@@ -159,110 +159,186 @@ and is executable, it is the default `setup`. Then:
   runs code because it arrived; it runs because Greg said yes to that clone.
 - Spideryarn gets one, and it is the worked example.
 
+## GPT Sol's plan review, and what changed
+
+[260902h-…-review-sol.md](260902h-gjd-remote-works-from-whichever-repo-you-are-in-review-sol.md)
+(prompt alongside). Four blockers, eight should-fixes; the plan below is the plan after them.
+
+Taken:
+
+- **The box-side inventory fails closed** — sentinel, row count, blocked states with reasons
+  (`non-checkout`, `unrecognised-origin`, `incomplete-checkout`, `symlink`, `unreadable`), `found`
+  requires a valid `HEAD`, and an ssh origin on the box is `found` with a diagnostic that `doctor`
+  fails on, because the box cannot fetch it.
+- **Clone and setup are one durable, locked transaction.** Clone into a unique staging sibling,
+  verify origin and `HEAD`, rename atomically. Setup runs as a **tool-owned tmux job** with an
+  attempt id and an atomic status file under `~/gjd-remote/setup/`, held under a box-side `flock`
+  per slug — because `npm ci` plus Docker pulls outlive a foreground ssh from a laptop that sleeps.
+  **Readiness is the status file, never the checkout's presence**, so a failed setup followed by a
+  second `new-claude` says "setup failed on attempt X; `gjd-remote setup` to retry" and starts
+  nothing. `--no-setup` is dropped; `gjd-remote clone` is the clone-only path.
+- **Three roots, named**, and a command matrix for them (below).
+- **Config authority.** After the clone, the config is re-read from the cloned commit; if it differs
+  from what the prompt showed, stop and ask again. The setup shell gets `ForwardAgent=no`, no
+  TTY, no stdin, a small explicit environment. And said plainly: a `setup` command runs as the
+  box's one passwordless-sudo user, like everything else on it; the config cannot be sandboxed and
+  the guarantee is only that it cannot alter the laptop's choice of host, path or env policy.
+- **tmux metadata gets a version** (`GJD_METADATA_VERSION=1`) and a kind
+  (`GJD_KIND=claude|shell|setup`), so a legacy row and a malformed new row are distinguishable.
+- **The laptop log gets a validated `repo` field** and setup attempt records.
+- **The paid call** needs a new `AiJob` across the exhaustive routing/model maps, `withLedger("cli")`
+  around it, and an async seam in `main()` — not a spend declaration, which is for bypasses. Red
+  test: one proposal attempt ⇒ exactly one spend row, including the malformed-response case.
+- **The value-leak test** covers every sink at once (request body, stdout, stderr, thrown error
+  text, checklist descriptions, log line, spend row, saved policy), reusing the existing env parser.
+- **Order**: durable setup before auto-clone, auto-clone before generic `push-env`.
+- hellozenno's "kill whatever owns 5173" fix joins Stage 5.
+
+Not taken, or not whole — each a decision recorded here:
+
+- **"Only previously human-approved keys may be pre-ticked; the model recommends, never defaults."**
+  This cuts against Greg's stated design (the model proposes, the user overrides). Held for Greg
+  before Stage 4 — see Open questions.
+- **"Require `check` for the automatic path."** Spideryarn has no read-only check today, so that
+  would refuse to set up this repo. Readiness = setup exit 0 + our marker + `check` passing when
+  one is defined. A repo without `check` is set up and told so.
+- **"Cut the `package.json` `setup` inference."** Kept: it is built and tested, it is the
+  zero-config path for a Node repo, and whatever it resolves to is shown in the prompt before it
+  runs.
+- **Depth-2 scanning of `~/code`.** Kept one level deep, which is the convention; nested checkouts
+  are not something this box has. Symlinks are not followed and are de-duplicated by realpath.
+
+### The target contract
+
+| root | holds | resolved from |
+|---|---|---|
+| **tool root** | Terraform state, `provision.sh`, `remote-smoke-browser.mjs`, the OpenRouter key via `src/env.ts` | the script's own location (`REPO` today) |
+| **local target** | the `.env.local` `push-env` reads | the toplevel of the repo you are in; a regular non-symlink file directly under it |
+| **remote target** | session cwd, setup, `.mcp.json` for `doctor`'s MCP check | the verified checkout on the box |
+
+| command | needs identity? | `--dir` | `--repo` |
+|---|---|---|---|
+| `new-claude`, `new-shell` | no — `--dir ~` is an explicitly arbitrary directory with `GJD_REPO` unknown | any box path | resolves the checkout |
+| `push-env`, `setup`, repo-`doctor` | **yes** | must be a checkout of the same origin, verified | same |
+| `clone` | yes, or an argument | — | — |
+| `GJD_REMOTE_REPO` | deprecated alias for `--dir`; **refuses** if it disagrees with the cwd's origin | | |
+
+## Open questions for Greg
+
+- **Pre-ticking (Stage 4).** Sol: a new key should never start ticked, because Enter on a model's
+  default is weaker than a deliberate tick, and today a new key is skipped until a person adds it.
+  Greg's ask: the model proposes and the user overrides, which reads as pre-ticked. Options: (a)
+  pre-tick the model's proposal, as asked; (b) pre-tick only keys approved on an earlier run, and
+  show the model's recommendation as a mark on each row; (c) as (a) but keys the model calls
+  *secret* or *production* are shown disabled. Orchestrator's lean: (b) on the first run of a repo
+  is thirty manual ticks, so **(a)**, with a final "send these N keys? y/N" that lists them.
+
 ## Stages
 
 Each stage ends green (`npm test`, `npm run typecheck`, `npm run check`), committed, and reviewed
 by GPT Sol before the next starts. Implementation is delegated to Opus subagents; the orchestrator
 keeps the plan, the briefs, the diffs and the commits.
 
-### Prep
+### Prep — done
 
-- [x] `git pull` (merge) so the tree is current; work in a worktree per
-  [worktrees.md](../project/worktrees.md). Note: a worktree has no `infra/hetzner/terraform.tfstate`
-  (gitignored), so `host()` dies there — set `GJD_REMOTE_HOST` when exercising the CLI from one.
+- [x] `git pull` (merge); worktree `gjd-remote-any-repo`. A worktree has no
+  `infra/hetzner/terraform.tfstate`, so set `GJD_REMOTE_HOST` when exercising the CLI from it.
 - [x] Sonnet research: TUI prompt library and per-repo config conventions (both → research docs).
-  Seam map of every Spideryarn-specific line in the CLI (Explore agent): the only hard-wired
-  constant is `REMOTE_REPO_DEFAULT`; the five split-out modules are already repo-agnostic; no
-  interactive prompt exists anywhere; no existing test pins the constant.
-- [ ] GPT Sol review of this plan; fold findings in.
+  Seam map of the CLI (Explore agent): the only hard-wired constant is `REMOTE_REPO_DEFAULT`; the
+  five split-out modules are already repo-agnostic; no interactive prompt exists; no test pins it.
+- [x] GPT Sol review of this plan; findings folded in above.
+- [x] Pure modules, built in parallel with the review: `scripts/gjd-remote-repo.ts` (identity,
+  resolution) and `scripts/gjd-remote-config.ts` (the config), with tests; `smol-toml` direct.
 
-### Stage 1 — the repo you are standing in
+### Stage 1 — identity, inventory, contract, metadata
 
-New module `scripts/gjd-remote-repo.ts`, pure and tested without a network, following the split the
-other `gjd-remote-*.ts` files use.
-
-- [ ] `localRepo(cwd)`: toplevel + origin → `{ slug, owner, name, toplevel }`, or a typed refusal
-  (`not-git`, `no-origin`, `submodule`, `unrecognised-remote`). Tests: two temp repos with the same
-  basename and different origins resolve differently; a nested submodule refuses; a worktree
-  resolves to its parent's origin.
-- [ ] `resolveRemoteCheckout(slug, facts)`: given the box's `~/code` scan (the existing
-  `cloneFacts` output, reshaped), returns a discriminated union — `found(dir)`, `absent(proposedDir)`,
-  `ambiguous(dirs)`, `occupied(dir, otherSlug)`. Tests for each arm.
-- [ ] `--repo owner/name` on `new-claude`, `new-shell`, `push-env`, `clone`, `setup`, `doctor` for
-  use outside a checkout. `-d/--dir` unchanged and still wins. `GJD_REMOTE_REPO` → treated as
-  `--dir`, with a one-line deprecation.
-- [ ] `sessionDir()` uses the resolution; prints which repo and which directory every time.
-- [ ] Sessions carry `GJD_REPO=<slug>` and `GJD_REMOTE_DIR=<dir>` in the tmux environment;
-  `ls` gains a `REPO` column (`(unknown)` for older sessions — never inferred from
-  `pane_current_path`). The strict parser is extended, not bypassed, and a record missing the new
-  field in the new format is rejected as incomplete.
-- [ ] Help text and [hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md) updated.
-- [ ] Live check from the laptop: `gjd-remote new-shell` from this repo lands in `~/code/spideryarn2`
-  (found by origin, not by name); from `~` refuses with the three options; from a scratch git repo
-  with a made-up origin reports `absent` and the proposed path, without cloning (Stage 2 adds that).
+- [ ] **Strict inventory.** A new box-side script (in `gjd-remote-repo.ts` or a sibling, tested the
+  way `gjd-remote-tmux.ts`'s script is): every entry directly under `~/code`, not following
+  symlinks, each with realpath, is-checkout, origin, has-valid-HEAD; row count and `GJDOK` sentinel;
+  parsed fail-closed. `resolveRemoteCheckout` grows the blocked states and the `HEAD` requirement.
+  Red tests: truncated reply, wrong row count, symlink duplicate, non-checkout at the proposed
+  path, partial clone (`.git` present, no `HEAD`), ssh origin ⇒ `found` + diagnostic.
+- [ ] **The contract**, wired: `localRepo(cwd)` in `main()`; `--repo` on the six commands;
+  `sessionDir()` through the resolution; `push-env`/`setup`/`doctor` verify `--dir`'s origin;
+  `GJD_REMOTE_REPO` refuses on disagreement; `.env.local` from the local target; `.mcp.json` from
+  the remote target. Every path printed. `REMOTE_REPO_DEFAULT` deleted.
+- [ ] **Metadata.** `-e GJD_METADATA_VERSION=1 -e GJD_KIND=… -e GJD_REPO=… -e GJD_REMOTE_DIR=…` on
+  every `tmux new-session`; the strict record carries them; `ls` gains `REPO`; legacy = no version
+  and no repo ⇒ `(unknown)`; version 1 with a missing field fails the listing. Red test: a mixed
+  reply with one legacy and one malformed new row. `LogRecord` gains validated `repo`.
+- [ ] Help text, [hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md).
+- [ ] Live, from the laptop with the worktree's script: `new-shell` from this repo lands in
+  `~/code/spideryarn2` found by origin; from `~` refuses with the options; from a scratch repo with
+  a made-up origin reports `absent` and the proposed path; `ls` shows the column.
 - [ ] Sol review.
 
-### Stage 2 — config, setup, and clone-then-setup
+### Stage 2 — config, durable setup, `clone`, repo-doctor
 
-- [ ] Parser for the per-repo config (format per research), with a typed result and a test per
-  key, including "file absent" and "file present, empty". Unknown keys are an error, not ignored —
-  a misspelt key that does nothing is silent success.
-- [ ] `gjd-remote setup [--repo]`: runs the repo's setup command on the box in its checkout, streams
-  output, requires the nonce marker, then runs `check` if there is one. Exit code is the truth.
-- [ ] `gjd-remote clone` with no argument means "the repo I am in".
-- [ ] `new-claude`/`new-shell` on `absent`: one y/N prompt naming the repo, the path, and the setup
-  command; on yes, clone → setup → session; on any failure, no session and the reason. Not a TTY →
-  refuse with the two commands to run. `--no-setup` to clone only, printing what was skipped.
-- [ ] **`@inquirer/prompts`** lands here (`confirm` now, `checkbox` in Stage 3), a direct dependency
-  in `package.json`. Chosen over `@clack/prompts` because its checkbox has pre-ticking, a
-  per-item description and a built-in select-all key, and over built-in `readline` because a
-  checkbox UI is raw-mode cursor arithmetic that is not worth writing twice —
-  [260902a](../research/260902a-tui-prompt-library-for-gjd-remote.md). Every prompt is given
-  explicit `input`/`output` streams, so it works after `-p -` has spent stdin (the existing
-  `/dev/tty` reopen). The TTY refusal stays ours, not the library's.
-- [ ] Spideryarn's own config file, as the worked example; its `setup` is `npm ci && npm run setup`.
+- [ ] `gjd-remote setup [--repo]`: `flock` per slug under `~/gjd-remote/locks/`; a tool-owned tmux
+  job (`GJD_KIND=setup`) running the config's `setup` from the checkout with the small explicit
+  environment; attempt id; status file `~/gjd-remote/setup/<slug>.json` written atomically with
+  attempt, config hash, started/finished, outcome; then `check` if defined. The laptop attaches to
+  watch, and reads the status file for the verdict — never the stream. Re-running while an attempt
+  is live says so. Red tests: stale status from a prior attempt; output after the marker; a status
+  file whose attempt id is not this one.
+- [ ] `gjd-remote clone` with no argument = the repo you are in; staging sibling + verify + rename;
+  a failure leaves the destination absent and names the staging path.
+- [ ] `doctor` splits box checks from repo checks; the repo half needs identity, runs `check`,
+  reports the setup status file, and fails an ssh-origin checkout by name.
+- [ ] `@inquirer/prompts` wrapper (`scripts/gjd-remote-prompt.ts`, built) wired to a
+  `promptStreams()` that always verifies a controlling TTY and wraps `/dev/tty` as a non-closing
+  `Readable`; Ctrl-C ⇒ exit 130, nothing mutated. Tests: piped stdin, `-p -`, redirected output.
 - [ ] Docs + help. Sol review.
 
-### Stage 3 — `push-env` for a repo without a policy
+### Stage 3 — clone-then-setup inside `new-claude` / `new-shell`
 
-- [ ] Key-name extraction from `.env.local` as a pure function that returns **names only**, tested
-  with a file whose values are sentinels that must not appear in the output.
-- [ ] A new gateway job kind for the proposal (in `AI_JOB_ROUTE` + spend declarations), calling
-  `openRouterJson` with the names and a short instruction: classify each as *local dev only*,
-  *shared provider key*, *production or signing secret*, *infrastructure-destroying*, with one line
-  of reason. A malformed reply falls back to "nothing pre-ticked", never to "all".
-- [ ] Checklist TUI (`@inquirer/checkbox`): pre-ticked from the proposal, the reason as each item's
-  description, `a` for select-all / select-none, confirm. Non-TTY refuses.
-- [ ] The two hard guards, applied after the user's ticks and before any transfer, by name.
-- [ ] Persist the approved key list to `~/.config/gjd-remote/repos/<owner>--<name>.toml`, `0600`.
-  Next run: pre-tick from the saved list, flag keys not on it as **new**, and skip the LLM unless
-  there are new keys or `--propose`. Spideryarn keeps its typed allowlist in `gjd-remote-env.ts`;
-  the interactive path is only for repos without one.
-- [ ] Destination = the resolved checkout; the write-and-verify path is the existing one.
-- [ ] Docs + help. Sol review — hand it the extraction test and a redacted transcript of one run.
+- [ ] On `absent`: one prompt naming the repo, the path and the exact setup command (or script
+  path + hash); clone; re-read config from the cloned commit and re-confirm on difference; setup as
+  above; session only on a `success` status. Not a TTY ⇒ refuse with the two commands.
+- [ ] On `found` without a `success` status: refuse and say which (`pending`, `failed`, `never`).
+- [ ] Red tests: failed setup then a second `new-*` starts no session; concurrent second invocation
+  blocked by the lock and told so; truncated scan ⇒ no clone.
+- [ ] Live: a throwaway public repo end to end. Sol review.
 
-### Stage 4 — `doctor` and provisioning
+### Stage 4 — `push-env` for a repo without a policy
 
-- [ ] `doctor` splits box checks from repo checks; the repo half runs only inside a repo, and runs
-  the config's `check` if there is one. The MCP check moves to the repo half.
-- [ ] `provision.sh`: `python3-venv` (and `python3-pip`) for hellozenno; re-run against the box.
-- [ ] Sol review.
+Blocked on the pre-ticking answer above; everything else in it is settled.
 
-### Stage 5 — hellozenno, end to end
+- [ ] Names-only extraction reusing the existing env parser; the one all-sinks sentinel test.
+- [ ] `env-proposal` `AiJob` across the exhaustive maps; `withLedger("cli")`; async `main()` seam;
+  one-attempt-one-row test including malformed response and provider failure. Model output
+  validated as an exact subset of the names sent; descriptions stripped of control characters.
+- [ ] Checklist from the wrapper; the two hard guards shown disabled *and* re-applied after
+  selection; select-all selects only eligible keys; final "send these N keys?".
+- [ ] Policy saved under `~/.config/gjd-remote/repos/` — `0700` dir, non-symlink temp, rename,
+  `chmod 0600`, readback. Red tests: existing `0644` file; a symlink at the path.
+- [ ] Spideryarn keeps its typed allowlist. Docs + help. Sol review.
 
-Only after `/Users/greg/dev/hellozenno` exists **and at least fifteen minutes have passed since it
-was created, with no writes in the last few minutes** (`stat` the tree). Until then, this stage
-waits.
+### Stage 5 — hellozenno end to end, and provisioning
 
-- [ ] Its config file and setup script: venv, `git submodule update --init`, `npm ci --prefix
-  frontend`, and a `check` that verifies venv, submodule commit and frontend deps by looking, not
-  by exit code.
-- [ ] `.gitmodules` → https (its plan doc, item 3).
-- [ ] `gjd-remote new-claude` from that directory on the laptop: the prompt, the clone, the setup,
-  the session — one run, recorded in this plan with what it printed.
-- [ ] `push-env` from that directory: the proposal must put `FLASK_SECRET_KEY` and the Supabase
-  password in the not-ticked column; the recorded outcome names keys only.
+Only after `/Users/greg/dev/hellozenno` exists and has been quiet for fifteen minutes.
+
+- [ ] `provision.sh`: `python3-venv`, `python3-pip`; re-run against the box.
+- [ ] hellozenno's `.gjd-remote/config.toml` + `setup` (venv, submodule, `npm ci --prefix
+  frontend`) + a `check` that looks rather than trusts exit codes; `.gitmodules` → https; the
+  `lsof | kill -9` lines replaced by "refuse and name the holder".
+- [ ] `gjd-remote new-claude` from that directory: prompt, clone, setup, session — recorded here.
+- [ ] `push-env` from it: `FLASK_SECRET_KEY` and the Supabase password not sent; outcome recorded
+  as key names only.
 - [ ] Its plan doc updated to point here; Sol review of the whole.
+
+## Findings along the way
+
+- **`cloneFacts()`'s scan cannot feed `resolveRemoteCheckout` unchanged** (Stage 1 module agent,
+  2026-09-02). Its `sibling=` lines are only ever checkouts with a readable origin, so a plain
+  directory at the proposed path has to be synthesised from the separate `exists`/`checkout` keys or
+  the `occupied` arm never fires; the glob is one level deep (`~/code/*/`), so a nested checkout
+  reads as `absent` and gets a second clone proposed; and a symlink under `~/code` to a real checkout
+  is reported under both paths, which reads as `ambiguous`. The wiring stage de-duplicates by
+  realpath on the box side and reports non-checkout directories; one-level-deep stays, documented.
+- **`scripts/deploy-checks.ts` said `smol-toml` was transitive-only**; it is direct now, and the
+  comment says so. Its hand-written parser stays — it is a deploy gate that has been watched going
+  red — but the two-parsers state is worth a line here in case someone wants to fold it later.
 
 ## What is deliberately not being built
 
@@ -277,16 +353,20 @@ into its own repo · per-session worktrees on the box · a second Unix user.
 | Identity by origin | Same basename, different origins → different slugs |
 | Remote resolution | Two checkouts of one origin under `~/code` → `ambiguous`, no session |
 | Wrong repo at the path | `~/code/<name>` with another origin → `occupied`, nothing cloned |
-| Setup verdict | Setup script exits 0 with the stream cut before the marker → failure |
-| Session after failed setup | Setup exits 1 → `tmux new-session` never runs (assert on the command log) |
+| Setup verdict | status file names a prior attempt, or is absent, or the stream is cut → failure |
+| Truncated inventory | reply without `GJDOK`, or row count short → no clone, no session |
+| Partial clone | `.git` with no valid `HEAD` at the path → `blocked: incomplete-checkout` |
+| Session after failed setup | Setup status `failed` → no Claude/shell session exists on the box afterwards, and the second `new-*` refuses |
 | Names only | A value sentinel in `.env.local` must not appear in the extracted names, the prompt body, or any output |
 | Proposal fallback | Malformed model reply → zero pre-ticked, not all |
 | Hard guards | A hosted `DATABASE_URL` ticked by the user → refused by name before transfer |
 | Config strictness | Unknown key in the config → error naming it |
-| New-format record | tmux record without the repo field → `ls` rejects the listing |
+| New-format record | version-1 record without the repo field → `ls` rejects the listing; legacy row (no version, no repo) shows `(unknown)` |
 
 ## Log
 
+- 2026-09-02 — GPT Sol reviewed the plan: four blockers taken (strict inventory, durable setup,
+  the target contract, config re-read after clone); stages reordered; pre-ticking held for Greg.
 - 2026-09-02 — plan written; questions answered by Greg (table above); research and seam map
   back; config format and prompt library decided. Sent to GPT Sol. Stage 1's pure module starts in
   parallel with that review, since both earlier Sol reviews already asked for it; its wiring into
