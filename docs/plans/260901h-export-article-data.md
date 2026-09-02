@@ -407,10 +407,29 @@ restoring byte-identically each time:
 | before the snapshot change | 0/10 failed | one of two failed, `expected 404 to be 200` |
 | after  | 0/10 failed | one of two failed, same error |
 
-Identical either side. So the snapshot transaction is exonerated, the pool theory is dead, and this
-is a **test-isolation limitation in `export-route.test.ts`**, triggered only by something no CI does
-— running one file in two processes at once. Left as it is, recorded rather than fixed, because the
-trigger is an artefact of several agents sharing one checkout and one database.
+Identical either side. So the snapshot transaction is exonerated and the pool theory is dead: it was
+a **test-isolation bug in `export-route.test.ts`**.
+
+**Fixed** (Greg asked for it rather than leaving it recorded). The fixture now mints `ARTICLE_ID`,
+`REVISION_ID`, `SLUG` and `SHORT_ID` per run with `crypto.randomUUID()`/`mintId()` — the idiom
+`tests/store-uploads-parity.test.ts` already uses — so a collision is impossible across files *and*
+processes rather than being guarded against. Minting only the uuids would not have been enough:
+`articles.short_id` is unique table-wide and `slug` unique per owner, so a second process would still
+have collided on the insert.
+
+**Watched failing first, then fixed.** Two concurrent runs of the old file reproduced the exact
+symptom — `expected 404 to be 200`, both processes exiting 1 — and the new file went 6/6 across
+three concurrent pairs. The old version passed one pair before failing the next, so the six greens
+are corroboration; the actual argument is structural, since random ids cannot collide.
+
+**The cost of minting, paid back:** fixed ids cleaned up after a crashed predecessor for free,
+because the next run reused them. Random ones cannot, so `sweepAbandoned()` collects rows matching
+this file's slug prefix that are **over an hour old**. The age is load-bearing — sweeping the prefix
+outright would delete a concurrent run's article and reintroduce the very bug being fixed.
+
+`tests/fixture-ids.test.ts` now records in its own docstring that it cannot see this class: it checks
+two *files* sharing an id, and this was one file colliding with itself in two processes. That is why
+checking the ids was the first thing done when the flake appeared and ruled nothing out.
 
 ## What this is deliberately not doing
 

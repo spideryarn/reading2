@@ -55,9 +55,10 @@
  * docs/plans/260901h-export-article-data.md § Stage D.
  */
 
+import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { eq } from "drizzle-orm";
+import { and, eq, like, lt } from "drizzle-orm";
 import { unzipSync } from "fflate";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -65,6 +66,7 @@ import type { Verifier } from "../src/auth.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, blockIdentities, revisionBlocks } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
+import { mintId } from "../src/ids.js";
 import type { OwnerId } from "../src/owner.js";
 import { BUNDLE_BYTE_CAP, overBundleCap } from "../src/store/export-bundle.js";
 import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
@@ -111,9 +113,39 @@ vi.mock("../src/store/export-bundle.js", async (importOriginal) => {
   };
 });
 
-const SLUG = "test-export-route";
-const ARTICLE_ID = "0e5c0001-0000-4000-8000-000000000001";
-const REVISION_ID = "0e5c0001-0000-4000-8000-000000000002";
+/**
+ * **Minted per run, not written down — because the guard that catches shared
+ * fixture ids only looks across *files*, and this failed across *processes*.**
+ *
+ * This suite used to hold three fixed uuids and one fixed slug, and clean by
+ * them in `beforeAll` and `afterAll`. Two processes running *this same file* —
+ * a peer's `npm test` while somebody ran the file directly — therefore deleted
+ * each other's article halfway through, and the owner's own export came back
+ * **404**. It reproduces on demand: run this file twice at once and one of the
+ * two fails `expected 404 to be 200`.
+ *
+ * tests/fixture-ids.test.ts exists for exactly that collision and could not see
+ * this one: its ids were unique across the suite, which is all that guard can
+ * check. Checking them was the first thing done when the flake appeared, and it
+ * ruled nothing out. docs/plans/260901h-export-article-data.md § The
+ * intermittent 404.
+ *
+ * A random id per run cannot collide with another file or another process, so
+ * the whole class goes away rather than being guarded against — the same
+ * `crypto.randomUUID()` idiom `tests/store-uploads-parity.test.ts` already uses
+ * for "an id nothing else will use". `shortId` and `slug` are minted too and
+ * not merely the uuids: `articles.short_id` is `.unique()` across the whole
+ * table and `slug` is unique per owner, so a second process would collide on
+ * the insert even with distinct primary keys.
+ */
+const RUN = randomUUID();
+const SLUG = `test-export-route-${RUN.slice(0, 8)}`;
+const ARTICLE_ID = RUN;
+const REVISION_ID = randomUUID();
+const SHORT_ID = mintId();
+/* Fixed, and safe to be: `block_identities` is keyed by `(article_id, block_id)`
+   and `revision_blocks` by the revision, so this id is already scoped by the
+   two above and cannot reach another run's rows. */
 const BLOCK_ID = "spya-exprt2";
 
 /**
@@ -206,6 +238,7 @@ const { reachable } = await pgReady({
 
 const when = reachable ? describe : describe.skip;
 
+/** This run's rows, and only ever this run's — see `RUN` above. */
 async function clean(): Promise<void> {
   const db = getDb();
   await db.delete(revisionBlocks).where(eq(revisionBlocks.articleId, ARTICLE_ID));
@@ -215,15 +248,51 @@ async function clean(): Promise<void> {
   await db.delete(articles).where(eq(articles.id, ARTICLE_ID));
 }
 
+/**
+ * **The cost of minting ids, paid back.** Fixed ids cleaned up after a crashed
+ * predecessor for free, because the next run reused them. Random ones cannot,
+ * so a run killed between its insert and its `afterAll` would leak an article
+ * into the local database for ever.
+ *
+ * **The age is the whole point.** Sweeping this file's slug prefix outright
+ * would delete a concurrent run's article and reintroduce precisely the bug
+ * above; an hour is far longer than this suite's 20s timeout, so a live peer is
+ * never in range and only genuinely abandoned rows are.
+ */
+const LEAK_AGE_MS = 60 * 60 * 1000;
+
+async function sweepAbandoned(): Promise<void> {
+  const db = getDb();
+  const stale = await db
+    .select({ id: articles.id })
+    .from(articles)
+    .where(
+      and(
+        like(articles.slug, "test-export-route-%"),
+        lt(articles.createdAt, new Date(Date.now() - LEAK_AGE_MS)),
+      ),
+    );
+  for (const { id } of stale) {
+    await db.delete(revisionBlocks).where(eq(revisionBlocks.articleId, id));
+    await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, id));
+    await db.delete(articleRevisions).where(eq(articleRevisions.articleId, id));
+    await db.delete(blockIdentities).where(eq(blockIdentities.articleId, id));
+    await db.delete(articles).where(eq(articles.id, id));
+  }
+}
+
 when("downloading one article's data", { timeout: 20_000 }, () => {
   beforeAll(async () => {
-    await clean();
+    /* Not `clean()`: these ids were minted a millisecond ago and nothing can
+       have written under them, so cleaning first would be theatre. What is
+       worth doing is collecting anything a previously killed run left. */
+    await sweepAbandoned();
     const db = getDb();
     await db.insert(articles).values({
       id: ARTICLE_ID,
       ownerId: TEST_OWNER,
       slug: SLUG,
-      shortId: "spya-exprt9",
+      shortId: SHORT_ID,
     });
     await db.insert(articleRevisions).values({
       id: REVISION_ID,

@@ -19,6 +19,27 @@
  * Uniqueness cannot be checked at the type level and nothing crashes when it is
  * violated: the delete succeeds, the insert's `onConflictDoNothing` succeeds,
  * and the only symptom is a 404 in a different file. So it is checked here.
+ *
+ * ## What this cannot see: the same file, in two processes
+ *
+ * This guard is about two *files* sharing an id. **The identical failure happens
+ * when one file runs in two processes**, and no static check can see it, because
+ * the ids are unique — the file is simply colliding with itself.
+ *
+ * `tests/export-route.test.ts` hit it on 2026-09-01: a peer's `npm test` while
+ * somebody ran that file directly, its `beforeAll`/`afterAll` cleaning by fixed
+ * uuid, and each process deleting the other's article mid-run. The symptom was
+ * the one described above — `expected 404 to be 200`, the *owner* refused their
+ * own article — and checking the ids for collisions was the first thing done and
+ * ruled nothing out, because by this guard's rule they were fine.
+ *
+ * **The remedy is not a wider guard, it is not needing one:** mint the row's ids
+ * per run with `crypto.randomUUID()`, as `tests/store-uploads-parity.test.ts` and
+ * now `export-route` do, and the collision is impossible across files and
+ * processes alike. Mint every *unique* column, not just the primary key —
+ * `articles.short_id` is unique table-wide and `slug` unique per owner, so
+ * distinct uuids alone still collide on the insert. A fixed id is fine for a
+ * fixture nothing inserts, which is what `NOT_A_ROW` below is for.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
