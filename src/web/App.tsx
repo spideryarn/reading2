@@ -76,6 +76,7 @@ import { CandidatesBand } from "./CandidatesPanel.js";
    is the scanner and it calls no model. */
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { SourceScanNotice } from "./SourceScanNotice.js";
+import { RefereeHowButton, RefereeHowCard, useHowCard } from "./RefereeCard.js";
 import { useSourceScan } from "./useSourceScan.js";
 import { SearchPanel } from "./SearchPanel.js";
 import { useSearch } from "./useSearch.js";
@@ -4469,9 +4470,19 @@ function DiagramBand({
  * **No acknowledgement**, which the plan's first draft asked for. A box that
  * says "I understand" in front of something already done would imply that
  * ticking it makes prohibited use permissible. It would also have to be
- * remembered somewhere, and both places available are wrong: `localStorage` is
- * banned outright (docs/project/url-state.md), and a column is a migration for
- * a checkbox.
+ * remembered somewhere, and both places available are wrong: the URL is for
+ * view state — *how you are looking at an article*, which has to survive a
+ * reload and travel when the address is pasted (docs/project/url-state.md) —
+ * and a column is a migration for a checkbox.
+ *
+ * **This comment used to say `localStorage` was "banned outright", and that was
+ * the flat version of the rule rather than the rule.** It is banned for view
+ * state, which is what the paragraph above is about; a per-device "I have read
+ * this" bit is neither view state nor anything worth pasting to somebody else.
+ * `InstallHint` was already the exception and the explainer card below is the
+ * second — src/web/referee-card.ts draws the distinction in full. None of that
+ * reaches this notice, which remembers nothing on purpose; see the collapse
+ * paragraph at the end.
  *
  * **Not dismissible**, for the reason `SharedNotice` in src/web/PublicChrome.tsx
  * gives about itself: *it is what this page is, and a control to make it go away
@@ -4490,8 +4501,16 @@ function DiagramBand({
  * has gone. Second, nothing is remembered: `noticeOpen` is a `useState` that
  * dies with the mount, so every visit starts shut and one press opens it. That
  * is also why the storage objection this comment used to make against a
- * collapse — localStorage is banned (docs/project/url-state.md), and a column is
- * a migration for a checkbox — does not apply: there is nothing to store.
+ * collapse — the URL is the wrong place for it, and a column is a migration for
+ * a checkbox — does not apply: there is nothing to store.
+ *
+ * **The explainer card *is* remembered, and the difference between them is the
+ * point.** "How Referee mode works" is something you read once; a notice about
+ * where the manuscript has already gone is something the mode *is*, and a
+ * referee arriving on their second paper meets it again. So the card keeps a bit
+ * in `localStorage` (src/web/referee-card.ts) and this keeps none — and the two
+ * live in different boxes, `.ref-brief` and `.ref-panel`, so that no press can
+ * be mistaken for the other.
  *
  * It is styled as a notice and not as an error — src/web/styles.css § referee
  * mode. Nothing has gone wrong.
@@ -4553,11 +4572,20 @@ function RefereeBand({
      and docs/project/url-state.md keeps the address bar for places you were. */
   const [noticeOpen, setNoticeOpen] = useState(false);
 
+  /* **One bit, and it is on the device rather than in the URL** — the card is
+     open until the referee shuts it, and the header button brings it back by
+     clearing the same bit. Every read and write of it is inside `useHowCard`,
+     so this component cannot change the screen and forget to write;
+     src/web/referee-card.ts is why it is not a `?` parameter, and why it is not
+     the flat ban this component's docstring used to assert. */
+  const how = useHowCard();
+
   return (
     <aside className="mode-band gloss referee" aria-label="Referee">
       <div className="gloss-head">
         <ClipboardCheck size={14} className="gloss-head-icon" />
         <h2>Referee</h2>
+        <RefereeHowButton open={how.open} onToggle={() => how.show(!how.open)} />
       </div>
 
       {/* **The two things that belong to the mode rather than to a sub-mode**,
@@ -4608,6 +4636,10 @@ function RefereeBand({
       <RefereeViews view={view} onView={(next) => void setView(next)} />
 
       <div className="ref-panel">
+        {/* **Inside the scroller, under the chips, and above the sub-mode** —
+            not in `.ref-brief` with the two notices that may never be
+            dismissed. src/web/RefereeCard.tsx § where it sits. */}
+        {how.open && <RefereeHowCard onClose={() => how.show(false)} />}
         <RefereeSubMode
           view={view}
           slug={slug}

@@ -343,6 +343,71 @@ block's queued state update produces.
   rule-bearing doc, so that edit goes to Greg as a before/after under
   [edit-important-docs.md](../reusable/edit-important-docs.md) rather than being slipped in.
 
+#### Built, 2026-09-02 — what landed, and the four places it is not what is written above
+
+Everything in this stage landed, plus the two gaps stage 2 had recorded and could not close inside
+its own scope. Where it deviates:
+
+- **The card's colour paragraph does not name red and green, and the plan's § *The card's words*
+  does.** Stage 1 made the ramp a property of the mode (`?refscale=rg|br`), so *"red counts against,
+  green counts for"* is exactly wrong on `br` — the failure `TheKey` in
+  [`CriteriaPanel.tsx`](../../src/web/CriteriaPanel.tsx) already refuses by drawing swatches rather
+  than naming colours. The card says the shape of the rule instead — *colour is direction rather than
+  identity; one end counts against, the other counts for; the panel prints the key* — and sends the
+  reader to the key, which is beside the criteria whenever a for/against one is on and cannot drift
+  from the rows. Everything else in § *The card's words* is used as written; it was checked against
+  what stage 1 actually built and the rest of it is still true.
+- **The one bit lives in a hook, not in `RefereeBand`.** `useHowCard` in
+  [`RefereeCard.tsx`](../../src/web/RefereeCard.tsx) holds every read and write of it, so the band
+  cannot change the screen and forget to write — which is the failure that would be invisible until
+  the next paper. The pure `localStorage` half is
+  [`src/web/referee-card.ts`](../../src/web/referee-card.ts), separate for `install-hint.ts`'s reason.
+- **`RefereeBand`'s docstring is corrected rather than annotated.** It asserted that `localStorage` is
+  "banned outright"; it now says what the rule actually is — the URL is for view state, *how you are
+  looking at an article*, which must survive a reload and travel when the address is pasted, and a
+  per-device "I have read this" bit is neither. The distinction is written out in full beside the code
+  in `referee-card.ts` and in [referee-mode.md](../project/referee-mode.md) § The card that says what
+  the mode is for.
+- **[url-state.md](../project/url-state.md) is still not touched**, and it now owes two edits rather
+  than one: `?refscale=` from stage 1, and its line 6 — *"nothing lives in `localStorage`"* — which
+  two features now break. Both go to Greg together under
+  [edit-important-docs.md](../reusable/edit-important-docs.md).
+
+**Candidates.** The opening run is behind a labelled press. The button's visible words name both
+parties before either is reached — *"Find reviewers — one model call and a web search"*, with a line
+under it saying that the search terms are drawn from the paper — because a card is not read by
+anybody in a hurry and the search engine is the third party the band's notice cannot cover. Nothing
+after the first press changed.
+
+**The two gaps.** *Run this criterion* is `aria-disabled` rather than `disabled`, so the card is
+reachable while the form is incomplete, with `.crit-run[aria-disabled="true"]` replacing the
+`:disabled` rule; the activation was already blocked by the form's `onSubmit`, which is where it has
+to stay, since a click, an Enter and a Space all arrive as one submit. The rank numeral gets a
+visible line above the list rather than a second card — *the number is the model's ordering of its
+own answers for that criterion, not a score* — printed only once a run has returned something.
+
+**Tests**, each with the mutation it catches:
+
+| File | Cases | What goes red |
+|---|---|---|
+| [`referee-how-card.test.tsx`](../../tests/referee-how-card.test.tsx) | 9 | a `show` that only calls `setOpen` (the dismissal does not survive a remount); a reopen that writes nothing or writes `"1"` anyway (the button works once); either `try`/`catch` removed from `referee-card.ts` (the band blanks on a browser that refuses storage); the card moved into `.ref-brief` or the header button deleted, asserted against App.tsx's source because no render can see placement |
+| [`referee-candidates-press.test.tsx`](../../tests/referee-candidates-press.test.tsx) | 4 | the `useEffect` put back, or `startBrief` called from anywhere but the button (a POST appears on mount); a button wired to nothing (no POST after the press); the cost words removed from the button and its note; a stored thread offered a second start |
+| [`referee-criteria-explained.test.tsx`](../../tests/referee-criteria-explained.test.tsx) | 6 | `disabled` back on the run button; the form's `!ready` guard removed (an empty criterion goes to the server); the stylesheet left on `:disabled` while the markup moved; the rank line deleted, or printed before any run has returned |
+
+`tests/referee-candidates-panel.test.tsx` gained the new required `onStart` prop and a comment saying
+why it never presses it.
+
+**Suite after: 4 files / 4 tests red** — `doc-links`, `pdf-bundle-trace`, `store-artefact-manifest`,
+`store-roundtrip` — which is the baseline this stage started from. Nothing that was green went red.
+
+**Measured rather than assumed**: `window.localStorage` is `undefined` in this suite, not a working
+store, so the persistence tests install a Map-backed fake per test — which is what
+[testing.md § `localStorage` is undefined under jsdom](../project/testing.md) already says to do. And
+the reachability half of the run-button fix is a **browser** fact this suite cannot demonstrate: jsdom
+dispatches events to `disabled` elements happily, which is exactly why
+`tests/referee-tooltips.test.tsx` was green over the bug. The test asserts the attribute pair and the
+stylesheet rule, and says so rather than claiming a measurement it did not make.
+
 ### Stage 4 — drive it, then write it down
 
 A Playwright pass on a real paper through all four sub-modes, fixing what it finds; the remaining doc

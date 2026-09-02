@@ -404,6 +404,13 @@ function CriteriaView({
           code. */}
       {api.criteria.length > 0 && <p className="crit-how">{WHAT_THE_TICK_DOES}</p>}
 
+      {/* Only once a run has come back with something, so the sentence arrives
+          with the numbers it is about. `WHAT_THE_RANK_IS` says why this is here
+          and not on the numeral. */}
+      {api.criteria.some((row) => row.results.length > 0) && (
+        <p className="crit-how">{WHAT_THE_RANK_IS}</p>
+      )}
+
       {anyDiverging && <TheKey scale={scale} />}
 
       <ul className="crit-list">
@@ -472,6 +479,32 @@ function CriteriaView({
  */
 const WHAT_THE_TICK_DOES =
   "A criterion marks its passages while its tick is on. New runs turn it on automatically.";
+
+/**
+ * **What the big number on a result is**, in one visible sentence above the
+ * list — and the reason it is a sentence rather than the card that is already
+ * on the numeral.
+ *
+ * The card is real and says more (`CriterionResult`), but it is **hover-only**:
+ * the numeral is a `<span>` inside the jump button, so it takes no focus, and a
+ * `tabIndex` on it would put a tab stop inside a button. Stage 2 recorded that
+ * as a gap rather than accepting it, and named this as the fix — *if the gap is
+ * worth closing it wants a visible line above the list, not a card* — because a
+ * card nobody can reach by keyboard is not an answer to a numeral that reads
+ * like a severity score.
+ *
+ * Printed only when something has actually returned results, so a referee who
+ * has written one criterion and not run it is not told about a number they
+ * cannot see. Beside `WHAT_THE_TICK_DOES` rather than repeated above each
+ * criterion's own list: it is the same sentence about every list, and three
+ * copies of it in a narrow band is the wall this stage is against.
+ *
+ * Module-local and asserted as a literal in
+ * tests/referee-criteria-panel.test.tsx, for `WHAT_THE_TICK_DOES`'s reason: a
+ * copy test that read the constant would pass over any wording at all.
+ */
+const WHAT_THE_RANK_IS =
+  "The number beside a passage is the model's ordering of its own answers for that criterion. It is not a score, and nothing here ranks the paper.";
 
 /**
  * **The key: what a coloured mark in the paper means**, shown only while a
@@ -741,14 +774,25 @@ function NewCriterion({
           />
         }
       >
-        {/* `disabled` rather than `aria-disabled`, which means the card is *not*
-            reachable while the form is incomplete — a disabled button emits no
-            pointer or focus events, so Floating UI never hears about it. That is
-            the wrong way round and it is left alone here on purpose: the fix is
-            a styling change (`:disabled` in styles.css) and this stage changes
-            no layout. What the referee wants explained in that state is why the
-            button is dead, and that is the explainer card's job — stage 3. */}
-        <button type="submit" className="crit-run" disabled={!ready}>
+        {/* **`aria-disabled`, not `disabled`**, and the difference is the whole
+            point: a `disabled` button emits no pointer or focus events, so
+            Floating UI never hears about it and the card explaining what the
+            button costs is unreadable in exactly the state a referee wants it —
+            standing in front of a dead button, wondering what is missing. With
+            `aria-disabled` the control stays hoverable, focusable and tabbable,
+            and is announced as unavailable, which is what every screen reader
+            does with the attribute.
+
+            **`aria-disabled` on its own does not stop an activation**, so the
+            inertness is elsewhere and has to stay there: the `onSubmit` above
+            returns on `!ready` before it calls `onAsk`, which catches the click,
+            the Enter and the Space alike because all three arrive here as a
+            submit. `onClick` is *not* where that guard goes — Enter in a text
+            field submits a form without ever pressing the button.
+
+            The dead look is `.crit-run[aria-disabled="true"]` in styles.css,
+            which took over from `:disabled` in the same change. */}
+        <button type="submit" className="crit-run" aria-disabled={!ready}>
           Run this criterion
         </button>
       </Tooltip>

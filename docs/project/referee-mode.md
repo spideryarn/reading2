@@ -451,11 +451,22 @@ between the drop and the re-add, unlike 0048), both stores' normalisers, the rou
 one branch in [`src/converse.ts`](../../src/converse.ts). It bills under its own job,
 `referee-candidates`, because it is the only conversation here that runs several web searches a turn.
 
-**The thread opens with the fit brief, before the editor types anything.** What a competent reviewer
-of this paper would need to know — methods, subfield, statistics, the domain knowledge the claims
-assume — each requirement anchored to the passage that motivates it. That half has no
-hallucinated-person failure mode, is useful on its own, and is the query the conversation then
-refines. The plan says explicitly that this is where to stop if the names layer disappoints.
+**The thread opens with the fit brief — on one press.** What a competent reviewer of this paper
+would need to know — methods, subfield, statistics, the domain knowledge the claims assume — each
+requirement anchored to the passage that motivates it. That half has no hallucinated-person failure
+mode, is useful on its own, and is the query the conversation then refines. The plan says explicitly
+that this is where to stop if the names layer disappoints.
+
+**It used to fire on mount, and that was wrong for a reason larger than the money**, fixed
+2026-09-02. The sub-modes are a radiogroup, a first-time referee reads a radiogroup by pressing along
+it, and the other three chips are inert to a press. So clicking Candidates to find out what the word
+meant bought a run over the paper **and** sent search terms drawn from an unpublished manuscript to a
+search engine — *a different third party at a different time* from the model provider the band's
+notice is about, and one the notice cannot cover, because it is in the past tense and this had not
+happened yet. It is behind a labelled button now, and the button's visible words name both parties
+before either is reached. Everything after the first press is unchanged: the thread is stored, and
+coming back to the sub-mode finds it and asks nothing.
+[`tests/referee-candidates-press.test.tsx`](../../tests/referee-candidates-press.test.tsx).
 
 **Chat steers; a list is what you look at.** The panel keeps a browsable shortlist *above* the
 transcript, revised by whichever answer most recently carried one. This is the editor research's
@@ -592,7 +603,8 @@ Where the cards are, and the one thing each says that the label cannot:
 | the preset chips | they replace the whole form: text, kind and both poles |
 | *Run this criterion*, *Pull the paper's claims*, *Try again* | one model call over the whole paper, at full price, nothing resumed |
 | the colour swatch, and *Automatic* | on a for/against criterion it colours the paragraph bar and the rail and **not** the marks; automatic is a hash of the criterion's id, and there are eight |
-| the rank numeral | the model's ordering of its own answers, and **not** a severity — the most misreadable thing in the mode |
+| the rank numeral | the model's ordering of its own answers, and **not** a severity — the most misreadable thing in the mode, and the one card that also has a visible line, below |
+| Candidates' *Find reviewers* button | one model call **and** web searches, whose terms come from the paper — the only place in the mode that reaches a search engine |
 | Claims' tick, and *other text in quotes* | marks are off until asked for; and that list is **not** the claims the model missed |
 | Mirror's evidence badge, and its coverage row | what the trial actually tested; and that the coverage row has nowhere to send you, which is the whole of what it is saying |
 | Candidates' shortlist heading and tool strip | each turn **replaces** the shortlist; the strip is the check on *"never claim a tool you did not run"* rather than decoration |
@@ -627,9 +639,65 @@ in place of them. [`tests/referee-tooltips.test.tsx`](../../tests/referee-toolti
 that each control has a card, that the card is that control's, that a `title` attribute has not crept
 back, and the three changed labels as literals.
 
-**Still to come, and not here:** the *"How Referee mode works"* card at the top of the panel, and
-Candidates spending money the moment its chip is first pressed. Both are stage 3 of
-[260902f-make-referee-mode-understandable.md](../plans/260902f-make-referee-mode-understandable.md).
+### The two gaps a card could not close
+
+Both were found by stage 2 and recorded rather than accepted, and both have the same shape: a card
+that cannot be reached is not an explanation.
+
+- **The *Run this criterion* card was unreadable in the state that needed it.** A `disabled` button
+  emits no pointer and no focus events, so nothing opens a card on one — and the referee who wants to
+  know what the button costs, or why it is dead, is standing in front of exactly that. It carries
+  `aria-disabled` now, so it stays hoverable, focusable and announced as unavailable, with
+  `.crit-run[aria-disabled="true"]` in [`styles.css`](../../src/web/styles.css) doing what `:disabled`
+  used to. **`aria-disabled` does not stop an activation**, so the inertness stays where it already
+  was: the form's `onSubmit` returns on an incomplete criterion, which catches the click, the Enter
+  and the Space alike.
+- **The rank numeral's card is hover-only and cannot be otherwise.** The numeral is a `<span>` inside
+  the jump button, so it takes no focus, and a `tabIndex` there would put a tab stop inside a button.
+  So the fact itself is now a **visible line above the list** — *the number is the model's ordering of
+  its own answers for that criterion, not a score* — printed once a run has returned something, beside
+  `WHAT_THE_TICK_DOES`. The card stays for the reader who hovers.
+
+[`tests/referee-criteria-explained.test.tsx`](../../tests/referee-criteria-explained.test.tsx) holds
+both, including the part jsdom cannot demonstrate: it dispatches events to `disabled` elements
+happily, so the old spelling passed a "the card opens" test here and failed it in every browser.
+
+## The card that says what the mode is for
+
+The cards above answer *what does this control do*. They cannot answer *what is this mode*, because a
+card only opens on a control you already suspected. So there is one **"How Referee mode works"** card,
+under the sub-mode chips at the top of the panel:
+[`src/web/RefereeCard.tsx`](../../src/web/RefereeCard.tsx).
+
+Four short parts, and the first is the refusal — *you are the referee; nothing here scores the paper
+or drafts your review* — then a line each on the four sub-modes, then what the colours mean. It is
+kept short deliberately: a card longer on screen than the panel underneath it has failed at the thing
+it is for.
+
+**It is in `.ref-panel`, not `.ref-brief`.** That matters more than it looks. `.ref-brief` holds the
+confidentiality notice and the injection scan, and neither of those may ever be dismissed — a
+closable card sitting beside a non-closable one invites closing the wrong one, and teaches a referee
+that the box above ought to close too. The card is in the scroller with the sub-mode, where
+everything is transient by construction.
+
+**Shut it and it stays shut; the header's *How this works* button brings it back.** One bit, in
+`localStorage`, and reopening clears it rather than opening the card for one mount — otherwise the
+button works once and the card is gone again on the next paper, which reads as the button not having
+worked. [`src/web/referee-card.ts`](../../src/web/referee-card.ts) is the store and the whole argument
+for it; [`tests/referee-how-card.test.tsx`](../../tests/referee-how-card.test.tsx) pins both
+directions and the case where the browser refuses to keep anything.
+
+**Why `localStorage` at all**, when `RefereeBand`'s own docstring used to say it was banned outright
+citing [url-state.md](url-state.md): that was the flat version of a real rule rather than the rule.
+View state — *how you are looking at an article* — goes in the URL because it has to survive a reload
+and travel when the address is pasted to somebody else. A per-device *"I have read this"* bit is
+neither: it is not about this article, and pasting it at somebody else would be pasting your own
+reading history at them. The install hint was already the exception; this is the second, and it is the
+same kind of thing rather than a new kind. The alternative considered and dropped was a
+reader-profile column, which is a migration for a checkbox.
+
+**What the card is not** is a way to dismiss the confidentiality notice. That notice collapses, is
+never dismissed, remembers nothing, and starts shut on every visit — see § Confidentiality below.
 
 ## The rules the whole mode obeys
 

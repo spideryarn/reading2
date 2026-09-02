@@ -6492,6 +6492,86 @@ td.text.has-hit[data-hues="8"] {
   overflow-y: auto;
 }
 
+/* **The explainer card, and the button in the header that brings it back.**
+   src/web/RefereeCard.tsx says what it is for; what matters here is that it is
+   inside `.ref-panel` and not in `.ref-brief`, so it scrolls away with the
+   sub-mode under it rather than eating the capped 40% the two undismissable
+   notices live in.
+
+   Quiet rather than loud: it is an explanation, not an alert, so it borrows the
+   surface the panel already uses and carries no accent colour of its own. A
+   card that shouted would make the confidentiality notice above it look
+   subordinate, which is the wrong way round.
+
+   **The width the copy is written against is this band's**, so the type is the
+   panel's small size and the list is unbulleted — four rows of two words and a
+   dash read as a table at this width, and a bullet column would cost a
+   character of every line. */
+.ref-how-card {
+  margin: 0.45rem 0.35rem 0.2rem;
+  padding: 0.45rem 0.55rem 0.55rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.ref-how-head { display: flex; align-items: baseline; gap: 0.4rem; }
+.ref-how-head h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.ref-how-close {
+  flex: none;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  line-height: 1;
+}
+.ref-how-close:hover { color: var(--ink); }
+.ref-how-close:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+.ref-how-p {
+  margin: 0.35rem 0 0;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.ref-how-p b { color: var(--ink); font-weight: 600; }
+.ref-how-list {
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.ref-how-list b { color: var(--ink); font-weight: 600; }
+
+/* In the mode header beside the title, where `.gloss-head h2` has `flex: 1` and
+   pushes it to the right edge. Text rather than an icon: a `?` in a circle is
+   the affordance nobody presses, and the card it opens is four sentences that
+   change what the rest of the band means. */
+.ref-how-btn {
+  flex: none;
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.ref-how-btn:hover { color: var(--ink); border-color: var(--rule-strong); }
+.ref-how-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
 /* --- Criteria, the first sub-mode. src/web/CriteriaPanel.tsx.
 
    Nothing here paints a valence. Every swatch takes its colour from an inline
@@ -6560,7 +6640,11 @@ td.text.has-hit[data-hues="8"] {
   color: var(--ink);
   cursor: pointer;
 }
-.crit-run:disabled { opacity: 0.5; cursor: default; }
+/* **`aria-disabled`, not `:disabled`** — CriteriaPanel.tsx § the run button
+   says why the button stays hoverable and focusable while the form is
+   incomplete, and where its inertness actually lives. This rule is the whole of
+   what `:disabled` was doing for it. */
+.crit-run[aria-disabled="true"] { opacity: 0.5; cursor: default; }
 
 .crit-error { margin: 0.25rem 0; font-size: 0.76rem; color: var(--ink); }
 .crit-retry {
@@ -6965,6 +7049,31 @@ td.text.has-hit[data-hues="8"] {
 .cnd-what { margin: 0; font-size: 0.74rem; line-height: 1.45; color: var(--ink-faint); }
 .cnd-quiet { margin: 0; font-size: 0.74rem; line-height: 1.45; color: var(--ink-faint); }
 .cnd-error { margin: 0; font-size: 0.76rem; color: var(--ink); }
+
+/* **The one press that spends money**, and the line under it that says so.
+   `StartBrief` in CandidatesPanel.tsx says why this is a button rather than a
+   `useEffect`. Drawn like a real action — filled, full width, an icon that names
+   the web — because a quiet link would be the sub-mode looking broken until
+   somebody found it. */
+.cnd-start { display: flex; flex-direction: column; gap: 0.25rem; }
+.cnd-start-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  width: 100%;
+  font: inherit;
+  font-size: 0.76rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  cursor: pointer;
+}
+.cnd-start-btn:hover { border-color: var(--ink-faint); }
+.cnd-start-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.cnd-start-note { margin: 0; font-size: 0.7rem; line-height: 1.45; color: var(--ink-faint); }
 
 .cnd-list-box {
   display: flex;
