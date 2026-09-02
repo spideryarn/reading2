@@ -25,7 +25,7 @@ const row = (over: Partial<AiCallRow>): AiCallRow =>
     isByok: false,
     costSource: "provider",
     creditsUsedNanos: 0,
-    upstreamInferenceNanos: null,
+    byokUpstreamNanos: null,
     computedCostNanos: null,
     ...over,
   }) as AiCallRow;
@@ -53,7 +53,7 @@ describe("what an ingest is reported to have cost", () => {
 
   it("counts BYOK, whose OpenRouter credits are legitimately zero", () => {
     const fields = jobSpendFields(
-      [row({ isByok: true, creditsUsedNanos: 0, upstreamInferenceNanos: 4_000 })],
+      [row({ isByok: true, creditsUsedNanos: 0, byokUpstreamNanos: 4_000 })],
       0,
     );
     expect(fields.aiCostNanos).toBe(4_000);
@@ -66,7 +66,7 @@ describe("what an ingest is reported to have cost", () => {
        credits — so a total that adds it unconditionally reports twice the money.
        This line gets that right only by going through `totalRows`. */
     const fields = jobSpendFields(
-      [row({ isByok: false, creditsUsedNanos: 5_000, upstreamInferenceNanos: 5_000 })],
+      [row({ isByok: false, creditsUsedNanos: 5_000, byokUpstreamNanos: 5_000 })],
       0,
     );
     expect(fields.aiCostNanos).toBe(5_000);

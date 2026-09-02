@@ -203,7 +203,9 @@ actually reaches is not always the one on its command line, and both mistakes pr
   stay in the shared tree. Run the job itself the way
   [engineering-manager.md](docs/reusable/engineering-manager.md) says — a plan doc, a few stages,
   the work delegated, and a GPT Sol review at the end of every stage. Commit each stage, and push to
-  `dev` when you finish.
+  `dev` when you finish. **Before deleting a worktree, run `npm run worktree:check` inside it** —
+  `data/` and `.env.local` are gitignored, so a clean `git status` says "safe" over the top of work
+  nothing else has a copy of.
 - **Other agents will get in your way; be tolerant.** Most of us work out of this one checkout,
   against one local Supabase and one dev server. Files change under you, tests go red for reasons
   that are not yours, the database is not how you left it. Absorb it, do your best, and carry on —

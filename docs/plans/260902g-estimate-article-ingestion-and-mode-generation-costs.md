@@ -69,9 +69,15 @@ cost-tracking machinery and must not modify it.
   is not length-dependent. **Root-caused and fixed, 2026-09-02**
   ([260902c-the-truncation-retry-cost-storm.md](../postmortems/260902c-the-truncation-retry-cost-storm.md)):
   a Vite dev-server restart re-imported the server modules, the files-mode queue's in-memory
-  claims vanished with the old module copy, and the sweeper requeued the still-running job —
-  $9.62 of the ledger's $11.36 was this. Postgres claiming never had the bug, and a restart is
-  now a pause (`src/process-state.ts`). This eval treats it as a fixed historical anomaly, and
+  claims vanished with the old module copy, and the sweeper requeued the still-running job.
+  Postgres claiming never had the bug, and a restart is now a pause (`src/process-state.ts`).
+  **The size of it was understated while it was being fixed**, in two ways the stage-1
+  aggregation caught: "$9.62 of $11.36" compared the storm against *the four storm jobs*, not
+  against the ledger, and it counted only the structure calls. Across both ledgers the waste is
+  **$10.47–$10.81 of $31.22, a third of all recorded spend** (39 unpriced rows are unknown, not
+  zero) — and one of the five groups is a `summary` step 15h20m later, a **different step on a
+  later day** than the postmortem describes. Same root cause, wider blast radius; the postmortem is corrected.
+  This eval treats it as a fixed historical anomaly, and
   separately measures *stochastic* hierarchy cost under current code — where hierarchy runs at
   effort `medium` precisely because this article filled the ceiling at `high`
   ([`src/hierarchy.ts`](../../src/hierarchy.ts)), and a truncation surfaces as a `bug` failure
@@ -190,18 +196,72 @@ cost-tracking machinery and must not modify it.
 
 ## Stages & actions
 
-### Stage: Baseline from the ledger we already have (no code, no spend)
+### Stage: Baseline from the ledger we already have (no code, no spend) ✅ 2026-09-02
 
-- [ ] Aggregate `data/_ai-calls.jsonl` (and the Postgres `ai_calls` table where populated) per
-      slug × step × runId, **separating overlapping duplicate executions from single executions**
-      and using BYOK-aware totals. Output the named-cases table into this doc's appendix,
-      replacing the current one.
-- [ ] Sanity-check against `npm run cost --reconcile` for the same period.
+- [x] Aggregated both ledgers per slug × step × runId, separating duplicate from single
+      executions, BYOK-aware. **Working kept**: `evals/cost/baseline/` — `final-numbers.py`
+      reproduces every figure quoted below, `coverage.py` the mode coverage, `pg-dump.mjs` /
+      `pg-articles.mjs` the local Postgres reads, and
+      [`stage1-baseline.md`](../../evals/cost/baseline/stage1-baseline.md) is the full report.
+      The appendix below is rewritten from it.
+- [x] Cross-checked against `npm run cost`: $28.6727 / 565 calls on the filesystem ledger,
+      per-job table identical to the cent.
+- [x] **Five corrections it made to this plan and the postmortem**, each verified from
+      timestamps rather than argued: the duplicate-execution waste is a third of all spend, not
+      the stated fraction of one incident; there was a fifth group, on a different step and a
+      later day; every headline hierarchy figure in the old appendix was taken at effort `high`,
+      which `fb82dc8` left on 2026-08-30 20:03 UTC, so the numbers were right about a
+      configuration we no longer run; two word counts were wrong; and `summarise` is a deleted
+      step whose $1.36 must stay out of any per-article figure.
 - [ ] Stop and show Greg: the observed range, labelled extrapolations, ranked expensive bits.
-      This alone answers "roughly what does an article cost" — the rest buys repeatability and
-      model comparison.
 
-### Stage: No-spend feasibility — orchestration, attribution, fixtures
+**Two requirements this stage handed the runner.** Record **effort and commit on every run** —
+this analysis was nearly wrong by 2× because a config constant moved mid-ledger and no row said
+so. And the prompt cache is worth **2.5× on chat and 7× on quiz marking**, the largest observed
+lever in the data, so per-interaction scenarios must report cold and warm separately rather than
+averaging them.
+
+### Stage: No-spend feasibility — orchestration, attribution, fixtures ✅ 2026-09-02
+
+**Design and the dry-pass output: [`evals/cost/feasibility.md`](../../evals/cost/feasibility.md).**
+All three couplings are answered, and **none of them needs the cost-tracking agents to change
+anything** — which was the coordination risk this stage existed to size.
+
+- [x] **Attribution: wrap each step's `run` in `withSpendAttribution({ scopeKind: "eval" })`.**
+      `scopeKind` is read at row-write time and `withSpendAttribution` re-enters the same box
+      ([`src/ai-spend.ts`](../../src/ai-spend.ts)), so every call inside a step writes an `eval`
+      row while keeping the owner, slug, jobId and stepName that `runStep` set. Since
+      [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts) already defines Product as
+      `scopeKind !== "eval"`, **Sol's acceptance criterion is met with no seam and no
+      coordination.** Rejected: slug-only attribution (fails exactly as Sol said), an eval
+      coordinator (a second copy of the thing being measured), and a production branch in
+      `runStep`.
+- [x] **Fixture ingress: replace only stage 1, through the existing `AdvanceParts.steps` seam.**
+      A fixture `fetch` step reads the checked-in HTML and calls the exported `writeRaw()`;
+      everything downstream is the production registry. **No SSRF guard is weakened** — rejected a
+      `fixture:`/`file:` scheme in `src/` for exactly that reason, and a non-loopback static
+      server because the box's LAN address is private and blocked anyway.
+- [x] **Shared-state safety**, plus a trap that was not in the plan: `enqueue` ends with `pump()`,
+      which drives the job with the **production** registry and wins the claim synchronously — on
+      the first dry run this silently skipped the fixture step and the pipeline looked fine. The
+      existing idiom (`VERCEL=1` across the `enqueue` call) is the fix. Also: the run tag has to
+      be on the **URL** as well as the slug, or `freeSlug` adopts an existing article.
+- [x] **The dry pass was seen to fail before it passed.** Control arm, no overlay →
+      `scope=job_step` → `Product spend: $0.0123`. Eval arm → `scope=eval` → `Eval spend:
+      $0.0123`. Same fixture, same step, same fabricated cost. The pipeline really ran
+      (`fetch 19 KB (fixture)` → `extract "Tufte CSS"` → `blocks 70 blocks`), and cleanup left
+      `ai_calls` untouched with zero `evalcost-%` articles or jobs behind.
+- [x] **`costStore.forJob(jobId)` exists**, so the plan's "read a window and filter in memory" is
+      unnecessary. That paragraph in References is superseded.
+
+**One new hard gate, and it is not ours** — see the blocker below the stages.
+**One nice-to-have**: a dedicated eval owner wants a third `SEEDED_ACCOUNTS` entry
+([`scripts/seed-accounts.ts`](../../scripts/seed-accounts.ts)), a file another agent is editing
+now. Not a blocker — the isolation comes from `scopeKind`, not from the owner — so ask for it
+rather than hand-inserting into `auth.users`.
+
+<details>
+<summary>The original framing of this stage, kept because the reasoning is what Sol reviewed</summary>
 
 The runner design has to answer three couplings before any money moves (Sol blocker 2):
 
@@ -229,17 +289,61 @@ The runner design has to answer three couplings before any money moves (Sol bloc
 - [ ] Write the decision into this doc; stop & review with Greg if the attribution seam needs
       cost-tracking coordination.
 
-### Stage: Fixture corpus — three articles, held constant
+</details>
 
-- [ ] **Short HTML** (~1,000 words): pick from `tests/fixtures/data-root/` or
-      `evals/extraction/fixtures/`.
-- [ ] **Long/dense HTML** (10k+ words): find a licence-safe candidate (or snapshot
-      `towards-a-theory-of-bugs…`'s source if licensing allows); check in with a hash as
-      `evals/extraction/fixtures/hashes.json` does.
-- [ ] **~20-page PDF**: check page counts of the existing `evals/pdf/` fixtures; add one near 20
-      pages if needed (with LICENCE). Run `planChunks` on it (free) to learn the real chunk
-      count rather than assuming pages/6.
-- [ ] Record word/page/block/gistable counts per fixture so the report can show cost-per-1k-words.
+### 🚧 Blocked: the local database cannot be migrated, by anybody
+
+**Found 2026-09-02 by the feasibility dry pass; verified independently.** `npm run db:migrate`
+refuses:
+
+> 1 ledger row(s) belong to no migration in this journal: `1788351034981`
+
+**It is `0052_per_article_job_queue`, in the `article-job-queue` worktree.** That worktree's
+journal has it at `when: 1788351034981`, which is the ledger row's `created_at` exactly; the
+migration is committed there (`540927f`) but **not pushed to `dev`**, so `origin/dev`'s journal
+does not contain it. What it did is visible in the database: `spideryarn.jobs` now carries
+`jobs_active_work`, `jobs_reserved_slug`, `jobs_active_source` and `jobs_one_running_per_slug`,
+and `jobs_active_slug` is gone.
+
+*(A first pass at this attributed the row to a since-deleted
+`20260902122542_auth_users_token_defaults.sql`. That was wrong — a peer session working on the
+same blockage supplied the jobs-index detail, and the journal `when` settled it. Recorded because
+a wrong attribution here sends somebody to delete the wrong ledger row.)*
+
+The consequence is wider than this plan: **`byok_upstream_nanos` cannot be applied**, so
+`src/db/schema.ts` and the local database disagree, every Postgres-backed test fails, and
+`runStep`'s own `jobSpend` errors on every job. **Nobody's ledger row needs deleting** — the fix
+is to push `540927f` to `dev`, after which the journal reconciles. Until then the paid runs cannot
+start and neither can the cost-tracking plan's stage 1b.
+
+### Stage: Fixture corpus — three articles, held constant ✅ 2026-09-02 (with two gaps)
+
+Measured by running `runExtract`, `runBlocks`, `pass0` and `planChunks` locally — all four are
+free, which was checked in the code before running rather than assumed.
+
+| slot | pick | measured |
+|---|---|---|
+| Short HTML | `tests/fixtures/data-root/data/writes/raw.html` (a Paul Graham essay) | 561 words, 19 blocks, 18 gistable, sha256 `728a75e7…` |
+| Long/dense HTML | `evals/extraction/fixtures/gwern.html` ("The Scaling Hypothesis", public domain) | 16,855 words, 186 blocks, 177 gistable, sha256 `4a2564b8…` |
+| PDF | `evals/pdf/harder/source.pdf` | 14 pages, 11,937 words, **5 chunks** `[3,3,3,3,2]`, sha256 `18d0d66a…` |
+
+- [x] **`planChunks` confirmed the plan's own warning**: `much-harder` is 17 pages and still
+      plans 3 chunks, capped by `MAX_CHUNK_PAGES`. Pages ÷ 6 would have been wrong three times
+      out of three.
+- [ ] **Gap 1 — nothing checked in is a normal ~1,000-word article.** The hole runs from 625
+      words (`mkdocs_tabs.html`, and it is one of the deliberately-broken extraction fixtures, so
+      it is excluded as pathological) to 1,638 (`shakespeare_hamlet`, a play scene rather than
+      prose). 561 words is the closest honest choice; say so in the report rather than calling it
+      a thousand.
+- [ ] **Gap 2 — no PDF fixture is near 20 pages.** `much-harder` is 17 but is a photographic
+      scan, so its cost is vision transcription and not representative; `harder` is 14 and
+      born-digital. Taking `harder` and flagging the shortfall — a true 20-page fixture means a
+      new licensed download, which is a decision for Greg, not a thing to slip in.
+- [x] `gwern.html` was checked for the duplication failure its corpus exists to provoke: zero
+      exact-duplicate blocks under current code, so its word count is trustworthy.
+- **For the feasibility stage**: three of the five `tests/fixtures/data-root/` articles have no
+  committed `raw.html` by design, so they cannot enter stage 1 at all without the fixture-input
+  seam.
 
 ### Stage: v1 runner — one article, end to end, cold
 
@@ -301,27 +405,45 @@ The runner design has to answer three couplings before any money moves (Sol bloc
 
 ## Appendix
 
-### Observed named cases (from the existing ledger; extrapolations labelled)
+### Observed named cases
 
-| Case | Observed |
-|---|---|
-| `read`, 468 words / 23 blocks — hierarchy+labels, per single execution | **$0.047–0.078** (six overlapping duplicate executions in the file; per-execution is the honest unit) |
-| `what-if-we-had-bigger-brains…`, 13,476 words / 172 blocks — hierarchy+labels | **$0.36** |
-| same article + arc, glossary, ideas, sketch (the four measured modes) | **~$0.91** partial total; quotes/tweets/timeline/quiz unmeasured |
-| `towards-a-theory-of-bugs…` — the duplicate-execution incident | $5.43 in one job (11 overlapping executions, distinct runIds; a *waste* incident, not a per-article cost) |
-| PDF extraction, easy fixture | ~$0.01 (`evals/pdf/README.md`); full BYOK eval runs span ~$0.015–0.118 upstream |
-| chat turn | ~$0.04 |
-| embeddings per article | ~$0.0003 |
+Rewritten 2026-09-02 from the stage-1 aggregation; full tables and method in
+[`evals/cost/baseline/stage1-baseline.md`](../../evals/cost/baseline/stage1-baseline.md).
+**Split by effort**, because `fb82dc8` moved hierarchy from `high` to `medium` partway through
+the ledger and the two halves are not comparable.
 
-**Labelled extrapolations** (to be replaced by the eval): a short article with all per-article
-modes pressed plausibly lands **under ~$1**; a long article **roughly $1–3**; per-run eval cost
-over three fixtures with repeats, order of **$3–8**. The historical $5+ figures are duplicate
-execution, not a cost any single ingest should pay.
+**Under current code** (`medium`, the only two clean observations we have):
+
+| slug | words | ingest + first open | of which |
+|---|---|---|---|
+| `own-spya-bf6g9b` | 2,530 | **$0.0987** | hierarchy+labels $0.0814, arc $0.0173 |
+| `replication-crisis-spya-hrjamq` | 21,200 | **$0.6100** | hierarchy+labels $0.5200, arc $0.0900 |
+
+That is $0.032 and $0.025 per 1,000 words — **the long article is cheaper per word**, which is
+the opposite of the shape the old appendix implied.
+
+**Under the old `high` effort** (everything in the filesystem ledger): `read` 459 words,
+hierarchy+labels **$0.047–0.078** per single execution; `what-if-we-had-bigger-brains…` 12,975
+words, **$0.3639**, and **~$0.91** with arc, glossary, ideas and sketch added.
+
+**Other measured units**: sketch $0.23 · ideas $0.17 · timeline $0.12–0.18 · quiz $0.079–0.110 ·
+glossary $0.024–0.081 · quotes $0.029 · embeddings **$0.0006** per article · PDF extraction
+$0.007–0.12 upstream on Luna, which is **8× cheaper than terra** on the same corpus. A chat turn
+is $0.068 cold and $0.027 warm; quiz marking $0.050 cold and $0.0068 warm.
+
+**Labelled extrapolations** (what the eval exists to replace): short article, every mode pressed,
+~$0.25–0.35; 13k words ~$1.2–1.3; 21k words ~$1.5–2.0. None of those has been observed end to end
+on one article — they are sums of single executions from different articles.
+
+**Total historical spend, both ledgers: $31.22 over 601 rows, plus 39 unpriced rows that are
+unknown rather than zero.** A naive `SUM` over the money columns gives $52.62, an 84%
+overstatement — which is the double-count the cost-tracking plan's rename exists to kill.
 
 ### Cost-reduction candidates (Sol's re-ranking adopted; to be priced by the eval)
 
-1. ✅ **Duplicate job execution** — was the largest historical waste ($9.62 of $11.36), **fixed
-   2026-09-02**
+1. ✅ **Duplicate job execution** — the largest waste in our history by a distance:
+   **$10.47–$10.81 of $31.22, a third of everything ever spent**, across five job/step groups.
+   **Fixed 2026-09-02**
    ([260902c-the-truncation-retry-cost-storm.md](../postmortems/260902c-the-truncation-retry-cost-storm.md)):
    dev-server restarts were forgetting files-mode claims; pinned by
    `tests/two-servers-one-queue.test.ts`. Still open from that work, for Greg: two OS processes
@@ -355,4 +477,11 @@ Hierarchy split/resume work is a **latency/quality/engineering** question (see t
   finding.
 - `gateway ok` ≠ `stage ok`; record both.
 - Fresh article per independent draw; `force` does not bypass PDF checkpoints.
-- Run with `SPIDERYARN_STORE=postgres`; assert the local target before spending.
+- Run against Postgres and **assert the local target before spending**. Since 2026-09-02
+  `npm run dev` defaults to `postgres`; the CLI and the eval do not, so the runner still sets it.
+- **Record effort and commit on every run.** A config constant moved mid-ledger and no row said
+  so, which nearly made the baseline wrong by 2×. This is the trap that already bit us once.
+- **Three steps have never been paid for at all** — `extract` (PDF extraction has never run
+  through the job queue in either ledger), `tweets` (two CLI runs, both against the `claude-test`
+  stub, both unpriced), and `timeline`/`quiz` outside CLI/eval scope. A number for those comes
+  only from running them.

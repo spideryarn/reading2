@@ -41,6 +41,14 @@ stages ticking over while you watch. Since 2026-08-26 the watching happens on a 
 > `TableView` falls back to the root gist, which is exactly why it is worth writing down rather than
 > leaving to be noticed. The same applies to `tweets`, `glossary`, `summary` and `ideas` whenever a
 > reader asks for one. That is the hydration problem, and it is the next piece.
+>
+> **Fixed on 2026-09-01, and this paragraph is kept because the diagnosis was right.** `claimSession`
+> ([`src/jobs.ts`](../../src/jobs.ts)) is two lines now: under `SPIDERYARN_STORE=postgres` a claim
+> gets `openPgStoreSession`, whose reads are the article's own draft revision rather than a
+> job-scoped directory, and every late step's `run` takes the article through `readArticle(ctx.slug,
+> store)` instead of opening a path. `tests/claim-session-postgres.test.ts` § *"runs a late single
+> step that reads the article from the store, not from its empty root"* ingests under one job id and
+> then runs `["arc"]` under a second, which is exactly the shape above.
 
 > **Superseded, and kept.** *"This does not make an ingest work on Vercel, and the section below
 > saying it nearly does is the mistake worth not repeating."* Every stage still writes
@@ -131,6 +139,14 @@ having checksummed one document and extracted another. Verified bytes are *copie
 staging key is left alone. A sweep after `SWEEP_GRACE_MS` is not built;
 [`tests/upload-acquire.test.ts`](../../tests/upload-acquire.test.ts) asserts the object survives,
 which is what stops somebody adding the obvious `remove` later.
+
+**A reload of `/add/upload/<id>` is answered from the upload record once the job has gone.** Finished
+jobs are trimmed to fifty per reader, and modes are jobs, so fifty is a fortnight of ordinary use.
+After that the upload is still `claimed` and the article is still on the shelf, so `POST /api/jobs
+{uploadId}` answers `200 {article}` — the slug the record has carried since `enqueue` returned —
+rather than 202 with a job that no longer exists, and `AddPage` goes straight to the article. While
+the job *is* there it is still the answer, whatever status it is in, matched by `upload.id` rather
+than by slug.
 
 **An upload never adopts an existing article.** `freeSlug` may adopt one, because `urlKey` can
 prove two addresses are one piece. An upload has no address, so there is nothing that could make
@@ -398,8 +414,10 @@ other way round:** *which slug already holds this `urlKey`?*
 The lookup is an argument, which is what makes every decision above testable without a filesystem, a
 network or a queue. Its default asks the shelf and then **the live queue** — because a job that is
 queued or running has taken a slug and not yet published an article for it. Without that second
-half, two adds of one URL a second apart get two slugs, the queue's `jobs_active_slug` conflict
-(which is on the slug) never fires, and the reader pays twice.
+half, two adds of one URL a second apart get two slugs, every unique key in the schema contains the
+slug so none of them fires, and the reader pays twice. **Two adds of one URL at the same *instant*
+are a different case**, which no slug-shaped key can catch and `jobs_active_source` does — see
+[The article's line](#the-articles-line).
 
 ### What it still cannot know
 
@@ -657,13 +675,97 @@ a `claim` that ignored its argument, on both adapters
 
 **What the number rations is spend and provider rate limits**, not CPU, memory or connections. There
 is no spend cap anywhere in this repo, and the label and summary fan-outs each multiply by N. It does
-not ration correctness: two jobs still never run on one article, which is `jobs_active_slug`'s job
-and not this one.
+not ration correctness: two jobs still never *run* on one article, which is the article's own line
+below and not this one.
 
 **The pump does not start on Vercel.** It cannot outlive the invocation that made it, so all it
 could produce there is a `running` row whose claimant is already frozen. The browser is the only
 driver in production, which is what the advance endpoint was built for.
 
+### The article's line
+
+**Within one article the jobs form a queue; the cap above is across articles.** Greg, 2026-09-02:
+*"can we always and by default append to existing per-article queue, so that we can run as much as we
+like, and it simply takes longer?"* So a second, different request for one article is **created**,
+not refused, and waits.
+
+Four partial unique indexes on `jobs` arbitrate it ([`src/db/schema.ts`](../../src/db/schema.ts)),
+and they replaced one — `jobs_active_slug`, unique on `(owner_id, slug)` over `queued` and `running`
+— which had been doing three jobs at once. Splitting it is what let an article hold more than one:
+
+| index | on | where | for |
+|---|---|---|---|
+| `jobs_one_running_per_slug` | `(slug)` | `status = 'running'` | the article mutex |
+| `jobs_reserved_slug` | `(slug)` | active **and** `reserves_name` | name reservation |
+| `jobs_active_work` | `(owner_id, slug, work_key)` | active **and not** `cancelling` | de-duplication |
+| `jobs_active_source` | `(owner_id, url_key)` | active **and** `reserves_name` | one mint per address |
+
+Two more things came with them and are easy to miss. `jobs_slug_order`, a **non-unique** index on
+`(slug, created_at, id)` over the active statuses, is what the predecessor scan reads — it runs inside
+the `queue_state` lock every claimant takes, so a sequential scan there would serialise the whole
+account behind it. And a check constraint, `jobs_cancelling_is_running`: a `queued` row carrying
+`cancelling` is a state the cancellation API cannot produce and nothing could clear, and it would sit
+outside `jobs_active_work` while still blocking its article's line for ever.
+
+**The first two are global on `slug`, not owner-scoped.** `articles.slug` is globally unique because
+it is the URL contract, so two owners can build toward one name. De-duplication is a fact about one
+person's request; the article is not.
+
+**`reserves_name` is *the slug was minted*,** and nothing broader. `enqueue` fills `url` from
+`meta.json` for a late step, so `{slug, steps:["ideas"]}` on an article that has been on the shelf
+for a month carries a URL exactly as a fresh paste does — and that request is *naming* an article
+rather than claiming a name. The fact is known at one moment only, which is why slug allocation
+returns `{slug, kind: "minted" | "adopted"}` rather than a string
+([`freeSlug`](../../src/jobs.ts)). An upload always mints, there being no address that could make two
+uploads one article.
+
+**Which conflict fired is decided by re-reading, never by the constraint name.** One insert can
+violate two of those indexes at once and Postgres promises nothing about which it reports; read as
+the wrong one, the caller renames an article and pays for a second model call. So `enqueueOrGet`
+keeps `on conflict do nothing` and classifies from the rows — `EnqueueOutcome` in
+[`src/store/jobs.ts`](../../src/store/jobs.ts), four answers with four different repairs.
+
+**The order is enforced at the claim**, and nowhere else: a job may claim only when **no older active
+row and no other running row exist for the same slug**, ordered by `(created_at, id)`; otherwise
+`busy`, *another job on this article is ahead of it*. Called a deterministic order rather than FIFO
+on purpose — Postgres is given the application's millisecond timestamp and `id` is random, so two
+requests inside one millisecond order by luck. What the rule guarantees is that the set of
+predecessors is the same for every claimant and never empties out of order; two requests that close
+together are a double-click, which de-duplication collapses into one job before the order can matter.
+
+**The *"and no other running row"* half is not a refinement of the first**, and leaving it out cost a
+500. A row whose insert commits after a newer one has already claimed the slug has nothing older than
+it on the article, so an order-only rule lets it through — and its `UPDATE` then walks into
+`jobs_one_running_per_slug`, which is a unique violation where the contract says wait. On the
+filesystem store, which has no index underneath, it was worse: two jobs running on one
+`data/<slug>/`. The late commit still does not get to displace the job already inside the article; it
+waits like everything else.
+
+**A predecessor that is stopping still blocks.** Stop on a *queued* job settles it terminal at once
+and it leaves the line by itself; Stop on a *running* one leaves it `running` with `cancelling` set
+until its claimant releases or its lease lapses, and the mutex still covers that row. The successor
+unblocks when the cancellation becomes terminal, not when Stop is pressed.
+
+**The cost, named rather than solved: an abandoned `queued` row blocks its own article's line.** It
+is not swept, and there is no `last_seen_at` — that would turn *"durable until resumed or
+cancelled"* into *"alive only while a browser keeps reaching the server"*, which is a product change
+rather than the repair of an expired lease. A stuck queued job is a card with a Stop button, it
+blocks one article and nothing else, and every owner tab drives it, so it only stays queued when
+nobody is looking.
+
+**And that is why `enqueue` requires you to own the article a slug-named request targets.** The
+predecessor query is global on the slug; job lists and Stop are owner-scoped. Without the check,
+owner B could queue `{slug, steps}` against owner A's article and walk away — the job fails closed at
+claim under Postgres, but **nothing ever claims it**, so the row sits at the head of A's line for
+ever. A URL or upload mint is the exception, governed by reservation instead. A slug you do not own
+is a **404, not a 403** ([auth.md](auth.md)); a slug *nobody* has is allowed through, because a
+random short id means no other reader can ever come to want that name.
+
+**What serialising is protecting is corruption, not ambiguity.**
+[`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts) keys every artefact write, the
+`beginStep`/`finishStep` marker and `interrupted()` on `(slug, step)` in one shared `data/<slug>/`
+directory with no job scoping, and on a laptop there is no per-job scratch to save it. Two jobs
+running at once on one article would overwrite each other's output outright.
 ### On the filesystem, "one process" had to be made true
 
 The files adapter has always said its fence holds within one process and not across two, and that is
@@ -684,7 +786,6 @@ been the wrong companion fix, is
 **Two OS processes over one `data/` are still not fenced**, and that is unchanged rather than fixed —
 `claimIn`'s single `update … where status = 'queued'` is what makes Postgres immune, and running with
 `SPIDERYARN_STORE=postgres` is what CLAUDE.md already asks for.
-
 ### The browser is the worker
 
 So a wedged job in production is not a queue that needs draining. It is a job whose only engine has
@@ -842,43 +943,48 @@ it computes `stalled` there; nothing about transport health went onto `Job` or t
 The prop is **required** rather than optional, so the compiler did the fifteen-file sweep instead of
 a warning being quietly wired into two panels out of eight.
 
-### The 409 points at the job in the way
+### There is no 409, and a second job on one article simply waits
 
-Ask for work on an article that already has a job in flight and the answer is a 409 — which until
-2026-09-01 said *"That article already has a job running. Wait for it, or stop it first."* It named
-no job, offered no way to reach one, and said **running** of a job that might be idle in `queued`.
-The reader was told to stop something they could not see.
+> I got `Spideryarn is already busy with this article. Wait for that to finish, or stop it and ask
+> again.` when I tried to run Ideas while Glossary was already running. Can we always and by default
+> append to existing per-article queue, so that we can run as much as we like, and it simply takes
+> longer?
+>
+> — Greg, 2026-09-02
 
-It carries the job now, and the four parts are all load-bearing, because returning an id alone would
-have changed nothing:
+**Asking for work on an article that already has a job in flight queues a second job.** It answers
+202 with a new job id, the row goes in `queued`, and `claim` is what makes it wait its turn — see
+[The article's line](#the-articles-line) above. Only *identical* work collapses onto the job already
+doing it, so a double-click on *Find quotes* still costs one model call.
 
-1. **`JobConflict`** ([`src/jobs.ts`](../../src/jobs.ts)) holds the blocking `Job` that `enqueueOrGet`
-   already handed back. **The identity comes from the atomic conflict result, never from
-   `listJobs`** — which since Stage 3 mutates, logs and sometimes re-reads, and is not a lookup.
-2. **`structuredDetail`** in [`routes.ts`](../../src/routes.ts) matches **that class and nothing
-   else**, reads one declared field, and passes it through `publicJob` — the same call `GET
-   /api/jobs` makes. It does not spread an error's own properties, so nothing else has a route out:
-   not a database error's bound parameters, not a provider's words, not article prose. The 409 can
-   carry nothing the reader's next poll would not have handed them anyway.
-3. **`HttpError.details`** ([`lib/api.ts`](../../src/web/lib/api.ts)) — `readJson` used to drop every
-   structured field. One parsing path, not a second one for this case.
-4. **`JobProgress` renders the blocker in the same band vocabulary**, so it says *Building the
-   hierarchy · 2m 14s* rather than a static sentence. Without this it could not have shown at all:
-   `useStepJob` filters the job list to jobs writing the *requested* step, and a blocker whose steps
-   do not include it is exactly the case that produces the 409.
+**A whole family of machinery went with the refusal on 2026-09-02**, deleted rather than left,
+because dead machinery for a refusal that cannot happen is the next agent's wrong turn:
+`JobConflict`, `ARTICLE_IS_BUSY`, `structuredDetail` in [`routes.ts`](../../src/routes.ts),
+`blockingJob` and `lastBlocker` in `useJobs.ts`, `blocking` in `useStepJob.ts`, and the second
+`<Band>` in `JobProgress.tsx` that drew the blocker with its own `WORKING_ON_THIS_ARTICLE` label.
+Every panel that passed it lost a required prop. `HttpError.details` stays — it is generic and belongs to the
+error type rather than to this case — but nothing on the server puts a structured field beside
+`error` any more, and whatever brings one back must match **one declared class and read one declared
+field** rather than spreading an error's own properties: a Drizzle failure's message carries bound
+parameters, and a provider's carries its own words.
 
-**Identity from the refusal, state from the list.** The 409's copy of the job seeds the band so it
-draws at once; `queue.jobs` supersedes it; a positive terminal reading clears it. `failed` derives
-from the same value, so the refusal lasts exactly as long as the job it was about, and there is no
-window in which the sentence and the band disagree.
+*`Too many articles already called "x"` is a different sentence and stays.* It is the retry budget
+running out inside slug allocation, which is a fault rather than a queue state.
 
-> **Know before you extend this.** The throw site every band button reaches is on a list to be
-> replaced by a per-article queue —
-> [260830ar-several-articles-at-once.md](../plans/260830ar-several-articles-at-once.md) § Stage 2,
-> *"Replace the 409"*, blocked on a prerequisite another session owns, with an `it.skip` in
-> `tests/jobs.test.ts` already holding its place. The **second** throw site (a URL or upload whose
-> slug cannot move) is not on that list, so the structured body keeps earning its place — but the
-> `JobProgress` blocker branch loses its only producer the day that lands.
+**No queue positions, and that is Greg's call.** A waiting job shows as waiting, in the card it
+already has — `displayJob` says *Waiting to continue.* beside a Stop button. The reason a job is
+waiting is **logged** at the claim rather than carried to the client, which is where *"why did this
+sit for four minutes"* actually gets asked.
+
+**Two lookups had to change with it, because each picked one row where several now exist.**
+`useStepJob`'s `job` memo took the first active match out of a **newest-first** list, so a panel with
+two matching jobs — a forced and an unforced glossary, whose work keys differ — bound to the newer one
+and silently dropped the older one's progress and its failure. It takes the running match if there is
+one, otherwise the **oldest queued**, which is the one `claim` will take next, with the same
+`(createdAt, id)` tie-break so the panel and the server cannot disagree. And the upload
+repeat-claim recovery in [`routes.ts`](../../src/routes.ts) looked for a job **by slug** over every
+status, so reloading `/add/upload/<id>` could be handed a later mode job on that article, presented
+as the reader's import; it matches `job.upload.id` now, which is the thing it meant.
 
 ### The app says out loud that it needs a tab open
 
@@ -1385,8 +1491,9 @@ Five things about it are worth knowing before touching it.
   lets a claim adopt what an earlier request of the same job left behind — a two-step job whose first
   request ran `fetch` and handed the claim back holds that work in the draft, so the second request
   can skip the step and still publish it.
-- **It only happens under `SPIDERYARN_STORE=postgres`.** On a laptop with the flag unset the session
-  is the filesystem one and behaves exactly as it always has: no draft, no publication, no database.
+- **It only happens under `SPIDERYARN_STORE=postgres`.** On a laptop where the flag is `files` — set
+  explicitly, since `npm run dev` itself now defaults to `postgres` — the session is the filesystem
+  one and behaves exactly as it always has: no draft, no publication, no database.
   [`tests/claim-session-files.test.ts`](../../tests/claim-session-files.test.ts) is that half of the
   claim, and it proves it by taking `DATABASE_URL` away.
 - **Opening it is a database call, so it can fail — and that failure ends the job.** Two doors reach

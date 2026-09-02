@@ -27,6 +27,72 @@ import { devWatchIgnored } from "./scripts/worktree-admin.js";
 const WATCH_IGNORED = devWatchIgnored(fileURLToPath(new URL(".", import.meta.url)));
 
 /**
+ * Refuse to boot a Postgres-mode server whose database does not answer.
+ *
+ * **The env checks are not enough, and that is the whole reason this exists.**
+ * `src/store/index.ts` refuses at module load when the Supabase Storage
+ * variables are missing, and `getDb()` explains an absent `DATABASE_URL` — but
+ * both of those read *settings*. With every setting present and the containers
+ * simply stopped, nothing throws: the server boots clean and the first `/api`
+ * request dies on a raw connection error. That is precisely the outcome
+ * `createApiMiddleware` below declares this file's anti-goal, and since
+ * `npm run dev` now defaults to `postgres` it is the routine state of a fresh
+ * checkout rather than an edge case. Absent is conclusive; present is not.
+ *
+ * `select 1` and nothing more. It is not a health check, it does not retry, and
+ * it must not grow into one — the question is only whether there is a database
+ * on the other end of the URL we are about to serve every read from.
+ *
+ * **`cause` before `message`, and it is the whole value of the message.**
+ * Drizzle wraps a failure as `Failed query: select 1`, which names what we
+ * asked and not what went wrong — so an unreachable database and a permissions
+ * error read identically. The `ECONNREFUSED` a person needs is on the `cause`.
+ *
+ * **Dev and preview only.** It is reached from `createApiMiddleware`, which
+ * `apply: "serve"` keeps out of a build, so a serverless cold start pays
+ * nothing for it.
+ */
+async function assertStoreReachable(): Promise<void> {
+  const { STORE } = await import("./src/store/live.js");
+  if (STORE !== "postgres") return;
+
+  const [{ getDb }, { sql }] = await Promise.all([
+    import("./src/db/client.js"),
+    import("drizzle-orm"),
+  ]);
+
+  /* **A deadline, because the pool has none.** `new Pool(...)` in src/db/client.ts
+     sets no `connectionTimeoutMillis`, so a refused connection comes back at once
+     but a blackholed address or a stalled TLS handshake never comes back at all —
+     and a dev server that hangs before printing its URL is a worse failure than
+     the 500 this function exists to replace. Not retried: `supabase start` already
+     waits for readiness, and typing the command again is the right response to the
+     narrow case where the container is up but Postgres is still recovering.
+     GPT Sol, 2026-09-02. */
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("timed out after 5s")), 5_000);
+    timer.unref();
+  });
+
+  try {
+    await Promise.race([getDb().execute(sql`select 1`), deadline]);
+  } catch (err) {
+    const cause = err instanceof Error && err.cause instanceof Error ? err.cause : err;
+    throw new Error(
+      `SPIDERYARN_STORE is "postgres", but the database did not answer: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }. Locally: npm run db:start, and check DATABASE_URL in .env.local. To work off the ` +
+        "filesystem instead, put SPIDERYARN_STORE=files in .env.local — that file beats both this " +
+        "script's default and anything you type on the command line (src/env.ts). " +
+        "See docs/project/supabase-local.md.",
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * One process, one command (`npm run dev`). The API is mounted as dev middleware
  * rather than as a separate server so there's nothing to run in a second
  * terminal while the ideas are still moving — see src/routes.ts for the routes
@@ -46,7 +112,85 @@ const WATCH_IGNORED = devWatchIgnored(fileURLToPath(new URL(".", import.meta.url
  * still lands at **server boot**. A store misconfiguration must not first show
  * up as a 500 on somebody's first request.
  */
+/**
+ * Has a dev server in **this process** ever come up? Kept on `globalThis`, not in
+ * a module-level `let`.
+ *
+ * Vite re-bundles and re-imports this config on every restart, so module state
+ * is reset exactly when the question is asked, and a flag that always reads
+ * `false` would answer "first boot" for ever — a guard whose failure mode is
+ * silence, which is the thing this whole file keeps meeting. The process is the
+ * scope the question is actually about.
+ */
+const BOOTED = Symbol.for("spideryarn.devServerHasBooted");
+
+function hasBooted(): boolean {
+  return (globalThis as Record<symbol, unknown>)[BOOTED] === true;
+}
+
+function markBooted(): void {
+  (globalThis as Record<symbol, unknown>)[BOOTED] = true;
+}
+
+/**
+ * The API middleware, or — on a **restart** — one that answers 503 and says why.
+ *
+ * ## Why a restart must not throw, when first boot must
+ *
+ * `assertStoreReachable` throwing at first boot is right: nothing is serving, and
+ * a dev server that silently reads from the wrong place is worse than one that
+ * refuses. On a restart the same throw is a resource leak. Vite wires its file
+ * watcher 23 lines *before* it awaits `configureServer`, and `restartServer`'s
+ * failure path logs and returns without closing the half-built server it can no
+ * longer reach. So a throw here abandons a live, watching, restart-capable
+ * orphan: a second independent restart chain in one process. The next config
+ * change fires both, the real one rebinds its port, and the orphan walks up to
+ * the next free one. Every failed restart adds a chain, so with N chains one
+ * failure adds N.
+ *
+ * That is not theory. On 2026-09-02 this process reached **eleven live dev
+ * servers on 5273-5283**, all answering 200 for the SPA and 401 for `/api`, from
+ * thirteen failed restarts — nine of them `timed out after 5s` while Postgres was
+ * busy, and the first one somebody deliberately breaking the query to prove this
+ * very guard fired. Reproduced in an isolated Vite project.
+ * docs/postmortems/260902d-a-failed-config-reload-left-a-second-dev-server-behind.md
+ *
+ * The class: **a hook that runs inside somebody else's lifecycle must not throw
+ * once that lifecycle is already running.** At startup a throw is a refusal; at
+ * restart the same throw is a leak, because the framework's error path abandons
+ * the half-built object rather than dismantling it.
+ *
+ * Degrading rather than refusing also loses nothing. The old server is still
+ * serving either way — the difference is only whether a twin of it is too.
+ */
+async function mountApi(logger: {
+  error: (msg: string, opts?: { timestamp?: boolean }) => void;
+}): Promise<Connect.NextHandleFunction> {
+  try {
+    const api = await createApiMiddleware();
+    markBooted();
+    return api;
+  } catch (err) {
+    if (!hasBooted()) throw err;
+    const why = err instanceof Error ? err.message : String(err);
+    logger.error(
+      `\n  The API did not come up on this reload: ${why}\n` +
+        "  Keeping the dev server alive and answering 503 on /api rather than throwing —\n" +
+        "  a throw here leaves a second live server behind, see\n" +
+        "  docs/postmortems/260902d-a-failed-config-reload-left-a-second-dev-server-behind.md\n" +
+        "  Fix the cause (usually: is Postgres up?) and save any file to reload.\n",
+      { timestamp: true },
+    );
+    return (_req, res) => {
+      res.statusCode = 503;
+      res.setHeader("content-type", "text/plain; charset=utf-8");
+      res.end(`The dev server's API failed to reload: ${why}\n`);
+    };
+  }
+}
+
 async function createApiMiddleware(): Promise<Connect.NextHandleFunction> {
+  await assertStoreReachable();
   const { handleApi } = await import("./src/routes.js");
   return (req, res, next) => {
     handleApi(req, res).then(
@@ -130,6 +274,26 @@ export default defineConfig(() => {
             } catch {
               /* No config to read: say nothing rather than cry wolf. */
               return;
+            }
+            /* **Did we get the port we asked for?** Asked first, because the
+               allow-list question below cannot answer it: 5274-5283 are all
+               allow-listed, so eleven leaked dev servers accumulated in one
+               process on 2026-09-02 while this plugin said nothing — it was
+               asked "is this port allowed?" when the useful question was "is
+               this the port I wanted?". A server that quietly landed somewhere
+               else is either a peer holding the port or this process leaking a
+               twin, and both are worth one line on the way past.
+               docs/postmortems/260902d-a-failed-config-reload-left-a-second-dev-server-behind.md */
+            const wanted = server.config.server.port;
+            if (wanted !== undefined && actual !== wanted) {
+              server.config.logger.warn(
+                `\n  Asked for ${wanted}, got ${actual}. Something already holds ${wanted}.\n` +
+                  "  Usually another agent's dev server. If it is THIS process, a failed config\n" +
+                  "  reload has left a second server behind and both are now serving —\n" +
+                  "  docs/postmortems/260902d-a-failed-config-reload-left-a-second-dev-server-behind.md\n" +
+                  `  Check with:  ss -ltnp | grep $$\n`,
+                { timestamp: true },
+              );
             }
             if (allowed.length === 0 || allowed.includes(actual)) return;
             const plan = portInRange(actual)
@@ -227,7 +391,8 @@ export default defineConfig(() => {
         // Vite awaits both hooks, so the `await` here is what keeps a store
         // misconfiguration a boot-time refusal rather than a first-request 500.
         async configureServer(server) {
-          server.middlewares.use(await createApiMiddleware());
+          const mounted = await mountApi(server.config.logger);
+          server.middlewares.use(mounted);
         },
         /* The same API in front of the built bundle, so `vite preview` serves
            something a reader could actually use.

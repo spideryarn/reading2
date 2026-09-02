@@ -87,7 +87,7 @@ describe("the breakdowns", () => {
       isByok: false,
       costSource: "provider",
       creditsUsedNanos: 0,
-      upstreamInferenceNanos: null,
+      byokUpstreamNanos: null,
       computedCostNanos: null,
       ...over,
     }) as AiCallRow;
@@ -112,7 +112,7 @@ describe("the breakdowns", () => {
 
   it("counts BYOK, whose credits are legitimately zero", () => {
     const groups = by(
-      [row({ isByok: true, creditsUsedNanos: 0, upstreamInferenceNanos: 4_000 })],
+      [row({ isByok: true, creditsUsedNanos: 0, byokUpstreamNanos: 4_000 })],
       (r) => r.job,
     );
     expect(groups[0]?.nanos).toBe(4_000);

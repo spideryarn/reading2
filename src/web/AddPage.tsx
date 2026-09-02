@@ -151,7 +151,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
        dependency list. */
     const queueIt =
       uploadId !== undefined ? uploadRef.current(uploadId) : addRef.current(source);
-    void queueIt.then((job) => {
+    void queueIt.then((queued) => {
       /* **Only if this is still the POST we are waiting for.** Two `/add/`
          addresses in quick succession, or Retry, leave two requests in flight,
          and the first can land last — which would put the *first* article's job
@@ -162,8 +162,21 @@ export function AddPage({ source: origin }: { source: AddSource }) {
          in `queue.error`. Without that branch the page sat on "Queueing it…"
          for ever, with the error above it and no way to try again. */
       if (posted.current !== want) return;
-      if (job) setStarted(job.id);
-      else setFailed(true);
+      if (!queued) {
+        setFailed(true);
+        return;
+      }
+      /* **Nothing was queued, because there was nothing left to queue.** A
+         reload of `/add/upload/<id>` after retention has taken the ingest's job
+         record away is answered with the article the file became rather than
+         with a job — `queueAnUpload` in src/routes.ts. There is no card to
+         show and nothing to wait for, so this is the same navigation the
+         `done` effect below does, arriving a step earlier. */
+      if ("article" in queued) {
+        navigate(readHref(queued.article), { replace: true });
+        return;
+      }
+      setStarted(queued.id);
     });
     /* The two plain strings, never `origin` itself. That object is a fresh
        literal on every render of the component above, so depending on it would

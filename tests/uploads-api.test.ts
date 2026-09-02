@@ -18,7 +18,13 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { handleApi, parseJobRequest } from "../src/routes.js";
 import { slugFromFilename, slugWithShortId } from "../src/ingest.js";
 import { forgetUpload, recordsSurviveTheRequest } from "../src/upload-records.js";
-import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
+import { forgetForTests, fsJobStore } from "../src/store/jobs-fs.js";
+import type { OwnerId } from "../src/owner.js";
+import type { JobStep } from "../src/types.js";
+import { acceptAny, AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
+
+/** The reader `AUTHED_HEADERS` is, which is who these jobs belong to. */
+const OWNER = TEST_SUB as OwnerId;
 
 /**
  * **The ids this file minted, and only those.**
@@ -304,5 +310,187 @@ describe("the slug an upload gets", () => {
     expect(slugWithShortId("bergson-matter-memory-1911")).toMatch(
       /^bergson-matter-memory-1911-spya-[a-z0-9]{6}$/,
     );
+  });
+});
+
+/**
+ * **Reloading `/add/upload/<id>` hands back *this upload's* job.**
+ *
+ * The recovery: the claim on an upload is create-only, so a double-click or a
+ * reload arrives after the first request has taken it. That is the same request
+ * twice rather than a conflict, so the route looks for the job the first claim
+ * produced and returns it.
+ *
+ * It looked for it **by slug**, over every status — `all.find(j => j.slug ===
+ * slug)`. That was one answer while an article could hold one job. An article
+ * holds a *line* now, so the reader who imported a PDF and then pressed
+ * Glossary could reload their import page and be handed the **glossary run**,
+ * presented as their import: `listJobs` is newest first, and the glossary job is
+ * newer. It also depended on `noteSlug` having landed, where the upload id is on
+ * the job record from the moment `enqueue` returns.
+ *
+ * So it matches `job.upload.id === uploadId`, which is the thing it means.
+ * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 1h.
+ *
+ * **Watched red on 2026-09-02** with the slug lookup put back: *"the reload was
+ * handed a later mode job on the same article: expected 'spya-…' to be
+ * 'spya-…'"*.
+ */
+describe("the job a repeat claim finds", () => {
+  it("matches the upload rather than the article, so a later mode job cannot stand in", async () => {
+    const minted = await call("POST", "/api/uploads", {
+      filename: "repeat-claim.pdf",
+      bytes: 1024,
+      sha256: "b".repeat(64),
+    });
+    expect(minted.status).toBe(201);
+    const uploadId = String(minted.body.uploadId);
+
+    /* **`VERCEL`, so `enqueue` does not start driving what it queues.** `pump`
+       returns immediately when it is set (src/jobs.ts); without it the ingest
+       runs, fails looking for bytes nobody uploaded, and the job this case is
+       about is terminal before the second request arrives. The recovery has to
+       work either way, but a race is not what is being tested here. */
+    const was = process.env.VERCEL;
+    process.env.VERCEL = "1";
+    const made: string[] = [];
+    try {
+      const first = await call("POST", "/api/jobs", { uploadId });
+      expect(first.status, `refused with: ${String(first.body.error)}`).toBe(202);
+      const ingest = String(first.body.id);
+      const slug = String(first.body.slug);
+      made.push(ingest);
+
+      /* A mode job on the article the upload became, **queued afterwards** — so
+         it is the newer of the two and sorts first in the list the route reads.
+         This is what a reader produces by pressing Glossary and then reloading
+         the tab their import was in. */
+      const later = await call("POST", "/api/jobs", {
+        slug,
+        steps: ["glossary"],
+        useProfile: false,
+      });
+      expect(later.status, `refused with: ${String(later.body.error)}`).toBe(202);
+      made.push(String(later.body.id));
+      expect(later.body.id).not.toBe(ingest);
+
+      /* The reload. The claim is already taken, so this is the recovery path. */
+      const again = await call("POST", "/api/jobs", { uploadId });
+      expect(again.status, `refused with: ${String(again.body.error)}`).toBe(202);
+      expect(again.body.id, "the reload was handed a later mode job on the same article").toBe(
+        ingest,
+      );
+    } finally {
+      if (was === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = was;
+      await forgetForTests(made);
+    }
+  });
+
+  /**
+   * **An ingest that is over is still the answer**, which is the half the case
+   * above cannot see: it keeps its ingest `queued` on purpose, so a `jobForUpload`
+   * narrowed to the active statuses would pass it.
+   *
+   * The reader who imported a PDF, watched it finish, and then reloaded the tab
+   * it happened in must be shown *that* job — the page navigates to the article
+   * off a `done` job (src/web/AddPage.tsx) — rather than a 409 saying somebody
+   * else has their file. The earlier review asked for this case and it did not
+   * land.
+   *
+   * Watched red on 2026-09-02 with `jobForUpload` narrowed to
+   * `queued`/`running`: *"a finished ingest was not found: expected 409 to be
+   * 202"*.
+   */
+  it("hands back an ingest that has already finished, rather than refusing the reload", async () => {
+    const minted = await call("POST", "/api/uploads", {
+      filename: "finished-claim.pdf",
+      bytes: 1024,
+      sha256: "c".repeat(64),
+    });
+    expect(minted.status).toBe(201);
+    const uploadId = String(minted.body.uploadId);
+
+    const was = process.env.VERCEL;
+    process.env.VERCEL = "1";
+    const made: string[] = [];
+    try {
+      const first = await call("POST", "/api/jobs", { uploadId });
+      expect(first.status, `refused with: ${String(first.body.error)}`).toBe(202);
+      const ingest = String(first.body.id);
+      made.push(ingest);
+
+      /* Ended the way a real one ends — claimed, then finished under its own
+         token — rather than by writing `done` into the record, so the job is
+         terminal in every account the store keeps of it. */
+      const attempt = "attempt-finished-claim";
+      const claimed = await fsJobStore.claim(ingest, OWNER, attempt, 600_000, 4);
+      expect(claimed.kind).toBe("claimed");
+      await fsJobStore.finish(ingest, attempt, {
+        status: "done",
+        steps: (first.body.steps as JobStep[]).map((step) => ({ ...step, status: "done" })),
+      });
+
+      const again = await call("POST", "/api/jobs", { uploadId });
+      expect(again.status, "a finished ingest was not found").toBe(202);
+      expect(again.body.id).toBe(ingest);
+      expect(again.body.status).toBe("done");
+    } finally {
+      if (was === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = was;
+      await forgetForTests(made);
+    }
+  });
+
+  /**
+   * **And when the job record has gone, the upload record answers.**
+   *
+   * Finished jobs are trimmed to fifty per reader (`KEEP_FINISHED`,
+   * src/jobs.ts). Modes are jobs now — a glossary, a set of ideas, a quiz are
+   * three more rows on one article — so fifty is a fortnight rather than a year,
+   * and after it the upload is still `claimed`, the article is still on the
+   * shelf, and the reader reloading `/add/upload/<id>` was told *"That upload is
+   * already being turned into an article."* about an article they finished
+   * reading. GPT Sol, reviewing the built stage 1, finding 5.
+   *
+   * The upload record outlives the job by design — uploads are swept on their
+   * grant, never trimmed by count — and it has carried the slug since the moment
+   * `enqueue` returned. So the recovery asks it, and answers with the article
+   * rather than with a job that no longer exists.
+   *
+   * `forgetForTests` is retention, done by hand: what the reader is left with is
+   * a claimed upload, an article, and no job row.
+   *
+   * Watched red on 2026-09-02: *"the reader was refused their own article:
+   * expected 409 to be 200"*.
+   */
+  it("answers from the upload record once the ingest job has been trimmed away", async () => {
+    const minted = await call("POST", "/api/uploads", {
+      filename: "trimmed-claim.pdf",
+      bytes: 1024,
+      sha256: "d".repeat(64),
+    });
+    expect(minted.status).toBe(201);
+    const uploadId = String(minted.body.uploadId);
+
+    const was = process.env.VERCEL;
+    process.env.VERCEL = "1";
+    try {
+      const first = await call("POST", "/api/jobs", { uploadId });
+      expect(first.status, `refused with: ${String(first.body.error)}`).toBe(202);
+      const slug = String(first.body.slug);
+
+      // Retention, arriving.
+      await forgetForTests([String(first.body.id)]);
+
+      const again = await call("POST", "/api/jobs", { uploadId });
+      expect(again.status, "the reader was refused their own article").toBe(200);
+      expect(again.body.article, "the answer has to name the article to be worth anything").toBe(
+        slug,
+      );
+    } finally {
+      if (was === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = was;
+    }
   });
 });

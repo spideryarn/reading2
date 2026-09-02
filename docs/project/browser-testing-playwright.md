@@ -37,6 +37,30 @@ is not the check here**: the dev server is an SPA fallback, so a path that does 
 answers 200 with a perfectly good shell — verified on `/definitely-not-a-real-path-zzz`. Wait for
 something only the real page has, as the skeleton does.
 
+**Say `localhost`, never `127.0.0.1`.** Vite binds `[::1]` only, and this box resolves `localhost`
+IPv6-first, so `localhost:5273` works while `http://127.0.0.1:5273/` is refused outright — measured
+2026-09-02. Anything that forces IPv4 gets a connection error that reads as "the server is down".
+
+### In a worktree, 5273 is somebody else's server
+
+5273 belongs to the **primary checkout**. A browser check run from a worktree against it exercises
+none of that worktree's changes — not the client, because the primary's vite deliberately excludes
+`.claude/worktrees/**` from its watcher and serves its own files, and not the server, because the API
+middleware was imported when the primary booted. It returns a perfectly good `ok`.
+
+This is not hypothetical: on 2026-09-02 **no worktree on this box was running a dev server at all**,
+so every browser check ever run from one had tested the primary. `scripts/browser-sign-in.ts` now
+refuses to default from inside a worktree rather than doing that quietly. Start your own server and
+name it:
+
+```bash
+npm run dev                                                    # prints the port it took
+SPIDERYARN_BASE_URL=http://localhost:<port> npx tsx scripts/browser-sign-in.ts
+```
+
+`SPIDERYARN_BASE_URL` is the one knob, and it is read from the environment only — nothing loads
+`.env.local` for it.
+
 ## Signing in
 
 Every route past the gate needs a session (src/auth.ts), so the skeleton above can look at the

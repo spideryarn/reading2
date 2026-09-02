@@ -76,7 +76,7 @@ the only trace is a number in a ledger nobody reads.
 |---|---|---|---|---|
 | `spya-v2f7b3` | read (08:29) | **6** | $0.30 | **all six fine** |
 | `spya-p38nga` | towards-a-theory-of-bugs (14:05) | 10 | $4.81 | 6 at the ceiling, 3 below, 1 `error` |
-| `spya-zf0bgj` | towards-a-theory-of-bugs (17:48) | 11 | **$5.43** | 6 at the ceiling, 5 below |
+| `spya-zf0bgj` | towards-a-theory-of-bugs (17:48) | 11 | **$5.43** | 7 at the ceiling, 4 below |
 | `spya-gv99gh` | towards-a-theory-of-bugs (17:53) | 2 | $0.82 | 1 at the ceiling, 1 below |
 | `spya-ug2qtq` | towards-a-theory-of-bugs (13:51) | **1** | $0.32 | one call, 269s, no storm |
 
@@ -84,9 +84,26 @@ the only trace is a number in a ledger nobody reads.
 is how much anybody was editing.
 
 **Keeping one call from each group and calling the rest waste, this cost $9.62** of the $11.36 those
-four jobs spent — and that is the whole ledger, 565 rows, a few days of one laptop's development. The
-question that produces it is one line (*more than one `runId` for one `(jobId, step)`*) and nobody
-had ever asked it.
+four jobs spent. The question that produces it is one line (*more than one `runId` for one
+`(jobId, step)`*) and nobody had ever asked it.
+
+**Corrected 2026-09-02, twice, by the aggregation this postmortem asked for**
+([evals/cost/baseline](../../evals/cost/baseline/stage1-baseline.md), and it is why that stage
+exists rather than being a nicety):
+
+- **$11.36 is not "the whole ledger".** It is what those four jobs spent. The filesystem ledger is
+  **$28.67** over 565 rows, and with the local Postgres rows **$31.22** over 601. The sentence
+  above compared the storm against itself.
+- **There was a fifth group, and it is not hierarchy and not that day**: `openai-huggingface` /
+  **`summary`** / `spya-dmrwav`, three concurrent executions, **$0.87**, on **2026-08-31 09:22
+  UTC** — **15h20m** after the last hierarchy storm finished (`spya-gv99gh` ended 08-30 18:02:43),
+  on a step that no longer exists. This postmortem's account of the incident as hierarchy-only and
+  confined to 08-30 was wrong. The root cause is the same; the blast radius is every step the queue
+  can walk, which is what *"a safety property enforced by nothing"* should have implied and this
+  document did not say.
+- Counting the labels fan-out and that fifth group, the waste is **$10.47–$10.81 of $31.22 — a
+  third of all *recorded* spend.** Not "everything we have ever spent": 39 rows in the ledger are
+  unpriced, and the baseline is explicit that those are unknown rather than zero.
 
 ## The class
 

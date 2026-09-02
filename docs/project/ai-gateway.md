@@ -351,6 +351,68 @@ awaited before the collector closes. [`src/store/ai-calls.ts`](../../src/store/a
 adapter; `npm run cost` reads it back. The reasoning, the column list, and the four decisions taken
 in Greg's absence are in [260827q-ai-cost-tracking.md](../plans/260827q-ai-cost-tracking.md).
 
+### `byok_upstream_nanos` — the column whose name is a condition
+
+**A row's money is now `credits + byok_upstream + computed`, with nothing conditional about it**, and
+that is a change made on 2026-09-02 rather than how it always was.
+
+OpenRouter reports `cost_details.upstream_inference_cost` on *every* chat-wire call, and on an
+ordinary one it is the same money as `cost` — equal to seven decimal places on a live probe. The
+column then called `upstream_inference_nanos` stored it on every row, so
+`SUM(credits_used_nanos) + SUM(upstream_inference_nanos)` was **twice the truth**, and the rule that
+made a total correct — add the upstream figure only when `is_byok` — lived nowhere but in
+`totalRows()` in [`src/store/ai-calls.ts`](../../src/store/ai-calls.ts). Migration 0023 had
+anticipated exactly this class for the other pair of money columns and said so; this column sat
+outside its CHECK.
+
+So the column is renamed to carry its own condition, is written only on BYOK rows, and
+[the migration](../../drizzle/20260902141103_byok_upstream_nanos.sql) nulls the historical duplicates
+and adds `ai_calls_byok_upstream_only`:
+
+```sql
+CHECK (byok_upstream_nanos IS NULL
+       OR (cost_source = 'provider' AND is_byok IS TRUE AND provider_account = 'openrouter'))
+```
+
+`is_byok IS TRUE` and not a bare `is_byok`: the column is nullable, a Postgres CHECK passes on
+`UNKNOWN`, and "the provider did not say" is not "no". The same three conditions appear twice more —
+`normaliseByokUpstream` in [`src/ai-spend.ts`](../../src/ai-spend.ts), which is the only place a
+`SpendRecord`'s figure becomes this column, and the filesystem reader's validation. **They must not
+drift apart**: a row the database refuses is a call that lands in no ledger at all, because the sink
+warns rather than throws.
+
+**The JSONL ledger cannot be migrated**, being append-only, so every line ever written still says
+`upstreamInferenceNanos`. `translateByokUpstream` in
+[`src/store/ai-calls-fs.ts`](../../src/store/ai-calls-fs.ts) converts it on read under the same
+condition — carried over on a BYOK line, nulled on any other, because there it *was* the duplicate.
+Without that the whole historical file would read as damage.
+
+**Postgres is authoritative for pricing from this change's deploy, and the filesystem history is not
+imported.** GPT Sol's call, taken rather than left to the implementer: that history is development
+evidence and contains no complete ingest.
+
+### A test may not write to the real ledger, in either store
+
+`data/_ai-calls.test.jsonl` has always kept fixture calls out of the filesystem ledger, keyed on
+`NODE_ENV`. The Postgres adapter never had the other half of that contract, and the bill for it was
+**4,714 of 4,750 rows** in the dev ledger being `test-chat-route-fixture`,
+`test-remember-route-fixture` and `test-candidates-route-fixture` — every `By owner` and `By article`
+line meaningless, and a permanent "thousands of calls reported no cost" warning burying the one
+signal that would show a real unpriced problem.
+
+Since 2026-09-02 [`costStore`](../../src/store/ai-calls.ts) hands out the **filesystem** adapter to
+anything running under the test harness, whatever `SPIDERYARN_STORE` says. Redirecting rather than
+refusing, because a store that threw under test would stop the route suites exercising the metering
+lifecycle at all — which is the half of the ledger those tests are the only cover for. The focused
+`pgCostStore` tests still go to Postgres, by importing the adapter directly and cleaning up after
+themselves. `tests/cost-store-under-test.test.ts` is what says the redirect is still there.
+
+**And the report names its database**, not just its table: `npm run cost` prints
+`postgres: spideryarn.ai_calls at <host>/<db>`, password stripped. Local and remote Postgres are
+different ledgers with different money in them, and this repo has a whole section on a command
+reaching a database other than the one on its command line —
+[database.md](database.md#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like).
+
 ### `durationMs` is per **call**, and three different ways of adding it up are wrong
 
 **This has produced a wrong number in three separate workstreams on one day — 2026-08-30 — and in

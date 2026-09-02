@@ -73,7 +73,6 @@ vi.mock("../src/web/useJobs.js", () => ({
        landmine this file's siblings already note about `lastFailure`. */
     driverFailures: {},
     lastFailure: () => null,
-    lastBlocker: () => null,
     run: async (_slug: string, _steps: string[], force?: boolean) => {
       ran.push(force ?? false);
       return null;

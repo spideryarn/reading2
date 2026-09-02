@@ -582,7 +582,7 @@ part, because the failure lands in whichever file lost the race rather than in t
 
 | resource | what enforces it | how a suite cooperates |
 |---|---|---|
-| one job per article in flight | `jobs_active_slug`, and these suites share fixed fixture slugs | [`tests/helpers/run-lock.ts`](../../tests/helpers/run-lock.ts) and [`running-slot.ts`](../../tests/helpers/running-slot.ts) |
+| one job *running* per article, and its line | `jobs_one_running_per_slug` plus the predecessor rule in `claim`, and these suites share fixed fixture slugs | [`tests/helpers/run-lock.ts`](../../tests/helpers/run-lock.ts) and [`running-slot.ts`](../../tests/helpers/running-slot.ts) |
 | how many jobs run at once, anywhere | a count taken inside the `queue_state` lock by `claim`, capped by `SPIDERYARN_JOB_CONCURRENCY` | **nothing, and it does not need to** — see below |
 | the real articles in `data/` | nothing — it is a whole-suite window | [`tests/helpers/corpus-lock.ts`](../../tests/helpers/corpus-lock.ts) |
 

@@ -194,8 +194,9 @@ local database only. Five things about it are deliberate:
   nothing being wrong until somebody opens the feature that reads them.
 - **The dry run is the real write, rolled back.** Not a `select count(*)`: it runs every `update`
   inside a transaction and then rolls back, so the counts are the counts and a unique violation is
-  found by Postgres rather than predicted by us. `jobs_active_slug` is a partial index, and any
-  prediction we wrote here would have to re-implement its predicate to avoid crying wolf.
+  found by Postgres rather than predicted by us. The queue's unique indexes on `jobs` are **partial**
+  — four of them, [`src/db/schema.ts`](../../src/db/schema.ts) — and any prediction we wrote here
+  would have to re-implement four predicates to avoid crying wolf.
 - **It counts again after committing** and names anything that arrived under the old owner while it
   ran. "Nothing was left behind" and "nothing was left behind that we looked for" are different
   sentences, and this is the one that earns the first.
@@ -319,14 +320,19 @@ administrator — which is what everything above tells you to do — that is thi
 is wrong; re-run `npm run db:seed-dev` and it is on again in a second, with a new "since" date. Worth
 knowing before you go looking for a bug in the switch, which is what the date moving looks like.
 
-**It exits non-zero when `SPIDERYARN_STORE` is not `postgres`, and that is deliberate.** The variable
-defaults to `files` ([`src/store/index.ts`](../../src/store/index.ts)), so a dev server on a machine
-that has never set it serves articles off `data/` and every row this wrote is invisible in the
-browser — the seed works and the shelf looks empty. A green `npm run setup` over that is the exact
-failure this command exists to prevent, so it stops instead. **The seed itself has already committed
-by then**, so fixing the variable and re-running costs a second. Set `SPIDERYARN_STORE=postgres` in
-`.env.local` **on the laptop**; it is on `push-env`'s allowlist since 2026-09-02, so the box inherits
-it, and a line typed on the box would be destroyed by the next push.
+**It exits non-zero when `SPIDERYARN_STORE` is not `postgres`, and that is deliberate.** This script
+is a CLI script, `tsx scripts/db-seed-dev.ts`, and the variable defaults to `files` for those
+([`src/store/live.ts`](../../src/store/live.ts)) — unlike `npm run dev`, which since 2026-09-02
+defaults to `postgres` on its own. So the check is really asking whether *this process's* copy of
+the variable agrees with what the dev server will use: if `.env.local` has no `SPIDERYARN_STORE`
+line, this script sees "unset" (→ `files`) while a plain `npm run dev` will still read Postgres —
+but anyone who has set `SPIDERYARN_STORE=files` explicitly, or starts the server some other way,
+gets the old failure: every row this wrote is invisible in the browser, the seed works and the shelf
+looks empty. A green `npm run setup` over that is the exact failure this command exists to prevent,
+so it stops instead. **The seed itself has already committed by then**, so fixing the variable and
+re-running costs a second. Set `SPIDERYARN_STORE=postgres` in `.env.local` **on the laptop**; it is
+on `push-env`'s allowlist since 2026-09-02, so the box inherits it, and a line typed on the box would
+be destroyed by the next push.
 
 And the end-to-end check, which needs no human:
 
