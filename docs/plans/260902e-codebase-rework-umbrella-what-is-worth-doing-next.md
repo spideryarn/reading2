@@ -288,14 +288,27 @@ a gate through a pipe destroys the one thing you are reading it for.
 
 ## Stages, and where this run stops
 
-1. **Stage 1 — Tier 1.1 + 1.2** (this run). One cluster, one shape: make two written invariants
-   checkable. Red-first: each test must be seen to fail against a deliberate break.
-2. **Stage 2 — reproduce 0.1** and promote or demote it. Not started.
-3. **Stage 3 — 2.1**, which is 0.1's durable fix. Not started.
-4. Tier 3 stays named and unstarted.
+**Landed, in this order:**
 
-Stopping after Stage 1 leaves the tree better and coherent: an invariant that was prose is now
-checked, three copies are one, and everything else is written down here for whoever picks it up.
+1. **1.1** — `sourceHashFor` ×3 into `pg.ts` beside `blockHashQuery`, with SQL assertions. `4726a94`.
+2. **0.2 + 0.3**, both from the reviews — the chat PATCH 500, fixed with one `objectBody()` across
+   five sites; and the SQL assertions strengthened after the review passed a broken query through
+   them. `3fe721c`.
+3. **The postmortem for 0.2, and the prevention it recommends** — a table over all seven PATCH
+   routes × four non-object bodies, seen to fail against the reverted fix. `e632953`.
+
+**Not started, in the order the plan review argued for:**
+
+4. **Reproduce 0.1** with wave 2's recipe, then **2.1** for all eight surfaces — its durable fix.
+5. **2.4**, `App.tsx`'s five duplicated timeline effects: the better seam into that file.
+6. **2.2** (`fetchOk`, 14 sites) and the narrowed **2.3** (`articleSystem` only, callers re-counted).
+7. **1.2** as a direct import in `drizzle.config.ts`, scored low. **1.3**, the two strings that
+   bypass `messages.ts`.
+8. **Tier 3** stays named and unstarted, and 3.1 now wants its own plan with the wider prerequisite.
+
+Stopping here leaves the tree coherent: a live 500 is fixed and has a test that fails without it,
+three copies of a query are one, four copies of a guard are one, a false claim in three files is
+corrected, and everything not done is written down above with what is actually known about it.
 
 ## Stage 1, as it actually went — 2026-09-02
 
