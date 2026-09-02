@@ -95,6 +95,12 @@ const REQUIRED_CHECKS = [
   "docker daemon",
   "docker run as",
   "supabase",
+  // The editor, all three of the places that name it. Listed separately rather
+  // than as one "emacs", because a box can have the package and still open nano.
+  "emacs runs",
+  "EDITOR is emacs -nw",
+  "editor alternative is emacs",
+  "git core.editor",
   "sshd",
   "password auth",
 ];
