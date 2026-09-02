@@ -301,8 +301,8 @@ export function CriteriaBand({
      2026-09-02 this cleared `onFound` and left `openKey` set, so leaving
      Referee handed the next mode a key naming a passage nobody marks any more.
      The note on `TimelineBand`'s five effects in App.tsx says *"a fix to one of
-     these belongs in both"* — referee made it three, so read it as **all
-     three**, and tests/passage-mode-cleanup.test.tsx is the executable form of
+     these belongs in all three"* — it said *"in both"* until referee became the
+     third — and tests/passage-mode-cleanup.test.tsx is the executable form of
      it. docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md § T0.2. */
   useEffect(
     () => () => {

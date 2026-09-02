@@ -115,7 +115,7 @@ function statusLabel(res: Response): string {
 function logFailure(res: Response, text: string, parsed: boolean): void {
   console.error(`[api] ${res.status} ${res.url || "(no url)"}${parsed ? "" : " — reply was not JSON"}`, {
     status: res.status,
-    contentType: res.headers.get("content-type"),
+    contentType: header(res, "content-type"),
     bytes: text.length,
     body: text.length > SNIPPET ? `${text.slice(0, SNIPPET)}…` : text,
   });
@@ -166,8 +166,17 @@ function mediaType(res: Response): string | null {
  * added to observe, which is the worst possible way for one to fail.
  *
  * Twelve tests in `tests/use-search.test.ts` and `tests/use-chat-recovery.test.ts`
- * went red on it, 2026-08-31. The rule it leaves behind: **anything read only
- * for the log buffer is read through a function that cannot throw.**
+ * went red on it, 2026-08-31.
+ *
+ * **Every header read in this file goes through here — not only the ones read
+ * for the log buffer.** That was the original rule and it was too narrow:
+ * `logFailure` kept one direct `res.headers.get("content-type")` for its
+ * `console.error`, so the same accepted stub turned `failure()` — the one
+ * function whose whole job is to *build* an error — into a `TypeError`. The
+ * module has decided to accept incomplete `Response`s, and a decision that
+ * holds in most of a file holds in none of it. GPT Sol, 2026-09-02:
+ * docs/plans/260902o-adding-a-mode-wave1-a-code-review-sol.md § 2, and
+ * `tests/web-api.test.ts` § survives a response with no headers at all.
  */
 function header(res: Response, name: string): string | null {
   try {
@@ -622,7 +631,7 @@ function saving(input: string, init: RequestInit, res: Response): Response {
        chat thread and then going offline must not bring the thread back, which
        is what a cache kept past the delete would do — and it would look exactly
        like the delete having failed. See `invalidate`. */
-    if (res.ok && !storesNothing(input)) {
+    if (res.ok && !leavesCachedResourceCurrent(input)) {
       const user = lastKnownUser();
       const prefix = resourceOf(input);
       if (user && prefix) void invalidate(prefix, user);
@@ -767,31 +776,39 @@ function cacheable(input: string): boolean {
 }
 
 /**
- * **The writes that write nothing**, so that answering a question does not
- * throw away the questions.
+ * **The writes that leave our copy still correct**, so that answering a
+ * question does not throw away the questions.
  *
  * A non-GET is assumed to have changed the thing it names, which is right for
- * every route but one: `POST /api/quiz/<slug>/mark` sends one answer, streams
- * the marking back, and stores **nothing** — src/routes.ts says so of itself
- * (*"one answer, marked against one question — SSE, stateless"*). Nothing the
- * cache holds became wrong, so nothing should be thrown away; without this, a
- * reader who answered one question offline had lost the whole quiz.
+ * every route but one: `POST /api/quiz/<slug>/mark` sends one answer and
+ * streams the marking back. **It stores no quiz state** — no attempt, no score,
+ * no answer, no change to the questions — so `GET /api/quiz/<slug>` answers
+ * exactly what it answered before and the cached copy is still current.
+ *
+ * **It is not literally a write that writes nothing**, which is what this used
+ * to be called. Marking makes a model call, and that call's spend goes through
+ * the request's collector to an `ai_calls` ledger row — the route says so
+ * itself, of the article it attaches to *"every row this request writes"*.
+ * Accounting is recorded; nothing the offline store holds is affected by it.
+ * That distinction is the whole name: the test is not *did the server write*,
+ * it is *did the thing we cached change*. GPT Sol, 2026-09-02:
+ * docs/plans/260902o-adding-a-mode-wave1-a-code-review-sol.md § 3.
  *
  * Exempted here rather than inside `resourceOf`, which answers a different
  * question — *which* resource a URL is about — and would still be right if it
- * answered it for this one. This says the write is read-only.
+ * answered it for this one.
  *
  * Exact, anchored patterns, and a list so that a second one is a line: the same
  * last segment on `PATCH /api/comments/<slug>/<id>/mark` is a real write — the
  * referee's placement on a criterion — and must keep invalidating.
- * tests/api-fetch-offline.test.ts § a stateless write keeps the copy it did not
+ * tests/api-fetch-offline.test.ts § marking an answer keeps the quiz it did not
  * change asserts both directions.
  */
-const STATELESS_WRITES = [/^\/api\/quiz\/[^/]+\/mark$/];
+const LEAVE_CACHED_RESOURCE_CURRENT = [/^\/api\/quiz\/[^/]+\/mark$/];
 
-function storesNothing(input: string): boolean {
+function leavesCachedResourceCurrent(input: string): boolean {
   const path = input.split("?")[0] ?? input;
-  return STATELESS_WRITES.some((shape) => shape.test(path));
+  return LEAVE_CACHED_RESOURCE_CURRENT.some((shape) => shape.test(path));
 }
 
 /**

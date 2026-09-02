@@ -334,11 +334,15 @@ describe("the media type is parsed, not searched", () => {
 });
 
 /**
- * **A write that stores nothing must not throw away what we hold.**
+ * **A write that leaves our copy correct must not throw it away.**
  *
  * `POST /api/quiz/<slug>/mark` marks one answer against one question and
- * streams the marking back; the server writes nothing at all
- * (src/routes.ts § quiz — *"SSE, stateless"*). `resourceOf` maps it to
+ * streams the marking back; it stores **no quiz state** — no attempt, no score,
+ * no answer, no change to the questions (src/routes.ts § quiz — *"SSE,
+ * stateless"*), so `GET /api/quiz/<slug>` still answers what we cached. It is
+ * not a write that writes *nothing*: the model call behind it puts a row in the
+ * `ai_calls` ledger, which no cached read reflects — see
+ * `leavesCachedResourceCurrent` in src/web/lib/api.ts. `resourceOf` maps it to
  * `/api/quiz/<slug>` all the same, because it maps a URL to *its own* resource
  * and cannot know that this one is read-only. So the reader's quiz was evicted
  * by the act of answering a question of it, and adding `/api/quiz/` to
@@ -356,7 +360,7 @@ describe("the media type is parsed, not searched", () => {
  * reader gets — the copy is still served when the network goes.
  * docs/reusable/silent-success.md.
  */
-describe("a stateless write keeps the copy it did not change", () => {
+describe("marking an answer keeps the quiz it did not change", () => {
   /** url → body, for the one user these tests have. */
   let held: Map<string, unknown>;
 

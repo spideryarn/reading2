@@ -28,6 +28,22 @@
  *    served; matching only `req.method === "GET"` would pass a name that is not
  *    a URL at all.
  *
+ * ## The pair is found through the *binding*, not through the kind's name
+ *
+ * Until 2026-09-02 the dispatch was looked for as `if (<kind> && …)`, which
+ * quietly assumed the `const` is always named after the artefact kind. GPT Sol
+ * ran the mutation that breaks it: rename `timeline` to `timelineRoute` in both
+ * its declaration and its dispatch — a pure refactor that changes no
+ * behaviour — and drop `"/api/timeline/"` from `CACHEABLE`. The suite stayed
+ * green with one test fewer, because Timeline had fallen out of the derivation
+ * that was supposed to catch exactly that deletion. **A test that chooses its
+ * own inputs can lose one and still pass.**
+ *
+ * So the binding name is now captured from the declaration and used to find the
+ * dispatch, and `every declared artefact route is answered` below is the
+ * control: a rename that breaks the pairing names the kind and goes red instead
+ * of shrinking the list. See docs/plans/260902o-adding-a-mode-wave1-a-code-review-sol.md § 1.
+ *
  * The intersection drops the pipeline's private kinds (`raw`, `blocks`, `tree`,
  * `labels`, `assets`, …) because none of them has a route, and it drops
  * `/api/similar/` and `/api/projection/` because neither is an `ArtifactKind` —
@@ -98,13 +114,32 @@ const routesSource = readFileSync(new URL("../src/routes.ts", import.meta.url), 
 const routePattern = (kind: string) => `/^\\/api\\/${kind}\\/([\\w.%-]+)$/`;
 
 /** And the line that actually answers it. Nothing is a GET route without one. */
-const getDispatch = (kind: string) => `if (${kind} && req.method === "GET")`;
+const getDispatch = (binding: string) => `if (${binding} && req.method === "GET")`;
+
+/** So a route pattern can be looked for as itself, inside a bigger regex. */
+const literally = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+
+/**
+ * The name the route is bound to, or `null` when the kind has no route at all.
+ *
+ * Reading it out of the declaration rather than assuming it — the whole of the
+ * § above.
+ */
+const bindingOf = (kind: string): string | null =>
+  new RegExp(`const (\\w+) = ${literally(routePattern(kind))}\\.exec\\(path\\)`).exec(
+    routesSource,
+  )?.[1] ?? null;
+
+/** Every artefact kind with a URL, paired with the name that URL is bound to. */
+const declaredRoutes = Object.keys(SHAPE)
+  .map((kind) => ({ kind, binding: bindingOf(kind) }))
+  .filter((pair): pair is { kind: string; binding: string } => pair.binding !== null)
+  .sort((a, b) => a.kind.localeCompare(b.kind));
 
 /** Every artefact kind a reader can fetch on its own, one article at a time. */
-const servedArtefacts = Object.keys(SHAPE)
-  .filter((kind) => routesSource.includes(routePattern(kind)))
-  .filter((kind) => routesSource.includes(getDispatch(kind)))
-  .sort();
+const servedArtefacts = declaredRoutes
+  .filter(({ binding }) => routesSource.includes(getDispatch(binding)))
+  .map(({ kind }) => kind);
 
 /**
  * The reads the docstring on `CACHEABLE` says are left out **on purpose** —
@@ -148,6 +183,22 @@ describe("the derivation itself", () => {
      canary that says the scan still reads src/routes.ts. */
   it("finds the artefact routes that are already cached", () => {
     expect(servedArtefacts).toEqual(expect.arrayContaining(["glossary", "ideas", "quotes"]));
+  });
+
+  /**
+   * **The control on the scan above**, and the reason the binding is captured.
+   *
+   * A declared route with no dispatch found through its own binding is either a
+   * route nobody answers or — far likelier — a scan that has stopped reading
+   * the file, and in the second case every `keeps /api/<kind>/:slug` below
+   * disappears rather than fails. Naming the kind here turns a silently
+   * shrinking list into a red test that says which one went.
+   */
+  it("finds a GET dispatch for every artefact route it found a declaration for", () => {
+    const unanswered = declaredRoutes
+      .filter(({ binding }) => !routesSource.includes(getDispatch(binding)))
+      .map(({ kind, binding }) => `${kind} (bound as ${binding})`);
+    expect(unanswered).toEqual([]);
   });
 
   it("does not mistake a pipeline-private kind for a route", () => {

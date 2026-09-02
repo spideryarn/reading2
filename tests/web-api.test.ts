@@ -133,6 +133,29 @@ describe("failure", () => {
     const err = await failure(json({ error: "Nothing to change" }, 400));
     expect(err.message).toBe("Nothing to change");
   });
+
+  it("survives a response with no headers at all", async () => {
+    /* **A stand-in `Response` from a test, which this module has decided to
+       accept.** `header()` in src/web/lib/api.ts was added on 2026-08-31 for
+       exactly this — a hand-built stub whose `headers` is `undefined` made
+       `res.headers.get(…)` throw *inside* a `try` that then reported a good
+       response as a transport failure. But `logFailure` kept one direct read,
+       so the same stub turned the one function whose job is to build an error
+       into a `TypeError` instead. GPT Sol found it:
+       docs/plans/260902o-adding-a-mode-wave1-a-code-review-sol.md § 2. */
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const headerless = {
+      status: 500,
+      statusText: "",
+      url: "/api/x",
+      text: async () => '{"error":"boom"}',
+    } as Response;
+
+    const err = await failure(headerless);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).toBe("boom");
+    expect(statusOf(err)).toBe(500);
+  });
 });
 
 /**

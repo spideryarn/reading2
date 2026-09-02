@@ -24,8 +24,9 @@
  * **Since slice 1b the commonest answer is `null`.** A visitor gets the
  * glossary, the ideas, the quotes and the tweet thread, so the question this
  * file answers is no longer *which excuse* but *is there anything in the way at
- * all* — and for three of the eight modes, on an article that has them, there
- * is not.
+ * all* — and for the modes those artefacts serve, on an article that has them,
+ * there is not. `POLICY` below is the list, mode by mode; a count here would
+ * only go stale the next time a mode is added, and had.
  *
  * The sentences themselves are in src/messages.ts, like every other sentence a
  * reader sees. This file decides *which*.

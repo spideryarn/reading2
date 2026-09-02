@@ -2,8 +2,9 @@
 
 Everything the reader sees in the browser. The page has **three regions**: the **spine** (where you
 are in the article), the **prose** (what you are reading), and between them a **band** belonging to
-whichever mode is on. The first two are permanent; the band is the surface glossary, summaries,
-ideas, quotes, search, diagram and chat take turns in.
+whichever mode is on. The first two are permanent; the band is the surface the modes take turns in —
+[the list is below](#the-modes-in-the-band), and naming them here as well only means one of the two
+goes stale.
 
 **Two of the thirteen modes open no band at all**, and the default is one of them. `plain` is the article
 by itself — no band, and no gist columns either — and it is what a bare `/read/<slug>` shows since
