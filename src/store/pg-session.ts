@@ -96,13 +96,15 @@ import {
 } from "./artifacts-pg.js";
 import { createPgCheckpointStore } from "./checkpoints-pg.js";
 import { guardDbStore } from "./db-errors.js";
-import { StaleAttemptError } from "./jobs.js";
+import { DraftGoneError, StaleAttemptError } from "./jobs.js";
 import type { JobEnding } from "./jobs.js";
 import { finishIn, releaseStepIn } from "./pg-jobs.js";
 import {
+  JobDraftGone,
   NotTheLiveAttempt,
   failRevisionIn,
   finishStepRun,
+  liveJobDraft,
   lockOrCreateArticle,
   logDraftFailure,
   logPublication,
@@ -458,10 +460,26 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
          so either of them going first makes this refuse. GPT Sol, 2026-08-30,
          docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 2. */
       if (unfinished) {
-        await finishStepRun(
-          { revisionId: ref.revisionId, stepName: unfinished, job, status: "error" },
-          tx,
-        );
+        /* **Unless the draft is not ours any more, in which case there is
+           nothing to tidy and asking would take the ending down with it.**
+
+           This is the ending `endAsStorageFailure` reaches for when `commit`
+           raised `JobDraftGone` — the draft was deleted underneath a live claim
+           — so `finishStepRun`'s own `requireLiveJobOwnsDraft` would raise it a
+           second time and the recovery would throw where the failure did. The
+           step run is in a revision this job no longer points at, and usually in
+           one the database has already deleted (`revision_step_runs` cascades),
+           so there is no row to mark and marking a stranger's would be worse
+           than leaving it. `failRevisionIn` below still clears the pointer:
+           its fence is `liveAttempt` alone and the claim is still live.
+           docs/postmortems/260902f-a-lost-claim-that-was-never-lost-and-a-publication-that-was-never-buried.md. */
+        const stillOurs = (await liveJobDraft(tx, job)) === ref.revisionId;
+        if (stillOurs) {
+          await finishStepRun(
+            { revisionId: ref.revisionId, stepName: unfinished, job, status: "error" },
+            tx,
+          );
+        }
       }
       const reason = reasonFor(ending);
       const failed = await failRevisionIn(tx, { slug, revisionId: ref.revisionId, reason, job });
@@ -488,8 +506,17 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
    * says, and src/jobs.ts only knows the second one — it answers `busy` on an
    * `instanceof` and would otherwise turn a lost claim into a 500. Translated at
    * this boundary, which is the only place that knows both vocabularies.
+   *
+   * **`JobDraftGone` is the other one, and it must not become the first.** It
+   * arrives from the same fence and means the opposite thing — the claim is
+   * still ours, the draft is not — so it gets its own name on the way out and
+   * src/jobs.ts ends the job instead of answering `busy`. Collapsing the two
+   * here would put back the wedge in
+   * docs/postmortems/260902f-a-lost-claim-that-was-never-lost-and-a-publication-that-was-never-buried.md
+   * one layer up from where it was.
    */
   const asStaleClaim = (err: unknown): never => {
+    if (err instanceof JobDraftGone) throw new DraftGoneError(job.id);
     if (err instanceof NotTheLiveAttempt) throw new StaleAttemptError(job.id);
     throw err;
   };

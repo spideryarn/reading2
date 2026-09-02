@@ -1496,13 +1496,25 @@ Five things about it are worth knowing before touching it.
   one and behaves exactly as it always has: no draft, no publication, no database.
   [`tests/claim-session-files.test.ts`](../../tests/claim-session-files.test.ts) is that half of the
   claim, and it proves it by taking `DATABASE_URL` away.
-- **Opening it is a database call, so it can fail — and that failure ends the job.** Two doors reach
+- **Opening it is a database call, so it can fail — and that failure ends the job.** Three doors reach
   the same recovery in [`src/jobs.ts`](../../src/jobs.ts) (`endAsStorageFailure`): the publication
-  that goes wrong when every step skipped, and the session that would not open at all. Both fail the
-  draft, clear the job's pointer to it and terminalise the job in one transaction, because a job left
-  `running` holds the global slot until its lease lapses and offers the reader no Retry either. The
-  kind the database boundary gave the failure is **kept** rather than rewritten as `retry`, so a
-  permanent refusal does not reach the card promising that another go is safe.
+  that goes wrong when every step skipped, the session that would not open at all, and the draft that
+  goes away *underneath a live claim*. All three fail the draft, clear the job's pointer to it and
+  terminalise the job in one transaction, because a job left `running` holds the global slot until
+  its lease lapses and offers the reader no Retry either. The kind the database boundary gave the
+  failure is **kept** rather than rewritten as `retry`, so a permanent refusal does not reach the
+  card promising that another go is safe.
+- **A claim that loses its draft is not a claim that lost its job**, and the third door exists
+  because the two used to be one error. `jobs.draft_revision_id` is `on delete set null`, so deleting
+  a draft revision takes the pointer out of a live claimant's row silently; the fence
+  (`requireLiveJobOwnsDraft` in [`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) then
+  refused, and until 2026-09-02 it said the same thing it says when the *job* has moved on. The walk
+  believed that, answered `busy`, and left a `running` row nothing could claim, stop or finish for
+  the 760 seconds of `LEASE_MS` — with every other job on that article queued behind it. The fence
+  now raises `JobDraftGone`, which crosses the session seam as `DraftGoneError` and ends the job.
+  [260902f](../postmortems/260902f-a-lost-claim-that-was-never-lost-and-a-publication-that-was-never-buried.md);
+  the reproduction is
+  [`tests/a-claim-that-lost-its-draft.test.ts`](../../tests/a-claim-that-lost-its-draft.test.ts).
 
 **A decorator held this seam from 2026-08-30 to 2026-09-01**, and it is worth a paragraph because
 several plans and reviews are about it. `publishingSession` wrapped the *filesystem* session and, at
