@@ -460,7 +460,32 @@ free, which was checked in the code before running rather than assumed.
       so articles were still created under the environment owner. Read back from
       `articles.owner_id`, not inferred. Nothing but running it would have found this, which is
       [silent-success.md](../reusable/silent-success.md) in one line.
-- [ ] Run on the short HTML fixture (expected well under $0.50 total). Commit runner + result.
+- [x] **First paid run, 2026-09-02: it spent $0.0333 and the ledger kept neither row.** The
+      pipeline worked perfectly — 19 blocks, 13 sections, 561 words, published, cleaned up — and
+      `spideryarn.ai_calls` was missing columns [`src/db/schema.ts`](../../src/db/schema.ts) had
+      already declared, so both inserts failed `42703` into a warning log and the read afterwards
+      threw over the top of the cleanup. **Every gate passed**, because not one of them asked
+      whether the thing the run produces works.
+      - Fixed by `assertLedgerUsable` in [`harness.ts`](../../evals/cost/harness.ts), run last
+        before any money: one read against the ledger, refusing the run if it throws. A read probe
+        is enough for this class — the failing selects and failing inserts name the same table —
+        and it does not replace the calls-made-against-rows-kept reconciliation, which is the
+        expensive gate for the cases a read cannot see.
+      - A refused run is now **a sentence, not a stack trace**: the entrypoint catches, prints the
+        message alone and exits 1. A `StoreFailure` arrives under forty lines of driver frames, and
+        the person reading is deciding what to do next.
+      - Watched red both ways: live against the broken database, and in
+        `tests/cost-eval.test.ts` against a no-op gate.
+      - **This is `silent-success.md` with a receipt.** The run reported `job done`, `status: done`,
+        and a published revision. Only `aiCostStatus: "unavailable"` and two warning lines said the
+        money had vanished, and nothing was watching either.
+- [ ] **Blocked again, and worse than before.** `npm run db:migrate` now reports **three** ledger
+      rows belonging to no migration and **two migrations that can never be applied** — they are
+      stamped earlier than the newest ledger row, and drizzle only applies entries after it. So
+      `ai_calls` is short the realtime columns, and on this box **every paid call by anybody is
+      currently recorded nowhere**. Not this plan's to untangle: working out what three unknown
+      rows did is the job of whoever wrote them.
+- [ ] Re-run on the short HTML fixture once the ledger holds rows again. Commit the result.
 
 ### Stage: All modes, all three articles, with repeats where variance lives
 

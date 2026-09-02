@@ -34,6 +34,7 @@ import { DEV_OWNER_ID, EVAL_OWNER_ID } from "../src/owner.js";
 import { fixtureByName } from "../evals/cost/fixtures.js";
 import {
   assertDistinctEvalOwner,
+  assertLedgerUsable,
   assertOneOnDemandMode,
   blocksFromDetail,
   evalRegistry,
@@ -802,5 +803,31 @@ describe("requiredAiJobsFor", () => {
 
   it("maps a mode step onto the AI job of the same name", () => {
     expect(requiredAiJobsFor(html, ["glossary"])).toEqual(["glossary"]);
+  });
+});
+
+/**
+ * The gate written *after* a run spent $0.0333 into a ledger that could not
+ * hold it — `ai_calls` was missing columns the code had already declared, so
+ * every insert failed and was swallowed into a warning. Every other gate passed,
+ * because none of them asked whether the thing the run produces works.
+ */
+describe("assertLedgerUsable", () => {
+  it("lets a run past when the ledger answers", async () => {
+    await expect(assertLedgerUsable(async () => ({ rows: [], unreadable: 0 }))).resolves.toBeUndefined();
+  });
+
+  it("refuses when the ledger cannot be read, and says what to do", async () => {
+    const boom = new Error("column ai_calls.event_kind does not exist");
+    await expect(assertLedgerUsable(() => Promise.reject(boom))).rejects.toThrow(
+      /spend money and record nothing/,
+    );
+    await expect(assertLedgerUsable(() => Promise.reject(boom))).rejects.toThrow(/db:migrate/);
+  });
+
+  it("keeps the original error as the cause, so the driver detail is not lost", async () => {
+    const boom = new Error("42703");
+    const caught = await assertLedgerUsable(() => Promise.reject(boom)).catch((e: unknown) => e);
+    expect((caught as Error).cause).toBe(boom);
   });
 });
