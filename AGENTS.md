@@ -187,9 +187,12 @@ actually reaches is not always the one on its command line, and both mistakes pr
 
 ### Working in a tree several agents share
 
-- **Check which machine you are on.** A working directory under `/home/greg/` means you are probably
-  on the Hetzner remote box — [hetzner-remote-server-box.md](docs/project/hetzner-remote-server-box.md); `/Users/greg/` means
-  you are on Greg's Mac.
+- **Check which machine you are on.** `/home/greg/` is probably the Hetzner box, `/Users/greg/` is
+  Greg's Mac. A change to either that should still be true next week — a package, a key in
+  `.env.local`, a config — is also a change to the file that builds the next box, so ask Greg whether
+  to make it so now, going forwards, or both —
+  [hetzner-remote-server-box.md § A change to the box is a change to a file](docs/project/hetzner-remote-server-box.md#a-change-to-the-box-is-a-change-to-a-file).
+  On the Mac, more caution: a different OS, and not disposable — spike it first where that is safe.
 - **Use a worktree for anything non-trivial.** `claude --worktree <name>`, then
   `npm run worktree:setup` inside it, and land the work with `git push origin HEAD:dev` —
   [worktrees.md](docs/project/worktrees.md). It is your own checkout, so nobody else's edits are in

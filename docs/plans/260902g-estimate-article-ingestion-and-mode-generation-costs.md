@@ -28,6 +28,28 @@ applied — including its one substantive catch, that slug-attributed eval runs 
 Other agents are concurrently building payments machinery and cost-tracking; this work reads the
 cost-tracking machinery and must not modify it.
 
+> **Note from the cost-tracking plan, 2026-09-02.** That plan is
+> [260902g-cost-tracking-that-can-set-a-price.md](260902g-cost-tracking-that-can-set-a-price.md),
+> and it has **handed its measurement stage to this one** rather than duplicating it — so this is
+> the plan that produces the unit costs, and that one produces the ledger they are read from.
+> Three things it is changing underneath you, all landing before you run:
+>
+> - **`upstream_inference_nanos` is being renamed `byok_upstream_nanos` and nulled on non-BYOK
+>   rows.** Today it is populated on non-BYOK rows *equal to* `credits_used_nanos`, so a naive
+>   `SUM` over the money columns roughly doubles the answer — one auditor got $23.54 where the
+>   truth was $11.77. Read totals through `totalRows()`
+>   ([`src/store/ai-calls.ts`](../../src/store/ai-calls.ts)) until the rename lands.
+> - **The test suite will stop writing into the Postgres ledger**, and the ~4,000 existing fixture
+>   rows will be deleted (Greg approved 2026-09-02). If your harness reads Postgres, its `By owner`
+>   and `By article` numbers are currently buried under them.
+> - **Postgres becomes authoritative from that stage's deploy; the filesystem ledger is not being
+>   imported.** Your appendix numbers come from `data/_ai-calls.jsonl`, which stays readable but
+>   stops being the source of truth.
+>
+> Also: **live conversation is being metered** for the first time, which will add a cost line no
+> article-shape measurement can see — voice is roughly $0.06–$0.46 a minute against $0.05–$0.36 for
+> a whole article ingest. Worth naming as out of your scope rather than absent from the picture.
+
 ## Context: most of the machinery already exists
 
 - **Cost capture is done.** Every paid call already lands in the `ai_calls` ledger
@@ -44,10 +66,12 @@ cost-tracking machinery and must not modify it.
   starting 7–60 s apart while earlier calls were still in flight, and several finished *below*
   the token ceiling — something kept starting fresh attempts of a step already running.
   The same overlap appears on the 468-word `read` article (six executions under one job), so it
-  is not length-dependent. Consistent with the old files-mode queue; possibly already prevented
-  by the Postgres attempt-token/lease claiming ([`src/jobs.ts`](../../src/jobs.ts)). **An Opus
-  agent is root-causing and fixing/pinning this now** (dispatched 2026-09-02 at Greg's request,
-  with its own plan + Sol reviews); this eval treats it as a separate historical anomaly, and
+  is not length-dependent. **Root-caused and fixed, 2026-09-02**
+  ([260902c-the-truncation-retry-cost-storm.md](../postmortems/260902c-the-truncation-retry-cost-storm.md)):
+  a Vite dev-server restart re-imported the server modules, the files-mode queue's in-memory
+  claims vanished with the old module copy, and the sweeper requeued the still-running job —
+  $9.62 of the ledger's $11.36 was this. Postgres claiming never had the bug, and a restart is
+  now a pause (`src/process-state.ts`). This eval treats it as a fixed historical anomaly, and
   separately measures *stochastic* hierarchy cost under current code — where hierarchy runs at
   effort `medium` precisely because this article filled the ceiling at `high`
   ([`src/hierarchy.ts`](../../src/hierarchy.ts)), and a truncation surfaces as a `bug` failure
@@ -145,6 +169,20 @@ cost-tracking machinery and must not modify it.
 - **Read-only towards the cost-tracking machinery.** The one open coordination point: eval
   attribution through the production queue (blocker 2) must be designed **with** the
   cost-tracking agents, not around them.
+- **Run in parallel with the cost-tracking work; gate only the paid runs on it** (Greg,
+  2026-09-02). Its plan
+  ([260902g-cost-tracking-that-can-set-a-price.md](260902g-cost-tracking-that-can-set-a-price.md))
+  is changing the ledger underneath us — the `upstream_inference_nanos` →
+  `byok_upstream_nanos` rename with non-BYOK rows nulled, the test-suite fixture rows deleted,
+  Postgres authoritative (see the note at the top of this doc). Everything free proceeds
+  meanwhile: the baseline aggregation (totals via `totalRows()` only, never a naive `SUM` over
+  the money columns — it double-counts today), the feasibility design and dry pass, the fixture
+  corpus, the runner code and its unit tests. **Before the first paid run**, check whether that
+  plan has landed — concretely: `byok_upstream_nanos` exists in
+  [`src/db/schema.ts`](../../src/db/schema.ts) and that plan's own stages show its ledger
+  changes done. If not, **delay an hour or two and re-check** (repeating until it has landed)
+  rather than paying for runs whose rows would straddle the rename and the fixture-row purge;
+  keep working through any remaining free items while waiting.
 - **Out of scope**: live conversation (browser-direct OpenAI Realtime, invisible to the ledger —
   known and accepted); infrastructure costs; implementing cost reductions (the duplicate-execution
   fix is already in flight separately); model arms (follow-up plan once an injection mechanism
@@ -205,6 +243,12 @@ The runner design has to answer three couplings before any money moves (Sol bloc
 
 ### Stage: v1 runner — one article, end to end, cold
 
+- [ ] **Gate: the cost-tracking plan has landed.** Check
+      [260902g-cost-tracking-that-can-set-a-price.md](260902g-cost-tracking-that-can-set-a-price.md)
+      and the `byok_upstream_nanos` rename in [`src/db/schema.ts`](../../src/db/schema.ts). Not
+      landed → delay an hour or two and re-check until it has (see Principles). The rest of
+      this stage is code and can be written and unit-tested meanwhile — only the first paid run
+      waits on the gate.
 - [ ] `evals/cost/run.ts`, modelled on `evals/hierarchy-structure/run.ts` (including incremental
       result persistence); `npm run eval:cost`. Production-path calls run under normal
       `collectSpend`; `declared-spend` only if any arm later bypasses the gateway.
@@ -276,9 +320,13 @@ execution, not a cost any single ingest should pay.
 
 ### Cost-reduction candidates (Sol's re-ranking adopted; to be priced by the eval)
 
-1. **Duplicate job execution** — the largest historical waste. Root-cause/fix already in flight
-   (Opus agent, 2026-09-02) and **owned by that investigation, not this plan** — including the
-   concurrency test that pins the guarantee if the Postgres queue already prevents it.
+1. ✅ **Duplicate job execution** — was the largest historical waste ($9.62 of $11.36), **fixed
+   2026-09-02**
+   ([260902c-the-truncation-retry-cost-storm.md](../postmortems/260902c-the-truncation-retry-cost-storm.md)):
+   dev-server restarts were forgetting files-mode claims; pinned by
+   `tests/two-servers-one-queue.test.ts`. Still open from that work, for Greg: two OS processes
+   over one `data/` remain unfenced — Sol recommends `npm run dev` on Postgres by default or
+   refusing a second files-mode server.
 2. **Keep artefact modes on demand** (status quo, and the largest product-level saving already
    operating). One eager exception to reconsider: arc auto-fires on owner open
    (`src/web/useArc.ts`); tradeoff of changing it: the L0 column appears only after a press.

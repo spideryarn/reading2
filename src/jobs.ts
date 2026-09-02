@@ -73,6 +73,7 @@ import { runInJob } from "./job-scope.js";
 import { errorFields, log, type Log, since } from "./log.js";
 import { captureFailure } from "./monitoring.js";
 import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
+import { processSingleton } from "./process-state.js";
 import { slugForUrlKey } from "./store/find-article.js";
 import { fsStoreSession } from "./store/session.js";
 import type { JobSettlement, JobTransition, StoreSession } from "./store/session.js";
@@ -122,8 +123,20 @@ const store: JobStore = STORE === "postgres" ? pgJobStore : fsJobStore;
  * everybody can see it, and this aborts the step if the step happens to be
  * here. An instance that is not running it reads the flag at its next step
  * boundary instead, which is a moment later and correct.
+ *
+ * **Keyed to the process rather than to this module**, and that is not the same
+ * hedge as the sentence above. "A second instance has no function to interrupt"
+ * is true of a second *machine* and false of a second copy of this module in
+ * this process — which is what every dev-server restart makes, while the step it
+ * abandoned is still running and still listening. A private `Map` meant Stop
+ * reached nothing at all after a save. src/process-state.ts, and
+ * docs/postmortems/260902c-the-truncation-retry-cost-storm.md.
  */
-const aborts = new Map<string, AbortController>();
+const aborts = processSingleton<Map<string, AbortController>>(
+  "jobs.aborts",
+  "2026-09-02",
+  () => new Map(),
+);
 
 /**
  * How long a claim is good for, and how long before that the claimant stops.

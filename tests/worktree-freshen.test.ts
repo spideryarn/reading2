@@ -143,3 +143,41 @@ describe("freshenFromTrunk", () => {
     expect(describeFreshen(r, "dev")).toContain("may be behind");
   });
 });
+
+/**
+ * The hang, which is the failure a plain `git fetch` cannot report.
+ *
+ * A stalled transfer sits at 0% CPU for ever, and `worktree:setup` waiting for
+ * ever looks exactly like `worktree:setup` working. The test wedges git itself
+ * by pointing its transport at `sleep`, so what is measured is a real hung
+ * fetch being killed rather than a mocked one.
+ */
+describe("a fetch that hangs", () => {
+  it("kills it and says it hung, rather than waiting for ever", () => {
+    const wt = worktreeFromPrimaryHead("hangs");
+    /* An ssh-shaped URL routes the transfer through GIT_SSH_COMMAND, which we
+       point at a sleep far longer than the timeout below. */
+    git(["remote", "set-url", "origin", "ssh://git@example.invalid/repo.git"], primary);
+
+    const before = Date.now();
+    const prev = process.env.GIT_SSH_COMMAND;
+    /* git appends host and command arguments, and bare `sleep 60 host …` errors
+       out instantly on the extra args. `sh -c` swallows them into $0/$@. */
+    process.env.GIT_SSH_COMMAND = "sh -c 'sleep 60'";
+    let r: ReturnType<typeof freshenFromTrunk>;
+    try {
+      r = freshenFromTrunk(wt, "dev", 2_000);
+    } finally {
+      if (prev === undefined) delete process.env.GIT_SSH_COMMAND;
+      else process.env.GIT_SSH_COMMAND = prev;
+    }
+    const elapsed = Date.now() - before;
+
+    expect(r.kind).toBe("fetch-failed");
+    if (r.kind !== "fetch-failed") throw new Error("unreachable");
+    expect(r.timedOut).toBe(true);
+    expect(describeFreshen(r, "dev")).toContain("hung");
+    /* The point of the whole thing: it came back, and quickly. */
+    expect(elapsed).toBeLessThan(30_000);
+  }, 40_000);
+});
