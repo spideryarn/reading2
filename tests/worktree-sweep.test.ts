@@ -251,6 +251,22 @@ describe("removeOne", () => {
     expect(git(["branch", "--list", "worktree-ghosted"], primary)).toContain("worktree-ghosted");
   });
 
+  it("removes a LOCKED worktree, which is what claude --worktree creates", () => {
+    /* The fixtures above are unlocked, so nothing else here reaches the unlock
+       step — and a locked worktree refuses a plain `git worktree remove`. Every
+       real worktree on this box is locked, so an untested unlock would mean the
+       removal never worked outside these tests. */
+    const wt = path.join(root, "locked");
+    git(["worktree", "add", "--lock", "--reason", "as claude --worktree does", "--quiet", "-b", "worktree-locked", wt, "HEAD"], primary);
+
+    const out = removeOne(primary, "worktree-locked", { now: now() + 999 * HOUR });
+
+    expect(out.ok).toBe(true);
+    expect(out.steps.join(" ")).toContain("unlocked");
+    expect(existsSync(wt)).toBe(false);
+    expect(git(["worktree", "list", "--porcelain"], primary)).not.toContain(wt);
+  });
+
   it("says so when no worktree is on that branch", () => {
     const out = removeOne(primary, "worktree-imaginary", { now: now() });
     expect(out.ok).toBe(false);
