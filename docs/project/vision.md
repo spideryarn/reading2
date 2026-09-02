@@ -161,9 +161,11 @@ these, each to be judged against the principles above:
 
 ## Under this doc
 
-`vision.md` is one of the seven entry points listed in [AGENTS.md](../../AGENTS.md). Two things sit
+`vision.md` is one of the seven entry points listed in [AGENTS.md](../../AGENTS.md). Three things sit
 under it:
 
+- **[positioning.md](positioning.md)** — what the website says, who it says it to first, and what
+  the product is called; the decisions, in Greg's words, and the interview that turns them into copy.
 - **[open-questions.md](open-questions.md)** — the calls nobody has made yet, each with a
   recommendation so nobody is blocked. It should shrink: when a question gets decided, the answer
   goes into the doc that owns it and the question is deleted.

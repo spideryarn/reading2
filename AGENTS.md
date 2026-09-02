@@ -26,7 +26,8 @@ listed here; the names under each are files in `docs/project/`.
 
 - **[vision.md](docs/project/vision.md)** — the intent, the principles, the anti-goals, and the two
   exceptions Greg has made to "prefer boring".
-  <br>↳ `open-questions.md` · `original-version/` (the larger app this is an offshoot of)
+  <br>↳ `open-questions.md` · `positioning.md` (the website, the name, who it speaks to first) ·
+  `original-version/` (the larger app this is an offshoot of)
 - **[architecture.md](docs/project/architecture.md)** — the pipeline stage by stage, what a block
   is, who owns which stage, where the data lives.
   <br>↳ `block-ids.md` · `fetching.md` (stage 1) · `content-extraction.md` (stage 2, and there are
