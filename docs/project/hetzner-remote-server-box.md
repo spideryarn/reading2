@@ -27,8 +27,12 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 **The CLI**
 
 - [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) — all of it: `ls`, `new-claude`,
-  `new-shell`, `resume`, `resume-all`, `kill`, `doctor`, `provision`, `clone`, `push-env`, `ssh`,
-  `tunnel`, `forget-key`. `--help` is long on purpose.
+  `new-shell`, `resume`, `resume-all`, `kill`, `doctor`, `provision`, `clone`, `push-env`, `resolve`,
+  `ssh`, `tunnel`, `forget-key`. `--help` is long on purpose.
+- [`scripts/gjd-remote-repo.ts`](../../scripts/gjd-remote-repo.ts) — which repo you are standing in,
+  and which directory on the box is that same repo. The box-side inventory script and its
+  fail-closed parse live here too. See [Which repo, and where on the box](#which-repo-and-where-on-the-box)
+  and [`tests/gjd-remote-repo.test.ts`](../../tests/gjd-remote-repo.test.ts).
 - [`scripts/gjd-remote-provision.ts`](../../scripts/gjd-remote-provision.ts) — whether provisioning
   actually succeeded, which is not the same question as whether it exited 0. Split out for the same
   reason as the rest: [`tests/gjd-remote-provision.test.ts`](../../tests/gjd-remote-provision.test.ts).
@@ -126,6 +130,48 @@ Two things follow, and both are in
 [infra/hetzner/README.md § Why provisioning is a separate command](../../infra/hetzner/README.md#why-provisioning-is-a-separate-command):
 `cloud-init: done` now means *bootstrapped*, and cloud-init owns the bootstrap dependencies forever,
 because it is baked into the machine at creation and never runs again.
+## Which repo, and where on the box
+
+`gjd-remote` drives **whichever repo you are standing in**, and there is no default repo any more.
+The rules, in order:
+
+1. **Identity is the git origin** of the cwd's toplevel, lower-cased to `owner/name` — never a
+   folder name. So `reading2` on the laptop and `spideryarn2` on the box are one repo, a worktree is
+   the same repo as its parent, and two repos may share a basename without colliding. Outside git,
+   inside a submodule, or with an origin that is not GitHub, it refuses and offers `--repo
+   owner/name` or `--dir`.
+2. **The box is asked what is under `~/code`** — every entry, symlinks not followed, each with its
+   realpath, whether it is a checkout, its origin and whether `HEAD` resolves. The reply is strict:
+   a row count and a `GJDOK` sentinel, and anything short of that is a failure rather than an empty
+   box. One directory with that origin is the answer. None is `absent`, two is `ambiguous`, and
+   anything else in the way is `blocked` with a reason (`non-checkout`, `incomplete-checkout`,
+   `symlink`, `unreadable`, `unrecognised-origin`, `other-repo`). Only `found` starts anything.
+3. **`--dir` wins over both** and is an explicitly arbitrary path on the box — `-d ~` is the home
+   directory and no repo at all, which is why it prints `repo: unknown`. For `push-env` it must be
+   this repo's checkout, verified by origin, because that command carries this repo's credentials.
+
+`GJD_REMOTE_REPO` still works and is **deprecated**: it is an alias for `--dir`, it says so every
+time, and it refuses if the directory it names is not the repo you are standing in. An env var must
+not quietly steer one repo's work into another repo's tree.
+
+The repo and the box directory are printed before anything happens. `gjd-remote resolve` prints just
+those and stops — one round trip, nothing created — which is what to run when a command refuses.
+
+Three roots, and they are not the same directory:
+
+| root | holds | resolved from |
+|---|---|---|
+| tool root | Terraform state, `provision.sh`, `remote-smoke-browser.mjs` | this checkout, from the script's own location |
+| local target | the `.env.local` that `push-env` reads | the toplevel of the repo you are in |
+| remote target | the session's cwd, `push-env`'s destination, the `.mcp.json` `doctor` checks | the verified checkout on the box |
+
+`push-env` refuses any repo without an entry in the policy map at the top of `cmdPushEnv` — the
+allowlist in [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) is a list of key *names*
+and it is Spideryarn's.
+
+The plan, including the auto-clone and per-repo setup that are not built yet, is
+[../plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md](../plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md).
+
 ## Running `gjd-remote` from the box
 
 `gjd-remote` is written to run **from the laptop**, and for a while that was the only place it ran.

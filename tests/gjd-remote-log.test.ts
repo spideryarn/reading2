@@ -330,3 +330,104 @@ describe("what reaches the file, and what must not", () => {
     expect(formatLine(rec({ name }))).toContain(name);
   });
 });
+
+/**
+ * WHICH REPO the launch was for.
+ *
+ * A directory is not an identity, and this repo is the standing example: it is
+ * `reading2` on the laptop and `spideryarn2` on the box, so a log that records
+ * only `dir` cannot answer "what has been launched for hellozenno this week".
+ * GPT Sol, finding 10 of the plan review.
+ *
+ * VALIDATED AT BOTH SEAMS, against the same rule the tmux listing uses. A repo
+ * that reaches the file malformed is a repo nothing can group by afterwards,
+ * and the file is append-only — there is no pass later to fix it up.
+ */
+describe("the repo a launch was for", () => {
+  it("round-trips a slug, and the literal unknown", () => {
+    for (const repo of ["gregdetre/reading2", "gregdetre/hellozenno", "unknown"]) {
+      expect(parseLine(formatLine(rec({ repo })))?.repo, repo).toBe(repo);
+    }
+  });
+
+  it("refuses to write one that is not a slug", () => {
+    for (const repo of ["", "reading2", "GregDetre/Reading2", "a/b/c", "..", "a/../b"]) {
+      expect(() => formatLine(rec({ repo })), repo).toThrow(/repo/);
+    }
+  });
+
+  /**
+   * The whole line, not the field. Everywhere else in this reader a value of
+   * the wrong type is dropped and the record kept — but repo is identity, and a
+   * record whose repo was dropped reads as a launch from before repos were
+   * recorded, which is a different and untrue claim.
+   */
+  it("refuses to read a line whose repo is not one, rather than dropping the field", () => {
+    for (const repo of ['"a/b/c"', '"Reading2"', "42", "null", '""']) {
+      expect(parseLine(`{"v":1,"t":"x","ms":1,"cmd":"new-claude","repo":${repo}}`), repo).toBeNull();
+    }
+  });
+
+  /** Every line already in Greg's log has no repo, and must still read. */
+  it("reads a line written before repos as one with no repo, not as a broken line", () => {
+    const r = parseLine(`{"v":1,"t":"x","ms":1,"cmd":"new-claude","id":"${UUID_A}"}`);
+    expect(r).not.toBeNull();
+    expect(r?.repo).toBeUndefined();
+  });
+});
+
+/**
+ * Setup attempts, which are the other thing the log has no record of.
+ *
+ * A clone that fails setup leaves a directory that looks finished, and the next
+ * `new-claude` resolves it as found (Sol, blocker 2). The durable half of the
+ * answer to that is a record per attempt, by attempt id, with what became of it.
+ *
+ * `attempt` and `outcome` are only meaningful on a `setup` line, and that is
+ * checked at both seams rather than left as a convention — an outcome attached
+ * to a launch would be read by something eventually.
+ */
+describe("setup attempts", () => {
+  const setup = (o: Partial<LogRecord> = {}): LogRecord => ({
+    v: LOG_SCHEMA,
+    t: "2026-09-02T11:00:00+01:00",
+    ms: 1788300000000,
+    cmd: "setup",
+    repo: "gregdetre/hellozenno",
+    attempt: "260902h-4f2a",
+    outcome: "started",
+    ...o,
+  });
+
+  it("round-trips the three outcomes", () => {
+    for (const outcome of ["started", "success", "failed"] as const) {
+      const r = parseLine(formatLine(setup({ outcome })));
+      expect(r?.outcome, outcome).toBe(outcome);
+      expect(r?.attempt).toBe("260902h-4f2a");
+    }
+  });
+
+  it("refuses an outcome it was not written for, at both seams", () => {
+    expect(() => formatLine(setup({ outcome: "worked" as never }))).toThrow(/outcome/);
+    expect(parseLine('{"v":1,"t":"x","ms":1,"cmd":"setup","attempt":"a1","outcome":"worked"}')).toBeNull();
+  });
+
+  it("refuses an attempt id that could be joined onto a path", () => {
+    for (const attempt of ["", "../etc", "a/b", "a b", "A1", "x".repeat(65)]) {
+      expect(() => formatLine(setup({ attempt })), attempt).toThrow(/attempt/);
+    }
+  });
+
+  /** An outcome on a launch line is a record two readers would disagree about. */
+  it("refuses an attempt or an outcome on anything but a setup line", () => {
+    expect(() => formatLine(rec({ attempt: "a1" }))).toThrow(/setup/);
+    expect(() => formatLine(rec({ outcome: "failed" }))).toThrow(/setup/);
+    expect(parseLine('{"v":1,"t":"x","ms":1,"cmd":"new-claude","outcome":"failed"}')).toBeNull();
+  });
+
+  /** `gjd-remote log` reports launches, and a setup attempt is not one — it has
+   *  no session uuid and could never be given a verdict. */
+  it("carries no session id, so nothing can mistake it for a launch", () => {
+    expect(Object.keys(JSON.parse(formatLine(setup())))).not.toContain("id");
+  });
+});

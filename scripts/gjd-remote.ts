@@ -16,7 +16,7 @@
  */
 import { type StdioOptions, execFileSync, spawnSync } from "node:child_process";
 import { parseArgs, styleText } from "node:util";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { constants, homedir, tmpdir } from "node:os";
 import path from "node:path";
@@ -55,6 +55,18 @@ import {
   wantedColour,
 } from "./gjd-remote-tab.js";
 import {
+  type InventoryEntry,
+  type OriginTransport,
+  type RemoteCheckout,
+  describeLocalRepo,
+  describeResolution,
+  inventoryScript,
+  localRepo,
+  parseInventory,
+  remoteSlug,
+  resolveRemoteCheckout,
+} from "./gjd-remote-repo.js";
+import {
   type Here,
   isSessionUuid,
   newTabScript,
@@ -67,20 +79,21 @@ import {
   selfSessionUuid,
 } from "./gjd-remote-resume-all.js";
 
+/**
+ * THE TOOL ROOT: this checkout, found from the script's own location.
+ *
+ * It is where the box's own configuration lives — Terraform state (the
+ * address), `provision.sh`, `remote-smoke-browser.mjs` — and it is NOT the repo
+ * you are working on. Those things belong to the box, which is shared, so they
+ * stay here however many repos the tool drives. Everything per-repo goes
+ * through `resolveTarget()` instead.
+ */
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const USER = "greg";
 
-/** Where checkouts live on the box, and where `clone` puts a new one. */
+/** Where checkouts live on the box, and where `clone` puts a new one. Box
+ *  policy, not a property of any repo — see the plan's "The target contract". */
 const REMOTE_CODE = `/home/${USER}/code`;
-
-/** The one checkout that already exists. Written once and referenced everywhere
- *  — it used to be a literal in two places, and the help text is exactly where
- *  a second copy goes stale without anything noticing. */
-const REMOTE_REPO_DEFAULT = `${REMOTE_CODE}/spideryarn2`;
-
-/** Where the repo checkout lives on the box. Overridable so the push can be
- *  exercised against a scratch directory without a real checkout. */
-const REMOTE_REPO = () => process.env.GJD_REMOTE_REPO ?? REMOTE_REPO_DEFAULT;
 
 /** Everything gjd-remote leaves on the box lives under here. */
 const REMOTE_WORK = `/home/${USER}/gjd-remote`;
@@ -659,43 +672,286 @@ function age(d: Date): string {
   return `${Math.floor(mins / 1440)}d`;
 }
 
+// ------------------------------------------------- which repo, and where
+
+/**
+ * WHICH REPO, AND WHERE ON THE BOX — the one question every per-repo command
+ * asks, answered in one place.
+ *
+ * There are three roots and they are not the same directory (the plan's "The
+ * target contract"):
+ *
+ *  - the **tool root** is `REPO` above: Terraform state, `provision.sh`, the
+ *    browser smoke test. Shared box, shared tool, one copy.
+ *  - the **local target** is the toplevel of the repo you are standing in. It
+ *    is where `push-env` reads `.env.local` from.
+ *  - the **remote target** is the verified checkout on the box: where a session
+ *    starts, where `.env.local` is written, whose `.mcp.json` `doctor` checks.
+ *
+ * Identity is the git origin of the cwd's repo, never a folder name — so
+ * `spideryarn/reading2` is found at `~/code/spideryarn2` with no registry
+ * anywhere, and the laptop moving between Dropbox and `~/dev` changes nothing.
+ */
+type Identity = {
+  slug: string;
+  owner: string;
+  name: string;
+  /** The repo's toplevel on THIS machine, or null when `--repo` named a repo
+   *  we are not standing in. `push-env` needs it and refuses without it. */
+  localToplevel: string | null;
+};
+
+/** Which repo the user means: `--repo` if given, else the cwd's origin. The
+ *  refusal carries its own wording, because "not a repo" and "a repo with no
+ *  origin" need different next steps. */
+function identify(repoOpt: string | undefined): { ok: true; id: Identity } | { ok: false; why: string } {
+  const here = localRepo(process.cwd());
+  if (repoOpt !== undefined) {
+    const r = parseRepo(repoOpt);
+    const slug = `${r.owner}/${r.name}`.toLowerCase();
+    return {
+      ok: true,
+      id: {
+        slug,
+        owner: r.owner,
+        name: r.name,
+        localToplevel: here.kind === "repo" && here.slug === slug ? here.toplevel : null,
+      },
+    };
+  }
+  if (here.kind !== "repo") return { ok: false, why: describeLocalRepo(here) };
+  return { ok: true, id: { slug: here.slug, owner: here.owner, name: here.name, localToplevel: here.toplevel } };
+}
+
+/** Everything directly under `~/code`, strictly parsed. One round trip, and it
+ *  fails closed: a reply this cannot read is not an empty box. */
+function inventory(base = REMOTE_CODE): InventoryEntry[] {
+  const got = parseInventory(ssh(inventoryScript(base), { check: false }));
+  if (!got.ok) die(`could not read ${base} on the box: ${got.why}`);
+  return got.entries;
+}
+
+/** The inventory row for one path, by listing its parent. The same script and
+ *  the same strict parse as everything else — a second way of asking "whose
+ *  checkout is this?" would be a second way of getting it wrong. */
+function entryAt(dir: string): InventoryEntry | undefined {
+  const want = dir.replace(/\/+$/, "") || "/";
+  return inventory(path.posix.dirname(want)).find((e) => (e.dir.replace(/\/+$/, "") || "/") === want);
+}
+
+/** Where the repo lives on the box. `~/code/<name>` is only the PROPOSAL — a
+ *  checkout under any other name with the right origin is the answer. */
+function remoteCheckout(id: Identity): RemoteCheckout {
+  return resolveRemoteCheckout(id.slug, `${REMOTE_CODE}/${id.name}`, inventory());
+}
+
+/**
+ * A directory named by hand must be the repo we are standing in, or the command
+ * is about to do this repo's work in another repo's tree.
+ *
+ * This is the check that makes `GJD_REMOTE_REPO` safe to keep: as a silent
+ * default it could steer a hellozenno `push-env` into Spideryarn's checkout,
+ * which is exactly what an allowlisted secret must never do.
+ */
+function assertSameRepo(dir: string, id: Identity, what: string): void {
+  const e = entryAt(dir);
+  const found = e?.isCheckout && e.origin !== undefined ? remoteSlug(e.origin) : undefined;
+  if (found === id.slug) return;
+  die(
+    `${what} points at ${dir} on the box, and that is not ${id.slug}.\n` +
+      `  you are in: ${id.slug}\n` +
+      `  that path:  ${found ?? (e === undefined ? "does not exist" : e.isCheckout ? "a checkout with an origin I do not recognise" : "not a git checkout")}\n` +
+      `  Nothing was touched. Drop ${what}, or point it at this repo's checkout.`,
+  );
+}
+
+/** Said out loud every time it is used, rather than obeyed quietly: an env var
+ *  that redirects which tree a session opens in — or which checkout a file full
+ *  of credentials lands in — is a thing you want reminding is set. */
+function sayDeprecated(): void {
+  console.error(yellow(`GJD_REMOTE_REPO is deprecated — it is an alias for --dir, and --dir wins over it.`));
+}
+
+/** Where this command is about to act, said out loud. Printed before anything
+ *  happens, because which tree an agent is about to edit — or which checkout a
+ *  file full of credentials is about to land in — should never be something you
+ *  find out afterwards. */
+type Target = {
+  slug: string | null;
+  localToplevel: string | null;
+  dir: string;
+  via: "--dir" | "GJD_REMOTE_REPO" | "origin";
+  originTransport: OriginTransport | null;
+};
+
+function announce(t: Target): Target {
+  console.log(
+    dim(`repo: ${t.slug ?? "unknown — an explicit directory was given"}`) +
+      (t.localToplevel ? dim(`  (${t.localToplevel})`) : ""),
+  );
+  console.log(dim(`box:  ${t.dir}${t.via === "origin" ? "" : `  (${t.via})`}`));
+  return t;
+}
+
+/**
+ * The whole resolution, in the order the plan sets out: `--dir` wins, then the
+ * deprecated env var, then the repo you are standing in.
+ *
+ * `--dir` is deliberately an ARBITRARY directory — `-d ~` is a home directory
+ * and not a repo at all — so it does not need an identity and prints "unknown".
+ * Everything else needs one, and refuses rather than guessing.
+ */
+function resolveTarget(opts: {
+  repo?: string | undefined;
+  dir?: string | undefined;
+  /** push-env: no identity, no push — and a `--dir` must be this repo. */
+  requireIdentity?: boolean;
+}): Target {
+  const envDir = process.env.GJD_REMOTE_REPO;
+  const givenDir = opts.dir ?? envDir;
+  const via: Target["via"] = opts.dir !== undefined ? "--dir" : envDir !== undefined ? "GJD_REMOTE_REPO" : "origin";
+  const id = identify(opts.repo);
+
+  if (via === "GJD_REMOTE_REPO") sayDeprecated();
+
+  if (givenDir !== undefined) {
+    return announce(namedDir(givenDir, via, id, opts.requireIdentity ?? false));
+  }
+
+  if (!id.ok) die(id.why);
+  const r = remoteCheckout(id.id);
+  if (r.kind !== "found") onNotFound(id.id, r);
+  return announce({
+    slug: id.id.slug,
+    localToplevel: id.id.localToplevel,
+    dir: r.dir,
+    via: "origin",
+    originTransport: r.originTransport,
+  });
+}
+
+/**
+ * A directory somebody named, checked as far as it can be.
+ *
+ * The identity is optional here and that is the point of `--dir`: `-d ~` is a
+ * home directory, not a repo, and printing "unknown" is the honest answer. It
+ * becomes compulsory the moment the command carries this repo's data
+ * (`push-env`), and the ORIGIN is compared whenever the path came from the
+ * deprecated env var, because nobody typed that today and it must not steer one
+ * repo's work into another's tree.
+ */
+function namedDir(
+  given: string,
+  via: Target["via"],
+  id: ReturnType<typeof identify>,
+  requireIdentity: boolean,
+): Target {
+  const what = via === "origin" ? "--dir" : via;
+  const dir = remotePath(given, what);
+  if (!id.ok && requireIdentity) die(id.why);
+  if (id.ok && (requireIdentity || via === "GJD_REMOTE_REPO")) assertSameRepo(dir, id.id, what);
+  return {
+    slug: id.ok ? id.id.slug : null,
+    localToplevel: id.ok ? id.id.localToplevel : null,
+    dir,
+    via,
+    originTransport: null,
+  };
+}
+
+/**
+ * No single checkout on the box, so nothing starts.
+ *
+ * THE `absent` BRANCH IS A SEAM. Stage 3 of
+ * docs/plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md replaces
+ * the die() with: ask, clone into a staging sibling, run the repo's setup as a
+ * tool-owned tmux job, and start the session only on a `success` status file.
+ * Until then the exact command to type is printed, which is what Sol's review
+ * asked for in the first place.
+ */
+function onNotFound(id: Identity, r: Exclude<RemoteCheckout, { kind: "found" }>): never {
+  // TODO(260902h Stage 3): r.kind === "absent" ⇒ prompt, clone, setup, then
+  // start the session. Nothing else in this function changes.
+  die(describeResolution(id.slug, r));
+}
+
+/**
+ * `gjd-remote resolve` — say which repo this is and what the box has, and stop.
+ *
+ * One round trip, nothing created, nothing changed. It exists because every
+ * per-repo command now begins with this question, and when one of them refuses,
+ * the useful thing is to see the answer on its own rather than reconstruct it
+ * from a refusal. Exit 0 only for a checkout that was actually found.
+ */
+function cmdResolve(opts: { repo?: string | undefined; dir?: string | undefined }): void {
+  console.log(dim(`cwd:  ${process.cwd()}`));
+  const id = identify(opts.repo);
+  if (!id.ok) {
+    console.error(red(`✗ ${id.why}`));
+    process.exit(1);
+  }
+  console.log(`repo: ${bold(id.id.slug)}${id.id.localToplevel ? dim(`  (${id.id.localToplevel})`) : ""}`);
+
+  // The env var is read here too, so what this prints is what the real commands
+  // will do rather than a tidier version of it.
+  const givenDir = opts.dir ?? process.env.GJD_REMOTE_REPO;
+  if (givenDir !== undefined) {
+    const what = opts.dir !== undefined ? "--dir" : "GJD_REMOTE_REPO";
+    if (what === "GJD_REMOTE_REPO") sayDeprecated();
+    const dir = remotePath(givenDir, what);
+    const e = entryAt(dir);
+    const found = e?.isCheckout && e.origin !== undefined ? remoteSlug(e.origin) : undefined;
+    const said = found ?? (e === undefined ? "does not exist" : "not a checkout of anything I recognise");
+    console.log(`box:  ${dir}  ${dim(`(${what}; ${said})`)}`);
+    if (found !== id.id.slug) {
+      console.error(red(`✗ that is not ${id.id.slug}, so every per-repo command will refuse it`));
+      process.exit(1);
+    }
+    return;
+  }
+
+  const proposed = `${REMOTE_CODE}/${id.id.name}`;
+  const r = remoteCheckout(id.id);
+  if (r.kind === "found") {
+    console.log(`box:  ${bold(r.dir)}  ${dim(`(found by origin, ${r.originTransport})`)}`);
+    if (r.originTransport === "ssh") {
+      console.log(yellow(`  its remote is an ssh URL, and the box has no GitHub ssh key — it can never fetch`));
+    }
+    return;
+  }
+  console.log(`box:  ${dim(`nothing found; ${r.kind}`)}${r.kind === "absent" ? dim(`, proposed ${proposed}`) : ""}`);
+  console.error(red(`✗ ${describeResolution(id.id.slug, r)}`));
+  process.exit(1);
+}
+
 // ---------------------------------------------------------------- commands
 
 /**
- * Which tree a session starts in — and proof that it is actually there.
+ * Proof that the tree a session is about to start in is actually enterable.
  *
- * Most specific first: an explicit `--dir`, else `GJD_REMOTE_REPO`, else the one
- * checkout that already exists. The home directory used to be the default, and
- * it is the wrong one: every session then opened with an agent guessing where to
- * `cd`, and a guess about which tree to edit is the expensive kind. `-d ~` still
- * gets you home when that is genuinely what you want.
- *
- * The check belongs HERE, before any session is created, and not only because a
- * session that dies on its first line is confusing. It is the half of the guard
- * that can say something useful — by the time the job script runs, nobody is
- * watching. See cdGuard() below for the other half.
+ * The directory itself comes from resolveTarget() — by origin, or from a `--dir`
+ * somebody typed. This is the last check before a session exists, and not only
+ * because a session that dies on its first line is confusing: it is the half of
+ * the guard that can say something useful, since by the time the job script runs
+ * nobody is watching. See cdGuard() below for the other half.
  *
  * It is `cd`, not `test -d`, and the difference is a real hole: `test -d` only
  * stats, so a directory with no execute permission passes it and then refuses
  * every attempt to enter. Asking the question we actually mean costs the same
  * round trip.
  */
-function sessionDir(given: string | undefined): string {
-  const explicit = given !== undefined;
-  const dir = remotePath(given ?? REMOTE_REPO(), explicit ? "--dir" : "GJD_REMOTE_REPO");
-  const probe = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), `cd ${shq(dir)}`], { encoding: "utf8" });
-  if (probe.status === 0) return dir;
+function sessionDir(t: Target): string {
+  const probe = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), `cd ${shq(t.dir)}`], { encoding: "utf8" });
+  if (probe.status === 0) return t.dir;
   const why = (probe.stderr || "").trim().split("\n").at(-1)?.replace(/^bash: line \d+: /, "") ?? "";
   die(
-    `cannot start a session in ${dir} on the box.\n` +
+    `cannot start a session in ${t.dir} on the box.\n` +
       (why ? `  the box said: ${why}\n` : "") +
-      (explicit
-        ? `  --dir is a path on the BOX, not on this laptop.`
-        : `  that is where sessions start when you do not say. Either put it there:\n` +
-          `    gjd-remote clone spideryarn/reading2 --name spideryarn2\n` +
-          `  or say where to start:\n` +
-          `    gjd-remote new-claude -d ~   ${dim("# the home directory")}\n` +
-          `  (or set GJD_REMOTE_REPO to a checkout that already exists)`),
+      (t.via === "origin"
+        ? `  The box listed that directory a moment ago as the checkout of ${t.slug}, so\n` +
+          `  something changed underneath us, or its permissions do not allow entering it.\n` +
+          `  gjd-remote resolve   ${dim("# what the box says about this repo now")}`
+        : `  ${t.via} is a path on the BOX, not on this laptop.`),
   );
 }
 
@@ -1231,6 +1487,9 @@ function cmdNewClaude(
   given: string | undefined,
   opts: {
     prompt?: string | undefined;
+    /** Where to start: resolved by resolveTarget() below, and deliberately not
+     *  in main(), so the cheap local refusals still come first. */
+    repo?: string | undefined;
     dir?: string | undefined;
     attach: boolean;
     transport?: string | undefined;
@@ -1266,10 +1525,10 @@ function cmdNewClaude(
   if (!SLUG.test(name)) die(`'${name}' is not a valid name (lower-case letters, digits, hyphens; max 41)`);
   if (sessions().some((s) => s.name === name)) die(`session '${name}' already exists — 'gjd-remote resume ${name}'`);
 
-  // Resolved, normalised and checked in one place — and said out loud, because
-  // which tree an agent is about to edit should never be something you find out
-  // afterwards.
-  const dir = sessionDir(opts.dir);
+  // Which repo, which directory, printed — then the last look, which is the one
+  // that proves the directory can actually be entered.
+  const target = resolveTarget({ repo: opts.repo, dir: opts.dir });
+  const dir = sessionDir(target);
   console.log(bold(`gjd-remote new-claude ${name}`) + dim(` → ${HOST()}:${dir}`));
 
   // Pin the session id rather than discovering it: it is how we find this
@@ -1358,6 +1617,9 @@ function cmdNewClaude(
   // The id and the provisional flag live in the tmux session's own environment,
   // so they survive the rename that `ls` may later perform — a mapping file
   // keyed by name would go stale at exactly that moment.
+  // The `-e` flags are the session's own metadata. Stage 1's third bullet adds
+  // `GJD_METADATA_VERSION`, `GJD_KIND`, `GJD_REPO` and `GJD_REMOTE_DIR` here —
+  // `target` is the object holding the last two, in scope for exactly that.
   ssh(
     `tmux new-session -d -s ${name} -e CLAUDE_SESSION_ID=${sessionId} ` +
       `-e GJD_PROVISIONAL=${provisional ? 1 : 0} ${shq(`bash ${jobPath}`)}`,
@@ -1425,7 +1687,10 @@ function cmdNewClaude(
  * gets you back into it. `ssh` is a throwaway connection that dies with the
  * terminal, which is what you want for a quick look and never for real work.
  */
-function cmdNewShell(given: string | undefined, opts: { dir?: string | undefined; transport?: string | undefined }): void {
+function cmdNewShell(
+  given: string | undefined,
+  opts: { repo?: string | undefined; dir?: string | undefined; transport?: string | undefined },
+): void {
   const name = given ?? timestampName("sh");
   if (!SLUG.test(name)) die(`'${name}' is not a valid name (lower-case letters, digits, hyphens; max 41)`);
 
@@ -1435,7 +1700,8 @@ function cmdNewShell(given: string | undefined, opts: { dir?: string | undefined
     attach(name, opts.transport);
   }
 
-  const dir = sessionDir(opts.dir);
+  const target = resolveTarget({ repo: opts.repo, dir: opts.dir });
+  const dir = sessionDir(target);
   console.log(bold(`gjd-remote new-shell ${name}`) + dim(` → ${HOST()}:${dir}`));
 
   // `-c ${dir}` is NOT the guard, and used to be all there was: tmux falls back
@@ -1446,6 +1712,8 @@ function cmdNewShell(given: string | undefined, opts: { dir?: string | undefined
   // GJD_PROVISIONAL=0: a shell has no Claude conversation and so will never
   // have a title to adopt. Marking it settled stops `ls` looking every time.
   ssh(`mkdir -p ${REMOTE_WORK}/jobs && rm -f ${shq(failNote(name))}`);
+  // As in cmdNewClaude: Stage 1's metadata bullet adds the `GJD_*` variables to
+  // this `-e` list, and `target` is where the repo and directory come from.
   ssh(
     `tmux new-session -d -s ${name} -c ${shq(dir)} -e GJD_PROVISIONAL=0 ` +
       shq(`${cdGuard(name, dir, "a shell")}; exec bash -l`),
@@ -1453,6 +1721,74 @@ function cmdNewShell(given: string | undefined, opts: { dir?: string | undefined
   confirmStarted(name);
   console.log(green(`✓ shell '${name}'`) + dim(` in ${dir}`));
   attach(name, opts.transport);
+}
+
+/**
+ * Which keys may leave the laptop, per repo.
+ *
+ * A map rather than one hard-wired list, because the list is Spideryarn's: it
+ * is a set of key NAMES, and another repo's `DATABASE_URL` is not this one's.
+ * A repo with no entry here is REFUSED rather than pushed under somebody else's
+ * policy — Stage 4 of the plan fills the gap with a per-repo policy the user
+ * ticks once and this file then reads from `~/.config/gjd-remote/repos/`.
+ *
+ * The seam is deliberately this small. It is a lookup by slug and a function
+ * that turns file text into a payload; Stage 4 adds entries to it and changes
+ * nothing else here.
+ */
+type EnvPolicy = { build: (localText: string) => ReturnType<typeof buildEnvPayload> };
+const ENV_POLICIES: Record<string, EnvPolicy | undefined> = {
+  "spideryarn/reading2": { build: buildEnvPayload },
+};
+
+/**
+ * WHICH file on this laptop, and WHOSE rules apply to it.
+ *
+ * Three refusals, all of them before a single byte is read:
+ *
+ *  - **No local checkout, no push.** `--repo` can name a repo you are not
+ *    standing in, and then there is no `.env.local` to send. Guessing this
+ *    checkout's one would send Spideryarn's keys under another repo's name.
+ *  - **No policy, no push.** The allowlist in scripts/gjd-remote-env.ts is a
+ *    list of key NAMES and it is Spideryarn's; another repo's `DATABASE_URL` is
+ *    not this one's. Stage 4 of the plan fills the map in.
+ *  - **No symlinks.** What is about to be read is every credential the repo
+ *    has, and a symlink is a file whose real location this never looked at.
+ */
+function envSource(target: Target, file: string | undefined): { local: string; policy: EnvPolicy } {
+  const slug = target.slug;
+  if (slug === null || target.localToplevel === null) {
+    die(
+      `push-env sends this repo's .env.local, so it has to be run from inside the repo.\n` +
+        (slug === null
+          ? `  I could not tell which repo you mean.`
+          : `  --repo named ${slug}, but this laptop is not standing in it, so there is no\n` +
+            `  .env.local to read. Run it from that checkout.`),
+    );
+  }
+  const policy = ENV_POLICIES[slug];
+  if (!policy) {
+    die(
+      `no env policy for ${slug} yet — see docs/plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md, Stage 4.\n` +
+        `  The allowlist in scripts/gjd-remote-env.ts is Spideryarn's, and it is a list of\n` +
+        `  key NAMES: pushing it for another repo would send whatever that repo happens to\n` +
+        `  call DATABASE_URL. Nothing was read and nothing was sent.`,
+    );
+  }
+
+  // The LOCAL TARGET, not the tool root: `.env.local` belongs to the repo you
+  // are standing in. It used to be read from this checkout however far away the
+  // work was, which is how a hellozenno push would have sent Spideryarn's keys.
+  const local = path.resolve(file ?? path.join(target.localToplevel, ".env.local"));
+  const refusal = assertPushableName(path.basename(local));
+  if (refusal) die(refusal);
+  const st = lstatSync(local, { throwIfNoEntry: false });
+  if (!st) die(`no such file: ${local}`);
+  if (st.isSymbolicLink()) {
+    die(`${local} is a symlink, and this will not follow one to find credentials.\n  Pass the real file with --file.`);
+  }
+  if (!st.isFile()) die(`${local} is not a regular file.`);
+  return { local, policy };
 }
 
 /**
@@ -1477,13 +1813,14 @@ function cmdNewShell(given: string | undefined, opts: { dir?: string | undefined
  * Reports which KEYS changed. Never a value, and never a hash of one: a short
  * value shown as a hash is a value shown.
  */
-function cmdPushEnv(opts: { file?: string | undefined }): void {
-  const local = path.resolve(opts.file ?? path.join(REPO, ".env.local"));
-  const refusal = assertPushableName(path.basename(local));
-  if (refusal) die(refusal);
-  if (!existsSync(local)) die(`no such file: ${local}`);
-
-  const payload = buildEnvPayload(readFileSync(local, "utf8"));
+function cmdPushEnv(opts: { file?: string | undefined; repo?: string | undefined; dir?: string | undefined }): void {
+  // `requireIdentity` — this command carries one repo's credentials, so it may
+  // not run without knowing which repo, and a `--dir` must be that repo's
+  // checkout rather than any directory on the box.
+  const target = resolveTarget({ repo: opts.repo, dir: opts.dir, requireIdentity: true });
+  const source = envSource(target, opts.file);
+  const local = source.local;
+  const payload = source.policy.build(readFileSync(local, "utf8"));
   // Refused, not reported. The allowlist stops the file sending a key it should
   // not; nothing stopped it sending FEWER keys than it appears to — a duplicate
   // takes the later value, an unclosed quote eats every line after it, and a
@@ -1505,21 +1842,12 @@ function cmdPushEnv(opts: { file?: string | undefined }): void {
     );
   }
 
-  const dir = REMOTE_REPO();
+  const dir = target.dir;
   const dest = `${dir}/.env.local`;
   // Not created for you, on purpose: an env file beside no repo is a box that
   // looks set up and is not, and you would find out at the first npm command.
   if (ssh(`test -d ${shq(dir)} && echo yes || echo no`, { check: false }) !== "yes") {
-    die(
-      `no checkout at ${dir} on the box, so there is nowhere to put .env.local.\n` +
-        `  Create it first, then run this again:\n` +
-        `    gjd-remote ssh\n` +
-        // HTTPS, not the ssh remote the laptop uses. The box authenticates with
-        // per-owner fine-grained PATs through a git credential helper, which only
-        // sees a request it can route when the URL is https.
-        `    mkdir -p ~/code && git clone https://github.com/spideryarn/reading2.git ${dir}\n` +
-        `  (or set GJD_REMOTE_REPO to a checkout that already exists)`,
-    );
+    die(`${dir} went away between resolving it and writing to it, so nothing was written.`);
   }
 
   console.log(bold(`gjd-remote push-env → ${HOST()}:${dest}`));
@@ -1631,17 +1959,8 @@ function parseRepo(given: string): Repo {
   return { owner, name, url: `https://github.com/${owner}/${name}.git` };
 }
 
-/** `owner/name`, lower-cased, out of any GitHub remote URL — the comparable
- *  form. GitHub owners and repo names are case-insensitive, so the comparison
- *  has to be too, or an existing checkout goes unrecognised and gets a twin. */
-function remoteSlug(url: string): string | undefined {
-  const m = /^(?:https:\/\/(?:[^@/]*@)?github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(
-    url.trim(),
-  );
-  const owner = m?.[1];
-  const name = m?.[2];
-  return owner && name ? `${owner}/${name}`.toLowerCase() : undefined;
-}
+// `remoteSlug` used to have a second copy here. It is imported from
+// scripts/gjd-remote-repo.ts now, which is the only place that regex lives.
 
 /** A path ON THE BOX, from a flag. Absolute or `~`-relative; anything else is a
  *  path relative to whatever directory ssh happened to land in, which is not a
@@ -1744,11 +2063,33 @@ function describeCheckout(facts: CloneFacts): void {
  * quietly triggers a five-minute install is a clone you cannot use to look at
  * something. The next steps are printed instead.
  */
-function cmdClone(given: string | undefined, opts: { baseFolder?: string | undefined; name?: string | undefined }): void {
-  if (!given) {
-    die(`gjd-remote clone <repo> [--base-folder DIR] [--name DIR-NAME]\n  owner/name, or https://github.com/owner/name.git`);
+function cmdClone(
+  given: string | undefined,
+  opts: { baseFolder?: string | undefined; name?: string | undefined; repo?: string | undefined },
+): void {
+  // With no argument it is the repo you are standing in — the common case, and
+  // the one that needs no typing. `--repo` says the same thing explicitly; both
+  // together must agree, because a clone of the wrong repo is not a typo you
+  // notice until an agent is editing it.
+  const asked = given ?? opts.repo;
+  if (given !== undefined && opts.repo !== undefined && parseRepo(given).url !== parseRepo(opts.repo).url) {
+    die(`clone was given two different repos: '${given}' and --repo ${opts.repo}.`);
   }
-  const repo = parseRepo(given);
+  let repo: Repo;
+  if (asked !== undefined) {
+    repo = parseRepo(asked);
+  } else {
+    const id = identify(undefined);
+    if (!id.ok) {
+      die(
+        `gjd-remote clone [repo] [--base-folder DIR] [--name DIR-NAME]\n` +
+          `  With no argument it clones the repo you are standing in, and you are not in one.\n` +
+          `${id.why}`,
+      );
+    }
+    repo = parseRepo(id.id.slug);
+    console.log(dim(`repo: ${id.id.slug}  (${id.id.localToplevel})`));
+  }
   const base = remotePath(opts.baseFolder ?? REMOTE_CODE, "--base-folder");
   const dirName = (opts.name ?? repo.name).trim();
   if (!GH_REPO.test(dirName)) {
@@ -1854,9 +2195,10 @@ function cmdClone(given: string | undefined, opts: { baseFolder?: string | undef
   // Nothing else is run for you — no `npm ci`, no install. Said out loud,
   // because a clone that silently starts a five-minute install is a clone you
   // cannot use to go and look at something.
-  const envNote = dest === REMOTE_REPO() ? "" : `   # note: writes to ${REMOTE_REPO()}, not here`;
   console.log(dim("\nnext:"));
-  console.log(dim(`  gjd-remote push-env${envNote}`));
+  // Both are run FROM that repo's checkout on this laptop, which is how they
+  // find it on the box — by origin, not by the directory name above.
+  console.log(dim(`  gjd-remote push-env      # from ${want}'s own checkout on this laptop`));
   console.log(dim(`  gjd-remote new-shell -d ${dest}   then npm ci`));
 }
 
@@ -1944,6 +2286,63 @@ function probeTools(): Map<string, { status: number; detail: string }> {
 }
 
 /**
+ * The checkout `doctor`'s repo-shaped checks are about, or why there isn't one.
+ *
+ * SKIPPED, NEVER GUESSED. `doctor` is run from anywhere — a cron line, a
+ * terminal in the home directory — and a box check that quietly falls back to
+ * some other repo's checkout would report on a tree nobody asked about. It
+ * refuses nothing and fails nothing; it says which repo it could not find and
+ * carries on with the box.
+ */
+function doctorTarget(repoOpt: string | undefined): { kind: "dir"; dir: string } | { kind: "skip"; why: string } {
+  const id = identify(repoOpt);
+  if (!id.ok) {
+    return { kind: "skip", why: `not inside a git repository, and no --repo was given` };
+  }
+  const r = remoteCheckout(id.id);
+  if (r.kind !== "found") {
+    return { kind: "skip", why: `${id.id.slug}: ${describeResolution(id.id.slug, r).split("\n")[0] ?? r.kind}` };
+  }
+  return { kind: "dir", dir: r.dir };
+}
+
+/**
+ * The MCP servers the TARGET repo declares, against what the box holds for that
+ * checkout.
+ *
+ * Two of the three need an OAuth login only a human with a browser can do, once
+ * per box. Nothing about a box that has not had it done looks wrong: sessions
+ * start, the suite passes, and an agent simply never has the tool. The failure
+ * is an absence, so it needs a check rather than a reader.
+ *
+ * BOTH SIDES ARE THE REMOTE TARGET, and that is the change this stage makes:
+ * the wanted list is read from the checkout's own `.mcp.json` ON THE BOX, and
+ * `claude mcp list` runs in that same directory. Reading the wanted list from
+ * THIS checkout while listing servers in another repo's would compare two
+ * different repos and call the difference a broken box.
+ *
+ * Everything else `doctor` asks is about the box, which is shared, and stays on
+ * the tool root — Terraform state, `provision.sh`, the browser smoke test.
+ */
+function mcpOutcome(repoOpt: string | undefined): { kind: "skip"; why: string } | { kind: "check"; ok: boolean; why: string } {
+  const target = doctorTarget(repoOpt);
+  if (target.kind === "skip") return target;
+  const mcpFile = `${target.dir}/.mcp.json`;
+  const raw = ssh(`cat ${shq(mcpFile)} 2>/dev/null || true`, { check: false, raw: true });
+  // A repo that declares nothing has nothing to be wrong about, and failing it
+  // would make doctor red for every repo but this one.
+  if (raw.trim() === "") return { kind: "skip", why: `${mcpFile} does not exist on the box` };
+  const declared = declaredServers(raw);
+  if (!declared.ok) return { kind: "check", ok: false, why: `${mcpFile}: ${declared.why}` };
+  // `|| true` and check:false: `claude mcp list` exits non-zero when any server
+  // is unhealthy, including servers of Greg's that are none of our business.
+  // Its OUTPUT is the answer; its exit code is not.
+  const listing = ssh(`cd ${shq(target.dir)} && timeout 120 claude mcp list 2>&1 || true`, { check: false });
+  const verdict = mcpVerdict(listing, declared.names);
+  return { kind: "check", ok: verdict.ok, why: verdict.why };
+}
+
+/**
  * Everything that can be checked from here, in one command — because Claude
  * Code's own shell cannot reach port 22, so an agent cannot run any of this
  * itself. Run `gjd-remote doctor` and paste the output.
@@ -1954,8 +2353,13 @@ function probeTools(): Map<string, { status: number; detail: string }> {
  *
  * And it asserts, positively, that every check it means to run actually ran.
  * A doctor that quietly ran nothing at all otherwise looks exactly like a pass.
+ *
+ * MOST OF IT IS ABOUT THE BOX, which is shared, so it needs no repo at all. The
+ * one repo-shaped check is `mcp`, and it is skipped out loud when there is no
+ * repo to check — see doctorTarget(). Stage 2 of the plan splits the two halves
+ * properly and adds the config's `check` command to the repo half.
  */
-function cmdDoctor(): void {
+function cmdDoctor(repoOpt: string | undefined): void {
   const ip = host();
   console.log(bold(`gjd-remote → ${ip}`));
 
@@ -2051,30 +2455,14 @@ function cmdDoctor(): void {
   const smoke = runBrowserSmoke();
   check("browser", smoke.ok, smoke.detail);
 
-  // The MCP servers this repo declares, checked against what the box holds.
-  //
-  // Two of the three need an OAuth login only a human with a browser can do,
-  // once per box. Nothing about a box that has not had it done looks wrong:
-  // sessions start, the suite passes, and an agent simply never has the tool.
-  // The failure is an absence, so it needs a check rather than a reader.
-  //
-  // The wanted list is read from OUR .mcp.json, not written down again here, so
-  // adding a server extends this check without anyone remembering to.
-  const declared = declaredServers(
-    existsSync(path.join(REPO, ".mcp.json")) ? readFileSync(path.join(REPO, ".mcp.json"), "utf8") : "",
-  );
-  if (!declared.ok) {
-    check("mcp", false, declared.why);
+  // The one repo-shaped check, and the only one that needs to know which repo
+  // this is — see mcpOutcome(). Everything else here is about the box.
+  const mcp = mcpOutcome(repoOpt);
+  if (mcp.kind === "skip") {
+    record("mcp", "skip");
+    console.log(dim(`· mcp  not checked: ${mcp.why}`));
   } else {
-    // `|| true` and check:false: `claude mcp list` exits non-zero when any
-    // server is unhealthy, including servers of Greg's that are none of our
-    // business. Its OUTPUT is the answer; its exit code is not.
-    const listing = ssh(
-      `cd ${shq(REMOTE_REPO())} && timeout 120 claude mcp list 2>&1 || true`,
-      { check: false },
-    );
-    const verdict = mcpVerdict(listing, declared.names);
-    check("mcp", verdict.ok, verdict.why);
+    check("mcp", mcp.ok, mcp.why);
   }
 
   // cloud-init's own status is genuinely informational: it reports the FIRST
@@ -2298,11 +2686,13 @@ ${bold("SESSIONS")}
   ls, (no args)           list sessions, each with Claude's own title for it
   new-claude [name]       start Claude Code and attach
       -p, --prompt TEXT     give it a first prompt (${dim("-p -")} reads it from stdin)
-      -d, --dir DIR         working directory on the box ${dim(`(default: ${REMOTE_REPO_DEFAULT})`)}
+      -d, --dir DIR         a directory on the box, skipping the repo question
+          --repo OWNER/NAME which repo, when you are not standing in it
           --wait DURATION   create it now, start Claude later ${dim("— 45s, 15m, 2h, 1d")}
           --no-attach       create it, but stay here
   new-shell [name]        a persistent shell, no Claude Code
-      -d, --dir DIR         working directory on the box ${dim(`(default: ${REMOTE_REPO_DEFAULT})`)}
+      -d, --dir DIR         a directory on the box
+          --repo OWNER/NAME which repo, when you are not standing in it
   resume [name]           reattach; with no name, the most recent session
   resume-all              one new iTerm tab per session, each attached to its own
       --include-attached    take over sessions something else is already in
@@ -2313,19 +2703,27 @@ ${bold("SESSIONS")}
       --path                print where the log file is and stop
 
 ${bold("THE BOX")}
+  resolve                 which repo is this, and where is it on the box?
+                          one round trip, nothing created — run it when a command
+                          refuses and you want to see what it saw
+      -d, --dir DIR         check that this box path is that repo's checkout
+          --repo OWNER/NAME ask about a repo you are not standing in
   doctor                  check everything, and say what is wrong
                           exits non-zero if any check failed
+          --repo OWNER/NAME which repo's .mcp.json to check on the box
   provision               build a bootstrapped box: copy provision.sh up, run it
                           cloud-init no longer does this — user_data is capped at
                           32 KiB and the script is 67 KiB base64'd
                           safe to re-run; that is how you move a pinned version
       --wait-seconds N      how long to wait for ssh and cloud-init ${dim("(default 300)")}
       --run-minutes N       cap on the run itself ${dim("(default 45)")}
-  clone <repo>            clone one of Greg's repos onto the box, over HTTPS
+  clone [repo]            clone one of Greg's repos onto the box, over HTTPS
+                          with no argument, the repo you are standing in
       --base-folder DIR     where to put it ${dim(`(default: ${REMOTE_CODE})`)}
       --name DIR-NAME       directory name, if not the repo's own
-  push-env                send .env.local to the repo checkout on the box
+  push-env                send this repo's .env.local to its checkout on the box
       --file PATH           a different .env.local — the basename must be exactly that
+      --dir DIR             a box path, which must be this repo's checkout
   ssh [command]           a throwaway connection — no tmux, dies with the terminal
                           with a command, runs it and prints what it said
                           ${dim("gjd-remote ssh 'free -g; uptime'")}
@@ -2350,12 +2748,18 @@ ${bold("HOW clone AUTHENTICATES")}
   Issuing the tokens is a ceremony in ${dim("infra/hetzner/README.md")}.
 
 ${bold("WHERE A SESSION STARTS")}
-  ${dim("new-claude")} and ${dim("new-shell")} begin in the repo checkout, not the home directory: an agent
-  that starts in ~ opens by guessing which tree to edit. Most specific wins —
-  ${dim("--dir")}, else ${dim("GJD_REMOTE_REPO")}, else ${dim(REMOTE_REPO_DEFAULT)} — and whichever it
-  is, it is printed. ${dim("-d ~")} for the home directory.
+  Three lines, and they apply to ${dim("new-claude")}, ${dim("new-shell")}, ${dim("push-env")}, ${dim("clone")} and ${dim("doctor")} alike:
+    1. the repo is the ${bold("git origin")} of wherever you are standing — never a folder
+       name, so ${dim("reading2")} on the laptop and ${dim("spideryarn2")} on the box are one repo.
+    2. the box is asked what is under ${dim(REMOTE_CODE)}, and the ONE directory with
+       that origin is the answer. None, two, or something else in the way: it says
+       so and does nothing. ${dim("--repo owner/name")} when you are not in the repo.
+    3. ${dim("--dir")} wins over both, and is an arbitrary path on the box — ${dim("-d ~")} is the
+       home directory and no repo at all.
+  Whichever it is, the repo and the directory are printed before anything happens.
   The directory must already exist on the box; there is no fallback, because the
   fallback was a healthy-looking session in ${dim("/home/greg")} editing the wrong thing.
+  Cloning a repo the box does not have yet is ${dim("gjd-remote clone")} for now.
 
 ${bold("STARTING LATER")}
   ${dim("--wait 2h")} makes the session NOW and starts Claude in two hours. The units are
@@ -2395,9 +2799,12 @@ ${bold("THE LOG")}
 
 ${bold("EXAMPLES")}
   gjd-remote new-claude -p "fix the ToC ordering bug"
-      ${dim(`gjd-remote new-claude s-260831-171205 → greg@1.2.3.4:${REMOTE_REPO_DEFAULT}`)}
+      ${dim(`repo: spideryarn/reading2  (/Users/greg/dev/spideryarn/reading2)`)}
+      ${dim(`box:  ${REMOTE_CODE}/spideryarn2`)}
+      ${dim(`gjd-remote new-claude s-260831-171205 → greg@1.2.3.4:${REMOTE_CODE}/spideryarn2`)}
       ${dim("✓ started 's-260831-171205' with a prompt")}
-      already in the checkout, and named after whatever Claude decides the work is
+      in the checkout of the repo you ran it from, found by origin rather than by
+      name, and named after whatever Claude decides the work is
   gjd-remote new-claude -p - <<'EOF'
       the prompt comes from stdin, so nothing needs escaping — quotes, backticks,
       dollar signs and newlines all arrive as typed
@@ -2430,7 +2837,7 @@ ${bold("EXAMPLES")}
       the repo is ${dim("reading2")} and its checkout is ${dim("spideryarn2")}. Without --name you are
       told it is already on the box under another name, rather than given a second copy
   gjd-remote push-env
-      ${dim(`gjd-remote push-env → greg@1.2.3.4:${REMOTE_REPO_DEFAULT}/.env.local`)}
+      ${dim(`gjd-remote push-env → greg@1.2.3.4:${REMOTE_CODE}/spideryarn2/.env.local`)}
       ${dim("  + OPENROUTER_API_KEY  added")}
       ${dim("  ~ DATABASE_URL  changed")}
       ${dim("  = 10 unchanged")}
@@ -2441,9 +2848,11 @@ ${bold("ENVIRONMENT")}
   GJD_REMOTE_HOST         override the address (default: read from Terraform state,
                           so it is never stale after a rebuild)
   GJD_REMOTE_TRANSPORT    ssh | mosh | auto (default: auto, which probes mosh once)
-  GJD_REMOTE_REPO         where the checkout lives on the box — where push-env
-                          writes, and where new-claude/new-shell start without a --dir
-                          (default: ${REMOTE_REPO_DEFAULT})
+  GJD_REMOTE_REPO         ${dim("deprecated")} — an alias for --dir, and --dir wins over it.
+                          It prints a line whenever it is set, and it REFUSES if the
+                          directory it names is not the repo you are standing in:
+                          an env var must not quietly steer one repo's work, or one
+                          repo's credentials, into another repo's checkout.
   GJD_REMOTE_TAB_COLOUR   ${dim("off")}, or a ${dim("#rrggbb")} (default: ${REMOTE_TAB_COLOUR})
 
 ${bold("WHICH TABS ARE ON THE BOX")}
@@ -2497,6 +2906,7 @@ function main(): void {
         options: {
           prompt: { type: "string", short: "p" },
           dir: { type: "string", short: "d" },
+          repo: { type: "string" },
           wait: { type: "string" },
           "no-attach": { type: "boolean", default: false },
           ssh: { type: "boolean", default: false },
@@ -2513,6 +2923,7 @@ function main(): void {
       }
       return cmdNewClaude(positionals[0], {
         prompt: resolvePrompt(values.prompt),
+        repo: values.repo,
         dir: values.dir,
         wait,
         attach: !values["no-attach"],
@@ -2574,16 +2985,36 @@ function main(): void {
       const { values, positionals } = parseArgs({
         args: rest,
         allowPositionals: true,
-        options: { dir: { type: "string", short: "d" }, ssh: { type: "boolean", default: false } },
+        options: {
+          dir: { type: "string", short: "d" },
+          repo: { type: "string" },
+          ssh: { type: "boolean", default: false },
+        },
       });
       return cmdNewShell(positionals[0], {
+        repo: values.repo,
         dir: values.dir,
         transport: values.ssh ? "ssh" : undefined,
       });
     }
 
-    case "doctor":
-      return cmdDoctor();
+    case "doctor": {
+      const { values } = parseArgs({ args: rest, options: { repo: { type: "string" } } });
+      return cmdDoctor(values.repo);
+    }
+
+    // Hidden-ish, and documented in the help as a debugging aid: it answers
+    // "which repo does this directory mean, and what does the box say about
+    // it?" in one cheap round trip, without creating anything. Everything the
+    // per-repo commands do starts here, so when one of them refuses, this is
+    // how you see what it saw.
+    case "resolve": {
+      const { values } = parseArgs({
+        args: rest,
+        options: { repo: { type: "string" }, dir: { type: "string", short: "d" } },
+      });
+      return cmdResolve({ repo: values.repo, dir: values.dir });
+    }
 
     case "provision": {
       const { values } = parseArgs({
@@ -2603,8 +3034,11 @@ function main(): void {
     }
 
     case "push-env": {
-      const { values } = parseArgs({ args: rest, options: { file: { type: "string" } } });
-      return cmdPushEnv({ file: values.file });
+      const { values } = parseArgs({
+        args: rest,
+        options: { file: { type: "string" }, repo: { type: "string" }, dir: { type: "string", short: "d" } },
+      });
+      return cmdPushEnv({ file: values.file, repo: values.repo, dir: values.dir });
     }
 
     case "clone": {
@@ -2614,9 +3048,14 @@ function main(): void {
         options: {
           "base-folder": { type: "string" },
           name: { type: "string" },
+          repo: { type: "string" },
         },
       });
-      return cmdClone(positionals[0], { baseFolder: values["base-folder"], name: values.name });
+      return cmdClone(positionals[0], {
+        baseFolder: values["base-folder"],
+        name: values.name,
+        repo: values.repo,
+      });
     }
 
     case "forget-key": {
@@ -2696,7 +3135,7 @@ function main(): void {
       return console.log(HELP);
 
     default: {
-      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "provision", "clone", "push-env", "ssh", "tunnel", "forget-key"];
+      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "provision", "clone", "push-env", "resolve", "ssh", "tunnel", "forget-key"];
       // The containment clause is not decoration: `new` and `shell` were the
       // names of these two commands until 2026-08-31 and there are no aliases,
       // so the typo path is the whole migration. Two-char prefixes get `new`
