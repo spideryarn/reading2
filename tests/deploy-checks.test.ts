@@ -45,6 +45,7 @@ import {
   type JournalEntry,
   type RunningBucket,
   type VercelDeployment,
+  postApplyProblems,
 } from "../scripts/deploy-checks.js";
 
 const SHA = "1f032e20f723883f4eecd218b06701c754d320a5";
@@ -1077,5 +1078,63 @@ describe("whether a failure means the code might not be live", () => {
 
   it("is false for a clean run", () => {
     expect(codeMayNotHaveShipped([])).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* After the migrator returns                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * **The bug this replaced.** `applyMigrations` used to verify its own work by
+ * counting ledger rows — `moved === plan.pending.length` — and a count cannot
+ * tell one migration from another. If a second machine applied the pending
+ * migration in the gap, this run applied nothing, watched the count move by
+ * exactly the number it expected, and reported success. The same arithmetic
+ * passes when a *different* migration lands, which is worse.
+ *
+ * Every case below is built so the counting version would have been happy.
+ */
+describe("postApplyProblems", () => {
+  const want = (created_at: number, hash: string, tag: string) => ({ created_at, hash, tag });
+  const got = (created_at: number, hash: string) => ({ created_at, hash });
+
+  it("is silent when every migration the commit needs is in the ledger", () => {
+    const expected = [want(1, "aa", "0001_a"), want(2, "bb", "0002_b")];
+    expect(postApplyProblems(expected, [got(1, "aa"), got(2, "bb")])).toEqual([]);
+  });
+
+  it("catches a different migration landing while the count still adds up", () => {
+    const expected = [want(1, "aa", "0001_a"), want(2, "bb", "0002_b")];
+    const after = [got(1, "aa"), got(2, "zz")];
+
+    /* The counting check's exact arithmetic, so the control is explicit rather
+       than asserted in prose: two rows before, two after, one pending applied. */
+    expect(after).toHaveLength(expected.length);
+
+    expect(postApplyProblems(expected, after).join(" ")).toContain("0002_b");
+  });
+
+  it("catches the migrator returning 0 having applied nothing", () => {
+    const expected = [want(1, "aa", "0001_a"), want(2, "bb", "0002_b")];
+    expect(postApplyProblems(expected, [got(1, "aa")]).join(" ")).toContain("0002_b");
+  });
+
+  it("names every missing migration, not just the first", () => {
+    const expected = [want(1, "aa", "0001_a"), want(2, "bb", "0002_b"), want(3, "cc", "0003_c")];
+    const problems = postApplyProblems(expected, [got(1, "aa")]).join(" ");
+    expect(problems).toContain("0002_b");
+    expect(problems).toContain("0003_c");
+  });
+
+  /**
+   * A row the commit has never heard of is not this check's business — a
+   * concurrent deploy of a *newer* commit would leave one, and failing here
+   * would turn a race into a false alarm about the migrations that did land.
+   * `migrationPlan`'s ledger-ahead refusal is what owns that question.
+   */
+  it("ignores a ledger row this commit does not know about", () => {
+    const expected = [want(1, "aa", "0001_a")];
+    expect(postApplyProblems(expected, [got(1, "aa"), got(9, "zz")])).toEqual([]);
   });
 });
