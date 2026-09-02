@@ -193,8 +193,9 @@ actually reaches is not always the one on its command line, and both mistakes pr
   don't try to fence yourself off.
 - **Commit and push to `dev`.** That is the trunk, and a push there builds nothing. `main` is
   production and is written only by `npm run deploy` — pushing to it yourself is an unreviewed
-  deploy to real readers. We are also setting up a worktree per agent, so the sharing above gets
-  less painful.
+  deploy to real readers, and **nothing mechanical stops you**:
+  [version-control.md § What protects `main`](docs/project/version-control.md#what-protects-main-and-what-does-not).
+  We are also setting up a worktree per agent, so the sharing above gets less painful.
 - **Stay inside your stage.** Talk to other stages through the artefacts they write, not by reaching
   into their code — [architecture.md § Stage ownership](docs/project/architecture.md#stage-ownership).
 - **Never run a git command that throws work away.** No `git checkout -- …`, `git restore`,
