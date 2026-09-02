@@ -10,11 +10,12 @@
  *   installation's owner. Without it, every read and list filters on an exact
  *   `ownerId` and the record is invisible to everybody. There were 34 such
  *   files in this repo's `data/_jobs/` at the time.
- * - **A job's work key comes back with it.** Without it an active job that
- *   survived a restart cannot recognise its own repeat request, so an identical
- *   enqueue is told this is *different* work — and for a URL, whose slug cannot
- *   legitimately be reallocated, that ends in a 409 for a request that should
- *   have been handed the running job.
+ * - **A job's enqueue ticket comes back with it** — its work key, and since
+ *   2026-09-02 whether it reserves its article's name. Without the key an active
+ *   job that survived a restart cannot recognise its own repeat request, so an
+ *   identical enqueue is told this is *different* work. Without `reservesName` a
+ *   job that is minting an article stops holding the name across a restart, and
+ *   a second request mints a second article for the same address.
  *
  * Both are checked by writing a file and reloading, which is the only honest
  * way to exercise a function that runs at cold start.
@@ -32,6 +33,10 @@ const JOBS_DIR = path.resolve(import.meta.dirname, "..", "data", "_jobs");
 /** Its own ids, so nothing here collides with another suite's records. */
 const LEGACY = "spya-fsload1";
 const KEYED = "spya-fsload2";
+/** A record that was minting a name when the process stopped. */
+const RESERVER = "spya-fsload6";
+/** And one written before `reservesName` existed, which must read as not reserving. */
+const NAMELESS = "spya-fsload7";
 
 const steps: JobStep[] = [{ name: "fetch", label: "Fetching the page", status: "done" }];
 
@@ -62,13 +67,27 @@ beforeAll(async () => {
     `${JSON.stringify({ ...record(KEYED), status: "queued", finishedAt: undefined, ownerId: environmentOwnerId(), workKey: "k-abc" }, null, 2)}\n`,
     "utf8",
   );
+  await writeFile(
+    path.join(JOBS_DIR, `${RESERVER}.json`),
+    `${JSON.stringify({ ...record(RESERVER), status: "queued", finishedAt: undefined, ownerId: environmentOwnerId(), workKey: "k-mint", reservesName: true, urlKey: "example.test/fsload" }, null, 2)}\n`,
+    "utf8",
+  );
+  /* No `reservesName` key at all — the shape of every file written before
+     2026-09-02, and the one the loader has to have an opinion about. */
+  await writeFile(
+    path.join(JOBS_DIR, `${NAMELESS}.json`),
+    `${JSON.stringify({ ...record(NAMELESS), status: "queued", finishedAt: undefined, ownerId: environmentOwnerId(), workKey: "k-old" }, null, 2)}\n`,
+    "utf8",
+  );
   await reloadForTests();
 });
 
 afterAll(async () => {
   await rm(path.join(JOBS_DIR, `${LEGACY}.json`), { force: true });
   await rm(path.join(JOBS_DIR, `${KEYED}.json`), { force: true });
-  for (const id of ["spya-fsload3", "spya-fsload4", "spya-fsload5"]) {
+  await rm(path.join(JOBS_DIR, `${RESERVER}.json`), { force: true });
+  await rm(path.join(JOBS_DIR, `${NAMELESS}.json`), { force: true });
+  for (const id of ["spya-fsload3", "spya-fsload4", "spya-fsload5", "spya-fsload8", "spya-fsload9"]) {
     await rm(path.join(JOBS_DIR, `${id}.json`), { force: true });
   }
   await reloadForTests();
@@ -90,10 +109,9 @@ describe("reading the job directory back", () => {
        `enqueue` had no way to make progress from there. */
     const same = await fsJobStore.enqueueOrGet(
       { ...record("spya-fsload3"), ownerId: environmentOwnerId(), slug: `test-fsload-${KEYED}` },
-      "k-abc",
+      { workKey: "k-abc", reservesName: false },
     );
-    expect(same.created).toBe(false);
-    expect(same.sameWork).toBe(true);
+    expect(same.kind).toBe("sameWork");
     expect(same.job.id).toBe(KEYED);
   });
 
@@ -121,7 +139,7 @@ describe("reading the job directory back", () => {
         slug: `test-fsload-written-${id}`,
         status: "queued",
       } as Job,
-      "k-written",
+      { workKey: "k-written", reservesName: false },
     );
     await fsJobStore.forget(id, environmentOwnerId()).catch(() => undefined);
 
@@ -132,9 +150,9 @@ describe("reading the job directory back", () => {
         slug: `test-fsload-written`,
         status: "queued",
       } as Job,
-      "k-written",
+      { workKey: "k-written", reservesName: false },
     );
-    expect(written.created).toBe(true);
+    expect(written.kind).toBe("created");
 
     const on = JSON.parse(
       await readFile(path.join(JOBS_DIR, `${written.job.id}.json`), "utf8"),
@@ -146,5 +164,86 @@ describe("reading the job directory back", () => {
     expect(job && "workKey" in job).toBe(false);
 
     await fsJobStore.forget(written.job.id, environmentOwnerId()).catch(() => undefined);
+  });
+
+  /**
+   * **A job that was minting a name still holds it after a restart.**
+   *
+   * `reservesName` is a fact known only at slug allocation, and a record that
+   * came back without it would let a second request mint a second article for
+   * the same address. Asked the way the reservation is actually enforced — offer
+   * a different piece of work claiming the same name — because "the field is on
+   * the object" is a weaker claim that a `Partial` spread satisfies by accident.
+   */
+  it("brings a job's name reservation back with it", async () => {
+    const taken = await fsJobStore.enqueueOrGet(
+      {
+        ...record("spya-fsload8"),
+        ownerId: environmentOwnerId(),
+        slug: `test-fsload-${RESERVER}`,
+        status: "queued",
+      } as Job,
+      { workKey: "k-other", reservesName: true },
+    );
+    expect(taken.kind).toBe("nameTaken");
+    expect(taken.job.id).toBe(RESERVER);
+  });
+
+  /**
+   * **And a record written before the field existed reserves nothing.**
+   *
+   * The safe direction, and the only one that does not need a guess: a missing
+   * `reservesName` read as *true* would block a name nobody is claiming, for as
+   * long as that stale record sat in `data/_jobs/`. Read as *false* it can only
+   * ever fail to block one. The plan's § 1e says the same thing about the
+   * Postgres column, which is why that migration drains instead.
+   */
+  it("treats a record written before the field as not reserving", async () => {
+    const free = await fsJobStore.enqueueOrGet(
+      {
+        ...record("spya-fsload8"),
+        ownerId: environmentOwnerId(),
+        slug: `test-fsload-${NAMELESS}`,
+        status: "queued",
+      } as Job,
+      { workKey: "k-other", reservesName: true },
+    );
+    expect(free.kind).toBe("created");
+    await fsJobStore.forget(free.job.id, environmentOwnerId()).catch(() => undefined);
+  });
+
+  /**
+   * **A job enqueued as `running` is `queued` in the file, not only in memory.**
+   *
+   * `enqueueOrGet` normalises the status — a caller may not insert a row that
+   * never passed the cap check and carries no attempt token — and until
+   * 2026-09-02 it normalised it into the in-memory index and then wrote the
+   * *caller's* object to the file. GPT Sol, reviewing the built stage 1,
+   * finding 6.
+   *
+   * **The file is read directly rather than through a reload**, and that is the
+   * whole reason this case is worth writing. `loadFromDisk` runs `sweepStopped`
+   * over every record, which turns a `running` job with nobody inside it back
+   * into a `queued` one — so a reload answers `queued` either way, and a test
+   * that asked it would be green against the bug. The record is still wrong
+   * while it sits there, and anything reading `data/_jobs/` that is not this
+   * loader reads a lie. docs/reusable/silent-success.md.
+   *
+   * Watched red on 2026-09-02: *"the file kept the caller's status: expected
+   * 'running' to be 'queued'"*.
+   */
+  it("writes an enqueued job to its file as queued, whatever status it was handed", async () => {
+    const id = "spya-fsload9";
+    await fsJobStore.enqueueOrGet(
+      {
+        ...record(id),
+        ownerId: environmentOwnerId(),
+        slug: `test-fsload-${id}`,
+        status: "running",
+      } as Job,
+      { workKey: "k-running", reservesName: false },
+    );
+    const stored = JSON.parse(await readFile(path.join(JOBS_DIR, `${id}.json`), "utf8")) as Job;
+    expect(stored.status, "the file kept the caller's status").toBe("queued");
   });
 });

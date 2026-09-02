@@ -91,8 +91,9 @@ export type ReaderCapability =
        * piece have one* rather than *give me the list*, and they ask it about
        * `arc` too, which is not in the set above because it has ridden inside
        * the article payload since slice 1a. Derived rather than fetched:
-       * `GET /api/public/metadata/:slug` used to answer this and the second
-       * request is gone. public-artefacts.ts.
+       * a public metadata endpoint used to answer this; the second request went
+       * in slice 1b and the endpoint itself on 2026-09-02.
+       * public-artefacts.ts.
        *
        * **Not nullable any more.** It was `PublicArtefacts | null`, where
        * `null` meant that second request had failed — which is the state slice
@@ -115,6 +116,24 @@ export type ReaderCapability =
        * could take it up.
        */
       signedIn: boolean;
+      /**
+       * **Whether we could confirm that session** — and it is on the chrome,
+       * not on what may be done.
+       *
+       * `GET /api/article/:slug` answered 401 (after `apiFetch` spent its one
+       * refresh and one retry) while the public route answered 200, so this
+       * reader is being served the shared article and told why it went
+       * read-only. A 401 says nothing about the public entitlement, and the two
+       * are kept independent on purpose — finding C3,
+       * docs/plans/260902j-public-read-only-access-audit-and-improvements.md.
+       *
+       * **It grants and withholds nothing.** A visitor is a visitor whichever
+       * way this reads: the owner-only hooks live inside `OwnedReader` and are
+       * unreachable rather than skipped, exactly as they are for a stranger. So
+       * it belongs beside `signedIn` — the other field here that only the
+       * wording depends on — rather than beside `artefacts`.
+       */
+      sessionUnconfirmed: boolean;
     };
 
 /**

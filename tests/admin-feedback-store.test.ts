@@ -148,9 +148,14 @@ const when = reachable ? describe : describe.skip;
 function report(over: Partial<NewFeedback> & { id: string }): NewFeedback {
   return {
     reporterEmail: "reporter@example.invalid",
-    steps: "Open an article and press the button",
-    expected: "A dialog",
-    actual: "Nothing at all",
+    /* One field since 2026-09-02 — docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md
+       collapsed the three boxes into one. This fixture read three until the two
+       features met in a merge. */
+    body: "Open an article and press the button; I expected a dialog and got nothing at all",
+    /* Required rather than optional on `NewFeedback`, and `null` is a real
+       answer: the toggle has no default, so "they did not say" is a third
+       state and not a missing field. src/types.ts § FEEDBACK_KINDS. */
+    kind: null,
     consented: false,
     routeKind: "read",
     slug: "some-article",
@@ -233,10 +238,10 @@ when("the admin feedback read on Postgres", () => {
     const aliceShot = Uint8Array.of(1, 1, 1, 1);
     const bobShot = Uint8Array.of(2, 2, 2, 2, 2, 2);
     await runAsOwner(ALICE, () =>
-      pgFeedbackStore.submit(report({ id, actual: "what Alice saw", screenshot: aliceShot })),
+      pgFeedbackStore.submit(report({ id, body: "what Alice saw", screenshot: aliceShot })),
     );
     await runAsOwner(BOB, () =>
-      pgFeedbackStore.submit(report({ id, actual: "what Bob saw", screenshot: bobShot })),
+      pgFeedbackStore.submit(report({ id, body: "what Bob saw", screenshot: bobShot })),
     );
 
     /* Both are in the list, as two rows. A `key` on the id alone would draw
@@ -245,8 +250,8 @@ when("the admin feedback read on Postgres", () => {
     expect(seen.filter((r) => r.id === id)).toHaveLength(2);
 
     /* And each read gets its own owner's report and its own owner's bytes. */
-    expect((await readFeedbackAcrossOwners(ALICE, id))?.actual).toBe("what Alice saw");
-    expect((await readFeedbackAcrossOwners(BOB, id))?.actual).toBe("what Bob saw");
+    expect((await readFeedbackAcrossOwners(ALICE, id))?.body).toBe("what Alice saw");
+    expect((await readFeedbackAcrossOwners(BOB, id))?.body).toBe("what Bob saw");
     expect(await readFeedbackScreenshotAcrossOwners(ALICE, id)).toEqual(Buffer.from(aliceShot));
     expect(await readFeedbackScreenshotAcrossOwners(BOB, id)).toEqual(Buffer.from(bobShot));
   });
@@ -310,7 +315,7 @@ when("the admin feedback read on Postgres", () => {
     for (let i = 0; i < 5; i++) {
       const id = mintId();
       ids.push(id);
-      await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id, steps: `step ${i}` })));
+      await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id, body: `step ${i}` })));
     }
     const newestFirst = [...ids].reverse();
 

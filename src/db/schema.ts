@@ -1702,6 +1702,42 @@ export const jobs = spideryarn.table(
      */
     workKey: text("work_key").notNull(),
 
+    /**
+     * **This request minted the slug rather than adopting one**, and so is the
+     * one holding the name until it is over.
+     *
+     * Narrower than "arrived with a URL", which is what a draft of this called
+     * it. `enqueue` fills `url` from `meta.json` for a late step, so
+     * `{slug, steps:["ideas"]}` on an article already on the shelf carries a URL
+     * exactly as a paste does — and that request is *naming* an article, not
+     * claiming a name. The fact is known in one place only, at slug allocation:
+     * `freeSlug` either hands back the slug something already holds for this URL
+     * (adopted) or `slugWithShortId(slug)` (minted). An upload always mints,
+     * there being no address that could make two uploads one article.
+     *
+     * Recovering it later — from `url`, from `upload`, from the shape of the
+     * slug string — is the guess this column exists to avoid. GPT Sol,
+     * 2026-09-02, docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 1b.
+     *
+     * Defaulted `false` so that a row written by anything that has not been
+     * taught about it reserves nothing, which is the direction that can only
+     * ever fail to block a name rather than wrongly block one.
+     */
+    reservesName: boolean("reserves_name").notNull().default(false),
+
+    /**
+     * **`urlKey(url)`** (src/ingest.ts), persisted so that `jobs_active_source`
+     * can be an index rather than a comparison in TypeScript.
+     *
+     * Null for an upload, and for any request that arrived without an address —
+     * and `jobs_active_source` is partial on `reserves_name`, so those rows are
+     * outside it. That is right: two uploads of one file are two documents.
+     *
+     * Not the URL itself. `http://x.test/p` and `https://x.test/p/` are one
+     * address, and only the normalised form makes them one row.
+     */
+    urlKey: text("url_key"),
+
     createdAt: createdAt(),
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
@@ -1741,8 +1777,8 @@ export const jobs = spideryarn.table(
      * parity suite's cap case is what stands between that and a green run;
      * docs/reusable/silent-success.md is why it is written to be seen red.
      *
-     * The per-article rule is a different question and keeps an index of its
-     * own — see `jobs_active_slug` below.
+     * The per-article rule is a different question and keeps indexes of its
+     * own — see `jobs_one_running_per_slug` and its three neighbours below.
      */
     /**
      * A draft has exactly one owner, enforced rather than assumed.
@@ -1764,28 +1800,134 @@ export const jobs = spideryarn.table(
     ),
 
     /**
-     * **One active job per article** — `activeFor` and `freeSlug` as a
-     * constraint, and the conflict target `enqueueOrGet` inserts against.
+     * **`cancelling` belongs to a running job and to nothing else.**
      *
-     * It does two jobs at once, which is why there is one index here and not
-     * two. It **reserves the slug**, closing the check-then-use race in which
-     * two uploads both named `paper.pdf` each choose `paper` and the second
-     * publishes into the first's article. And it **de-duplicates**, because a
-     * second request for work already in flight conflicts here first: the
-     * caller re-reads the row and compares `work_key` — same work, hand back
-     * that job; different work, allocate the next slug suffix and retry.
+     * Stop on a *queued* job settles it terminal in the same statement, because
+     * nobody is inside it to notice a flag; Stop on a *running* one sets this
+     * and waits for the claimant. Every transition that leaves `running`
+     * clears it. So a `queued` row carrying `cancelling` is a state the
+     * cancellation API cannot produce — and one nothing could clear either: it
+     * would sit outside `jobs_active_work` (which excludes cancelling rows, so
+     * no request would ever de-duplicate onto it) while still blocking its
+     * article's line as a predecessor, for ever.
      *
-     * **There was very nearly a second index on `(owner_id, slug, work_key)`,
-     * and it could never have fired.** Any pair of rows violating it violates
-     * this one too, so it was strictly subsumed — a unique index that is a claim
-     * in the schema and does nothing. Found by inserting the rows rather than by
-     * reading the definitions, 2026-08-27. `work_key` stays as a *column*
-     * because it is what the caller compares after this index refuses.
-     *
-     * Partial, because two finished jobs for one article are ordinary history.
+     * Raised by GPT Sol as *"consider a check that `cancelling` implies
+     * `running`"*, 2026-09-02, and taken: the alternative is a comment asking
+     * every future transition to remember.
      */
-    uniqueIndex("jobs_active_slug")
-      .on(t.ownerId, t.slug)
+    check(
+      "jobs_cancelling_is_running",
+      sql`not ${t.cancelling} or ${t.status} = 'running'`,
+    ),
+
+    /**
+     * **The article mutex: at most one job actually *running* per article.**
+     *
+     * `jobs_active_slug` was here until 2026-09-02 — unique on
+     * `(owner_id, slug)` `where status in ('queued','running')` — and it did
+     * three jobs at once: reserve the name, de-duplicate the request, and
+     * serialise the article. Doing all three meant a second, *different*
+     * request for one article was refused at enqueue rather than queued behind
+     * the first, which is what Greg asked to change. Each of the three now has
+     * its own home, and the scope of each was a separate decision.
+     *
+     * **Global on `slug`, not `(owner_id, slug)`.** `articles.slug` is globally
+     * unique — it is the URL contract — so two owners can build toward one
+     * name, and until 2026-08-30 only `jobs_only_one_running` (above, and gone)
+     * stopped them doing it at once. What this protects is not ambiguity but
+     * corruption: src/store/artifacts-fs.ts keys every artefact write, the
+     * attempt marker and `interrupted()` on `(slug, step)` in one shared
+     * `data/<slug>/` directory with no job scoping, so two claimants on one
+     * article overwrite each other's output outright.
+     *
+     * It is a backstop, not the mechanism. The order rule in
+     * src/store/pg-jobs.ts § `claim` — no older active row for this slug — is
+     * what keeps a second claimant from getting here at all.
+     */
+    uniqueIndex("jobs_one_running_per_slug")
+      .on(t.slug)
+      .where(sql`${t.status} = 'running'`),
+
+    /**
+     * **Name reservation**: at most one active job may be *claiming* a slug.
+     *
+     * The half of `jobs_active_slug` that closed the check-then-use race, kept
+     * exactly. Global on `slug` for the same reason as the mutex above, and
+     * partial on `reserves_name` so that the many jobs merely *naming* an
+     * existing article do not reserve anything and can therefore queue up
+     * behind one another.
+     *
+     * **`cancelling` rows are still covered here**, deliberately, where
+     * `jobs_active_work` excludes them: a stopped-but-still-running job's
+     * claimant is inside it, so its name is not free until it is terminal.
+     */
+    uniqueIndex("jobs_reserved_slug")
+      .on(t.slug)
+      .where(sql`${t.status} in ('queued','running') and ${t.reservesName}`),
+
+    /**
+     * **De-duplication**: one active job per owner, article and piece of work.
+     *
+     * **This is the index the comment above `jobs_active_slug` said had been
+     * dropped as "strictly subsumed", and the comment was right at the time.**
+     * Any pair of rows violating `(owner_id, slug, work_key)` violated
+     * `(owner_id, slug)` too while that covered `queued`. Relaxing it to allow a
+     * line per article is exactly what un-subsumes this one, so it comes back —
+     * and it is not decoration: without it a double-click on *Find quotes*
+     * makes two jobs and pays for two model calls.
+     *
+     * **Owner-scoped**, unlike the two above. De-duplication is a fact about one
+     * person's request; the article is not.
+     *
+     * **`cancelling` rows are excluded.** A request that de-duplicated onto a
+     * job the reader has just stopped would vanish into a job that is about to
+     * end, and the reader would watch a card that never does what they asked.
+     * GPT Sol, 2026-09-02.
+     */
+    uniqueIndex("jobs_active_work")
+      .on(t.ownerId, t.slug, t.workKey)
+      .where(sql`${t.status} in ('queued','running') and not ${t.cancelling}`),
+
+    /**
+     * **One active mint per address**, which closes a race no other index here
+     * catches.
+     *
+     * Two pastes of one URL at the same instant: both call `slugAlreadyHolding`,
+     * both find nothing, and `freeSlug` mints `paper-a3f9k1` and `paper-x7d2m4`.
+     * Every other key above contains the slug, so neither insert conflicts with
+     * anything, and the reader gets two articles for one address and pays twice.
+     * That is not a regression — `jobs_active_slug` did not catch it either,
+     * for the same reason — but it is four lines to close. The loser re-reads,
+     * finds this row, and **adopts its slug**, which is what `freeSlug` would
+     * have done had it been able to see the other request.
+     *
+     * **Owner-scoped**, because *"if it was previously uploaded by a different
+     * user, then reuse the source object, but add a new per-user article
+     * object"* — Greg, 2026-08-26. And partial on `reserves_name`, so a late
+     * step that happens to carry the article's URL is outside it.
+     *
+     * `url_key` is null for an upload, and a null is never equal to anything in
+     * a unique index, so uploads are outside it too — which is right: two
+     * uploads of one file are two documents.
+     */
+    uniqueIndex("jobs_active_source")
+      .on(t.ownerId, t.urlKey)
+      .where(sql`${t.status} in ('queued','running') and ${t.reservesName}`),
+
+    /**
+     * **The predecessor scan**, and it is the only index here that is not a
+     * guarantee.
+     *
+     * `claim` asks whether any *older* active row exists for this slug, ordered
+     * by `(created_at, id)`, and refuses if one does. Nothing above serves that
+     * query: the two unique indexes on `slug` are partial on `running` and on
+     * `reserves_name`, and `jobs_queued_idx` (drizzle/0001) leads on
+     * `created_at` rather than on the slug. The scan runs **inside** the
+     * `queue_state` lock every claimant takes, so a sequential scan there would
+     * serialise the whole account behind it.
+     */
+    index("jobs_slug_order")
+      .on(t.slug, t.createdAt, t.id)
       .where(sql`${t.status} in ('queued','running')`),
   ],
 );
@@ -2992,14 +3134,28 @@ export const readerProfiles = spideryarn.table("reader_profiles", {
  * outbox is more machinery than an alpha feedback button is worth, and
  * `mirrored_at is null` is the query that finds anything stranded.
  *
- * ## Three answers, three columns
+ * ## One answer, and it used to be three
  *
- * *Steps to reproduce*, *what you expected*, *what you saw* are three `text`
- * columns and not one blob, so "how many reports mention scrolling" is a query
- * rather than a regex over prose — docs/project/sql.md. All three are nullable
- * (a reader may leave one blank) and all three are non-empty when present, the
- * same rule and the same reason as `comments_body_nonempty`: empty and absent
- * must not be two spellings of one fact.
+ * *Steps to reproduce*, *what you expected*, *what you saw* were three `text`
+ * columns, on the argument that "how many reports mention scrolling" should be a
+ * query rather than a regex over prose — docs/project/sql.md. They are gone, and
+ * the argument for splitting them turned out to be worth less than what it cost
+ * at the other end. Greg, 2026-09-02:
+ *
+ * > It has three input boxes. I worry that will be intimidating/off-putting to
+ * > users, so let's combine them into one.
+ *
+ * Three boxes is a form, and a form is a thing you fill in once you have decided
+ * to file a bug. The reader this feature exists for is the one who was merely
+ * annoyed — docs/reusable/silent-success.md is why: most of what goes wrong in
+ * this app never throws, so the reader is the only instrument that detects it,
+ * and an instrument you have to fill in a form to use is an instrument nobody
+ * uses.
+ *
+ * So there is one `body`, and `kind` beside it. The three old columns were
+ * **backfilled into `body` with their headings kept and then dropped** — Greg's
+ * call, over keeping them as dead nullable columns:
+ * docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md.
  *
  * ## What is deliberately NOT here
  *
@@ -3041,12 +3197,26 @@ export const feedback = spideryarn.table(
      * reader had when they wrote to us. Never a value the browser supplied.
      */
     reporterEmail: text("reporter_email").notNull(),
-    /** *Steps to reproduce.* */
-    steps: text("steps"),
-    /** *What you expected to see.* */
-    expected: text("expected"),
-    /** *What you saw instead.* */
-    actual: text("actual"),
+    /**
+     * **What the reader wrote**, in one box, in their own order.
+     *
+     * `not null`, which is the whole of the old `feedback_says_something`: a
+     * report with nothing in it is not a report, and that is now the column's
+     * type rather than a constraint beside it. Reports filed before 2026-09-02
+     * carry the three old answers glued together with their headings, so the
+     * backfill is what made this possible — see the migration.
+     */
+    body: text("body").notNull(),
+    /**
+     * *A problem* or *a suggestion* — `FEEDBACK_KINDS` in src/types.ts.
+     *
+     * **Nullable, and starting unset is the design.** Greg, 2026-09-02: *"don't
+     * default to Problem. Default to null/unknown."* So null means the reader
+     * did not say, which is also true of every report filed before the toggle
+     * existed, and the two are the same fact rather than two that have to be
+     * told apart.
+     */
+    kind: text("kind"),
     /**
      * Whether the reader ticked *Send extra diagnostics*, recorded as its own
      * fact rather than inferred from `diagnostics` being present: "they said yes
@@ -3146,7 +3316,7 @@ export const feedback = spideryarn.table(
       sql`${t.environment} in ('production', 'preview', 'development', 'test')`,
     ),
     /**
-     * Non-empty when present, and **capped**, on all three answers.
+     * Non-empty when present, and **capped**.
      *
      * The cap is the one that matters: it is what stops one paste of an entire
      * article becoming an attachment on its way to Sentry. In the database as
@@ -3158,27 +3328,28 @@ export const feedback = spideryarn.table(
      * here rather than imported for the reason the vocabularies above are — and
      * pinned to that constant behaviourally by tests/feedback-store.test.ts,
      * which writes exactly the cap and exactly one character more.
+     *
+     * **12,072 is `MAX_FEEDBACK_BODY_CHARS`, and it is deliberately not 4,000.**
+     * The cap the reader meets is `MAX_FEEDBACK_ANSWER_CHARS` — the route
+     * refuses more and the dialog says so — but the backfill glued three
+     * separately-capped answers under their headings, and three full ones come
+     * to exactly this. A 4,000 CHECK would either fail the migration on a row
+     * that was legal when it was filed, or force it to truncate, which throws
+     * away something a reader wrote. GPT Sol's review of the plan, 2026-09-02.
      */
     check(
-      "feedback_steps_shape",
-      sql`${t.steps} is null or (length(btrim(${t.steps})) > 0 and length(${t.steps}) <= 4000)`,
-    ),
-    check(
-      "feedback_expected_shape",
-      sql`${t.expected} is null or (length(btrim(${t.expected})) > 0 and length(${t.expected}) <= 4000)`,
-    ),
-    check(
-      "feedback_actual_shape",
-      sql`${t.actual} is null or (length(btrim(${t.actual})) > 0 and length(${t.actual}) <= 4000)`,
+      "feedback_body_shape",
+      sql`length(btrim(${t.body})) > 0 and length(${t.body}) <= 12072`,
     ),
     /**
-     * **A report with nothing in it is not a report.** The dialog refuses one
-     * too; this is the half that holds for every other writer.
+     * The third closed vocabulary, written out by hand for the reason the two
+     * above are. `FEEDBACK_KINDS` in src/types.ts is the same list, and
+     * tests/feedback-store.test.ts files a report under every value of it.
+     *
+     * **Null is a member of the domain and not of the list**: it means the
+     * reader did not say, which is what the toggle starts as.
      */
-    check(
-      "feedback_says_something",
-      sql`${t.steps} is not null or ${t.expected} is not null or ${t.actual} is not null`,
-    ),
+    check("feedback_kind", sql`${t.kind} is null or ${t.kind} in ('problem', 'suggestion')`),
     check("feedback_reporter_email", sql`length(btrim(${t.reporterEmail})) > 0`),
     /**
      * **Diagnostics cannot exist without consent.** The tick-box is the whole

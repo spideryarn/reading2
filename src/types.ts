@@ -1316,6 +1316,37 @@ export interface LibraryEntry {
   gist?: string;
   /** The committed `example/` fixture rather than real pipeline output. */
   fixture?: boolean;
+  /**
+   * **`"public"` when anyone with the link can read this, and absent otherwise.**
+   *
+   * The owner's side of `Visibility` below: the shelf is the one place they see
+   * every article at once, so it is the only place that can answer *which of
+   * mine are out in the world* at a glance. src/web/ShelfEntry.tsx draws it;
+   * the visitor's side of the same fact is `ViewOnlyChip`
+   * (src/web/PublicChrome.tsx) and says something different.
+   *
+   * **Absent rather than `"private"`, and that is not a spelling choice.** The
+   * filesystem store has no visibility column at all — `visibilityStore.set`
+   * refuses with a 501 there (src/store/index.ts) — so absence is the only
+   * answer both stores can give about a document nobody has shared, and
+   * tests/store-parity.test.ts compares whole entries. A `"private"` from one
+   * store and an absence from the other would be two spellings of one fact and
+   * a parity failure about nothing.
+   *
+   * A badge, not a filter: there is deliberately no way to sort or narrow the
+   * shelf by this until there is enough shared material for it to be worth
+   * anything.
+   * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § Cluster E.
+   *
+   * **`"public"` and not `Visibility`, so the paragraph above is a compile
+   * error rather than a convention.** `describeArticle` still *takes* the full
+   * union — it is normalising a database value — and narrows here, which is
+   * where the invariant belongs: an accidental pass-through of the row's
+   * `"private"` now fails to typecheck instead of putting a wrong key on every
+   * card and waiting for a parity test to notice. GPT Sol's review of this
+   * stage, on the house rule in AGENTS.md § *let the types catch it*.
+   */
+  visibility?: "public";
 
   /* ---- shelf state: what the reader has done to the card (src/shelf.ts) ---- */
 
@@ -1708,9 +1739,10 @@ export interface ArticleMetadata {
    *
    * Added 2026-08-28, and it closes a real hole in stage 1a rather than a
    * nicety: the owner's Access & Sharing card had nothing owner-facing to read,
-   * so it was asking `GET /api/public/metadata/:slug` anonymously — the only
-   * non-mutating question available to it — and **that endpoint cannot tell
-   * *private* from *no such article***. Both are 404, deliberately, so a
+   * so it was asking the public metadata endpoint anonymously — the only
+   * non-mutating question available to it — and **that endpoint could not tell
+   * *private* from *no such article***. (That endpoint was itself deleted on
+   * 2026-09-02; this field is what replaced its misuse.) Both are 404, deliberately, so a
    * stranger learns nothing about what exists. The card was drawing "we could
    * not check" because it could not honestly draw anything else.
    *
@@ -2978,7 +3010,26 @@ export const FEEDBACK_ENVIRONMENTS = ["production", "preview", "development", "t
 export type FeedbackEnvironment = (typeof FEEDBACK_ENVIRONMENTS)[number];
 
 /**
- * The longest any one of the three answers may be.
+ * **What the reader says this is** — a problem, or a suggestion.
+ *
+ * Greg asked for the toggle on 2026-09-02 and then, a message later, for what it
+ * starts as: *"don't default to Problem. Default to null/unknown."* So the third
+ * state is **absence**, and it is a real answer rather than a missing one: every
+ * report filed before this existed is null, and so is one from a reader who did
+ * not feel like categorising their own complaint.
+ *
+ * That is why there is no `"unknown"` member. A value spelled `unknown` beside a
+ * nullable column would be two spellings of one fact — the same call `consented`
+ * and `comments_body_nonempty` already make.
+ *
+ * docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md.
+ */
+export const FEEDBACK_KINDS = ["problem", "suggestion"] as const;
+
+export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
+
+/**
+ * The longest the reader's report may be.
  *
  * Here rather than beside the store for the reason `MAX_PROFILE_CHARS` is here:
  * the dialog's `maxlength` and the number the server refuses at must be one
@@ -2989,8 +3040,33 @@ export type FeedbackEnvironment = (typeof FEEDBACK_ENVIRONMENTS)[number];
  * costs us the detail that would have identified it — and small enough that a
  * pasted article cannot become an attachment, which is the case the cap is
  * really for.
+ *
+ * It used to be *per answer*, and there were three of them, so the reader's
+ * ceiling has quietly dropped from 12,000 characters to 4,000. Left where it is
+ * on purpose: 4,000 characters is a very long report, the number is written into
+ * a CHECK constraint by hand, and the failure is a sentence asking the reader to
+ * trim rather than a report that goes missing.
  */
 export const MAX_FEEDBACK_ANSWER_CHARS = 4_000;
+
+/**
+ * The longest a `feedback.body` may be **in the database**, which is three times
+ * the number above plus the headings — and that is not sloppiness, it is what
+ * the backfill needs.
+ *
+ * Reports filed before 2026-09-02 are three answers, each capped at
+ * `MAX_FEEDBACK_ANSWER_CHARS` separately, glued under the headings src/feedback.ts
+ * used to write. Three full ones come to exactly 12,072 characters. The column's
+ * CHECK has to admit that, or the migration that wrote them into `body` would
+ * fail on a row that was legal when it was filed — and the alternative, cutting
+ * the backfill to 4,000, silently throws away something a reader wrote.
+ *
+ * **The reader's limit is still `MAX_FEEDBACK_ANSWER_CHARS`**: the route refuses
+ * more and the dialog says so. This one is the ceiling under which no historical
+ * row is illegal, and it is also what a report from a *stale client* folds into
+ * — src/routes.ts § `legacyBody`.
+ */
+export const MAX_FEEDBACK_BODY_CHARS = 12_072;
 
 /**
  * The largest screenshot the database will take, in **decoded** bytes.
@@ -3100,12 +3176,16 @@ export interface AdminFeedbackReport {
   ownerId: string;
   /** The address the reader held **when they wrote to us**, snapshotted, not joined. */
   reporterEmail: string;
-  /** *Steps to reproduce.* `null` where they left it blank. */
-  steps: string | null;
-  /** *What you expected to see.* */
-  expected: string | null;
-  /** *What you saw instead.* */
-  actual: string | null;
+  /**
+   * **What they wrote, in one field.** Three columns until 2026-09-02, when
+   * docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md
+   * collapsed *steps / expected / what you saw* into a single box on the
+   * argument that three boxes is a form, and a form is what a mildly annoyed
+   * person closes. `notNull` in the schema, so never blank here.
+   */
+  body: string;
+  /** *Bug or suggestion*, if they used the toggle. `null` where they did not. */
+  kind: FeedbackKind | null;
   /** Whether they ticked *Send extra diagnostics* — its own fact, never inferred. */
   consented: boolean;
   routeKind: FeedbackRouteKind;

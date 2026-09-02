@@ -93,7 +93,19 @@ afterEach(async () => {
 async function visitor(available: PublicArtefacts): Promise<void> {
   await act(async () => {
     root.render(
-      createElement(PublicMetadataPage, { slug: SLUG, article: ARTICLE, available, signedIn: false }),
+      /* `sessionUnconfirmed` arrived on this page's props in a merge — a
+         visitor whose session has not come back yet is told something
+         different from one who is definitely signed out. This test is about
+         which artefacts a visitor is shown, so `false` (definitely signed out)
+         is the state it means. src/web/PublicPages.tsx and
+         src/web/reader-capability.ts. */
+      createElement(PublicMetadataPage, {
+        slug: SLUG,
+        article: ARTICLE,
+        available,
+        signedIn: false,
+        sessionUnconfirmed: false,
+      }),
     );
   });
 }

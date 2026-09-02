@@ -155,6 +155,9 @@ async function visitor(meta: Partial<Meta>) {
           quotes: false,
         },
         signedIn: false,
+        /* This file is about where the piece came from; the session is beside
+           the point, so it is the ordinary answer. App.tsx § ArticleAccess. */
+        sessionUnconfirmed: false,
       }),
     );
   });

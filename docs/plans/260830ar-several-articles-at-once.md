@@ -1,9 +1,15 @@
 # Several articles at once, and a queue behind each one
 
-**Status: reviewed by GPT Sol 2026-08-30, and recut in response.** The review opened *"STOP — do not
-build this plan as written"* with four blockers. **All four were checked against the code and all four
-were right**; what they changed is recorded in § *What the review changed*, and the work is now two
-stages because one of the blockers is a prerequisite this session does not own.
+**Status: both stages built.** Stage 1 — several articles at once — shipped on 2026-08-30. **Stage 2,
+a queue behind each article, was built on 2026-09-02** and not from this plan: it was recut as
+[260902e](260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md), which is
+where the design that shipped lives. Read that one for the four indexes, the claim-time order rule
+and the enqueue ownership check; this one for the history and for Greg's words at the top.
+
+The review opened *"STOP — do not build this plan as written"* with four blockers. **All four were
+checked against the code and all four were right**; what they changed is recorded in § *What the
+review changed*. The work became two stages because one of the blockers was a prerequisite this
+session did not own — [260830aq](260830aq-late-steps-read-the-store.md), built on 2026-09-01.
 
 ## The job
 

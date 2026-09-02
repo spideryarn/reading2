@@ -24,7 +24,7 @@ import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { HomeLogo } from "./HomeLogo.js";
 import { isAdmin } from "../admin.js";
-import { AdminFeedbackPage, AdminHome, AdminUsersPage } from "./AdminPage.js";
+import { AdminHome, AdminUsersPage } from "./AdminPage.js";
 import { LandingPage } from "./LandingPage.js";
 import { PrivacyPage } from "./PrivacyPage.js";
 import { SignInPage } from "./SignInPage.js";
@@ -188,7 +188,13 @@ import type {
 import { artefactsIn, artefactsOf } from "./public-artefacts.js";
 import { NO_COMMENTS, NO_TERMS, NO_THREADS, type ReaderCapability } from "./reader-capability.js";
 import { markedModes, visitorGap } from "./visitor.js";
-import { NotSharedPage, SharedNotice, ViewOnlyChip, VisitorBand } from "./PublicChrome.js";
+import {
+  NotSharedPage,
+  ReauthRequiredPage,
+  SharedNotice,
+  ViewOnlyChip,
+  VisitorBand,
+} from "./PublicChrome.js";
 import { PublicMetadataPage, VisitorTweetsPage } from "./PublicPages.js";
 import { useRenderCount } from "./perf.js";
 import {
@@ -311,7 +317,13 @@ export function App() {
     /* **The third exception, since 2026-09-02.** The privacy policy is for
        somebody deciding whether to sign in, so answering it with the pitch
        would be answering the one question the pitch is trying to get past.
-       The landing page's footer links here. See PrivacyPage.tsx. */
+       The landing page's footer links here. See PrivacyPage.tsx.
+
+       **This branch has been written twice.** It first reached trunk inside a
+       peer's commit that swept the working tree, and the tidy-up of that
+       commit dropped it again as a half-finished hunk — reasonably, since
+       nothing in App.tsx said it was one end of a feature whose other end was
+       a whole page. Hence this paragraph. */
     if (route.kind === "privacy") return <PrivacyPage />;
     if (route.kind !== "read") return <LandingPage />;
     return <ArticlePage slug={route.slug} view={route.view} readerId={null} />;
@@ -421,13 +433,7 @@ function SignedIn({
     return (
       <>
         <HomeLogo />
-        {route.page === "users" ? (
-          <AdminUsersPage />
-        ) : route.page === "feedback" ? (
-          <AdminFeedbackPage />
-        ) : (
-          <AdminHome />
-        )}
+        {route.page === "users" ? <AdminUsersPage /> : <AdminHome />}
       </>
     );
   }
@@ -470,6 +476,20 @@ type ArticleAccess =
   | { kind: "error"; message: string }
   /** Not yours, and not shared. The two pages this ends at are in App above. */
   | { kind: "not-shared" }
+  /**
+   * **We could not tell whose this is, and nobody has shared it either.**
+   *
+   * The owned route answered 401 — after `apiFetch` had already refreshed once
+   * and retried once — and the public route answered 404. Both halves matter:
+   * a 401 on its own says nothing about the public entitlement, so it is only
+   * when the public route *also* refuses that there is nothing left to draw.
+   *
+   * A state of its own rather than `error`, whose page is a `<pre>` with
+   * nothing to press, and rather than `not-shared`, which asserts something
+   * about the document that a 401 leaves us unable to know.
+   * PublicChrome.tsx § ReauthRequiredPage.
+   */
+  | { kind: "reauth-required" }
   | { kind: "owned"; article: Article }
   | {
       kind: "public";
@@ -492,14 +512,25 @@ type ArticleAccess =
        * payload above rather than fetched.
        *
        * It used to be `PublicArtefacts | null`, filled by a **second** request
-       * to `GET /api/public/metadata/:slug` whose failure was swallowed to
-       * `null` — and `null` needed a `VisitorGap` member and a sentence of its
-       * own so that a lost request would not be rendered as a claim about
-       * somebody's article. There is no second request now, so there is no
+       * to a public metadata endpoint, since deleted, whose failure was
+       * swallowed to `null` — and `null` needed a `VisitorGap` member and a
+       * sentence of its own so that a lost request would not be rendered as a
+       * claim about somebody's article. There is no second request now, so no
        * `null`: either this payload arrived or the reader is looking at
        * *this document isn't shared*. public-artefacts.ts.
        */
       available: PublicArtefacts;
+      /**
+       * **The reader has a session and we could not get it confirmed** — the
+       * owned route answered 401 and this payload arrived anyway.
+       *
+       * On the chrome rather than on the capability seam, because it changes
+       * nothing about what may be *done*: this reader is a visitor either way,
+       * and the owner-only hooks are unreachable for the same structural
+       * reason they are unreachable for a stranger. What it changes is what the
+       * page *says* — PublicChrome.tsx § SharedNotice, and the chip beside it.
+       */
+      sessionUnconfirmed: boolean;
     };
 
 const LOADING: ArticleAccess = { kind: "loading" };
@@ -507,10 +538,33 @@ const LOADING: ArticleAccess = { kind: "loading" };
 /**
  * The two-step, in one hook.
  *
- * **With a session: ask the owned route, and fall back to the public one on a
- * 404.** Without one: ask the public route directly. A 401 falls back too — a
- * session that expired between page load and this request is a reader with no
- * token, and the public route is the right one to ask.
+ * **With a session: ask the owned route, then the public one unless the first
+ * one answered.** Without one: ask the public route directly.
+ *
+ * ## A 401 is a third answer, not a second 404
+ *
+ * It used to be treated as one — *"a session that expired is a reader with no
+ * token, so ask the public route"* — and the result was that an owner whose
+ * token could not be refreshed was silently reclassified as a stranger over
+ * their own article, while `useSession` went on saying they were signed in so
+ * nothing ever re-asked. Finding C3, 2026-09-02.
+ *
+ * The public route is still asked, because a 401 says nothing whatever about
+ * the **public** entitlement and refusing a world-readable article over an
+ * unrelated broken session couples two independent things. What changed is that
+ * both answers now decide, and the reader is told:
+ *
+ * | owned | public | what they get |
+ * |---|---|---|
+ * | 404 | 200 | the shared article |
+ * | 401 | 200 | the shared article, and a notice that the session is unconfirmed |
+ * | 401 | 404 | `reauth-required` |
+ *
+ * Owner capabilities mount in neither 401 case, and that follows on its own
+ * from going down the visitor arm: `ArticlePage` mounts `OwnedArticle` only for
+ * `kind: "owned"`, and the private hooks live inside it, so they are not
+ * skipped for this reader — they do not exist.
+ * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C3.
  *
  * ## Why the public half is a bare `fetch`
  *
@@ -522,14 +576,6 @@ const LOADING: ArticleAccess = { kind: "loading" };
  * the server half is built the same way round: `servePublicApi` is handed
  * `{res, path, method}` and never the request, so it cannot read a header even
  * by accident. docs/reusable/silent-success.md.
- *
- * ## One `try`, and the metadata request outside it
- *
- * The article is the page. The artefact flags are a detail on top of it, so a
- * metadata request that fails must not take the article down with it — it
- * degrades to `null`, which `visitorGap` reads as *"not on shared links yet"*,
- * which is unconditionally true in this slice whatever the flags would have
- * said.
  */
 function useArticleAccess(slug: string, readerId: string | null): ArticleAccess {
   /**
@@ -618,7 +664,7 @@ function useArticleAccess(slug: string, readerId: string | null): ArticleAccess 
  */
 async function resolveAccess(slug: string, signedIn: boolean): Promise<ArticleAccess> {
   const found = await findArticle(slug, signedIn);
-  if (found.kind === "not-shared") return found;
+  if (found.kind === "not-shared" || found.kind === "reauth-required") return found;
   const article = sanitizeArticle(found.article);
   return found.kind === "owned"
     ? { kind: "owned", article }
@@ -627,6 +673,7 @@ async function resolveAccess(slug: string, signedIn: boolean): Promise<ArticleAc
         article,
         artefacts: artefactsOf(found.article),
         available: artefactsIn(found.article),
+        sessionUnconfirmed: found.sessionUnconfirmed,
       };
 }
 
@@ -636,30 +683,52 @@ async function findArticle(
   signedIn: boolean,
 ): Promise<
   | { kind: "not-shared" }
+  | { kind: "reauth-required" }
   | { kind: "owned"; article: Article }
-  | { kind: "public"; article: PublicArticle }
+  | { kind: "public"; article: PublicArticle; sessionUnconfirmed: boolean }
 > {
+  /**
+   * **What the owned route could not tell us**, carried down to the public one.
+   *
+   * `false` unless the owned route answered 401, which is the only status that
+   * leaves the question of ownership open. A 404 closes it — *not mine* — and
+   * needs nothing carried.
+   */
+  let sessionUnconfirmed = false;
   if (signedIn) {
     const res = await apiFetch(`/api/article/${encodeURIComponent(slug)}`);
-    /* 404 is *not mine*; 401 is *no longer signed in*. Everything else,
+    /* 404 is *not mine*; 401 is *we cannot tell*, after `apiFetch` has already
+       spent its one refresh and one retry on it (lib/api.ts). Everything else,
        `readJson` turns into a message — including a 500, which must not be
        quietly retried against the public route and rendered as somebody else's
        shared document. */
-    if (res.status !== 404 && res.status !== 401) {
+    if (res.status === 401) sessionUnconfirmed = true;
+    else if (res.status !== 404) {
       return { kind: "owned", article: await readJson<Article>(res) };
     }
   }
 
-  /* **One request, and it used to be two.** A second `GET /api/public/metadata/:slug`
-     stood here purely to learn which artefacts existed, with its failure
-     swallowed to `null`. The artefacts are in this payload now, so the payload
-     answers that — and the endpoint itself stays, tested and in the route
-     inventory, for stage 2's link preview. The win was the request, never the
-     route. docs/plans/260827ai-public-read-only-access.md § The second request
-     disappears. */
+  /* **One request, and it used to be two.** A second GET, for a public metadata
+     endpoint, stood here purely to learn which artefacts existed, with its
+     failure swallowed to `null`. The artefacts are in this payload now, so the
+     payload answers that.
+
+     A comment here said the endpoint itself stayed *"for stage 2's link
+     preview"*, and it was false when it was written: the preview function calls
+     `loadHead`. The route was deleted on 2026-09-02 with nothing but a
+     deployment checker on it.
+     docs/plans/260827ai-public-read-only-access.md § The second request
+     disappears, and
+     docs/plans/260902j-public-read-only-access-audit-and-improvements.md
+     § Cluster B. */
   const read = await loadPublicArticle(slug);
-  if (read.kind === "not-shared") return { kind: "not-shared" };
-  return { kind: "public", article: read.body };
+  /* **Both answers, and this is the line where they meet.** *Nobody shared it*
+     is a complete answer to a reader we could identify; to one we could not it
+     is only half of one, and the reader needs a way back in rather than a
+     sentence about a document we cannot say is theirs. */
+  if (read.kind === "not-shared")
+    return sessionUnconfirmed ? { kind: "reauth-required" } : { kind: "not-shared" };
+  return { kind: "public", article: read.body, sessionUnconfirmed };
 }
 
 /**
@@ -746,6 +815,11 @@ function ArticlePage({
      since the mark is the only thing on screen that says whose page this is. */
   if (access.kind === "not-shared") return signedIn ? <NotSharedPage /> : <LandingPage />;
 
+  /* **Its own branch, beside `error` and never through it.** The reader can fix
+     this one, and the error page is a `<pre>` with nothing to press. It draws
+     its own corner logo, as `NotSharedPage` above does. PublicChrome.tsx. */
+  if (access.kind === "reauth-required") return <ReauthRequiredPage />;
+
   if (access.kind === "error")
     return (
       <>
@@ -781,6 +855,7 @@ function ArticlePage({
           artefacts={access.artefacts}
           available={access.available}
           signedIn={signedIn}
+          sessionUnconfirmed={access.sessionUnconfirmed}
           view={view}
         />
       )}
@@ -967,6 +1042,7 @@ function VisitorArticle({
   artefacts,
   available,
   signedIn,
+  sessionUnconfirmed,
   view,
 }: {
   slug: string;
@@ -976,6 +1052,13 @@ function VisitorArticle({
   available: PublicArtefacts;
   /** For the call to action, and nothing else — reader-capability.ts § signedIn. */
   signedIn: boolean;
+  /**
+   * **Only for what the chrome says**, and it goes to all three views rather
+   * than to the reading view alone: the other two are one click away and carry
+   * the same `SharedNotice`, so a reader who stepped out to the metadata page
+   * would otherwise watch the explanation vanish. App.tsx § ArticleAccess.
+   */
+  sessionUnconfirmed: boolean;
   view: ArticleView;
 }) {
   if (view === "metadata")
@@ -985,6 +1068,7 @@ function VisitorArticle({
         article={article}
         available={available}
         signedIn={signedIn}
+        sessionUnconfirmed={sessionUnconfirmed}
       />
     );
   if (view === "tweets")
@@ -995,13 +1079,14 @@ function VisitorArticle({
         thread={artefacts.tweets}
         available={available}
         signedIn={signedIn}
+        sessionUnconfirmed={sessionUnconfirmed}
       />
     );
   return (
     <Reader
       slug={slug}
       article={article}
-      capability={{ kind: "visitor", artefacts, available, signedIn }}
+      capability={{ kind: "visitor", artefacts, available, signedIn, sessionUnconfirmed }}
     />
   );
 }
@@ -1237,6 +1322,10 @@ function Reader({
      `true` for the owner is never consulted, since none of the chrome it gates
      is drawn for them. */
   const signedIn = capability.kind === "visitor" ? capability.signedIn : true;
+  /* And only the read-only chrome reads this: the notice under the masthead and
+     the chip in the bar below it, neither of which is drawn for an owner.
+     PublicChrome.tsx § SharedNotice for why it is two things and not one. */
+  const sessionUnconfirmed = capability.kind === "visitor" && capability.sessionUnconfirmed;
   const geometry = useMemo(
     () => buildGeometry(article.tree, article.blocks),
     [article],
@@ -2096,12 +2185,12 @@ function Reader({
           this is the sentence and the ask, which belong with the title. Not
           dismissible: it is what this page is, not a notification.
           PublicChrome.tsx. */}
-      {!owner && <SharedNotice signedIn={signedIn} />}
+      {!owner && <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} />}
       <div className="controls">
         {/* First of all, before even the spine: what footing you are reading
             on outranks every control that follows, and this bar is the one
             piece of chrome that is on screen at every scroll position. */}
-        {!owner && <ViewOnlyChip />}
+        {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} />}
         {/* Leftmost of the *view* controls, because the rail it names is
             leftmost — and before the mode/contents split, because it is the one
             control that survives both. See `spineToggle` above. */}
@@ -2276,26 +2365,32 @@ function Reader({
           void setNote(null);
           void setThread(id);
         }}
-        onChatAbout={(blockId) => {
-          /* A conversation anchored to the whole block — the other half of what
-             an anchor can be, and the one that draws no mark in the prose. The
-             paragraph's opening words go into the composer so the reader can see
-             which one they pressed; a six-character id is not something you can
-             check you clicked correctly.
+        /* A conversation anchored to the whole block — the other half of what an
+           anchor can be, and the one that draws no mark in the prose. The
+           paragraph's opening words go into the composer so the reader can see
+           which one they pressed; a six-character id is not something you can
+           check you clicked correctly.
 
-             A visitor's press does nothing: opening a conversation costs a
-             model call, and the sentence saying so is one press away in the
-             Chat band rather than fired at them as a dialog they did not ask
-             for. */
-          if (!owner) return;
-          void setNote(null);
-          void setThread(null);
-          setChatDraft({
-            kind: "draft",
-            anchor: { blockId },
-            opening: blockText.get(blockId) ?? "",
-          });
-        }}
+           **Handed over only to an owner, and that is the whole gate.** It used
+           to go to everybody with a `if (!owner) return;` inside it, so a
+           visitor got a chat button on every paragraph whose press did nothing.
+           The absent callback is what makes the button absent (BlockGutter.tsx),
+           and the sentence about what chat costs is still one press away in the
+           Chat band. The place a visitor meets the boundary is `onSelect` below,
+           which they reach by accident and which stays silent for that reason. */
+        onChatAbout={
+          owner
+            ? (blockId) => {
+                void setNote(null);
+                void setThread(null);
+                setChatDraft({
+                  kind: "draft",
+                  anchor: { blockId },
+                  opening: blockText.get(blockId) ?? "",
+                });
+              }
+            : undefined
+        }
         terms={termSelections}
         openTerm={term?.id ?? null}
         hitMarks={hitMarks}

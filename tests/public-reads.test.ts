@@ -25,10 +25,8 @@ import { publicBlocksQuery, publicCurrentRevisionQuery } from "../src/store/publ
 import { lockedArticleQuery } from "../src/store/pg-visibility.js";
 
 const articleQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", "article").toSQL();
-const metadataQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", "metadata").toSQL();
 const headQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", "head").toSQL();
 const article = articleQuery.sql;
-const metadata = metadataQuery.sql;
 const headSql = headQuery.sql;
 const blocks = publicBlocksQuery(new QueryBuilder() as never, "rev-1").toSQL().sql;
 
@@ -46,7 +44,6 @@ describe("the public revision read", () => {
        both are read. */
     for (const [name, q] of [
       ["article", articleQuery],
-      ["metadata", metadataQuery],
       /* Stage 2's head read joined this loop the day it was written, rather
          than getting its own copy of the assertion later. A new projection is
          exactly the shape that acquires an unfiltered query — it is not the
@@ -66,7 +63,6 @@ describe("the public revision read", () => {
    */
   it("does not mention owner_id at all", () => {
     expect(article).not.toContain("owner_id");
-    expect(metadata).not.toContain("owner_id");
     expect(headSql).not.toContain("owner_id");
   });
 
@@ -157,19 +153,6 @@ describe("the public revision read", () => {
     expect(articleQuery.params).toEqual(["a-slug", "public", 1]);
   });
 
-  /**
-   * The metadata read asks whether an artefact exists, in SQL — not by dragging
-   * the JSONB document across the wire to compare it with null. That mistake
-   * was two days of docs/plans/260828c-library-read-latency.md on the owner's shelf.
-   */
-  it("asks the metadata question as is-not-nulls rather than documents", () => {
-    for (const column of ["tree", "arc", "tweets", "glossary", "ideas"]) {
-      expect(metadata, column).toMatch(new RegExp(`"${column}" is not null`));
-    }
-    /* And the documents themselves are not selected — the `is not null` above is
-       the only place these column names appear. */
-    expect(metadata.match(/"glossary"/g)).toHaveLength(1);
-  });
 });
 
 /**
@@ -246,10 +229,11 @@ describe("the public head read", () => {
   /**
    * **The blocks bar, as SQL rather than as a count.**
    *
-   * `loadArticle` refuses a tree with no blocks and `loadMetadata` only checks
-   * the tree, so a revision can pass the metadata bar and be a page React
-   * cannot draw. A head that answered 200 there would put a title on a link to
-   * a blank screen. `exists` rather than `count(*)`, because the question is
+   * A revision can have a tree and no blocks, which is a page React cannot
+   * draw, and a head that answered 200 there would put a title on a link to a
+   * blank screen. `loadArticle` clears that bar by counting the block rows it
+   * already fetched; the head read fetches none, so it asks in SQL.
+   * `exists` rather than `count(*)`, because the question is
    * whether there is at least one and counting a long article to learn that is
    * work nobody asked for.
    */

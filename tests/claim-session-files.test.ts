@@ -192,16 +192,16 @@ const FAKE_STEPS = {
 
 const MADE: string[] = [];
 
-async function queueJob(names: StepName[]): Promise<Job> {
+async function queueJob(names: StepName[], slug = SLUG): Promise<Job> {
   const wanted: Job = {
     id: mintId(),
     ownerId: DEV_OWNER_ID,
-    slug: SLUG,
+    slug,
     steps: names.map((name): JobStep => ({ name, label: STEPS[name].label, status: "pending" })),
     status: "queued",
     createdAt: new Date().toISOString(),
   };
-  const { job } = await fsJobStore.enqueueOrGet(wanted, `claim-session-files-${wanted.id}`);
+  const { job } = await fsJobStore.enqueueOrGet(wanted, { workKey: `claim-session-files-${wanted.id}`, reservesName: false });
   MADE.push(job.id);
   return job;
 }
@@ -245,7 +245,12 @@ describe("a job under the filesystem store", () => {
   });
 
   it("runs on the plain filesystem session, with no Postgres session round it", async () => {
-    const job = await queueJob(["blocks", "hierarchy"]);
+    /* **Its own slug**, because this case queues a job and never runs it, and
+       since 2026-09-02 a queued job holds its article's place in line: leaving
+       one on `SLUG` makes the case below wait behind it for ever and report
+       `queued` where it wanted `done`. Watched happening. The job below is the
+       one that needs `SLUG`, because it asserts the artefacts written there. */
+    const job = await queueJob(["blocks", "hierarchy"], `${SLUG}-session`);
     const session = await claimSession(job, "not-a-real-attempt");
     /* `guardDbStore` marks what it wrapped, and every Postgres session goes out
        through it (`pgStoreSession`) while the filesystem one does not. Structural,

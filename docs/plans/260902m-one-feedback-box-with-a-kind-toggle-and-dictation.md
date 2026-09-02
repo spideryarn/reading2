@@ -42,8 +42,9 @@ it.
   says *where* rather than *what*.
 - [`src/web/AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) — the closest existing call site:
   a dialog, one textarea, `useDictationField`, and the `dictate.readOnly` guard on submit.
-- [260902l-admin-feedback-page.md](260902l-admin-feedback-page.md) — not built yet, and it will read
-  whatever columns this plan leaves behind.
+- `260902l-admin-feedback-page.md` — the `/admin/feedback` plan. Not linked, because it is not
+  committed anywhere this worktree can see it: it exists as **uncommitted work in the shared tree**,
+  and it is already built there against the three columns. See § What this collides with.
 - [copy.md](../project/copy.md) — every reader-facing failure sentence ends in a bracketed code.
 
 ## Decisions
@@ -100,72 +101,116 @@ went wrong on the page in front of them.
   characters to 4,000. Left alone: 4,000 characters is a very long bug report, the number is written
   into a CHECK, and the failure is a sentence telling the reader to trim, not a lost report.
 
+### What the review changed
+
+GPT Sol reviewed this plan before it was built —
+[the prompt](260902m-one-feedback-box-with-a-kind-toggle-and-dictation-review-prompt.md), [the
+answer](260902m-one-feedback-box-with-a-kind-toggle-and-dictation-review-sol.md) — and said *"do not
+build this as written"*. Five of its nine findings changed the design, and three of those were bugs
+that would have shipped:
+
+1. **The backfill would have thrown a reader's words away.** The plan added a `body ≤ 4000` CHECK and
+   then glued three separately-capped answers under it: three full ones come to 12,072 characters, so
+   either the migration aborts or it truncates. It now admits `MAX_FEEDBACK_BODY_CHARS` (12,072) at
+   the column and holds the reader to `MAX_FEEDBACK_ANSWER_CHARS` (4,000) in the route and the
+   dialog, and nothing is cut.
+2. **Closing the dialog would have left the microphone running.** `FeedbackButton` renders this
+   dialog whether or not it is open, so Escape unmounts nothing and `useDictation`'s cleanup — which
+   runs on unmount — never fires. Verified in the code, and now an effect on `open`.
+3. **`dictate.readOnly` is not "the microphone is busy".** It is `transcribing` alone, the two
+   seconds *after* stop. Send is now refused on `armed || readOnly`, with a test for each — the
+   single test the plan asked for would have passed with the listening bug still there.
+4. **A stale client would have been refused.** `FEEDBACK_FIELDS` rejects an unknown key outright, so
+   a reader with a tab open from before the deploy would be told *"a report has a field this endpoint
+   does not take"* at the moment they are trying to report that something is broken. The old three
+   fields are accepted and folded into `body` under the migration's headings; sending both shapes at
+   once is refused as `[fb-shape]`.
+5. **Native radios cannot be un-picked**, and the plan wanted a toggle that starts unset. Two
+   `aria-pressed` buttons instead: pressing the pressed one clears it.
+
+Two more it was right about and this plan took a different way:
+
+- **The deploy window.** Dropping columns is non-additive and `npm run deploy` commits migrations
+  before the code goes live, so for a minute or two an old function serving `POST /api/feedback`
+  would 500 — and if the Vercel build failed, until the next deploy. Sol asked for expand/contract
+  over two deploys. Put to Greg with that cost named, he chose **one deploy**: an alpha with a
+  handful of readers, an endpoint whose failure path already offers Copy and an email address, and
+  the legacy acceptance above covers the client half of the same window.
+- **`body` should not be nullable.** Agreed, and it is `not null`, which retires
+  `feedback_says_something` altogether — the column's type is now the constraint.
+
+### What this collides with
+
+**`/admin/feedback` is built, and only in the shared tree.** Sol found the uncommitted
+`AdminFeedbackList.tsx`, `pg-admin-feedback.ts`, `AdminFeedbackReport` and their tests in
+`/home/greg/code/spideryarn2` — none of it committed, so none of it is on `dev` or in this worktree.
+It renders `steps`, `expected` and `actual` individually and `ADMIN_FEEDBACK_SHAPE_MATCHES` pins the
+wire type against `FeedbackReport`, so **whoever lands second has a typecheck failure and three dead
+field reads to fix**. It is a small fix — one pre-wrapped body, and `kind` as Problem / Suggestion /
+Unspecified — but it will not happen by itself, and 260902l's own doc needs the same amendment.
+
+### The migration chain was forked before any of this
+
+`npm run db:generate` refused on the first attempt: `0052_per_article_job_queue` and
+`20260902141103_byok_upstream_nanos` both claimed `0051`'s snapshot as their parent, and **both were
+already on `dev`**. Repaired here by rebuilding `drizzle/meta/20260902141103_snapshot.json` onto
+`0052`'s id — 0052 touches `jobs` only and 141103 touches `ai_calls` only, so the merge was
+unambiguous — leaving both `.sql` files and the journal untouched, which is what
+[database.md § Repairing a fork](../project/database.md#repairing-a-fork-what-the-losing-migration-is-decides-everything)
+requires of a published migration. A peer session reported repairing the same fork on `dev`
+independently, about twenty minutes later.
+
 ## Stages
 
-### Stage 1 — the schema, the store and the route
+### Stage 1 — the schema, the store and the route ✅
 
-- [ ] `git pull` first.
-- [ ] `src/db/schema.ts`: add `body text` and `kind text`; CHECKs `feedback_body_shape` (null or
-      non-empty and ≤ 4000) and `feedback_kind` (`null or kind in ('problem','suggestion')`).
-      `npm run db:generate -- --name feedback_body_and_kind`.
-- [ ] `src/db/schema.ts` again: remove `steps`/`expected`/`actual` and their three `*_shape` CHECKs;
-      rewrite `feedback_says_something` to name `body`. `npm run db:generate -- --name
-      drop_feedback_three_answers`, then **hand-write the backfill at the top of that file**, before
-      the drops: `update spideryarn.feedback set body = concat_ws(E'\n\n', …) where body is null`,
-      with the old headings kept so an old report still reads as one.
-- [ ] `npm run db:migrate` locally, and read its `Target:` line rather than its success line
-      ([database.md](../project/database.md)).
-- [ ] `src/store/contracts.ts`: `NewFeedback` loses the three, gains `body: string | null` and
-      `kind: FeedbackKind | null`. `FeedbackReport` keeps extending it — there is no legacy shape to
-      read any more, which is the point of the drop.
-- [ ] `src/types.ts`: `FEEDBACK_KINDS = ["problem", "suggestion"] as const`, beside the other two
-      closed vocabularies, with the same note about the CHECK being a second copy pinned
-      behaviourally.
-- [ ] `src/store/pg-feedback.ts`: insert and select `body`/`kind`; `charsIn` counts `body`.
-- [ ] `src/routes.ts`: `FEEDBACK_FIELDS` becomes `id, body, kind, consented, routeKind, slug,
-      buildCommit, diagnostics, screenshot`; `feedbackAnswer` is reused for `body` and the empty
-      check becomes one field (`[fb-empty]` keeps its code, new sentence); a `kind` check refusing
-      anything outside the vocabulary (`[fb-kind]`); `MAX_FEEDBACK_BODY_BYTES` drops its `3 *`.
-- [ ] `src/feedback.ts`: `message()` is the body; `tagsFor` gains `kind` when it is not null, and
-      `FEEDBACK_TAG_KEYS` in `src/feedback-envelope.ts` gains it too (the compile error is the pin).
-- [ ] Tests, written before the code where they can be: `tests/feedback-store.test.ts` (the cap at
-      exactly 4,000 and one over, every value of `FEEDBACK_KINDS`, null kind, the says-something
-      refusal), `tests/feedback-route.test.ts` (a body with `steps` in it is now refused as an
-      unknown field, a bad kind is refused, a report with only a kind is refused),
-      `tests/feedback-mirror.test.ts` (the message is the body, the tag arrives).
-- [ ] `npm test`, `npm run typecheck`.
+- [x] `src/types.ts`: `FEEDBACK_KINDS`, `FeedbackKind`, `MAX_FEEDBACK_BODY_CHARS`.
+- [x] `src/db/schema.ts`: `body text not null`, `kind text`, `feedback_body_shape` (12,072),
+      `feedback_kind`; the three old columns and their four CHECKs gone.
+- [x] Two migrations rather than one, because the shape needs three steps and drizzle will not
+      generate a rename it has to guess at: `20260902161529_feedback_body_and_kind` adds the two
+      columns nullable, and `20260902161553_feedback_one_body` backfills, sets `not null`, drops the
+      three, and widens the CHECK. The `UPDATE` in the second is hand-written — everything either
+      side of it is generated.
+- [x] `npm run db:migrate` against the local Supabase (`Target:` read, not the success line).
+- [x] `src/store/contracts.ts`, `src/store/pg-feedback.ts`: `body` and `kind` through the insert, the
+      selection and `charsIn`.
+- [x] `src/routes.ts`: the field allowlist, `feedbackBody` (both shapes), `feedbackKind`,
+      `[fb-kind]`, `[fb-shape]`, and `reportKind` in the log line beside the store's own `kind`.
+- [x] `src/feedback.ts` and `src/feedback-envelope.ts`: the message is the body, and `kind` is a tag
+      that is absent rather than empty when the reader did not say.
+- [x] `tests/feedback-store.test.ts`, `tests/feedback-route.test.ts`, `tests/feedback-mirror.test.ts`
+      — the cap at exactly 12,072 and one over, every kind and none, a bad kind, the legacy shape,
+      both shapes at once, and the tag's absence.
 
-### Stage 2 — the dialog
+### Stage 2 — the dialog ✅
 
-- [ ] `tests/feedback-dialog.test.tsx` first: it posts `body` and `kind: null`; picking Suggestion
-      posts `kind: "suggestion"`; Send stays disabled with an empty box; the existing id/idempotency
-      cases keep passing with one box.
-- [ ] `src/web/FeedbackDialog.tsx`: one `body` state replacing three; the thanks line; the radios;
-      the disclosure; `asPlainText` and `reportBody` follow. Title becomes **Feedback** rather than
-      *Report a problem*, because half of what it now takes is not a problem — and the `aria-label`
-      with it.
-- [ ] `src/web/styles.css`: `.fb-thanks`, `.fb-kind`, `.fb-help`, and the mic row. House `fb-*`
-      classes, as the block there already says.
-- [ ] `npm test`, `npm run typecheck`, `npm run check`.
+- [x] One box; the thanks line; the two toggle buttons; the "Not sure what to write?" disclosure;
+      `asPlainText` carrying the kind; the title, the button's tooltip, the mailto subject and the
+      "boxes above" sentence in `src/messages.ts` all made to say one box and not three.
+- [x] `src/web/styles.css`: `.fb-thanks`, `.fb-kind`, `.fb-kind-button`, `.fb-under-box`,
+      `.fb-help-toggle`, `.fb-help`, `.fb-body`.
+- [x] `tests/feedback-dialog.test.tsx`: one body and a null kind, picking and un-picking.
 
-### Stage 3 — the microphone
+### Stage 3 — the microphone ✅
 
-- [ ] `useDictationField` on the box, `DictationButton` under it (guarded on
-      `dictation.supported`, as AnnotateDialog does), `DictationStrip` below the actions.
-- [ ] The ⌘/Ctrl+Enter handler and the Send button both refuse while `dictate.readOnly`.
-- [ ] A test that Send is refused mid-transcription.
+- [x] `useDictationField` on the box, the button and the strip under it, the `armed || readOnly`
+      guard on both send paths, and the effect that stops the microphone when the dialog shuts.
+- [x] Three tests, and **each one watched to fail** with its guard removed before it was kept.
 
 ### Stage 4 — check it, review it, ship it
 
-- [ ] Browser pass in a **Sonnet subagent** — [browser-control.md](../project/browser-control.md)
-      then [browser-testing.md](../project/browser-testing.md) — against `SPIDERYARN_STORE=postgres
-      npm run dev`: the dialog opens, the thanks reads, the toggle picks and unpicks, the disclosure
-      opens, a report files, and the reports land in the local `feedback` table with the right
-      `kind`. The microphone permission dialog is browser chrome and cannot be granted by an
-      automated session ([dictation.md](../project/dictation.md) § What a browser pass could and
-      could not check), so the mic is checked as far as "Opening the microphone…" and no further.
-- [ ] Update [feedback.md](../project/feedback.md) — the three answers are all over it — and the
-      dictation.md line that counts the boxes with a microphone (it will be six).
+- [x] `npm test` and `npm run typecheck` (the five reds are the shared tree's, not this change's —
+      `store-ai-calls`, `pdf-bundle-trace`, `auth-user-seeding`, `pdf-chunk-concurrency`,
+      `store-jobs-parity` and friends fail the same way on `origin/dev` here).
+- [ ] Browser pass in a Sonnet subagent against `npm run dev`: the dialog, the toggle, the
+      disclosure, a report filed, and the row's `kind`. The microphone permission dialog is browser
+      chrome and cannot be granted by an automated session
+      ([dictation.md](../project/dictation.md) § What a browser pass could and could not check).
+- [ ] Update [feedback.md](../project/feedback.md) and [dictation.md](../project/dictation.md) (the
+      count of boxes with a microphone becomes six).
 - [ ] GPT Sol code review of the diff; act on the findings.
 - [ ] Commit and push to `dev`.
 - [ ] **Greg**: `npm run deploy`, which is what applies these two migrations to production.
+- [ ] **Somebody**: reconcile with the unlanded `/admin/feedback` work — see § What this collides
+      with.

@@ -258,7 +258,6 @@ import {
   enqueue,
   forgetJob,
   getJob,
-  JobConflict,
   listJobs,
   retryJob,
 } from "./jobs.js";
@@ -316,6 +315,7 @@ import type {
   ChatThread,
   Comment,
   FeedbackEnvironment,
+  FeedbackKind,
   FeedbackRouteKind,
   LibraryEntry,
   GlossaryResponse,
@@ -345,6 +345,7 @@ import { isThreadKind, THREAD_KINDS } from "./types.js";
    src/types.ts § feedback. */
 import {
   FEEDBACK_ENVIRONMENTS,
+  FEEDBACK_KINDS,
   FEEDBACK_ROUTE_KINDS,
   MAX_FEEDBACK_ANSWER_CHARS,
   MAX_FEEDBACK_SCREENSHOT_BYTES,
@@ -395,8 +396,10 @@ const MAX_AUDIO_BODY_BYTES = MAX_AUDIO_BASE64 + 16 * 1024;
  * So each term is the worst case of a thing that is separately capped:
  *
  * - the screenshot, base64, which is four characters per three bytes;
- * - three answers at `MAX_FEEDBACK_ANSWER_CHARS`, at the six bytes per UTF-16
- *   unit `JSON.stringify` can produce for a control character;
+ * - the reader's answer at `MAX_FEEDBACK_ANSWER_CHARS`, at the six bytes per
+ *   UTF-16 unit `JSON.stringify` can produce for a control character — times
+ *   three, because a stale client still sends the old three answers and folding
+ *   them into one `body` must not be refused before it is read;
  * - the diagnostics blob, whose own ceiling is computed in
  *   src/feedback-payload.ts from the caps that file enforces;
  * - the rest of the envelope — the id, the slug, the build stamp, the keys.
@@ -4464,7 +4467,7 @@ function publicUpload(record: UploadRecord): Record<string, unknown> {
  * article that claim produced and hands back its job. Only a claim with nothing
  * to show for it is an error.
  */
-async function queueAnUpload(uploadId: string): Promise<Job> {
+async function queueAnUpload(uploadId: string): Promise<UploadOutcome> {
   const owner = currentOwnerId();
   const record = await readUpload(uploadId, owner);
   if (!record) throw httpError(404, "No such upload");
@@ -4474,8 +4477,38 @@ async function queueAnUpload(uploadId: string): Promise<Job> {
     if (claim.why === "expired") throw httpError(410, UPLOAD_MISSING.message);
     /* `taken`. If the first claim got as far as a job, that job is the answer —
        this is the same request arriving twice, not a conflict. */
-    const already = record.slug ? await jobForSlug(record.slug) : null;
-    if (already) return already;
+    const already = await jobForUpload(uploadId);
+    if (already) return { kind: "job", job: already };
+    /**
+     * **And when the job has gone, the upload record still knows.**
+     *
+     * Finished jobs are trimmed to fifty per reader (`KEEP_FINISHED`,
+     * src/jobs.ts), and modes are jobs now — a glossary, a set of ideas and a
+     * quiz are three more rows on one article — so fifty is a fortnight of
+     * ordinary use rather than a year of it. After that the upload is still
+     * `claimed`, the article is still on the shelf, and this answered *"That
+     * upload is already being turned into an article"* about an article the
+     * reader had finished reading. GPT Sol, reviewing the built stage 1,
+     * finding 5.
+     *
+     * **Answered from the record rather than by keeping the job alive**, and
+     * that is the choice worth writing down. Sparing an upload's job from
+     * retention only covers the ingests that never completed: a *successful*
+     * import's job is trimmed like any other success, and that is the case a
+     * reader actually comes back to. What is durable here is the **article**,
+     * and the upload record has named it since the moment `enqueue` returned —
+     * uploads are swept on their grant, never trimmed by count, so the record
+     * outlives the job by design.
+     *
+     * Re-read rather than reusing `record` above: `noteSlug` lands after
+     * `enqueue` returns, so a second request arriving in that window would
+     * otherwise read a record from before the slug was written.
+     */
+    const fresh = await readUpload(uploadId, owner);
+    if (fresh?.slug) return { kind: "article", slug: fresh.slug };
+    /* A claim with nothing at all to show for it: `enqueue` threw between the
+       claim and `noteSlug`. The reader chooses the file again, which is cheap
+       and correct. */
     throw httpError(409, "That upload is already being turned into an article.");
   }
 
@@ -4484,21 +4517,61 @@ async function queueAnUpload(uploadId: string): Promise<Job> {
     slug: candidate,
     upload: { id: uploadId, filename: claim.record.filename },
   });
-  /* **Immediately, and this line is what makes the paragraph above true.** The
-     record's slug used to be written only by the acquisition step, on success —
-     so a reload of `/add/upload/<id>` while the job was still queued behind
-     another one found a claimed upload with no slug, could not find its job,
-     and answered 409. Every reload, for ever, if acquisition never began. The
-     doc claimed the recovery worked while the field it recovers through was
-     never set. GPT Sol, 2026-08-27. */
+  /* **Immediately**, so that `GET /api/uploads/:id` can say which article this
+     file became rather than only which one it might.
+
+     It used to be written by the acquisition step, on success — so a reload of
+     `/add/upload/<id>` while the job was still queued behind another one found
+     a claimed upload with no slug, could not find its job, and answered 409.
+     Every reload, for ever, if acquisition never began. GPT Sol, 2026-08-27.
+     The recovery no longer goes through this field — `jobForUpload` matches the
+     upload id — but the record still had a hole in it, and the reader's own
+     `/add/upload/<id>` page reads the slug from here. */
   await noteSlug(uploadId, job.slug);
-  return job;
+  return { kind: "job", job };
 }
 
-/** The job currently working on this article, if there is one. For the repeat-claim case above. */
-async function jobForSlug(slug: string): Promise<Job | null> {
+/**
+ * What `POST /api/jobs { uploadId }` resolves to.
+ *
+ * Two answers rather than one, because after retention there is a true thing to
+ * say that is not a job: *this file is already that article*. The alternative
+ * was to invent a job record to say it with, which is a lie about what the
+ * store holds, or to keep answering 409, which is a lie about what happened.
+ *
+ * `article` rather than `slug` on the wire, so the two bodies cannot be
+ * confused: a `publicJob` carries a `slug` of its own.
+ */
+type UploadOutcome = { kind: "job"; job: Job } | { kind: "article"; slug: string };
+
+/**
+ * The job this upload became, whatever state it is in. For the repeat-claim
+ * case above.
+ *
+ * **It matches the upload id, which is the thing it actually means.** It asked
+ * `j.slug === record.slug` until 2026-09-02, over **every** status, and that
+ * was two guesses at once. An article holds a *line* of jobs now, so a reload
+ * of `/add/upload/<id>` could be handed whichever mode job on that article
+ * happened to sort first — a glossary run, presented to the reader as their
+ * import. And it depended on `noteSlug` having landed, where the upload id is
+ * on the job record from the moment `enqueue` returns.
+ *
+ * **Every status, deliberately.** The reader reloading `/add/upload/<id>` after
+ * their ingest has finished — or failed — must be shown *that* job, not a 409,
+ * and narrowing this to the active statuses would take that away again a minute
+ * after each import ends.
+ *
+ * It is not the *whole* of the recovery, though it was described that way until
+ * 2026-09-02: finished jobs are trimmed to fifty per reader, so this eventually
+ * finds nothing however wide its statuses are. `queueAnUpload` above falls back
+ * to the upload record for that.
+ *
+ * Newest first, because `listJobs` is (src/jobs.ts) and a retry of an upload
+ * ingest is the more recent of the two rows.
+ */
+async function jobForUpload(uploadId: string): Promise<Job | null> {
   const all = await listJobs();
-  return all.find((j) => j.slug === slug) ?? null;
+  return all.find((j) => j.upload?.id === uploadId) ?? null;
 }
 
 /**
@@ -4978,6 +5051,14 @@ async function transcribeDictation(
  */
 const FEEDBACK_FIELDS = [
   "id",
+  "body",
+  "kind",
+  /* **The old three-box vocabulary, still accepted on purpose.** A reader whose
+     tab was loaded before the deploy posts these, and this is the one endpoint
+     where a client and a server disagreeing is likely to be the very thing the
+     reader is trying to report — so they are folded into `body` rather than
+     refused. GPT Sol's review of the plan, 2026-09-02. They come out when the
+     old bundles are certainly gone. */
   "steps",
   "expected",
   "actual",
@@ -5012,7 +5093,7 @@ const BUILD_COMMIT = /^[A-Za-z0-9._-]{1,64}$/;
 const VERCEL_ID = /^[A-Za-z0-9]{1,12}(:[A-Za-z0-9]{1,12}){0,3}::[A-Za-z0-9-]{1,64}$/;
 
 /**
- * One of the three answers, trimmed — or `null` for a box the reader left empty.
+ * What the reader wrote, trimmed — or `null` for an empty box.
  *
  * **No part of the answer reaches a thrown message**, and that is the rule this
  * whole function exists to keep rather than a nicety: an `httpError` message is
@@ -5034,6 +5115,64 @@ function feedbackAnswer(value: unknown, field: string): string | null {
     );
   }
   return trimmed;
+}
+
+/**
+ * **What the reader wrote**, from either shape of request body.
+ *
+ * The current dialog sends one `body`. A dialog loaded before 2026-09-02 sends
+ * `steps`, `expected` and `actual`, and those are glued here under the same
+ * headings the migration used, so a report from a stale tab is stored as the
+ * same text it would have been stored as the day before.
+ *
+ * Accepting both is deliberate and is GPT Sol's finding: `FEEDBACK_FIELDS`
+ * refuses an unknown key outright, so without this a reader with an open tab is
+ * told *"a report has a field this endpoint does not take"* at the exact moment
+ * they are trying to tell us something is broken. Refusing a body that carries
+ * **both** shapes is the other half — that is not an old client, it is a caller
+ * making something up, and there would be no right answer about which to keep.
+ */
+function feedbackBody(sent: Record<string, unknown>): string {
+  const written = feedbackAnswer(sent.body, "body");
+  const steps = feedbackAnswer(sent.steps, "steps");
+  const expected = feedbackAnswer(sent.expected, "expected");
+  const actual = feedbackAnswer(sent.actual, "actual");
+  const legacy = [
+    steps === null ? null : `Steps to reproduce:\n${steps}`,
+    expected === null ? null : `What you expected to see:\n${expected}`,
+    actual === null ? null : `What you saw instead:\n${actual}`,
+  ].filter((part): part is string => part !== null);
+  if (written !== null && legacy.length > 0) {
+    throw httpError(400, "A report mixes two request shapes [fb-shape]");
+  }
+  const body = written ?? (legacy.length > 0 ? legacy.join("\n\n") : null);
+  /* The database says the same thing — `body` is `not null` — and this is the
+     half that gets to explain itself. A `kind` on its own is not a report: it is
+     the row a mis-wired toggle would file. */
+  if (body === null) {
+    throw httpError(400, "A report needs something written in it. [fb-empty]");
+  }
+  return body;
+}
+
+/**
+ * *A problem*, *a suggestion*, or **nothing**, which is a third answer rather
+ * than a missing one.
+ *
+ * Greg asked for the toggle to start unset — *"don't default to Problem. Default
+ * to null/unknown"* — so an absent field is valid and an unrecognised one is
+ * not. A value outside the vocabulary is a client and a server that disagree,
+ * and the cheap failure is now; the CHECK in src/db/schema.ts is the same
+ * refusal for every other writer.
+ */
+function feedbackKind(value: unknown): FeedbackKind | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string" || !(FEEDBACK_KINDS as readonly string[]).includes(value)) {
+    /* The list is ours and the value is not the reader's prose — but it is still
+       a string off the wire, so it does not go in the message. `[fb-kind]`. */
+    throw httpError(400, "kind is not one of ours [fb-kind]");
+  }
+  return value as FeedbackKind;
 }
 
 /**
@@ -5173,14 +5312,17 @@ function feedbackScreenshot(value: unknown): FeedbackScreenshot | null {
  * and the Vercel id from this request's own headers. See each of them.
  */
 function parseFeedback(
-  body: unknown,
+  /* `raw` rather than `body`, which is now a *field* of the report — the request
+     body and the reader's words are two different things and were briefly one
+     name. */
+  raw: unknown,
   req: IncomingMessage,
   user: VerifiedUser,
 ): { report: NewFeedback; screenshot: FeedbackScreenshot | null } {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     throw httpError(400, "Expected a JSON object [fb-type]");
   }
-  const sent = body as Record<string, unknown>;
+  const sent = raw as Record<string, unknown>;
   for (const key of Object.keys(sent)) {
     if (!(FEEDBACK_FIELDS as readonly string[]).includes(key)) {
       /* **Fixed prose. Not the key, not forty characters of it.**
@@ -5209,14 +5351,8 @@ function parseFeedback(
   const consented = sent.consented;
   const where = feedbackWhere(sent);
 
-  const steps = feedbackAnswer(sent.steps, "steps");
-  const expected = feedbackAnswer(sent.expected, "expected");
-  const actual = feedbackAnswer(sent.actual, "actual");
-  /* The database says the same thing (`feedback_says_something`); this is the
-     half that gets to explain itself. */
-  if (steps === null && expected === null && actual === null) {
-    throw httpError(400, "A report needs at least one of the three answers. [fb-empty]");
-  }
+  const body = feedbackBody(sent);
+  const kind = feedbackKind(sent.kind);
 
   if (
     sent.diagnostics !== undefined &&
@@ -5245,9 +5381,8 @@ function parseFeedback(
          `VerifiedUser` — the one type only `requireUser` can make — and this is
          a snapshot of the address it verified, taken at submit time. */
       reporterEmail: user.email,
-      steps,
-      expected,
-      actual,
+      body,
+      kind,
       consented,
       ...where,
       environment: feedbackEnvironment(),
@@ -5308,7 +5443,10 @@ async function fileFeedback(
     {
       id: report.id,
       kind: answer.kind,
-      chars: (report.steps?.length ?? 0) + (report.expected?.length ?? 0) + (report.actual?.length ?? 0),
+      /* The reader's own answer, next to the store's. Two different `kind`s in
+         one line would be a log nobody can read, so this one says whose it is. */
+      reportKind: report.kind,
+      chars: report.body.length,
       consented: report.consented,
       routeKind: report.routeKind,
       slug: report.slug,
@@ -5375,37 +5513,6 @@ async function fileFeedback(
  */
 function chosenByUs(err: unknown): boolean {
   return typeof (err as { status?: number }).status === "number";
-}
-
-/**
- * The structured fields an error is allowed to put beside `error`.
- *
- * **One class, one field, and no generic spread** — which is the whole of what
- * stops this becoming a hole. The handler above answers every throw in the API,
- * including a Drizzle failure whose `Error.message` carries bound parameters
- * (src/store/db-errors.ts) and a provider's own words (docs/project/copy.md
- * rule 4). Copying an error's own enumerable properties onto the wire would
- * have made every one of those a candidate; matching `JobConflict` and reading
- * its declared `Job` cannot.
- *
- * And the payload is narrowed by `publicJob`, the same call `GET /api/jobs`
- * makes, so this 409 carries nothing the same reader's next poll would not have
- * handed them a second later. The blocking row is always theirs:
- * `jobs_active_slug` is `(owner_id, slug)` in src/db/schema.ts and the
- * filesystem adapter filters on `ownerId` before it compares anything.
- *
- * **`instanceof` here, where `statusOf` in src/web/lib/api.ts deliberately
- * duck-types.** That one is defensive because a test can mock `lib/api.js` and
- * put a second copy of `HttpError` in the graph; nothing mocks `src/jobs.js` at
- * this seam, both files are server modules in one bundle, and being strict is
- * the point — a duck-typed check would let any object with a `blocking`
- * property onto the wire. `tests/blocking-job-409.test.ts` drives the real
- * import graph, so the identity is a fact rather than an assumption.
- *
- * docs/plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md § Stage 6.
- */
-function structuredDetail(err: unknown): Record<string, unknown> {
-  return err instanceof JobConflict ? { blocking: publicJob(err.blocking) } : {};
 }
 
 function logRequest(
@@ -5680,7 +5787,20 @@ async function serveApi(
        src/monitoring.ts decides what may be *said* about the error. This line
        only decides whether to say anything. */
     if (status >= 500) captureFailure(err, { method, path, status });
-    send(res, status, { error: (err as Error).message, ...structuredDetail(err) });
+    /* **The message and nothing else, and it must stay that way.** A
+       `structuredDetail(err)` used to be spread in beside it, carrying the
+       blocking `Job` out of a `JobConflict`; the per-article queue removed the
+       refusal, so it went with it
+       (docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 1g).
+
+       Whatever brings a structured field back, it must match **one declared
+       class and read one declared field** — never copy an error's own
+       enumerable properties. This handler answers every throw in the API,
+       including a Drizzle failure whose `Error.message` carries bound
+       parameters (src/store/db-errors.ts) and a provider's own words
+       (docs/project/copy.md rule 4), and a generic spread would put every one
+       of those on the wire. */
+    send(res, status, { error: (err as Error).message });
     return true;
   } finally {
     logRequest(method, path, res.statusCode, started, failure);
@@ -6895,7 +7015,16 @@ export async function serveAuthenticatedApi(
       if (request.uploadId !== undefined) {
         /* No other field survives `checkUploadOrigin`, so there is nothing to
            forward: an upload is always the default ingest. */
-        send(res, 202, publicJob(await queueAnUpload(request.uploadId)));
+        const outcome = await queueAnUpload(request.uploadId);
+        /* **200, not 202**: nothing has been accepted, because there is nothing
+           left to do. The file became this article a while ago and its job
+           record has since been trimmed — `queueAnUpload` for why the record
+           rather than the job is what answers. */
+        if (outcome.kind === "article") {
+          send(res, 200, { article: outcome.slug });
+          return;
+        }
+        send(res, 202, publicJob(outcome.job));
         return;
       }
       /* **Not for the `{ url }` shape**, and that is a correctness fix rather

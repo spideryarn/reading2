@@ -79,7 +79,7 @@ const TONE: Record<"ok" | "warn" | "quiet", string> = {
   quiet: "tw:text-ink-faint",
 };
 
-/** One of the three answers, with an empty one saying so rather than vanishing. */
+/** What they wrote, with an empty one saying so rather than vanishing. */
 function Answer({ label, text }: { label: string; text: string | null }) {
   return (
     <div className="tw:mt-3">
@@ -286,9 +286,14 @@ export function FeedbackCard({ report, now }: { report: AdminFeedbackReport; now
         </span>
       </div>
 
-      <Answer label="Steps to reproduce" text={report.steps} />
-      <Answer label="What they expected to see" text={report.expected} />
-      <Answer label="What they saw instead" text={report.actual} />
+      {/* **One answer, since 2026-09-02.** This page was built against the
+          three-box dialog and merged into a trunk where
+          docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md
+          had already collapsed them into one. The `Answer` helper is unchanged
+          — it still says "they left it blank" rather than vanishing — but the
+          label now names the toggle where there is one, because *which* of the
+          two a report is is the first thing an inbox wants to sort by. */}
+      <Answer label={report.kind === "suggestion" ? "Suggestion" : "What happened"} text={report.body} />
 
       {report.screenshotBytes !== null && report.screenshotBytes > 0 && (
         <Screenshot ownerId={report.ownerId} id={report.id} bytes={report.screenshotBytes} />

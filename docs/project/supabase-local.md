@@ -194,8 +194,9 @@ local database only. Five things about it are deliberate:
   nothing being wrong until somebody opens the feature that reads them.
 - **The dry run is the real write, rolled back.** Not a `select count(*)`: it runs every `update`
   inside a transaction and then rolls back, so the counts are the counts and a unique violation is
-  found by Postgres rather than predicted by us. `jobs_active_slug` is a partial index, and any
-  prediction we wrote here would have to re-implement its predicate to avoid crying wolf.
+  found by Postgres rather than predicted by us. The queue's unique indexes on `jobs` are **partial**
+  — four of them, [`src/db/schema.ts`](../../src/db/schema.ts) — and any prediction we wrote here
+  would have to re-implement four predicates to avoid crying wolf.
 - **It counts again after committing** and names anything that arrived under the old owner while it
   ran. "Nothing was left behind" and "nothing was left behind that we looked for" are different
   sentences, and this is the one that earns the first.

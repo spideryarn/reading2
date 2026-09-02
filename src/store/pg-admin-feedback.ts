@@ -67,6 +67,7 @@ import type {
   FeedbackCursor,
   FeedbackDiagnosticsPayload,
   FeedbackEnvironment,
+  FeedbackKind,
   FeedbackRouteKind,
 } from "../types.js";
 import { ADMIN_FEEDBACK_DEFAULT_LIMIT, ADMIN_FEEDBACK_MAX } from "../types.js";
@@ -87,9 +88,8 @@ const LIST_COLUMNS = {
   id: feedbackTable.id,
   ownerId: feedbackTable.ownerId,
   reporterEmail: feedbackTable.reporterEmail,
-  steps: feedbackTable.steps,
-  expected: feedbackTable.expected,
-  actual: feedbackTable.actual,
+  body: feedbackTable.body,
+  kind: feedbackTable.kind,
   consented: feedbackTable.consented,
   routeKind: feedbackTable.routeKind,
   slug: feedbackTable.slug,
@@ -109,9 +109,8 @@ interface ListRow {
   id: string;
   ownerId: string;
   reporterEmail: string;
-  steps: string | null;
-  expected: string | null;
-  actual: string | null;
+  body: string;
+  kind: string | null;
   consented: boolean;
   routeKind: string;
   slug: string | null;
@@ -139,9 +138,12 @@ function toListed(row: ListRow): AdminFeedbackReport {
     id: row.id,
     ownerId: row.ownerId,
     reporterEmail: row.reporterEmail,
-    steps: row.steps,
-    expected: row.expected,
-    actual: row.actual,
+    body: row.body,
+    /* The same honest cast `routeKind` and `environment` get below, and for the
+       same reason: the column is `text` with a CHECK, so the database knows the
+       vocabulary and the driver hands back a `string`. src/types.ts §
+       FEEDBACK_KINDS. */
+    kind: row.kind as FeedbackKind | null,
     consented: row.consented,
     routeKind: row.routeKind as FeedbackRouteKind,
     slug: row.slug,

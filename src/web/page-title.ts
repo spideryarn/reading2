@@ -142,6 +142,23 @@ export type TitleSpec =
    * confirms an article exists.
    */
   | { kind: "not-shared" }
+  /**
+   * **The page for a reader we could not identify at all** —
+   * `ReauthRequiredPage` in PublicChrome.tsx: the owned route answered 401 and
+   * the public one answered 404.
+   *
+   * Its own variant rather than borrowing `not-shared`, which is what it did for
+   * one afternoon on 2026-09-02 and which a browser pass caught. Two things were
+   * wrong with that. The tab said *Not shared*, which is a claim about the
+   * document — and the whole point of this state is that a 401 leaves us unable
+   * to make one. And the title is read aloud: `useDocumentTitle` mirrors it into
+   * the `aria-live` announcer below, so a screen reader was told *"Not shared"*
+   * over a page whose heading says we could not confirm the sign-in.
+   *
+   * It names the action instead, which is a fact about the reader's session and
+   * about nothing else.
+   */
+  | { kind: "reauth-required" }
   | { kind: "profile" }
   | { kind: "design" }
   /** What we do with a reader's data — PrivacyPage.tsx. */
@@ -205,6 +222,12 @@ function segments(spec: TitleSpec): string[] {
        name and nothing else. */
     case "not-shared":
       return ["Not shared", APP_NAME];
+
+    /* The words on the page's own button, so the tab, the heading and what a
+       screen reader announces are one thing. It says nothing about the article
+       because there is nothing we can honestly say. */
+    case "reauth-required":
+      return ["Sign in again", APP_NAME];
 
     case "profile":
       return ["Profile", APP_NAME];
