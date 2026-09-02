@@ -87,11 +87,21 @@ reviewed twice and committed. What remains is the half a reader can see — admi
 the ingest route, settlement wired into the publish transaction, the checkout and portal routes,
 and `/profile` — plus the Postgres suite, which has never actually run.
 
-**98 billing tests pass; the Postgres suite skips** — a real vitest skip, not a false pass. That
-skip is the single biggest weakness in this work and it should not be talked around: the
-concurrency guarantee has been measured with a standalone two-connection spike, but
-`tests/billing-quota-race.test.ts` has not once executed against the real code. Nothing here goes
-near real money until it has.
+**151 billing tests pass, including the Postgres suite** — which spent most of the day skipping and
+now runs. The migration is applied locally, `tests/billing-quota-race.test.ts` executes all 13 of
+its cases through the real code, and `tests/db-schema.test.ts` is green on all three new foreign
+keys.
+
+Two things about that suite are worth keeping, because both nearly cost the guarantee:
+
+- **It skipped for a reason that had nothing to do with the database.** The file never called
+  `loadEnvLocal()`, so `pgReady` found no `DATABASE_URL` and reported 13 skipped against a database
+  that was up and migrated. A skip is indistinguishable from a deliberate one, which is why it
+  survived hours of being looked at; `REQUIRE_POSTGRES=1` is what said so, and is what that flag is
+  for.
+- **It can fail.** Remove the `for update` from the admission read and *"admits exactly three of
+  twenty for a free account"* goes red. The lock is demonstrated to be load-bearing rather than
+  asserted to be.
 
 **Reviewed as built** ([review](260902i-stripe-code-review-sol.md)): GPT Sol's verdict on the code
 was *"I would not ship the quota path yet"*, and it found six real defects — a release that could
@@ -121,10 +131,22 @@ Worktree `stripe-payments`, branch `worktree-stripe-payments`.
 | `pay-` copy | Three messages, registered in `CODE_KINDS` so none arrives with a Retry button that cannot work. |
 | [billing.md](../project/billing.md) | The evergreen doc, under [security-map.md](../project/security-map.md). |
 
-**What has never run**: `tests/billing-quota-race.test.ts` and the foreign-key assertions in
-`tests/db-schema.test.ts`. Both wait on the migration, which waits on an unrelated session's
-unpushed migrations in the shared local database — the third time today that has blocked somebody
-([the pattern is worth a plan of its own](#the-coordination-problem-this-work-kept-hitting)).
+**What is still unbuilt**: the wiring. `reserveIngest` has no caller in `POST /api/jobs` and
+`settleReservation` has none in `settleIn`, so the quota is enforced nowhere yet — everything above
+is machinery with tests, waiting to be connected. `syncSubscriptionFromStripe` has likewise never
+been executed: the webhook route is tested with an injected sync, and the real one wants a
+controlled-interleaving test against two connections before it is trusted.
+
+**One statement in the schema migration is not ours**, and it is written down here so nobody
+rediscovers it: `src/db/schema.ts` on `dev` admits `'privacy'` in `feedback_route_kind` and no
+migration carried it, so the first `db:generate` since picked it up. Keeping it was deliberate —
+trimming would leave the snapshot asserting a constraint the database denies, which is the content
+hole that cost this box an hour. The half it does *not* close: `FEEDBACK_ROUTE_KINDS` in
+`src/types.ts` still lacks `'privacy'` and there is no such route, so the column now admits a value
+the client cannot send. Harmless in that direction; the mirror of it would be a 500 on the endpoint
+people use to report 500s. Whoever ships the `/privacy` page should add it to that array in the
+same change — and `tests/feedback-store.test.ts` cannot see either half, because it iterates the
+`types.ts` list.
 **Next**, in order:
 
 1. `npm run db:migrate`, then **run `tests/billing-quota-race.test.ts`** — the first time the
