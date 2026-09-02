@@ -669,6 +669,21 @@ git show origin/dev:drizzle/meta/_journal.json > drizzle/meta/_journal.json
 A file write rather than a `git checkout`, so it stays inside
 [AGENTS.md](../../AGENTS.md#working-in-a-tree-several-agents-share)'s rules.
 
+**That line assumes your side is the one being rebuilt**, so its entry comes back on the regenerate.
+When **both** sides survive — the row below where both are already applied — taking the trunk's file
+whole deletes your own entry instead, and you get a migration with no journal row. Keep both, in
+`when` order.
+
+> **Resolving the journal is not resolving the fork, and this is the trap the section is named for.**
+> Git conflicts on `_journal.json` because both sides appended a line. It does *not* conflict on the
+> snapshots, because each side wrote a **new file** and git merges two new files without a word. So
+> the conflict you can see is the half that does not matter, and the half that does arrives silently.
+> On 2026-09-02 that produced exactly the fork below: the journal was resolved carefully, the
+> filenames were checked for collisions, and `0052_per_article_job_queue` and
+> `20260902141103_byok_upstream_nanos` went to `dev` as two children of `0051`. It was caught by a
+> code review, not by anything that ran. **After any merge that touches `drizzle/`, run
+> `npm run db:chain`** — it takes a second and it is the whole of the check.
+
 The snapshot half cannot be merged. Snapshots are a linear chain and drizzle has no notion of two
 parents — Alembic and Django both model migrations as a DAG and can write an explicit merge node;
 drizzle cannot. **And the obvious hand-fix is a trap:** repointing the loser's `prevId` at the
@@ -685,7 +700,45 @@ going, in every row:
 | unpublished, purely generated | delete its `.sql`, its snapshot and its journal entry, then `npm run db:generate` again. The simple case, and the common one. |
 | unpublished, hand-edited or `--custom` | **keep the original SQL.** Regenerate only the schema part and re-apply the custom part by hand — a backfill, a grant, a function, `NOT VALID`, RLS. An ordinary `generate` may say "no schema changes" and hand you no replacement at all. |
 | already applied to the shared local Postgres | preserve it and regenerate the *other* side, or reset. **Greg's call** — `npm run db:reset` empties the database and puts nothing back. |
+| **both** sides applied, and they touch **disjoint tables** | neither is the loser. Hand-merge the snapshot — § below. |
 | **applied to production** | **never delete, re-stamp or regenerate it.** Published migrations are immutable; the repair is a new forward migration. |
+
+#### When both are applied and disjoint, merge the snapshot rather than rebuilding one
+
+The common case for two agents: each added a table or some indexes, they never touched the same one,
+and both are already in the shared database, so neither may be deleted and neither may be re-stamped.
+
+Then the repair is one object. Diff the two children against their shared parent and check they
+differ in **disjoint** `tables[…]` entries and in nothing else — not `enums`, `schemas`, `sequences`,
+`policies`, `views`, `roles` or `_meta`. If that holds, the later child's snapshot with the earlier
+child's table object dropped into it *is* the correct post-both state, assembled out of drizzle's own
+serialisations rather than written by hand. Repoint `prevId` at the earlier child's `id`, and leave
+the journal, both `.sql` files and the database untouched.
+
+**Keep the rebuilt snapshot's own `id`.** Only `prevId` moves. The `id` is minted with
+`crypto.randomUUID()` in `preparePgMigrationSnapshot` and nothing anywhere derives or validates it
+from the contents — its only readers are the next snapshot's `prevId` and a zod string check. So
+re-minting it buys nothing and costs everything downstream: any migration already chained onto the
+old value dangles, and `drizzle-kit check` groups by `prevId` alone and **will not tell you**. Only
+[`scripts/migration-snapshots.ts`](../../scripts/migration-snapshots.ts) resolves links, and only for
+migrations that are in the tree — a peer's unpushed child is invisible to every check you can run.
+There was one on 2026-09-02, and preserving the id is what kept it resolving.
+
+**Green structural checks prove nothing about the contents.** `npm run db:chain` and
+`tests/migration-snapshots.test.ts` are structure only, and `migration-snapshots.ts`'s own header
+says a stale-but-structurally-perfect snapshot passes both. The check that proves the merge is:
+
+```bash
+npm run db:generate -- --allow-empty     # must answer: no schema changes
+```
+
+That is drizzle saying the snapshot equals what it would serialise from `src/db/schema.ts` today,
+which is the actual claim — that no future generate re-emits either migration's DDL. If it writes a
+migration instead, read the `.sql`: it names exactly what the merge missed.
+
+**Do it from a tree that is exactly the trunk.** A rebuilt snapshot takes its contents from the
+current `src/db/schema.ts`, so a tree carrying unlanded schema work bakes those objects into a
+snapshot dated before they exist — the same fault one turn further on, and much harder to see.
 
 Two more things that bite. `drizzle-kit generate` asks whether a thing was **renamed or dropped and
 recreated**, and answering differently the second time produces different and possibly destructive
