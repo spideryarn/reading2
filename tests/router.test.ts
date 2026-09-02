@@ -12,6 +12,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   settleAddress,
+  ADMIN_FEEDBACK_HREF,
   ADMIN_HREF,
   ADMIN_USERS_HREF,
   addHref,
@@ -20,6 +21,7 @@ import {
   addUrlFromQuery,
   canonicalAddHref,
   carriedSearch,
+  PRIVACY_HREF,
   parseRoute,
   readHref,
 } from "../src/web/router.js";
@@ -123,7 +125,7 @@ describe("parseRoute", () => {
 });
 
 /**
- * `/admin` and `/admin/users` — see src/web/AdminPage.tsx.
+ * `/admin`, `/admin/users` and `/admin/feedback` — see src/web/AdminPage.tsx.
  *
  * **Parsing an address says nothing about being allowed to use it.** These
  * routes exist for everybody; App.tsx renders the shelf for anybody who is not
@@ -140,12 +142,22 @@ describe("the admin routes", () => {
     for (const path of ["/admin/users", "/admin/users/"]) {
       expect(parseRoute(path), path).toEqual({ kind: "admin", page: "users" });
     }
+    for (const path of ["/admin/feedback", "/admin/feedback/"]) {
+      expect(parseRoute(path), path).toEqual({ kind: "admin", page: "feedback" });
+    }
   });
 
   it("sends anything else under /admin to the shelf, like every other unknown address", () => {
     /* The alternation in the regex is the validation. A third admin page is a
        word added there, not a path that silently half-works. */
-    for (const path of ["/admin/nonsense", "/admin/users/extra", "/adminx", "/admin/USERS"]) {
+    for (const path of [
+      "/admin/nonsense",
+      "/admin/users/extra",
+      "/admin/feedback/extra",
+      "/adminx",
+      "/admin/USERS",
+      "/admin/FEEDBACK",
+    ]) {
       expect(parseRoute(path), path).toEqual({ kind: "library" });
     }
   });
@@ -155,6 +167,32 @@ describe("the admin routes", () => {
        address bar says otherwise — which looks like nothing happened at all. */
     expect(parseRoute(ADMIN_HREF)).toEqual({ kind: "admin", page: "home" });
     expect(parseRoute(ADMIN_USERS_HREF)).toEqual({ kind: "admin", page: "users" });
+    expect(parseRoute(ADMIN_FEEDBACK_HREF)).toEqual({ kind: "admin", page: "feedback" });
+  });
+});
+
+describe("the privacy route", () => {
+  /* It is three lines of regex, and it is tested for the reason every other
+     standalone route here is: a link that does not parse lands the reader on
+     the shelf with the address bar still saying `/privacy`, which looks like
+     nothing happened at all. The policy is also the one page a reader may have
+     been *sent* a link to, so a link that silently goes nowhere is worse here
+     than on `/design`. See src/web/PrivacyPage.tsx. */
+  it("takes the address with or without the trailing slash", () => {
+    expect(parseRoute("/privacy")).toEqual({ kind: "privacy" });
+    expect(parseRoute("/privacy/")).toEqual({ kind: "privacy" });
+  });
+
+  it("is spelled once, by the constant the two links use", () => {
+    expect(parseRoute(PRIVACY_HREF)).toEqual({ kind: "privacy" });
+  });
+
+  it("does not swallow anything underneath it", () => {
+    /* `/privacy/cookies` is an address nobody minted, and an unknown address is
+       the shelf — the same rule `/admin/foo` follows above. It must not become
+       the policy page, because a reader who typed it would be told they were
+       reading a document that does not answer what they asked. */
+    expect(parseRoute("/privacy/cookies")).toEqual({ kind: "library" });
   });
 });
 

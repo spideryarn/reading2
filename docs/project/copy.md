@@ -8,6 +8,11 @@ them off doing the wrong thing.
 The messages themselves live in one file — [`src/messages.ts`](../../src/messages.ts) — and
 nowhere else.
 
+**Its sibling is [website-text.md](website-text.md)**, and the split is the reader's situation rather
+than the subject: this file is what somebody is told when something goes wrong *while they are doing
+something*; that one is what somebody is told when they come looking — the landing page, the privacy
+policy, and the address they write to.
+
 ## Who is reading this
 
 Someone who came here to read an article. They did not come to operate an AI
@@ -252,6 +257,17 @@ Otherwise: only the model-call failures are written down here. The rest of the i
 empty states, button labels, the panel headings — is still written wherever it is
 used, and has not been through this. That is a gap rather than a decision; when
 somebody rewrites a batch of it, the messages should move here too.
+
+**One batch has moved, and it is worth knowing the shape it took.** The sharing inventory —
+`ALWAYS_SHARED`, `NEVER_SHARED`, `OWNER_MODE_NOTE` and the three headings in
+[`src/messages.ts`](../../src/messages.ts) — is a *table* of sentences rather than a sentence, and
+none of them carries a code because none of them is a failure. The rule they keep instead is that
+**a note describes what a thing is and never which list it is in**: which bucket a mode lands in is
+decided by `sharedInventory` sweeping `visitorGap`
+([shared-inventory.ts](../../src/web/shared-inventory.ts)), and a sentence that also claimed the
+bucket would be a second answer in a file that cannot see it. Timeline is the live case — it is
+withheld today and Greg has said he would like it public-readable — and when it moves, its row moves
+and its wording does not.
 
 Nothing here is about tone in the *documentation*, which is
 [AGENTS.md § How we write docs here](../../AGENTS.md).

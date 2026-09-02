@@ -329,7 +329,9 @@ actually reaches is not always the one on its command line, and both mistakes pr
   add the complexity or the optimisation later, once something shows it is needed. When a choice
   would add complexity, a dependency or a trade-off, name it at the point of choosing — in the plan
   and in chat — so Greg decides it rather than inherits it.
-  [vision.md § Simpler first](docs/project/vision.md#simpler-first).
+  [vision.md § Simpler first](docs/project/vision.md#simpler-first). **Ask the other way round
+  too:** when a small product tweak — dropping a case, changing a default — would take a lot of the
+  engineering out, ask Greg before you build the hard version. Often that's the route we'll prefer.
 - **Let the types catch it.** Make a wrong state something the compiler refuses, not something a
   test finds later: a discriminated union rather than a bag of optionals, a `never` check where a
   `switch` must be exhaustive, a named type at every seam. `strict` and `noUncheckedIndexedAccess`

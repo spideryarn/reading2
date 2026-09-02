@@ -3139,7 +3139,7 @@ export const feedback = spideryarn.table(
      */
     check(
       "feedback_route_kind",
-      sql`${t.routeKind} in ('library', 'read', 'add', 'add-upload', 'design', 'profile', 'admin', 'login', 'callback', 'privacy', 'unknown')`,
+      sql`${t.routeKind} in ('library', 'read', 'add', 'add-upload', 'design', 'profile', 'admin', 'login', 'callback', 'unknown')`,
     ),
     check(
       "feedback_environment",
