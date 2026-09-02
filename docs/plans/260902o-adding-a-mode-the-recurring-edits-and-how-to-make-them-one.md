@@ -52,8 +52,8 @@ route (each per-kind route carries a different staleness contract), and a sixtee
 - **Excluded:** `scripts/`, `api/`, `evals/` — grepped, no real hits (`livemode`, `ssl.mode`,
   columns literally named `quotes` are the false positives). The panel bodies of Chat, Diagram,
   Search and Glossary were not read end to end.
-- **Blind to:** anything that exists only at runtime. The one race in this plan (T2.1) comes from
-  Sol's 2026-08-28 reasoning, not from a reproduction; the plan asks for one before the fix.
+- **Blind to:** anything that exists only at runtime. The one race in this plan (T2.1) was
+  argued by Sol on 2026-08-28 and reproduced by a spike on 2026-09-02 before the fix was scheduled.
 
 ## What adding a mode touches today
 
@@ -98,18 +98,30 @@ separate.
   [`src/web/lib/api.ts`](../../src/web/lib/api.ts) § `CACHEABLE` lists `/api/glossary/`,
   `/api/ideas/`, `/api/quotes/` and not `/api/timeline/`, `/api/quiz/`, `/api/sketch/`, each of
   which has its own GET route and hook. Its docstring says what is left out is deliberate and
-  names three omissions; these three are not among them. So the offline store Greg asked for —
+  names three omissions; these are not among them, and neither is `/api/arc/`, which Sol added.
+  The offline copy is used only after a GET transport failure and is labelled as a copy, so
+  staleness is no reason to exclude a stored artefact. So the offline store Greg asked for —
   *"stuff that has already been computed … survive losing the connection"* — keeps quotes and
-  drops a timeline. Quotes was added the same week timeline was. Nothing tests the list.
-- **T0.2 Referee's cleanup clears half the passage contract.** *Proved from the code.* The
+  drops a timeline. Nothing tests the list. Two more things Sol found in the same file: the
+  stateless `POST /api/quiz/:slug/mark` invalidates the cached `/api/quiz/:slug`, so adding quiz
+  to the list alone still loses it offline after one answer; and the referee's stored GETs
+  (`/api/referee/criteria/:slug`, `/api/referee/claims/:slug`) are nested, so `slugOf` would file
+  them under the slug `"criteria"`. The referee pair is a decision, not an omission: cache them
+  with route-aware slug extraction, or say in the docstring why not — **the derived test must not
+  define them out of scope silently.**
+- **T0.2 Referee's cleanup clears half the passage contract.** *Proved from the code; downgraded
+  by Sol to state hygiene* — outside Referee nothing reads the key, and on re-entry the
+  invalid-key effect clears it before results arrive, so no reader sees it. One-line fix in
+  Stage A with a small contract test, not the large behavioural one. The
   five-effect contract that `useIdeasMode` and `TimelineBand` follow (on unmount: `onFound([])`
   **and** `onOpenKey(null)`) is only half-copied in `CriteriaPanel`'s cleanup, which clears
   `onFound` and leaves `openRefereeKey` set after leaving Referee. Recoverable on re-entry, but it
   is exactly the divergence the comment above `useIdeasMode` warns about: *"a fix to one of these
-  belongs in both."* Since that comment, referee became a third partial copy. Red test first.
+  belongs in both."* Since that comment, referee became a third partial copy.
 - **T0.3 The entry-point doc miscounts the modes.**
-  [reading-view-overview.md](../project/reading-view-overview.md) line 8 says "two of the ten
-  modes"; there are thirteen, and `web-client.md` says thirteen. Fix in passing.
+  [reading-view-overview.md](../project/reading-view-overview.md) says "two of the ten modes";
+  there are thirteen, eleven of which open a band, and the band list above it omits Outline,
+  Timeline, Referee and Remember. Fix the count and the list.
 
 ### Tier 1 — cheap, mechanical, evidence in hand
 
@@ -119,90 +131,105 @@ separate.
   [`src/web/Dock.tsx`](../../src/web/Dock.tsx) § `MODES_UI` is `{ mode: Mode; … }[]`; add a
   mode and forget the row and it compiles. The only pairing is a runtime assertion in a
   *visitor-trace* test. Its position is Greg's by hand and must stay an ordered list, so the fix
-  is not a `Record`: keep the array and add a compile-time exhaustiveness check
-  (`Exclude<Mode, (typeof MODES_UI)[number]["mode"]>` must be `never`, and the duplicate check
-  the other way), which is a few lines and no runtime. The test's *pressing* half stays; its
-  membership half becomes redundant and can go.
+  is not a `Record`: keep the array, preserve the literals with
+  `as const satisfies readonly ModeUi[]` (Sol: as annotated today the element union is already
+  `Mode`, so an `Exclude` over it can never fire), and assert `Exclude<Mode, ActualModes>` is
+  `never`. No duplicate check at the type level — unions discard multiplicity — so the runtime
+  pairing test **stays**: it is what catches a duplicate and a wrong order.
 - **T1.2 The mode's label lives in three places.** *Proved.* `MODE_LABEL` in
   [`src/title-text.ts`](../../src/title-text.ts) (total, compiler-checked), `MODES_UI[].label` in
-  `Dock.tsx` (all thirteen pairs match today), and the controls bar in `App.tsx`, which renders
-  the raw mode id and uppercases it in CSS — rename "Referee" to "Reviewer" in both tables and the
-  bar still says `REFEREE`. `src/modes.ts` names the two-copy problem in prose already. Fix:
-  Dock and the controls bar read `MODE_LABEL`; the `label` field leaves `MODES_UI`. `title-text.ts`
+  `Dock.tsx` (all thirteen pairs match today), the controls bar in `App.tsx`, which renders the raw
+  mode id and uppercases it in CSS — rename "Referee" to "Reviewer" in both tables and the bar
+  still says `REFEREE` — and, Sol's fourth, six of them again in `visitor.ts` § `COSTS`, so the
+  visitor's sentence goes stale too. Fix: Dock, the controls bar and the visitor policy all read
+  `MODE_LABEL`; the `label` field leaves `MODES_UI`, and the owners-only policy carries no string. `title-text.ts`
   imports nothing under `src/web/`, so Dock may import it.
 - **T1.3 `ARTEFACT` and `COSTS` in `visitor.ts` are `Partial`.** *Reproduced — by history.* The
   referee fall-through of 2026-08-31 to 2026-09-02 is this table's own comment. Fix: one total
-  `Record<Mode, VisitorPolicy>` with an explicit variant for each of the four cases the function
-  already distinguishes (free, spends-as-owner with its button name, needs-artefact with its key,
-  and the four modes drawn from the payload). The if-chain and the "not reachable today"
-  fall-through are deleted, not moved. `tests/visitor-gaps.test.ts` keeps sweeping `MODES`; the
+  `Record<Mode, VisitorPolicy>` with three variants — `available`, `owners-only`, and
+  `artefact(key)` — the owner-facing name coming from `MODE_LABEL`. The if-chain and the "not
+  reachable today" fall-through are deleted, not moved; Timeline's "stated rather than defaulted
+  into" is stronger, not weaker, because its row is now required. `tests/visitor-gaps.test.ts` keeps sweeping `MODES`; the
   "sentence carries its own id" assertion becomes unnecessary and can go with the fall-through.
 - **T1.4 Five copies of the band head in CSS, two of them drifted.** *Proved.* `.gloss-head`,
   `.srch-head`, `.summ-head`, `.diag-head`, `.quotes-head` and their `h2` and `-icon` rules are
   byte-identical except: `.summ-head` alone has `flex: none`; `.diag-head h2` alone has the
   ellipsis rules, with a comment saying the one-word-heading assumption *"would stop being true the
   moment the heading became two words"* — the four other heads still carry that assumption, and
-  `.gloss-head` is shared by Ideas, Timeline, Quiz and Referee. Fix: one `.band-head` family
-  (taking the ellipsis rule for all, since it is the robust one), the five class names retired
-  from the panels. A browser pass, in a Sonnet subagent, on every band before and after.
+  `.gloss-head` is shared by Ideas, Timeline, Quiz and Referee. `.chat-head` is a sixth
+  near-copy with the same long-title need. Fix: one `.band-head` family including Chat — ten header
+  sites, nine decorative-icon sites, `.chat-icon` kept for the action buttons — taking `flex: none`
+  and the ellipsis centrally. Neither difference is a proven defect, so the browser comparison is
+  the veto: a Sonnet subagent screenshots every band before and after.
 
 **Store and pipeline** (the artefact-backed half of a mode)
 
 - **T1.5 `STAMP_SOURCE` is `Partial`, and a missing row costs money for ever.** *Proved, in its
   own words.* [`src/store/artifacts.ts`](../../src/store/artifacts.ts) § `STAMP_SOURCE`: *"Missing
   here means `stampFor` answers `null` silently, so the step is never current and re-runs on every
-  job for ever."* Fix: total over the artefact-producing steps, with the key derived the way
-  `ProfileCarrying` already is, so a new step is red here.
+  job for ever."* Fix: `Record<StepName, ArtifactKind | null>` with explicit
+  `null` for fetch, extract and blocks — clearer than deriving a subset key, and a new step is red
+  here.
 - **T1.6 `pgArticleReader` is a `Pick` cast to `ArticleReader`.** *Proved.*
   [`src/store/index.ts`](../../src/store/index.ts) casts; a missing Postgres loader is a boot-time
   `TypeError` instead of a typecheck error. This is the shape of postmortem
   [260901e](../postmortems/260901e-claims-shipped-filesystem-only-and-returned-501-in-production.md).
-  Fix: declare it `ArticleReader` (or `satisfies`), delete the cast and the hand-kept union of
-  method names.
-- **T1.7 `REVISION_READ_POLICY`'s inner record is `Partial`.** *Reproduced — by history.*
-  [`src/store/pg.ts`](../../src/store/pg.ts) records that `quotes` landed with the projection and
-  the read policy "had not caught up", found by `tests/store-revision-columns.test.ts`. Fix: the
-  inner record total over `RevisionReader`, with an explicit `null` for "this reader does not
-  read this column".
+  Fix: `satisfies ArticleReader`, delete the `Pick` and the cast — Sol confirmed no supported
+  adapter may legitimately omit a loader — and fix the stale seam-test comment.
+- **T1.7 `REVISION_READ_POLICY`'s inner record is `Partial`.** *Reproduced — by history, and
+  dropped.* [`src/store/pg.ts`](../../src/store/pg.ts) records that `quotes` landed with the
+  projection and the read policy "had not caught up". Sol's veto: the policy is 46 columns by 13
+  readers, so a total inner record is 598 cells with 473 explicit nulls, and
+  `tests/store-revision-columns.test.ts` already compares every projection exactly with its
+  grants — removing a grant, adding an unlisted projection, or querying an ungranted column is
+  caught. The class is covered; the dense matrix fails the deletion test. Not built.
 - **T1.8 `STEP_ORDER` is a plain array over `StepName`.** *Proved.* `tests/db-step-constraint`
   reads it as the source of truth for the SQL CHECK, so an omission there is an omission in the
-  constraint. Fix: a one-line exhaustiveness check like T1.1.
-- **T1.9 Generator-module drift, two small.** *Proved.* `quotes.isStale` takes
-  `blocks: BlockFingerprint[]` where the other five take `readonly`; `glossary.ts` alone has no
-  `inputFingerprint` export and is special-cased in the pipeline and both stores for it. Fix: the
-  `readonly`; give glossary the export and delete the special cases if that is all they are —
-  check first that the special-casing is only that.
+  constraint. Fix: preserve the tuple literals and add the missing-member
+  `Exclude` check like T1.1; the runtime jobs test keeps order and duplicates.
+- **T1.9 Generator-module drift, one small.** *Proved, halved by Sol.* `quotes.isStale` takes
+  `blocks: BlockFingerprint[]` where its five peers that expose `inputFingerprint` take
+  `readonly`. Fix: the one word. The other half — giving `glossary.ts` an `inputFingerprint`
+  export — is withdrawn: the pipeline hash it would replace is shared with tweets, and Postgres
+  freshness compares the whole stamp, so the export deletes no special case.
 
 ### Tier 2 — extractions worth doing, each with a test before it
 
-- **T2.1 The same-slug race, and the guard that lives in one hook of seven.** *Hypothesis, argued
-  reachable by Sol on 2026-08-28.* `useGlossary` orders reads on one slug with
+- **T2.1 The same-slug race, and the guard that lives in one hook of eight.** *Reproduced,
+  2026-09-02* — `tests/artefact-read-race.test.tsx`: the ideas hook ends holding the old list after
+  the completion read has landed with the new one; the glossary control keeps the new one, and for
+  the right reason (its post-job read trails rather than racing). **Promoted to Tier 0 and built in
+  the first wave**; it stays listed here because the fix is an extraction. Sol's 2026-08-28
+  argument was: `useGlossary` orders reads on one slug with
   generation / one-in-flight / trailing; `useIdeas`, `useQuotes`, `useTimeline`, `useQuiz`,
-  `useArc`, `useSketch` do not. The sequence: open a mode while a job for that article is already
+  `useArc`, `useSketch` and the read inside `Tweets.tsx` (the eighth, found by Sol) do not. The sequence: open a mode while a job for that article is already
   running, the opening GET reads the old artefact, the completion GET lands first, the opening GET
   lands last and overwrites it permanently. This was planned as
   [260828aj § 2.6](260828aj-simplification-wave-2.md), reviewed, narrowed — *extract only the
   mechanism glossary proves, leave parsing, 404s and error prose per hook* — scheduled last, never
-  built, and two more copies have arrived since. The test shape is written down there: hold the
-  opening reply, change the fixture, finish the job before settling the opening read, settle
-  newest-first, and **the control must name the stale value**. Red first; if it cannot be made
-  red, that is the finding and the extraction does not happen.
-- **T2.2 `usePassageMode`: the five-effect contract, shared by four callers with one proved
-  divergence (T0.2).** *Proved.* Ideas, Timeline, Referee (partial) and Quotes (partial) each
-  wire `found`/`openKey`/`onFound`/`onOpenKey`/jump through the same five effects, and `App.tsx`
-  says the merge *"is the right shape and is a follow-up worth doing on a quiet file."* One hook,
-  four callers, opposite ratio to the refused `<ModeBands>`. This is what actually shrinks
-  `App.tsx`: the five `Found[]` states and the two five-arm ternary chains are O(modes) today.
-  After T2.1, since both touch the same panels.
+  built, and two more copies have arrived since. The extraction is narrowly about request
+  ordering — an ordinary reload may join the read in flight, a post-write refresh must trail it,
+  and only the newest generation may commit — and parsing, 404s, state shape and copy stay in each
+  hook. Arc can sometimes self-repair after an absent response, so "permanently" is qualified there.
+- **T2.2 The passage-producer lifecycle.** *Proved, and narrowed by Sol.* There are **six**
+  passage producers — Ideas, Timeline, Search, Criteria, Quotes and Claims — not four, and only
+  Ideas and Timeline share all five effects; Search and Criteria deliberately omit auto-open and
+  the intent jump, Quotes and Claims have no open key. The shared lifecycle is smaller than the
+  plan first said: publish `found`, clear it on unmount, and clear an invalid or open key, through
+  a keyed/unkeyed discriminated union. A hook inside the bands **cannot** remove Reader's five
+  `Found[]` states or its two selection chains — that claim is withdrawn. **Not built this run**:
+  it depends on Stage C through `App.tsx`, and the boundary wants its own review. Its own plan.
 
 ### Tier 3 — named and sized, not started
 
 - **T3.1 The band dispatch in `App.tsx`.** Fourteen `mode === "…"` band branches and no
-  exhaustiveness. The refused shape is the sixteen-prop component. A shape not yet weighed: after
-  T2.2, a `Record<Mode, BandSpec | null>` where `null` is "opens no band" (plain, hierarchy) —
-  compiler-total, and it would make "does this mode open a band" a fact in one place rather than
-  a boolean derived in three (`inMode`, `bandOpen`, `plainCols`). Worth asking Sol whether the
-  props problem survives T2.2. Its own job, its own plan.
+  exhaustiveness. The refused shape is the sixteen-prop component. The `Record<Mode, BandSpec |
+  null>` idea was put to Sol and **does not survive**: `plain` and `hierarchy` would both be
+  `null`, yet Plain has `inMode` true with empty columns and Hierarchy has it false with columns
+  kept, so layout still needs a three-way `hierarchy | plain | band`; and since T2.2 cannot shrink
+  Reader's state, a `BandSpec` renderer is `<ModeBands>` under another name. The cheapest future
+  option is an inline exhaustive `switch (mode)` or a local `Record<Mode, ReactNode>` closing over
+  Reader's locals. Named, sized, not started.
 - **T3.2 Making a mode public-readable is a fifth hand-written table away.** The timeline
   comment in `visitor.ts` records Greg wanting the option, and that it *"wants a general answer for
   all the modes rather than a fifth hand-written table."* T1.3 makes the table total; it does not
@@ -232,35 +259,53 @@ separate.
   gives the compiler guarantee without changing the shape.
 - **Deriving the test fixtures `HOMES` and `OWNED`.** Deliberately literal; the postmortem says
   why.
+- **A total `REVISION_READ_POLICY` inner record** (T1.7) — 473 explicit nulls to say what an
+  exact-projection test already proves.
+- **A type-level duplicate check on `MODES_UI`** — unions discard multiplicity; the runtime test
+  does it.
+- **`Record<Mode, BandSpec | null>` for the band dispatch** (T3.1) — see above.
 
 ## Stages
 
-Each stage ends green, committed and pushed, with this doc updated and a GPT Sol review. Stages
-with non-overlapping file sets run in parallel.
+Each stage ends green, committed and pushed, with a GPT Sol review. Stages with non-overlapping
+file sets run in parallel; the orchestrator alone edits this doc, after each wave.
 
-- [x] **Plan.** This doc, reviewed by Sol before anything is built.
+- [x] **Plan.** This doc, reviewed by Sol before anything is built —
+  [review-prompt](260902o-adding-a-mode-review-prompt.md) ·
+  [review-sol](260902o-adding-a-mode-review-sol.md). Verdict: ready with changes; fourteen
+  findings, all folded in above; T1.7 and the glossary half of T1.9 dropped, T2.1 promoted,
+  T2.2 and T3.1 narrowed or refused.
+
+**Wave 1 — three stages in parallel, file-disjoint.**
+
 - [ ] **Stage A — the client tables (T0.1, T0.2, T0.3, T1.1, T1.2, T1.3).** Files: `Dock.tsx`,
   `App.tsx` (controls bar only), `title-text.ts`, `visitor.ts`, `CriteriaPanel.tsx`, `lib/api.ts`,
-  the tests that pin them, `reading-view-overview.md`. Red test first for T0.2 and T0.1
-  (a test that `CACHEABLE` covers every per-kind GET route, derived from the route names rather
-  than hand-listed). Done when: a mode added to `MODES` with no `MODES_UI` row and no visitor
-  policy is a typecheck failure, and no label is spelled twice.
-- [ ] **Stage B — the store totals (T1.5–T1.9).** Files: `src/store/artifacts.ts`, `index.ts`,
-  `pg.ts`, `src/pipeline.ts`, `src/quotes.ts`, `src/glossary.ts` and whatever special-cases it.
-  Parallel with A. Done when: a new `StepName` with no stamp source, a `pgArticleReader` missing a
-  loader, and a reader missing from a read-policy row are each red at typecheck.
-- [ ] **Stage C — the band head (T1.4).** Files: `styles.css` and the panels' class names. After
-  A (both touch `App.tsx`). Browser pass on every band before and after, in a Sonnet subagent;
-  done when the diff is one CSS family and eleven renames and the screenshots match.
-- [ ] **Stage D — the read-hook guard (T2.1).** Files: the seven `use*.ts` hooks and a new
-  helper beside `useStepJob.ts`. Parallel with C. Red test first, as specified; if it cannot go
-  red, write that down and stop the stage.
-- [ ] **Stage E — `usePassageMode` (T2.2).** After C and D. Characterise the current five effects
-  in a test first; then extract without changing behaviour; then the referee fix from T0.2 is
-  one line.
-- [ ] **Stage F — the signpost (T3.3), and the debrief.** The residue list, in the two docs; this
-  plan's status; what is left.
+  the tests that pin them, `reading-view-overview.md`. Red tests first for T0.1 (a test that the
+  offline list covers every stored-artefact GET, derived from the code rather than hand-listed,
+  plus the GET → mark → failed GET regression for quiz) and the T0.2 contract. Done when: a mode
+  added to `MODES` with no `MODES_UI` row and no visitor policy is a typecheck failure, no label is
+  spelled twice, and the referee routes are either cached correctly or excluded in writing.
+- [ ] **Stage B — the store totals (T1.5, T1.6, T1.8, T1.9).** Files: `src/store/artifacts.ts`,
+  `index.ts`, `pg.ts` (the reader declaration only), `src/pipeline.ts`, `src/quotes.ts`, and
+  their tests. Done when: a new `StepName` with no stamp-source row, a `pgArticleReader` missing a
+  loader, and a step missing from `STEP_ORDER` are each red at typecheck.
+- [ ] **Stage D — the read-hook guard (T2.1).** Files: the seven `use*.ts` hooks, `Tweets.tsx`,
+  a new helper beside `useStepJob.ts`, `tests/artefact-read-race.test.tsx` (already red) extended
+  to every consumer. Done when: the race test is green for all eight and the glossary's own
+  guard is the shared one rather than a ninth copy.
+
+**Wave 2.**
+
+- [ ] **Stage C — the band head (T1.4).** After A (both touch `App.tsx`). Files: `styles.css`
+  and the panels' class names, Chat included. Browser pass on every band before and after, in a
+  Sonnet subagent, as the veto.
+- [ ] **Stage F — the signpost (T3.3), and the debrief.** The residue list in `web-client.md` and
+  `architecture.md` § Conventions; this plan's status; what is left.
+
+**Not this run.** T2.2 (the six-producer lifecycle helper) — its own plan, after C, with the
+boundary reviewed first.
 
 ## Progress
 
 - 2026-09-02: audit run, four subagents, counts re-verified; plan written; to Sol.
+- 2026-09-02: race reproduced (`tests/artefact-read-race.test.tsx`); Sol's review folded in; wave 1 dispatched.
