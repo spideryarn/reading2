@@ -37,6 +37,7 @@
     "db:migrate": "tsx scripts/db-migrate.ts",
     "db:check": "tsx scripts/db-check.ts",
     "db:seed-owner": "tsx scripts/db-seed-owner.ts",
+    "db:seed-dev": "tsx scripts/db-seed-dev.ts",
     "db:reown": "tsx scripts/db-reown.ts",
     "db:admin-password": "tsx scripts/db-admin-password.ts",
     "setup": "tsx scripts/setup-local.ts",

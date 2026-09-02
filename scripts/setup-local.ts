@@ -83,6 +83,20 @@ const STEPS: Step[] = [
       "Read the message above — this step refuses rather than guessing, and every\n" +
       "  refusal it has says what to do. docs/project/supabase-local.md § Signing in.",
   },
+  {
+    /* **Separate from the seed above, not folded into it.** That one talks to
+       GoTrue's admin API and prints a generated password once; this one talks to
+       Postgres and the committed fixture corpus. Different dependencies and
+       different failure surfaces, and `scripts/seed-accounts.ts` is deliberately
+       testable with no network at all — a property that would be lost by giving
+       it a database to reach. */
+    what: "put experimental features and a few articles on that account",
+    args: ["run", "db:seed-dev"],
+    ifItFails:
+      "It says which slug it could not seed and why. A slug owned by somebody else is\n" +
+      "  the usual answer on a shared database — `npm run db:reown` moves rows.\n" +
+      "  docs/project/supabase-local.md § A shelf with something on it.",
+  },
 ];
 
 const bold = (s: string) => styleText("bold", s);
