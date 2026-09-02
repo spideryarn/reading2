@@ -87,8 +87,9 @@ That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enfo
 
 - **`docs/plans/`** — one file per piece of work, written before it lands and kept afterwards, so
   the reasoning and the evidence survive. A plan names the simpler option it passed over, and why.
-- **`docs/postmortems/`** — one file per bug worth understanding: the real root cause, the commit
-  that introduced it, the fix that's right for the long term, and what would have caught the class.
+- **`docs/postmortems/`** — one file per bug worth understanding: the real root cause and the name
+  of its class, the commit that introduced it, the fix that's right for the long term, and what
+  would have caught the class.
 - **`docs/tutorials/`** — self-contained HTML explainers of how one area works, written for somebody
   who has never read the code — [reusable/write-tutorial.md](docs/reusable/write-tutorial.md) is how
   to write one.
@@ -271,8 +272,9 @@ actually reaches is not always the one on its command line, and both mistakes pr
   exit code *and* answer file, because a review that returned nothing looks exactly like one that
   found nothing. [codex-cli-as-subagent.md](docs/reusable/codex-cli-as-subagent.md).
 - **Root-cause every bug in a subagent, and write it up** under `docs/postmortems/`: the real cause
-  rather than the line that broke, which commit introduced it, the fix that's right for the long
-  term, and what would have caught the whole class of it.
+  rather than the line that broke, **the class it belongs to, named**, which commit introduced it,
+  the fix that's right for the long term, and what would have caught the whole class of it — ranked
+  by ease and value where there is more than one.
 - **"Close this tab if successful" means exactly that** — close it with the recipe in
   [iterm.md](docs/reusable/iterm.md), and only once the work in that conversation is actually done
   and its checks passed. If anything failed or is unfinished, leave the tab open and say why.

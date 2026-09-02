@@ -25,7 +25,8 @@ For background, read the relevant docs. Here that means:
   [write-planning-doc.md](write-planning-doc.md)
 - [silent-success.md](silent-success.md) — the failure shape most of this repo's bugs have had
 
-Don't make changes. Just investigate, discuss.
+Don't make changes. Just investigate, discuss. Its doing counterpart, for when the job is to land
+the rework rather than report it, is [improve-the-codebase.md](improve-the-codebase.md).
 
 Output:
 
