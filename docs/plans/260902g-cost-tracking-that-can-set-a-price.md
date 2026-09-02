@@ -414,6 +414,43 @@ client starts posting.
 
 ### Stage 2B — browser delivery, and proof
 
+**✅ Built, 2026-09-02; the end-to-end run is outstanding and cannot happen on this box.**
+[`src/web/live/meter.ts`](../../src/web/live/meter.ts) is the whole of the browser half — the two
+projections and the queue — driven from `useLiveConversation.ts`, which now records
+`response.created` times, reports `response.done` and the completed transcription event, posts
+`connected` when the data channel opens, and posts `close` with the browser's own word for why the
+conversation ended (twelve reasons, from `reader` to `idle-cap` to `pagehide`). The three accounting
+calls are **required** methods on `LiveWiring`, not optional ones: an optional method is one a new
+wiring forgets, and the failure would be a session that silently meters nothing.
+[`tests/live-meter.test.ts`](../../tests/live-meter.test.ts) hands what the client builds to the
+server's real `parseRealtimeUsage` and `acceptRealtimeUsage` — imported, never mocked, because that
+seam is the point — and six new tests in `tests/live-session-flow.test.tsx` cover what only the hook
+can get wrong. Each guard was watched to fail first.
+
+**Three decisions taken in the build:**
+
+- **An event whose numbers cannot be read is not reported, and is counted.** `response.done` without
+  its modality split (openai-agents-js#538) would, if the gaps were filled with zeros, produce a
+  report the server *accepts* and prices at approximately nothing — a turn that cost real money
+  landing in the ledger as free, with nothing red anywhere. The two counts that are allowed to be
+  missing are the cached ones and image tokens, and both can only bias the figure up.
+- **The transcription is priced from `usage.seconds` only.** That event's `usage` comes in a
+  `duration` shape and a `tokens` shape, and there is no per-token rate for the transcriber; a
+  conversion factor would be a made-up number in a table built to hold settled ones. A token-shaped
+  usage is counted and said out loud instead. **Which shape `gpt-live-transcribe` actually sends is
+  the first thing a real session will settle.**
+- **`sendBeacon` is not used at all.** It cannot set an `Authorization` header and every route under
+  `/api/` takes a bearer token and no cookie, so a beacon would be a 401 that looks like a send.
+  `keepalive` on the last pass is the hint, and it is a hint rather than the path.
+
+**Outstanding, and the same peer collision as 1b and 2A:** `npm run db:migrate` still refuses, so
+`spideryarn.realtime_sessions` exists in no database and **no real conversation has produced a real
+Postgres row**. The plan's "Done" below is therefore half-met. What *is* proved is everything
+between: `tests/live-session-routes.test.ts` now takes a raw provider event through the client's own
+projection, over the HTTP route as JSON, and out as a priced row in the filesystem ledger — for the
+spoken turn and the transcription both. What is left is a browser and a database. Run a real live session once `0052` lands, and check `npm run cost` shows
+`computed` spend on `gpt-realtime-2.1` **and** on `gpt-live-transcribe` — two rate cards, not one.
+
 - Handle `response.done` and the completed input-transcription event; track event timestamps and
   provider outcomes.
 - Immediate posting, a small in-memory retry queue while the tab lives, `keepalive`/`sendBeacon` on

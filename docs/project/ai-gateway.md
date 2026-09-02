@@ -14,9 +14,12 @@ was OpenAI or no live mode, and Greg's own question ("*I'd love to just have a s
 Two things about it belong here rather than there, because they are properties of *this* claim.
 **The audio never touches our server** — [`src/live.ts`](../../src/live.ts) mints a short-lived token
 and the browser opens the WebRTC connection itself, so there is no seam the spend passes through.
-And therefore **`npm run cost` cannot see a live session yet.** It is written down in
-`UNMETERED_SPEND` — the register's second table, which `npm run cost` prints by name every run;
-before 2026-09-02 it was named only in the scan's `ALLOWED` list, which prints nothing at all.
+And therefore the usage exists only in the reader's tab: **`npm run cost` sees a live session
+because the browser tells it**, posting what each turn cost to `/api/live/:sessionId/usage`, where
+the server prices it and writes an ordinary `ai_calls` row. That landed on 2026-09-02 (Stage 2B) and
+`src/live.ts` came out of `UNMETERED_SPEND` the same day — the register's second table means *money
+leaves and no row appears*, so leaving it there would have made the report overclaim in the one
+direction it exists to prevent. The two live-mode evals under `evals/live/` are still in it.
 
 **It is still not a declared bypass, and the reason changed on 2026-09-02.** It used to be that a
 `Declaration` for it could not be *typed*: `ProviderAccount` had no `"openai"` and `Wire` had no
@@ -30,20 +33,25 @@ whose accounting arrives through a different seam** — an authenticated accepta
 browser posts to, instead of a gateway that reads a response. GPT Sol was explicit that the
 allowlist entry must be *reclassified* and not retired, and
 [`tests/no-undeclared-spend.test.ts`](../../tests/no-undeclared-spend.test.ts) carries that wording.
-The seam is built and the browser does not post to it yet:
+Both halves are built now:
 [live-conversation.md § The meter](live-conversation.md#the-meter).
 
-**Greg decided to ship with it open**, 2026-08-31: *"make a comment in `npm run cost` and
-cost-tracking docs re this gap, and let's accept it for now."* This paragraph used to say the hole
-must be closed before readers saw the feature, and that sentence is now out of date rather than
-merely unmet — recording the decision matters more than keeping the stronger wording, because the
-next reader will otherwise treat a shipped feature as a violation.
+**Greg decided to ship with the meter open**, 2026-08-31: *"make a comment in `npm run cost` and
+cost-tracking docs re this gap, and let's accept it for now."* It was open for two days and is
+closed; the decision is kept here because the next reader should be able to see that a shipped
+feature with a known hole in its accounting was a choice rather than an oversight.
 
-What *was* closed instead is the part that costs money rather than visibility: a live session now
-ends itself after five minutes of quiet or twenty minutes in total
+The part that costs money rather than visibility was closed first: a live session ends itself after
+five minutes of quiet or twenty minutes in total
 ([`useLiveConversation.ts`](../../src/web/live/useLiveConversation.ts) § the caps), so a forgotten
-tab bills minutes rather than the hour OpenAI would allow. The meter is still missing; the runaway
-is not.
+tab bills minutes rather than the hour OpenAI would allow. **Measuring is still not limiting** —
+nothing on our server can end somebody's session, and a browser clock is a clock a tab can be wrong
+about.
+
+**What the live figure is worth**, said once: it is our arithmetic over counts a browser reported,
+priced from `REALTIME_PRICES`, and nothing reconciles it. That is `cost_source: "computed"`, which is
+what that value has always meant here. A turn that was never posted because the tab died first is
+simply missing, so the figure is biased low by a probably-small unknown.
 
 Recorded, not necessarily *priced*: a call that dies before its usage arrives is written down as
 having happened with a cost of `null`, and counted as unpriced rather than as free. That distinction
@@ -551,13 +559,16 @@ So the rule is not *"everything uses the seam"*. It is **a bypass has to be decl
 bypass still writes a row** — silence reads as zero, and zero is the one answer that is definitely
 wrong.
 
-**And there are three that do neither** — live conversation, its two evals, and the Codex CLI. They
-are the case `DECLARATIONS` cannot hold, and for two different reasons: the first three spend on a
-wire this server never sees, so there is no response body for an `Observer` to read; `run-codex.ts`
-makes no request at all, it spawns a subprocess. They are in `UNMETERED_SPEND` — a reason written
-down, and no row ever produced — which is weaker than every other entry here and is exactly why the
-first is named in the opening paragraphs rather than left for somebody to find at the bottom of a
-table.
+**And there are two that do neither** — the two live-mode evals and the Codex CLI. They are the case
+`DECLARATIONS` cannot hold, and for two different reasons: an eval opens a realtime session and talks
+over it, so there is no response body for an `Observer` to read; `run-codex.ts` makes no request at
+all, it spawns a subprocess. They are in `UNMETERED_SPEND` — a reason written down, and no row ever
+produced — which is weaker than every other entry here.
+
+**Live conversation was the third until 2026-09-02**, and how it left matters more than that it did:
+not by starting to use a seam — the browser still opens WebRTC straight to OpenAI, which is still a
+sanctioned bypass — but because the browser now reports what each turn cost to an authenticated
+endpoint that prices it and writes a row. Only the accounting moved.
 
 *"A `Declaration` for them cannot be typed until `ProviderAccount` and `Wire` widen"* was the reason
 given here until 2026-09-02. Both widened that day and none of them moved, which is the point: the
@@ -572,8 +583,8 @@ types were never what stood in the way.
 - `UNMETERED_SPEND`, in the same file — **the spend a `Declaration` cannot describe**, printed on
   every run by `unmetered()` in [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts). A declaration has a
   `ProviderAccount` and a `Wire`; these have both now and still cannot be declared, because a
-  `Declaration` describes a request this process made. Three entries: live conversation
-  ([`src/live.ts`](../../src/live.ts)), the two live-mode evals under `evals/live/`, and
+  `Declaration` is spent through `declaredFetch`, which wraps a request this process made. Two
+  entries: the two live-mode evals under `evals/live/`, and
   [`scripts/run-codex.ts`](../../scripts/run-codex.ts) — the GPT Sol reviews this repo asks for on
   every plan, which spawn another vendor's CLI on a third account and so are invisible to the
   capability scan as well as to the ledger.
@@ -581,8 +592,9 @@ types were never what stood in the way.
   It has to be printed separately from `undeclared()`, which reads `DECLARATIONS`: on the day the
   last `metered: false` entry is wired up this report would otherwise have announced that everything
   writes a row — while a reader could be holding a live conversation billing audio by the minute
-  into no total at all. Greg accepted that gap knowingly on 2026-08-31; half of it closed on
-  2026-09-02, and what is left is in
+  into no total at all. Greg accepted that gap knowingly on 2026-08-31 and it closed on 2026-09-02,
+  which is why that entry is gone: an entry here claims *no row appears*, and leaving one for a
+  feature that now writes rows is the same overclaim in the other direction.
   [live-conversation.md § The meter](live-conversation.md#the-meter).
   The completeness line says "every **declared** way", which is the true claim.
 
@@ -646,8 +658,9 @@ Written up in [260828g-ai-spend-outside-the-gateway.md](../plans/260828g-ai-spen
 Everything above rests on one vendor. **Live conversation — interactive voice dialogue on OpenAI's
 Realtime API — cannot rest on it**, because OpenRouter does not proxy that API. The decision was
 made in advance rather than discovered in a diff
-([realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md)), and the server half
-was built on 2026-09-02.
+([realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md)), and both halves were
+built on 2026-09-02 — the server's journal, endpoints and pricing first (Stage 2A), then the
+browser's reporting (Stage 2B, [`src/web/live/meter.ts`](../../src/web/live/meter.ts)).
 
 The rule is now: **every paid operation goes through one of two owned seams or through the realtime
 acceptance endpoint.** OpenRouter owns messages, chat and embeddings; live conversation is metered
@@ -659,6 +672,14 @@ Three things about it are worth knowing before you touch this file's claims:
   `response.done` events land there and there is no way to ask OpenAI afterwards. The rows are
   `cost_source: "computed"` — our arithmetic over a table we typed in — which is what that value has
   always meant here.
+- **Two bills per conversation, not one.** The model that answers is billed per token split by
+  modality on `response.done`; `gpt-live-transcribe`, which writes down what the reader said, is
+  billed **per audio minute** and reports on its own event. A meter that watched only `response.done`
+  would price half the feature at zero, which is why the report is a discriminated union — token
+  detail *or* seconds.
+- **A turn the tab never posted is simply missing.** There is no durable outbox and no ack-based
+  retry: GPT Sol cut both for the alpha, as *"what an invoice needs"*. The queue is in memory and
+  lives as long as the tab, so the live figure is biased low by a probably-small unknown.
 - **There is no `usageSource` column, and that was a decision.** The design proposed one
   (`"client_report" | "sideband"`) so a server-side sideband could be swapped in later without a
   schema change. It was left out: today `wire = 'realtime'` **is** "a browser reported this", so the

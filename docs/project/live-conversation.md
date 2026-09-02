@@ -48,8 +48,8 @@ endpoints under `/api/live/:sessionId/` below.
 ([ai-gateway.md](ai-gateway.md)), because OpenRouter has no realtime API at all. Two consequences
 follow and both are written down rather than hoped about:
 
-- **The meter is half built**, and until the other half lands nothing is metered — see § The meter
-  below, which is where that gap now lives.
+- **The meter is browser-reported**, because the numbers exist in the tab and nowhere else — see
+  § The meter below.
 - **Nothing is capped on the server.** The browser ends its own session after five minutes of quiet
   or twenty in total — see § What is not built — which is a clock a tab can be wrong about. A
   per-reader ceiling this server could enforce does not exist.
@@ -70,7 +70,7 @@ of the untrusted parties, and there is no per-reader cap to duck under. What wil
 that **the tab closes**, and a report that fires once at the end never fires at all. So the design
 is not "trust the client"; it is *make the untrustworthy thing as small as possible*.
 
-**The server half is built** (2026-09-02, Stage 2A).
+**Both halves are built** (2026-09-02, Stages 2A and 2B).
 
 | | |
 | --- | --- |
@@ -79,6 +79,7 @@ is not "trust the client"; it is *make the untrustworthy thing as small as possi
 | `POST /api/live/:sessionId/usage` | One paid event. The server prices it; the browser never sends a cost. |
 | `POST /api/live/:sessionId/close` | The conversation ended, best-effort. A closed laptop says nothing, so a session with no `closed_at` is ordinary and **must not** be read as one still running. |
 | `acceptRealtimeUsage` in [`src/live.ts`](../../src/live.ts) | Parse, validate, price, project — pure, and tested without HTTP in [`tests/realtime-usage.test.ts`](../../tests/realtime-usage.test.ts). |
+| [`src/web/live/meter.ts`](../../src/web/live/meter.ts) | The browser half: what to read off `response.done` and off the completed transcription event, and the queue that posts it. [`tests/live-meter.test.ts`](../../tests/live-meter.test.ts) hands what it builds to the server's own parser, because the seam is the point. |
 
 Four decisions in it are worth knowing before touching any of them:
 
@@ -96,16 +97,45 @@ Four decisions in it are worth knowing before touching any of them:
   turn, so cumulative input legitimately outgrows wall-clock — a rate ceiling would start refusing
   true reports exactly as a conversation got long.
 
-**The browser half is not built** (Stage 2B), so every session currently shows as *issued, reported
-nothing*. That is the honest state and it is the whole reason the session row exists: without it a
-conversation that reported nothing would be an absence rather than a gap, and a total that was short
-by an unknown amount would look healthy. `npm run cost` still names live conversation as unmetered
-spend by name every run — [`src/spend-declarations.ts`](../../src/spend-declarations.ts)
-`UNMETERED_SPEND` — and that line comes out with Stage 2B, not before.
+**The browser half** is [`src/web/live/meter.ts`](../../src/web/live/meter.ts), driven from
+[`useLiveConversation.ts`](../../src/web/live/useLiveConversation.ts). Four things in it are
+decisions rather than plumbing:
+
+- **Two events, because there are two bills.** `response.done` carries the answering model's token
+  usage; the completed input-transcription event carries `gpt-live-transcribe`'s, in **seconds**. A
+  `response.done`-only meter would have priced half the feature at nothing with nothing going red.
+- **Every turn is posted as it happens**, with a small in-memory retry queue and `keepalive` on
+  teardown as a *hint*. Not `sendBeacon`: it cannot set an `Authorization` header, and every route
+  under `/api/` takes a bearer token and no cookie.
+- **Nothing is invented.** A `response.done` that arrives without its modality split
+  (openai-agents-js#538) is *not reported*, because filling the gaps with zeros produces a report the
+  server accepts and prices at approximately nothing — a turn that cost real money, in the ledger as
+  free. The two exceptions are the cached counts and image tokens, and both can only bias the figure
+  *up*; the file argues each one.
+- **Never a dollar amount, a model, an owner or an article.** All four come from the session row the
+  server wrote when it minted the token.
+
+`npm run cost` no longer names live conversation as unmetered spend: it came out of
+`UNMETERED_SPEND` in [`src/spend-declarations.ts`](../../src/spend-declarations.ts) the day the
+browser started posting, because an entry there claims *money leaves and no row appears*. The WebRTC
+connection is still a sanctioned provider bypass in the scan's `ALLOWED` map —
+[ai-gateway.md](ai-gateway.md) has the distinction.
 
 **Accepted loss, permanently:** the final turn can vanish on a crash or an instant tab close, so the
-aggregate is biased low by a probably-small unknown. GPT Sol: *"Add the durable outbox before usage
-affects an allowance, an invoice, or a promise made to users."*
+aggregate is biased low by a probably-small unknown. There is no durable outbox and no ack-based
+retry, deliberately: GPT Sol cut both as what an invoice needs rather than what a pricing estimate
+does. *"Add the durable outbox before usage affects an allowance, an invoice, or a promise made to
+users."*
+
+**What is still unproved**, said plainly: `realtime_sessions` could not be created on the shared dev
+box while a peer's migration ledger row blocked `npm run db:migrate`, so **no real conversation has
+produced a real Postgres row**. What is proved is everything between: in
+[`tests/live-session-routes.test.ts`](../../tests/live-session-routes.test.ts) a raw provider event
+goes through the client's own projection, over the HTTP route as JSON, and out as a priced row in
+the filesystem ledger — for both bills. What is left is a browser and a database.
+The first real session is also the first chance to see
+whether `gpt-live-transcribe` reports its usage as a duration (which this prices) or as tokens
+(which it counts and refuses to guess at, saying so in the console).
 
 ## The three orderings, and why each is a rule
 
@@ -245,14 +275,22 @@ thread, and start a fresh seeded session if the reader wants one.
 | **An edit, a retry or a delete in the same thread** | Not intercepted, and deliberately: the next spoken append claims a tail that has moved, gets a 409, and *that* ends the session and reloads the conversation. One mechanism instead of three, and it is the one that also covers a second tab. The cost is that the model is briefly seeded with a history that has changed under it, for the length of one answer. |
 | **Leaving mid-connect** | A session epoch is bumped by every start and every stop and checked after every `await`, so an abandoned `start` never opens a connection or claims a microphone. Without it the cleanup found nothing to tear down and the abandoned attempt carried on. |
 
+**Every one of those endings names itself** to the session journal — `reader`, `idle-cap`,
+`session-cap`, `pagehide`, `connection-lost`, `channel-closed`, `thread-moved`, `seed-timeout`,
+`microphone-taken`, `append-refused`, `failed-to-start`, `unmounted`. Free text with a length bound
+on the server rather than a union, deliberately: the list belongs to the browser, and a server-side
+union that lagged it would refuse a true report about how a conversation ended. It is best-effort
+either way — a closed laptop says nothing, and a session with no `closed_at` is ordinary rather than
+one still running.
+
 ## What is not built
 
-- **The browser does not report its usage yet**, so no spend appears in `npm run cost` — § The meter
-  above has the whole of it, and what is left is Stage 2B. Greg accepted the gap on 2026-08-31 —
-  *"let's accept it for now"* — and it is printed by name on every run until then. A session's spend
-  is meanwhile visible only in OpenAI's own dashboard.
+- **Nothing caps a session on the server.** The meter measures what a conversation cost; it cannot
+  stop one, and a per-reader ceiling this server could enforce does not exist. § The meter above has
+  what the measurement is and is not worth.
 
-  The **cap** is built, because it is the half that costs money rather than visibility: a session
+  The **cap** in the browser is built, because it is the half that costs money rather than
+  visibility: a session
   ends itself after five minutes of quiet or twenty minutes in total, so a forgotten tab bills
   minutes rather than the hour OpenAI would allow. Only the reader's own voice resets the idle
   clock — a session that kept itself alive by answering its own last question would be exactly the

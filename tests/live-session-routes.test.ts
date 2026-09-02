@@ -33,7 +33,8 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AiCallRow } from "../src/ai-spend.js";
-import { LIVE_MODEL } from "../src/live.js";
+import { LIVE_MODEL, LIVE_TRANSCRIBER } from "../src/live.js";
+import { responseReport, transcriptionReport } from "../src/web/live/meter.js";
 import { handleApi } from "../src/routes.js";
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
@@ -333,6 +334,97 @@ describe("the acceptance endpoints", () => {
     const out = await post(`/api/live/${id}/close`, { reason: "x".repeat(200) });
     expect(out.status).toBe(400);
     expect((await sessions())[id]?.closedAt).toBeNull();
+  });
+});
+
+describe("what the browser actually posts, end to end", () => {
+  /**
+   * **The closest thing to a real session this box can run.** A raw provider
+   * event goes through the client's own projection (src/web/live/meter.ts),
+   * over the HTTP route as JSON, through `parseRealtimeUsage` and
+   * `acceptRealtimeUsage`, and out as a priced row.
+   *
+   * Everything else in this file posts a body written by hand, which proves the
+   * server and nothing about the client. A hand-written body is exactly what a
+   * client-side field-name mistake would agree with: the server would go on
+   * accepting the shape the test made up while refusing every real report with
+   * a 400, and both files would stay green.
+   *
+   * What is still not proved here is the browser itself and Postgres — see
+   * docs/project/live-conversation.md § The meter.
+   */
+  const at = () => new Date().toISOString();
+
+  it("prices a spoken turn the client built from a real response.done", async () => {
+    const id = await ticket("spya-lcaaaa");
+    const report = responseReport(
+      {
+        type: "response.done",
+        response: {
+          id: "resp_browser_1",
+          status: "completed",
+          output: [],
+          usage: {
+            total_tokens: 253,
+            input_tokens: 132,
+            output_tokens: 121,
+            input_token_details: {
+              text_tokens: 119,
+              audio_tokens: 13,
+              image_tokens: 0,
+              cached_tokens: 64,
+              cached_tokens_details: { text_tokens: 60, audio_tokens: 4 },
+            },
+            output_token_details: { text_tokens: 30, audio_tokens: 91 },
+          },
+        },
+      },
+      { startedAt: new Date(Date.now() - 2000).toISOString(), finishedAt: at() },
+    );
+    /* Through `JSON.parse(JSON.stringify(…))` rather than as the object, because
+       that is what actually crosses the wire — a `undefined` that survives an
+       in-process call disappears in serialisation, and the server requires every
+       field explicitly. */
+    const out = await post(`/api/live/${id}/usage`, JSON.parse(JSON.stringify(report)));
+    expect(out.status, JSON.stringify(out.body)).toBe(200);
+
+    const row = (await ledger()).find((r) => r.providerEventId === "resp_browser_1");
+    expect(row?.requestedModel).toBe(LIVE_MODEL);
+    expect(row?.costSource).toBe("computed");
+    expect(row?.computedCostNanos).toBeGreaterThan(0);
+    /* The splits survive the whole trip, which is what makes the row repriceable
+       — audio in is $32/Mtok against $4 for text, so a row with only totals is a
+       number nobody can check. */
+    expect(row?.inputAudioTokens).toBe(13);
+    expect(row?.cachedAudioTokens).toBe(4);
+    expect(row?.outputAudioTokens).toBe(91);
+  });
+
+  it("prices the transcription, which is the other half of the bill", async () => {
+    /* Two models, two rate cards, two events. A meter built on `response.done`
+       alone would have left this one at nothing, and the row would not exist to
+       notice. */
+    const id = await ticket("spya-lcaaab");
+    const report = transcriptionReport(
+      {
+        type: "conversation.item.input_audio_transcription.completed",
+        event_id: "event_1",
+        item_id: "item_browser_1",
+        transcript: "what did the author mean by that",
+        usage: { type: "duration", seconds: 4 },
+      },
+      { startedAt: null, finishedAt: at() },
+    );
+    const out = await post(`/api/live/${id}/usage`, JSON.parse(JSON.stringify(report)));
+    expect(out.status, JSON.stringify(out.body)).toBe(200);
+
+    const row = (await ledger()).find((r) => r.providerEventId === "item_browser_1");
+    expect(row?.requestedModel).toBe(LIVE_TRANSCRIBER);
+    expect(row?.transcriptionSeconds).toBe(4);
+    expect(row?.computedCostNanos).toBeGreaterThan(0);
+    /* No matching start event exists, so the duration is null rather than a
+       zero that would read as an instant call. */
+    expect(row?.durationMs).toBeNull();
   });
 });
 

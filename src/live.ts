@@ -596,13 +596,12 @@ export async function mintLiveToken(
  * ordinary chat rows — see `withSpokenTurn` in src/chat.ts and
  * docs/project/live-conversation.md.
  *
- * - **Nothing has actually reported yet.** The server can accept a usage report
- *   and price it (the meter at the foot of this file, and the three endpoints in
- *   src/routes.ts), and every issued session is journalled — but the browser
- *   does not post anything, so `npm run cost` still sees no live spend. What is
- *   visible instead is the gap itself: a row per issued session, reporting
- *   nothing. Stage 2B of docs/plans/260902g-cost-tracking-that-can-set-a-price.md
- *   is the half that closes it.
+ * - **The report comes from the tab, and a session that reports nothing is a
+ *   visible row rather than an absence.** The browser posts every turn as it
+ *   happens (src/web/live/meter.ts, Stage 2B, 2026-09-02) and this server
+ *   validates, prices and journals it — but the numbers are the browser's, so
+ *   an issued session that never reports still shows as one, which is the point
+ *   of writing the session row before the token is released.
  * - **The last turn can vanish, and always will be able to.** A reader ends a
  *   conversation by shutting the laptop, and an event that has not been posted
  *   when the tab dies is gone — there is no durable outbox. The aggregate is

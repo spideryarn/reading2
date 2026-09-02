@@ -277,7 +277,13 @@ function pocket(label: string, rows: readonly AiCallRow[]): void {
     console.log(`  billed upstream    ${formatNanos(upstream)}  (BYOK — a different pocket)`);
   if (computed > 0)
     console.log(
-      `  computed by us     ${formatNanos(computed)}  (not through OpenRouter; priced from ANTHROPIC_PRICES, never reconciled)`,
+      /* **Two price tables now, not one.** `computed` was the Anthropic-direct
+         bypasses only until 2026-09-02, when live conversation started writing
+         rows priced from `REALTIME_PRICES` over counts a browser reported. Both
+         are our arithmetic and neither is reconciled, which is what the label
+         is for — naming only one of them would have quietly made the other
+         look settled. */
+      `  computed by us     ${formatNanos(computed)}  (not through OpenRouter; priced here from ANTHROPIC_PRICES or REALTIME_PRICES, never reconciled)`,
     );
   if (unpriced > 0)
     console.log(`  ${unpriced} call(s) reported no cost, so the figure above is short by an unknown amount.`);
@@ -287,29 +293,41 @@ function pocket(label: string, rows: readonly AiCallRow[]): void {
  * **The holes that are not in `DECLARATIONS` and cannot be put there.**
  *
  * A `Declaration` describes a call that could in principle have gone through one
- * of this app's two seams: it has a `ProviderAccount` that bills it and a `Wire`
- * it speaks. Live conversation, its evals and the Codex CLI are none of those —
- * `ProviderAccount` has no `"openai"`, `Wire` has no `"realtime"`, and
- * `scripts/run-codex.ts` spawns a subprocess rather than making a request at
- * all. `UNMETERED_SPEND` in src/spend-declarations.ts is where they are written
- * down, with the reason each one cannot be declared.
+ * of this app's two seams: it is spent through `declaredFetch`, which wraps a
+ * `fetch` and hands an `Observer` the response body. The live-mode evals and the
+ * Codex CLI are neither — an eval opens a realtime session and talks over it,
+ * and `scripts/run-codex.ts` spawns a subprocess. `UNMETERED_SPEND` in
+ * src/spend-declarations.ts is where they are written down, with the reason each
+ * one cannot be declared.
  *
  * **They are printed here because the alternative is this report lying.**
  * `undeclared()` below reads `DECLARATIONS`, so the day the last
  * `metered: false` entry is wired up this script would otherwise have printed
- * *"Every declared way of spending money in this repo writes a row"* — while a
- * reader could be holding a live conversation billing audio by the minute into
- * no total at all, and every GPT Sol review on this repo was being bought on a
- * third account. A report that goes silently complete while a hole is open is
- * exactly the failure docs/reusable/silent-success.md is about, and this is a
- * report whose whole value is being believed.
+ * *"Every declared way of spending money in this repo writes a row"* — while
+ * every GPT Sol review on this repo was being bought on a third account. A
+ * report that goes silently complete while a hole is open is exactly the failure
+ * docs/reusable/silent-success.md is about, and this is a report whose whole
+ * value is being believed.
  *
  * Until 2026-09-02 only the live-conversation entry was here, and the other two
  * were named solely in the `ALLOWED` map of tests/no-undeclared-spend.test.ts —
  * **which prints nothing**. A green test is not a register.
  *
- * Greg accepted the live-conversation gap knowingly on 2026-08-31, with the ask
- * that it be commented here and in the docs rather than closed now.
+ * **Live conversation came off this list on 2026-09-02**, and it is worth saying
+ * how rather than just that. It did not start using a seam: the audio is still a
+ * WebRTC connection from the reader's tab straight to OpenAI, which remains a
+ * sanctioned provider bypass. What changed is that the browser now posts what
+ * each turn cost to `/api/live/:sessionId/usage`, where the server prices it from
+ * its own table and writes an ordinary `ai_calls` row — so live spend is in the
+ * totals above, as `computed`. Greg had accepted the gap knowingly on
+ * 2026-08-31; Stage 2B of
+ * docs/plans/260902g-cost-tracking-that-can-set-a-price.md closed it.
+ *
+ * **Those rows are our arithmetic over counts a browser sent us**, never a
+ * settled figure, and nothing reconciles them — which is exactly what `computed`
+ * has always meant in this ledger. The one loss that remains is a turn that was
+ * never posted because the tab died first, so the live figure is biased low by a
+ * probably-small unknown. docs/project/live-conversation.md § The meter.
  */
 /** Six-space-indented, wrapped to a terminal width — these reasons are sentences, not labels. */
 function wrapped(text: string, width = 84): string[] {
