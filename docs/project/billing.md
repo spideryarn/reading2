@@ -11,13 +11,86 @@ described in the present tense.
 
 ## What we sell, and the one promise
 
-- **Free**: sign in, ingest **3 articles, lifetime**. Enough to see whether you like it.
-- **Reader**: **$10/month, 100 article ingests per billing period.**
+| | ingests | USD | GBP | EUR |
+|---|---|---|---|---|
+| **Free** | 3, lifetime | — | — | — |
+| **Reader** | 20 / month | $10 | £8 | €9 |
+| **Researcher** | 150 / month | $50 | £40 | €45 |
 
-Prices are finger-in-the-air and expected to be wrong. Greg, 2026-09-02:
+The table in code is [`PAID_TIERS`](../../src/billing/tiers.ts), and it is the only place these
+numbers live.
 
-> In practice, that might actually mean that we're working at a loss depending on how much it costs
-> to upload an article, but I'm assuming that most people won't max it out.
+**The quotas moved on 2026-09-02, and the reason is worth keeping.** Reader started at 100 ingests
+for $10 because nobody had measured what an ingest costs. When measurement came back saying a full
+article can cost around **£1**, that was not finger-in-the-air optimism — it was an invitation to
+lose £90 a month per user. Reader dropped to 20. Greg, 2026-09-02:
+
+> it can cost £1 to fully process an article, so let's say that the $10 plan gets you 20 articles
+> (which we can always increase later)
+
+**Raising a quota is a one-line change** in `PAID_TIERS` — no Stripe object, no migration, no price
+change. That asymmetry is deliberate and worth preserving: we can be generous later cheaply, and
+being generous now is the expensive mistake to unwind.
+
+### Why three currencies rather than one
+
+A Stripe Price can carry several currencies (`currency_options`), and hosted Checkout picks by the
+customer's location. We use it because the alternative costs real money:
+
+**Stripe adds +2% whenever the price's currency differs from the account's settlement currency**,
+and it is triggered by the *price*, not by the customer. The account is GB and settles in GBP, so a
+USD-only price would have charged that 2% on **every** sale — including UK customers, who would
+otherwise sit in Stripe's cheapest band (1.5% + 20p, so 3.5% + 20p instead). On top of that a UK
+customer paying in USD often meets their own bank's foreign-transaction fee, ~2.75–3% on many
+mainstream cards, which is invisible to us and a known conversion-killer.
+
+**The amounts are chosen, never converted at run time.** A customer seeing €8.62 knows they are
+being shown somebody else's price. They were set at roughly GBP/USD 1.35 and EUR/USD 1.16, rounded
+up to whole units, which lands each about 4–8% above spot — headroom on purpose, because a price
+set at spot goes underwater the moment the rate moves and **Stripe prices cannot be edited**. Two
+properties `tests/billing-tiers.test.ts` pins: the ratio between tiers is **5× in every currency**,
+so the pricing page tells one story everywhere; and the amounts are whole units, which is the
+prosumer-tool convention (Linear, Copilot, Notion) rather than the `.99` of consumer subscriptions.
+
+## Adding a tier or a currency
+
+Both are one edit to [`PAID_TIERS`](../../src/billing/tiers.ts) and a re-run of the setup script.
+The list is walked rather than hardcoded, so nothing else has a tier's name in it.
+
+**A new currency** — add it to `CURRENCIES`, add an amount to every tier's `amounts`, run
+`npx tsx scripts/stripe-setup.ts` (dry run) then `--apply`. The script sees the live price lacks the
+currency, creates a **new** price, and moves the lookup key onto it with `transfer_lookup_key`.
+Paste the new ids into `.env.local`.
+
+**A new tier** — add an entry with a fresh `id`, `lookupKey` and `envVar`, then:
+
+1. `npx tsx scripts/stripe-setup.ts --apply`, and paste the new `STRIPE_PRICE_…` into `.env.local`.
+2. Add that variable name to `.env.example`, to `ALLOWLIST` in
+   [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts), and to the env table in
+   [deployment.md](deployment.md#environment-variables).
+3. At go-live, create it in live mode and set the variable in Vercel.
+
+`tests/billing-tiers.test.ts` will fail if you miss a currency, reuse a lookup key or an
+environment variable, or make a dearer tier that allows fewer ingests.
+
+### The three things that make this safe to change
+
+- **Existing subscribers are never moved.** A replaced price stays alive and unarchived, so anyone
+  already billing on it keeps their terms. Migrating them is a separate, visible decision — not a
+  side effect of running a setup script.
+- **The lookup key is the identity, not the name.** Never change one. It is how a re-run finds what
+  it made last time instead of minting a second price that nobody notices until two customers are
+  on different ones.
+- **An unrecognised price falls to the free tier**, logged. So a price you created and forgot to
+  configure costs a customer an email, not us a hundred ingests a month.
+
+### VAT, flagged rather than resolved
+
+Worth a look before EU revenue is real, and **not** the "we're below the threshold" situation we
+assumed: the €10,000 distance-selling threshold applies to businesses established *in* the EU. For
+a UK seller after Brexit, VAT on B2C digital services to EU consumers is in principle due from the
+first sale, via the Non-Union OSS scheme. Not a blocker for launching, and not a reason to choose a
+different EUR number — but it is a conversation with an accountant rather than an assumption.
 
 **Reading is never gated, and this is the promise the copy makes out loud.** Greg, 2026-09-02:
 

@@ -26,7 +26,7 @@
  *
  * We take correctness, because at this scale the throughput cost is
  * hypothetical and the stale-write is not: subscription webhooks arrive a
- * handful at a time for one paid tier, and they arrive in bursts *per customer*
+ * handful at a time across two paid tiers, and they arrive in bursts *per customer*
  * — which is precisely the case the lock exists for. **If that ever stops being
  * true**, the fix is not to drop the lock but to make the write conditional on
  * freshness: keep a monotonic marker from Stripe beside the row and refuse a
@@ -43,7 +43,7 @@ import { billingAccounts } from "../db/schema.js";
 import { log } from "../log.js";
 import { chooseSubscription } from "./subscription.js";
 import { assertLivemode, stripeClient } from "./stripe.js";
-import { isEntitledStatus } from "./tiers.js";
+import { isEntitledStatus, priceTierMap } from "./tiers.js";
 
 const logger = log("store");
 
@@ -79,10 +79,10 @@ export type SyncResult =
  */
 export async function syncSubscriptionFromStripe(customerId: string): Promise<SyncResult> {
   const stripe = stripeClient();
-  /* Read once, outside the transaction: it is configuration, not state, and
-     `readerPriceId()` throws when unset — which must not turn a webhook into a
-     500 on a deployment that simply has no paid tier configured. */
-  const readerPriceId = process.env.STRIPE_PRICE_READER?.trim() || null;
+  /* Read once, outside the transaction: it is configuration, not state. An
+     empty map is a deployment with no paid tier configured, which must not turn
+     a webhook into a 500. */
+  const prices = priceTierMap();
 
   return await getDb().transaction(
     async (tx) => {
@@ -132,7 +132,7 @@ export async function syncSubscriptionFromStripe(customerId: string): Promise<Sy
       }
 
       const chosen = chooseSubscription(subscriptions, isEntitledStatus, (priceId) =>
-        Boolean(readerPriceId) && priceId === readerPriceId,
+        prices.has(priceId),
       );
       for (const note of chosen.notes) {
         logger.warn({ customerId, ownerId: row.ownerId, note }, "reading a Stripe subscription");

@@ -57,8 +57,8 @@
 
 import { eq, sql } from "drizzle-orm";
 
-import { FREE, entitlementFor, isEntitledStatus, tierForPrice } from "../billing/tiers.js";
-import type { Entitlement } from "../billing/tiers.js";
+import { FREE, entitlementFor, isEntitledStatus, priceTierMap, tierForPrice } from "../billing/tiers.js";
+import type { Entitlement, PaidTier } from "../billing/tiers.js";
 import { getDb } from "../db/client.js";
 import { billingAccounts, ingestEvents } from "../db/schema.js";
 import { log } from "../log.js";
@@ -128,13 +128,13 @@ export interface BillingRow {
  */
 export function entitlementFromRow(
   row: BillingRow | undefined,
-  readerPriceId: string | null,
+  prices: ReadonlyMap<string, PaidTier>,
   now: Date,
 ): Entitlement | Stale {
   if (!row || !isEntitledStatus(row.status)) return FREE;
 
-  const tier = tierForPrice(row.priceId, readerPriceId ?? "");
-  if (tier !== "reader") {
+  const tier = tierForPrice(row.priceId, prices);
+  if (!tier) {
     logger.warn(
       { priceId: row.priceId, status: row.status },
       "an entitled subscription is on a price this build does not recognise — treating as free",
@@ -147,7 +147,7 @@ export function entitlementFromRow(
   if (!start || !end || now < start || now >= end) {
     return { kind: "stale", subscriptionId: row.stripeSubscriptionId };
   }
-  return entitlementFor("reader", { start, end });
+  return entitlementFor(tier, { start, end });
 }
 
 /**
@@ -234,16 +234,17 @@ export async function usageFor(ownerId: string, entitlement: Entitlement): Promi
  * job's own INSERT — see `jobs.ingest_event_id`. If it never reaches a job,
  * `releaseReservation` gives it back.
  *
- * @param readerPriceId the configured `price_…`, or null when billing is
- * unconfigured — in which case nobody is entitled and everybody gets the free
- * allowance, which is the right behaviour for a deployment with no Stripe.
+ * @param prices which `price_…` sells which tier. Defaults to whatever the
+ * environment says; an empty map means billing is unconfigured, so nobody is
+ * entitled and everybody gets the free allowance — the right behaviour for a
+ * deployment with no Stripe.
  * @param slug the intended slug, stored as a diagnostic only — it is mutable,
  * so it is never this row's identity.
  */
 export async function reserveIngest(
   ownerId: string,
-  readerPriceId: string | null,
   slug?: string,
+  prices: ReadonlyMap<string, PaidTier> = priceTierMap(),
 ): Promise<Admission> {
   return await getDb().transaction(
     async (tx) => {
@@ -278,7 +279,7 @@ export async function reserveIngest(
         throw new Error(`billing_accounts row for ${ownerId} vanished under its own lock`);
       }
 
-      const entitlement = entitlementFromRow(row, readerPriceId, new Date());
+      const entitlement = entitlementFromRow(row, prices, new Date());
       if ("kind" in entitlement) return entitlement; // stale
 
       const usage = usageOf(await tx.execute(usageSql(ownerId, entitlement)));

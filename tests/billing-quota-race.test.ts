@@ -22,8 +22,8 @@
  */
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { FREE, FREE_LIFETIME_INGESTS, READER_PERIOD_INGESTS } from "../src/billing/tiers.js";
-import type { Entitlement } from "../src/billing/tiers.js";
+import { FREE, FREE_LIFETIME_INGESTS, tierSpec } from "../src/billing/tiers.js";
+import type { Entitlement, PaidTier } from "../src/billing/tiers.js";
 import { releaseReservation, reserveIngest, usageFor } from "../src/store/pg-billing.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
@@ -45,14 +45,15 @@ const dbIt = reachable ? it : it.skip;
  */
 const OWNER = "0b111a99-0000-4000-8000-00000000c0da";
 
-/** The configured Reader price, as `reserveIngest` is given it. */
+/** The configured Reader price, and the map `reserveIngest` resolves it through. */
 const READER_PRICE = "price_reader_for_tests";
+const PRICES: ReadonlyMap<string, PaidTier> = new Map([[READER_PRICE, "reader"]]);
 
 const PERIOD = { start: "2026-09-01T00:00:00Z", end: "2026-10-01T00:00:00Z" };
 
 const PAID: Entitlement = {
   tier: "reader",
-  limit: READER_PERIOD_INGESTS,
+  limit: tierSpec("reader").ingestsPerPeriod,
   periodStart: new Date(PERIOD.start),
   periodEnd: new Date(PERIOD.end),
 };
@@ -137,7 +138,7 @@ describe("the anchor row is created before it is locked", () => {
       ]);
 
       let settled = false;
-      const b = reserveIngest(OWNER, READER_PRICE).then((r) => {
+      const b = reserveIngest(OWNER, undefined, PRICES).then((r) => {
         settled = true;
         return r;
       });
@@ -167,14 +168,14 @@ describe("a barrier-synchronised burst cannot exceed the allowance", () => {
    */
   dbIt("admits exactly three of twenty for a free account", async () => {
     const results = await Promise.all(
-      Array.from({ length: 20 }, () => reserveIngest(OWNER, READER_PRICE)),
+      Array.from({ length: 20 }, () => reserveIngest(OWNER, undefined, PRICES)),
     );
     expect(results.filter((r) => r.kind === "admitted")).toHaveLength(FREE_LIFETIME_INGESTS);
     expect(results.filter((r) => r.kind === "refused")).toHaveLength(20 - FREE_LIFETIME_INGESTS);
   });
 
   dbIt("counts an unsettled reservation, so the next request sees it", async () => {
-    expect((await reserveIngest(OWNER, READER_PRICE)).kind).toBe("admitted");
+    expect((await reserveIngest(OWNER, undefined, PRICES)).kind).toBe("admitted");
     /* Nothing has succeeded — the job has not even been created — and the
        usage still has to include it, or N concurrent requests all read zero. */
     expect(await usageFor(OWNER, FREE)).toEqual({ used: 0, inFlight: 1 });
@@ -184,10 +185,10 @@ describe("a barrier-synchronised burst cannot exceed the allowance", () => {
 describe("the entitlement is read under the lock, not handed in", () => {
   dbIt("gives a paying subscriber the Reader allowance", async () => {
     await makePaid();
-    const admitted = await reserveIngest(OWNER, READER_PRICE);
+    const admitted = await reserveIngest(OWNER, undefined, PRICES);
     expect(admitted).toMatchObject({ kind: "admitted" });
     if (admitted.kind !== "admitted") throw new Error("expected an admission");
-    expect(admitted.entitlement).toMatchObject({ tier: "reader", limit: READER_PERIOD_INGESTS });
+    expect(admitted.entitlement).toMatchObject({ tier: "reader", limit: tierSpec("reader").ingestsPerPeriod });
   });
 
   /* An entitled status on a price this build does not sell is free, not Reader.
@@ -195,7 +196,7 @@ describe("the entitlement is read under the lock, not handed in", () => {
      month for something nobody costed. */
   dbIt("falls to free when the subscription is on an unrecognised price", async () => {
     await makePaid();
-    const admitted = await reserveIngest(OWNER, "price_something_else");
+    const admitted = await reserveIngest(OWNER, undefined, new Map());
     if (admitted.kind !== "admitted") throw new Error("expected an admission");
     expect(admitted.entitlement.tier).toBe("free");
   });
@@ -214,7 +215,7 @@ describe("the entitlement is read under the lock, not handed in", () => {
         where owner_id = $1`,
       [OWNER, "2026-01-01T00:00:00Z", "2026-02-01T00:00:00Z"],
     );
-    const answer = await reserveIngest(OWNER, READER_PRICE);
+    const answer = await reserveIngest(OWNER, undefined, PRICES);
     expect(answer.kind).toBe("stale");
     /* And it took no slot on the way past. */
     expect(await usageFor(OWNER, FREE)).toEqual({ used: 0, inFlight: 0 });
@@ -226,7 +227,7 @@ describe("the entitlement is read under the lock, not handed in", () => {
     await pool.query("update spideryarn.billing_accounts set status = 'canceled' where owner_id = $1", [
       OWNER,
     ]);
-    const admitted = await reserveIngest(OWNER, READER_PRICE);
+    const admitted = await reserveIngest(OWNER, undefined, PRICES);
     if (admitted.kind !== "admitted") throw new Error("expected an admission");
     expect(admitted.entitlement.tier).toBe("free");
   });
@@ -235,19 +236,19 @@ describe("the entitlement is read under the lock, not handed in", () => {
 describe("releasing a slot that never became a job", () => {
   dbIt("gives the allowance back", async () => {
     const taken = await Promise.all(
-      Array.from({ length: FREE_LIFETIME_INGESTS }, () => reserveIngest(OWNER, READER_PRICE)),
+      Array.from({ length: FREE_LIFETIME_INGESTS }, () => reserveIngest(OWNER, undefined, PRICES)),
     );
-    expect(await reserveIngest(OWNER, READER_PRICE)).toMatchObject({ kind: "refused" });
+    expect(await reserveIngest(OWNER, undefined, PRICES)).toMatchObject({ kind: "refused" });
 
     const first = taken[0];
     if (first?.kind !== "admitted") throw new Error("expected an admission");
     expect(await releaseReservation(first.reservationId)).toBe(true);
 
-    expect(await reserveIngest(OWNER, READER_PRICE)).toMatchObject({ kind: "admitted" });
+    expect(await reserveIngest(OWNER, undefined, PRICES)).toMatchObject({ kind: "admitted" });
   });
 
   dbIt("is idempotent, so a double release cannot free two slots", async () => {
-    const one = await reserveIngest(OWNER, READER_PRICE);
+    const one = await reserveIngest(OWNER, undefined, PRICES);
     if (one.kind !== "admitted") throw new Error("expected an admission");
     expect(await releaseReservation(one.reservationId)).toBe(true);
     expect(await releaseReservation(one.reservationId)).toBe(false);
@@ -262,7 +263,7 @@ describe("releasing a slot that never became a job", () => {
    */
   dbIt("refuses to release a reservation a job is already spending", async () => {
     if (!pool) return;
-    const one = await reserveIngest(OWNER, READER_PRICE);
+    const one = await reserveIngest(OWNER, undefined, PRICES);
     if (one.kind !== "admitted") throw new Error("expected an admission");
 
     /* A real minted id, not a readable one. `jobs_id_format` enforces the
@@ -288,9 +289,9 @@ describe("releasing a slot that never became a job", () => {
 describe("the refusal says what a reader needs", () => {
   dbIt("carries the count, the limit, and no reset date for the free tier", async () => {
     await Promise.all(
-      Array.from({ length: FREE_LIFETIME_INGESTS }, () => reserveIngest(OWNER, READER_PRICE)),
+      Array.from({ length: FREE_LIFETIME_INGESTS }, () => reserveIngest(OWNER, undefined, PRICES)),
     );
-    const refused = await reserveIngest(OWNER, READER_PRICE);
+    const refused = await reserveIngest(OWNER, undefined, PRICES);
     expect(refused).toEqual({
       kind: "refused",
       used: FREE_LIFETIME_INGESTS,
@@ -308,13 +309,13 @@ describe("the refusal says what a reader needs", () => {
     await pool.query(
       `insert into spideryarn.ingest_events (owner_id, reserved_at, succeeded_at)
        select $1, now(), now() from generate_series(1, $2)`,
-      [OWNER, READER_PERIOD_INGESTS],
+      [OWNER, tierSpec("reader").ingestsPerPeriod],
     );
-    const refused = await reserveIngest(OWNER, READER_PRICE);
+    const refused = await reserveIngest(OWNER, undefined, PRICES);
     expect(refused).toMatchObject({
       kind: "refused",
-      used: READER_PERIOD_INGESTS,
-      limit: READER_PERIOD_INGESTS,
+      used: tierSpec("reader").ingestsPerPeriod,
+      limit: tierSpec("reader").ingestsPerPeriod,
       resetAt: end,
     });
   });

@@ -2,21 +2,41 @@
 
 ## Goal, context
 
-Introduce payments: a freemium model with one paid tier, processed by Stripe.
+Introduce payments: a freemium model with two paid tiers, processed by Stripe.
 
-- **Free**: sign in and ingest **3 articles, lifetime** — enough to play with the product.
-- **Paid ("Reader", name TBC)**: **$10/month for 100 article ingests per billing period.**
-- Reading is never gated. Greg, 2026-09-02:
+| | ingests | USD | GBP | EUR |
+|---|---|---|---|---|
+| **Free** | 3, lifetime | — | — | — |
+| **Reader** | 20 / month | $10 | £8 | €9 |
+| **Researcher** | 150 / month | $50 | £40 | €45 |
 
-  > To be clear: if a user has hit their quota, they should still be able to read their existing
-  > and Public-readable articles, just not incur extra spend.
+Reading is never gated. Greg, 2026-09-02:
 
-Pricing is deliberately finger-in-the-air. Greg, 2026-09-02:
+> To be clear: if a user has hit their quota, they should still be able to read their existing
+> and Public-readable articles, just not incur extra spend.
+
+**The Reader quota was 100 until measurement arrived.** The original figure was explicitly a guess.
+Greg, 2026-09-02:
 
 > Right now I have no idea of the costs involved for uploading an article … I was thinking
 > something like $10 a month allows you to upload 100 articles. In practice, that might actually
 > mean that we're working at a loss depending on how much it costs to upload an article, but I'm
 > assuming that most people won't max it out.
+
+Then a number came back, and the guess turned out to be off by enough to matter — at ~£1 an
+article, 100 ingests for $10 loses about £90 a month per user who uses it. Greg, same day:
+
+> it can cost £1 to fully process an article, so let's say that the $10 plan gets you 20 articles
+> (which we can always increase later)
+
+…and a second tier for people who read for a living:
+
+> let's also add a $50 (and appropriate GBP) tier for 150 articles per month
+
+**Raising a quota later is one line** in `PAID_TIERS` — no Stripe object, no migration. Being
+generous later is cheap; being generous now is the expensive mistake to unwind. The currency
+reasoning, and the recipe for adding a tier, are in
+[billing.md](../project/billing.md#adding-a-tier-or-a-currency).
 
 Cost-tracking and cost-estimating are **out of scope** — other agents are working on those. This
 plan is the billing machinery: Stripe integration, a billing-account record per owner, and quota
