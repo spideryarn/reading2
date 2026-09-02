@@ -93,11 +93,12 @@ const STEPS: Step[] = [
      * no database — the config carries no `dbCredentials` (drizzle.config.ts),
      * so this stays offline like everything else here. About 2 s.
      *
-     * **It does not cover holes.** It groups snapshots by `prevId` and
-     * complains only when two share one, so it is green with `0003` and `0029`
-     * missing and with the `0021 → 0022` break. Those are
-     * `snapshotProblems` in scripts/migration-ledger.ts, run by the test gate
-     * above. See docs/plans/260902c-concurrent-migrations-across-worktrees.md.
+     * **It does not cover holes.** It rejects malformed and out-of-date
+     * snapshots, and groups the rest by `prevId` to find a fork — so it is
+     * green with `0003` and `0029` missing and with the `0021 → 0022` break.
+     * Those are `snapshotProblems` in scripts/migration-snapshots.ts, run by
+     * the test gate above. See
+     * docs/plans/260902c-concurrent-migrations-across-worktrees.md.
      */
     name: "chain",
     gate: true,

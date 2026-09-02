@@ -213,9 +213,16 @@ try {
    */
   const chain = snapshotProblems(journal, readSnapshots(folder), HISTORICAL);
   if (chain.length > 0) {
-    console.warn(`\n⚠ drizzle/meta/ is not a well-formed chain — this migration is unaffected,`);
-    console.warn("  but the next `npm run db:generate` will refuse and say nothing about why:");
+    console.warn("\n⚠ drizzle/meta/ is not a well-formed chain — this migration is unaffected,");
+    console.warn("  but the next `npm run db:generate` will be working from it:");
     for (const p of chain) console.warn(`    · ${p}`);
+    /* Two different outcomes, and saying "it will refuse" covers only one of
+       them. drizzle refuses on a fork; on a hole or an ordinary broken link it
+       is perfectly happy and diffs against the wrong base, which is worse
+       because the SQL it writes looks complete. GPT Sol, 2026-09-02. */
+    console.warn("  On a fork it refuses, exits 0 and writes nothing. On a hole or a broken");
+    console.warn("  link it does not refuse at all — it diffs against the wrong snapshot and");
+    console.warn("  writes SQL that looks complete and re-emits DDL that has already run.");
     console.warn("  docs/project/database.md § Two worktrees generated at once.\n");
   }
 

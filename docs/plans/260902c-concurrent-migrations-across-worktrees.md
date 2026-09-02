@@ -163,6 +163,17 @@ precedent stage 2 has to follow.
 
 Stages 1–5. Stage 6 is a plan of its own and stage 7 was never going to be built.
 
+Reviewed twice more after the plan review: by Fable before building
+([260902c-concurrent-migrations-review-fable.md](260902c-concurrent-migrations-review-fable.md)) and
+by GPT Sol on the finished code
+([260902c-concurrent-migrations-code-review-sol.md](260902c-concurrent-migrations-code-review-sol.md)).
+**The code review found more than the plan review did, which is the argument for weighting it
+higher.** Four High findings and five Medium, every one of them real, and the most important could
+not have been visible at plan stage: the wrapper checked the snapshot chain *after* drizzle ran, so a
+folder that was already holed would produce a bad-but-complete migration — all three artefacts
+present, postcondition satisfied. That is the `0029 → 0030` failure exactly, caught after the damage.
+It is a precondition now, and it refuses without generating.
+
 | | |
 |---|---|
 | [`scripts/migration-snapshots.ts`](../../scripts/migration-snapshots.ts) | `readSnapshots` and `snapshotProblems` — nine checks over `drizzle/meta/`, plus `HISTORICAL`, the three exceptions with a reason on each. |

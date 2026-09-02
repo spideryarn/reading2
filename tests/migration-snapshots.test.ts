@@ -59,7 +59,9 @@ describe("the real drizzle/meta", () => {
 
   it("still has the two holes the exceptions excuse, and not a file that would fill them", () => {
     for (const m of HISTORICAL.missing) {
-      expect(journal.some((e) => e.tag === m.tag)).toBe(true);
+      /* The stamp as well as the tag: the exemption is keyed on both, so a
+         pin on the tag alone would let it drift out of date in silence. */
+      expect(journal.find((e) => e.tag === m.tag)?.when).toBe(m.when);
       const prefix = m.tag.split("_")[0];
       expect(existsSync(path.join(FOLDER, "meta", `${prefix}_snapshot.json`))).toBe(false);
       expect(m.reason.length).toBeGreaterThan(20);
@@ -69,11 +71,12 @@ describe("the real drizzle/meta", () => {
   /* Keyed on the ids so that regenerating either side lapses the exemption
      rather than inheriting it — the same reasoning as GRANDFATHERED in
      tests/migration-journal.test.ts. This is the assertion that proves it. */
-  it("still has the break the exception excuses, with both ids unchanged", () => {
+  it("still has the break the exception excuses, with all three ids unchanged", () => {
     for (const b of HISTORICAL.breaks) {
       const after = snapshots.find((s) => s.file === b.after);
       const before = snapshots.find((s) => s.file === b.before);
       expect(after?.id).toBe(b.afterId);
+      expect(before?.id).toBe(b.beforeId);
       expect(before?.prevId).toBe(b.beforePrevId);
       expect(b.reason.length).toBeGreaterThan(20);
     }
@@ -240,6 +243,59 @@ describe("the shapes it must refuse", () => {
     expect(snapshotProblems(readJournal(dir), readSnapshots(dir))).toEqual([]);
   });
 
+  /**
+   * The three shapes GPT Sol built by hand on 2026-09-02 and got `[]` back for.
+   * Each one is a folder that is not a chain, and each passed every check the
+   * first version had.
+   */
+  it("catches a file that ends in _snapshot.json but is not the derived name", () => {
+    const dir = folderWith(HEALTHY.tags, [
+      ...HEALTHY.snapshots,
+      { file: "0000_extra_snapshot.json", body: body("eee", "aaa") },
+    ]);
+    expect(problemsIn(dir)).toContain("is not the name drizzle derives for it");
+  });
+
+  /**
+   * A whole-folder cycle: the first snapshot's parent is the LAST one's id.
+   * Every link resolves, every id is unique, no two share a parent, and the
+   * order agrees — so only "the first snapshot's parent is the zero UUID"
+   * catches it.
+   */
+  it("catches a chain that loops back into itself at the root", () => {
+    const dir = folderWith(HEALTHY.tags, [
+      { file: "0000_snapshot.json", body: body("aaa", "ccc") },
+      HEALTHY.snapshots[1]!,
+      HEALTHY.snapshots[2]!,
+    ]);
+    expect(problemsIn(dir)).toContain("sorts first and claims ccc as its parent");
+  });
+
+  /* A snapshot with no version and no dialect agrees with every other snapshot
+     vacuously, so the "one version throughout" check alone passes it. */
+  it("catches a snapshot carrying no version or dialect", () => {
+    const dir = folderWith(HEALTHY.tags, [
+      HEALTHY.snapshots[0]!,
+      HEALTHY.snapshots[1]!,
+      { file: "0002_snapshot.json", body: { id: "ccc", prevId: "bbb" } },
+    ]);
+    expect(problemsIn(dir)).toContain("0002_snapshot.json is missing its version");
+  });
+
+  /* `null` is valid JSON. Reading fields off it used to throw, which turned
+     db:migrate's intended warning into a crash. */
+  it("reports rather than crashes on a file holding valid JSON that is not an object", () => {
+    const dir = folderWith(HEALTHY.tags, HEALTHY.snapshots.slice(0, 2));
+    writeFileSync(path.join(dir, "meta", "0002_snapshot.json"), "null");
+    expect(problemsIn(dir)).toContain("0002_snapshot.json could not be read as a snapshot");
+  });
+
+  /* A folder with nothing in it is a legitimate starting state, not a fault. */
+  it("says nothing about an empty folder and an empty journal", () => {
+    const dir = folderWith([], []);
+    expect(snapshotProblems(readJournal(dir), readSnapshots(dir))).toEqual([]);
+  });
+
   it("catches a folder half-migrated to a new snapshot version", () => {
     const dir = folderWith(HEALTHY.tags, [
       HEALTHY.snapshots[0]!,
@@ -253,40 +309,65 @@ describe("the shapes it must refuse", () => {
 /* ------------------------------------------------------------------ */
 
 describe("the exceptions themselves", () => {
+  const ROOT = "00000000-0000-0000-0000-000000000000";
   const chain: Snapshot[] = [
-    { file: "0000_snapshot.json", prefix: "0000", id: "aaa", prevId: "zzz", version: "7", dialect: "postgresql" },
+    { file: "0000_snapshot.json", prefix: "0000", id: "aaa", prevId: ROOT, version: "7", dialect: "postgresql" },
     { file: "0001_snapshot.json", prefix: "0001", id: "bbb", prevId: "gone", version: "7", dialect: "postgresql" },
   ];
   const journal: JournalEntry[] = [
     { idx: 0, tag: "0000_first", when: 1 },
     { idx: 1, tag: "0001_second", when: 2 },
   ];
+  /** The exemption that matches `chain` exactly. Each test spoils one field. */
+  const theBreak = {
+    after: "0000_snapshot.json",
+    afterId: "aaa",
+    before: "0001_snapshot.json",
+    beforeId: "bbb",
+    beforePrevId: "gone",
+    reason: "x",
+  };
 
   it("excuses the break it names", () => {
-    const excused = {
-      missing: [],
-      breaks: [{ after: "0000_snapshot.json", afterId: "aaa", before: "0001_snapshot.json", beforePrevId: "gone", reason: "x" }],
-    };
-    expect(snapshotProblems(journal, chain, excused)).toEqual([]);
+    expect(snapshotProblems(journal, chain, { missing: [], breaks: [theBreak] })).toEqual([]);
     expect(snapshotProblems(journal, chain, NO_EXCEPTIONS)).toHaveLength(1);
   });
 
-  /* Both ids are in the key precisely so that regenerating either side takes
-     the exemption away instead of inheriting it. */
-  it("stops excusing the break once either side is re-minted", () => {
-    const excused = {
-      missing: [],
-      breaks: [{ after: "0000_snapshot.json", afterId: "aaa-REGENERATED", before: "0001_snapshot.json", beforePrevId: "gone", reason: "x" }],
-    };
-    expect(snapshotProblems(journal, chain, excused)).toHaveLength(1);
+  /**
+   * **Every id is in the key**, so that regenerating either side takes the
+   * exemption away instead of inheriting it.
+   *
+   * Both directions are tested because for a while only one of them worked:
+   * `beforeId` was not in the type at all, so a freshly minted *later* snapshot
+   * carrying the same stale parent still matched. The test that was supposed to
+   * prove this spoiled `afterId` only, and passed. GPT Sol's code review,
+   * 2026-09-02 — and the reason a test named "either side" must actually try
+   * both sides.
+   */
+  it.each([
+    ["the earlier snapshot", { ...theBreak, afterId: "aaa-REGENERATED" }],
+    ["the later snapshot", { ...theBreak, beforeId: "bbb-REGENERATED" }],
+    ["the stale parent between them", { ...theBreak, beforePrevId: "gone-REGENERATED" }],
+  ])("stops excusing the break once %s is re-minted", (_which, excused) => {
+    expect(snapshotProblems(journal, chain, { missing: [], breaks: [excused] })).toHaveLength(1);
   });
 
   /* An exemption for a hole must not become cover for the next hole. */
   it("excuses only the missing snapshot it names", () => {
     const j: JournalEntry[] = [...journal, { idx: 2, tag: "0002_third", when: 3 }];
-    const excused = { missing: [{ tag: "0001_second", reason: "x" }], breaks: [] };
+    const excused = { missing: [{ tag: "0001_second", when: 2, reason: "x" }], breaks: [] };
     const problems = snapshotProblems(j, [chain[0]!], excused);
     expect(problems.join("\n")).toContain("0002_third is in the journal");
     expect(problems.join("\n")).not.toContain("0001_second is in the journal");
+  });
+
+  /* Keyed on the stamp as well as the tag, so the entry becoming a different
+     migration under the same name takes the exemption away. */
+  it("stops excusing a missing snapshot once its entry is re-stamped", () => {
+    const restamped: JournalEntry[] = [journal[0]!, { idx: 1, tag: "0001_second", when: 999 }];
+    const excused = { missing: [{ tag: "0001_second", when: 2, reason: "x" }], breaks: [] };
+    expect(snapshotProblems(restamped, [chain[0]!], excused).join("\n")).toContain(
+      "0001_second is in the journal",
+    );
   });
 });

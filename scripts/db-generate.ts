@@ -15,14 +15,31 @@
  *   drizzle-kit generate   prints the same red "Error:", exit 0, nothing written
  *
  * `bin.cjs` has the two `process.exit` calls a few lines apart, and the
- * generate side is the one that says 0. There are two more exit-0-with-no-output
- * paths next to it — a snapshot of an unsupported version, and a snapshot that
- * is not of the latest version — so this wrapper does not check for the forked
- * chain specifically. **It checks that success produced output**, which closes
- * the whole family including whatever drizzle adds to it next.
+ * generate side is the one that says 0. There are more exit-0-with-no-output
+ * paths next to it — a snapshot of an unsupported version, one that is not of
+ * the latest version, a missing schema file — so this does not look for the
+ * forked chain specifically. **It checks that success produced output.**
  *
  * That is the shape docs/reusable/silent-success.md is about: the operator asked
  * for a migration, got a success code, and got no migration.
+ *
+ * ## Three checks, and the order is the point
+ *
+ * 1. **Before drizzle runs**: `drizzle-kit check`, plus `snapshotProblems` for
+ *    the holes and breaks that `check` is green on. **A precondition, because a
+ *    postcondition is too late for half of this.** If the folder is already
+ *    holed or its terminal snapshot is the wrong one, drizzle diffs against the
+ *    wrong base and writes a *bad but complete* migration — all three artefacts
+ *    present, postcondition satisfied. That is the `0029 → 0030` failure exactly:
+ *    catching it afterwards means catching it after the damage. GPT Sol's code
+ *    review, 2026-09-02.
+ * 2. **drizzle runs**, with its output inherited, so its rename prompts work.
+ * 3. **After**: the three artefacts this run should have written, and the whole
+ *    folder again.
+ *
+ * Step 1 is also why `--allow-empty` cannot paper anything over: it runs
+ * unconditionally, before the flag is consulted, and `drizzle-kit check` is the
+ * tool that exits 1 on the unsupported-version paths this file cannot see.
  *
  * This would also have caught `0029_assets`, whose snapshot never reached the
  * folder — the next `generate` then diffed against `0028`, re-emitted DDL that
@@ -55,6 +72,29 @@ const allowEmpty = process.argv.slice(2).includes(ALLOW_EMPTY);
 /* `--help` writes nothing on purpose, and so does asking drizzle for its
    version. Enforcing the postcondition on those would just be wrong. */
 const asking = passthrough.some((a) => a === "--help" || a === "-h" || a === "--version");
+
+/**
+ * **Flags that move the folder, refused rather than handled.**
+ *
+ * Every check here reads `<repo>/drizzle`, so a `--config` or `--out` pointing
+ * somewhere else would have this inspecting one folder while drizzle wrote to
+ * another: a real migration reported as "wrote no migration", or — with
+ * `--allow-empty` — reported as an intentional no-op. Deriving the effective
+ * folder would mean re-implementing drizzle's config resolution, which is a
+ * second copy of a fact. Refusing is the honest option, and nothing in this
+ * repo generates anywhere but `drizzle/`. GPT Sol's code review, 2026-09-02.
+ */
+const MOVES_THE_FOLDER = ["--config", "--out"];
+const moved = passthrough.filter((a) => MOVES_THE_FOLDER.some((f) => a === f || a.startsWith(`${f}=`)));
+if (moved.length > 0 && !asking) {
+  console.error(
+    `\ndb:generate cannot check a run that writes somewhere else (${moved.join(", ")}).\n` +
+      `  Its checks read ${path.relative(process.cwd(), FOLDER)} and nothing else.\n` +
+      "  Run `npx drizzle-kit generate` directly if you really mean to, and know that\n" +
+      "  nothing will tell you if it exits 0 having written nothing.",
+  );
+  process.exit(1);
+}
 
 /** Everything the folder holds, read the way drizzle writes it. */
 interface FolderState {
@@ -91,11 +131,18 @@ function readFolder(): FolderState {
  * What drizzle wrote, judged against what it should have written.
  *
  * **All three artefacts, not just the journal.** `writeResult` in `bin.cjs`
- * writes the snapshot, then the journal, then the `.sql`, in that order — so a
- * run that dies partway through leaves a snapshot nothing names, which is
- * exactly the `0032` collision this repo has already had (see
- * `journalProblems` in scripts/migration-ledger.ts). Checking only the journal
- * would call that a success.
+ * writes the snapshot, then the journal, then the `.sql`, as three separate
+ * `writeFileSync` calls — so a run that dies partway through leaves the folder
+ * mid-write, and checking only the journal would call two of the three
+ * outcomes a success.
+ *
+ * The repo has had the missing-snapshot half of that for real, though not from
+ * a crash: `0032_jobs_concurrency_cap` shipped its SQL and its journal entry
+ * while its snapshot sat untracked, and the snapshot arrived in a later commit
+ * ("The snapshot that would have brought the index back"). An earlier version
+ * of this comment called that a snapshot naming no journal entry, which is the
+ * same accident mirrored and is not what happened. GPT Sol's code review,
+ * 2026-09-02, checked the history.
  */
 function postcondition(before: FolderState, after: FolderState): string[] {
   /**
@@ -177,7 +224,45 @@ function postcondition(before: FolderState, after: FolderState): string[] {
   return problems;
 }
 
+/** Print a list of sentences under a heading, the way this file reports. */
+function report(heading: string, problems: readonly string[]): void {
+  console.error(`\n${"=".repeat(64)}`);
+  console.error(heading);
+  console.error("=".repeat(64));
+  for (const p of problems) console.error(p.startsWith(" ") || p === "" ? p : `  ✗ ${p}`);
+  console.error("");
+}
+
 const before = readFolder();
+
+/**
+ * **Step 1, and the reason this is not just a postcondition.**
+ *
+ * `drizzle-kit check` reads the folder exactly as `generate` is about to, and
+ * exits 1 on the fork, on malformed snapshots and on out-of-date ones — the
+ * last of which `generate` merely exits 0 over. `snapshotProblems` adds what
+ * `check` is green on. Together they mean the folder drizzle is about to diff
+ * against is one we have looked at, rather than one we will inspect after it
+ * has already produced SQL from the wrong base.
+ */
+if (!asking) {
+  const chain = snapshotProblems(before.entries, readSnapshots(FOLDER), HISTORICAL);
+  const check = spawnSync("npx", ["drizzle-kit", "check"], { cwd: ROOT, encoding: "utf8" });
+  const checkOut = `${check.stdout ?? ""}${check.stderr ?? ""}`.trim();
+  const problems = [
+    ...chain,
+    ...(check.status === 0 ? [] : [`drizzle-kit check refuses this folder:\n${checkOut}`]),
+  ];
+  if (problems.length > 0) {
+    report("db:generate: drizzle/meta/ is not sound, so nothing was generated", problems);
+    console.error(
+      "  Generating against this would diff from the wrong snapshot and write SQL that\n" +
+        "  looks complete and is wrong. docs/project/database.md § Two worktrees generated\n" +
+        "  at once has the repair, and it depends on what the losing migration is.\n",
+    );
+    process.exit(1);
+  }
+}
 
 const run = spawnSync("npx", ["drizzle-kit", "generate", ...passthrough], {
   cwd: ROOT,
@@ -190,7 +275,16 @@ const code = run.status ?? 1;
 if (asking) process.exit(code);
 
 if (code !== 0) {
-  console.error(`\ndrizzle-kit generate failed (exit ${code}). Nothing was checked.`);
+  console.error(`\ndrizzle-kit generate failed (exit ${code}).`);
+  /* It writes snapshot, journal and .sql as three separate calls, so a death
+     partway through leaves the folder mid-write. The command has already
+     failed — this is about what the NEXT one starts from. */
+  const wreckage = snapshotProblems(readFolder().entries, readSnapshots(FOLDER), HISTORICAL);
+  if (wreckage.length > 0) {
+    report("and it left drizzle/meta/ in a state the next command cannot use", wreckage);
+  } else {
+    console.error("  drizzle/meta/ is still sound, so nothing needs unpicking.\n");
+  }
   process.exit(code);
 }
 
@@ -198,11 +292,7 @@ const after = readFolder();
 const problems = postcondition(before, after);
 
 if (problems.length > 0) {
-  console.error(`\n${"=".repeat(64)}`);
-  console.error("db:generate: drizzle-kit reported success and the folder disagrees");
-  console.error("=".repeat(64));
-  for (const p of problems) console.error(p.startsWith(" ") || p === "" ? p : `  ✗ ${p}`);
-  console.error("");
+  report("db:generate: drizzle-kit reported success and the folder disagrees", problems);
   process.exit(1);
 }
 
