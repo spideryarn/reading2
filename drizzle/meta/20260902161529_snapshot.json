@@ -2172,6 +2172,19 @@
           "primaryKey": false,
           "notNull": true
         },
+        "reserves_name": {
+          "name": "reserves_name",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "url_key": {
+          "name": "url_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2209,8 +2222,40 @@
           "method": "btree",
           "with": {}
         },
-        "jobs_active_slug": {
-          "name": "jobs_active_slug",
+        "jobs_one_running_per_slug": {
+          "name": "jobs_one_running_per_slug",
+          "columns": [
+            {
+              "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"spideryarn\".\"jobs\".\"status\" = 'running'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "jobs_reserved_slug": {
+          "name": "jobs_reserved_slug",
+          "columns": [
+            {
+              "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"spideryarn\".\"jobs\".\"status\" in ('queued','running') and \"spideryarn\".\"jobs\".\"reserves_name\"",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "jobs_active_work": {
+          "name": "jobs_active_work",
           "columns": [
             {
               "expression": "owner_id",
@@ -2223,9 +2268,65 @@
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "work_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
             }
           ],
           "isUnique": true,
+          "where": "\"spideryarn\".\"jobs\".\"status\" in ('queued','running') and not \"spideryarn\".\"jobs\".\"cancelling\"",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "jobs_active_source": {
+          "name": "jobs_active_source",
+          "columns": [
+            {
+              "expression": "owner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "url_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"spideryarn\".\"jobs\".\"status\" in ('queued','running') and \"spideryarn\".\"jobs\".\"reserves_name\"",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "jobs_slug_order": {
+          "name": "jobs_slug_order",
+          "columns": [
+            {
+              "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "where": "\"spideryarn\".\"jobs\".\"status\" in ('queued','running')",
           "concurrently": false,
           "method": "btree",
@@ -2281,6 +2382,10 @@
         "jobs_upload_both_or_neither": {
           "name": "jobs_upload_both_or_neither",
           "value": "(\"spideryarn\".\"jobs\".\"upload_id\" is null) = (\"spideryarn\".\"jobs\".\"upload_filename\" is null)"
+        },
+        "jobs_cancelling_is_running": {
+          "name": "jobs_cancelling_is_running",
+          "value": "not \"spideryarn\".\"jobs\".\"cancelling\" or \"spideryarn\".\"jobs\".\"status\" = 'running'"
         }
       },
       "isRLSEnabled": false

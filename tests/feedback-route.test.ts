@@ -531,6 +531,23 @@ describe("POST /api/feedback", () => {
     expect(submitted).toHaveLength(0);
   });
 
+  it("decides which shape a report is on its keys, not on which of them are empty", async () => {
+    /* `{body: null, steps: "…"}` carries both vocabularies, and the first
+       version read it as a well-formed old client because it asked whether each
+       field held *text*. A shape is a set of keys. GPT Sol's code review,
+       2026-09-02. */
+    const reply = await call(minimal({ body: null, steps: "Pressed the button" }));
+    expect(reply.status).toBe(400);
+    expect(String(reply.body.error)).toMatch(/\[fb-shape\]/);
+    expect(submitted).toHaveLength(0);
+
+    /* And the mirror image: a real body beside empty legacy keys. */
+    const other = await call(minimal({ steps: null, expected: null, actual: null }));
+    expect(other.status).toBe(400);
+    expect(String(other.body.error)).toMatch(/\[fb-shape\]/);
+    expect(submitted).toHaveLength(0);
+  });
+
   it("refuses a report with nothing in it", async () => {
     const reply = await call(minimal({ body: "  " }));
     expect(reply.status).toBe(400);

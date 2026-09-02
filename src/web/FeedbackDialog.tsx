@@ -224,6 +224,22 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
   const sending = useRef(false);
 
   /**
+   * **Which *attempt* this is**, as distinct from which report.
+   *
+   * The id deliberately survives a close and reopen, and reopening releases the
+   * latch above — so two requests carrying one id can be in flight at once, and
+   * they can settle in either order. `stillMine` checked only the id, so the
+   * slower one still counted as current: a first send that fails *after* a retry
+   * has succeeded would paint the failure panel over "Thank you", and the
+   * reverse ordering would paint success over a failure. GPT Sol's code review,
+   * 2026-09-02.
+   *
+   * A counter rather than a token because it is read the same way: only the
+   * newest attempt may write to the screen.
+   */
+  const attempts = useRef(0);
+
+  /**
    * **One id per *report*, and it outlives the dialog being shut.**
    *
    * This was `useMemo(() => open ? mintId() : null, [open])` until GPT Sol's
@@ -406,6 +422,12 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
   const send = useCallback(async () => {
     if (sending.current) return;
     if (!somethingSaid) return;
+    /* **The counter above was a statement, not a rule**, until GPT Sol's code
+       review on 2026-09-02: Send stayed enabled at 4,001 characters, so the
+       reader was told the limit, allowed to press the button, and answered with
+       a server-side `[fb-long]`. The keyboard path needs it too — `disabled` on
+       the button does not stop ⌘+Enter. */
+    if (over) return;
     /* The microphone is still on, or the good words are still on their way.
        Either way the draft is not what the reader means to send yet. */
     if (dictationBusy) return;
@@ -431,7 +453,8 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
      * the durable id above.
      */
     const mine = reportId;
-    const stillMine = () => mine === reportIdRef.current;
+    const attempt = ++attempts.current;
+    const stillMine = () => mine === reportIdRef.current && attempt === attempts.current;
 
     /* Collected **at send time and only when consented**, so an unticked box
        never builds the blob at all. The server refuses diagnostics without
@@ -480,7 +503,7 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
       sending.current = false;
       setStage({ kind: "failed", message: FEEDBACK_SEND_FAILED.message });
     }
-  }, [reportId, somethingSaid, preparing, consented, body, kind, where, shot, dictationBusy]);
+  }, [reportId, somethingSaid, over, preparing, consented, body, kind, where, shot, dictationBusy]);
 
   const copy = useCallback(() => {
     const clipboard = navigator.clipboard;
@@ -777,7 +800,9 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
           <button
             type="submit"
             className="fb-send"
-            disabled={!somethingSaid || stage.kind === "sending" || preparing || dictationBusy}
+            disabled={
+              !somethingSaid || over || stage.kind === "sending" || preparing || dictationBusy
+            }
           >
             {stage.kind === "sending" ? (
               <>
