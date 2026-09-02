@@ -31,6 +31,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import type { Job, Quotes, QuotesResponse } from "../types.js";
+import { useOrderedRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
@@ -91,9 +92,16 @@ export function useQuotes(slug: string): UseQuotes {
   const hasProfile = useHasProfile(slug);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  /**
+   * The read itself — the parse, the 404 branch and the error copy, which are
+   * this mode's own. `current()` after every `await`, before any state is
+   * set: false means this reply is about an article, or an artefact, the hook
+   * has since moved on from. See src/web/useOrderedRead.ts.
+   */
+  const load = useCallback(async (current: () => boolean) => {
     try {
       const res = await apiFetch(`/api/quotes/${encodeURIComponent(slug)}`);
+      if (!current()) return;
       if (res.status === 404) {
         // The ordinary case, not a fault: most articles have none, and this is
         // what the panel's button is for.
@@ -107,6 +115,7 @@ export function useQuotes(slug: string): UseQuotes {
         return;
       }
       const loaded = await readJson<QuotesResponse>(res);
+      if (!current()) return;
       setQuotes(loaded.quotes);
       setStale(loaded.stale);
       setOutdated(loaded.outdated);
@@ -117,6 +126,7 @@ export function useQuotes(slug: string): UseQuotes {
       setError(null);
       setStatus("ready");
     } catch (err) {
+      if (!current()) return;
       setError((err as Error).message);
       /* **A failed revalidation must not take the list away.** `load` is not
          only the opening read — `onFinished` below calls it again every time a
@@ -129,14 +139,21 @@ export function useQuotes(slug: string): UseQuotes {
     }
   }, [slug]);
 
+  /* **The ordering is not this hook's**: an ordinary `reload` joins the read
+     already in flight, a post-job `refresh` trails it rather than racing it, and
+     only the newest reply may commit. src/web/useOrderedRead.ts, shared with the
+     seven other artefact readers — this one lost that race until 2026-09-02
+     (tests/artefact-read-race.test.tsx). */
+  const { reload, refresh } = useOrderedRead(load);
+
   useEffect(() => {
-    void load();
-  }, [load]);
+    void reload();
+  }, [reload]);
 
   /* The job half — the poll, the running job, and what a refused or dead run
      says to the reader — is src/web/useStepJob.ts, shared with the glossary, the
      summaries and the ideas. */
-  const queue = useStepJob(slug, "quotes", load);
+  const queue = useStepJob(slug, "quotes", refresh);
 
   const find = useCallback(
     async (useProfile = true) => {
