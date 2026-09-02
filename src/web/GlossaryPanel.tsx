@@ -217,8 +217,8 @@ export function GlossaryPanel({
 
   return (
     <aside className="mode-band gloss" aria-label="Glossary">
-      <div className="gloss-head">
-        <BookA size={14} className="gloss-head-icon" />
+      <div className="band-head">
+        <BookA size={14} className="band-head-icon" />
         <h2>Glossary</h2>
         {glossary && (
           <span className="gloss-count">

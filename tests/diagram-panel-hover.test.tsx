@@ -921,8 +921,8 @@ describe("what a scatter says about itself", () => {
        wrapping is invisible to it. That is how three copies of a false claim got
        past a green suite: the icon was on `.diag-opts`, which wraps, and at the
        ideal band width Drift's two chip groups plus the icon do not fit on one
-       line. `.diag-head` has no `flex-wrap`, so it cannot gain a flex line — and
-       `.diag-head h2` now carries the one-line-cut four, so it cannot gain a
+       line. `.band-head` has no `flex-wrap`, so it cannot gain a flex line — and
+       `.band-head h2` now carries the one-line-cut four, so it cannot gain a
        *text* line either, which was the fourth version of the same mistake.
        tests/diagram-css.test.ts holds those four; docs/project/diagram.md
        § Why the heading row and not the control row has the whole sequence.
@@ -939,7 +939,7 @@ describe("what a scatter says about itself", () => {
     expect(
       icon?.parentElement?.className,
       "the caveat is back on a row that can wrap",
-    ).toBe("diag-head");
+    ).toBe("band-head");
   });
 
   it("still says it out loud when the picture lands", async () => {

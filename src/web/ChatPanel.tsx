@@ -434,7 +434,7 @@ export function ChatPanel({
       className={`mode-band chat${remember ? " remember" : ""}`}
       aria-label={remember ? "Remember what you took from this article" : "Chat about this article"}
     >
-      <div className="chat-head">
+      <div className="band-head">
         <h2>{open ? open.title : remember ? "Remember" : "Chat"}</h2>
         {subMode}
         {open ? (

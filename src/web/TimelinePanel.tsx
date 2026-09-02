@@ -328,8 +328,8 @@ export function TimelinePanel({
 
   return (
     <aside className="mode-band gloss timeline" aria-label="Timeline">
-      <div className="gloss-head">
-        <Clock size={14} className="gloss-head-icon" />
+      <div className="band-head">
+        <Clock size={14} className="band-head-icon" />
         <h2>Timeline</h2>
         {timeline && (
           <span className="gloss-count">

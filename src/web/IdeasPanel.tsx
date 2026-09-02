@@ -158,8 +158,8 @@ export function IdeasPanel({
 
   return (
     <aside className="mode-band gloss ideas" aria-label="Ideas">
-      <div className="gloss-head">
-        <Lightbulb size={14} className="gloss-head-icon" />
+      <div className="band-head">
+        <Lightbulb size={14} className="band-head-icon" />
         <h2>Ideas</h2>
         {ideas && (
           <span className="gloss-count">

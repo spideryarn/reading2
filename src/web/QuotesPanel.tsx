@@ -528,8 +528,8 @@ export function QuotesPanel({
 
   return (
     <aside className="mode-band quotes" aria-label="Quotes">
-      <div className="quotes-head">
-        <QuoteIcon size={14} className="quotes-head-icon" />
+      <div className="band-head">
+        <QuoteIcon size={14} className="band-head-icon" />
         <h2>Quotes</h2>
         {quotes && (
           <span className="quotes-count">

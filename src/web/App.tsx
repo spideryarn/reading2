@@ -2633,16 +2633,19 @@ function Reader({
           that a tooltip may never be the only place needed information lives,
           and a hover tooltip is out of reach of touch and keyboard entirely.
           So the marked mode still opens its band, in the same slot at the same
-          width, and the band says which of the four boundaries this is.
+          width, and the band says which boundary this is — `VisitorGap` in
+          visitor.ts is the set of them.
           PublicChrome.tsx, visitor.ts.
 
           Placed above the real bands rather than woven into each of their
           conditions, so that a mode added later cannot arrive without one:
-          `visitorGap` answers for every member of `Mode` and fails closed. */}
+          `visitorGap` reads a `Record<Mode, VisitorPolicy>`, so a mode with no
+          row is a compile error rather than a mode that quietly opens. */}
       {/* **Only when there is a gap**, and since slice 1b there usually is not:
           a visitor whose article has a glossary opens the glossary, and
           `visitorGap` answers `null`. What is left here is a mode the pipeline
-          never ran for this piece, and the four that cost a model call. */}
+          never ran for this piece, and the ones that cost a model call —
+          `POLICY` in visitor.ts says which, so no count lives here. */}
       {!owner && gap && <VisitorBand gap={gap} signedIn={signedIn} />}
       {owner && mode === "chat" && (
         <ConversationBand
@@ -4677,8 +4680,8 @@ function RefereeBand({
 
   return (
     <aside className="mode-band gloss referee" aria-label="Referee">
-      <div className="gloss-head">
-        <ClipboardCheck size={14} className="gloss-head-icon" />
+      <div className="band-head">
+        <ClipboardCheck size={14} className="band-head-icon" />
         <h2>Referee</h2>
         <RefereeHowButton open={how.open} onToggle={() => how.show(!how.open)} />
       </div>

@@ -3868,21 +3868,51 @@ td.text.has-hit[data-hues="8"] {
   font-size: 0.87rem;
 }
 
-.chat-head {
+/* **The title row every band has — one family, for all of them.** It replaced
+   six byte-identical-except-for-one-thing copies on 2026-09-02: `.chat-head`,
+   `.gloss-head` (shared by Glossary, Ideas, Timeline, Quiz and Referee),
+   `.srch-head`, `.summ-head`, `.diag-head` and `.quotes-head`, each with its own
+   `-head`, `-head-icon` and `-head h2`. Adding a mode meant copying three rules,
+   and two of the copies had already drifted in ways nobody chose. Both drifts
+   are resolved here to the robust side, for every band, because in each case the
+   other heads were only accidentally safe:
+
+   **`flex: none`** was `.summ-head`'s alone. The band is a fixed-height flex
+   column, so a head without it is squeezable by a tall sibling — the shape of
+   the fault `tests/referee-band-fits.test.ts` records, where the one child that
+   would shrink went to 0px with 321px of content in it. A title row giving up
+   its height is never the answer.
+
+   **The one-line cut** was `.diag-head h2`'s alone, and its comment said exactly
+   why the others could not be trusted: "Diagram" is one word and so cannot wrap
+   today — but that is "a fact about the heading, not about the row, and it would
+   stop being true the moment the heading became two words." Chat's `h2` already
+   needed it for the other reason: a thread's title is the reader's first
+   sentence and can be sixty characters, and the whole of it is in the list
+   behind the ×. `min-width: 0` is the one that does the work — without it a flex
+   item's automatic minimum is its longest word, so it never shrinks far enough
+   for `text-overflow` to have anything to do.
+
+   Each panel still keeps a class of its own for whatever only it needs, sitting
+   in this row as a flex child: `.gloss-count`, `.diag-about`, `.ref-how-btn`.
+   `.chat-icon` below is a different thing — Chat's action *buttons*, not this
+   row's decorative icon. */
+.band-head {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
   padding: 0.55rem 0.7rem;
   border-bottom: 1px solid var(--rule);
+  flex: none;
 }
-.chat-head h2 {
+.band-head-icon { color: var(--ink-faint); flex: none; }
+.band-head h2 {
   flex: 1;
   margin: 0;
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--ink);
-  /* A thread's title is the reader's first sentence and can be sixty
-     characters. One line, cut — the whole thing is in the list behind the ×. */
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4604,21 +4634,7 @@ td.text.has-hit[data-hues="8"] {
    prose, no silent sort by the model's scores, and no hiding an entry that
    matches nothing in the article. */
 
-.gloss-head {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.55rem 0.7rem;
-  border-bottom: 1px solid var(--rule);
-}
-.gloss-head-icon { color: var(--ink-faint); flex: none; }
-.gloss-head h2 {
-  flex: 1;
-  margin: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--ink);
-}
+/* The title row is `.band-head`, § mode band. */
 .gloss-count { color: var(--ink-faint); font-size: 0.75rem; }
 
 /* The sort control. Small, quiet, and always visible when there is a choice —
@@ -5626,21 +5642,7 @@ td.text.has-hit[data-hues="8"] {
    The marks these produce in the prose are `mark.hit` and `td.text.has-hit`,
    further up this file — and the hue is deliberately not the orange. */
 
-.srch-head {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.55rem 0.7rem;
-  border-bottom: 1px solid var(--rule);
-}
-.srch-head-icon { color: var(--ink-faint); flex: none; }
-.srch-head h2 {
-  flex: 1;
-  margin: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--ink);
-}
+/* The title row is `.band-head`, § mode band. */
 
 .srch-box {
   padding: 0.5rem 0.6rem 0.55rem;
@@ -6300,11 +6302,11 @@ td.text.has-hit[data-hues="8"] {
 
 /* -------------------------------------------------------- § referee mode ----
    The mode for somebody who has been asked to peer-review the piece. The shell
-   is `.mode-band` above and the head is `.gloss-head`'s, unchanged; what is here
+   is `.mode-band` above and the head is `.band-head`, unchanged; what is here
    is the three things this band has that no other one does. See App.tsx
    § RefereeBand and docs/plans/260831an-referee-mode-for-peer-reviewers.md.
 
-   Everything else is borrowed on purpose rather than duplicated — `.gloss-head`
+   Everything else is borrowed on purpose rather than duplicated — `.band-head`
    for the title row and `.gloss-quiet` for the placeholder lines — so this
    section stays the size of what is genuinely new. */
 
@@ -6643,7 +6645,7 @@ td.text.has-hit[data-hues="8"] {
 }
 .ref-how-p b { color: var(--ink); font-weight: 600; }
 
-/* In the mode header beside the title, where `.gloss-head h2` has `flex: 1` and
+/* In the mode header beside the title, where `.band-head h2` has `flex: 1` and
    pushes it to the right edge. Text rather than an icon: a `?` in a circle is
    the affordance nobody presses, and the card it opens is two paragraphs that
    change what the rest of the band means. */
@@ -7288,22 +7290,8 @@ td.text.has-hit[data-hues="8"] {
    same two colours here, so "this is the parts level" needs no legend. Change
    them in one place or they stop meaning one thing. */
 
-.summ-head {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.55rem 0.7rem;
-  border-bottom: 1px solid var(--rule);
-  flex: none;
-}
-.summ-head-icon { color: var(--ink-faint); flex: none; }
-.summ-head h2 {
-  flex: 1;
-  margin: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--ink);
-}
+/* The title row is `.band-head`, § mode band — where this panel's `flex: none`
+   now lives, for every band. */
 
 /* ---- the two controls ---- */
 .summ-controls {
@@ -8388,36 +8376,10 @@ td.text.has-hit[data-hues="8"] {
    family or a padding is changing arithmetic that lives in TypeScript, and the
    two will disagree silently. `CHAR_W` there is the number to move. */
 
-.diag-head {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.55rem 0.7rem;
-  border-bottom: 1px solid var(--rule);
-}
-.diag-head-icon { color: var(--ink-faint); flex: none; }
-.diag-head h2 {
-  flex: 1;
-  margin: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--ink);
-  /* **One line, cut** — as `.chat-head h2` above, and here for a reason that is
-     easy to miss. The row holds the caveat icon so that the caveat costs no
-     vertical space, and the argument for that was `.diag-head` having no
-     `flex-wrap`, so it cannot gain a flex line. True, and not the whole story:
-     a flex item can gain a *text* line instead, which makes the row just as
-     tall. "Diagram" is one word and so cannot wrap today — but that is a fact
-     about the heading, not about the row, and it would stop being true the
-     moment the heading became two words. These four make it a fact about the
-     row. `min-width: 0` is the one that does the work: without it a flex item's
-     automatic minimum is its longest word, so it never shrinks far enough for
-     `text-overflow` to have anything to do. */
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* The title row is `.band-head`, § mode band — where this panel's
+   one-line-cut four now live, for every band. The row holds the caveat icon so
+   that the caveat costs no vertical space, and § `.diag-about` below is the
+   whole argument for why that claim needs those four to be true. */
 
 /* The three pictures, as one control. Same shape as `.gloss-sort`, because it
    is the same kind of thing — a small quiet row of exclusive choices under the
@@ -10243,7 +10205,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    the DOM as an `.sr-only` live region — this is a change to where it is
    *shown*, not to whether it is said. DiagramPanel.tsx § ScatterNote.
 
-   **It lives in `.diag-head` because `.diag-head` cannot wrap.** It was on
+   **It lives in `.band-head` because `.band-head` cannot wrap.** It was on
    `.diag-opts` first, which does, and the "costs no vertical space" claim was
    false there in a way that took two checks and a browser sweep to see. Auto
    margins right-align an item on the line it lands on; they do not stop it
@@ -10251,16 +10213,17 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    which item wrapped, because the binding constraint is **total intrinsic
    width**, not alignment. At the ideal band width Drift's two chip groups plus
    this icon do not fit on one line, so something wraps whichever way the
-   alignment is written. `.diag-head` has no `flex-wrap`, so it shrinks its
+   alignment is written. `.band-head` has no `flex-wrap`, so it shrinks its
    heading instead of gaining a flex line.
 
    **That is still not the whole argument, and the missing half is a text
    line.** A row with no `flex-wrap` cannot gain a line, but the flexible item
    inside it can wrap its own text once it has been shrunk far enough, and the
-   row is then just as tall. Nothing about `.diag-head` prevented that; only
+   row is then just as tall. Nothing about `.band-head` prevented that; only
    the heading being the single unbreakable word "Diagram" did, which is a fact
-   about today's copy rather than about the row. `.diag-head h2` now declares
-   the one-line-cut four (§ heading), so the claim is a property of the markup.
+   about today's copy rather than about the row. `.band-head h2` declares the
+   one-line-cut four (§ mode band), so the claim is a property of the markup —
+   and since 2026-09-02 it is true of every band's head, not only this one.
 
    `flex: none` so it is the icon that keeps its size when that shrinking
    happens, rather than collapsing and taking the caveat with it;
@@ -11783,21 +11746,7 @@ table.only-prose thead { display: none; }
    for rule. They are the same three controls doing the same three jobs, and a
    second look for them would teach the reader they mean something else. What is
    NOT shared is the row, which is a different thing entirely. */
-.quotes-head {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.55rem 0.7rem;
-  border-bottom: 1px solid var(--rule);
-}
-.quotes-head-icon { color: var(--ink-faint); flex: none; }
-.quotes-head h2 {
-  flex: 1;
-  margin: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--ink);
-}
+/* The title row is `.band-head`, § mode band. */
 .quotes-count { color: var(--ink-faint); font-size: 0.75rem; }
 
 .quotes-rank {
@@ -12292,7 +12241,7 @@ table.only-prose thead { display: none; }
 /* ------------------------------------------------------------------ quiz --
    The Quiz sub-mode of Remember — docs/plans/260831al-review-quiz-sub-mode.md.
 
-   **The structural classes are the glossary band's** (`gloss-head`, `gloss-run`,
+   **The structural classes are the glossary band's** (`band-head`, `gloss-run`,
    `gloss-stale`, `gloss-count`) rather than a second vocabulary saying the same
    things. What is `quiz-*` here is only what no other band has: a question, a
    box to answer it in, a mark, a disclosure holding an answer the reader is not

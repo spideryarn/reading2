@@ -3,7 +3,7 @@
  * can reach.**
  *
  * The bug, measured in Chrome on 2026-09-01 at an ordinary 1280 × 720: the
- * band's children were `gloss-head` 41 + `ref-notice` 214 + `ref-scan` 386 +
+ * band's children were `band-head` 41 + `ref-notice` 214 + `ref-scan` 386 +
  * `ref-views` 46 = **687px in a 636px band**, so `.ref-panel` — the only child
  * carrying `min-height: 0`, and therefore the only one flexbox was willing to
  * squeeze — was **0px tall with 321px of content in it**, the sub-mode chips
