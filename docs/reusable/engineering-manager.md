@@ -45,8 +45,9 @@ asked. In a shared tree, name your files on both commands —
   the stage felt small.
 
 Hand it the evidence — the scoped diff, the failing output, the script that produced the number —
-not just your account of it. Check each finding yourself; some are wrong. Check a verdict actually
-arrived, exit code *and* answer file. Mechanics in
+not just your account of it, and tell it to run one test file itself: its sandbox allows that, and
+a finding it reproduced outranks one it reasoned to. Check each finding yourself; some are wrong.
+Check a verdict actually arrived, exit code *and* answer file. Mechanics in
 [codex-cli-as-subagent.md](codex-cli-as-subagent.md).
 
 ## Delegate
