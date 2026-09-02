@@ -74,9 +74,20 @@ the sharper one is that **`git remote set-head origin -a` was wrong**, because `
 default branch is a separate setting that had not moved, so it would have set `origin/HEAD` back to
 production while looking like the careful option.
 
-Still outstanding and both Greg's: GitHub's default branch (no authenticated `gh` on this box), and
-taking the model keys off Vercel Preview. Neither blocks a worktree, because `worktree.baseRef:
-"head"` never resolves `origin/HEAD`.
+**GitHub's default branch became `dev` on 2026-09-02**, from the Mac, where `gh` is authenticated
+(`gh api -X PATCH repos/spideryarn/reading2 -f default_branch=dev`) — the box has no token, which is
+why it stayed open. Greg approved it on the condition that it was consistent with `main` remaining
+deployment-only, and it is: Vercel's `link.productionBranch` was read before and after and is still
+`main`, so a push to `dev` cannot promote itself.
+
+**That inverts the runbook correction above.** `git remote set-head origin -a` was the wrong spelling
+only while the two settings disagreed. They now agree, so `-a` is the right command everywhere, and
+it is the one that has to be run: changing the default on GitHub does **not** move `origin/HEAD` in
+any existing clone. Done on the Mac and verified; see [§ every clone including the
+box](#what-step-0-is-in-full) for the three-line check, still owed on the box and on any other
+checkout.
+
+Still outstanding and Greg's: taking the model keys off Vercel Preview.
 
 **Step 0 was split on 2026-09-01, and the half that disturbs nobody was built first.** Greg:
 
@@ -126,7 +137,7 @@ What exists now:
 
 | | |
 |---|---|
-| [`scripts/lockfile.ts`](../../scripts/lockfile.ts) | Atomic file lock. **Never steals a stale lock** — see step 1 below. Used by the deploy gate; step 4's database lease is the next caller. |
+| [`scripts/lockfile.ts`](../../scripts/lockfile.ts) | Atomic file lock. **Never steals a stale lock** — see step 1 below. Used by the deploy gate, and by nothing else: step 4's database lease was going to be its next caller and is not being built, because a better lock for that job was already in `db:migrate`. See step 4. |
 | [`scripts/worktree-admin.ts`](../../scripts/worktree-admin.ts) | `forceRemoveThrowawayWorktree` (both `--force` flags, exit code returned), plus a `--porcelain -z` parser and `ghosts()` for step 5's `doctor`. |
 | [`scripts/deploy.ts`](../../scripts/deploy.ts) | Uses both. Teardown failures are now `record()`ed instead of swallowed. |
 | [`src/monitoring.ts`](../../src/monitoring.ts), [`src/web/monitoring.ts`](../../src/web/monitoring.ts) | Sentry now needs a deployment as well as a DSN. Unrelated to worktrees; found because the plan copies `.env.local` into every worktree. |
@@ -945,6 +956,23 @@ Two additions make that survivable:
 - **A migration lease.** A lock file wrapping `db:migrate`, `db:reset` and any DB-backed test run, so
   two agents cannot migrate one database at once, and a schema change cannot land underneath another
   worktree's test run.
+
+  **Half of this was already built when the plan was written, better, and somewhere else.**
+  `db:migrate` has taken a Postgres advisory lock — `MIGRATION_LOCK_KEY` in
+  [`scripts/migration-ledger.ts`](../../scripts/migration-ledger.ts), `pg_try_advisory_lock` in
+  [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts) — since before worktrees, held across the
+  preflight as well as the migrate. So migrator-against-migrator is done, and building the file-lock
+  version would have put a weaker primitive next to a better one. **Do not build it.** What is
+  genuinely open is migrate against a running test suite, and `db:reset`, which takes nothing;
+  [260902c § 6](260902c-concurrent-migrations-across-worktrees.md#6-locking-moves-to-its-own-plan)
+  hands that to a plan of its own, with the seam (`globalSetup`, not `pgReady`) and the reason
+  `db:reset` cannot be covered by a lock it kills.
+
+  **The duplicate-migration-number refusal proposed alongside it is also dropped**, and for a
+  sharper reason: it is neither necessary nor sufficient. The migrator reads journal tags, so it
+  would happily run two `0052`s; and two worktrees minting a tidy `0052` and `0053` still fork the
+  snapshot chain, which is the failure that actually matters. What replaced it is in
+  [260902c](260902c-concurrent-migrations-across-worktrees.md), and it is built.
 - **A `test:db` that fails closed.** About a dozen Postgres suites currently *skip themselves
   silently* when the database is down — a misconfigured worktree would report green while testing
   nothing. `test:db` must fail when the database is absent or the migration head is not what the
@@ -1378,9 +1406,10 @@ not how it is:*
 - `npm run deploy` is untouched and remains the only writer of `main`.
 
 [Runbook A](../project/worktrees.md#runbook-a-flip-the-trunk-to-dev-done-2026-09-02) moved the primary
-onto `dev` on 2026-09-02. GitHub's default branch is still `main` and stays outstanding — which changes
-nothing here, because `worktree.baseRef: "head"` makes worktrees branch from the primary's local `HEAD`
-rather than through `origin/HEAD`.
+onto `dev` on 2026-09-02, and GitHub's default branch followed the same day. Neither ever mattered
+here, because `worktree.baseRef: "head"` makes worktrees branch from the primary's local `HEAD`
+rather than through `origin/HEAD` — but a clone that has not run `git remote set-head origin -a`
+since the flip still answers `main`, which matters to anything that does resolve it.
 
 **The one command, which an agent cannot run** — the permission classifier refuses a `git push` here,
 correctly:

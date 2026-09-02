@@ -256,7 +256,9 @@ import type {
 } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { insertWhenSlotFree } from "./helpers/running-slot.js";
-import { type HeldRunLock, takeRunLock } from "./helpers/run-lock.js";
+import { cleanUpThenRelease, takeRunLockAndSetUp } from "./helpers/lock-lifecycle.js";
+import type { HeldRunLock } from "./helpers/run-lock.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 /* Put back straight away: the modules above have captured the flag, and vitest
    reuses a worker process across files. Leaving it set hands the next file a
@@ -323,28 +325,27 @@ const { reachable } = await pgReady({
 if (reachable) {
   /* After `pgReady`, and only when reachable — a file that is about to skip
      must not sit holding the lock. See tests/helpers/run-lock.ts. */
-  runLock = await takeRunLock("tests/store-pg-session.test.ts");
-  const lockClient = runLock.client;
-
-  /* The lock is held, so no sibling can be using any of this. Jobs first: they
-     reference drafts, and a leftover `running` row from a killed run blocks
-     this file's own slugs and counts against the concurrency cap until its
-     lease lapses. */
-  await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
-  await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
-  await lockClient.query(
-    "update spideryarn.articles set current_revision_id = null where slug like $1",
-    [SLUG_RUBBLE],
-  );
-  await lockClient.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
-  await lockClient.query("delete from auth.users where id::text like $1", [RUBBLE]);
-  await lockClient.query(
-    `insert into auth.users
-       (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
-     values ($1, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-             $2, 'x', now(), now())`,
-    [OWNER, `store-pg-session-${OWNER}@example.invalid`],
-  );
+  /* Through `takeRunLockAndSetUp`, so a sweep statement that throws gives the
+     key back: this is module scope, and no `afterAll` exists yet to do it.
+     tests/helpers/lock-lifecycle.ts. */
+  runLock = await takeRunLockAndSetUp("tests/store-pg-session.test.ts", async (lockClient) => {
+    /* The lock is held, so no sibling can be using any of this. Jobs first: they
+       reference drafts, and a leftover `running` row from a killed run blocks
+       this file's own slugs and counts against the concurrency cap until its
+       lease lapses. */
+    await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
+    await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
+    await lockClient.query(
+      "update spideryarn.articles set current_revision_id = null where slug like $1",
+      [SLUG_RUBBLE],
+    );
+    await lockClient.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
+    await lockClient.query("delete from auth.users where id::text like $1", [RUBBLE]);
+    await seedAuthUser(lockClient, {
+      id: OWNER,
+      email: `store-pg-session-${OWNER}@example.invalid`,
+    });
+  });
 }
 
 const when = reachable ? describe : describe.skip;
@@ -905,23 +906,39 @@ when("the transactional session", () => {
 
   afterAll(async () => {
     if (!reachable) return;
-    const database = getDb();
-    await database.delete(jobsTable).where(eq(jobsTable.ownerId, OWNER));
-    const mine = await database.select({ id: articles.id }).from(articles).where(eq(articles.ownerId, OWNER));
-    for (const { id } of mine) {
-      /* The pointer lets go first, or the revision cannot cascade away — the
-         order tests/store-import-convergence.test.ts works out at length. */
-      await database.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, id));
-      await database.delete(articles).where(eq(articles.id, id));
-    }
-    await closeDb();
-    if (runLock) {
-      /* On the lock's own connection, so the person is taken away while this
-         file still owns the slot rather than in the gap after letting go. */
-      await runLock.client.query("delete from auth.users where id = $1", [OWNER]);
-      await runLock.release();
-    }
-    await rm(path.join(ROOT, "data", `${SLUG_PREFIX}preflight`), { recursive: true, force: true });
+    /* Release last, and whatever the cleanup did: one failed statement used to
+       skip it, leaving the key held until the worker exited and every peer
+       suite waiting on it. tests/helpers/lock-lifecycle.ts. */
+    await cleanUpThenRelease(
+      async () => {
+        const database = getDb();
+        await database.delete(jobsTable).where(eq(jobsTable.ownerId, OWNER));
+        const mine = await database
+          .select({ id: articles.id })
+          .from(articles)
+          .where(eq(articles.ownerId, OWNER));
+        for (const { id } of mine) {
+          /* The pointer lets go first, or the revision cannot cascade away — the
+             order tests/store-import-convergence.test.ts works out at length. */
+          await database
+            .update(articles)
+            .set({ currentRevisionId: null })
+            .where(eq(articles.id, id));
+          await database.delete(articles).where(eq(articles.id, id));
+        }
+        await closeDb();
+        /* On the lock's own connection, so the person is taken away while this
+           file still owns the slot rather than in the gap after letting go. */
+        await runLock?.client.query("delete from auth.users where id = $1", [OWNER]);
+        await rm(path.join(ROOT, "data", `${SLUG_PREFIX}preflight`), {
+          recursive: true,
+          force: true,
+        });
+      },
+      async () => {
+        await runLock?.release();
+      },
+    );
   });
 
   /**

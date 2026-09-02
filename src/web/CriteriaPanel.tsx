@@ -25,7 +25,7 @@
  * `slot`. What pays for it is rule 3, extended into the prose: the mark carries
  * a **sign**, and this panel prints a **key** whenever a for/against criterion
  * is switched on.
- * docs/plans/260902e-make-referee-mode-understandable.md has the argument and
+ * docs/plans/260902f-make-referee-mode-understandable.md has the argument and
  * the two things it knowingly does not fix.
  *
  * The plan also asked for the valence in the prose gutter, beside the marked

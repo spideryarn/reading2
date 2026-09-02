@@ -2,7 +2,7 @@
 
 **Status: planning, revised after GPT Sol's first review, 2026-09-02.** Worktree
 `referee-mode-clarity`, branch `worktree-referee-mode-clarity`, dev server on 5274 against Postgres.
-Review: [260902e-…-review-sol.md](260902e-make-referee-mode-understandable-review-sol.md), which
+Review: [260902e-…-review-sol.md](260902f-make-referee-mode-understandable-review-sol.md), which
 returned **do not build as written** on the first draft. Eight of its nine findings changed this
 plan; § *Where this plan still disagrees with the review* is the one that did not.
 
@@ -204,7 +204,7 @@ the author's sentence with no sign in it.
 
 #### What the code review of stage 1 changed
 
-[260902e-stage1-code-review-sol.md](260902e-stage1-code-review-sol.md) — *ship with changes*, twelve
+[260902f-make-referee-mode-understandable-stage1-review-sol.md](260902f-make-referee-mode-understandable-stage1-review-sol.md) — *ship with changes*, twelve
 findings, and nine of them were real defects rather than opinions. Two of the nine were the reversal
 quietly contradicting itself, and both were invisible to the whole suite:
 

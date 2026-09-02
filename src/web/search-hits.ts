@@ -684,7 +684,7 @@ export function resolveTimelineEvent(
  * deliberately left reading it. And a stripe that carries a verdict may not
  * carry it in colour alone (docs/project/colour-scales.md), which is paid for by
  * the sign glyph `annotateHtml` draws and the key in the Criteria panel.
- * docs/plans/260902e-make-referee-mode-understandable.md has the whole argument,
+ * docs/plans/260902f-make-referee-mode-understandable.md has the whole argument,
  * including the two things it knowingly does not fix.
  *
  * **The number and not a token**, for the reason `Found.valence` gives: this

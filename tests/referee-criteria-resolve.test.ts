@@ -33,7 +33,7 @@
  * opposites, and what is asserted now is the property that replaced the old one:
  * a stripe is the **direction**, deduplicated on the resolved ramp token, so two
  * opposite valences over one phrase stay two stripes and never collapse into
- * one. The plan is docs/plans/260902e-make-referee-mode-understandable.md, which
+ * one. The plan is docs/plans/260902f-make-referee-mode-understandable.md, which
  * also says what this knowingly gives up (prose→panel provenance) and what pays
  * for painting a judgement in colour (the sign glyph, and the key in the panel).
  */

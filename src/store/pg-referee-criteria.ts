@@ -37,7 +37,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { articles, refereeCriteria, revisionBlocks } from "../db/schema.js";
+import { articles, refereeCriteria } from "../db/schema.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import {
@@ -49,9 +49,8 @@ import {
 import { CRITERION_SWEPT, withCriterion } from "../referee-criteria-store.js";
 import { MAX_CRITERIA, type SavedCriterion } from "../saved-criteria.js";
 import { requireColour } from "../searches.js";
-import { hashBlocks } from "../source-hash.js";
 import type { RefereeCriteriaStore, SweepOptions } from "./contracts.js";
-import { notFound, ownedSlug, requireSlug } from "./pg.js";
+import { notFound, ownedSlug, requireSlug, sourceHashFor } from "./pg.js";
 
 const logger = log("store");
 
@@ -119,31 +118,6 @@ function readable(rows: (typeof refereeCriteria.$inferSelect)[], slug?: string):
   }
   if (unreadable) logger.warn({ slug, unreadable }, "dropped criteri(a) with an unreadable config");
   return out;
-}
-
-/**
- * The fingerprint of the article as this store has it — the Postgres half of
- * `currentSourceHash` in src/searches.ts, and byte for byte the same query
- * `pg-searches.ts` runs.
- *
- * Four columns and `order by ordinal`, both for the reasons written out there:
- * `hashBlocks` folds in `role` and `treatment`, and block ids carry no
- * position, so without the clause a hash computed here would match the file's
- * in development and drift in production.
- */
-async function sourceHashFor(articleId: string, db: Db | Tx = getDb()): Promise<string | undefined> {
-  const rows = await db
-    .select({
-      id: revisionBlocks.blockId,
-      text: revisionBlocks.text,
-      role: revisionBlocks.role,
-      treatment: revisionBlocks.treatment,
-    })
-    .from(revisionBlocks)
-    .innerJoin(articles, eq(articles.currentRevisionId, revisionBlocks.revisionId))
-    .where(eq(articles.id, articleId))
-    .orderBy(asc(revisionBlocks.ordinal));
-  return rows.length ? hashBlocks(rows) : undefined;
 }
 
 /**

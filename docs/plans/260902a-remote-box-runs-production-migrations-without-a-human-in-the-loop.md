@@ -1,8 +1,9 @@
 # The remote box runs production migrations, with nobody in the loop
 
-**Status: proposed, 2026-09-02. Not built.** Greg has chosen the shape; the detail below is what a
-first implementation would be, and the [open questions](#open-questions) are the parts still to
-settle.
+**Status: step 1 mostly built and live, 2026-09-02.** See
+[Progress](#progress-and-what-step-1-found-on-its-first-run) — including the fifteen unapplied
+migrations it found in production on its first run, and the green it reports now they are applied. Steps 2 and 3 are still proposals, and the
+[open questions](#open-questions) are the parts still to settle.
 
 > I really want the remote-box to be able to kick off production migrations as part of its deploy
 > (which it can trigger simply with a push).
@@ -460,6 +461,61 @@ laptop. Two things about that number, in both directions:
 The honest summary for the decision: **this buys "most nights, not every night".** If that is not
 enough, the answer is the credential on the box, with the trade-off row *the gate: advisory* read
 out loud.
+
+## Progress, and what step 1 found on its first run
+
+**Built, 2026-09-02** — commits `2939f6d` (the reporting) and `b6be6a7` (the two bugs).
+
+- [`src/migration-digest.ts`](../../src/migration-digest.ts) — the canonical digest and the
+  two-direction comparison, used by **both** `/api/health` and `scripts/deploy.ts`, so the two
+  cannot drift into disagreeing about what "the same migrations" means.
+- `/api/health` reports `migrations.expected` (stamped in at build time from the commit's own
+  `drizzle/`) beside `migrations.applied` (read as the app role). `missing` warns and 503s; `ahead`
+  is silent, because the deploy order guarantees it during every deploy.
+- `--skip-migrations` no longer skips the *check*, and refuses to ship when anything is pending.
+- The post-apply verification compares hashes rather than a row count.
+- The production grant was applied and **verified by asking afterwards**, `false → true`:
+  `usage` on `spideryarn_migrations` and `select` on `__drizzle_migrations`, for `spideryarn_app`.
+
+### What it found, and what happened next
+
+Pointed at production for the first time, at 06:50, the check reported the exact failure this
+document exists to prevent, already in progress: **37 migrations applied, 52 needed by the live
+commit** — fifteen missing, and `/api/health` answering 503 over 53 columns the code selected and
+could not see.
+
+Another agent deployed and migrated within the hour. As of 07:26 production answers:
+
+```
+  expected : { count: 52, digest: 29d57bbb… }
+  applied  : { count: 52, digest: 29d57bbb… }
+  missing  : []        ahead : 0        warnings: []        ok: true
+```
+
+So the ledger, the schema and the code are in step, the grant works from the deployed function, and
+**the feature's first end-to-end run in production was a green one it had itself made legible.**
+
+### One mistake worth recording, because the tooling built here is the fix for it
+
+Between reading the ledger (37) and reading the columns, the other agent was migrating. So the
+columns came back showing `quiz`, `based_on_revision_id`, a dropped `raw_bytes` and a fully-formed
+`feedback` table — all from migrations the ledger snapshot said were unapplied. That looks exactly
+like a schema that has drifted ahead of its ledger, and it was nearly written up as one.
+
+It was not drift. It was **one reader taking several snapshots across a moving database** and
+comparing them to each other. The lesson is not "be careful" — it is that a single
+`GET /api/health` answers expected, applied, missing and ahead **atomically, in one response**,
+where a sequence of separate queries cannot. The instrument built in step 1 is the thing that
+would have prevented the misreading; reaching for `psql` instead is what caused it.
+
+### Still to do in step 1
+
+- **The pre-push refusal.** Now that the digest is on `/api/health`, this is an HTTPS request rather
+  than a database connection — which also gives `--skip-migrations` back a credential-free check.
+  Remember it must be **deleted** in step 2, or the push that triggers the migration is the push
+  that gets refused.
+- **The Vercel Deployment Check.** Needs a workflow file, which the box cannot push (fact 4) — so
+  landing it is Greg's, and it wants the live canary named in step 1 before it is load-bearing.
 
 ## See also
 

@@ -28,7 +28,7 @@ What is built:
 | [`vercel.json`](../../vercel.json) | `git.deploymentEnabled` is default-deny — `{"**": false, "main": true}` — so only production builds. |
 | [`.gitignore`](../../.gitignore) | `.claude/worktrees/` — where `claude --worktree <name>` puts a worktree. Ignored rather than merely untracked, because the primary would otherwise see every peer's whole checkout as untracked files and the commit recipe leans on `git status` being readable. |
 | [`.worktreeinclude`](../../.worktreeinclude) | `.env.local` and `.env`, copied into each new worktree. `.env.prod` deliberately absent, so an agent in a worktree cannot deploy. |
-| [`scripts/typecheck.ts`](../../scripts/typecheck.ts) | `.claude` added to `SKIP`. **The one scanner that actually walks in** — it recurses from the repository root and matches by basename, so a worktree's `tsconfig.json` became a project of the primary's. biome, knip and jscpd need nothing: their globs are anchored allowlists. |
+| [`scripts/typecheck.ts`](../../scripts/typecheck.ts) | `.claude/worktrees` in `SKIP_PATHS`. **The one scanner that actually walks in** — it recurses from the repository root, so a worktree's `tsconfig.json` became a project of the primary's. A **joined path, not a basename in `SKIP`**, because `.claude/` also holds the tracked hooks and settings, and skipping every directory of that name would hide a TypeScript hook added there later. biome, knip and jscpd need nothing: their globs are anchored allowlists. |
 | [`vite.config.ts`](../../vite.config.ts) | `server.watch.ignored` gains `**/.claude/worktrees/**`, so a peer's keystrokes do not reload your page. Plus a startup warning when the port is not allow-listed — see [Ports and the ceiling](#ports-and-the-ceiling). |
 | [`scripts/worktree-port.ts`](../../scripts/worktree-port.ts) | The range, `PRIMARY_PORT`, `portInRange`, `parseDevPortEnv` and `allowListedPorts`. **No allocator**: Greg redirected the design to dynamic allocation on 2026-09-01, and the reservation, its tests and an export added to `lockfile.ts` for it were deleted — see [Ports and the ceiling](#ports-and-the-ceiling). |
 | [`supabase/config.toml`](../../supabase/config.toml) | `additional_redirect_urls` covers **5273–5303**, matching `DEV_PORT_RANGE` exactly, so sign-in works on whichever port a worktree lands on. GoTrue bakes the list in at start, so editing it needs a Supabase restart. |
@@ -36,16 +36,38 @@ What is built:
 | [`scripts/corpus-materialise.ts`](../../scripts/corpus-materialise.ts) | The corpus copy, extracted from `deploy.ts` so the gate and the setup script share one implementation rather than two that drift. |
 | [`.claude/settings.json`](../../.claude/settings.json) | `worktree.baseRef: "head"` — worktrees branch from the primary's local `HEAD`, not from the remote. See [Why not the remote](#why-a-worktree-branches-from-head-and-not-from-the-remote). |
 
-Still to build: an identity endpoint, the database lease, and `worktree:sweep` —
+Still to build: an identity endpoint and `worktree:sweep` —
 [the plan's work list](../plans/260828r-worktrees.md#what-is-left-to-do). The auth allow-list is
 done.
+
+**The "database lease" on that list is half built already, and not where the plan looks for it.**
+`db:migrate` has taken a Postgres advisory lock since before worktrees —
+`MIGRATION_LOCK_KEY` in [`scripts/migration-ledger.ts`](../../scripts/migration-ledger.ts), taken as
+`pg_try_advisory_lock` in [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts) and held across the
+preflight as well as the migrate. So migrator-against-migrator is safe. What is not covered is
+migrate against a running test suite, and `db:reset`, which takes nothing —
+[260902c](../plans/260902c-concurrent-migrations-across-worktrees.md#6-locking-moves-to-its-own-plan)
+hands that to a plan of its own and it is not written yet.
+
+**What two worktrees do to `drizzle/meta/` is closed, as of 2026-09-02.** Both generating from one
+trunk fork the snapshot chain, and the next `drizzle-kit generate` refuses on it and **exits 0
+having written nothing**. Migrations now carry timestamp prefixes, `npm run check` gates
+`drizzle-kit check`, `npm test` walks the chain, and `npm run db:generate` requires that success
+produced output. The repair depends on whether the losing migration is published, hand-edited, or
+merely generated —
+[database.md § Two worktrees generated at once](database.md#two-worktrees-generated-at-once) is the
+runbook.
+
+**The limit no lock can lift**: a non-additive migration — a dropped column — applied by one
+worktree breaks the running dev server of every other worktree at once. One shared database, one
+schema; the advisory lock serialises the writers and cannot do anything about that.
 
 ## Starting one
 
 ```bash
 claude --worktree my-thing      # creates .claude/worktrees/my-thing, branch worktree-my-thing
 npm run worktree:setup         # inside it: dependencies + the article store
-npm test                        # expect ~14 of 477 files red, about what the primary has
+npm test                        # expect a handful red, about what the primary has at the same moment
 npm run dev                     # walks up from 5273; warns if the port is not allow-listed
 ```
 
@@ -89,10 +111,11 @@ default `"fresh"`, which branches from the default branch **on the remote**. Mea
 stale* and cannot see anything done here today. `"head"` gives it the primary's current committed
 state; uncommitted peer edits do not travel, because a worktree is a fresh checkout of commits.
 
-It also means GitHub's default branch does not matter here, which is the one part of [Runbook
-A](#runbook-a-flip-the-trunk-to-dev-done-2026-09-02) still outstanding: `"fresh"` would resolve
-through `origin/HEAD`, and `"head"` never asks. So a worktree created today branches from this box's
-`dev` regardless of what GitHub still says its default is.
+It also means GitHub's default branch does not matter here — it was the last part of [Runbook
+A](#runbook-a-flip-the-trunk-to-dev-done-2026-09-02) to land, on 2026-09-02, and this setting is why
+the wait cost nothing: `"fresh"` would resolve through `origin/HEAD`, and `"head"` never asks. A
+worktree branches from this box's `dev` whatever GitHub says, and whatever a stale `origin/HEAD`
+says.
 
 ### What a worktree costs, measured rather than assumed
 
@@ -107,6 +130,25 @@ The plan had 4–5 s and 564 MB, both from an earlier measurement, and both opti
 what `worktree:setup` buys, and it is the number that made a worktree worth having: the bare run also
 *collected* 1,137 fewer tests, so its lower raw failure count was hiding the problem rather than
 showing it.
+
+**And then measured again on the Mac, 2026-09-02, because those are the Linux box's numbers and
+nobody had run this here.** It works end to end, and every figure is better:
+
+```
+  npm run worktree:setup        6.8 s      the npm cache was warm
+  the whole worktree           637 MB      558 MB of it node_modules
+  npm test, after setup          4 of 504 files fail
+  npm test, in the primary       4 of 504 files fail    at the same moment, 254 s against 65 s
+  npm run typecheck              clean, 989 files
+  npm run dev                    landed on 5274 and correctly said nothing
+```
+
+Two things worth keeping from it. **The primary's own count is the only baseline worth comparing
+to** — the failing files were not quite the same set in both, because peers are hitting the shared
+Supabase throughout, so an absolute number would have read as a worktree defect. And the port warning
+staying silent on 5274 is the *right* answer now rather than the old bug: the allow-list covers the
+range, so there was nothing to warn about. It was checked against the running container when that
+landed, not against the file.
 
 ## What Greg decided, 2026-09-01
 
@@ -373,21 +415,46 @@ predates the push it might have been mistaken for.
    yet — so `-a` would have queried GitHub, been told `main`, and quietly set `origin/HEAD` straight
    back to production. The explicit `git remote set-head origin dev` is what this step needs while
    the two disagree. `-a` reads like the careful option, which is exactly the problem.
+
+   **This expired later the same day.** GitHub's default branch became `dev` on 2026-09-02, so the
+   two settings now agree and `-a` is the right command again — it asks the remote and is told
+   `dev`. The correction was true of a window, not of the command, and the general form is the one
+   worth keeping: `-a` delegates the answer to a setting somewhere else, so it is only ever as
+   correct as that setting.
 2. **`origin/dev` already existed**, at `e3ef75f` from the previous day's spike, 57 commits behind.
    It was a strict ancestor, so the push fast-forwarded and no force was needed — but the runbook
    read as though it were creating the branch, and a diverged `origin/dev` would have needed a
    decision rather than a `push -u`.
 
-### Still outstanding, and both are Greg's
+### Both of these are now done — 2026-09-02, from the Mac
 
-- **GitHub: Settings → Branches → default branch → `dev`.** There is no authenticated `gh` on this
-  box (`gh auth status`: *"You are not logged into any GitHub hosts"*), so this cannot be done from
-  here. Until it is, a fresh `git clone` checks out `main`, and `set-head -a` in any clone undoes
-  step 3. **Vercel's production branch stays `main`** — a different setting in a different place.
-- **The Mac**, whenever it is next in use:
+- **GitHub's default branch is `dev`.** It could not be done from the box, which has no
+  authenticated `gh` (`gh auth status`: *"You are not logged into any GitHub hosts"*); the Mac has
+  one, so `gh api -X PATCH repos/spideryarn/reading2 -f default_branch=dev`. **Vercel's production
+  branch stays `main`** — a different setting in a different place, and it was read before and after
+  rather than assumed: `link.productionBranch` on the project is explicitly `"main"`, so it does not
+  fall back to the repo default and a push to `dev` cannot promote itself.
+
+  **A clone that has not re-run `set-head` still answers `main`.** GitHub's setting does not reach
+  anybody's `origin/HEAD`; each checkout has its own copy. So on every clone including the box:
 
   ```bash
-  git fetch origin dev && git switch -c dev origin/dev && git remote set-head origin dev
+  git fetch origin dev && git remote set-head origin -a
+  git symbolic-ref refs/remotes/origin/HEAD     # must print refs/remotes/origin/dev
+  ```
+
+  `-a` rather than the explicit spelling, now that the two settings agree — see correction 1 above.
+- **The Mac is on `dev`**, done the same day with the merge form rather than the switch form, since
+  it had two local commits to bring along:
+
+  ```bash
+  git fetch origin dev && git switch dev && git merge main && git remote set-head origin -a
+  ```
+
+  The older recipe, for a Mac with nothing local to carry:
+
+  ```bash
+  git fetch origin dev && git switch -c dev origin/dev && git remote set-head origin -a
   ```
 
   It is on `main` today, and `npm run deploy` now refuses from `main` (below), so a deploy attempted
@@ -467,10 +534,11 @@ will need it: `git worktree repair` against the **recorded** paths from `git wor
 rather than a shell glob, and then verifying status, branch, common git dir and registered path from
 every worktree.
 
-The steps from [Runbook A](#runbook-a-flip-the-trunk-to-dev-done-2026-09-02) the Mac still needs are
-listed there, and the spelling matters: **`git remote set-head origin dev`, not `-a`.** An earlier
-version of this line said `-a`, which would ask GitHub — whose default branch is still `main` — and
-put `origin/HEAD` back on production.
+The Mac has since run the steps from
+[Runbook A](#runbook-a-flip-the-trunk-to-dev-done-2026-09-02) — it is on `dev`, and its
+`origin/HEAD` points there. This line spent a day insisting on **`git remote set-head origin dev`,
+not `-a`**, which was right while GitHub's default was still `main` and stopped being right the
+moment that flipped. Either spelling lands on `dev` today.
 
 ## Traps
 

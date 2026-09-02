@@ -248,7 +248,7 @@ The identity channel is not lost, only moved: the bar down the left of the parag
 rail still read the palette slot, which is the § below on *the two answer different questions* doing
 its job. What is knowingly given up is the phrase-level version of it — a red mark no longer says
 *which* criterion said so. That is written down in
-[260902e-make-referee-mode-understandable.md](../plans/260902e-make-referee-mode-understandable.md)
+[260902f-make-referee-mode-understandable.md](../plans/260902f-make-referee-mode-understandable.md)
 rather than left to be rediscovered.
 
 ### One local collision worth knowing about

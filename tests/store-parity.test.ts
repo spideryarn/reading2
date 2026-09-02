@@ -102,7 +102,11 @@ import { releaseCorpusLock, takeCorpusLock } from "./helpers/corpus-lock.js";
 import { forgetRevisions } from "./helpers/forget-revisions.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { type LoadedArticle, loadArticleIntoPg } from "./helpers/load-article.js";
-import { seedCommentsFromFiles, seedShelfFromFiles } from "./helpers/seed-reader-state.js";
+import {
+  seedCommentsFromFiles,
+  seedGlossaryLookupsFromFiles,
+  seedShelfFromFiles,
+} from "./helpers/seed-reader-state.js";
 
 loadEnvLocal();
 
@@ -287,6 +291,18 @@ if (reachable) {
   slugs = onDiskSlugs.filter((slug) => slug !== LEGACY_SLUG);
 }
 
+/* **At module scope, not in the `beforeAll` below.** This waits for
+   tests/store-roundtrip.test.ts to finish with the corpus, and on a bad day that
+   is as long as this suite's own work — while the hook it used to sit in has one
+   300s timeout covering both. Both files fork at once, so both clocks start
+   together and the waiter had about 10% margin; `Hook timed out in 300000ms` was
+   the result, on the same tree that had just passed.
+   A top-level `await` puts the wait in vitest's *import* phase, which has no
+   hook timeout, and leaves the 300s covering only the work.
+   tests/helpers/corpus-lock.ts § "Take it at MODULE SCOPE"; the measurements are
+   in docs/plans/260902c-make-the-test-suite-pass-reliably.md § "Cause 4". */
+if (reachable) await takeCorpusLock("tests/store-parity.test.ts");
+
 const when = reachable ? describe : describe.skip;
 
 afterAll(async () => {
@@ -297,11 +313,11 @@ afterAll(async () => {
 when("the filesystem and Postgres stores agree", () => {
   /** What each load reported, so the tests can assert on it rather than assume. */
   const loaded = new Map<string, LoadedArticle>();
+  /** What `seedShelfFromFiles` wrote, per slug — the floor for the monotonic
+      `opens`/`lastOpenedAt` assertion in "lists the same articles" below. */
+  const seededShelf = new Map<string, { opens: number; lastOpenedAt: Date | null }>();
 
   beforeAll(async () => {
-    /* Blocks until no other suite is loading the corpus — see the helper. */
-    await takeCorpusLock();
-
     await forgetRevisions([...onDiskSlugs]);
     for (const slug of slugs) {
       /* **The fixture supplies the history the real path gets from a clock.**
@@ -350,8 +366,19 @@ when("the filesystem and Postgres stores agree", () => {
          made to — see tests/helpers/seed-reader-state.ts. Without it every
          archived article would be on the Postgres shelf and off the filesystem
          one, and every comment count would be zero. */
-      await seedShelfFromFiles(slug);
+      const shelf = await seedShelfFromFiles(slug);
+      seededShelf.set(slug, { opens: shelf.opens, lastOpenedAt: shelf.lastOpenedAt });
       await seedCommentsFromFiles(slug);
+      /* **Seed what you compare.** The glossary comparison below reads
+         `loadGlossary`, and both stores hang a `lookup` off an entry — the
+         filesystem's from `data/<slug>/glossary-lookups.json`, Postgres's from
+         the `glossary_lookups` table. Seeding the shelf and the comments but
+         not this one left the table holding whatever the last suite to write it
+         had put there: on 2026-09-02 a fixture row from
+         `tests/fixtures/data-root/` was sitting on `spya-uup6nt`, so this suite
+         failed or passed according to which file vitest had run last. Nothing
+         in it was flaky; it was reading state it did not own. */
+      await seedGlossaryLookupsFromFiles(slug);
     }
   }, 300_000);
 
@@ -701,11 +728,48 @@ when("the filesystem and Postgres stores agree", () => {
        filesystem reads `meta.fetchedAt ?? mtime(blocks.json)`. The first is
        when the document was fetched and the second is when it was last
        extracted, and they are minutes apart across most of this corpus. */
+    /* **`opens` and `lastOpenedAt` cannot be compared for EQUALITY, and this is
+       a deliberate trade of coverage rather than an oversight.**
+
+       `seedShelfFromFiles` writes `data/<slug>/shelf.json`'s values onto the
+       row in `beforeAll`, and from that moment the two sides are free to drift:
+       a dev server running `SPIDERYARN_STORE=postgres` against this same
+       database legitimately calls `pgShelfStore.recordOpen`
+       (src/store/pg-shelf.ts) on every `POST /api/library/:slug/open`, which
+       increments `opens` and stamps `last_opened_at`. The filesystem copy is
+       frozen — nothing writes `shelf.json` any more since the Postgres move
+       (docs/project/database.md) — so the gap only ever widens, and this suite
+       failed with `opens: 169` against `170` for no reason of its own.
+
+       What replaces the equality is the assertion below: whatever the app did
+       to the row can only have moved these two forwards from what we seeded.
+       Monotonicity is the real invariant on a box where the app writes Postgres
+       and the shelf file does not move. It still catches an `opens` that went
+       DOWN, a `lastOpenedAt` that went backwards, and a store that lost either
+       one — which is what a parity break here would look like. What it no
+       longer catches is Postgres reporting a *larger* number than the file, and
+       that is exactly the case a live dev server produces honestly. */
     const comparable = (entries: LibraryEntry[]) =>
       entries.map((e) => {
-        const { addedAt: _addedAt, url: _url, ...rest } = e;
+        const { addedAt: _addedAt, url: _url, opens: _opens, lastOpenedAt: _last, ...rest } = e;
         return rest;
       });
+
+    /* The price of dropping those two, paid positively. Asserted on the
+       Postgres side, because Postgres is the side the running app writes. */
+    for (const card of present(realOnly(fromPg))) {
+      const seeded = seededShelf.get(card.slug);
+      expect(seeded, `${card.slug} was never seeded`).toBeDefined();
+      if (!seeded) continue;
+      expect(card.opens, `${card.slug} opens went backwards`).toBeGreaterThanOrEqual(seeded.opens);
+      if (seeded.lastOpenedAt) {
+        expect(card.lastOpenedAt, `${card.slug} lost its lastOpenedAt`).toBeDefined();
+        expect(
+          new Date(card.lastOpenedAt ?? 0).getTime(),
+          `${card.slug} lastOpenedAt went backwards`,
+        ).toBeGreaterThanOrEqual(seeded.lastOpenedAt.getTime());
+      }
+    }
 
     /* **Subtracted from the filesystem side ONLY**, because it is the only side
        that counted it. Applying it to both is a normalisation that cancels out

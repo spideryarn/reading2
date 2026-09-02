@@ -1,38 +1,45 @@
-**Verdict: ship with changes.**
+Keep the extraction. It is behavior-preserving and removes worthwhile duplication, but the new SQL test overstates what it proves.
 
-1. Pressing a result does not ring its phrase unless the criterion is already ticked. [CriteriaPanel.tsx:252](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/CriteriaPanel.tsx:252) excludes unticked criteria from `found`, but [CriteriaPanel.tsx:1151](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/CriteriaPanel.tsx:1151) leaves every result clickable. The click sets `openKey`, then the absence check at line 281 clears it; there is never a mark to ring. Make pressing a result activate its criterion before opening it, or temporarily include that result in `found`. Test the default-off path without ticking first.
+## Findings
 
-2. A valence sign can erase a comment’s ✳ marker. [styles.css:1923](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/styles.css:1923) and [styles.css:2205](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/styles.css:2205) both own `::after` at equal specificity; the later direction rule wins when a comment and valence hit end together. Give the direction sign its own generated element/pseudo-element or add an overlap treatment that visibly preserves both carriers.
+1. **Medium — the “current revision” test does not prove the query is scoped to the requested article. High confidence.**
 
-3. The stripe cap can remove every valence colour while retaining its sign. [annotate.ts:440](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/annotate.ts:440) concatenates every identity token before every valence token and only then slices to six. Six single-ended criteria over a phrase starve a diverging result completely, producing categorical stripes followed by `+`/`−`; the displayed colour and sign then describe different facts. When both kinds exist, reserve at least one lane for each before deterministically filling the remaining lanes.
+   The assertions at [tests/store-block-reads.test.ts:113](/home/greg/code/spideryarn2/.claude/worktrees/routes-split/tests/store-block-reads.test.ts:113) merely require the tokens `current_revision_id` and `inner join`. They do not assert:
 
-4. The prose carrier is deliberately absent from the accessibility tree. [styles.css:2198](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/styles.css:2198) uses empty alternative text. The panel is not a substitute for a co-located carrier when a screen-reader user encounters the marked prose directly. Keep generated content, but use semantic alternatives such as `content: "−" / "counts against"` and corresponding text for the other states. That avoids the unexplained “stray minus” without making the judgement silent.
+   - `articles.current_revision_id = revision_blocks.revision_id`;
+   - `where articles.id = $1`;
+   - that `"art-1"` is the bound parameter.
 
-5. `mixed` only notices co-terminating directions. [annotate.ts:467](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/annotate.ts:467) derives the sign from `ending`, not all valence marks covering that run. For an against range `[0,10]` overlapped by a for range `[0,5]`, the first segment draws both colours but ends with `+`, hiding the simultaneous against direction in greyscale. When any valence ends, derive the sign from all valence marks covering that rendered segment. The key at [CriteriaPanel.tsx:464](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/CriteriaPanel.tsx:464) should also explain `·` and `±`, not only `−` and `+`.
+   I generated a deliberately broken query with no `WHERE` and `ON articles.current_revision_id = articles.id`; all four current test cases passed. That query would hash blocks from unrelated articles.
 
-6. The remaining identity colour recreates the original ambiguity. [CriteriaPanel.tsx:869](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/CriteriaPanel.tsx:869) gives the tick an identity hue, and the adjacent button is merely labelled “Colour”. For a diverging criterion, changing that colour does not recolour its phrase marks; it affects only the paragraph bar and rail. The comment at line 874 still falsely says the tick and mark are “the same thing.” Make the tick neutral or ramp-shaped, and label the categorical control explicitly as the bar/rail colour.
+   Assert the complete join predicate and article predicate, plus `toSQL().params`. This is the main change I would request before calling the new guard complete.
 
-7. The visible default-off copy is false for new runs. [CriteriaPanel.tsx:315](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/CriteriaPanel.tsx:315) automatically ticks a newly run criterion, while [CriteriaPanel.tsx:439](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/CriteriaPanel.tsx:439) says nothing is marked until the reader ticks it. Prefer: “A criterion marks its passages while its tick is on. New runs turn it on automatically.”
+2. **Low — the extraction adds a false historical claim in three places. High confidence.**
 
-8. The sanitizer policy changed without advancing its version. [sanitize-policy.ts:55](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/sanitize-policy.ts:55) still says version 4, although its own comment requires a bump for every stricter policy. Advance it to 5 and add a sanitization test for forged `class="hit" data-dir="for"`. The actual `FORBID_ATTR` addition is otherwise the right defence, and I found no other newly generated annotation attribute needing reservation.
+   [src/store/pg.ts:1033](/home/greg/code/spideryarn2/.claude/worktrees/routes-split/src/store/pg.ts:1033), [tests/store-block-reads.test.ts:75](/home/greg/code/spideryarn2/.claude/worktrees/routes-split/tests/store-block-reads.test.ts:75), and [docs/reusable/improve-the-codebase.md:100](/home/greg/code/spideryarn2/.claude/worktrees/routes-split/docs/reusable/improve-the-codebase.md:100) say every old comment called itself “the third copy.” Inspection of the parent commit shows only `pg-referee-claims.ts` did. Searches called itself the Postgres half; criteria said it matched searches.
 
-9. A core source-of-truth comment still asserts the reversed rule. [referee-criteria.ts:205](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/referee-criteria.ts:205) says valence is “never painted into the prose stripe” and lives in a nonexistent block-gutter treatment. The two changed project docs are otherwise aligned with the new rule. Correct this docstring before landing.
+   There is also a now-stale surviving comment at [tests/store-parity-referee.test.ts:347](/home/greg/code/spideryarn2/.claude/worktrees/routes-split/tests/store-parity-referee.test.ts:347) saying claims still contains a third copy.
 
-10. Omitting `refscale` from the URL-state table is not justified by earlier omissions. [url-state.md:27](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/docs/project/url-state.md:27) presents an exhaustive parameter table and later says “Those are all.” Existing omissions of `runs` and `crits` are documentation bugs, not precedent. Make the approved rule-doc edit and add `runs`, `crits`, and `refscale` together.
+3. **Low — “the same four columns” is stronger than the assertion. High confidence.**
 
-11. `Mark` still accepts wrong states. [annotate.ts:155](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/annotate.ts:155) permits, for example, a `kind: "cmt"` mark with `hue: "garbage"`, `dir: "for"`, and `slot: 1.5`. It prevents only the explicitly named null pairing. Discriminate the valence arm on `kind: "hit"` and use a constrained token/validated palette-slot type, or stop claiming invalid slots and non-hit valence marks are unrepresentable.
+   [tests/store-block-reads.test.ts:89](/home/greg/code/spideryarn2/.claude/worktrees/routes-split/tests/store-block-reads.test.ts:89) proves that four column names occur somewhere in the SQL and that `html`/`fts` do not. Additional selected columns would pass, so it does not prove “exactly four” or directly compare the two select lists.
 
-12. The reversed tests are meaningful, but important mutations remain green. The current tests exercise `resolveCriterion → Found → hitMarks → annotateHtml`, so they are more than a restatement. However, the suite does not catch:
+   It is nevertheless useful: dropping any of the four current selected fields fails, and the negative test catches a bare `.select()`. The ordering assertion is strong and genuinely load-bearing. None of these tests is tautological.
 
-   - swapping the `for` and `against` CSS glyphs;
-   - removing `data-dir` from `FORBID_ATTR`;
-   - identity-token starvation at six stripes;
-   - partially overlapping opposite directions;
-   - pressing an unticked result;
-   - the comment-marker/valence-sign collision.
+## Answers to the six questions
 
-   Add those cases, with at least one computed-style/browser assertion for generated content.
+1. **Type and transaction safety:** safe at the current callers. `Db` and `Tx` both provide the same `select` capability, and all three transactional paths still pass `tx` explicitly—for example [pg-searches.ts:160](/home/greg/code/spideryarn2/.claude/worktrees/routes-split/src/store/pg-searches.ts:160), [pg-referee-criteria.ts:170](/home/greg/code/spideryarn2/.claude/worktrees/routes-split/src/store/pg-referee-criteria.ts:170), and [pg-referee-claims.ts:163](/home/greg/code/spideryarn2/.claude/worktrees/routes-split/src/store/pg-referee-claims.ts:163). The helper uses that object directly at [pg.ts:1066](/home/greg/code/spideryarn2/.claude/worktrees/routes-split/src/store/pg.ts:1066); there is no hidden `getDb()` call when `tx` is supplied.
 
-I found no defect in the `refscale` synchronization between its independent hooks, remaining display reads of `config.scale`, the other `Found` producers, `blockHues`/spine slot use, or consumers of the newly derived `rgb(var(...))` tokens.
+   The `Pick` is structurally broader than `Db | Tx`, so a sufficiently compatible select-only adapter could now typecheck. That does not create a present bug, and the old type did not prevent someone from passing the global DB inside a transaction either. No transaction-scoped read can silently escape through this implementation.
 
-I attempted the targeted tests, but this review environment is read-only and Vitest failed before collection when Vite tried to write `node_modules/.vite-temp`; the verdict therefore uses the supplied test evidence plus static inspection.
+2. **Home and cycles:** `pg.ts` is a reasonable home. All three modules already imported helpers from it, while `pg.ts` already imported `getDb`, both tables, Drizzle operators, and `hashBlocks`. Consequently the extraction adds no new module dependency edge. `npm run cycles` is clean. A narrower `pg-block-hashes.ts` might eventually improve the very large `pg.ts`, but that is unrelated refactoring, not a reason to reject this extraction.
+
+3. **Assertions:** column-presence, heavy-column absence, and ordering are useful. The `current_revision_id`/`inner join` pair only pins text and should be replaced or supplemented with the exact `ON` and `WHERE` relationships.
+
+4. **Lost reasoning:** nothing important is absent from the tree. The four-field rationale remains in [source-hash.ts:47](/home/greg/code/spideryarn2/.claude/worktrees/routes-split/src/source-hash.ts:47); ordering and narrow-read reasoning remain above `blockHashQuery`; undefined-on-no-blocks remains at [pg.ts:1061](/home/greg/code/spideryarn2/.claude/worktrees/routes-split/src/store/pg.ts:1061); transaction reasoning remains at the call sites. The surviving operational docstring is accurate. Its historical “each called itself third” sentence is not.
+
+5. **Building on `blockHashQuery`:** do not add the extra round trip. Outside the locked `begin` paths, resolving the revision and then fetching its blocks would allow publication between statements, returning the hash of a revision that is no longer current. The one-statement join at [pg.ts:1044](/home/greg/code/spideryarn2/.claude/worktrees/routes-split/src/store/pg.ts:1044) is cheaper and observes the pointer and blocks under one statement snapshot. Two similar query definitions are justified here.
+
+6. **Edges and behavior differences:** the three old bodies were equivalent. An article with no current revision and a current revision with no blocks both return `undefined`, exactly as before. Public callers still validate the article first, so a nonexistent slug remains a 404. Naming and error behavior are acceptable.
+
+Current validation: the cycle gate passed. The scoped files produce no TypeScript error, although the current merged worktree’s full typecheck is not clean because of an unrelated error at [scripts/db-seed-dev.ts:290](/home/greg/code/spideryarn2/.claude/worktrees/routes-split/scripts/db-seed-dev.ts:290). Vitest could not create its temporary directory under this review sandbox, so I inspected and independently exercised the generated SQL instead.

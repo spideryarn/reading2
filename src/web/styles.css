@@ -6237,12 +6237,18 @@ td.text.has-hit[data-hues="8"] {
    **Two other fixes were weighed.** A `min-height` on `.ref-panel` alone does
    not work: nothing above it would give way, so the overflow would move rather
    than go, and a band that overflows here draws over the dock instead of
-   scrolling. And making the notice collapsible — the most attractive of the
-   three, since after one reading it is 214px of chrome — was already decided
-   against, with reasons, in App.tsx § RefereeBand: it is not dismissible, and
-   remembering that a referee had dismissed it has no right home (localStorage
-   is banned, a column is a migration for a checkbox). A layout bug is not the
-   place to reopen that.
+   scrolling. And making the notice collapsible was the most attractive of the
+   three, since after one reading it is 214px of chrome — but a layout bug is
+   not the place to reopen a product decision, so the cap shipped alone.
+
+   **Both boxes are collapsible now**, since 2026-09-02, and Greg asked for it
+   as a product change rather than as a layout fix: the notice opens on a press
+   and the scan opens by itself only when it found something. So the ordinary
+   first screen of this box is two lines rather than 600px, and everything above
+   still holds — the cap and the fade are what keep it honest on the visit where
+   a referee has opened both. The measurements above are of the *open* state and
+   are still the ones to design against. src/web/App.tsx § RefereeBand and
+   src/web/SourceScanNotice.tsx carry why a collapse here is not a dismissal.
 
    `.ref-scan-list` keeps its own 14rem cap inside this one. Two nested
    scrollers is not lovely, but the inner cap is what stops a hundred findings
@@ -6292,6 +6298,34 @@ td.text.has-hit[data-hues="8"] {
   font-size: 0.78rem;
   line-height: 1.5;
 }
+/* **The fact, as the control.** The whole line is the target rather than a 12px
+   chevron — Metadata.tsx's `Section` makes the same call — and it is `--ink`
+   rather than `--ink-soft`, because shut is this notice's ordinary state and
+   this sentence is then the only one on screen. Left-aligned text with the
+   chevron pushed to the end, so a two-line wrap still reads as a paragraph and
+   not as a menu item. */
+.ref-notice-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+}
+.ref-notice-toggle > span { flex: 1; }
+.ref-notice-toggle svg { flex: none; margin-top: 0.2rem; }
+.ref-notice-toggle:hover { color: var(--highlight-ink); }
+.ref-notice-toggle:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+/* Only when it is open: shut, the button IS the notice, and a gap under a
+   single line would read as a box with something missing from it. */
+.ref-notice-toggle[aria-expanded="true"] { margin-bottom: 0.45rem; }
 /* The disclosure line is for a different reader — somebody whose agreement
    permits this — so it is separated rather than run on. */
 .ref-notice .ref-notice-also { margin-top: 0.45rem; color: var(--ink-faint); }
@@ -6328,6 +6362,29 @@ td.text.has-hit[data-hues="8"] {
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
+/* The heading is the disclosure, and it carries the tooltip that says what the
+   scan is for and how much to worry — so the hit area is the whole row, and it
+   inherits the heading's own type rather than declaring a second one. The `h3`
+   stays an `h3`: the band's outline is the same open or shut. */
+.ref-scan-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+/* The chevron to the far end, so shut and open are tellable at the edge of
+   vision rather than by reading the row. */
+.ref-scan-toggle svg:last-child { margin-left: auto; }
+.ref-scan-toggle:hover { color: var(--ink); }
+.ref-scan-toggle:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
 .ref-scan-line {
   margin: 0;
   color: var(--ink-soft);

@@ -21,7 +21,7 @@
  * `data-dir` and drawn as generated content by styles.css, plus a visible key
  * in the Criteria panel. A minus sign survives greyscale, deuteranopia and
  * protanopia intact, which a hue does not.
- * docs/plans/260902e-make-referee-mode-understandable.md.
+ * docs/plans/260902f-make-referee-mode-understandable.md.
  *
  * ## Anchored at zero, never at the data
  *

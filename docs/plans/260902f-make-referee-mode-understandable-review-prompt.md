@@ -5,7 +5,7 @@ You are reviewing a **plan, before any of it is built**. Repository root is the 
 
 ## The plan
 
-`docs/plans/260902e-make-referee-mode-understandable.md` — read it first, in full.
+`docs/plans/260902f-make-referee-mode-understandable.md` — read it first, in full.
 
 ## The code it changes
 

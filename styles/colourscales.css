@@ -334,7 +334,7 @@
        stylesheet paints it, so the value has to survive being interpolated
        into `rgb(…)`. `annotate.ts` does exactly that with `--h0` … `--h5` when
        a for/against criterion paints its marks by direction
-       (docs/plans/260902e-make-referee-mode-understandable.md).
+       (docs/plans/260902f-make-referee-mode-understandable.md).
 
        Written once, in the form that composes, with `--div-N` kept as the
        plain-colour spelling for everything that just wants a background. Two

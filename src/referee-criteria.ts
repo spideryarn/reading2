@@ -209,7 +209,7 @@ export interface DivergingResult extends Judged {
    * rather than a drift: `Found.valence` carries the number, `hitMarks` turns it
    * into a ramp token, and the stripe under the phrase is drawn by **direction**
    * instead of by which criterion found it
-   * (docs/plans/260902e-make-referee-mode-understandable.md).
+   * (docs/plans/260902f-make-referee-mode-understandable.md).
    *
    * What that gives up is prose→panel provenance, and it is given up knowingly:
    * two negative criteria over one phrase both go red and the phrase alone no

@@ -603,6 +603,16 @@ only excludes the holders that agree to take it, and a dev server mid-ingest nev
 `insertWhenSlotFree`'s wait-on-the-constraint is for. Removing either brings back a different half of
 the problem.
 
+**Taking either key is only half of it — the release has to be unconditional.** Both helpers clean
+up every failure inside themselves, and neither can govern what the caller does next. A suite that
+takes the lock at module scope and *then* sweeps its rubble has no teardown hook registered yet, so a
+statement that throws there leaves the key held until the vitest worker exits; a teardown that
+deletes rows before releasing loses the release to the first failed delete. Both shapes go through
+[`tests/helpers/lock-lifecycle.ts`](../../tests/helpers/lock-lifecycle.ts) —
+`takeRunLockAndSetUp` and `cleanUpThenRelease` — which
+[`tests/lock-lifecycle.test.ts`](../../tests/lock-lifecycle.test.ts) checks against `pg_locks` on
+keys minted per run. A suite whose whole teardown *is* the release needs neither.
+
 **Measured 2026-08-30.** Two concurrent `npx vitest run` processes over the seven job-slot files,
 with the key neutralised so the lock excludes nobody: **23 to 50 failures per run** across four runs,
 four to six of the seven files red, where every one of those files is green alone. With the lock

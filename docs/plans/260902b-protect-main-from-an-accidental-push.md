@@ -195,9 +195,19 @@ Independent of the hook; each stands on its own.
 - [ ] **Greg: on GitHub, block force-push and deletion on `main`.** Pure upside — `deploy.ts` does
       ordinary fast-forward pushes, so it is unaffected — and it blocks the one mistake that cannot
       be undone. **Do not** enable required reviews or required PRs, which would break deploying.
-- [ ] **Greg: change GitHub's default branch to `dev`** if not already done; carried over from
+      **Blocked, and not by permissions:** both the protection and ruleset APIs answer `403 Upgrade
+      to GitHub Pro or make this repository public to enable this feature` — measured 2026-09-02 with
+      an authenticated `gh`. Branch protection is not available on a private repo on this plan at
+      all, so this item needs a decision (pay, or go public) rather than a click. Everything else in
+      this plan is the local half, and it now carries the whole weight.
+- [x] **Greg: change GitHub's default branch to `dev`** — done 2026-09-02 from the Mac,
+      `gh api -X PATCH repos/spideryarn/reading2 -f default_branch=dev`. Checked first that Vercel's
+      `link.productionBranch` is an explicit project setting and still reads `main`, so `dev` pushes
+      cannot promote themselves. Carried over from
       [worktrees.md § Runbook A](../project/worktrees.md#runbook-a-flip-the-trunk-to-dev-done-2026-09-02).
-      Needs the web UI or an authenticated `gh`, and this box has neither.
+      **The flip does not reach existing clones**: every checkout still needs
+      `git fetch origin dev && git remote set-head origin -a`, which is now the *right* spelling
+      precisely because the two settings finally agree. Done on the Mac; still owed on the box.
 - [ ] Delete the leftover local branches `worktree-e2e` and `worktree-spike`, so `--all` has nothing
       to leak. The permission classifier refuses `git branch -D` from an agent, so this is Greg's or
       needs asking.

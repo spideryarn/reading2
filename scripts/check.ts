@@ -76,6 +76,34 @@ const STEPS: Step[] = [
     gate: true,
     argv: ["run", "--silent", "cycles"],
   },
+  {
+    /**
+     * **A forked snapshot chain — two worktrees generating from one parent.**
+     *
+     * `drizzle-kit check` is the only thing that reads `drizzle/meta/*` as a
+     * linked list. It was already run by `scripts/deploy.ts`, and by nothing
+     * else, so a fork survived every branch-level check and surfaced at the
+     * deploy — which is late, because the fork's real damage is to the *next*
+     * `drizzle-kit generate`, which refuses on it and **exits 0 having written
+     * nothing**. Verified 2026-09-02 against a copy of `drizzle/` with a second
+     * snapshot claiming `0051`'s parent: `check` exits 1 and names both files,
+     * `generate` prints the same error and exits 0.
+     *
+     * Gates from day one because it is green on this tree today, and it needs
+     * no database — the config carries no `dbCredentials` (drizzle.config.ts),
+     * so this stays offline like everything else here. About 2 s.
+     *
+     * **It does not cover holes.** It rejects malformed and out-of-date
+     * snapshots, and groups the rest by `prevId` to find a fork — so it is
+     * green with `0003` and `0029` missing and with the `0021 → 0022` break.
+     * Those are `snapshotProblems` in scripts/migration-snapshots.ts, run by
+     * the test gate above. See
+     * docs/plans/260902c-concurrent-migrations-across-worktrees.md.
+     */
+    name: "chain",
+    gate: true,
+    argv: ["run", "--silent", "db:chain"],
+  },
 
   // ---- advisories: real findings, deliberately not blocking --------------
   {
