@@ -171,7 +171,7 @@ for real with the key sitting in `.env.local`.
 Admission wired into `POST /api/jobs`; settlement wired into `settleIn`; `syncSubscriptionFromStripe`
 and the webhook route itself; `POST /api/billing/checkout` and `/portal`; the `/profile` surface;
 admin columns; comp subscriptions for journalists and QA; go-live. The order is in
-[the plan](../plans/260902i-stripe-payments-and-subscription-tiers.md#where-the-build-stands-2026-09-02-1630).
+[the plan](../plans/260902i-stripe-payments-and-subscription-tiers.md#where-the-build-stands).
 
 ## Where the code is
 

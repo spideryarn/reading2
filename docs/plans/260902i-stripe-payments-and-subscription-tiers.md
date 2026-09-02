@@ -56,56 +56,86 @@ decided — nothing is waiting on Greg. The first stage is built (✅); the buil
 5. **The files-store hole**, which neither earlier review saw: see *Billing is a Postgres feature*
    below. It was the one unplanned thing that would have cost an afternoon.
 
-### Where the build stands, 2026-09-02 16:30
+### Where the build stands
 
-**Verdict: important work left.** Roughly half the plan is built and every piece of it is
-reviewed, tested and committed; the half that remains is the half a reader can see — admission
-wired into the ingest route, settlement wired into the publish transaction, the checkout and
-portal routes, and `/profile`. None of it is designed-but-unknown; all of it is blocked or
-sequenced behind one external thing.
+*Last updated 2026-09-02 17:45. The date is in the text rather than the heading so that links to
+this section survive it being updated — an earlier dated heading broke `billing.md`'s link on the
+first edit, which is what `tests/doc-links.test.ts` is for.*
 
-**84 billing tests pass, 8 skip** (the skips are the Postgres suite, waiting on the migration
-below — a real vitest skip, not a false pass).
+**Verdict: important work left.** Everything that can be built without the database is built,
+reviewed twice and committed. What remains is the half a reader can see — admission wired into
+the ingest route, settlement wired into the publish transaction, the checkout and portal routes,
+and `/profile` — plus the Postgres suite, which has never actually run.
+
+**98 billing tests pass; the Postgres suite skips** — a real vitest skip, not a false pass. That
+skip is the single biggest weakness in this work and it should not be talked around: the
+concurrency guarantee has been measured with a standalone two-connection spike, but
+`tests/billing-quota-race.test.ts` has not once executed against the real code. Nothing here goes
+near real money until it has.
+
+**Reviewed as built** ([review](260902i-stripe-code-review-sol.md)): GPT Sol's verdict on the code
+was *"I would not ship the quota path yet"*, and it found six real defects — a release that could
+free a slot a job was spending, a settlement that updated without checking, an entitlement read
+outside its own lock, a subscription picker that could drop a paying reader to free, a usage count
+that defaulted to zero, and a subscription list that fetched one page while claiming to fetch all.
+All fixed. It also found **eleven comments that claimed more than the code did**, which is the
+finding worth remembering: this file's own rules say a confidently wrong comment is worse than
+none, and a dozen had accumulated in a day.
 
 
 
 Worktree `stripe-payments`, branch `worktree-stripe-payments`.
 
-- **Landed on `dev`**: the whole first stage — Stripe objects, `src/billing/stripe.ts`, the
-  setup script, the `/api/health` mode check (commit `9789d5a`).
-- **Committed locally and deliberately NOT pushed**: the quota schema, the two migrations,
-  `src/store/pg-billing.ts`, `src/billing/tiers.ts`, the race test, and the `pay-` copy.
-  **Do not push these until `0052_per_article_job_queue` is on `dev`** — its snapshots and mine
-  both branch from `0051`, so whoever pushes second forks the snapshot chain and the *next*
-  `db:generate` anywhere in the repo exits 0 having written nothing
-  ([database.md § Two worktrees generated at once](../project/database.md#two-worktrees-generated-at-once)).
-  The order that avoids it: they push, we merge, we delete and regenerate our two migrations —
-  which is cheap, because neither has been applied anywhere.
-- **Blocked, and not by anything in this plan**: `npm run db:migrate` refuses for every session on
-  this box, because the shared local database carries a ledger row for
-  `0052_per_article_job_queue`, which is committed in the `article-job-queue` worktree and
-  unpushed. Nobody may delete that row; it is that agent's work. Two other sessions are stuck
-  behind the same thing and the owning session has been asked to push.
-  **What that costs this plan**: the migration is unapplied, so
-  `tests/billing-quota-race.test.ts` skips (a real vitest skip, not a false pass) and the new
-  foreign-key assertion in `tests/db-schema.test.ts` is red. Both go green when it lands. The
-  mechanism itself was measured with two real connections before any of it was written, so it is
-  not resting on an unrun test — but it is not finished until that suite has actually run.
-- **Also committed locally**: `src/billing/webhook.ts` (signature verification over the exact
-  bytes, its own raw-body reader, fail-closed on an unset secret, event allowlist, live/test
-  assertion — 19 tests with real offline signatures) and `src/billing/subscription.ts` (the pure
-  Stripe→row reading, where the Basil period-move trap lives — 18 tests). Both were buildable
-  *because* they need no database, which is why they were done during the block rather than after
-  it. `api.stripe.com` is now refused by `tests/setup/provider-guard.ts`.
-- **Next**, in order, once the migration applies:
-  1. Merge `origin/dev`, delete and regenerate the two migrations onto the merged snapshot, apply.
-  2. Run `tests/billing-quota-race.test.ts` — the first time the mechanism is exercised through
-     the real code rather than through the standalone spike.
-  3. `reserveIngest` into `POST /api/jobs`; `settleReservation` into both branches of `settleIn`;
-     `ingestEventId` threaded through `EnqueueRequest` → `enqueue()` → the job INSERT.
-  4. `syncSubscriptionFromStripe` and the webhook route.
-  5. Checkout + portal routes, `/profile`, browser check.
-  6. `docs/project/billing.md`, admin columns, second Sol review of the whole diff.
+**What exists**, all of it on `dev` or about to be:
+
+| | |
+|---|---|
+| Stripe objects | Product, $10/mo price, Customer Portal configuration, created in test mode by [`scripts/stripe-setup.ts`](../../scripts/stripe-setup.ts) and idempotent by `lookup_key`. A Checkout Session and a Portal session were both minted by hand to prove the account works end to end. |
+| [`src/billing/stripe.ts`](../../src/billing/stripe.ts) | The only place a client is constructed. Pinned API version, mode guards, 10-second timeout. |
+| [`src/billing/tiers.ts`](../../src/billing/tiers.ts) | What each tier allows. `Entitlement` is a discriminated union, so a period start without an end is a state the compiler refuses. |
+| [`src/billing/subscription.ts`](../../src/billing/subscription.ts) | Reading a Stripe subscription, where the Basil period-move trap lives. Refuses everything unrecognised, towards free. |
+| [`src/billing/webhook.ts`](../../src/billing/webhook.ts) | Verification over the exact bytes, its own raw-body reader, fail-closed on an unset secret, and the route itself at an exact pre-auth path. |
+| [`src/billing/sync.ts`](../../src/billing/sync.ts) | Ask Stripe, write it down, under the customer's row lock. **Never executed.** |
+| [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts) | Reserve, settle, count. The lock, and the anchor row created before it. **Never executed against a database.** |
+| schema + 2 migrations | `billing_accounts`, `ingest_events`, `jobs.ingest_event_id` with a composite FK. **Generated, never applied.** |
+| `pay-` copy | Three messages, registered in `CODE_KINDS` so none arrives with a Retry button that cannot work. |
+| [billing.md](../project/billing.md) | The evergreen doc, under [security-map.md](../project/security-map.md). |
+
+**What has never run**: `tests/billing-quota-race.test.ts` and the foreign-key assertions in
+`tests/db-schema.test.ts`. Both wait on the migration, which waits on an unrelated session's
+unpushed migrations in the shared local database — the third time today that has blocked somebody
+([the pattern is worth a plan of its own](#the-coordination-problem-this-work-kept-hitting)).
+**Next**, in order:
+
+1. `npm run db:migrate`, then **run `tests/billing-quota-race.test.ts`** — the first time the
+   mechanism is exercised through the real code rather than the standalone spike. Do not skip
+   past this because the spike passed; they are different things.
+2. The settlement tests Sol asked for and nobody has written: reserve a slot, attach it to a real
+   job, and assert that `done` publishes *and* charges in one commit, that `error` and cancel
+   release, that an injected settlement failure rolls back the publication, and that a cancel
+   racing a final publication settles exactly once.
+3. `reserveIngest` into `POST /api/jobs`; `settleReservation` into both branches of `settleIn`;
+   `ingestEventId` threaded through `EnqueueRequest` → `enqueue()` → the job INSERT. Retries go
+   through admission like anything else.
+4. Checkout and portal routes — **and the customer→owner mapping must be durable before a
+   Checkout Session exists**, not written by the browser's return callback, which is not reliable
+   (Sol, and the webhook's "unmapped" case assumes it).
+5. `/profile`, browser check, admin columns.
+6. Comp subscriptions, then go-live.
+
+### The coordination problem this work kept hitting
+
+Not part of this plan, and worth someone's attention. Three separate sessions blocked
+`npm run db:migrate` for everybody today by applying a migration to the shared local Postgres and
+not pushing it — the guard fails closed on a ledger row belonging to no migration in the journal,
+which is correct and which nobody can clear but the owner. Add the forked snapshot chain that
+arrived the same afternoon and roughly two hours went on it across four sessions.
+
+The rule that would have prevented all of it is one line — *push a migration in the same breath as
+applying it* — and there is nowhere in the docs that says so. The deeper fix is a database per
+worktree, which [worktrees.md](../project/worktrees.md) shows is harder than it looks because of
+the `auth.users` foreign keys, and which
+[260902c](260902c-concurrent-migrations-across-worktrees.md) already owns.
 
 ## Picking this up
 
