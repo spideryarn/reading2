@@ -20,7 +20,6 @@ rest are one fetch away.
 | [third-party-library-selection.md](third-party-library-selection.md) | choosing a library to depend on |
 | [write-planning-doc.md](write-planning-doc.md) | writing the planning doc for a piece of work, and naming it |
 | [debrief-progress.md](debrief-progress.md) | reporting on how a piece of work is going |
-| [audit-architecture-mode.md](audit-architecture-mode.md) | auditing a feature, an area, or a plan against what was built |
 | [codex-cli-as-subagent.md](codex-cli-as-subagent.md) | (not from gjdutils) dispatching a GPT/Codex subagent |
 
 ## Others worth knowing about
@@ -33,6 +32,14 @@ Not copied here, but frequently the right thing to read — all under
 - `DETECTIVE_SCIENTIST_MODE.md` / `SURGEON_MODE.md` — debugging and careful-editing stances
 - `CODING_PRINCIPLES.md`, `GIT_COMMIT_CHANGES.md`, `GIT_WORKTREES.md`, `TASKS_SUBAGENTS.md`
 - `RESEARCH_THIS_TOPIC.md`, `CRITIQUE_OF_PLANNING_DOC.md`
+- `AUDIT_ARCHITECTURE_MODE.md` — **was copied here and has been deleted again**, 2026-09-02. Its
+  useful parts are now inside [improve-the-codebase.md](improve-the-codebase.md): auditing a named
+  target rather than the whole tree, checking a planning doc against the commits that claim to
+  implement it, stopping after the umbrella doc when only an audit was asked for, and ending one
+  level up on whether the approach is sound. What that doc lacked, and the reason it was not worth
+  keeping beside its replacement, is any step that verifies a finding before it is written down —
+  which is where every mistake in the first real run of the replacement turned out to be. Upstream
+  still has it, and upstream should probably get the same treatment.
 
 Run `ls` against the directory listing above for the current full set — it grows.
 
