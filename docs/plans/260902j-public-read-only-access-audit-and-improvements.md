@@ -476,6 +476,88 @@ stage 3 needs, and it is a redesign of the child tables, not of public reading.
   observationally identical to a no-op. Two overclaims fixed with it: the gutter header said a
   visitor has two slots when it has one, and the owner's control asserted `> 0` where one button on
   one paragraph would have satisfied "beside every paragraph"; it counts against the permalinks now.
+- 2026-09-02 — **Cluster E built: the badge.** A globe and the word *Shared* on the card's meta line
+  and in the table's title cell, one `SharedBadge` component in both, because a marker added to one
+  of the shelf's two renderers looks finished from wherever you happened to be standing. A private
+  article gets nothing at all. `docs/project/library.md` has the section.
+
+  The plan said *"visibility is already in the row `listArticlesQuery` selects"*, and it held —
+  `src/store/pg.ts:1489` selects `articles` whole, so this is a field of a row already on the wire
+  rather than a query change. The gap was one line further downstream than that phrasing implies:
+  the projection into `LibraryEntry`.
+
+  **`LibraryEntry.visibility` is present only when it is `"public"`.** Absence rather than
+  `"private"`, because absence is the only answer *both* stores can give — the filesystem store has
+  no visibility column and `visibilityStore.set` refuses there with a 501 — and
+  `tests/store-parity.test.ts` compares whole entries, so two spellings of one fact would be a
+  parity failure about nothing. That test now drops the field, with the reason written beside the
+  four exclusions it already had and an honest note that this one is weaker than those: they are
+  clocks and a live writer, this is a column one store cannot hold.
+
+  Four mutations, all killed, including one that proves the *private* row's assertion is
+  load-bearing rather than decorative. The browser pass shared a real local article through the
+  sharing card rather than through SQL, looked at both views, and unshared it again; the two rows it
+  left in `article_visibility_changes` are the honest record of that.
+- 2026-09-02 — **Sol's review of stage 1b** ([-stage1b-review-sol.md](260902j-public-read-only-stage1b-review-sol.md))
+  returned **BLOCKED** on two, both fixed.
+
+  **The no-thread tweets page dropped the whole of C3.** `VisitorTweetsPage`'s two arms had diverged:
+  with a thread it drew `SharedNotice`, without one it fell through to `VisitorPage`, which had no
+  read-only chrome at all — so a reader in the 401 + public-200 state lost both the fact and the
+  *Continue signed out* action by clicking Tweets on a piece nobody has written a thread for, which
+  is most pieces. A comment called that deliberate on the grounds that `VisitorNotice` is about the
+  artefact rather than the page; both halves of that are true and the conclusion does not follow,
+  and `VisitorArticle` states the opposite guarantee in as many words. `VisitorPage` was the only
+  one of the four visitor pages without a `SharedNotice`; it has one now, below the artefact's
+  sentence rather than above it — stacked the other way the page invites the reader to read *nobody
+  has built a tweet thread* as a consequence of *we couldn't confirm you're signed in*, which is the
+  one thing it must not say.
+
+  **The signed-in visitor never pressed a mode.** The exhaustive sweep lived in the signed-out
+  block; the parity tests covered page load and hover and never clicked. Sol named a mutation that
+  survived both — a private request in `onMode` gated on `signedIn && !owner`, which is exactly the
+  branch that became plausible once `signedIn` and `sessionUnconfirmed` started crossing the visitor
+  seam for copy. Running it against the new sweep: **one failure, the new sweep, on the first press**,
+  every other test green. The gap was real and the test bites.
+
+  **And a third thing, which explains a day of noise.** All three sweeps measure 3.6–3.8s against
+  vitest's 5-second default, so a load spike fails one at random — and *that failure is not
+  contained*: a timeout inside `act()` leaves the React root mid-render and every later test in the
+  file renders an empty `host`. One spike produced **twenty** further failures with nothing wrong.
+  A named `SWEEP_MS = 30_000` on all three, with the measurement written down. This is most of why
+  the full-suite runs looked so much worse than the isolated ones.
+
+  **Known and not fixed:** a signed-out visitor on a no-thread tweets page now sees *Make a free
+  account* twice, from `VisitorNotice` and from `SharedNotice`. It is the app's existing pattern —
+  the reading view already shows `VisitorBand`'s ask and `SharedNotice`'s together for the same
+  reader — so this doubles an existing wart rather than inventing one. Worth one tidy in
+  `PublicChrome.tsx` when somebody is next in there.
+- 2026-09-02 — **Sol's review of Cluster E** ([-cluster-e-review-sol.md](260902j-public-read-only-cluster-e-review-sol.md))
+  came back **not blocked**, with three changes, all made.
+
+  **`LibraryEntry.visibility` is `?: "public"`, not `?: Visibility`.** The doc comment was asserting
+  an invariant the type did not enforce, which is the house rule's own example. `describeArticle`
+  still *takes* the full union — it is normalising a database value — and narrows at the boundary.
+  Proved by mutation: passing the row's visibility straight through is now
+  `TS2375 … Type '"private"' is not assignable to type '"public"'` rather than a wrong key on every
+  card waiting for a parity test to notice it.
+
+  **One surviving mutation, and it was the sharpest kind.** The badge tests found the rendered badge
+  through `SHARING_BADGE`, so changing that constant to `"Private"` left every one of them green
+  while the shelf said the opposite of the truth — the test and the component wrong together. One
+  assertion pins the literal now; the constant stays rewordable in the sense that matters and cannot
+  silently become the other word.
+
+  **And the parity comment claimed too much.** "Nothing is lost by dropping it" is not literally
+  true: that comparison no longer catches Postgres emitting `"private"` where it should be silent.
+  Equality between the two stores could never have caught that anyway, so the comment now names
+  where the coverage actually lives — `tests/store-shelf-pg.test.ts`, against a known public and a
+  known private row.
+
+  **Offered and not taken:** `text("visibility").$type<Visibility>()` in `src/db/schema.ts` would
+  centralise the assertion and remove all three downstream casts. Sol called it a cheap cleanup and
+  not required for correctness; it ripples into every insert's types and the schema file is shared
+  with in-flight work, so it is written down here rather than slipped in.
 - 2026-09-02 — Sol's plan review ([-review-sol.md](260902j-public-read-only-access-audit-review-sol.md))
   returned **BLOCKED** on three things, all folded in above: C3 needed a `reauth-required` state
   rather than the existing error page, Cluster D's stage C needed the dispatcher seam named, and the
@@ -497,3 +579,51 @@ stage 3 needs, and it is a redesign of the child tables, not of public reading.
   `handler` means importing `src/vercel.ts`, which pulls the whole of `src/routes.ts` behind it —
   about eight seconds cold on this box, against vitest's five-second default. The first run
   "failed" as a timeout that looked nothing like the bug.
+- 2026-09-02 — **Cluster B built**, minus S2 above. `GET /api/public/metadata/:slug` is gone, and so
+  are `loadMetadata`, the `metadata` projection, the `publicMetadata` DTO, the `PublicMetadata` type
+  and the client's `loadPublicMetadata`. `PUBLIC_ROUTE_NAMES` has one entry; the two module-load
+  guards in `src/public/routes.ts` are untouched, and one of them is what catches a rename — mutating
+  `article` to `articles` fails the file at import with *"has no reader"*, before any test body runs.
+  `PublicMetadataPage` stays: it is the `/read/:slug/metadata` UI and it draws from the article
+  payload.
+
+  **The deployed checker was repointed, not weakened.** `scripts/check-public-shell.ts` reads
+  `meta.title` off `GET /api/public/article/:slug` now, and `judgeTitleAgainstMetadata` /
+  `fetchMetadataTitle` were renamed for what they actually compare. The parsing was split out as
+  `articleTitleFrom` so `--self-test` can reach it, because the *shape* moved with the route: the
+  metadata payload had `title` at the top level and the article payload has it at `meta.title`, and a
+  version that kept reading the old key would have reported "no string title" against every healthy
+  deployment — a checker failure wearing a deployment failure's clothes. Self-test: 46 cases before,
+  50 after, all passing, and mutating `articleTitleFrom` to read the top level reddens three of them.
+
+  **The semantic disagreement went with the route.** `loadMetadata` served a revision with a tree and
+  no blocks that `loadArticle` and `loadHead` both refuse, and the boneless fixture in
+  `tests/public-visibility-pg.test.ts` existed to pin that. It now asserts the opposite and better
+  thing: both surviving reads refuse it, by two different mechanisms — `loadArticle` counts the rows
+  it fetched, `loadHead` asks Postgres `has_blocks` because it fetches none.
+
+  **A deleted public path has to 404 from inside the closed room**, and that is the one way this
+  deletion could have opened a hole: a path the dispatcher no longer matches falling through to the
+  gate and answering 401, which reads as *sign in and you may see it*. Asserted three times, red
+  before the deletion — in `tests/public-dispatch.test.ts` for every method (404, no `Allow`,
+  `no-store`), and in `tests/public-visibility-pg.test.ts` over real HTTP for both a private article
+  and a shared one, reading the sentence (`No public API route`) and not just the status.
+
+  **Two false comments died with it.** `App.tsx`'s *"stays for stage 2's link preview"* — the preview
+  reads `loadHead` and never read this route — and `public-reader.ts`'s claim that the assets
+  projection is what stops a public article hot-linking, which S3 disproved; that one now points at
+  Cluster D, where it becomes true.
+
+  References under the five needles: **61 before, 8 after**, and every survivor is deliberate — four
+  are the new assertions, which have to name the path in order to refuse it, and four are comments
+  recording the deletion. `docs/project/` never mentioned the route, so `security-map.md` needed no
+  edit: it names no route and counts no routes.
+
+  **The lesson is about the sweep rather than the route.** Four audits and the first ledger swept
+  `src/`, `tests/` and `docs/` and not `scripts/` — and `scripts/` is where the only live caller
+  was. A deletion is exactly the change where an unswept directory is expensive, because the
+  evidence for "nothing calls this" is an absence. Worth adding to
+  [improve-the-codebase.md](../reusable/improve-the-codebase.md)'s standing instruction that a
+  reference sweep names every top-level directory it looked in, and that `scripts/` is the one most
+  often forgotten. Not edited here: that file's wording is a rule and goes through
+  [edit-important-docs.md](../reusable/edit-important-docs.md).

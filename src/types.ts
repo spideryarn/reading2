@@ -1310,6 +1310,37 @@ export interface LibraryEntry {
   gist?: string;
   /** The committed `example/` fixture rather than real pipeline output. */
   fixture?: boolean;
+  /**
+   * **`"public"` when anyone with the link can read this, and absent otherwise.**
+   *
+   * The owner's side of `Visibility` below: the shelf is the one place they see
+   * every article at once, so it is the only place that can answer *which of
+   * mine are out in the world* at a glance. src/web/ShelfEntry.tsx draws it;
+   * the visitor's side of the same fact is `ViewOnlyChip`
+   * (src/web/PublicChrome.tsx) and says something different.
+   *
+   * **Absent rather than `"private"`, and that is not a spelling choice.** The
+   * filesystem store has no visibility column at all — `visibilityStore.set`
+   * refuses with a 501 there (src/store/index.ts) — so absence is the only
+   * answer both stores can give about a document nobody has shared, and
+   * tests/store-parity.test.ts compares whole entries. A `"private"` from one
+   * store and an absence from the other would be two spellings of one fact and
+   * a parity failure about nothing.
+   *
+   * A badge, not a filter: there is deliberately no way to sort or narrow the
+   * shelf by this until there is enough shared material for it to be worth
+   * anything.
+   * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § Cluster E.
+   *
+   * **`"public"` and not `Visibility`, so the paragraph above is a compile
+   * error rather than a convention.** `describeArticle` still *takes* the full
+   * union — it is normalising a database value — and narrows here, which is
+   * where the invariant belongs: an accidental pass-through of the row's
+   * `"private"` now fails to typecheck instead of putting a wrong key on every
+   * card and waiting for a parity test to notice. GPT Sol's review of this
+   * stage, on the house rule in AGENTS.md § *let the types catch it*.
+   */
+  visibility?: "public";
 
   /* ---- shelf state: what the reader has done to the card (src/shelf.ts) ---- */
 
@@ -1631,9 +1662,10 @@ export interface ArticleMetadata {
    *
    * Added 2026-08-28, and it closes a real hole in stage 1a rather than a
    * nicety: the owner's Access & Sharing card had nothing owner-facing to read,
-   * so it was asking `GET /api/public/metadata/:slug` anonymously — the only
-   * non-mutating question available to it — and **that endpoint cannot tell
-   * *private* from *no such article***. Both are 404, deliberately, so a
+   * so it was asking the public metadata endpoint anonymously — the only
+   * non-mutating question available to it — and **that endpoint could not tell
+   * *private* from *no such article***. (That endpoint was itself deleted on
+   * 2026-09-02; this field is what replaced its misuse.) Both are 404, deliberately, so a
    * stranger learns nothing about what exists. The card was drawing "we could
    * not check" because it could not honestly draw anything else.
    *

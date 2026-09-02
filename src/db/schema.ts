@@ -2103,6 +2103,128 @@ export const rawSources = spideryarn.table(
   ],
 );
 
+/* --------------------------------------------------- realtime sessions -- */
+
+/**
+ * **One row per live conversation this server issued a token for** — the parent
+ * a live session's `ai_calls` rows hang off, and the only thing that can say a
+ * session reported *nothing*.
+ *
+ * ## Why a session row exists at all, when the money is on `ai_calls`
+ *
+ * Because live conversation is metered from the **browser**. The audio is a
+ * WebRTC connection from the reader's tab straight to OpenAI (src/live.ts says
+ * why at length), so this process never sees a byte of it and never receives a
+ * response body to read a token count out of. What arrives instead is a report,
+ * posted back by the tab as each turn finishes.
+ *
+ * A report that never arrives is the ordinary case, not an attack: the reader
+ * ends a conversation by shutting the laptop. Without this table that session is
+ * simply **absent** — no row, no gap, and a total that looks healthy while being
+ * short by an unknown amount. That is
+ * docs/reusable/silent-success.md exactly, and it is the same move
+ * `unscopedCalls()` already makes for calls with no collector open.
+ *
+ * So the row is written **when the client secret is minted**, in this order:
+ * OpenAI mints the secret, we insert here, and only then does the token reach
+ * the browser. If the insert fails the token is never released — a usable token
+ * with no journal row is spend nothing can ever see.
+ *
+ * ## Issued is not connected, and the column names say so
+ *
+ * `issued_at` is a token handed out. It is **not** a conversation: a reader can
+ * press the button, change their mind, and never open the data channel. A
+ * denominator built on issued sessions would understate the cost of a real
+ * conversation by however many of those there are. `connected_at` is the
+ * separate, cheap, authenticated event the browser posts when the channel opens
+ * — and a usage report backfills it too, because the event can itself be lost.
+ *
+ * ## `accepts_until` is stored, not computed
+ *
+ * The window a report is accepted in is a **server-owned** deadline, and it is
+ * emphatically not the ephemeral client secret's expiry — that admits the
+ * browser to one connection and is about ten minutes (`TOKEN_SECONDS` in
+ * src/live.ts), while a conversation may run for twenty. Using the wrong clock
+ * would silently drop the reports from the longest, most expensive sessions,
+ * which are precisely the ones this whole job exists to measure.
+ *
+ * It is a column rather than `issued_at + a constant` because the constant will
+ * change — the browser's own cap is a number in a React hook — and a stored
+ * deadline means an old row keeps the rule it was issued under instead of
+ * silently acquiring today's.
+ *
+ * **Rows are never deleted**, like `ai_calls`: `on delete restrict` on the
+ * owner, so removing an account is a decision somebody has to take deliberately
+ * rather than something that quietly erases billing history.
+ */
+export const realtimeSessions = spideryarn.table(
+  "realtime_sessions",
+  {
+    /**
+     * Ours, minted before OpenAI is asked for anything, so the id exists even
+     * for a session that fails to start — the same reasoning as `ai_calls.id`.
+     */
+    id: uuid("id").primaryKey(),
+    ownerId: uuid("owner_id").notNull(),
+    /**
+     * `on delete set null` and a slug beside it, exactly as `ai_calls` does:
+     * the id is the convenience and the slug is the historical fact a later
+     * delete cannot revoke.
+     */
+    articleId: uuid("article_id").references(() => articles.id, { onDelete: "set null" }),
+    articleSlug: text("article_slug"),
+    /**
+     * Which conversation this was spoken into. Text rather than a foreign key,
+     * for the reason `ai_calls.job_id` gives: a thread the reader deletes must
+     * not be able to take a billing row's context with it.
+     */
+    threadId: text("thread_id"),
+    /**
+     * The realtime model **as OpenAI created it**, not as we asked. They agree
+     * only when the request was honoured, and `mintLiveToken` reads the created
+     * session precisely so this column can be the answer rather than the
+     * question.
+     */
+    model: text("model").notNull(),
+    /** `gpt-live-transcribe` — a second model on a second rate card. src/live.ts. */
+    transcriptionModel: text("transcription_model"),
+    /** When the client secret was minted. A token handed out, not a conversation. */
+    issuedAt: timestamp("issued_at", { withTimezone: true }).notNull(),
+    /** The last instant a usage report for this session is accepted. See above. */
+    acceptsUntil: timestamp("accepts_until", { withTimezone: true }).notNull(),
+    /** When the data channel actually opened, or null if it never did. */
+    connectedAt: timestamp("connected_at", { withTimezone: true }),
+    /** When the browser said it was over. Best-effort: a closed tab says nothing. */
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    /**
+     * Why it ended, in the browser's own vocabulary — `hung_up`, `idle`,
+     * `session_cap`, `error`. Free text with a length bound rather than a CHECK,
+     * because the list belongs to a React hook this stage may not edit and a
+     * constraint that lags it would refuse a true report.
+     */
+    closeReason: text("close_reason"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    /** "What has this reader been talking to, and when" — the per-owner question. */
+    index("realtime_sessions_owner_issued").on(t.ownerId, t.issuedAt.desc()),
+    /**
+     * **The deadline must be after the issue**, or the session was born unable
+     * to accept a single report and nobody would find out until the reports
+     * started bouncing. A constraint rather than a comment, per
+     * docs/project/sql.md: it holds for the migration that backfills this
+     * column in three months as well as for the one caller today.
+     */
+    check("realtime_sessions_window", sql`${t.acceptsUntil} > ${t.issuedAt}`),
+    /** A channel cannot have opened before the token that admits it was minted. */
+    check(
+      "realtime_sessions_connected_after_issue",
+      sql`${t.connectedAt} is null or ${t.connectedAt} >= ${t.issuedAt}`,
+    ),
+    check("realtime_sessions_close_reason_len", sql`length(${t.closeReason}) <= 64`),
+  ],
+);
+
 /* ------------------------------------------------------------- ai calls -- */
 
 /**
@@ -2192,17 +2314,50 @@ export const aiCalls = spideryarn.table(
     credentialFingerprint: text("credential_fingerprint"),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     finishedAt: timestamp("finished_at", { withTimezone: true }).notNull(),
-    durationMs: integer("duration_ms").notNull(),
-    /** `ok`, `error` or `aborted`. A non-`ok` row's cost is a lower bound. */
+    /**
+     * **Nullable since 2026-09-02, and only a realtime row may be null.**
+     *
+     * The two gateways time their own request, so every row they write has a
+     * duration. A live session's input transcription does not: it arrives as one
+     * `…input_audio_transcription.completed` event with no matching start, so
+     * there is nothing to subtract from. Both alternatives were worse than a
+     * null, and both would have been *invisible* — a `0` reads as an instant
+     * call and skews any latency figure downwards, and the session's own
+     * wall-clock is the length of a conversation rather than of a call, which is
+     * the substitution GPT Sol's review named explicitly. src/ai-spend.ts §
+     * `AiCallRow.durationMs`.
+     */
+    durationMs: integer("duration_ms"),
+    /**
+     * `ok`, `error` or `aborted`. A non-`ok` row's cost is a lower bound —
+     * **except on a realtime row, where it is not.**
+     *
+     * The Realtime API reports the usage it billed on the terminal event
+     * whatever the status, so a `cancelled` or `incomplete` response's figure is
+     * complete even though its answer was not. OpenAI's four statuses are mapped
+     * onto these three by `realtimeOutcome` in src/live.ts and kept verbatim in
+     * `provider_status` below, because the map loses information on purpose and
+     * that is the column where it is not lost.
+     */
     outcome: text("outcome").notNull(),
     /**
-     * **Which bill this call lands on** — `openrouter` or `anthropic`.
+     * **Which bill this call lands on** — `openrouter`, `anthropic` or `openai`.
      *
      * Not derivable from `credential_fingerprint`, which identifies a key
-     * without saying whose. Money leaves this project from two accounts and
+     * without saying whose. Money leaves this project from three accounts and
      * `npm run cost --reconcile` can only read one of them, so the row has to
      * say which side of that line it is on or the reconciliation is comparing
      * our total against somebody else's subtotal.
+     *
+     * `openai` is live conversation, added 2026-09-02 — and it is the one
+     * **outside the account-level spend cap** set in OpenRouter, which is the
+     * safety net the other two sit behind. The allowed list is a CHECK in SQL
+     * (`ai_calls_provider_account_known`, first written in
+     * drizzle/0023_ai_calls_cost_provenance.sql and widened in
+     * drizzle/20260902150952_realtime_sessions_and_usage.sql), not a Drizzle
+     * enum, so widening `ProviderAccount` in TypeScript is *not* enough on its
+     * own — that is exactly how the third value nearly shipped with every
+     * insert failing.
      */
     providerAccount: text("provider_account").notNull(),
     /**
@@ -2291,6 +2446,79 @@ export const aiCalls = spideryarn.table(
     webSearches: integer("web_searches"),
     serviceTier: text("service_tier"),
     inferenceGeo: text("inference_geo"),
+
+    /* ----------------------------------------------- live conversation -- */
+
+    /**
+     * **The realtime block — null on every row that is not a live conversation.**
+     *
+     * Explicit nullable columns rather than one JSON blob, per
+     * docs/project/sql.md, and this is **not** a new pattern in this table: it
+     * already carries `cache_write_5m_tokens` and `cache_write_1h_tokens` (the
+     * Messages wire only), `service_tier` and `inference_geo` (Anthropic's own
+     * fields) and `web_searches` (the chat wire only), each null on most rows.
+     * A sibling table was the tempting alternative and that precedent settled
+     * it — this follows the table's existing design rather than putting a second
+     * shape beside it.
+     *
+     * **Why not the totals alone.** Audio input on `gpt-realtime-2.1` is $32 per
+     * million tokens against $4 for text, and audio output $64 against $24. A
+     * row holding only `reported_input_tokens` and `output_tokens` can be handed
+     * a price once, by whoever wrote it, and can never be repriced or audited
+     * afterwards. The splits are the whole point.
+     *
+     * Which session this call belongs to, and the thing that lets a `left join`
+     * find sessions that reported nothing at all.
+     */
+    realtimeSessionId: uuid("realtime_session_id").references(() => realtimeSessions.id, {
+      /* Billing history outlives everything, like `owner_id`. A session row is
+         never deleted, so this only ever refuses a mistake. */
+      onDelete: "restrict",
+    }),
+    /** OpenAI's `response.id`, or the transcribed item's id. Half the idempotency key. */
+    providerEventId: text("provider_event_id"),
+    /** `response` or `transcription` — which rate card, and the rest of the key. */
+    eventKind: text("event_kind"),
+    /** `completed`, `cancelled`, `failed`, `incomplete` — kept verbatim. See `outcome`. */
+    providerStatus: text("provider_status"),
+    /** Inside `reported_input_tokens`, never added to it. $4/Mtok. */
+    inputTextTokens: integer("input_text_tokens"),
+    /** Inside `reported_input_tokens`. **$32/Mtok** — the expensive half of a conversation. */
+    inputAudioTokens: integer("input_audio_tokens"),
+    /**
+     * Always zero today: `liveSession` in src/live.ts configures no image input.
+     * Stored so that the day it stops being zero is a visible fact rather than a
+     * silently mispriced row — there is no image rate in `REALTIME_PRICES` and
+     * `acceptRealtimeUsage` refuses a report carrying one.
+     */
+    inputImageTokens: integer("input_image_tokens"),
+    /**
+     * `cached_tokens_details` — the text/audio split of `cache_read_tokens`,
+     * which carries the parent total.
+     *
+     * Cached audio is $0.40/Mtok against $32 uncached, eighty times cheaper, so
+     * a single cached total cannot be priced. This is the same argument that
+     * produced `cache_write_5m_tokens` and `cache_write_1h_tokens` above.
+     */
+    cachedTextTokens: integer("cached_text_tokens"),
+    cachedAudioTokens: integer("cached_audio_tokens"),
+    /** Inside `output_tokens`. $24/Mtok. */
+    outputTextTokens: integer("output_text_tokens"),
+    /** Inside `output_tokens`. **$64/Mtok** — the most expensive number in this table. */
+    outputAudioTokens: integer("output_audio_tokens"),
+    /**
+     * **Seconds of audio transcribed**, for the half of live conversation that
+     * is not billed per token at all.
+     *
+     * `gpt-live-transcribe` is $0.017 per audio *minute*. A token-only row shape
+     * could not price it, which is why the usage DTO is a discriminated union —
+     * token detail **or** seconds — rather than one bag of optional counts.
+     *
+     * `double precision`, not an integer: the event reports a duration in
+     * milliseconds and rounding every turn up or down to a whole second would
+     * accumulate a real error over a twenty-minute conversation of short turns.
+     */
+    transcriptionSeconds: doublePrecision("transcription_seconds"),
     createdAt: createdAt(),
   },
   (t) => [
@@ -2305,6 +2533,82 @@ export const aiCalls = spideryarn.table(
      * wrong.
      */
     index("ai_calls_scope_started").on(t.scopeKind, t.startedAt.desc()),
+    /**
+     * **The same report must not become two rows.**
+     *
+     * The browser posts each turn as it happens and retries what it did not see
+     * acknowledged, so a dropped response — a request that succeeded and whose
+     * `200` never arrived — is the ordinary case rather than the pathological
+     * one. Double-counting is the direction that looks exactly like the thing
+     * being measured, which is what makes it worth a constraint rather than a
+     * check in TypeScript.
+     *
+     * `acceptRealtimeUsage` also derives the row's **primary key** from these
+     * same three components, so the ordinary retry collides on `ai_calls.id`
+     * and the existing `on conflict do nothing` absorbs it. This index is the
+     * belt to that pair of braces: it holds even if the derivation is changed,
+     * and it holds for anything writing this table that is not that function.
+     *
+     * Partial, because every non-realtime row has all three columns null and
+     * `null` is not equal to `null` in a unique index — but a partial index says
+     * what it means instead of relying on that, and it stays small.
+     */
+    uniqueIndex("ai_calls_realtime_event")
+      .on(t.realtimeSessionId, t.providerEventId, t.eventKind)
+      .where(sql`${t.realtimeSessionId} is not null`),
+    /**
+     * **A realtime row is fully identified or it is not a realtime row.**
+     *
+     * The three parts of the idempotency key arrive or refuse together. Without
+     * this a report missing its `response.id` would insert happily, sit outside
+     * the unique index above because one of its columns is null, and be counted
+     * again on the next retry — the exact failure the index exists to stop,
+     * walking in through the gap the index cannot cover.
+     */
+    check(
+      "ai_calls_realtime_identified",
+      sql`(${t.realtimeSessionId} is null and ${t.providerEventId} is null and ${t.eventKind} is null)
+          or (${t.realtimeSessionId} is not null and ${t.providerEventId} is not null and ${t.eventKind} is not null)`,
+    ),
+    check("ai_calls_realtime_event_kind", sql`${t.eventKind} is null or ${t.eventKind} in ('response','transcription')`),
+    /**
+     * **The modality columns belong to the realtime wire and nowhere else.**
+     *
+     * A `input_audio_tokens` on a chat-wire row would be a number nobody can
+     * price — there is no audio rate for `claude-sonnet-5` — and, worse, it
+     * would be summed by the first person to write `SUM(input_audio_tokens)`
+     * for a voice-minutes figure. This is the same shape as
+     * `ai_calls_byok_upstream_only` from the migration before it: the column's
+     * name carries a condition, and the database is what keeps the condition
+     * true. docs/project/sql.md § Get the database to do the work.
+     */
+    check(
+      "ai_calls_realtime_columns_need_realtime_wire",
+      sql`${t.wire} = 'realtime' or (
+            ${t.realtimeSessionId} is null
+            and ${t.providerStatus} is null
+            and ${t.inputTextTokens} is null
+            and ${t.inputAudioTokens} is null
+            and ${t.inputImageTokens} is null
+            and ${t.cachedTextTokens} is null
+            and ${t.cachedAudioTokens} is null
+            and ${t.outputTextTokens} is null
+            and ${t.outputAudioTokens} is null
+            and ${t.transcriptionSeconds} is null
+          )`,
+    ),
+    /**
+     * **`duration_ms` may only be null on a realtime row**, which is the whole
+     * of the licence the `NOT NULL` was dropped for.
+     *
+     * Dropping a `NOT NULL` widens what every *other* writer may do too, and the
+     * two gateways always know how long their own request took. Without this,
+     * the day one of them stops passing a duration is a day nothing goes red.
+     */
+    check(
+      "ai_calls_duration_known_off_realtime",
+      sql`${t.durationMs} is not null or ${t.wire} = 'realtime'`,
+    ),
   ],
 );
 
@@ -3005,7 +3309,7 @@ export const feedback = spideryarn.table(
      */
     check(
       "feedback_route_kind",
-      sql`${t.routeKind} in ('library', 'read', 'add', 'add-upload', 'design', 'profile', 'admin', 'login', 'callback', 'unknown')`,
+      sql`${t.routeKind} in ('library', 'read', 'add', 'add-upload', 'design', 'profile', 'admin', 'login', 'callback', 'privacy', 'unknown')`,
     ),
     check(
       "feedback_environment",

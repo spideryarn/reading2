@@ -366,7 +366,8 @@ describe("the sentences themselves", () => {
 
 /**
  * **Which artefacts the payload turned out to have** — the derivation that
- * replaced `GET /api/public/metadata/:slug` in the client.
+ * replaced a second request, to a public metadata endpoint, in the client —
+ * and outlived it: that route was deleted on 2026-09-02.
  *
  * It is two lines of code and it is the hinge of the whole slice: everything
  * above takes `PublicArtefacts`, and this is where those five booleans now come

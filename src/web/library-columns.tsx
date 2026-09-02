@@ -36,7 +36,7 @@ import { localeText, numberOrMissing } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
 import { timeAgo } from "./relative-time.js";
 import { readHref } from "./router.js";
-import { Actions, Details } from "./ShelfEntry.js";
+import { Actions, Details, SharedBadge } from "./ShelfEntry.js";
 import type { Shelf } from "./ShelfEntry.js";
 import { TitleEditor } from "./TitleEditor.js";
 import { Tooltip } from "./Tooltip.js";
@@ -286,8 +286,16 @@ function TitleCell({ entry, shelf }: { entry: LibraryEntry; shelf: Shelf }) {
       >
         {entry.title}
       </Link>
-      {(sub || entry.fixture) && (
+      {(sub || entry.visibility === "public" || entry.fixture) && (
         <span className="tw:block tw:truncate tw:text-xs tw:text-muted-foreground">
+          {/* **First on the line, unlike on the card**, because this line
+              truncates: the byline and the site name can afford to run out of
+              room and "anyone can read this" cannot. */}
+          {entry.visibility === "public" && (
+            <>
+              <SharedBadge />{" "}
+            </>
+          )}
           {sub}
           {entry.fixture && (
             <span className="tw:ml-1.5 tw:rounded tw:border tw:border-border tw:px-1 tw:py-0.5">

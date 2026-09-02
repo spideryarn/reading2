@@ -31,8 +31,9 @@ listed here; the names under each are files in `docs/project/`.
   is, who owns which stage, where the data lives.
   <br>↳ `block-ids.md` · `fetching.md` (stage 1) · `content-extraction.md` (stage 2, and there are
   two) · `hierarchy.md` · `ingest-queue.md` (paste a URL, get an article) ·
-  `ai-gateway.md` (every paid call goes through OpenRouter) · `prompt-caching.md` ·
-  `database.md` · `sql.md` (columns over JSON, keys over good intentions) ·
+  `ai-gateway.md` (every paid call goes through OpenRouter, bar one declared exception) ·
+  `prompt-caching.md` · `database.md` ·
+  `sql.md` (columns over JSON, keys over good intentions) ·
   `export.md` (one article's data, out)
 - **[reading-view-overview.md](docs/project/reading-view-overview.md)** — everything the reader
   sees: the spine, the prose, and the band the modes take turns in.
@@ -52,7 +53,8 @@ listed here; the names under each are files in `docs/project/`.
   `touch.md` · `url-state.md` · `library.md` (the shelf) · `page-titles.md` ·
   `reader-profile.md` · `experimental-features.md` (the switch on /profile) ·
   `dictation.md` (talking into a text box) ·
-  `copy.md` (reader-facing failure messages)
+  `copy.md` (reader-facing failure messages) ·
+  `website-text.md` (the privacy policy, the landing page, the contact address)
 - **[design-css-overview.md](docs/project/design-css-overview.md)** — the map for anything visual:
   the stylesheets and their order, which mechanism owns a given rule, the colour and type tokens.
   Its live counterpart is `/design`.

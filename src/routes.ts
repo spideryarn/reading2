@@ -50,10 +50,13 @@
  *                                  { threadId, edit: messageId, question, at? }
  *   POST   /api/chat/:slug/:threadId/stop  { messageId } → { stopped }
  *   POST   /api/chat/:slug/live-tool  { name, args } → one chat tool, for a live session
- *   POST   /api/chat/:slug/:threadId/live  → an ephemeral realtime secret,
- *                                            the thread as seed items, and the tail
+ *   POST   /api/chat/:slug/:threadId/live  → an ephemeral realtime secret, a session
+ *                                            id, the thread as seed items, and the tail
  *   POST   /api/chat/:slug/:threadId/spoken { question, answer, expectedTailId, … }
  *                                          → { thread }, one exchange appended
+ *   POST   /api/live/:sessionId/connected  → the data channel opened
+ *   POST   /api/live/:sessionId/usage      { kind, providerEventId, … } → one ledger row
+ *   POST   /api/live/:sessionId/close      { reason? } → the conversation ended
  *   PATCH  /api/chat/:slug/:threadId   { title }
  *   DELETE /api/chat/:slug/:threadId
  *   GET    /api/search/:slug     every saved meaning-search for the article
@@ -194,6 +197,7 @@ import {
   adminStore,
   commentStore,
   feedbackStore,
+  realtimeSessionStore,
   sourceStore,
   visibilityStore,
 } from "./store/index.js";
@@ -233,12 +237,17 @@ import { isSpideryarnId } from "./ids.js";
    OPENAI_API_KEY in the app. Nothing here touches that key — this file asks for
    a session and gets back a short-lived secret for the browser. */
 import {
+  acceptRealtimeUsage,
   LIVE_MODEL,
   LIVE_SERVER_TOOLS,
+  LIVE_TRANSCRIBER,
   type LiveToken,
   liveSeedItems,
   liveSession,
   mintLiveToken,
+  parseRealtimeUsage,
+  realtimeCloseReason,
+  REPORT_WINDOW_MS,
   SHOW_PASSAGE_TOOL,
 } from "./live.js";
 import { vocabularyTermsFor } from "./vocabulary-sources.js";
@@ -2894,11 +2903,164 @@ async function liveChatToken(
   });
 
   const minted = await mintLiveToken(session);
+
+  /* **The journal row goes in before the token comes out, and the order is the
+     whole rule.**
+
+     OpenAI mints the secret, we write the session, and only then does the token
+     reach the browser. If the insert throws, this function throws with it and
+     the reader is told the session could not start — because a usable token with
+     no journal row is money that will be spent on a wire this server cannot see,
+     with nothing anywhere that could later say a conversation had even happened.
+     GPT Sol set the sequence out in exactly these three steps; the token is
+     genuinely wasted when this fails, and that is the cheaper of the two
+     outcomes.
+
+     It also means an issued session that reports nothing shows up as a session
+     that reported nothing, which is the one failure a browser-reported meter
+     actually has — the reader shuts the laptop and the last turns never arrive.
+     Without a row there is no gap to see, only an absence.
+     docs/reusable/silent-success.md. */
+  const sessionId = randomUUID();
+  const issuedAt = new Date();
+  await realtimeSessionStore.issue({
+    id: sessionId,
+    ownerId: currentOwnerId(),
+    articleSlug: slug,
+    threadId,
+    /* **What OpenAI created, not what we asked for.** They agree only when the
+       request was honoured, and `mintLiveToken` reads the created session
+       precisely so that this column can be an answer rather than a hope — which
+       matters here more than usual, because the price is looked up by this
+       string. A row that named a model the session was not on would be priced
+       against the wrong rate card for ever. */
+    model: minted.model,
+    transcriptionModel: LIVE_TRANSCRIBER,
+    issuedAt: issuedAt.toISOString(),
+    /* **The server's own deadline, stored on the row.** Not the token's expiry,
+       which admits one connection and is about ten minutes, while a conversation
+       may run for twenty — see `REPORT_WINDOW_MS` in src/live.ts for why using
+       the wrong clock would have dropped the reports that matter most. Stored
+       rather than recomputed, so a session issued under today's rule keeps it
+       when the rule changes. */
+    acceptsUntil: new Date(issuedAt.getTime() + REPORT_WINDOW_MS).toISOString(),
+    connectedAt: null,
+    closedAt: null,
+    closeReason: null,
+  });
+
   return {
     ...minted,
+    sessionId,
     seed: liveSeedItems(thread?.messages ?? []),
     tailId: thread?.messages.at(-1)?.id ?? null,
   };
+}
+
+/**
+ * **The data channel opened** — `POST /api/live/:sessionId/connected`.
+ *
+ * The smallest endpoint in this file, and it exists because *a minted token is
+ * not a conversation*. A reader can press the button, think better of it, and
+ * never open the channel. A denominator built on issued sessions would then
+ * quietly understate what a real conversation costs by however many of those
+ * there are, and nothing would look wrong.
+ *
+ * GPT Sol offered two ways out — name the denominator honestly, or add this
+ * event — and preferred this one, because "issued" and "connected" are both
+ * facts worth having rather than one fact worth relabelling.
+ *
+ * Best-effort by nature: it fires once, on a channel that has just become
+ * usable, and nothing retries it. So `close` and the first usage report both
+ * backfill `connected_at` as well, and all three keep the earliest time.
+ */
+async function liveConnected(sessionId: string): Promise<{ ok: true }> {
+  const owner = currentOwnerId();
+  /* **Looked up for this owner, and 404 if it is not theirs.** The session id
+     travels through the browser, so a lookup that did not carry the owner would
+     answer for any session whose id somebody had. 404 rather than 403 is this
+     repo's rule for a thing you may not see — docs/project/auth.md § Whose data
+     is it. */
+  const session = await realtimeSessionStore.find(sessionId, owner);
+  if (!session) throw httpError(404, "No such live session.");
+  await realtimeSessionStore.markConnected(sessionId, owner, new Date().toISOString());
+  return { ok: true };
+}
+
+/**
+ * **One paid event from a live conversation** — `POST /api/live/:sessionId/usage`.
+ *
+ * This is the seam: an authenticated request carrying a browser's account of
+ * what a turn cost becomes a row in the ledger. Everything about the request
+ * that can be got wrong is got wrong in `parseRealtimeUsage` and
+ * `acceptRealtimeUsage`, which are named, pure and tested without HTTP —
+ * `tests/realtime-usage.test.ts`. This function does only the three things they
+ * cannot: find the session **for the authenticated owner**, price nothing
+ * itself, and write.
+ *
+ * ## What the endpoint refuses to take from the caller
+ *
+ * A dollar amount, a model, an owner, an article. All four come from the session
+ * row this server wrote when it minted the token. A client that could name its
+ * own model could name the cheap one; a client that could name its own cost
+ * could name zero. docs/plans/realtime-voice-cost-tracking.md.
+ *
+ * ## Why a lost report is worse than a wrong one
+ *
+ * Nobody has an incentive to under-report their own token count and there is no
+ * per-reader cap to duck under — docs/project/security-map.md is explicit that a
+ * signed-in reader is not one of the untrusted parties. What will actually
+ * happen is that a tab closes mid-conversation. That is why the browser posts
+ * every turn as it happens rather than one total at the end (Stage 2B), and why
+ * a retry of a report that was already accepted has to be harmless: the row's id
+ * is derived from the event, so a repeat lands on `on conflict do nothing`.
+ */
+async function liveUsage(sessionId: string, body: unknown): Promise<{ ok: true }> {
+  const owner = currentOwnerId();
+  const session = await realtimeSessionStore.find(sessionId, owner);
+  if (!session) throw httpError(404, "No such live session.");
+
+  const receivedAt = new Date();
+  const row = acceptRealtimeUsage({
+    session,
+    usage: parseRealtimeUsage(body),
+    receivedAt,
+  });
+  await costStore.record(row);
+  /* **A report is also evidence the channel opened**, and the `connected` event
+     above is the one thing here that nothing retries. Kept earliest-wins in the
+     store, so this weaker inference never overwrites the real moment. */
+  await realtimeSessionStore.markConnected(sessionId, owner, receivedAt.toISOString());
+  return { ok: true };
+}
+
+/**
+ * **The conversation ended** — `POST /api/live/:sessionId/close`.
+ *
+ * Best-effort, and it has to be treated that way by everything downstream: a
+ * closed laptop sends nothing, so a session with no `closed_at` is the ordinary
+ * case rather than an error, and **nothing may read its absence as a session
+ * still running**. The value of the field is in the sessions that do close — it
+ * is what makes "issued, never connected" and "connected, ended, reported
+ * nothing" different rows rather than one shrug.
+ *
+ * The reason is the browser's own word for it and is stored as free text with a
+ * length bound: the list belongs to `useLiveConversation.ts`, and a server-side
+ * union that lagged it would refuse a true report about how a conversation
+ * ended. `realtimeCloseReason` in src/live.ts is the bound.
+ */
+async function liveClose(sessionId: string, body: unknown): Promise<{ ok: true }> {
+  const owner = currentOwnerId();
+  const session = await realtimeSessionStore.find(sessionId, owner);
+  if (!session) throw httpError(404, "No such live session.");
+  const { reason } = (body ?? {}) as Record<string, unknown>;
+  await realtimeSessionStore.close(
+    sessionId,
+    owner,
+    new Date().toISOString(),
+    realtimeCloseReason(reason),
+  );
+  return { ok: true };
 }
 
 /**
@@ -2935,6 +3097,17 @@ async function liveTool(slug: string, body: unknown): Promise<ToolOutcome> {
 
 /** What the browser is given to open one live session. See `liveChatToken`. */
 interface LiveTicket extends LiveToken {
+  /**
+   * **The id of this server's own journal row for the conversation**, and the
+   * thing every later report is addressed to.
+   *
+   * Not the OpenAI session id, which the browser also learns and which this
+   * server never sees. Ours, minted here, so the three acceptance endpoints can
+   * find the row that says whose money it is, which article it was about, which
+   * model was created and how long reports are accepted for — none of which the
+   * browser is trusted to state. src/live.ts § `RealtimeUsage`.
+   */
+  sessionId: string;
   /** The thread so far, windowed and with our block ids taken out. */
   seed: { role: "user" | "assistant"; text: string }[];
   /** The row the first spoken append must claim, or `null` for an empty thread. */
@@ -5926,6 +6099,24 @@ export async function serveAuthenticatedApi(
   const chatLive = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/live$/.exec(path);
   const chatLiveTool = /^\/api\/chat\/([\w.%-]+)\/live-tool$/.exec(path);
   const chatSpoken = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/spoken$/.exec(path);
+  /* **Live conversation's three accounting endpoints, and they are NOT under
+     `/api/chat/`.**
+
+     The two above are: a ticket needs the thread to seed from, and a spoken
+     exchange is appended to it. These three are about the *session* — what it
+     spent, when its channel opened, when it ended — and a session outlives the
+     thread it started in, may be reported against after the reader has moved on,
+     and is addressed by a uuid this server minted rather than by a slug and a
+     thread id. Routing them under a conversation would have made every report
+     carry two identifiers that nothing checks against each other, which is two
+     more ways for a report to be about the wrong thing.
+
+     `[\w-]+` rather than the slug class the rest of this file uses: these ids
+     are uuids from `randomUUID`, so a dot or a percent-escape in one is not a
+     spelling to accept, it is a request to look at. */
+  const liveSessionConnected = /^\/api\/live\/([\w-]+)\/connected$/.exec(path);
+  const liveSessionUsage = /^\/api\/live\/([\w-]+)\/usage$/.exec(path);
+  const liveSessionClose = /^\/api\/live\/([\w-]+)\/close$/.exec(path);
   const searches = /^\/api\/search\/([\w.%-]+)$/.exec(path);
   const oneRun = /^\/api\/search\/([\w.%-]+)\/([\w.%-]+)$/.exec(path);
   /* Referee mode's criteria. Two patterns and the same split as the two above:
@@ -6478,6 +6669,24 @@ export async function serveAuthenticatedApi(
     if (chatLive && req.method === "POST") {
       const [slug, id] = [slugPart(chatLive, 1), part(chatLive, 2)];
       send(res, 200, await liveChatToken(slug, id, await readBody(req)));
+      return;
+    }
+    if (liveSessionConnected && req.method === "POST") {
+      send(res, 200, await liveConnected(part(liveSessionConnected, 1)));
+      return;
+    }
+    if (liveSessionUsage && req.method === "POST") {
+      /* **Not wrapped in `withSpendAttribution`, and that is deliberate.** That
+         helper puts an article on rows the *collector* writes — the calls made
+         inside this request. This request makes no model call at all: it reports
+         one that happened on a wire this server never touched, and the row is
+         built and written directly. The article comes off the session row, which
+         is a more durable answer than the ambient scope anyway. */
+      send(res, 200, await liveUsage(part(liveSessionUsage, 1), await readBody(req)));
+      return;
+    }
+    if (liveSessionClose && req.method === "POST") {
+      send(res, 200, await liveClose(part(liveSessionClose, 1), await readBody(req)));
       return;
     }
     if (chatSpoken && req.method === "POST") {

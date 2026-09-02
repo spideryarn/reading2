@@ -38,7 +38,12 @@ npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high --timeout-minutes
   --prompt-file <review-prompt> --output <review-answer>
 ```
 
-Read-only, in the background, and give it three quarters of an hour.
+Read-only, in the background, and give it three quarters of an hour. The tree is read-only, but the
+reviewer *can* run one test file or a tsx script — see [the review profile](#the-review-profile) —
+so say so in the prompt, and say how: `npx vitest run tests/<one>.test.ts` and
+`node --import tsx <script>`, not `npm test` or `npm run typecheck`, which the sandbox still stops.
+Until 2026-09-02 it could not, and fifteen reviews in a row were reasoning rather than
+reproduction — every attempt to run a test is in their activity logs, dying on `EROFS`.
 
 **Weight the second review higher than the first — higher, not instead.** A plan-stage review reads
 prose, so it can only catch what the prose says. It cannot find a `PATCH` handler that writes one
@@ -267,7 +272,7 @@ npx tsx scripts/run-codex.ts --sandbox workspace-write \
   --prompt-file /tmp/task.md --output /tmp/codex-answer.md
 ```
 
-Flags: `--model` · `--prompt` / `--prompt-file` · `--sandbox` (default `read-only`) · `--effort`
+Flags: `--model` · `--prompt` / `--prompt-file` · `--sandbox` (default `review`) · `--effort`
 (default `high`) · `--auth` (default `subscription-first`) · `--repo-dir` · `--timeout-minutes`
 (default 30) · `--output` · `--activity-log` · `--stream` · `--print` · `--quiet` ·
 `--max-print-chars` (default 20,000) · `--pass-env` · `--dry-run`.
@@ -355,12 +360,63 @@ If you ever do run raw `codex exec` from an orchestrator, redirect it
 
 ## Read-only vs write — the safety switch
 
-`--sandbox read-only` (the default) · `workspace-write` · `danger-full-access`.
+`--sandbox review` (the default) · `read-only` · `workspace-write` · `danger-full-access`.
 
 `workspace-write` lets Codex create and edit anything under the working directory and run routine
 local commands; it still blocks network writes and out-of-workspace writes (extend with
 `--add-dir`). `danger-full-access` removes all confinement — container or VM only, never a dev
 machine.
+
+### The review profile
+
+`read-only` means it: no writes anywhere, and on 2026-09-02 the activity logs of fifteen Sol
+reviews on this box showed what that costs. Every attempt to run a test died — vitest on
+`node_modules/.vite-temp`, where it bundles its config (`EROFS`), and tsx on the IPC pipe it opens
+under `/tmp` (`listen EPERM`). Plain `tsc --noEmit`, grep and `git diff` worked, so the reviews
+were type-checked reasoning, never a reproduction, and the house rule — *apply (a) and watch it go
+red* — was one the reviewer could not follow.
+
+`review` is codex's own answer to that: a **named permissions profile**, a `[permissions.<name>]`
+table with per-path rules, which the wrapper selects with `-c default_permissions=review` in place
+of `--sandbox`. The table is checked in at [`.codex/config.toml`](../../.codex/config.toml): read
+everywhere, write to `/tmp` and to the three cache directories under `node_modules`, and nothing
+else. Measured under it, first with `codex sandbox` (the sandbox with no model in it, free) and
+then with a real `codex exec`:
+
+| | `read-only` | `review` | `workspace-write` |
+|---|---|---|---|
+| `touch src/x` | refused | **refused** | written |
+| `npx vitest run tests/<one>.test.ts` | `EROFS` | **14 passed** | passes |
+| `node --import tsx scripts/typecheck.ts` | `EPERM` | **runs** | runs |
+| `npx tsc --noEmit` | runs | runs | runs |
+| `npm run typecheck` (the tsx CLI) | `EPERM` | `EPERM` | `EPERM` |
+| `npm test`, the whole suite | no | no | no |
+
+The last two rows are the honest limits. The tsx CLI listens on a unix socket and the sandbox
+denies that in every mode (a `unix_sockets` allow rule in the profile's `[network]` table did not
+change it), so run scripts as `node --import tsx <script>`. The full suite writes to `data/` and the
+Postgres half needs loopback network, which no profile short of `danger-full-access` grants. Neither
+matters for a review: one red test file is the reproduction, a green suite is the implementer's
+job.
+
+It is a relaxation of what the reviewer can *run*, not of what it can *change*: the sandbox still
+refuses a write to anything git tracks, so nothing in [Commit before you let it write](#commit-before-you-let-it-write)
+applies, and a `review` run is retried on the other credential exactly as a `read-only` one is.
+The profile is not `workspace-write` under another name, and the reason not to reach for that
+instead is the reason the whole review design gives: a reviewer that can edit the tree is a
+reviewer that will fix the finding rather than hand back the mutation.
+
+Two traps in codex's side of it, both hit while measuring:
+
+- **A profile needs an explicit `"/" = "read"`.** Without it bwrap cannot even exec the codex
+  binary under `~/.codex`, and the failure is a bare `execvp … No such file or directory`.
+- **`-c` cannot express the rules.** `-c 'permissions.review.filesystem."/tmp"="write"'` keeps the
+  quotes in the path and fails as *must be absolute*, so the table lives in a config file, and the
+  right one is the repo's own `.codex/config.toml` — every agent's run finds it there, whichever
+  machine, and the `:workspace_roots` token keeps the paths relative to the checkout. A repo without
+  the table gets codex's `default_permissions requires a [permissions] table` at exit 1, in the
+  log nobody reads; the wrapper checks for the header first and refuses in one line, naming
+  `--sandbox read-only` as the way to run there anyway.
 
 ### The approval-policy trap
 
@@ -536,10 +592,11 @@ under `~/.codex/sessions/`; capture the id from the `--json` `thread.started` ev
 - **Auth is a human setup step** — the calling agent can't `codex login` for you.
 - **Don't pipe Codex's raw stdout back in as a prompt.** It's a prompt-injection vector as soon as
   Codex echoes file or user content. Use `-o` and parse deliberately.
-- **`listen EPERM` on a tsx IPC pipe.** A `workspace-write` run that itself shells out to `npx tsx`
-  can fail with `listen EPERM … /tmp/…/*.pipe`. That's a sandbox artefact, not a code failure — the
-  sandbox blocks the named pipe tsx opens for IPC. Re-run the validation in your own shell, or
-  invoke it as `node --import tsx …`.
+- **`listen EPERM` on a tsx IPC pipe.** Any sandboxed run that shells out to `npx tsx` or an
+  `npm run` script built on it fails with `listen EPERM … /tmp/tsx-…/*.pipe` — in every mode,
+  `workspace-write` included, measured 2026-09-02. That's a sandbox artefact, not a code failure:
+  the tsx CLI listens on a unix socket and the sandbox denies it. Invoke the script as
+  `node --import tsx …`, which opens no socket, or re-run the validation in your own shell.
 - **Stale-looking answers.** A run occasionally returns something that reads as an answer to a
   *previous* prompt. The wrapper writes a fresh temp `-o` file per run and never resumes a session,
   so it isn't output reuse on this side; the likely causes are upstream. Treat such an answer as

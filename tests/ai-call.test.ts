@@ -213,9 +213,25 @@ describe("the routing table", () => {
     }
   });
 
-  it("covers every job that is not a pipeline stage, and no others", () => {
+  it("covers every job that comes down this wire, and no others", () => {
+    /* **Two wires are excluded now, not one, and the second one is the
+       interesting one.**
+
+       `messages` is the eight pipeline stages, which go through
+       src/messages-stream.ts. `realtime` is live conversation, and it is
+       excluded for a stronger reason than "a different endpoint": this process
+       makes no request for it at all. The browser opens WebRTC straight to
+       OpenAI and the usage arrives afterwards as a report — so there is no
+       OpenRouter path to route it to, and `AI_JOB_ROUTE` demanding one would be
+       a table entry that could only ever be a lie. src/ai-call.ts § `ChatJob`,
+       where the same exclusion is a compile error rather than an assertion.
+
+       This test was named "every job that is not a pipeline stage" until
+       2026-09-02, which was the same claim while there were only two kinds of
+       job. It stopped being true the day a paid call arrived that goes through
+       neither seam. */
     const chatJobs = Object.entries(AI_JOB_WIRE)
-      .filter(([, wire]) => wire !== "messages")
+      .filter(([, wire]) => wire !== "messages" && wire !== "realtime")
       .map(([job]) => job)
       .sort();
     expect(Object.keys(AI_JOB_ROUTE).sort()).toEqual(chatJobs);

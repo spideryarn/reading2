@@ -337,10 +337,37 @@ describe("the closed public namespace", () => {
       "/api/public/article",
       "/api/public/glossary/example",
       "/api/public/../library",
+      /* **A route that used to exist**, deleted 2026-09-02 with its reader, its
+         DTO and its type (docs/plans/260902j-public-read-only-access-audit-and-improvements.md
+         § Cluster B). Named here rather than left to the sweeps because a
+         deletion is the one edit that can open the hole this block is about: a
+         path the dispatcher no longer matches has to end *inside* the closed
+         room, and the way it would fail is by falling through to the gate and
+         answering 401 — which reads as *sign in and you may see it* about an
+         endpoint nobody may see. */
+      "/api/public/metadata/example",
     ]) {
       const r = await call("GET", path);
       expect({ path, status: r.status }).toEqual({ path, status: 404 });
       expect(r.body.error, path).toMatch(/No public API route/);
+    }
+  });
+
+  /**
+   * **And the deleted route is 404 for every method, not 405.**
+   *
+   * The sweep below drives off `PUBLIC_ROUTES`, so it stopped visiting this
+   * path the moment the route left the inventory — which is correct and is
+   * also exactly why the deleted spelling needs saying once by hand. A 405 with
+   * `Allow: GET, HEAD` would mean the pattern still matched something; the
+   * whole claim of a deletion is that it matches nothing.
+   */
+  it("404s the deleted metadata route whatever method it is asked with", async () => {
+    for (const method of ["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"]) {
+      const r = await call(method, "/api/public/metadata/example");
+      expect({ method, status: r.status }).toEqual({ method, status: 404 });
+      expect(r.headers.Allow, method).toBeUndefined();
+      expect(r.headers["Cache-Control"], method).toBe("no-store");
     }
   });
 

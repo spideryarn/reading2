@@ -44,8 +44,10 @@
  *   Not merely projected away: the public blocks query never selects it, which
  *   is the stronger version of the same rule.
  * - **The comment count**, `purpose`, `profile`, `archivedAt`, `dir` and the
- *   whole of `stages`. `PublicMetadata` says which artefacts exist and nothing
- *   whatever about how they were made.
+ *   whole of `stages`. The visitor's metadata page says which artefacts exist
+ *   and nothing whatever about how they were made, and it says it from the
+ *   article payload — `PublicArtefacts` below, derived by
+ *   src/web/public-artefacts.ts.
  *
  * See docs/plans/260827ai-public-read-only-access.md § The payload for the table these
  * came from, and § What a public visitor gets for the product decisions behind
@@ -348,10 +350,3 @@ export interface PublicArtefacts {
   quotes: boolean;
 }
 
-/** What `GET /api/public/metadata/:slug` returns. */
-export interface PublicMetadata {
-  slug: string;
-  /** The same title `PublicArticle.meta` carries, by the same rule. */
-  title: string;
-  available: PublicArtefacts;
-}
