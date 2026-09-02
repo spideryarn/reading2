@@ -1584,8 +1584,10 @@ Everything here needs Greg. The first four are new on 2026-08-31 and the first t
 
    - **`worktree.baseRef` is `"head"`, not `"fresh"`.** Deliberately reversed on 2026-09-01 after
      measuring that `origin/main` was 60 commits behind this box, so `"fresh"` would have started
-     every worktree two months stale — [worktrees.md § Why not the
-     remote](../project/worktrees.md#why-a-worktree-branches-from-head-and-not-from-the-remote). That
+     every worktree two months stale — [worktrees.md § Why `HEAD`, then the
+     remote](../project/worktrees.md#why-a-worktree-branches-from-head-and-then-merges-the-remote).
+     `worktree:setup` merges `origin/dev` on top since 2026-09-02, because `HEAD` is stale the other
+     way now that the trunk moves several times a day. That
      also means the GitHub default no longer affects worktree creation at all, which is why the flip
      could go ahead without it.
    - **GitHub's default is still `main`** as of 2026-09-02. It needs an authenticated `gh` or the web
