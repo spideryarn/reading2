@@ -29,6 +29,23 @@
  *  - **"a stored thread asks nothing and offers no button"** — coming back to
  *    the sub-mode must be free and must not offer to start a second thread.
  *
+ * ## What this file can see, and what it cannot
+ *
+ * Everything here is measured at **this app's own HTTP boundary**: `apiFetch` is
+ * mocked, so what is counted is requests the *client* makes to `/api/chat/…`.
+ * That is one request per press, and it is worth saying plainly that it is not
+ * the same fact as one model call.
+ *
+ * What happens on the other side of that request is `src/converse.ts`'s, and it
+ * is not one call and not a fixed number: web search is offered on every round
+ * and the model decides whether to use it, so it may run zero times; and each
+ * round in which the model asks for one of our own tools is a fresh provider
+ * request, up to `MAX_TOOL_ROUNDS + 1` of them. **No test in this file can see
+ * any of that.** The button said *"one model call and a web search"* until
+ * 2026-09-02 and a cross-family review showed the claim was wrong in both
+ * directions; the assertion below was reworded with it, and now checks what the
+ * words promise rather than pretending to have counted anything.
+ *
  * Harness: `CandidatesBand` over a stubbed `apiFetch`, the `vi.mock` from
  * tests/referee-claims-band.test.tsx. No `NuqsAdapter` — Candidates owns no
  * query parameter.
@@ -151,13 +168,16 @@ describe("opening the Candidates sub-mode", () => {
     expect(startButton(), "there is no way to start it either").not.toBeNull();
   });
 
-  it("asks once, when the button is pressed", async () => {
+  it("sends our own server exactly one request when the button is pressed", async () => {
     mount();
     await flush();
     act(() => {
       startButton()?.click();
     });
     await flush();
+    /* One *client* request, which is the thing this harness can count. How many
+       provider requests that turn then makes, and whether a web search runs, is
+       decided inside src/converse.ts and is invisible from here — see the header. */
     expect(posts().length, "the button did not start the brief").toBe(1);
     expect(posts()[0]?.url).toContain(`/api/chat/${SLUG}`);
     /* And the offer goes away with the press, so it cannot be pressed into a
@@ -165,15 +185,32 @@ describe("opening the Candidates sub-mode", () => {
     expect(startButton(), "the start button survived the press").toBeNull();
   });
 
-  it("says on the button what the press costs, in visible words", async () => {
+  /**
+   * **What the words promise, which is all this file is in a position to check.**
+   *
+   * Three things, and each is a wording a cross-family review found wrong on
+   * 2026-09-02:
+   *
+   *  - Both third parties are **named in visible text**, not in a card. The model
+   *    is the one the band's confidentiality notice already covers; the search
+   *    engine is the one it does not.
+   *  - The search is offered as a **possibility**. It may run zero times: the
+   *    opening ask is the fit brief and ends *"No names yet"*, and the model
+   *    decides whether to search at all.
+   *  - **No count of calls.** *"One model call"* was a number this app cannot
+   *    promise — a tool round is a fresh provider request, and there can be four.
+   */
+  it("promises only what it can keep about the press", async () => {
     mount();
     await flush();
-    const visible = (startButton()?.textContent ?? "") + (host.querySelector(".cnd-start-note")?.textContent ?? "");
-    /* Both third parties named, in the text, not in a card. The model is the one
-       the band's notice already covers; the search engine is the one it does
-       not. */
-    expect(visible.toLowerCase(), "the model call is not named").toContain("model");
-    expect(visible.toLowerCase(), "the web search is not named").toContain("search");
+    const visible =
+      `${startButton()?.textContent ?? ""} ${host.querySelector(".cnd-start-note")?.textContent ?? ""}`.toLowerCase();
+    expect(visible, "the AI turn is not named").toMatch(/model|ai turn/);
+    expect(visible, "the web search is not named").toContain("search");
+    expect(visible, "the search is promised rather than allowed for").toMatch(/may run a web search/);
+    expect(visible, "a number of calls this app cannot promise is back").not.toContain(
+      "one model call",
+    );
   });
 
   it("asks nothing, and offers nothing, when the thread is already there", async () => {

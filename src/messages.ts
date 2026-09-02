@@ -273,6 +273,10 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   /* Beside `ai-overflowed` rather than merged with it — see `MARK_CUT_OFF` for
      why a mark cannot take that one's advice. */
   "ai-mark-cut-off": "retry",
+  /* The same diagnosis as `ai-overflowed` reported to a screen with no scoping
+     control — see `ANSWER_OVERFLOWED_FIXED_ASK`, and `MARK_CUT_OFF` above it for
+     the precedent this follows. */
+  "ai-overflowed-no-ask": "retry",
   "ai-filtered": "blocked",
   "ai-no-room": "blocked",
   "ai-empty": "retry",
@@ -527,21 +531,55 @@ export const NOT_CONFIGURED: ReaderFacingFailure = {
  * (docs/plans/260902f-make-referee-mode-understandable.md § four things the pass
  * turned up).
  *
- * So the advice is **conditioned rather than deleted**, which is the smallest
- * honest fix: the retry is named first, because it is the lever every caller
- * actually has and the `retry` kind already puts a button under it, and the
- * narrowing keeps its clause where there is something to narrow. A second
- * message for the referee callers was the alternative and was passed over —
- * three call sites to thread it through, one more code for a reader to quote,
- * and rule 3 of docs/project/copy.md asks for what to do next, not for a
- * different sentence per screen.
+ * The first fix conditioned the advice rather than deleting it — *"where you
+ * asked a question of your own, asking something narrower usually does"* — and
+ * **a cross-family review, 2026-09-02, showed that still misses.** A criterion
+ * *is* the referee's own question, so the condition reads as satisfied on the
+ * one screen it was written to exclude; and an errored criterion offers *Try
+ * again* and nothing else, so acting on it means abandoning the row and writing
+ * a different criterion. A condition a reader can read as true while the control
+ * it names is absent is worse than no advice, because it sends them hunting.
+ *
+ * **So it split, and this half keeps the code and the advice.** Search is the
+ * caller: its reader typed the ask, and narrowing genuinely is the better lever
+ * — the answer's length grows with the number of hits and nothing else, so a
+ * smaller question is a shorter answer rather than a re-roll of the same one.
+ * `ANSWER_OVERFLOWED_FIXED_ASK` is the other half, and it is the default;
+ * src/search.ts § `AskKind` is what chooses.
+ *
+ * **The split is `MARK_CUT_OFF`'s shape rather than a new idea.** That message
+ * exists for exactly this reason — one diagnosis, a caller who cannot take the
+ * advice — and it took its own code, because two sentences under one code makes
+ * the code useless for the one job it has. `tests/messages.test.ts` enforces
+ * that, which is how a first attempt at sharing `[ai-overflowed]` between both
+ * halves was caught. Search keeps this code because it is the one already
+ * quoted in the wild, and its meaning here has not changed.
  */
 export const ANSWER_OVERFLOWED: ReaderFacingFailure = {
   kind: "retry",
   message:
     "The answer was longer than there was room for, so it arrived incomplete and could not be used. " +
-    "Trying again sometimes gets one that fits; where you asked a question of your own, asking " +
-    "something narrower usually does. [ai-overflowed]",
+    "Trying again sometimes gets one that fits, and asking something narrower usually does. " +
+    "[ai-overflowed]",
+};
+
+/**
+ * The same failure, reported to a screen with **nothing to narrow**: a criterion
+ * run, a claims pull, a Mirror run.
+ *
+ * See `ANSWER_OVERFLOWED` above for why there are two of these and why this one
+ * is the default that `parseHits` uses unless told otherwise. The retry is the
+ * whole of the advice because the retry is the whole of the lever: all three of
+ * those screens draw a *Try again* and none of them draws a scoping control.
+ *
+ * Its own code for `MARK_CUT_OFF`'s reason — one sentence per code — and the
+ * name says what distinguishes it: the reader has no ask of their own here.
+ */
+export const ANSWER_OVERFLOWED_FIXED_ASK: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The answer was longer than there was room for, so it arrived incomplete and could not be used. " +
+    "Trying again sometimes gets one that fits. [ai-overflowed-no-ask]",
 };
 
 /**

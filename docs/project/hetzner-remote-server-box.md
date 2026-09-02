@@ -66,6 +66,14 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 - [`infra/hetzner/README.md`](../../infra/hetzner/README.md) — Terraform and cloud-init: first run,
   what to check before every apply (`npx tsx scripts/check-cloud-init.ts`), the noVNC tunnel, and why
   the disposable-server/persistent-volume split exists.
+- **Claude Code itself** is installed **as `greg`**, by Anthropic's native installer, into
+  `~/.local/share/claude/versions/` with `~/.local/bin/claude` pointing at it — so it can update
+  itself without sudo. `/usr/local/bin/claude` is a symlink to that, and it is **load-bearing, not
+  cruft**: every context that runs work here (the tmux job scripts, `ssh <box> claude mcp list`,
+  cron) gets a stock PATH with no `~/.local/bin` in it. Installing it the obvious way instead — `sudo
+  npm install -g` — is what
+  [260902c-a-claude-that-could-never-update-itself.md](../postmortems/260902c-a-claude-that-could-never-update-itself.md)
+  is about.
 - [`scripts/remote-smoke-browser.mjs`](../../scripts/remote-smoke-browser.mjs) — the committed proof
   the browser stack works. `gjd-remote doctor` copies it up and runs it every time, so it is never a
   stale copy.
@@ -511,6 +519,31 @@ Two things worth knowing:
 [../research/260831c-remote-server-tmux-mosh.md](../research/260831c-remote-server-tmux-mosh.md)
 proposed a much larger `.tmux.conf` — mouse on, scroll bindings, a bigger history limit. That was
 written before the keys turned out to be the problem, and it is superseded here.
+
+## The editor is `emacs -nw`
+
+Every gjd-remote box gets `emacs-nox` — the terminal-only build — and it is the default editor, so
+`git commit` with no message, `crontab -e` and anything else that opens an editor lands in emacs
+rather than nano. Installed and wired up by
+[`infra/hetzner/provision.sh`](../../infra/hetzner/provision.sh).
+
+**Three things name the editor, and they come apart** — a box can have the package and still open
+nano, so all three are asserted separately by provisioning's verify section:
+
+- `$EDITOR` and `$VISUAL`, from `/etc/profile.d/editor.sh`, for anything that reads the
+  environment. A **login** shell only, which is what tmux job scripts get (`exec bash -l`).
+- the `editor` alternative (`update-alternatives --set editor /usr/bin/emacs`), for `sudoedit`,
+  `visudo`, and anything else that runs `/usr/bin/editor` with no environment to consult.
+- git's `core.editor`, set explicitly rather than left to fall through `$VISUAL`/`$EDITOR`, because
+  `ssh <box> git commit` is a non-login shell that sees neither.
+
+`emacs-nox` has no GUI to open, so `-nw` is redundant against it. It is written anyway: it is what a
+person types, and it stays correct if a graphical emacs ever arrives.
+
+**It lives in `provision.sh`, not in `cloud-init.yaml`'s `packages:` list**, even though it is a
+plain apt package exactly like tmux. cloud-init runs once, on a box's first boot; `provision.sh` is
+what gets re-run on the boxes that already exist, so it is the only file that reaches every box —
+and a second copy in cloud-init would be the copy that goes stale.
 
 ## Traps
 

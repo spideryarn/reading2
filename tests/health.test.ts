@@ -302,6 +302,7 @@ describe("the environment a deployment needs", () => {
     /* No `ANTHROPIC_API_KEY` — it left `EXPECTED` on 2026-08-31 and the test
        below is the one that stubs it, deliberately, to prove it is ignored. */
     vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+    vi.stubEnv("OPENAI_API_KEY", "sk-openai-test");
     vi.stubEnv("SUPABASE_URL", "https://project.supabase.co");
     vi.stubEnv("SUPABASE_PUBLISHABLE_KEY", "");
     vi.stubEnv("SUPABASE_ANON_KEY", "anon-test");
@@ -385,6 +386,25 @@ describe("the environment a deployment needs", () => {
     const said = warningsFrom(await call("GET")).join(" ");
 
     expect(said).toMatch(/ingest|pipeline/i);
+  });
+
+  it("reports OPENAI_API_KEY, the one credential whose spend nothing else can see", async () => {
+    /* **It was in neither `.env.example` nor this list until 2026-09-02**, while
+       being required by src/live.ts — so the one key that buys audio by the
+       minute on a *separate* OpenAI bill, outside the OpenRouter account cap,
+       was the one key nothing documented and nothing reported.
+
+       Reported, not warned about. Whether a given deployment wants live
+       conversation is a product decision this file cannot make, and a warning on
+       every deployment that has not enabled it is exactly the noise this
+       describe block's header is about. What the operator gets is the name, in
+       the env block, where the other credentials are. */
+    completeEnv();
+
+    const answer = await call("GET");
+
+    const env = (answer.body as { env?: Record<string, boolean> }).env ?? {};
+    expect(Object.keys(env)).toContain("OPENAI_API_KEY");
   });
 
   it("does not mention ANTHROPIC_API_KEY at all, in the env block or the warnings", async () => {

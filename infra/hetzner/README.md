@@ -192,10 +192,17 @@ noticing it, and we want cloud-init edits to land on the next build.
 So there are exactly two honest routes, and they are not alternatives — do both:
 
 1. **Now, by hand.** `provision.sh` is written to be re-runnable on a live box, so the change can be
-   applied directly. **Read it before you re-run the whole thing**: it does
-   `npm install -g @anthropic-ai/claude-code` *unpinned*, which swaps the `claude` binary under every
-   running session — there were ten live tmux sessions on 2026-08-31. Applying just the steps you
-   changed is usually the right call.
+   applied directly. **Read it before you re-run the whole thing**: it installs Claude Code
+   *unpinned*, so a re-run moves the box to whatever version shipped this morning — there were ten
+   live tmux sessions on 2026-08-31, and again on 2026-09-02. Applying just the steps you changed is
+   usually the right call.
+
+   That is less violent than it was. It used to be `npm install -g @anthropic-ai/claude-code`, which
+   overwrote the one binary every running session was executing. The native installer adds a new file
+   under `~/.local/share/claude/versions/` and repoints `~/.local/bin/claude` at it, so running
+   sessions keep the inode they started on and only new ones move —
+   [260902c-a-claude-that-could-never-update-itself.md](../../docs/postmortems/260902c-a-claude-that-could-never-update-itself.md)
+   for why it changed.
 2. **For the future, in the repo**, so the next build has it. It cannot be tested until that build,
    which is the cost of this design and the reason the preflight and shellcheck matter so much.
 
@@ -350,11 +357,24 @@ left off, rather than showing a wrong `0%`.
 
 ### Codex, for cross-family review
 
-`provision.sh` installs `@openai/codex` alongside Claude Code, so
+`provision.sh` installs Codex alongside Claude Code, so
 [`scripts/run-codex.ts`](../../scripts/run-codex.ts) runs here exactly as it does on the laptop and
 a plan written on the box can be reviewed on the box —
 [codex-cli-as-subagent.md](../../docs/reusable/codex-cli-as-subagent.md) is the standing rule.
 Installing it is the whole change; the interesting part is the credential.
+
+It is installed **as `greg`, with OpenAI's standalone installer** — not `npm install -g` as root,
+which is what it used to be and which left `codex update` unable to write its own install. Same
+shape as Claude Code, and
+[260902c-a-claude-that-could-never-update-itself.md](../../docs/postmortems/260902c-a-claude-that-could-never-update-itself.md)
+is why both changed. Codex is the more dangerous of the two, because `codex doctor` reports
+`install: consistent` and never checks whether the update target is writable.
+
+**A box built before 2026-09-02 needs a one-time manual migration**, and until it has had one the
+`no npm-global claude beside the native one` and `no npm-global codex beside the native one` checks
+report FAIL — correctly, because two installs are present. The commands are in that postmortem.
+Re-running the whole provisioner does *not* do it: the old npm packages are not removed by anything
+here, on purpose, since removing Codex's tree from under a running review breaks it.
 
 **It already works with no login**, because `CODEX_API_KEY` is on `gjd-remote push-env`'s allowlist
 and the wrapper reads it out of the repo's `.env.local`. But the wrapper spends the ChatGPT

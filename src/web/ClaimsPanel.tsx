@@ -598,10 +598,16 @@ function ClaimRow({
           placement="left"
           className="tip-soon"
           content={
+            /* **The first paragraph used to paraphrase the label**, which is
+                already a whole sentence — *"Draws this claim's passages in the
+                article…"* beside a box labelled *Mark these passages in the
+                paper*. A cross-family review named it, 2026-09-02. So the first
+                line now says what the passages *are*, which the label cannot,
+                and the second keeps the cost and the refusal. */
             <ControlTip
               head="Mark these passages in the paper"
-              what="Draws this claim's passages in the article, in this row's colour, and takes them away again when you switch it off."
-              how="Marks are off until you ask for them, so a paper you have not read yet arrives unpainted. The colour says which claim made a mark and nothing else — it carries no judgement about whether the passage carries the claim."
+              what="The model picked these out as where the paper takes this claim up. Whether a passage really carries it is your call, not its."
+              how="Marks are off until you ask for them, so a paper you have not read yet arrives unpainted, and every claim has its own box. The colour says which claim made a mark and nothing else; it carries no judgement."
             />
           }
         >

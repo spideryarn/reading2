@@ -16,7 +16,9 @@ Two things about it belong here rather than there, because they are properties o
 and the browser opens the WebRTC connection itself, so there is no seam the spend passes through.
 And therefore **`npm run cost` cannot see a live session at all.** It is not even a declared bypass:
 a `Declaration` for it cannot currently be *typed*, since `ProviderAccount` has no `"openai"` and
-`Wire` has no `"realtime"`, so the three files sit in the scan's `ALLOWED` list instead.
+`Wire` has no `"realtime"`. Since 2026-09-02 it is written down in `UNMETERED_SPEND` instead — the
+register's second table, which `npm run cost` prints by name every run. Before that it was named
+only in the scan's `ALLOWED` list, which prints nothing at all.
 
 **Widening those two unions is not the fix, though, and reading this paragraph as if it were is the
 mistake to avoid.** Every method on the declared-bypass `Observer` takes a response body *this
@@ -88,13 +90,20 @@ like**. Only the first collapsed.
 
 | | speaks | used by | code |
 |---|---|---|---|
-| **Messages** | Anthropic's Messages protocol, via OpenRouter's Anthropic-compatible endpoint (`/api/v1/messages`, which OpenRouter calls the "Anthropic Skin") | the seven pipeline stages | [`src/messages-stream.ts`](../../src/messages-stream.ts) |
-| **chat** | OpenAI's chat/completions shape | explain, chat, search, dictation, PDF reading | [`src/ai-call.ts`](../../src/ai-call.ts) |
+| **Messages** | Anthropic's Messages protocol, via OpenRouter's Anthropic-compatible endpoint (`/api/v1/messages`, which OpenRouter calls the "Anthropic Skin") | the pipeline stages — hierarchy, labels, arc, tweets, glossary, ideas, quotes, timeline, quiz, sketch | [`src/messages-stream.ts`](../../src/messages-stream.ts) |
+| **chat** | OpenAI's chat/completions shape | explain, chat, search, quiz marking, the three referee runs, dictation, PDF reading | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **embeddings** | `/api/v1/embeddings` — OpenAI-shaped, different endpoint | turning a paragraph into a vector | [`src/ai-call.ts`](../../src/ai-call.ts) |
 
-Two files, thirteen call sites, and **no third way to spend money**. Each gateway's tests scan `src/`
-and fail if any other file constructs an Anthropic client, opens a message stream, or names an
-OpenRouter endpoint.
+Two files, and **no third way to spend money**. Each gateway's tests scan `src/` and fail if any
+other file constructs an Anthropic client, opens a message stream, or names an OpenRouter endpoint.
+
+**There is deliberately no count of the call sites here.** This sentence said "thirteen" from
+2026-08-27 until 2026-09-02, by which point it was twenty — referee mode, quiz marking and the tool
+loop had arrived, and nothing goes red when a number in prose stops being true. Replacing it with
+"twenty" was the first fix attempted and is the same bug with a fresher number, which GPT Sol
+pointed out on the day. The count that cannot drift is the one you take yourself: grep for
+`streamMessage(`, `openRouterStream(` and `openRouterJson(`. What is *enforced* is the boundary, not
+the tally, and the tests above are where it lives.
 
 [`src/models.ts`](../../src/models.ts) holds the wire assignment as `AI_JOB_WIRE: Record<AiJob,
 Wire>` — a record rather than lists, so a job nobody assigned fails to compile rather than quietly
@@ -475,26 +484,42 @@ So the rule is not *"everything uses the seam"*. It is **a bypass has to be decl
 bypass still writes a row** — silence reads as zero, and zero is the one answer that is definitely
 wrong.
 
-**And there is now one call that does neither**, which is the live-conversation spike at the top of
-this doc. It is the case the register cannot yet hold: its money is spent on a wire this server never
-sees, and a `Declaration` for it cannot be typed until `ProviderAccount` and `Wire` widen. So it is
-in the scan's `ALLOWED` list, where a reason is written down but no row is ever produced — which is
-weaker than every other entry here and is exactly why it is named in the opening paragraphs rather
-than left for somebody to find at the bottom of a table.
+**And there are three that do neither** — the live-conversation spike at the top of this doc, its two
+evals, and the Codex CLI. They are the case `DECLARATIONS` cannot hold: the first three spend on a
+wire this server never sees, and a `Declaration` for them cannot be typed until `ProviderAccount` and
+`Wire` widen; `run-codex.ts` makes no request at all, it spawns a subprocess. They are in
+`UNMETERED_SPEND` — a reason written down, and no row ever produced — which is weaker than every
+other entry here and is exactly why the first is named in the opening paragraphs rather than left for
+somebody to find at the bottom of a table.
 
-- [`src/spend-declarations.ts`](../../src/spend-declarations.ts) — the register. One entry per
-  bypass: which account it bills, which file may use it, why the seam is wrong for it, and whether it
-  actually writes a row yet. `npm run cost` prints every `metered: false` entry **by name, every
-  run**, which is what makes the list finishable — the sentence it replaced ("*not counted here:
-  anything evals/ spends*") named nothing and so never could be.
-- [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts) `liveConversationGap()` — **the live-conversation
-  hole, printed on every run even though it is not in the register.** It has to be printed separately
-  because `undeclared()` reads `DECLARATIONS`, so on the day the last `metered: false` entry is wired
-  up this report would otherwise have announced that everything writes a row — while a reader could
-  be holding a live conversation billing audio by the minute into no total at all. Greg accepted the
-  gap knowingly on 2026-08-31; what it would take to close is in
-  [live-conversation.md § What is missing](../plans/260831g-live-conversation.md#what-is-missing). The
-  completeness line now says "every **declared** way", which is the true claim.
+- [`src/spend-declarations.ts`](../../src/spend-declarations.ts) — the register, and it is **two
+  tables**. `DECLARATIONS` is one entry per bypass: which account it bills, which file may use it,
+  why the seam is wrong for it, and whether it actually writes a row yet. `npm run cost` prints
+  every `metered: false` entry **by name, every run**, which is what makes the list finishable — the
+  sentence it replaced ("*not counted here: anything evals/ spends*") named nothing and so never
+  could be.
+- `UNMETERED_SPEND`, in the same file — **the spend a `Declaration` cannot describe**, printed on
+  every run by `unmetered()` in [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts). A declaration has a
+  `ProviderAccount` and a `Wire`; these have neither. Three entries: live conversation
+  ([`src/live.ts`](../../src/live.ts)), the two live-mode evals under `evals/live/`, and
+  [`scripts/run-codex.ts`](../../scripts/run-codex.ts) — the GPT Sol reviews this repo asks for on
+  every plan, which spawn another vendor's CLI on a third account and so are invisible to the
+  capability scan as well as to the ledger.
+
+  It has to be printed separately from `undeclared()`, which reads `DECLARATIONS`: on the day the
+  last `metered: false` entry is wired up this report would otherwise have announced that everything
+  writes a row — while a reader could be holding a live conversation billing audio by the minute
+  into no total at all. Greg accepted that gap knowingly on 2026-08-31; what it would take to close
+  is in [live-conversation.md § What is missing](../plans/260831g-live-conversation.md#what-is-missing).
+  The completeness line says "every **declared** way", which is the true claim.
+
+  **The other two were named only in the scan's `ALLOWED` map until 2026-09-02, and that map prints
+  nothing.** A green test is not a register: somebody asking what spends money here that they cannot
+  see got a report naming three dictation benches and stopping, while the live evals and every
+  review bought on `CODEX_API_KEY` were outside it. `OPENAI_API_KEY` is also a **separate billing
+  account** from `OPENROUTER_API_KEY` and is not covered by the cap set on the OpenRouter account —
+  it is in [`.env.example`](../../.env.example) and the health report's `EXPECTED` since the same
+  day, having been in neither.
 - [`evals/declared-spend.ts`](../../evals/declared-spend.ts) — the wrapper, kept under `evals/` so
   nothing in `src/` can reach a second way of calling a model. `declaredFetch` refuses to run outside
   a declaration, and counts attempts: a default Anthropic client retries twice, so one call can be
