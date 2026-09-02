@@ -1279,7 +1279,29 @@ async function main(): Promise<void> {
   process.exit(tally.FAIL > 0 ? 1 : 0);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+/**
+ * **Only when this file is what was run**, and it was unconditional until
+ * 2026-09-02.
+ *
+ * Every function above is exported so it can be exercised in isolation, and the
+ * `--self-test` mode exists precisely so somebody can. But a bare `main()` at
+ * module scope means *importing* one of those exports runs the whole suite —
+ * against `https://www.spideryarn.com`, because that is the default host. That
+ * happened while reviewing this file: a one-line import to try a single judge
+ * issued a dozen requests to production, including the POST that the 405 check
+ * is. Nothing was written and nothing could have been; it was still not what
+ * anybody asked for.
+ *
+ * `process.argv[1]` rather than a bundler's `import.meta.main`, which `tsx`
+ * does not define.
+ */
+const RUN_DIRECTLY =
+  process.argv[1] !== undefined &&
+  path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
+
+if (RUN_DIRECTLY) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
