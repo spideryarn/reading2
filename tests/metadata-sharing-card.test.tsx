@@ -173,12 +173,22 @@ async function open(): Promise<void> {
   }
 }
 
+/**
+ * Every artefact built, which is what the fixtures below want unless they say
+ * otherwise: since 2026-09-02 the card **refuses to offer sharing** when it
+ * cannot say what a shared link would carry, so a body with no `available` is a
+ * different test rather than a shorter fixture. See § the inventory could not be
+ * read at the foot of this file.
+ */
+const ALL_BUILT = { arc: true, tweets: true, glossary: true, ideas: true, quotes: true };
+
 describe("the sharing card, on the page that owns it", () => {
   it("says when a public article was shared, on a fresh load", async () => {
     sharing = {
       visibility: "public",
       publicAt: "2026-08-28T10:34:44.443Z",
       personalised: [],
+      available: ALL_BUILT,
     };
 
     await open();
@@ -188,6 +198,75 @@ describe("the sharing card, on the page that owns it", () => {
        this is what a reload shows, and the version that kept `publicAt` in
        component state had nothing to put here. */
     expect(host.textContent).toContain("Shared since");
+  });
+
+  /**
+   * **The inventory could not be read, so the page does not offer to publish.**
+   *
+   * At this level rather than only in `tests/access-sharing.test.tsx`, because
+   * this is the shape a *real* older or broken server produces — a `sharing`
+   * block with the visibility in it and no `available` — and it is the fixture
+   * every test in this file used until 2026-09-02. Stopping short here is
+   * deliberate: an owner who cannot be told what publishing carries should not
+   * be walked through a confirmation that claims to tell them.
+   */
+  it("offers no share button when the body carried no artefact flags", async () => {
+    sharing = { visibility: "private", publicAt: null, personalised: [] };
+
+    await open();
+
+    expect(host.textContent).toContain("Only you can read this");
+    expect(host.textContent).toContain("We could not work out what a shared link would carry");
+    expect(host.textContent).not.toContain("Share with anyone who has the link");
+  });
+
+  /**
+   * **The inventory survives the wiring too, and it is asymmetric on purpose.**
+   *
+   * `available` is threaded `Metadata` → `asArticleSharing` → `SharingSection` →
+   * `AccessSharing` → `sharedInventory`, and every unit test on that path hands
+   * the card its props directly. GPT Sol, 2026-09-02: a parser that discarded a
+   * valid `available`, or one that cross-wired two of its keys, would leave all
+   * of them green.
+   *
+   * So the body sets exactly two flags, and the assertion is that those two
+   * labels are on the *shared* side and the other three on the *not built* side
+   * — which no all-true or all-false fixture can check.
+   */
+  it("carries the artefact flags through the parser and into the dialog", async () => {
+    sharing = {
+      visibility: "private",
+      publicAt: null,
+      personalised: [],
+      available: { arc: false, tweets: true, glossary: true, ideas: false, quotes: false },
+    };
+
+    await open();
+    const share = [...host.querySelectorAll("button")].find((b) =>
+      (b.textContent ?? "").includes("Share with anyone"),
+    );
+    await act(async () => share?.click());
+
+    /* **Which heading each chip sits under**, not merely that both headings
+       exist. A component that rendered every row under "Anyone with the link
+       gets these" would pass a `textContent` check and be the worst possible
+       version of this feature. */
+    const under = (heading: string): string[] => {
+      const head = [...host.querySelectorAll("p")].find((p) =>
+        (p.textContent ?? "").includes(heading),
+      );
+      const list = head?.parentElement?.querySelector("ul");
+      return [...(list?.querySelectorAll("li") ?? [])].map((li) => li.textContent ?? "");
+    };
+
+    expect(under("Anyone with the link gets these")).toEqual(
+      expect.arrayContaining(["Glossary", "Tweets"]),
+    );
+    expect(under("Not built yet")).toEqual(
+      expect.arrayContaining(["Ideas", "Quotes", "The arc"]),
+    );
+    expect(under("Anyone with the link gets these")).not.toContain("The arc");
+    expect(under("These stay with you")).toEqual(expect.arrayContaining(["Chat", "Search"]));
   });
 
   /**
@@ -204,7 +283,12 @@ describe("the sharing card, on the page that owns it", () => {
    * owner opens the confirmation.
    */
   it("carries the personalised list all the way to the dialog", async () => {
-    sharing = { visibility: "private", publicAt: null, personalised: ["glossary", "summary"] };
+    sharing = {
+      visibility: "private",
+      publicAt: null,
+      personalised: ["glossary", "summary"],
+      available: ALL_BUILT,
+    };
 
     await open();
     const share = [...host.querySelectorAll("button")].find((b) =>
@@ -260,7 +344,7 @@ describe("the sharing card, on the page that owns it", () => {
   });
 
   it("says a private article is private, and offers to share it", async () => {
-    sharing = { visibility: "private", publicAt: null, personalised: [] };
+    sharing = { visibility: "private", publicAt: null, personalised: [], available: ALL_BUILT };
 
     await open();
 

@@ -8,8 +8,9 @@ Run the job through to the end. If you need to ask questions — to clarify inte
 tradeoff, propose a simplification — try to ask them upfront, so the rest of the work can proceed
 autonomously without human input until it is finished. After that, stop only for a **product** call:
 you're guessing at what the user wants, it changes user-visible behaviour nobody asked for, it's hard
-to reverse (a schema, a shared contract, a prompt), or somebody has unease that another round of
-review won't settle. Technical forks are yours — settle them with a second opinion, not a question.
+to reverse (a schema, a shared contract, a prompt), somebody has unease that another round of review
+won't settle, or **you can see a product tweak that would take a lot of the engineering out** — ask
+about that one even mid-run; often it's the route the user will prefer. Technical forks are yours — settle them with a second opinion, not a question.
 
 Running low on context is not a reason to stop. The plan doc is the memory: update it and keep going.
 

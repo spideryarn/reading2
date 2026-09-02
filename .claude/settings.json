@@ -10,6 +10,16 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/primary-checkout-notice.sh"
+          }
+        ]
+      }
     ]
   },
   "worktree": {

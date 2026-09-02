@@ -159,6 +159,27 @@ this, 2026-09-02.
 or two steps; the most complete covers 6 of 13 steps for $0.909. A full ingest is *extrapolated* at
 $1.50–$3. **We do not have the number this whole job exists to produce.**
 
+## Turned up on the way, and deliberately not fixed
+
+**Database-backed test files collide with themselves across processes.** Every such file here takes
+a fixed fixture id and `rm`s it in `afterAll` — `tests/live-session-routes.test.ts` uses
+`const SLUG = "test-live-session-routes"`. Two *concurrent full-suite runs*, which happen routinely
+in this shared tree, have each other's fixtures deleted mid-run and present as a broad sweep of
+unrelated 404s. It cost one subagent an entire discarded measurement here: a 40-file/133-test
+failure set that was four vitest runs against one Postgres, not a fact about the code. Run alone,
+the same file passes 15/15 three times over.
+
+[`tests/fixture-ids.test.ts`](../../tests/fixture-ids.test.ts) guards the *adjacent* case — two
+different files claiming one id — and says why that needed a test rather than a convention:
+*"It presents as a flake in somebody else's work."* The same-file-twice case is outside it.
+
+**Not fixed, on purpose.** This is a repo-wide idiom, not a defect in the file this job happened to
+add. Changing one instance would leave every other one and leave the next reader believing it was
+handled — the failure [improve-the-codebase.md](../reusable/improve-the-codebase.md) names as
+*"a dedup that leaves a copy alive is worse than none"*. If it is worth doing it is worth doing as
+its own job: per-run minted fixture ids across the suite, which is the remedy `fixture-ids.test.ts`
+already points at.
+
 ## The pricing-structure finding
 
 [`src/pipeline.ts:235`](../../src/pipeline.ts) `DEFAULT_INGEST_STEPS` is five steps — fetch,
