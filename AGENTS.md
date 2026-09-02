@@ -100,7 +100,10 @@ That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enfo
   [gjdutils](https://github.com/gregdetre/gjdutils/tree/main/docs/instructions) library of "how to
   do this kind of task well" instructions. **When a task matches one, follow it rather than
   inventing a process.** The index is [docs/reusable/README.md](docs/reusable/README.md); the one
-  worth knowing unprompted is [silent-success.md](docs/reusable/silent-success.md).
+  worth knowing unprompted is [silent-success.md](docs/reusable/silent-success.md). One of them is a
+  **ritual rather than a reaction**: [improve-the-codebase.md](docs/reusable/improve-the-codebase.md)
+  is a whole-tree sweep for the rework worth doing, run every week or so — suggest it when nobody has
+  run one lately.
 
 None of those first three is indexed here — there are a lot of files and they keep arriving. List
 the directory and read the file names; they say what each one is about, and the first paragraph of

@@ -1,63 +1,90 @@
 # Improve the codebase
 
 Not project-specific. Finding the rework worth doing — tidyups, refactors, rearchitectures, bug
-hotspots, files that got too big — and then doing enough of it that the tree is better than you
-found it.
+hotspots, files that got too big, defences that aren't catching enough — and then doing enough of it
+that the tree is better than you found it.
 
-This is the doing counterpart to [audit-architecture-mode.md](audit-architecture-mode.md), which
-investigates and changes nothing. Run it **under**
-[engineering-manager.md](engineering-manager.md) — that has the machinery: stages, subagents, plan
-docs, delegation, when to stop and ask. This doc is only about **what to look for and how to
-choose**, and it tries not to repeat it.
+**This is a periodic sweep, not a daily workflow.** Run it every week or so, across the whole
+codebase, when nobody has asked for anything in particular — unlike
+[engineering-manager.md](engineering-manager.md), the workflow a *named* job runs many times a day.
+The two meet at one seam: this sweep ends in an umbrella plan, and once you pick a cluster off it,
+building that cluster is an ordinary job run the ordinary way. So this doc covers **what to look for
+and how to choose**; that one covers stages, briefs, reviews and commits.
 
 ## The bar
 
-Long-term better: easier to understand, more reliable, easier to change six months from now. That
-is almost always **fewer moving parts, not more** — the best finding deletes something.
+Long-term better: easier to understand, more reliable, easier to change six months from now. That is
+almost always **fewer moving parts, not more** — the best finding deletes something.
 
-So bias hard towards simplicity, and be suspicious of your own enthusiasm. An extraction that leaves
-a new module with one caller, an interface with one implementation, or a "registry" for three
-things, has added machinery and called it cleanup. If you cannot say what gets *simpler* for the
-next reader, it is not a win.
+So bias hard towards simplicity, and be suspicious of your own enthusiasm. Two tests to put to every
+abstraction you are about to propose, including your own:
 
-**New machinery is a proposal for the plan, decided at review — not something to slip into a
-stage.** And when something genuinely is shared, **put it where the invariant already lives rather
-than minting a new home**: the module that already owns JSON parsing, or already owns what the
-streaming paths must agree on, is where the shared piece goes.
+- **The deletion test.** Would removing this module concentrate complexity behind a smaller
+  interface, or just spread it across the callers? Only the first is a win. A new module with one
+  caller, an interface with one implementation, or a "registry" for three things all fail it.
+- **The YAGNI test.** If the requirement does not exist today, the complexity that would support it
+  should not either — however convincingly you can predict the future.
+
+If you cannot say what gets *simpler* for the next reader, it is not a win. And when something
+genuinely is shared, **put it where the invariant already lives rather than minting a new home**.
 
 You will not finish, and that is the expected outcome. The deliverable is a tree that is better,
 committed, green, and a plan doc that honestly says what is left.
 
 ## Finding the work
 
+**If you were handed a target** — a file, an area, a planning doc — audit that, not the whole tree.
+A planning doc is itself a claim about the code: check the commits that say they implement it,
+uncommitted changes included, against what it actually says.
+
+Otherwise it is the whole tree, and that is more than one agent can hold. Fan it out.
+
+### How to run the trawl: wide and cheap, then narrow and expensive
+
+**Breadth first, in parallel, with cheap models.** Their job is to **nominate**, not to score — you
+do the scoring. Split the sweep two ways, because the two cuts find different things and neither
+finds the other's:
+
+- **By lens** — one agent per shape, each looking at the whole tree: what the code already says
+  about itself; duplication and divergence; dead code and unused exports; the defences.
+- **By zone** — one agent per area or layer, each looking for every shape: the store, the routes,
+  the client, the scripts. A zone agent is what catches "this area has stopped being coherent".
+
+**Then go deep on a few.** Take the two or three areas that came back richest and spend a strong
+model on each, reading properly rather than grepping. Depth is where a real cause gets separated
+from a symptom.
+
+Give every agent the same brief: cite `file:line`, say how you know, and say what you looked at and
+what you skipped — the last two feed the scope line and the evidence states below.
+
 **Start with what the codebase already knows.** The best items are not discoveries. They are places
 where a comment, a doc or a postmortem *says* two things must stay in step, and nothing makes them.
-Send a Sonnet subagent through the postmortems and the plan file names, and grep the source for the
-sentences people write when they know: `TODO`, `HACK`, `for now`, `should be`, `don't forget to
-also`, `must stay in step`, `the third time`, `see also`. In the repo this was written in, that
-through-line held twice over:
+Send a cheap subagent through the postmortems and the plan file names, and grep the source for the
+sentences people write when they know — `TODO`, `HACK`, `for now`, `should be`, `don't forget to
+also`, `must stay in step`, `is latent in`, `the third time`. Widen that vocabulary as you go — a
+live 500 once hid behind a phrasing nobody had thought to grep for.
 
-> The through-line of almost every finding worth doing: the codebase already knew. … Most of the
-> work below is finishing sentences the repo already started.
->
-> — [260826m-simplification-audit.md](../plans/260826m-simplification-audit.md)
+**Read the repeat root causes, not the individual bugs.** Two postmortems with the same *shape* are
+a class, and the rework that kills the class is worth more than any single fix inside it.
 
-**Read repeat root causes, not individual bugs.** Two postmortems with the same *shape* are a class,
-and the rework that kills the class is worth more than any single fix in it.
-[silent-success.md](silent-success.md) and
-[written-down-is-not-checked.md](written-down-is-not-checked.md) are two such classes already named.
+**Read what was already rejected, before you propose anything.** Prior plans record decisions as
+well as work, and the fastest way to waste a stage is to rebuild something a previous round
+considered and refused. Search the plans for the thing you are about to propose, by name.
 
 **Count every instance before you plan the fix.** Grep the whole tree for the *idiom*, not the sites
-a subagent showed you — each agent reads one slice, so it sees the copies inside its slice and none
-of the outermost ones, and every duplication count arrives low. In the repo above, the first draft
-undercounted every duplication it found (3 when it was 5, 4 when it was 18, 3 when it was 6, later
-7); the rule written to stop that was then broken again in the next wave, 29 when it was 34. **A
-dedup that leaves a copy alive is worse than none: the next reader believes it is done.**
+a subagent showed you. Counts arrive low for a structural reason: each agent reads one slice, so it
+sees the copies inside its slice and none of the outermost ones. **A dedup that leaves a copy alive
+is worse than none: the next reader believes it is done.**
 
-The reason it undercounts is worth knowing, because it also tells you where the bugs are: a codebase
-grows by copying the nearest module of the same genre, comments included — and the copy reliably
-carries the *documented* half of a contract while silently dropping the undocumented half. So
-copy-paste siblings are a strong predictor of real defects, not just of untidiness.
+A codebase grows by copying the nearest module of the same genre, comments included — and the copy
+reliably carries the *documented* half of a contract while silently dropping the undocumented half.
+Copy-paste siblings predict real defects, not just untidiness.
+
+**Look for two ways to do one thing**, which is a different search from looking for copies. Not the
+same code twice, but two mechanisms for one job that grew up separately: two HTTP wrappers, two
+notions of "current", two config readers, a helper and the hand-rolled version of it living side by
+side. These are worse than duplication because a reader cannot tell which one is correct, and a fix
+lands in whichever the author happened to know about.
 
 **And notice what slowed you down** in the last few hours of real work: what you had to read twice,
 where you hesitated because you couldn't tell which of two paths was live, what you were afraid to
@@ -67,63 +94,74 @@ touch. That is first-hand evidence and nobody else has it.
 
 Measure — run whatever static analysis the project has, count lines and complexity — but hold the
 numbers loosely, and rank by **churn × complexity**, the file that is both big and edited every
-week, rather than by size alone.
+week. A deepening in code nobody touches is a refactor you will never cash in.
 
-Be honest that size is weak evidence. In the repo above, across ~45 postmortems, **not one names
-file length as the cause**; the big files show up often because they are edited often, and the
-mechanism is always a missing check or a shared assumption. A 6,000-line file that is a flat,
-documented, order-sensitive switch may be entirely fine, and splitting it into six files that must
-now be read together is worse. Ask what the file's **reasons to change** are: one file, many
-reasons, is the problem. One file, one reason, is just a long file.
+Size is weak evidence: across ~45 postmortems in the codebase this was written for, **not one names
+file length as the cause** — the mechanism is always a missing check or a shared assumption.
+Splitting a long file into six that must now be read together is worse, not better. Ask what the
+file's **reasons to change** are: one file, many reasons, is the problem. One file, one reason, is
+just a long file.
 
 The same goes for duplication. **Prove the drift** — the strongest evidence is a fix that has
-already failed to reach one of the copies. Copies that have sat stable for months are usually
-honest, and merging them couples two things that were independent.
+already failed to reach one of the copies. Copies stable for months are usually honest, and merging
+them couples two things that were independent.
+
+### Look at the defences, not only the code
+
+The tests, the type system, the static analysis and the production signals are all part of the
+codebase, and they are where the highest-leverage rework usually hides. Three questions, in order:
+
+- **Could a class be killed by construction?** A type that makes the wrong state unrepresentable, a
+  narrower signature, a lint rule, a stricter compiler flag — these end a whole class without a
+  test, and they are *less* machinery, not more. Ask it before proposing any test.
+- **Would a better test have caught what got through?** Work from the escapes, not from coverage.
+  Push each test to the *lowest* level that catches its class; prefer verified fakes and contract
+  tests over mocks that have drifted from the thing they stand in for; write the edge case that
+  subsumes the easy ones. **Fewer, richer tests is a win, and deleting tests counts as
+  improvement** — a suite that is slow, flaky or vacuous hides real failures. Success is "catches
+  the real bug", never coverage or test count.
+- **When a class cannot be closed before it ships, would we notice?** Provider drift, rare races and
+  environment-specific failures leak past every gate. Ask whether a production signal would have
+  surfaced the last incident in hours rather than days: an error capture, an alert threshold, a
+  structured-log breadcrumb. Its bar: show it **would have fired on the actual incident**, and that
+  it is bounded against alert-fatigue. A noisy signal is worse than none.
+
+## Every finding is a claim, including yours
+
+This is the part that goes wrong, and it goes wrong quietly.
+
+A subagent's finding, a comment's count, a prior plan's summary, your own first draft — **verify
+each at the strength you assert it.** A quantifier (*each*, *every*, *all three*) means you counted.
+"Verified" means you re-ran the grep against today's tree, locating by content rather than by line
+number, because the line numbers in any audit are already stale.
+
+**The fix beside a finding is a separate claim from the finding**, and the easier one to miss,
+because the evidence you just checked was for the finding. Before building anything, ask what
+already exists that it duplicates. One run found three untested copies of a query — true — and
+proposed a test pinning them together; grepping the genre turned up their extracted, exported,
+already-tested home, which nobody had moved them to. The planned fix was machinery whose only job
+would have been to protect duplication.
 
 ## When there is too much: the umbrella plan
 
 Almost always there is more than one job's worth. Don't pick greedily. Write an **umbrella planning
 doc** ([write-planning-doc.md](write-planning-doc.md)) that lists everything found, clusters the
-items that touch the same code or the same idea, and scores each cluster on **effort, value and
+items touching the same code or the same idea, and scores each cluster on **effort, value and
 risk** — value and ease pick the order, risk can veto.
 
-**Verify each finding before you score it.** Every finding a subagent or a tool hands you is a
-claim: re-run the grep, re-read the code at today's line numbers, check the tool's hit is not a
-false positive. Both times this kind of audit has been run here, the first draft was materially
-wrong in places — including one item that proposed re-introducing a change the code's own header
-said had been deliberately reverted. Review is not a substitute: a reviewer checks the plan you
-wrote, not the greps you didn't run. Assume any line numbers in the audit are already stale, and
-locate everything by content.
+**Three things the doc must carry, because a reviewer cannot check your diligence but can check
+these:**
 
-**And the proposed fix is a claim too — verify it separately.** A finding can be entirely true while
-the fix beside it is wrong, and that is the easier mistake to miss, because the evidence you just
-checked was for the finding. The first run of this doc found three identical copies of a query, none
-of them tested — true — and proposed a test pinning the three together. Grepping the genre then
-found a fourth relative that was **already extracted, already exported and already tested**: the
-copies had a home built for them and nobody had moved them. The planned test would have been
-machinery whose only job was to protect duplication. Before you build a fix, ask what already exists
-that it duplicates.
+- **A scope line** — directories swept, directories excluded, and what the method is blind to. A
+  grep over `src/` silently omits the deploy scripts, and nobody notices an absence. Static sweeps
+  find no races, no ordering bugs, nothing that exists only at runtime.
+- **An evidence state on every finding** — *reproduced*, *proved from the code*, or *hypothesis* —
+  kept separate from its tier. The words blur under pressure, and a confident hypothesis otherwise
+  gets scored like a reproduction. Nothing counts as a correctness win below a reachable call path.
+- **The counts shown, not summarised**, so the next reader can check them without redoing the work.
 
-**Restate a subagent's claim only as narrowly as it was proved.** In that same run the sweep
-reported that *each* of the three copies called itself "the third copy". Only one did. That went
-unchecked into a docstring, a test header, a commit message and this doc — a generalisation from a
-same-shaped sample, which is the failure
-[written-down-is-not-checked.md](written-down-is-not-checked.md) is about, committed while citing
-it. Quantifiers are where a report is most often wrong and least often checked: when a finding says
-*each*, *every*, *all three*, go and count.
-
-**Say what you did not look at.** Write the scope into the doc — the directories the sweeps covered
-and, more importantly, the ones they didn't. A grep over `src/` silently excludes the deploy scripts
-and the operational code, and nobody notices an absence. Note too what the method cannot see at all:
-static sweeps do not find races, ordering bugs or anything that only exists at runtime, so a map
-built only from greps and complexity scores is systematically blind in one direction.
-
-**Mark each finding with how you know it**, and keep that separate from its tier: *reproduced*,
-*proved from the code*, or *hypothesis*. They are different things and the words blur under
-pressure — a hypothesis that sounds confident gets scored like a reproduction. Nothing gets
-correctness value without a reachable call path or a reproduction, and **the first stage addresses
-the highest confirmed tier unless risk explicitly vetoes it** — otherwise the cheap, comfortable
-cluster wins on convenience and a live defect waits.
+**The first stage addresses the highest confirmed tier unless risk explicitly vetoes it** —
+otherwise the cheap, comfortable cluster wins on convenience while a live defect waits.
 
 Tiers that have worked, and a good default:
 
@@ -136,74 +174,71 @@ Tiers that have worked, and a good default:
 - **Tier 3 — the rearchitectures.** Each is its own job with its own plan; the umbrella doc's role
   is to name it, size it, and stop.
 
-Get the umbrella doc reviewed before building anything from it. Then do one or more clusters. If you
-run them in parallel, the constraint is **non-overlapping file sets**, not independent ideas —
-clusters that sound unrelated often share a file, and in a shared tree you have peers' uncommitted
-work to route around too ([git-commit-changes.md](git-commit-changes.md)).
+**End the doc one level up:** say whether the overall approach of the area is sound. That is the
+finding a grep can never produce. If it is not sound, that is a Tier 3 item — named and sized, not
+started.
+
+**If you were asked only to audit, stop once the umbrella doc is reviewed**: found, verified, scored
+and reviewed, with nothing built, is a complete deliverable rather than an abandoned run. Otherwise
+do one or more clusters — and if you run them in parallel, the constraint is **non-overlapping file
+sets**, not independent ideas.
 
 ## Stages that can stop
 
-Every stage ends committable, green and deployable — [engineering-manager.md](engineering-manager.md)
-says that, and here it is the whole design constraint. For a rearchitecture the shape that gives it
-to you is the boring one: **add the new thing beside the old, move callers in batches, delete the
-old.** Each batch is a stage. If a stage would leave two ways to do the same thing, that is
-tolerable only when the plan and the commit message say which one wins and when the other dies.
+Every stage ends committable, green and deployable, and here that is the whole design constraint.
+For a rearchitecture the shape that gives it to you is the boring one: **add the new thing beside
+the old, move callers in batches, delete the old.** Each batch is a stage. If a stage leaves two
+ways to do one thing, that is tolerable only when the plan and the commit message say which wins and
+when the other dies.
 
-Two traps live in that window, and they are where this exact recipe has gone wrong before. **While
-both paths exist, a fix must land in both** — in a batched migration, drift is *created* by a fix
-landing in the original after the copy was taken. And **before the delete stage, grep for callers of
-the old path** rather than trusting your batch list: a missed caller keeps working, silently, on the
-code you believe is dead.
+Two traps live in that window. **While both paths exist, a fix must land in both** — drift is
+*created* by a fix landing in the original after the copy was taken. And **before the delete stage,
+grep for callers of the old path** rather than trusting your batch list: a missed caller keeps
+working, silently, on code you believe is dead. If the old path turns out to be genuinely unsafe to
+delete, that is a finding for the plan, not a reason to leave it "just in case".
 
 If you cannot see how to stop halfway, the job is not staged yet. Say so rather than starting.
 
 ## Not breaking it
 
-A refactor is where [silent-success.md](silent-success.md) bites hardest, because the behaviour is
-already correct, so there is no red test to write first. The substitute:
+A refactor is where a check that shares an assumption with the code bites hardest, because the
+behaviour is already correct, so there is no red test to write first. The substitute:
 
 - **Characterise before you change.** Write tests against the *current* behaviour, then prove they
-  can fail — break the code on purpose and watch them go red. A test that has never failed is not
-  covering the thing you are about to move.
-- **Pin the invariant, not the scaffolding — and not the vocabulary.** Assert what any correct
-  implementation must satisfy, not the way today's code happens to achieve it. The commonest way to
-  get this wrong is to assert that some *words* appear: the first run of this doc tested a SQL join
-  with "does the string contain `current_revision_id`, and does it say `inner join`", and the
-  reviewer passed all of it with a query that had no `where` clause at all and joined a table to
-  itself. Both words were there; neither meant anything. Assert the whole relationship, and the
-  bound parameters.
+  can fail.
+- **Prove a check can fail against a semantically *wrong* implementation, not only a mutilated
+  one.** Breaking the code on purpose only proves the test detects *that* break. Then ask what
+  plausible wrong version would still pass. Asserting that words appear is the commonest tautology:
+  a test that checked a SQL string for `current_revision_id` and `inner join` passed a query that
+  joined a table to itself and had no `where` clause at all. Assert the relationship and the bound
+  parameters, not the vocabulary.
 - **If the behaviour you are about to pin looks wrong, that is a Tier 0 finding, not a spec.**
-  Characterisation enshrines defects otherwise — a broken reply once got stored as a legitimate
-  answer, and there was a test blessing it. Stop and file it.
+  Characterisation enshrines defects otherwise.
 - **An existing test going red is evidence, not an obstacle.** The change that makes your new test
   green is not automatically the right change, and the test that objects may be the one holding the
   requirement. Read what it asserts before you touch it.
-- **Extract without changing behaviour in one commit; change behaviour in another.** A diff that
-  does both is unreviewable, and hides the bug in the noise.
-- **Delete the old path.** A refactor that leaves the old code behind "just in case" has doubled the
-  surface. If it is genuinely unsafe to delete, that is a finding for the plan.
+- **Extract without changing behaviour in one commit; change behaviour in another** — and before
+  finalising either, strip out the unrelated renames and restructurings that crept in. A diff that
+  does both is unreviewable and hides the bug in the noise.
 
 ## Reviews and second opinions
 
-The review cadence is [engineering-manager.md § GPT Sol](engineering-manager.md#gpt-sol) — the plan
-before you build, every stage at its end, evidence rather than your account of it. Three things it
-doesn't say:
+The review cadence is [engineering-manager.md § GPT Sol](engineering-manager.md#gpt-sol). Three
+things it doesn't say:
 
-- **Escalate the hard calls to Fable** (a subagent with `model: "fable"`) as well — a Tier 3
-  boundary, two designs that both work, a claim you can't settle.
+- **Escalate the hard calls to a second model family as well** — a Tier 3 boundary, two designs that
+  both work, a claim you can't settle.
 - **Ask explicitly whether a proposed abstraction is worth its keep.** Reviewers are good at this
   and will not volunteer it; asked directly, they will tell you the extraction is not worth the
   indirection.
-- **Research how the shape is normally solved** before inventing your own, in a subagent — but treat
-  what it finds as options, not obligations. Most best-practice advice is written for larger teams
-  and longer-lived code than yours, and importing it wholesale is the commonest way this work turns
-  into over-engineering.
+- **Research how the shape is normally solved** before inventing your own — but treat what it finds
+  as options, not obligations. Most best-practice advice is written for larger teams and
+  longer-lived code than yours, and importing it wholesale is the commonest way this work turns into
+  over-engineering.
 
 ## Along the way
 
-- **Update the docs in the same stage**, and delete the false comments you found — they are half the
-  findings, and one left behind is one the next agent believes.
-- **Write the postmortem** for any real bug this turns up, and then do what it says, now
-  ([engineering-manager.md § Bug-mode](engineering-manager.md#bug-mode)).
-- **Record what you decided not to do, and why.** The umbrella doc's list of rejected items is worth
-  as much as its list of accepted ones, and saves the next agent rediscovering them.
+- **Delete the false comments you found.** They are half the findings, and one left behind is one
+  the next agent believes.
+- **Record what you decided not to do, and why** — in the plan, where the next run's search for
+  prior rejections will actually find it. That list is worth as much as the list of accepted items.
