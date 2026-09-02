@@ -49,8 +49,7 @@
  *   `runInJob` — which is the state production actually shipped in, and nothing
  *   caught it (docs/plans/260830k-v1-stages01-review-sol.md critical 1).
  */
-import { readdir, readFile, rm } from "node:fs/promises";
-import path from "node:path";
+import { rm } from "node:fs/promises";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
 import { mintId } from "../src/ids.js";
@@ -67,10 +66,9 @@ import type {
 import { fsJobStore } from "../src/store/jobs-fs.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import { fsStoreSession } from "../src/store/session.js";
+import { jobFilesOnDisk } from "./helpers/job-files.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
 
-const ROOT = path.resolve(import.meta.dirname, "..");
-const JOBS_DIR = path.join(ROOT, "data", "_jobs");
 const OWNER = DEV_OWNER_ID;
 
 /**
@@ -251,9 +249,7 @@ describe("one claim walks the whole job", () => {
   });
 
   afterAll(async () => {
-    for (const file of await readdir(JOBS_DIR).catch(() => [])) {
-      const full = path.join(JOBS_DIR, file);
-      const record = JSON.parse(await readFile(full, "utf8").catch(() => "{}")) as { id?: string };
+    for (const { path: full, record } of await jobFilesOnDisk()) {
       if (record.id !== undefined && MADE.includes(record.id)) await rm(full, { force: true });
     }
   });

@@ -45,9 +45,22 @@ done.
 `MIGRATION_LOCK_KEY` in [`scripts/migration-ledger.ts`](../../scripts/migration-ledger.ts), taken as
 `pg_try_advisory_lock` in [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts) and held across the
 preflight as well as the migrate. So migrator-against-migrator is safe. What is not covered is
-migrate against a running test suite, and `db:reset`, which takes nothing. That, and what concurrent
-`drizzle-kit generate` does to the snapshot chain, is
-[260902c-concurrent-migrations-across-worktrees.md](../plans/260902c-concurrent-migrations-across-worktrees.md).
+migrate against a running test suite, and `db:reset`, which takes nothing —
+[260902c](../plans/260902c-concurrent-migrations-across-worktrees.md#6-locking-moves-to-its-own-plan)
+hands that to a plan of its own and it is not written yet.
+
+**What two worktrees do to `drizzle/meta/` is closed, as of 2026-09-02.** Both generating from one
+trunk fork the snapshot chain, and the next `drizzle-kit generate` refuses on it and **exits 0
+having written nothing**. Migrations now carry timestamp prefixes, `npm run check` gates
+`drizzle-kit check`, `npm test` walks the chain, and `npm run db:generate` requires that success
+produced output. The repair depends on whether the losing migration is published, hand-edited, or
+merely generated —
+[database.md § Two worktrees generated at once](database.md#two-worktrees-generated-at-once) is the
+runbook.
+
+**The limit no lock can lift**: a non-additive migration — a dropped column — applied by one
+worktree breaks the running dev server of every other worktree at once. One shared database, one
+schema; the advisory lock serialises the writers and cannot do anything about that.
 
 ## Starting one
 
@@ -57,6 +70,25 @@ npm run worktree:setup         # inside it: dependencies + the article store
 npm test                        # expect a handful red, about what the primary has at the same moment
 npm run dev                     # walks up from 5273; warns if the port is not allow-listed
 ```
+
+### The dev server used to be blind in here — fixed 2026-09-02
+
+Worth knowing even though it is fixed, because for four days a worktree's `npm run dev` **could not
+see its own edits** and nothing said so. `vite.config.ts` ignores `**/.claude/worktrees/**` so the
+primary's page does not reload on a peer's every keystroke; chokidar matches that against absolute
+paths, and a worktree's absolute path contains `.claude/worktrees/` — so inside one, the pattern
+excluded the server's whole source tree. The app still loaded and still worked; it just served the
+source it read at boot, for ever. An agent measuring its own change in a browser was shown the code
+from before the change.
+
+`devWatchIgnored` in [`scripts/worktree-admin.ts`](../../scripts/worktree-admin.ts) now drops the
+glob inside a worktree, with the two cases tested. The reasoning, the three-way proof and the lesson
+about path rules that name a directory you can also be standing in are in
+[260902a-a-dev-server-that-ignored-its-own-source.md](../postmortems/260902a-a-dev-server-that-ignored-its-own-source.md).
+
+**Until a command does it for you: restart the dev server before you measure anything in a browser.**
+Any observation taken against a server started before your edits is worthless, and it does not look
+worthless.
 
 **`worktree:setup` refuses to run in the primary checkout**, and that guard is the most important line
 in it: it runs `npm ci`, which deletes `node_modules` and reinstalls it, and a dozen agents work out of

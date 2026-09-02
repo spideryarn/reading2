@@ -34,7 +34,7 @@
  * A `fetch` step on a slug with no source URL fails immediately and offline,
  * which is how a job gets queued here without buying anything.
  */
-import { readdir, readFile, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import path from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -50,8 +50,8 @@ import {
 } from "../src/jobs.js";
 import { type OwnerId, runInRequest, setRequestOwner } from "../src/owner.js";
 import type { Job } from "../src/types.js";
+import { jobFilesOnDisk } from "./helpers/job-files.js";
 
-const JOBS_DIR = path.resolve(import.meta.dirname, "..", "data", "_jobs");
 const ROOT_DATA = path.resolve(import.meta.dirname, "..", "data");
 
 /** Its own slug, so nothing here collides with another suite's fixtures. */
@@ -81,9 +81,7 @@ async function settle(id: string): Promise<Job> {
 let alicesJob: Job;
 
 async function cleanUp(): Promise<void> {
-  for (const file of await readdir(JOBS_DIR).catch(() => [])) {
-    const full = path.join(JOBS_DIR, file);
-    const record = JSON.parse(await readFile(full, "utf8").catch(() => "{}")) as Partial<Job>;
+  for (const { path: full, record } of await jobFilesOnDisk()) {
     if (record.slug === SLUG) await rm(full, { force: true });
   }
   await rm(path.join(ROOT_DATA, SLUG), { recursive: true, force: true });

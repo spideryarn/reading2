@@ -169,9 +169,8 @@ can move. It is not the end of the world if something is briefly broken. What we
 away is design: write code that will still be good to work with in six months. It loosens nothing
 in **Real data belongs to the reader** below.
 
-**Explain plainly.** Whenever you explain, summarise or ask a question — in chat, in a doc, in a
-commit message — use plain words and short sentences. Say the thing itself, not a gesture at it. No
-jargon where an ordinary word will do, no hedging padding.
+**Explain plainly and briefly.** Whenever you explain, summarise or ask a question — in chat, in a
+doc, in a commit message.
 
 **Real data belongs to the reader, not to us.** There is one production database and no staging copy
 of it, and what is in it is real people's articles, comments, notes and profiles. Reading it is fine.

@@ -53,6 +53,28 @@ function lightness(hex: string): number {
   return 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
 }
 
+/**
+ * Every `--<prefix>-<n>-rgb` triple in the stylesheet, as hex, in index order.
+ *
+ * The diverging ramps and `--vir-*` are written as triples rather than hex,
+ * because a component sets a custom property to one of them inline and the
+ * stylesheet interpolates it into `rgb(…)` — `annotate.ts` does that with
+ * `--h0` … `--h5` when a for/against criterion paints its marks by direction.
+ * Their `--div-N` spellings are *derived* from these, so reading the triple
+ * reads the one value there is; reading the hex would read a `rgb(var(…))`
+ * expression and prove nothing about the colour.
+ */
+function triples(prefix: string): string[] {
+  const found = new Map<number, string>();
+  for (const m of css.matchAll(new RegExp(`--${prefix}-(\\d+)-rgb\\s*:\\s*(\\d+) (\\d+) (\\d+);`, "g"))) {
+    found.set(
+      Number(m[1]),
+      `#${[m[2], m[3], m[4]].map((v) => Number(v).toString(16).padStart(2, "0")).join("")}`,
+    );
+  }
+  return [...found.entries()].sort((a, b) => a[0] - b[0]).map(([, hex]) => hex);
+}
+
 /** Every `--<prefix>-<n>` hex in the stylesheet, in index order. */
 function scale(prefix: string): string[] {
   const found = new Map<number, string>();
@@ -128,10 +150,25 @@ describe.each([
   ["--div-*, blue to red", "div"],
   ["--div-rg-*, red to green", "div-rg"],
 ])("the diverging scale %s", (_name, prefix) => {
-  const steps = scale(prefix);
+  const steps = triples(prefix);
 
   it("has nine stops with the pivot in the middle", () => {
     expect(steps).toHaveLength(9);
+  });
+
+  it("spells every stop as a plain colour too, derived rather than typed twice", () => {
+    /* Both spellings are real customers — the triple is what `annotate.ts`
+       interpolates into `rgb(var(--h0))` for a mark, the plain colour is what
+       `valenceToken` hands a panel swatch as a `background`. What must never
+       happen is nine colours written out twice and kept in step by hand, which
+       is the failure this file exists for one level up. So the plain form is
+       generated from the triple in the stylesheet itself, and this checks that
+       it still is rather than trusting the comment beside it. */
+    for (let i = 0; i < 9; i++) {
+      expect(css, `--${prefix}-${i} is not derived from --${prefix}-${i}-rgb`).toContain(
+        `--${prefix}-${i}: rgb(var(--${prefix}-${i}-rgb));`,
+      );
+    }
   });
 
   it("puts its quietest step in the middle, not at the ends", () => {

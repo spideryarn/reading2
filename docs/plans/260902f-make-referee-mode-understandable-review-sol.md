@@ -1,0 +1,47 @@
+**Verdict: do not build as written.**
+
+1. **The prose would make colour the only carrier of a good/bad judgement.**  
+   [`colour-scales.md`](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/docs/project/colour-scales.md:363), [`valence.ts`](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/valence.ts:2), and [`referee-criteria.ts`](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/referee-criteria.ts:113) permit red↔green only when direction is also available without colour. The panel meets that condition; the prose does not. The card’s claim that direction is “always also printed in words” is therefore false at the mark itself. This is worse than today: the current unlabelled colour carries identity, not a good/bad judgement. Add a co-located non-colour carrier—an explicit sign, distinguishable geometry, or accessible direct label—or keep valence out of the prose. Merely defaulting to `br` does not satisfy the broader colour-only rule.
+
+2. **The paragraph bar does not preserve usable phrase provenance.**  
+   The bar is rendered for every matched block, but it is explicitly paragraph-wide rather than phrase-specific ([`TableView.tsx`](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/TableView.tsx:918)). It is only 3px wide ([`styles.css`](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/styles.css:2223)), caps at eight colours, and `blockHues` collapses two criteria sharing a slot ([`search-hits.ts`](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/search-hits.ts:1057)). Thus “one segment per criterion” is false. With several criteria enabled, the bar says only that those identities occurred somewhere in the paragraph; it cannot say which produced the red phrase.
+
+   This is compounded by the missing open path: Referee hard-codes `openPassage` to `null` ([`App.tsx`](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/App.tsx:1754)), while a criterion result only jumps to its block ([`CriteriaPanel.tsx`](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/CriteriaPanel.tsx:969)). I would retain identity stripes until there is real provenance—ideally pressing a mark opens/names its contributing criterion, and pressing a result sets `openKey` so the exact phrase gets the existing highlighted-ring treatment. Otherwise restrict the first version to one active diverging criterion.
+
+3. **The proposed slot-keyed dedup is semantically wrong once stripes mean valence.**  
+   The current implementation reduces hits to a set of slots before painting ([`annotate.ts`](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/annotate.ts:361)). Adding `hue` while retaining that key creates two failures:
+
+   - Same slot, opposite valences—possible with repeated/manual slots or overlapping results from one criterion—becomes one stripe and silently drops one direction.
+   - Different slots, same valence step produces `data-hues="2"` and two identical `--h*` values; the hard-stop gradient looks like one uninterrupted colour.
+
+   If the stripe means direction, deduplicate hue-bearing marks by their final valence token, while continuing to deduplicate identity-only marks by slot. That scopes the change to Referee: Search, Ideas, Quotes, Timeline and Claims can remain byte-identical. Add tests for same-slot/opposite-valence and different-slot/same-step.
+
+   The valid no-`hue` paths do otherwise fall back correctly: Claims and the non-Referee resolvers supply numeric slots, while literal find deliberately supplies `slot: null` and must retain the fixed `--hit` fallback. A `hue` paired with a null or invalid slot would currently be discarded by slot validation; the new contract must either forbid that state by type or handle it explicitly.
+
+4. **The mode-level scale reasoning is correct, but its proposed implementation is incomplete.**  
+   `valenceStep` maps −100→0 and +100→8 ([`valence.ts`](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/valence.ts:47)); `--div-rg-0` is red while `--div-8` is red ([`colourscales.css`](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/styles/colourscales.css:331)). Per-criterion ramps therefore cannot safely drive unlabelled prose marks.
+
+   But [`PlaceOnCriterion.tsx`](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/PlaceOnCriterion.tsx:298) still paints both the current referee placement and all five instrument choices from `chosen.config.scale`. An old `br` row with the default `?refscale=rg` would therefore show opposite palettes in Criteria/prose and the placement dialog. Every valence surface must receive the mode scale. `RefereeGap` should remain unchanged because it is deliberately words-only.
+
+   The database column does not need to be dropped now. Leaving it as legacy data is safer than a destructive migration. But the plan must define what new rows write, remove its influence from every client display, and stop calling it “unread” while `configFromRow` and `PlaceOnCriterion` still consume it. Also specify `refscale` parsing, invalid-value fallback and history behaviour; `replace` is the natural precedent for a display switch.
+
+5. **`Found.hue` is the wrong level of abstraction as proposed.**  
+   `Found` currently carries source facts—slot, confidence and offsets—while palette resolution happens later. A free-form CSS token on it introduces presentation state and lets `resolveCriterion` depend on URL display state. Carry a typed optional valence/directional discriminant instead, let the Reader own `refscale`, and resolve the token when producing `Mark`s.
+
+   If a token is retained, call it something precise such as `stripeRgbToken` and type its allowed shape. Existing `valenceToken` returns `var(--div-rg-N)`, whose value is hex; it is invalid inside the stripe’s `rgb(var(--h0))`. The plan needs a separate RGB-token function and tests pairing every emitted token with a defined `--*-rgb` property.
+
+6. **Stage 1 is not a coherent stopping point.**  
+   It changes the prose’s meaning before the visible explanation arrives in stage 3 and before the relevant project docs are corrected in stage 4. It would leave code comments, `referee-mode.md`, and `colour-scales.md` explicitly asserting the opposite rule. It also declares browser-computed colour a stage-1 completion condition while deferring the browser pass to stage 4.
+
+   Put the minimum visible colour key, the `?crits=`/tick explanation, browser measurement, and the Referee/colour/URL documentation into stage 1. Tooltips can remain stage 2, and Candidates can remain stage 3. The RGB-token plumbing could be a behaviour-free preparatory commit, but repainting and the mode-wide scale must land atomically.
+
+7. **Dropping a Referee-specific assignment algorithm is reasonable; deferring the collision is not.**  
+   A special `assignSlots` policy would not solve manual colour choices, would need to vary with `rg` versus `br`, and could make identity colours change when `?refscale=` changes. Keep the shared assignment.
+
+   However, flat categorical red/green will still sit beside valence red/green: the identity colour button remains flat ([`styles.css`](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/styles.css:6420)), and the paragraph bar remains categorical. Also, the “miniature ramp tick” cannot simply be applied to the current native checkbox because it is styled through `accent-color`, which cannot hold a gradient ([`styles.css`](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/styles.css:6413)). Keep the native checkbox neutral and add a separate, structurally distinct ramp glyph/legend. Browser-test automatic red/green slots and manually duplicated colours rather than waiting for confusion in use.
+
+8. **The explanatory copy misstates the default-off and navigation behaviour.**  
+   `?crits=` starts empty and only checked criteria paint the prose ([`CriteriaPanel.tsx`](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/CriteriaPanel.tsx:206)); a newly run criterion is the exception and switches itself on. Replace “Each one marks the passages” with copy that names the tick and the default-off rule. “Every row is a door into the prose” is also false: Mirror’s coverage row deliberately has no jump, and empty Claims/Criteria rows have no passage. Do not put knowingly false simplifications in the main explainer.
+
+9. **Documentation and state ownership need to move with their changes.**  
+   [`url-state.md`](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/docs/project/url-state.md:3) currently says nothing reader-changeable lives in `localStorage`. The install hint is already an undocumented exception, but that does not make a second exception self-justifying. If dismissal is device-local preference rather than article view state, record that exception in stage 3, using the guarded read/write idiom from [`install-hint.ts`](/home/greg/code/spideryarn2/.claude/worktrees/referee-mode-clarity/src/web/install-hint.ts:114). Because `url-state.md` is a rule-bearing project doc, its before/after wording needs approval under the repository’s important-doc process.

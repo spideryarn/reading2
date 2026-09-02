@@ -129,6 +129,7 @@ import {
 import type { Block, BlockId } from "../types.js";
 import { assignSlots } from "./hit-colours.js";
 import { type Found, resolveClaim } from "./search-hits.js";
+import { ControlTip, Tooltip } from "./Tooltip.js";
 import { type ClaimsApi, useClaims } from "./useClaims.js";
 
 /* ------------------------------------------------------------------ band -- */
@@ -352,9 +353,32 @@ export function ClaimsView({
           the list has already been read the wrong way. */}
       <p className="clm-what">{LINKAGE_NOT_ADEQUACY}</p>
 
-      <button type="button" className="clm-run" onClick={api.pull} disabled={pending || !api.loaded}>
-        {run === null ? "Pull the paper's claims" : "Pull them again"}
-      </button>
+      {/* **The one button on this panel that spends money**, and the label says
+          neither that nor what it is going to read. The card carries the cost
+          and the ordering rule together, because the ordering is the thing a
+          referee most often assumes wrongly — `DOCUMENT_ORDER_NOTE` says it
+          above the list, and that sentence is only on screen *after* the run. */}
+      <Tooltip
+        placement="bottom"
+        keepSide
+        className="tip-soon"
+        content={
+          <ControlTip
+            head={run === null ? "Pull the paper's claims" : "Pull them again"}
+            what="Asks the model for the claims the paper makes about its own work up front, and for the passages where the paper takes each one up."
+            how="One model call over the whole paper, so it takes a few seconds and costs something. The list comes back in the paper's own order, never best or worst first, and pulling again replaces the whole list rather than adding to it."
+          />
+        }
+      >
+        <button
+          type="button"
+          className="clm-run"
+          onClick={api.pull}
+          disabled={pending || !api.loaded}
+        >
+          {run === null ? "Pull the paper's claims" : "Pull them again"}
+        </button>
+      </Tooltip>
 
       {api.error && <p className="clm-error">{api.error}</p>}
       {!api.loaded && <p className="gloss-quiet">Loading…</p>}
@@ -469,7 +493,26 @@ function OtherTextInQuotes({
 }) {
   return (
     <section className="clm-row">
-      <p className="clm-claim">{OTHER_TEXT_HEADING}</p>
+      {/* **The heading a referee is likeliest to read as an accusation.** The
+          note under it already denies it — `OTHER_TEXT_NOTE`, whose docstring in
+          src/referee-claims.ts is where the denial is argued — and the card says
+          the refusal a second time, in one line, for the reader who reads a
+          heading and skips the paragraph beneath it. Not a second copy of the
+          note: the note says what the list *is*, and the card says what it is
+          not. */}
+      <Tooltip
+        placement="left"
+        className="tip-soon"
+        content={
+          <ControlTip
+            head={OTHER_TEXT_HEADING}
+            what="The rest of the text inside the passages the claims above quote, split into clauses, with the parts a claim begins in taken out."
+            how="It is not a list of claims the model missed. Deciding what is a claim is a judgement, and a quoted sentence carries background, citation and setup too — so this list is mechanical, and reading it is yours."
+          />
+        }
+      >
+        <p className="clm-claim">{OTHER_TEXT_HEADING}</p>
+      </Tooltip>
       <p className="clm-what">{OTHER_TEXT_NOTE}</p>
       <ul className="clm-passages">
         {rows.map((row) => (
@@ -546,18 +589,35 @@ function ClaimRow({
       </button>
 
       {claim.passages.length > 0 && (
-        <label className="clm-tick">
-          <input
-            type="checkbox"
-            checked={showing}
-            onChange={onToggle}
-            /* The row's own hue, so the tick and the marks it draws are visibly
-               the same thing — `--cat-rgb` holds a palette *reference*, never a
-               colour, which is the seam hit-colours.ts keeps. */
-            style={hue}
-          />
-          <span>Mark these passages in the paper</span>
-        </label>
+        /* The card is on the `<label>` rather than on the `<input>`: the box is a
+           13px target, the label is the whole row, and hovering the words is what
+           a reader actually does. The keyboard route survives it — the checkbox
+           inside is what takes focus, and `useFocus`'s listener sits on the label,
+           which a focus event bubbles to. */
+        <Tooltip
+          placement="left"
+          className="tip-soon"
+          content={
+            <ControlTip
+              head="Mark these passages in the paper"
+              what="Draws this claim's passages in the article, in this row's colour, and takes them away again when you switch it off."
+              how="Marks are off until you ask for them, so a paper you have not read yet arrives unpainted. The colour says which claim made a mark and nothing else — it carries no judgement about whether the passage carries the claim."
+            />
+          }
+        >
+          <label className="clm-tick">
+            <input
+              type="checkbox"
+              checked={showing}
+              onChange={onToggle}
+              /* The row's own hue, so the tick and the marks it draws are visibly
+                 the same thing — `--cat-rgb` holds a palette *reference*, never a
+                 colour, which is the seam hit-colours.ts keeps. */
+              style={hue}
+            />
+            <span>Mark these passages in the paper</span>
+          </label>
+        </Tooltip>
       )}
 
       {claim.passages.length === 0 && (

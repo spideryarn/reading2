@@ -77,6 +77,7 @@ import {
 import { pgFeedbackStore } from "../src/store/pg-feedback.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
 import { pgReady } from "./helpers/pg-ready.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 /* Put the level back straight after the imports: vitest reuses a worker across
    files and does not reset `process.env` between them, and src/log.ts has read
@@ -156,11 +157,7 @@ function report(over: Partial<NewFeedback> & { id: string }): NewFeedback {
 }
 
 async function seedUser(id: string, email: string): Promise<void> {
-  await getDb().execute(sql`
-    insert into auth.users (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
-    values (${id}, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-            ${email}, 'x', now(), now())
-    on conflict (id) do nothing`);
+  await seedAuthUser(getDb(), { id, email, onConflictDoNothing: true });
 }
 
 /**

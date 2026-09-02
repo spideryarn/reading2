@@ -139,6 +139,13 @@ describe("resolveClaim", () => {
     expect(found[0]?.runId).toBe(`${ABSTRACT}:8`);
     expect(found[0]?.slot).toBe(3);
     expect(blockHues(found).get(RESULTS)).toEqual([3]);
-    expect(hitMarks(found, null).get(RESULTS)?.length).toBe(1);
+    /* "rg" is inert here and the parameter is required rather than defaulted —
+       a claim's passage carries no valence at all, which is the next assertion
+       and is what keeps Claims byte-identical to what it was. */
+    expect(hitMarks(found, null, "rg").get(RESULTS)?.length).toBe(1);
+    const mark = hitMarks(found, null, "rg").get(RESULTS)?.[0];
+    expect(mark?.hue).toBeUndefined();
+    expect(mark?.dir).toBeUndefined();
+    expect(mark?.slot).toBe(3);
   });
 });

@@ -53,9 +53,10 @@ shared local Postgres; B generated at 12:45 and merges; B's migration is now bel
 Nothing to build. What this plan adds is a runbook for the *fix*, because refusing loudly still
 leaves an agent holding a migration it cannot apply.
 
-## Failure 2 — the snapshot chain. **Open, and it exits 0.**
+## Failure 2 — the snapshot chain. **Was open, and exited 0. Closed 2026-09-02.**
 
-This is the one that matters, and the parent plan never names it.
+This is the one that matters, and the parent plan never names it. What follows is the diagnosis as
+written before anything was built; [Built](#built-2026-09-02) is what closed it.
 
 Every `drizzle-kit generate` writes `drizzle/meta/<prefix>_snapshot.json` carrying `id` and
 `prevId`. It is a linked list. Verified in this repo:
@@ -158,6 +159,79 @@ here**, and it is written down in a migration. [`drizzle/0030_drop_summary_steer
 This repo has already lived the exact failure that unconditional regeneration would cause. The fix
 recorded there — keep the generated snapshot so the next generate diffs against reality — is the
 precedent stage 2 has to follow.
+
+## Built, 2026-09-02
+
+Stages 1–5, landed on `dev` as `b0b1853`. Stage 7 was never going to be built.
+
+**What is left is stage 6 and only stage 6**: the shared/exclusive lock covering a migration against
+a running test suite, and what to do about `db:reset`. It is a plan of its own and has not been
+written. It is **not a prerequisite for anything above**, and it is a smaller and more contained
+piece of work than this one was —
+[§ 6](#6-locking-moves-to-its-own-plan) already hands it the seam (`globalSetup`, not `pgReady`,
+with the five DB-backed suites that would have been missed named), the deadline and the no-cycle
+rule, why the pooler refusal in `db-migrate.ts` becomes load-bearing, and why `db:reset` cannot
+honestly claim lock protection. Whoever picks it up should read that section before designing
+anything.
+
+Note that the failure it addresses is **rarer and less severe** than the one closed here: a test run
+racing a migration gives you a confusing red suite, where a forked chain gave you a command that
+reported success and did nothing. That is an argument for it being next rather than urgent.
+
+Reviewed twice more after the plan review: by Fable before building
+([260902c-concurrent-migrations-review-fable.md](260902c-concurrent-migrations-review-fable.md)) and
+by GPT Sol on the finished code
+([260902c-concurrent-migrations-code-review-sol.md](260902c-concurrent-migrations-code-review-sol.md)).
+**The code review found more than the plan review did, which is the argument for weighting it
+higher.** Four High findings and five Medium, every one of them real, and the most important could
+not have been visible at plan stage: the wrapper checked the snapshot chain *after* drizzle ran, so a
+folder that was already holed would produce a bad-but-complete migration — all three artefacts
+present, postcondition satisfied. That is the `0029 → 0030` failure exactly, caught after the damage.
+It is a precondition now, and it refuses without generating.
+
+| | |
+|---|---|
+| [`scripts/migration-snapshots.ts`](../../scripts/migration-snapshots.ts) | `readSnapshots` and `snapshotProblems` — ten checks over `drizzle/meta/` (numbered 1–9; check 5 runs in both directions), plus `HISTORICAL`, the three exceptions with a reason on each. |
+| [`tests/migration-snapshots.test.ts`](../../tests/migration-snapshots.test.ts) | The real folder green, the exception list pinned in both directions, and eleven fixtures showing it refuse. |
+| [`scripts/db-generate.ts`](../../scripts/db-generate.ts) | `npm run db:generate` now requires a `.sql`, a snapshot **and** a journal entry, or an explicit `--allow-empty`. |
+| `npm run db:chain` + [`scripts/check.ts`](../../scripts/check.ts) | `drizzle-kit check` is a gate on the branch, not only at the deploy. ~2 s, offline. |
+| [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts) | Warns on a broken chain. **A warning, not a refusal** — see below. |
+| [`drizzle.config.ts`](../../drizzle.config.ts) | `migrations.prefix: "timestamp"`. |
+| [`tests/db-step-constraint.test.ts`](../../tests/db-step-constraint.test.ts) | Reads journal order rather than sorting filenames; the `/^\d{4}_/` assertion is gone. |
+| [database.md § Two worktrees generated at once](../project/database.md#two-worktrees-generated-at-once) | Stage 4's runbook. |
+
+**Four things came out different from the plan, and each is an improvement Fable's review or the
+building found:**
+
+- **Stage 2's own checklist was missing the check the stage exists for.** Its six bullets never
+  included "every journal entry has a snapshot", and the chain-link check cannot stand in for it,
+  because the physical chain **splices cleanly over both holes** — `0004`'s parent is `0002` and
+  `0030`'s is `0028`. A validator built exactly from the bullets would have passed a future
+  `0029`-shaped hole, which is the incident the stage cites as its own precedent. Found by Fable.
+- **It is not in `journalProblems`, and could not usefully have been.** That function is
+  `(journal, hashes)` and pure, called from inside `reconcileLedger`; snapshots would mean changing
+  two signatures and every caller. It is a sibling function instead, mirroring the module's own
+  `readJournal`/`hashMigrationFiles` split.
+- **`db:migrate` warns rather than refuses.** A forked chain does not make a migration wrong —
+  `migrate()` never opens a snapshot — so refusing would block safe pending SQL over a defect it has
+  nothing to do with. `db:generate` refuses, which is where it bites.
+- **`HISTORICAL` is exported production code, not a test constant**, unlike `GRANDFATHERED` in
+  `tests/migration-journal.test.ts`. That one is only ever called from a test; this one also runs in
+  the preflight, and a preflight whose "green" silently means "two known holes" is not auditable.
+
+**And one hole was written and then found in the wrapper itself**, which is worth recording because
+it is this plan's own subject turned on its author. The first `db:generate` returned early on
+`--allow-empty` when nothing had been written — and a forked chain makes `generate` refuse and exit 0
+*without* printing "No schema changes", which at that level is indistinguishable from an honest
+no-op. So the flag printed a green ✓ over a red `Error:`. The fix is that the folder-wide check runs
+first and unconditionally; verified by forking `drizzle/meta/` for a minute and watching it go from
+✓ to exit 1 naming the fork four ways.
+
+**Both halves of the central claim were reproduced before anything was built** (a copy of `drizzle/`
+with a second snapshot claiming `0051`'s parent): `check` names both files and exits 1, `generate`
+prints the same red `Error:` and exits **0**, writing nothing. And the timestamp prefix was run for
+real before the config changed — `20260902084631_proving_the_prefix.sql`, its snapshot sorting after
+`0051_snapshot.json`, `when` still `Date.now()`, `idx` still contiguous.
 
 ## What we are going to do
 

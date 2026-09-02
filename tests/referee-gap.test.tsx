@@ -169,6 +169,10 @@ function mount(comments: Comment[]): void {
           comments,
           onJump: () => {},
           onFound: () => {},
+          /* This file is about the two judgements on a row, never about the
+             prose, so no passage is open and nothing here opens one. */
+          openKey: null,
+          onOpenKey: () => {},
         }),
       ),
     );
@@ -553,6 +557,8 @@ describe("the referee's placements the model never returned", () => {
             comments: [comment({ blockId: MISSED, criterionId: CRIT, valence: -100 })],
             onJump: (id: BlockId) => jumped.push(id),
             onFound: () => {},
+            openKey: null,
+            onOpenKey: () => {},
           }),
         ),
       );

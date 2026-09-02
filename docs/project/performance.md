@@ -184,7 +184,7 @@ to have justified a fix, and a fix to any of them would have been wasted work th
 succeed:
 
 - **The YouTube embed.** The article
-  [`noema-mythology-of-conscious-ai`](../../data/noema-mythology-of-conscious-ai) really does carry
+  `data/noema-mythology-of-conscious-ai` really does carry
   one, the sanitiser really does permit it ([security.md](security.md)), and an embedded player
   really is its own JavaScript application in its own renderer process — so it is invisible to any
   profiler pointed at our page, which is exactly the shape of thing that stays unfound. It costs

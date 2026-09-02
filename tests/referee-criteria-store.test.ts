@@ -51,6 +51,7 @@ import { pgRefereeCriteriaStore } from "../src/store/pg-referee-criteria.js";
 import { fsRefereeCriteriaStore } from "../src/store/fs.js";
 import { MAX_CRITERIA, type SavedCriterion } from "../src/saved-criteria.js";
 import { pgReady } from "./helpers/pg-ready.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 loadEnvLocal();
 
@@ -278,12 +279,11 @@ when("a criterion under somebody else's article", () => {
     /* `auth.users` first — `articles.owner_id` and `referee_criteria.owner_id`
        both reference it (`referee_criteria_owner_fk`), so a made-up uuid is a
        foreign-key error rather than a second owner. */
-    await db.execute(sql`
-      insert into auth.users (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
-      values (${OTHER_OWNER}, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-              'referee-criteria-other-owner@example.invalid', 'x', now(), now())
-      on conflict (id) do nothing
-    `);
+    await seedAuthUser(db, {
+      id: OTHER_OWNER,
+      email: "referee-criteria-other-owner@example.invalid",
+      onConflictDoNothing: true,
+    });
     await db.insert(articles).values({ id: OTHER_ARTICLE, ownerId: OTHER_OWNER, slug: OTHER_SLUG });
     await db.execute(sql`
       insert into spideryarn.referee_criteria (article_id, id, owner_id, kind, criterion, status)

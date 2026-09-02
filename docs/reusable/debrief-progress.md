@@ -2,8 +2,20 @@
 
 > **Provenance.** Copied 2026-08-31 from
 > [`docs/instructions/DEBRIEF_PROGRESS.md`](https://github.com/gregdetre/gjdutils/blob/main/docs/instructions/DEBRIEF_PROGRESS.md)
-> in gregdetre/gjdutils — see [gjdutils-instructions.md](gjdutils-instructions.md). Close to
-> verbatim; only the paths are adapted.
+> in gregdetre/gjdutils — see [gjdutils-instructions.md](gjdutils-instructions.md). Verbatim apart
+> from the paths, and the lead-in below, which is this repo's.
+
+**Lead with these two, before anything else:**
+
+1. **What are we setting out to achieve?** One or two sentences, high level — the goal, not the task
+   list. Someone who has not been following should come away knowing what this work is *for*.
+2. **Where does it stand?** Say plainly which of three it is, in these words:
+   - **finished** — nothing meaningful left;
+   - **done enough to stop here** — what remains is real but optional, and stopping now leaves
+     something coherent;
+   - **important work left** — and say what it is, and what it costs to leave it.
+
+Vagueness is the failure mode this exists to stop. "Good progress" is not one of the three.
 
 Update the relevant planning doc for this work if there is one. (If you don't know, there probably
 isn't, and you can safely ignore this suggestion.)

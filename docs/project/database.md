@@ -574,6 +574,94 @@ The whole story, including why `0033_quotes` could not be replayed verbatim and 
 recorded instead, is in
 [the postmortem](../postmortems/260831h-db-migrate-applies-nothing-when-a-journal-timestamp-jumps-the-queue.md).
 
+## Two worktrees generated at once
+
+The section above is about the journal. This one is about `drizzle/meta/`, which is a **different
+file, a different failure, and the one that reports success.**
+
+Every `drizzle-kit generate` writes `drizzle/meta/<prefix>_snapshot.json` carrying an `id` and the
+`prevId` of the one before it: a linked list, and the thing the *next* migration is diffed against.
+Two worktrees generating from the same trunk write two snapshots with one `prevId`. The database
+never notices — `migrate()` reads the journal and the `.sql` files and never opens a snapshot — so
+everything works right up until somebody changes the schema again, and then:
+
+```
+npx drizzle-kit check      names both files, exit 1
+npm run db:generate        the same red "Error:", exit 0, nothing written
+```
+
+**The generate path exits zero.** Both `process.exit` calls are a few lines apart in
+`node_modules/drizzle-kit/bin.cjs` and only one of them says 1. Verified 2026-09-02 against a copy of
+`drizzle/` carrying a second snapshot that claimed `0051`'s parent. It is
+[silent-success.md](../reusable/silent-success.md) exactly: the operator asked for a migration, got a
+success code, and got no migration.
+
+### What stops it now
+
+| | |
+|---|---|
+| `migrations.prefix: "timestamp"` in [`drizzle.config.ts`](../../drizzle.config.ts) | Two agents no longer both mint `0052`. **Reduction, not prevention** — the stamp is one-second resolution, and the snapshot is named from the prefix alone, so same-second collisions survive it. |
+| `npm run db:chain` (`drizzle-kit check`), a gate in [`scripts/check.ts`](../../scripts/check.ts) | The fork, read the way `generate` will read it. It was already in `npm run deploy` and nowhere else, so a fork used to surface at the deploy. |
+| [`scripts/migration-snapshots.ts`](../../scripts/migration-snapshots.ts), via `npm test` and a warning in `db:migrate` | The holes and breaks `drizzle-kit check` is green on, plus the rename trap — drizzle diffs against whichever snapshot sorts **last**, so an old one renamed to sort last rewinds every future migration in silence. |
+| [`scripts/db-generate.ts`](../../scripts/db-generate.ts) | Success must have produced a `.sql`, a snapshot **and** a journal entry, or an explicit `-- --allow-empty`. This is the one that closes the class rather than the case: there are three exit-0-with-no-output paths in `generate`, and this does not care which one you hit. |
+
+**Write hand-written SQL with `npm run db:generate -- --custom --name <what_it_does>`, never by
+creating a file.** `--custom` writes the snapshot and the journal entry as well as the (empty) `.sql`
+for you to fill in. `0029_assets` was hand-made without one, so the next generate diffed against
+`0028`, re-emitted DDL that had already run, and failed on `column "assets" … already exists` — the
+repair is written up at the top of
+[`drizzle/0030_drop_summary_steer.sql`](../../drizzle/0030_drop_summary_steer.sql), and that hole is
+still in the folder as a named exception today.
+
+### Repairing a fork: what the losing migration is decides everything
+
+The journal half of the conflict is easy — take the trunk's file whole:
+
+```bash
+git show origin/dev:drizzle/meta/_journal.json > drizzle/meta/_journal.json
+```
+
+A file write rather than a `git checkout`, so it stays inside
+[AGENTS.md](../../AGENTS.md#working-in-a-tree-several-agents-share)'s rules.
+
+The snapshot half cannot be merged. Snapshots are a linear chain and drizzle has no notion of two
+parents — Alembic and Django both model migrations as a DAG and can write an explicit merge node;
+drizzle cannot. **And the obvious hand-fix is a trap:** repointing the loser's `prevId` at the
+winner's `id` leaves its *contents* still diffed from before the winner's changes, so the next
+generate re-emits the winner's DDL and `db:migrate` fails on `already exists` one migration later, in
+whichever worktree generates next. Deleting the loser's snapshot is the same bug mirrored — that is
+the `0029` story above.
+
+So the loser is rebuilt, and **how depends on what it is**. Keep the original file wherever it is
+going, in every row:
+
+| the losing migration is | do this |
+|---|---|
+| unpublished, purely generated | delete its `.sql`, its snapshot and its journal entry, then `npm run db:generate` again. The simple case, and the common one. |
+| unpublished, hand-edited or `--custom` | **keep the original SQL.** Regenerate only the schema part and re-apply the custom part by hand — a backfill, a grant, a function, `NOT VALID`, RLS. An ordinary `generate` may say "no schema changes" and hand you no replacement at all. |
+| already applied to the shared local Postgres | preserve it and regenerate the *other* side, or reset. **Greg's call** — `npm run db:reset` empties the database and puts nothing back. |
+| **applied to production** | **never delete, re-stamp or regenerate it.** Published migrations are immutable; the repair is a new forward migration. |
+
+Two more things that bite. `drizzle-kit generate` asks whether a thing was **renamed or dropped and
+recreated**, and answering differently the second time produces different and possibly destructive
+SQL — so answer it the same way. And regenerating changes a migration's `when`; a fresh `Date.now()`
+is later than everything only if your clock is not behind and no later-stamped branch merges
+concurrently, so the inversion check above stays load-bearing.
+
+A `db:migrate` that prints a `⚠ drizzle/meta/ is not a well-formed chain` warning is telling you
+this happened; the migration it is about to run is unaffected.
+
+### What no lock can cover
+
+A **non-additive** migration — a dropped column — applied by one worktree breaks the running dev
+server of every other worktree at once. That is inherent to one shared database, not something the
+advisory lock in `db:migrate` pretends to cover. See
+[worktrees.md](worktrees.md).
+
+The reasoning, the four failure modes, everything considered and rejected, and what the rest of the
+world does about it are in
+[260902c-concurrent-migrations-across-worktrees.md](../plans/260902c-concurrent-migrations-across-worktrees.md).
+
 ## Roles
 
 **Applied to the real project on 2026-08-26.** What follows is what was actually run, which is not
