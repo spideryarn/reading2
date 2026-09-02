@@ -1,6 +1,6 @@
 1. **Resolved.** The historical duplicate-execution incident is correctly separated from current hierarchy variability. Three to five interleaved cold draws support “observed variation,” not a tail estimate. Remove the opening promise of “a tail to $Z” to stay consistent.
 
-2. **Not fully resolved.** Slug-first attribution is the right evaluation order, but slugged `job_step` rows would still be classified as **Product spend** by [`scripts/ai-cost.ts`](scripts/ai-cost.ts:423). Attribution works; accounting isolation does not. Make eval/product separation an explicit feasibility acceptance criterion. This may still require a coordinated seam or reporting change.
+2. **Not fully resolved.** Slug-first attribution is the right evaluation order, but slugged `job_step` rows would still be classified as **Product spend** by `scripts/ai-cost.ts:423`. Attribution works; accounting isolation does not. Make eval/product separation an explicit feasibility acceptance criterion. This may still require a coordinated seam or reporting change.
 
 3. **Resolved**, except the Goal still says this plan enables model comparison. Say model comparison requires the follow-up arms plan.
 
