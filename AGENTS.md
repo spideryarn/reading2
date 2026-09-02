@@ -74,7 +74,7 @@ listed here; the names under each are files in `docs/project/`.
   `vercel-hosting-deployment.md` (reading the logs) · `sentry-error-monitoring.md` · `logging.md` ·
   `feedback.md` (the Feedback button, and where a bug report goes) ·
   `hetzner-remote-server-box.md` (the always-on box, and `gjd-remote`) ·
-  `worktrees.md` (one tree per agent, one day; the runbooks nobody has run yet)
+  `worktrees.md` (one tree per agent, and how to start one)
 
 Two of those are worth reading before you touch anything they bear on:
 **[granularity-zoom.md](docs/project/granularity-zoom.md)**, the feature this whole app is for, and
@@ -191,9 +191,10 @@ actually reaches is not always the one on its command line, and both mistakes pr
   against one local Supabase and one dev server. Files change under you, tests go red for reasons
   that are not yours, the database is not how you left it. Absorb it, do your best, and carry on —
   don't try to fence yourself off.
-- **Two things are changing here.** We are setting up a worktree per agent, so the sharing above
-  gets less painful; and the primary checkout is moving off `main` onto `dev`. Pushing to `main`
-  will still deploy.
+- **Commit and push to `dev`.** That is the trunk, and a push there builds nothing. `main` is
+  production and is written only by `npm run deploy` — pushing to it yourself is an unreviewed
+  deploy to real readers. We are also setting up a worktree per agent, so the sharing above gets
+  less painful.
 - **Stay inside your stage.** Talk to other stages through the artefacts they write, not by reaching
   into their code — [architecture.md § Stage ownership](docs/project/architecture.md#stage-ownership).
 - **Never run a git command that throws work away.** No `git checkout -- …`, `git restore`,
@@ -232,7 +233,9 @@ actually reaches is not always the one on its command line, and both mistakes pr
 - **A merge conflict is a proposal before it is an edit.** Read the history behind both sides, keep
   the best of both, and show Greg the proposal before you change anything —
   [git-resolve-merge-conflicts.md](docs/reusable/git-resolve-merge-conflicts.md).
-- **Commit when the work is done**, or when you reach a good stopping point, without being asked.
+- **Commit when the work is done**, or when you reach a good stopping point, without being asked —
+  **and push it.** Unpushed work is invisible to the other machine and to every check that asks
+  whether it landed.
 
 ### Before you call it finished
 
