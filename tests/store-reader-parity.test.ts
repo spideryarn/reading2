@@ -42,6 +42,7 @@ import type { ReaderStore } from "../src/store/contracts.js";
 import { fsReaderStore } from "../src/store/fs.js";
 import { pgReaderStore } from "../src/store/pg-reader.js";
 import { pgReady } from "./helpers/pg-ready.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 loadEnvLocal();
 
@@ -95,16 +96,17 @@ function on(store: ReaderStore, body: () => Promise<void>): Promise<void> {
 /**
  * The `auth.users` row this suite's owner needs.
  *
- * `on conflict do nothing`, so a re-run after a crashed one is fine. These are
- * the columns tests/db-schema.test.ts inserts, for the same reason: Supabase's
- * table has many more and every one of them has a default.
+ * `on conflict do nothing`, so a re-run after a crashed one is fine. The columns
+ * are the shared helper's: four of Supabase's have no default and GoTrue reads
+ * them as non-null strings, so a row that leaves them out makes the Auth
+ * service 500 for the whole database — tests/helpers/seed-auth-user.ts.
  */
 async function seedOwner(): Promise<void> {
-  await getDb().execute(sql`
-    insert into auth.users (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
-    values (${OWNER}, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-            'reader-parity@example.invalid', 'x', now(), now())
-    on conflict (id) do nothing`);
+  await seedAuthUser(getDb(), {
+    id: OWNER,
+    email: "reader-parity@example.invalid",
+    onConflictDoNothing: true,
+  });
 }
 
 afterAll(async () => {

@@ -34,7 +34,7 @@
  * Its own file rather than a block in `tests/jobs.test.ts`, because the module
  * mock below is file-wide and that file is shared with several other people.
  */
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StoreSession } from "../src/store/session.js";
@@ -83,9 +83,9 @@ const { fsArtifacts } = await import("../src/store/artifacts-fs.js");
 const { pauseForTests } = await import("../src/store/jobs-fs.js");
 import type { StepContext } from "../src/pipeline.js";
 import type { Job } from "../src/types.js";
+import { jobFilesOnDisk } from "./helpers/job-files.js";
 
 const ROOT_DATA = path.resolve(import.meta.dirname, "..", "data");
-const JOBS_DIR = path.join(ROOT_DATA, "_jobs");
 
 /** Wait for the in-process pump to let the job go. */
 async function settle(id: string): Promise<Job> {
@@ -112,9 +112,7 @@ describe("a step run for real, through the commit", () => {
     await rm(path.join(ROOT_DATA, SLUG), { recursive: true, force: true });
     await rm(at.htmlFile, { force: true });
     await rm(at.htmlFile.replace(/\.html$/, ".blocks.json"), { force: true });
-    for (const file of await readdir(JOBS_DIR).catch(() => [])) {
-      const full = path.join(JOBS_DIR, file);
-      const record = JSON.parse(await readFile(full, "utf8")) as { slug?: string };
+    for (const { path: full, record } of await jobFilesOnDisk()) {
       if (record.slug === SLUG) await rm(full, { force: true });
     }
   });

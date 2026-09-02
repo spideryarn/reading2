@@ -117,7 +117,9 @@ import { STORE } from "../src/store/live.js";
 import type { Block, JobStep, OwnerId, StepName, Tree } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { insertWhenSlotFree } from "./helpers/running-slot.js";
-import { type HeldRunLock, takeRunLock } from "./helpers/run-lock.js";
+import { cleanUpThenRelease, takeRunLockAndSetUp } from "./helpers/lock-lifecycle.js";
+import type { HeldRunLock } from "./helpers/run-lock.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 /* Put the flag back straight away — vitest reuses a worker across files, and the
    modules above have already captured it. */
@@ -160,23 +162,24 @@ const { reachable } = await pgReady({
 });
 
 if (reachable) {
-  runLock = await takeRunLock("tests/pg-session-real-step.test.ts");
-  const lockClient = runLock.client;
-  await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
-  await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
-  await lockClient.query(
-    "update spideryarn.articles set current_revision_id = null where slug like $1",
-    [SLUG_RUBBLE],
-  );
-  await lockClient.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
-  await lockClient.query("delete from auth.users where id::text like $1", [RUBBLE]);
-  await lockClient.query(
-    `insert into auth.users
-       (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
-     values ($1, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-             $2, 'x', now(), now())`,
-    [OWNER, `pg-session-real-step-${OWNER}@example.invalid`],
-  );
+  /* The sweep runs on the lock's own connection, so it is covered by the key —
+     and through `takeRunLockAndSetUp`, so a statement that throws gives the key
+     back. This is module scope: no `afterAll` has been registered yet, so
+     nothing else would. tests/helpers/lock-lifecycle.ts. */
+  runLock = await takeRunLockAndSetUp("tests/pg-session-real-step.test.ts", async (lockClient) => {
+    await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
+    await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
+    await lockClient.query(
+      "update spideryarn.articles set current_revision_id = null where slug like $1",
+      [SLUG_RUBBLE],
+    );
+    await lockClient.query("delete from spideryarn.articles where slug like $1", [SLUG_RUBBLE]);
+    await lockClient.query("delete from auth.users where id::text like $1", [RUBBLE]);
+    await seedAuthUser(lockClient, {
+      id: OWNER,
+      email: `pg-session-real-step-${OWNER}@example.invalid`,
+    });
+  });
 }
 
 const when = reachable ? describe : describe.skip;
@@ -423,22 +426,34 @@ when("a real pipeline stage committing through pgStoreSession", () => {
 
   afterAll(async () => {
     if (!reachable) return;
-    const database = getDb();
-    await database.delete(jobsTable).where(eq(jobsTable.ownerId, OWNER));
-    const ours = await database
-      .select({ id: articles.id, slug: articles.slug })
-      .from(articles)
-      .where(eq(articles.ownerId, OWNER));
-    for (const { id, slug } of ours) {
-      await database.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, id));
-      await database.delete(articles).where(eq(articles.id, id));
-      await rm(path.join(ROOT, "data", slug), { recursive: true, force: true });
-    }
-    await closeDb();
-    if (runLock) {
-      await runLock.client.query("delete from auth.users where id = $1", [OWNER]);
-      await runLock.release();
-    }
+    /* Release last, and whatever the cleanup did: one failed statement used to
+       skip it, leaving the key held until the worker exited and every peer
+       suite waiting on it. tests/helpers/lock-lifecycle.ts. */
+    await cleanUpThenRelease(
+      async () => {
+        const database = getDb();
+        await database.delete(jobsTable).where(eq(jobsTable.ownerId, OWNER));
+        const ours = await database
+          .select({ id: articles.id, slug: articles.slug })
+          .from(articles)
+          .where(eq(articles.ownerId, OWNER));
+        for (const { id, slug } of ours) {
+          await database
+            .update(articles)
+            .set({ currentRevisionId: null })
+            .where(eq(articles.id, id));
+          await database.delete(articles).where(eq(articles.id, id));
+          await rm(path.join(ROOT, "data", slug), { recursive: true, force: true });
+        }
+        await closeDb();
+        /* On the lock's own connection, so the person is taken away while this
+           file still owns the slot rather than in the gap after letting go. */
+        await runLock?.client.query("delete from auth.users where id = $1", [OWNER]);
+      },
+      async () => {
+        await runLock?.release();
+      },
+    );
   });
 
   /**

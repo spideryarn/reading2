@@ -25,6 +25,7 @@ import type { PoolClient } from "pg";
 import { loadEnvLocal } from "../src/env.js";
 import { UPLOAD_STATUSES } from "../src/source.js";
 import { pgReady } from "./helpers/pg-ready.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 loadEnvLocal();
 
@@ -96,13 +97,11 @@ const REV_1 = "bbbbbbbb-0000-0000-0000-000000000001";
 
 /** Two articles owned by one user, inside the caller's transaction. */
 async function seed(c: PoolClient): Promise<void> {
-  await c.query(
-    `insert into auth.users (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
-     values ($1,'00000000-0000-0000-0000-000000000000','authenticated','authenticated',
-             'schema-test@example.invalid','x',now(),now())
-     on conflict (id) do nothing`,
-    [OWNER],
-  );
+  await seedAuthUser(c, {
+    id: OWNER,
+    email: "schema-test@example.invalid",
+    onConflictDoNothing: true,
+  });
   await c.query(
     `insert into spideryarn.articles (id, owner_id, slug)
      values ($1,$3,'schema-test-one'), ($2,$3,'schema-test-two')`,

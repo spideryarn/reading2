@@ -25,6 +25,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { loadEnvLocal } from "../src/env.js";
 import { blobStore, CONTENT_TYPE, CorruptObject, storeRawSource } from "../src/store/blobs.js";
+import type { BlobHead, PutResult, RawSourceStore } from "../src/store/blobs.js";
 import { canonicalKey } from "../src/source.js";
 
 loadEnvLocal();
@@ -102,5 +103,105 @@ describe("storing a raw source", () => {
     expect(err).toBeInstanceOf(CorruptObject);
     expect((err as CorruptObject).key).toBe(key);
     await blobs.remove(key);
+  });
+});
+
+/**
+ * **The bytes do not go up a second time**, which is a Kong bug wearing our
+ * clothes.
+ *
+ * `storeRawSource` used to POST unconditionally and let the 409 tell it the
+ * object was already there. Storage answers that 409 in ~20 ms *without reading
+ * the body*, and the local stack's Kong — which has buffered a multi-megabyte
+ * body to a temp file — hands that connection back to its keepalive pool with
+ * the body unsent. The next request through it, any request, any key, waits out
+ * `proxy_read_timeout`: 60 seconds, measured 178 times in 17 hours. The
+ * diagnosis, with the probe that reproduced it, is
+ * docs/plans/260902c-make-the-test-suite-pass-reliably.md § Cause 1.
+ *
+ * So the guarantee under test is a negative one: on a dedup hit there is **no
+ * upload attempt at all**. The verification that made `already-there` mean
+ * something — read back, re-hash, refuse a mismatch — has to survive it, so it
+ * is asserted here too rather than assumed from the tests above.
+ */
+describe("a document that is already in the bucket", () => {
+  const good = pdf("already up there");
+  const digest = sha(good);
+  const key = canonicalKey(digest, "pdf");
+
+  /** A bucket in a Map that counts what was asked of it. */
+  function spyBlobs(objects: Map<string, Uint8Array>) {
+    const calls = { head: 0, get: 0, putIfAbsent: 0 };
+    const store: RawSourceStore = {
+      async head(k): Promise<BlobHead | null> {
+        calls.head += 1;
+        const there = objects.get(k);
+        return there ? { bytes: there.byteLength, contentType: CONTENT_TYPE.pdf } : null;
+      },
+      async get(k): Promise<Uint8Array | null> {
+        calls.get += 1;
+        return objects.get(k) ?? null;
+      },
+      async putIfAbsent(k, bytes): Promise<PutResult> {
+        calls.putIfAbsent += 1;
+        if (objects.has(k)) return "already-there";
+        objects.set(k, bytes);
+        return "stored";
+      },
+      async remove(k) {
+        objects.delete(k);
+      },
+    };
+    return { store, calls };
+  }
+
+  it("never attempts the upload, and still reads the object back to verify it", async () => {
+    const { store, calls } = spyBlobs(new Map([[key, good]]));
+
+    const result = await storeRawSource(good, "pdf", store);
+
+    expect(calls.putIfAbsent).toBe(0);
+    expect(result.outcome).toBe("already-there");
+    expect(result.sha256).toBe(digest);
+    /* The read-back is the whole reason `already-there` is trustworthy — a fast
+       path that skipped it would be the silent success this file exists to
+       stop. */
+    expect(calls.get).toBe(1);
+  });
+
+  it("still refuses wrong bytes sitting at the name, without uploading over them", async () => {
+    const { store, calls } = spyBlobs(new Map([[key, pdf("an impostor")]]));
+
+    await expect(storeRawSource(good, "pdf", store)).rejects.toThrow(CorruptObject);
+    expect(calls.putIfAbsent).toBe(0);
+  });
+
+  it("uploads exactly as before when the object is not there", async () => {
+    const objects = new Map<string, Uint8Array>();
+    const { store, calls } = spyBlobs(objects);
+
+    const result = await storeRawSource(good, "pdf", store);
+
+    expect(result.outcome).toBe("stored");
+    expect(calls.putIfAbsent).toBe(1);
+    expect(objects.get(key)).toEqual(good);
+    /* A create needs no read-back: we hashed the buffer we just wrote. */
+    expect(calls.get).toBe(0);
+  });
+
+  it("throws CorruptObject when head says present and the object then vanishes", async () => {
+    /* The race the head introduces has an answer already: `get` returns null
+       and the mismatch branch throws. Nothing new is needed for it — this only
+       makes sure nothing new was added. */
+    const objects = new Map([[key, good]]);
+    const { store } = spyBlobs(objects);
+    const racing: RawSourceStore = {
+      ...store,
+      async get() {
+        return null;
+      },
+    };
+
+    await expect(storeRawSource(good, "pdf", racing)).rejects.toThrow(CorruptObject);
   });
 });
