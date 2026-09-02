@@ -56,6 +56,34 @@ decided — nothing is waiting on Greg. The first stage is built (✅); the buil
 5. **The files-store hole**, which neither earlier review saw: see *Billing is a Postgres feature*
    below. It was the one unplanned thing that would have cost an afternoon.
 
+### Where the build stands, 2026-09-02 16:05
+
+Worktree `stripe-payments`, branch `worktree-stripe-payments`.
+
+- **Landed on `dev`**: the whole first stage — Stripe objects, `src/billing/stripe.ts`, the
+  setup script, the `/api/health` mode check (commit `9789d5a`).
+- **Committed locally and deliberately NOT pushed**: the quota schema, the two migrations,
+  `src/store/pg-billing.ts`, `src/billing/tiers.ts`, the race test, and the `pay-` copy.
+  **Do not push these until `0052_per_article_job_queue` is on `dev`** — its snapshots and mine
+  both branch from `0051`, so whoever pushes second forks the snapshot chain and the *next*
+  `db:generate` anywhere in the repo exits 0 having written nothing
+  ([database.md § Two worktrees generated at once](../project/database.md#two-worktrees-generated-at-once)).
+  The order that avoids it: they push, we merge, we delete and regenerate our two migrations —
+  which is cheap, because neither has been applied anywhere.
+- **Blocked, and not by anything in this plan**: `npm run db:migrate` refuses for every session on
+  this box, because the shared local database carries a ledger row for
+  `0052_per_article_job_queue`, which is committed in the `article-job-queue` worktree and
+  unpushed. Nobody may delete that row; it is that agent's work. Two other sessions are stuck
+  behind the same thing and the owning session has been asked to push.
+  **What that costs this plan**: the migration is unapplied, so
+  `tests/billing-quota-race.test.ts` skips (a real vitest skip, not a false pass) and the new
+  foreign-key assertion in `tests/db-schema.test.ts` is red. Both go green when it lands. The
+  mechanism itself was measured with two real connections before any of it was written, so it is
+  not resting on an unrun test — but it is not finished until that suite has actually run.
+- **Next**, in order, once the migration applies: run the race suite; wire admission into
+  `POST /api/jobs` and the settlement into `settleIn`; then the webhook, then checkout and
+  `/profile`.
+
 ## Picking this up
 
 For an agent starting fresh, with no other context than this doc:
