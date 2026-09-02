@@ -293,6 +293,42 @@ event_kind)`; event time and receipt time both kept, never substituting session 
 per-response latency; and a mapping for `completed`/`failed`/`cancelled`/`incomplete`, which
 `"ok" | "error" | "aborted"` cannot express.
 
+#### The realtime row shape, decided
+
+The usage OpenAI emits on `response.done`, from
+[realtime-voice-cost-tracking-web.md](../research/realtime-voice-cost-tracking-web.md):
+
+```json
+"usage": {
+  "total_tokens": 253, "input_tokens": 132, "output_tokens": 121,
+  "input_token_details": {
+    "text_tokens": 119, "audio_tokens": 13, "image_tokens": 0, "cached_tokens": 64,
+    "cached_tokens_details": { "text_tokens": …, "audio_tokens": … }
+  },
+  "output_token_details": { "text_tokens": 30, "audio_tokens": 91 }
+}
+```
+
+**Audio and text are priced an order of magnitude apart** — $32/Mtok audio in against $4 text in,
+$64 against $24 out — so a row that keeps only the totals cannot be repriced or audited. The splits
+are the whole point.
+
+So: new **nullable columns** on `ai_calls` for the modality detail — input text/audio/image, cached
+text/audio, output text/audio, transcription seconds, the provider event id and the provider status
+— with `reported_input_tokens`/`output_tokens` still carrying the totals.
+
+**Not JSON, and not a sibling table.** [sql.md](../project/sql.md) says columns over JSON; and a
+sibling table was the tempting alternative until the precedent settled it. `ai_calls` **already**
+carries wire-specific columns that are null on most rows: `cache_write_5m_tokens` and
+`cache_write_1h_tokens` are Messages-wire only, `service_tier` and `inference_geo` are Anthropic's
+own fields, and `web_searches` is chat-wire only. Realtime columns are the same pattern, not a new
+one — so this follows the table's existing design rather than introducing a second shape beside it.
+
+**Keep `cached_tokens_details`.** It was missing from `openai-node`'s types for a while
+([openai-node#1600](https://github.com/openai/openai-node/issues/1600)), so hand-rolled types tend
+to drop it — and it is the field that says how much of the cache saving was on the expensive
+modality.
+
 **Done:** deployable on its own, with every issued session visible as zero-reporting until the
 client starts posting.
 
@@ -436,6 +472,21 @@ Sol's own recommendation on the model, for the record: *"price the core text-rea
 from base upload plus engaged-text p95, and treat voice as a separate explicit allowance or beta
 feature. 'N articles per month' can remain a secondary abuse boundary, but it should not be the
 headline economic model."*
+
+## Handoff from the duplicate-execution fix, 2026-09-02
+
+The Vite-restart bug behind the ledger's duplicate hierarchy spend is fixed
+([260902c-the-truncation-retry-cost-storm.md](../postmortems/260902c-the-truncation-retry-cost-storm.md);
+`src/process-state.ts` is the mechanism). Two findings from that work belong to this plan, per its
+Sol review:
+
+- **`src/store/ai-calls-fs.ts`'s `writing` mutex is the same bug class** — a module-scope mutex
+  that a dev-server restart forgets, so two module copies can interleave writes and **corrupt the
+  files-mode ledger** this very incident was diagnosed from. It was out of that fix's scope by
+  instruction; `src/process-state.ts` is the ready-made home.
+- **The ledger's `outcome` field cannot see waste**: it means "the HTTP call completed"
+  (`ok | error | aborted`), so a wasted-but-successful call is indistinguishable from a useful
+  one. Worth deciding here whether the step/job outcome should be recorded beside spend.
 
 ## See also
 

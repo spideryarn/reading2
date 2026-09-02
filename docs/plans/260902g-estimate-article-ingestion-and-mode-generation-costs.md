@@ -66,10 +66,12 @@ cost-tracking machinery and must not modify it.
   starting 7–60 s apart while earlier calls were still in flight, and several finished *below*
   the token ceiling — something kept starting fresh attempts of a step already running.
   The same overlap appears on the 468-word `read` article (six executions under one job), so it
-  is not length-dependent. Consistent with the old files-mode queue; possibly already prevented
-  by the Postgres attempt-token/lease claiming ([`src/jobs.ts`](../../src/jobs.ts)). **An Opus
-  agent is root-causing and fixing/pinning this now** (dispatched 2026-09-02 at Greg's request,
-  with its own plan + Sol reviews); this eval treats it as a separate historical anomaly, and
+  is not length-dependent. **Root-caused and fixed, 2026-09-02**
+  ([260902c-the-truncation-retry-cost-storm.md](../postmortems/260902c-the-truncation-retry-cost-storm.md)):
+  a Vite dev-server restart re-imported the server modules, the files-mode queue's in-memory
+  claims vanished with the old module copy, and the sweeper requeued the still-running job —
+  $9.62 of the ledger's $11.36 was this. Postgres claiming never had the bug, and a restart is
+  now a pause (`src/process-state.ts`). This eval treats it as a fixed historical anomaly, and
   separately measures *stochastic* hierarchy cost under current code — where hierarchy runs at
   effort `medium` precisely because this article filled the ceiling at `high`
   ([`src/hierarchy.ts`](../../src/hierarchy.ts)), and a truncation surfaces as a `bug` failure
@@ -318,9 +320,13 @@ execution, not a cost any single ingest should pay.
 
 ### Cost-reduction candidates (Sol's re-ranking adopted; to be priced by the eval)
 
-1. **Duplicate job execution** — the largest historical waste. Root-cause/fix already in flight
-   (Opus agent, 2026-09-02) and **owned by that investigation, not this plan** — including the
-   concurrency test that pins the guarantee if the Postgres queue already prevents it.
+1. ✅ **Duplicate job execution** — was the largest historical waste ($9.62 of $11.36), **fixed
+   2026-09-02**
+   ([260902c-the-truncation-retry-cost-storm.md](../postmortems/260902c-the-truncation-retry-cost-storm.md)):
+   dev-server restarts were forgetting files-mode claims; pinned by
+   `tests/two-servers-one-queue.test.ts`. Still open from that work, for Greg: two OS processes
+   over one `data/` remain unfenced — Sol recommends `npm run dev` on Postgres by default or
+   refusing a second files-mode server.
 2. **Keep artefact modes on demand** (status quo, and the largest product-level saving already
    operating). One eager exception to reconsider: arc auto-fires on owner open
    (`src/web/useArc.ts`); tradeoff of changing it: the L0 column appears only after a press.
