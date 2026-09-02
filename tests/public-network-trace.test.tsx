@@ -73,6 +73,9 @@ import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Article } from "../src/types.js";
 import type { PublicArticle, PublicMetadata, PublicTweets } from "../src/public-types.js";
+/* The vocabulary itself, so the sweeps below cannot fall behind it — src/modes.ts
+   imports nothing, which is why the server can read it too. */
+import { DEFAULT_MODE, MODES, type Mode } from "../src/modes.js";
 
 /** Who `useSession` says is here. Re-posed by each test before it renders. */
 const session: { user: { id: string; email: string } | null } = { user: null };
@@ -444,6 +447,103 @@ async function open(search = "", path = ""): Promise<void> {
 
 const outsidePublic = () => trace.filter((r) => !r.url.startsWith("/api/public/"));
 
+/**
+ * Every gutter chat button on the page, by the name a reader hears.
+ *
+ * Shared by the visitor case and the owner control at the foot of this file, so
+ * the two ask the same question of the same DOM and only the answer differs.
+ */
+const chatButtons = () =>
+  [...host.querySelectorAll("button")].filter(
+    (b) => b.getAttribute("aria-label") === "Chat about this paragraph",
+  );
+
+/**
+ * The dock's mode buttons, in the order they are drawn.
+ *
+ * `role="radio"` inside the modes radiogroup, which is what the bar is
+ * (src/web/Dock.tsx) — not `.dock-btn`, which the panel buttons beside it also
+ * carry.
+ */
+const modeRadios = () => [
+  ...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]'),
+];
+
+/** Which mode the page is in, read the way a reader's URL bar would show it. */
+const modeInUrl = (): string =>
+  new URLSearchParams(location.search).get("mode") ?? DEFAULT_MODE;
+
+/**
+ * The same reading, **after waiting for the address bar to catch up**.
+ *
+ * `useQueryState` moves React state with the click and pushes `?mode=` on a
+ * throttle (src/web/params.ts § modeParam, `history: "push"`), so a single read
+ * of `location.search` straight after a press is a race. It lost about one run
+ * in two: the loop recorded the *previous* mode and reported Hierarchy as a dead
+ * button, which is exactly the finding the sweep exists to make — so a flaky
+ * read here would have been indistinguishable from the bug. Found 2026-09-02.
+ *
+ * Polled against the value before the press rather than slept blindly, so the
+ * only run that pays the whole deadline is one where the mode genuinely did not
+ * change — the first press, which is Plain on a page already in Plain. **The
+ * deadline is not the check**: a button that really is dead fails on
+ * `aria-checked` at the call site before this is reached.
+ */
+async function modeAfterPress(before: string): Promise<string> {
+  for (let i = 0; i < 40 && modeInUrl() === before; i++) {
+    await act(async () => {
+      await new Promise((go) => setTimeout(go, 10));
+    });
+  }
+  return modeInUrl();
+}
+
+/**
+ * **What each mode puts on a visitor's screen, on this fixture** — a total map,
+ * so a mode added next month is a red compile here rather than a row nobody
+ * wrote.
+ *
+ * The sweeps below drive off `MODES`, and a sweep that only counted requests
+ * would pass just as happily against a mode that rendered nothing at all. So
+ * each mode names one string that can only be on screen if its band drew what
+ * it is supposed to draw: the artefact where the payload carries one, and the
+ * boundary sentence where it does not.
+ *
+ * `null` means **this mode has no band and no columns of its own** — there is
+ * nothing for it to say, and the assertion is that no band opened.
+ *
+ * The values are literals rather than calls into `visitor.ts`, deliberately:
+ * deriving them from the module under test would make this agree with itself.
+ */
+const BAND_SAYS: Record<Mode, string | null> = {
+  /* The way out: the article and nothing else, so there is no band to check. */
+  plain: null,
+  /* Not a band but the gist columns, and the tree's own gist is what they
+     draw — so the string is on screen even though nothing opened beside the
+     prose. */
+  hierarchy: PUBLIC_GIST,
+  /* Free for a visitor since slice 1b: the same tree, one nested list. */
+  outline: PUBLIC_GIST,
+  /* Free since 2026-08-31 — the gist, with no summary artefact behind it. */
+  summary: PUBLIC_GIST,
+  /* The payload carries a glossary, so the visitor gets the real thing. */
+  glossary: PUBLIC_TERM,
+  /* And a list of ideas — the fixture is asymmetric on purpose. */
+  ideas: PUBLIC_IDEA,
+  /* No quotes on the payload: the *nobody built one* sentence, not a boundary. */
+  quotes: "Nobody has built a set of quotes for this piece yet",
+  /* The four that spend, each named by its own product noun in COSTS. */
+  search: "Search is for whoever added this article",
+  chat: "Chat is for whoever added this article",
+  remember: "Remember is for whoever added this article",
+  diagram: "Diagram is for whoever added this article",
+  timeline: "Timeline is for whoever added this article",
+  /* Referee reached the fall-through until 2026-09-02 and was announced by its
+     raw mode id; the capital R is the assertion that it no longer does.
+     docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C2. */
+  referee: "Referee is for whoever added this article",
+};
+
 describe("a signed-out browser on a shared document", () => {
   it("asks one public endpoint and nothing else", async () => {
     await open();
@@ -480,12 +580,29 @@ describe("a signed-out browser on a shared document", () => {
    * The mode bands are where the private hooks live — `useJobs` polls the job
    * list for ever from three of them — so opening one is the press most likely
    * to mount something that fetches.
+   *
+   * **Driven from `MODES`, and it was a literal list of seven until
+   * 2026-09-02.** That list had never opened Plain, Hierarchy, Outline, Quotes,
+   * Timeline or Referee — the two newest modes had never been in a visitor
+   * trace at all — while `markedModes` derives from the same vocabulary
+   * precisely so that a mode cannot be missed (src/web/visitor.ts). The guard
+   * did not, which is a test gap that grows on its own every time a mode is
+   * added. docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C4.
    */
   it("stays inside the public namespace through every mode", async () => {
-    for (const mode of ["glossary", "summary", "ideas", "search", "chat", "remember", "diagram"]) {
+    for (const mode of MODES) {
       trace.length = 0;
       await open(`?mode=${mode}`);
-      expect(outsidePublic()).toEqual([]);
+      expect(outsidePublic(), mode).toEqual([]);
+      /* And the mode drew what it is for. Without this the sweep passes against
+         a band that threw, rendered nothing, or silently fell back to the
+         article — all of which ask for nothing either. */
+      const says = BAND_SAYS[mode];
+      if (says === null) {
+        expect(host.querySelector(".mode-close"), `${mode} opens no band`).toBeNull();
+      } else {
+        expect(host.textContent, mode).toContain(says);
+      }
       await remount();
     }
   });
@@ -643,6 +760,33 @@ describe("a signed-out browser on a shared document", () => {
   });
 
   /**
+   * **The gutter's chat button is not drawn at all for a visitor.**
+   *
+   * It used to be, on every paragraph, with the press swallowed by an
+   * `if (!owner) return;` in App — a button whose only possible outcome was
+   * nothing, which is the thing the rest of this feature is careful not to
+   * ship. The capability is the callback itself now: no `onChatAbout`, no
+   * button. src/web/BlockGutter.tsx, and `onRenamed` on Masthead.tsx is the
+   * pattern it follows.
+   *
+   * Asked for by accessible name rather than by class, because the name is what
+   * decides whether a reader can reach it: `.block-chat` is hidden with
+   * `opacity` and never `display: none` (styles.css § the gutter), so a button
+   * nobody can see is still in the tab order and still announced.
+   */
+  it("draws no chat button beside a paragraph", async () => {
+    await open();
+
+    /* The prose is really on screen, so this cannot pass on a page that never
+       mounted the table. */
+    expect(host.textContent).toContain("The first paragraph of the piece.");
+    expect(chatButtons()).toEqual([]);
+    /* And the slot the visitor does keep, which is what makes this an absence
+       rather than a gutter that failed to render. */
+    expect(host.querySelectorAll("a.blk-permalink").length).toBeGreaterThan(0);
+  });
+
+  /**
    * The offer is the one thing keyed on *am I signed in* rather than on *is
    * this mine* — a browser pass read "Make a free account" put to somebody
    * already holding one as a page that had not noticed them. The **reason** is
@@ -796,26 +940,65 @@ describe("a signed-out browser on a shared document", () => {
    * hover/click/timer" as the mutation this file would miss, and the click half
    * was the one still outstanding after the hover test.
    *
-   * The dock buttons carry an accessible name, so the sweep asks for them the
-   * way a reader would rather than by class.
+   * **Driven from the buttons the dock actually draws**, which is the second of
+   * the two sources C4 asks for and a different question from the sweep above.
+   * That one asks *does every mode in the vocabulary behave*; this one asks
+   * *does every button in the bar behave*, and the two disagree in both of the
+   * ways that matter: a mode nobody drew a button for is untestable by press,
+   * and a button for something that is not a mode is a control the vocabulary
+   * has never heard of. So the modes reached by pressing are collected and
+   * compared with `MODES` at the end.
+   *
+   * A press is identified by the mode it lands the page in rather than by the
+   * button's label, because the label is a product word (`MODES_UI` in
+   * src/web/Dock.tsx) and matching it to a mode id here would be a third copy
+   * of that mapping.
    */
   it("stays inside the public namespace when the modes are pressed", async () => {
     await open();
     trace.length = 0;
 
-    for (const label of ["Summary", "Glossary", "Ideas", "Search", "Diagram", "Chat", "Remember"]) {
-      const button = [...host.querySelectorAll("button")].find(
-        (b) => b.getAttribute("aria-label") === label,
-      );
-      expect(button, `the bar must offer ${label}`).toBeDefined();
-      await act(async () => button?.click());
+    const buttons = modeRadios();
+    expect(buttons.length, "the bar must draw its modes").toBeGreaterThan(0);
+
+    const pressed: string[] = [];
+    for (const button of buttons) {
+      const label = button.getAttribute("aria-label");
+      const before = modeInUrl();
+      await act(async () => button.click());
       await settle();
       expect(outsidePublic(), `after pressing ${label}`).toEqual([]);
+
+      /* **The bar's own answer first**, because it is React state and lands with
+         the click. This is the assertion that a button is live; everything below
+         is about *which* mode it opened. */
+      expect(button.getAttribute("aria-checked"), `pressing ${label} must select it`).toBe(
+        "true",
+      );
+
+      /* Where the press landed. A button the vocabulary has never heard of is
+         caught here rather than by the table lookup on the next line, which
+         would fail with `undefined` and say nothing useful. */
+      const mode = await modeAfterPress(before);
+      expect(MODES, `pressing ${label} selected ${mode}`).toContain(mode);
+      pressed.push(mode);
+      const says = BAND_SAYS[mode as Mode];
+      if (says === null) {
+        expect(host.querySelector(".mode-close"), `${mode} opens no band`).toBeNull();
+      } else {
+        expect(host.textContent, `after pressing ${label}`).toContain(says);
+      }
     }
 
-    /* And the presses really did move the band — otherwise this passes by
-       clicking seven dead buttons. */
-    expect(host.textContent).toContain("Remember is for whoever added this article");
+    /* **The bar and the vocabulary are the same set**, in both directions: a
+       mode with no button is missing from the left, and a *dead* button leaves
+       the page where it was, so it shows up as a duplicate here and as the
+       missing mode it failed to open. Sorted, because the bar's order is Greg's
+       and `MODES` is only a vocabulary — they are deliberately not the same
+       order. This is also what proves every press was live, so there is no
+       per-press check that the mode changed: one assertion, at the end, that
+       thirteen presses reached thirteen modes. */
+    expect([...pressed].sort()).toEqual([...MODES].sort());
   });
 
   it("opens the comments drawer without asking for anybody's comments", async () => {
@@ -1127,6 +1310,18 @@ describe("the same address, as the owner", () => {
     expect(trace.filter((r) => r.url === "/api/jobs").length).toBeGreaterThan(0);
     // And it is the owner's queue, not something about this article.
     expect(trace.filter((r) => r.url.startsWith("/api/public/"))).toEqual([]);
+  });
+
+  /**
+   * **And the owner does get the gutter's chat button** — the control for the
+   * absence asserted on the visitor above, which would otherwise pass just as
+   * happily against a gutter that had lost its third slot for everybody.
+   */
+  it("draws the chat button beside every paragraph", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    await open();
+
+    expect(chatButtons().length).toBeGreaterThan(0);
   });
 
   it("mounts the private hooks and the record-open POST", async () => {

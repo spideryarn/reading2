@@ -2298,26 +2298,32 @@ function Reader({
           void setNote(null);
           void setThread(id);
         }}
-        onChatAbout={(blockId) => {
-          /* A conversation anchored to the whole block — the other half of what
-             an anchor can be, and the one that draws no mark in the prose. The
-             paragraph's opening words go into the composer so the reader can see
-             which one they pressed; a six-character id is not something you can
-             check you clicked correctly.
+        /* A conversation anchored to the whole block — the other half of what an
+           anchor can be, and the one that draws no mark in the prose. The
+           paragraph's opening words go into the composer so the reader can see
+           which one they pressed; a six-character id is not something you can
+           check you clicked correctly.
 
-             A visitor's press does nothing: opening a conversation costs a
-             model call, and the sentence saying so is one press away in the
-             Chat band rather than fired at them as a dialog they did not ask
-             for. */
-          if (!owner) return;
-          void setNote(null);
-          void setThread(null);
-          setChatDraft({
-            kind: "draft",
-            anchor: { blockId },
-            opening: blockText.get(blockId) ?? "",
-          });
-        }}
+           **Handed over only to an owner, and that is the whole gate.** It used
+           to go to everybody with a `if (!owner) return;` inside it, so a
+           visitor got a chat button on every paragraph whose press did nothing.
+           The absent callback is what makes the button absent (BlockGutter.tsx),
+           and the sentence about what chat costs is still one press away in the
+           Chat band. The place a visitor meets the boundary is `onSelect` below,
+           which they reach by accident and which stays silent for that reason. */
+        onChatAbout={
+          owner
+            ? (blockId) => {
+                void setNote(null);
+                void setThread(null);
+                setChatDraft({
+                  kind: "draft",
+                  anchor: { blockId },
+                  opening: blockText.get(blockId) ?? "",
+                });
+              }
+            : undefined
+        }
         terms={termSelections}
         openTerm={term?.id ?? null}
         hitMarks={hitMarks}

@@ -36,6 +36,10 @@ first; nothing below re-proposes a thing that file rejected.
 - [260902j-public-read-only-access-audit-input-prompt.md](260902j-public-read-only-access-audit-input-prompt.md)
   and [-input-sol.md](260902j-public-read-only-access-audit-input-sol.md) — what was put to GPT Sol,
   and what came back.
+- [-build-forks-prompt.md](260902j-public-read-only-build-forks-prompt.md) and
+  [-build-forks-sol.md](260902j-public-read-only-build-forks-sol.md) — two things this plan had
+  wrong, found while building it: the metadata route is not callerless, and C3 as written would
+  have taken a world-readable article away from a signed-in reader. Both amended below.
 
 ## Scope line
 
@@ -108,7 +112,7 @@ that way and nobody has made it happen.
 | S5 | **The audit table is write-only.** Migration 0026 made rows outlive a deleted article so a rights complaint could be answered; nothing in `src/` or `scripts/` reads them. | `src/store/pg-visibility.ts:118` | proved | low |
 | S6 | **`OPTIONS` on the dev server answers 204 from Vite's middleware**, before our 405. Not a hole (no `Access-Control-Allow-Origin`), but a dev-only probe reports a method table production does not have. | probe | probed | info |
 | S7 | **`npm run dev` cannot serve the public page.** See the scope line. Any future check of stage 2 against the dev server passes while proving nothing. | `src/vercel.ts:286` | probed | test gap |
-| S8 | **The public metadata route has no caller.** `loadPublicMetadata` is exported and unused; the client reads `available` off the article payload, and the comment saying the route stays for stage 2's link preview is false — previews read `loadHead`. The tests preserve a disagreement between it and the other two reads (metadata accepts a tree with no blocks). GPT Sol's finding; all four audits missed it. | `src/web/public-api.ts:108`, `src/web/App.tsx:632`, `src/store/public-reader.ts:504`, `tests/public-reads.test.ts:246` | proved | deletion |
+| S8 | **The public metadata route has one caller, and it is not the client.** `loadPublicMetadata` is exported and unused; the client reads `available` off the article payload, and the comment saying the route stays for stage 2's link preview is false — previews read `loadHead`. The tests preserve a disagreement between it and the other two reads (metadata accepts a tree with no blocks). **Corrected 2026-09-02, mid-build:** the audit's ledger swept `src/`, `tests/` and `docs/` and not `scripts/`. `scripts/check-public-shell.ts` calls the route deliberately, as the independent second opinion its deployed-head check compares a `<title>` against. So the deletion has to carry that check with it — see Cluster B. GPT Sol's finding; all four audits missed the route, and the first ledger missed its one caller. | `src/web/public-api.ts:108`, `src/web/App.tsx:632`, `src/store/public-reader.ts:504`, `tests/public-reads.test.ts:246`, `scripts/check-public-shell.ts:297` | proved | deletion |
 | S9 | **Vercel caps a function response at 4.5 MB** (proved: its documented limit), and `loadHead` checks the tree and blocks exist but never the payload size (proved), so it would advertise as readable an article the transport then refuses. Whether any stored article crosses the line, and what the deployed failure looks like, is the hypothesis. Not public-specific. GPT Sol's finding. | `src/store/public-reader.ts:551` | proved limit, hypothesis reach | low, unmeasured |
 
 ### Client
@@ -158,6 +162,32 @@ Sol's other calls, adopted without a question because they are engineering rathe
   link to `/login` would bounce a signed-in reader straight back to the shelf (`App.tsx`'s login
   route does that on purpose). So `ArticleAccess` gains a `reauth-required` member with a
   user-initiated sign-in-again action. Sol's plan review, which blocked on this.
+
+  **Amended 2026-09-02, mid-build** ([-build-forks-sol.md](260902j-public-read-only-build-forks-sol.md)).
+  `findArticle` only asks the owned route when there is a session, so the 401 arm also catches a
+  *signed-in reader on somebody else's public article* whose own token has died — the feature's own
+  likeliest first real user. Refusing them a world-readable article because of an unrelated broken
+  session couples two independent things, and a 401 says nothing at all about the public
+  entitlement. So the state is decided by **both** answers:
+
+  | owned | public | what the reader gets |
+  |---|---|---|
+  | 404 | 200 | the shared article, as today |
+  | 401 | 200 | the shared article, **and a notice that the session could not be confirmed**, with *Continue signed out* |
+  | 401 | 404 | `reauth-required`, with *Sign in again* |
+
+  Owner capabilities mount in neither 401 case. This is better for the owner too: the C3 complaint
+  was that the reclassification was **silent**, and the owner of a public article now keeps reading
+  it while being told why it went read-only, rather than being locked out of their own piece.
+
+  **Both actions are `supabase.auth.signOut({ scope: "local" })` followed by a reload of the same
+  address, and the labels differ because the outcome does.** Signed out at `/read/:slug` the app
+  does not show sign-in — it goes straight back through `ArticlePage` (`src/web/App.tsx:301`). So on
+  a shared article the reload returns the reader to the shared article as an ordinary visitor,
+  which is *Continue signed out*; on an unshared one it reaches `LandingPage`, which draws the
+  sign-in controls itself and keeps the address, so signing in lands them back here — which is
+  *Sign in again*. Calling the first one "sign in again" would be a button that does not do what it
+  says. Sol's correction; verified against `LandingPage.tsx` and `auth-return.ts`.
 - **C7 is not a bug.** `onRenamed` *is* a capability — a function the owner has and a visitor does
   not — and a second `visitor` prop beside it would be two facts that can disagree. Leave it.
 - **S5: no reader for the audit table.** SQL when a complaint arrives; a script only if that
@@ -185,9 +215,12 @@ is designed, and reviewed on its own.
   asserts the button is absent for the visitor arm.
 - C2 — `referee: "Referee"` in `COSTS`, and a wording assertion in `tests/visitor-gaps.test.ts` that
   the fall-through can no longer be reached by a live mode (the test currently knows it is).
-- C3 — `findArticle` falls back on 404 only; a final 401 resolves to `{ kind: "reauth-required" }`,
-  rendered with a sign-in-again action the reader presses. Red test: a 401 on the owned route
-  renders that action, and neither the public fallback nor `View only`.
+- C3 — `findArticle` stops treating a 401 as a 404. It asks the public route either way and lets
+  **both** answers decide, per the table under Decisions: 401 + public 200 is the shared article
+  with a session-unconfirmed notice and *Continue signed out*; 401 + public 404 is a new
+  `{ kind: "reauth-required" }` with *Sign in again*. Red tests: a 401 over a public article
+  renders the notice and no owner request; a 401 over a private one renders the sign-in-again
+  action and neither the public fallback nor `View only`.
 - C4 — both sweeps in `tests/public-network-trace.test.tsx` driven from `MODES` and from the rendered
   radio buttons, so the newest mode is pressed without anybody remembering to add it.
 
@@ -205,6 +238,7 @@ correction are reviewed apart from client state work.
   |---|---|---|
   | `src/store/public-reader.ts` | 9 | `loadMetadata`, its interface line, comments |
   | `tests/public-visibility-pg.test.ts` | 8 | HTTP and store cases |
+  | `scripts/check-public-shell.ts` | 8 | **the route's one real caller** — see below |
   | `tests/public-client-fetch.test.ts` | 7 | loader and client-path cases |
   | `tests/public-network-trace.test.tsx` | 4 | fixture, mock, comments |
   | `src/web/public-api.ts` | 4 | `loadPublicMetadata` |
@@ -216,11 +250,35 @@ correction are reviewed apart from client state work.
   | `src/web/App.tsx` | 2 | the false "stays for stage 2" comment |
   | `tests/visitor-gaps.test.ts`, `tests/public-reads.test.ts`, `src/web/reader-capability.ts`, `src/types.ts`, `src/public/routes.ts` | 1 each | `READS.metadata`, the no-blocks disagreement, comments |
 
-  Sixteen files, fifty-three references. `PUBLIC_ROUTE_NAMES` becomes one entry and the closed-room
-  guards stay; `tests/public-dispatch.test.ts` is inventory-driven and shrinks by itself — confirm
-  it still fails for a semantically wrong remaining route. Four places in
+  **Seventeen files, sixty-one references** — corrected 2026-09-02 mid-build, when the seventeenth
+  turned up. The first ledger swept `src/`, `tests/` and `docs/` and not `scripts/`, so it missed
+  the only thing that actually calls the route: `scripts/check-public-shell.ts`, the hand-run curl
+  verification of a deployed `/read/:slug`. It fetches `GET /api/public/metadata/:slug` on purpose,
+  as *"an independent, already-public source of truth for the article's title — assembled by the
+  same server, but not by the same code path that composes the head, so agreement between them
+  means something"*. Deleting the route blind would have downgraded that check to the weak
+  "not the bare default" version it was written to replace — which is
+  [silent-success.md](../reusable/silent-success.md) exactly.
+
+  **So the stage repoints it at `GET /api/public/article/:slug` and reads `meta.title`.** Sol's
+  call, and it checked the independence properly rather than taking my word for it
+  ([-build-forks-sol.md](260902j-public-read-only-build-forks-sol.md)): all three reads share
+  `publicCurrentRevisionQuery`, so none of them can catch a bug in that; beyond it, **metadata and
+  head share the same `PUBLIC_HEADING_TITLE` SQL expression** (`src/store/public-reader.ts:289`,
+  `:337`) while `loadArticle` derives its heading title from the sanitised blocks
+  (`headingTitleOf(blocks)`, `:485`). The article route is therefore *more* independent of the head
+  than the route being deleted, not less. It also makes the check stronger for free: it now proves
+  the article the head advertises can actually be delivered, which is Cluster G's worry
+  (`loadHead` advertises without measuring). The blank-title downgrade path survives, because `??`
+  preserves `""`.
+
+  `PUBLIC_ROUTE_NAMES` becomes one entry and the closed-room guards stay;
+  `tests/public-dispatch.test.ts` is inventory-driven and shrinks by itself — confirm it still
+  fails for a semantically wrong remaining route. Four places in
   [260827ai](260827ai-public-read-only-access.md) that describe the route get a superseded note.
-  Historical review docs stay as they were.
+  Historical review docs stay as they were. The rewrite in `check-public-shell.ts` is wider than
+  eight lines, because `judgeTitleAgainstMetadata` and its self-test cases are named after the
+  route (`:313`, `:666`, `:848`).
 - S2 — `runInRequest` around `servePublicReadPage` in `src/vercel.ts`, there and not in
   `public/page.ts` so the public import graph stays closed. Test: a public page handler that reaches
   for `currentOwnerId()` throws rather than answering as the environment owner. Fix the sentence in
@@ -337,6 +395,25 @@ stage 3 needs, and it is a redesign of the child tables, not of public reading.
 
 - 2026-09-02 — four audits, a live probe, Sol's input, Greg's four decisions, this doc. Nothing
   built.
+- 2026-09-02 — **stage 1a built: C1, C2, C4.** The gutter's chat button is no longer drawn for a
+  visitor — `onChatAbout` is optional through `TableView` into `BlockGutter`, so the callback *is*
+  the capability and there is no boolean beside it to disagree; `App.tsx`'s `if (!owner) return;`
+  is gone with it. `referee: "Referee"` joins `COSTS`, and all thirteen modes are now accounted for,
+  so no live mode reaches the fail-closed fall-through — a sweep over `MODES` asserts that by the
+  one thing the fall-through cannot fake, the bare mode id in the sentence. Both mode sweeps in
+  `tests/public-network-trace.test.tsx` are driven from `MODES` and from the dock's own radios, with
+  a total `BAND_SAYS` table so a mode that renders nothing cannot pass a request-counting check.
+  Six modes had never been pressed in a visitor trace; **pressing them revealed nothing** — every
+  one stays inside `/api/public/` and draws what it should.
+
+  Two things worth keeping. `exactOptionalPropertyTypes` refuses the `onChatAbout?(id): void`
+  shorthand for a prop a caller sets to `undefined` on purpose, so it is written out as
+  `((id: BlockId) => void) | undefined`, with the reason on the prop. And the new dock sweep was
+  **flaky on arrival and looked exactly like the bug it hunts**: nuqs pushes `?mode=` on a throttle,
+  so reading `location.search` straight after a click recorded the previous mode and reported
+  Hierarchy as a dead button, about one run in two. The press is now asserted on `aria-checked`,
+  which is React state and lands with the click, and the URL is polled to a deadline. Three clean
+  runs, and both assertions mutation-tested.
 - 2026-09-02 — Sol's plan review ([-review-sol.md](260902j-public-read-only-access-audit-review-sol.md))
   returned **BLOCKED** on three things, all folded in above: C3 needed a `reauth-required` state
   rather than the existing error page, Cluster D's stage C needed the dispatcher seam named, and the
