@@ -1479,6 +1479,21 @@ So a worktree can now run a nearly-green suite, which it could not this morning.
 
 ### 5. `worktree:sweep` — the part the native cleanup does not do
 
+**Both halves landed on 2026-09-02**, in two pieces by two agents on the same day:
+`scripts/worktree-sweep.ts` reads across every tree and owns the guarded removal, the age floor and
+ghost detection, and it takes its per-tree verdict from `blockers(gather(path))` in
+`scripts/worktree-check.ts` rather than keeping a cheaper `git status` copy of the same judgement.
+What follows describes the read-only half, `npm run worktree:check`
+([`scripts/worktree-check.ts`](../../scripts/worktree-check.ts),
+[worktrees.md § Before you remove one](../project/worktrees.md#before-you-remove-one)): `classify`
+for the tree you are standing in, with the "did it land?" test, the `--ignored` scan, and a
+content-level comparison of `data/` and `output/` against the committed fixture corpus — the
+gitignored blind spot this section names. It has no `--all` and no `remove`, deliberately — both belong to the sweep, and the age
+floor this section asks for would be actively wrong inside a one-tree check, because the person
+running it is standing in the tree. The creation timestamp turned out not to be needed at all:
+`lastActivityAt` in the sweep reads the branch reflog instead.
+
+
 Claude Code's own sweep already refuses to remove a worktree holding changed files, untracked files
 or unpushed commits, and holds a `git worktree lock` while a session runs. What it never asks is
 whether the work **landed**. So the script is small, and its shape is Rebel's:

@@ -35,11 +35,16 @@ What is built:
 | [`scripts/worktree-setup.ts`](../../scripts/worktree-setup.ts) | `npm run worktree:setup`, run **inside** a worktree. Merges `origin/dev`, installs dependencies, materialises the corpus, and says what is still missing. **Refuses in the primary**, because it runs `npm ci` — see below. |
 | [`scripts/worktree-freshen.ts`](../../scripts/worktree-freshen.ts) | The merge, on its own: fetch `origin/dev` and merge it into the worktree's branch, refusing over modified tracked files and stopping on a conflict. Why the merge rather than a different `baseRef` is [below](#why-a-worktree-branches-from-head-and-then-merges-the-remote). |
 | [`scripts/corpus-materialise.ts`](../../scripts/corpus-materialise.ts) | The corpus copy, extracted from `deploy.ts` so the gate and the setup script share one implementation rather than two that drift. |
+| [`scripts/worktree-check.ts`](../../scripts/worktree-check.ts) | `npm run worktree:check`, run **inside** a worktree: **is it safe to delete this directory?** Reads only. Fails closed on every unknown, and the part no other signal covers is the gitignored one — it compares `data/` and `output/` against the committed fixture corpus file by file, so a pipeline run nobody committed shows up as a blocker rather than as silence. See [Before you remove one](#before-you-remove-one). |
 | [`.claude/settings.json`](../../.claude/settings.json) | `worktree.baseRef: "head"` — worktrees branch from the primary's local `HEAD`, not from the remote, and `worktree:setup` then merges `origin/dev` on top. See [below](#why-a-worktree-branches-from-head-and-then-merges-the-remote). |
 
-Still to build: an identity endpoint and `worktree:sweep` —
+Still to build: an identity endpoint —
 [the plan's work list](../plans/260828r-worktrees.md#what-is-left-to-do). The auth allow-list is
-done.
+done, and so is the sweep, which landed on 2026-09-02 in two pieces on the same day:
+`worktree:check` answers for **one** tree and prints, and `worktree:sweep` reads across every tree
+and is the only thing that removes one. The sweep asks `blockers(gather(path))` for its per-tree
+verdict rather than deriving a weaker one from `git status` — one judgement, in one place, so the
+two cannot quietly disagree.
 
 **The "database lease" on that list is half built already, and not where the plan looks for it.**
 `db:migrate` has taken a Postgres advisory lock since before worktrees —
@@ -208,7 +213,17 @@ git fetch origin dev
 git merge origin/dev           # NOT rebase — see below
 npm test && npm run typecheck
 git push origin HEAD:dev       # commits land on dev; no worktree-* ref on origin
+
+# and to see just your own branch's changes — for a review, or a scoped diff:
+git diff origin/dev...HEAD     # THREE dots. Two is a trap; see below.
 ```
+
+**Type the three dots.** `git diff origin/dev..HEAD` — two — is a live comparison against wherever
+`origin/dev` has got to, and it renders commits *other agents landed* as deletions your branch makes.
+That is not a display problem: the workflow hands GPT Sol "the scoped diff" as review evidence, so a
+two-dot diff spends a review on phantom findings, or gets an agent to "restore" the phantom deletions
+and silently revert landed work. Three dots compares against the merge base — where you actually
+forked — which is the question you meant. [Below](#traps) for why this bites here in particular.
 
 Three things follow from `push origin HEAD:dev`, and they are all improvements:
 
@@ -231,6 +246,47 @@ Three things follow from `push origin HEAD:dev`, and they are all improvements:
 moving the trunk to `dev` costs one line in [`scripts/deploy.ts`](../../scripts/deploy.ts) rather than
 a rewrite, and why Vercel's git auto-deploy on `main` must stay **on** — the script polls for the
 production build that the push causes.
+
+## Before you remove one
+
+```bash
+npm run worktree:check          # inside the worktree, before anyone deletes it
+```
+
+One question — **would deleting this directory lose anything?** — and it fails closed on every part
+of the answer it cannot get. Read-only: it never removes the tree, and it never will, because the
+whole reason it can afford to be blunt is that nothing follows automatically from what it prints.
+
+`git status` is not this check, and that is the point:
+
+- **`data/`, `output/` and `.env.local` are gitignored**, so committing and pushing does not save
+  them and a clean `git status` says nothing about them. The corpus halves are compared against
+  [`tests/fixtures/data-root/`](../../tests/fixtures/data-root) **file by file, by content**, so a
+  pipeline run somebody paid for shows up by name. Claude Code's own cleanup has this same blind
+  spot — see [Traps](#traps) — and **so does git**: `git worktree remove` refuses over modified and
+  untracked files but not over ignored ones, so for the case that matters most there is no second
+  guard behind this one.
+- **A copy elsewhere is checked, not assumed.** `.env.local` and `.claude/settings.local.json` are
+  compared byte for byte against the primary's, because they arrive by being copied and an edit made
+  only here exists nowhere else. They were plain "worth an eye" notes until a GPT Sol review pointed
+  out that a worktree whose only uncommitted state was an edited `.env.local` printed SAFE.
+- **Tracked files can be hidden from `git status`** by `assume-unchanged` or `skip-worktree`. That
+  bit lives in this worktree's own index, so it goes with the directory and so does the edit.
+- **"Nothing unpushed" is not "it landed."** The native sweep asks the first; this asks the second,
+  with `git merge-base --is-ancestor HEAD origin/dev` after a **fresh fetch**. A fetch that fails is
+  `unknown`, which blocks — a stale remote-tracking ref answers a question about an hour ago.
+- A half-finished merge, cherry-pick, rebase or bisect lives in the git dir and can sit under a
+  clean-looking tree.
+
+Anything it does not recognise is a blocker rather than a shrug, so a new `.gitignore` entry makes it
+cautious instead of silent. What it does not check is printed when it passes rather than left to be
+discovered: file modes under `data/`, a commit reachable only through this worktree's HEAD reflog
+(which needs a branch-moving operation [AGENTS.md](../../AGENTS.md) bans), and whatever is only in the
+session's context.
+
+It answers for the tree you are standing in and takes no arguments. For every tree at once, and for
+the removal itself, see [`scripts/worktree-sweep.ts`](../../scripts/worktree-sweep.ts) — it calls
+`blockers(gather(path))` here rather than keeping a cheaper copy of the same judgement.
 
 ## The database: one stack, and a lease
 
@@ -586,9 +642,24 @@ moment that flipped. Either spelling lands on `dev` today.
 - **Claude Code's own worktree cleanup cannot see `data/` or `.env.local`.** Both are gitignored, so a
   clean `git status` reports "safe" and then deletes real work. Any removal path must check
   `git status --porcelain=v1 --untracked-files=all` **and** `--ignored`.
+  [`npm run worktree:check`](#before-you-remove-one) is the one that does — nothing stops the native
+  cleanup, so run it first.
 - **Age of the last commit is the wrong clock** for deciding a worktree is abandoned: one created ten
-  minutes ago from a month-old commit passes that test immediately. Record a creation timestamp at
-  setup and age from that.
+  minutes ago from a month-old commit passes that test immediately, and so does one that merged the
+  trunk by fast-forward, which writes no commit at all. Solved without the recorded creation timestamp
+  this trap used to ask for: `lastActivityAt` in
+  [`scripts/worktree-sweep.ts`](../../scripts/worktree-sweep.ts) takes the **branch reflog's** top
+  entry too — that moves when the branch is created and on every merge — and uses whichever is later.
+- **`git diff origin/dev..HEAD` in a worktree shows other agents' landed commits as your deletions.**
+  Two dots is a live comparison against wherever `origin/dev` has reached, so every commit it has that
+  you do not reads as a deletion on your side. Use `git diff origin/dev...HEAD`, three dots, which
+  compares against the merge base.
+
+  **This is not caused by worktrees**, and believing it is will get you two-dotting confidently in the
+  primary. Any checkout has it the moment it fetches. What the shared `.git` removes is your control
+  over *when*: `refs/remotes/` lives in the common directory, so a **peer's** fetch moves `origin/dev`
+  between two of your own commands while you sit still — and since 2026-09-02 every
+  `npm run worktree:setup` fetches, so this now happens whenever anyone starts a worktree.
 - **Every repo scanner walks into `.claude/worktrees/`** unless told not to — `SKIP` in
   `scripts/typecheck.ts`, `watch.ignored` in `vite.config.ts`, then `check.ts`, knip, biome, jscpd.
   Without this the primary typechecks ten peers' half-finished trees.
