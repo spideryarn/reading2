@@ -142,10 +142,11 @@ have cost, are in [`src/feedback-image.ts`](../../src/feedback-image.ts).
 
 ## Trying it locally
 
-**It needs the Postgres store, and that is not the default.** `SPIDERYARN_STORE` is `files` unless
-you say otherwise, and the files branch answers `POST /api/feedback` with a 501 by design — there is
-a Postgres implementation and a filesystem *refusal*, the same asymmetry `AdminStore` and
-`VisibilityStore` have ([`src/store/index.ts`](../../src/store/index.ts)). So:
+**It needs the Postgres store.** `npm run dev` defaults to it since 2026-09-02, so this now works out
+of the box; the files branch still answers `POST /api/feedback` with a 501 by design — there is a
+Postgres implementation and a filesystem *refusal*, the same asymmetry `AdminStore` and
+`VisibilityStore` have ([`src/store/index.ts`](../../src/store/index.ts)). Anyone who has set
+`SPIDERYARN_STORE=files` — in `.env.local` or the shell — still hits it:
 
 ```
 SPIDERYARN_STORE=postgres npm run dev

@@ -174,10 +174,12 @@ export function unopenable(expected: readonly string[], readable: readonly strin
  * news.
  *
  * **This is the trap the whole command falls into if nobody says anything.**
- * `SPIDERYARN_STORE` defaults to `files` ([src/store/index.ts](../src/store/index.ts)),
- * so a dev server started on a machine that has never set it serves article
- * reads off `data/` — and every row this seed writes to Postgres is invisible in
- * the browser while the seed reports three articles loaded. A check that agrees
+ * `SPIDERYARN_STORE` defaults to `files` for this script itself
+ * ([src/store/live.ts](../src/store/live.ts)) — unlike `npm run dev`, which since
+ * 2026-09-02 defaults to `postgres` on its own. A dev server that reads `files`
+ * anyway (set explicitly, or started some other way) serves article reads off
+ * `data/` — and every row this seed writes to Postgres is invisible in the
+ * browser while the seed reports three articles loaded. A check that agrees
  * with the bug, one level up.
  *
  * **The caller exits non-zero on a `false` here**, and that was a change of mind:
@@ -201,11 +203,13 @@ export function storeVerdict(store: string | undefined): { ok: boolean; lines: s
   return {
     ok: false,
     lines: [
-      `SPIDERYARN_STORE is ${store ? `"${store}"` : "unset, which means \"files\""}.`,
-      "  The dev server will serve articles off data/ and these rows will be invisible in the",
-      "  browser — the seed will have worked and the shelf will look empty. Put",
-      "  SPIDERYARN_STORE=postgres in .env.local on the LAPTOP: push-env rebuilds the box's copy",
-      "  from that one, so a line added here is destroyed by the next push.",
+      `SPIDERYARN_STORE is ${store ? `"${store}"` : "unset in this script's own environment"}.`,
+      "  A dev server that reads SPIDERYARN_STORE=files, or is started some other way than a plain",
+      "  `npm run dev` (which itself now defaults to postgres), will serve articles off data/ and",
+      "  these rows will be invisible in the browser — the seed will have worked and the shelf will",
+      "  look empty. Put SPIDERYARN_STORE=postgres in .env.local on the LAPTOP so every process",
+      "  agrees: push-env rebuilds the box's copy from that one, so a line added here is destroyed",
+      "  by the next push.",
     ],
   };
 }
