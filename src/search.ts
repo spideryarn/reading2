@@ -81,6 +81,7 @@ import { hitExtractor } from "./search-hits-stream.js";
 import { stripFence } from "./parse-json.js";
 import {
   ANSWER_OVERFLOWED,
+  ANSWER_OVERFLOWED_FIXED_ASK,
   ENDED_UNFINISHED,
   NOT_CONFIGURED,
   PROVIDER_UNREADABLE,
@@ -361,6 +362,26 @@ export function validateHits(
 }
 
 /**
+ * **Whose question produced the answer being parsed** — and specifically,
+ * whether the reader can edit it.
+ *
+ * `parseHits` is Search's parser *and* Referee mode's: a criterion run, a claims
+ * pull and a Mirror run all end in it. Only Search's reader typed the ask and
+ * can make it smaller. Claims pulls the paper's own claims, Mirror reads the
+ * referee's own comments, and a criterion is a saved row whose error state
+ * offers *Try again* and nothing else — narrowing any of those three means
+ * abandoning the thing and asking something different.
+ *
+ * The default is `"fixed"` deliberately: a caller that forgets to say gets the
+ * message that promises the least, so a new sub-mode cannot inherit advice about
+ * a control it does not have. Only src/search.ts's own `runSearch` passes
+ * `"editable"`, and it gets `ANSWER_OVERFLOWED`; everything else gets
+ * `ANSWER_OVERFLOWED_FIXED_ASK`, which is a different sentence under a different
+ * code, for the reason src/messages.ts § `ANSWER_OVERFLOWED` gives.
+ */
+export type AskKind = "editable" | "fixed";
+
+/**
  * The model's reply, parsed.
  *
  * Lenient about a code fence and about prose either side of the object, because
@@ -374,13 +395,14 @@ export function validateHits(
  *
  * Three outcomes, not two, and the third is the one worth naming: an object
  * that starts and never finishes is a response cut off by `max_tokens`, and it
- * gets its own reader-facing sentence — `ANSWER_OVERFLOWED`, which says the
- * lever the reader actually has (another go, and a narrower ask where there is
- * one to narrow — this parser also serves three Referee sub-modes that have no
- * scoping control at all, which is why that clause is conditional) — rather than
- * sending them hunting for a JSON object that was never going to be there. It
- * is also the most likely real failure here, because the answer's size grows
- * with the number of hits and nothing else.
+ * gets its own reader-facing sentence — which says the lever the reader actually
+ * has, rather than sending them hunting for a JSON object that was never going
+ * to be there. It is also the most likely real failure here, because the
+ * answer's size grows with the number of hits and nothing else.
+ *
+ * **Which sentence depends on `ask`, and that is the whole of what the parameter
+ * is for.** This parser is Search's and Referee mode's alike, and only Search's
+ * caller has an ask the reader can edit; see `AskKind`.
  *
  * **Detected by walking forward from the opening `{` until IT balances to
  * zero, not by `lastIndexOf("}")` and not by checking whether the WHOLE
@@ -415,7 +437,7 @@ export function validateHits(
  * If the text runs out before nesting returns to zero, the object never
  * closed — that is the cut-off case.
  */
-export function parseHits(text: string): unknown {
+export function parseHits(text: string, ask: AskKind = "fixed"): unknown {
   const trimmed = stripFence(text);
   const from = trimmed.indexOf("{");
   if (from === -1) {
@@ -423,7 +445,8 @@ export function parseHits(text: string): unknown {
   }
   const end = objectEnd(trimmed.slice(from));
   if (end === -1) {
-    throw new Error(ANSWER_OVERFLOWED.message, { cause: "cut-off" });
+    const overflowed = ask === "editable" ? ANSWER_OVERFLOWED : ANSWER_OVERFLOWED_FIXED_ASK;
+    throw new Error(overflowed.message, { cause: "cut-off" });
   }
   const to = from + end;
   try {
@@ -878,7 +901,9 @@ export async function* findPassagesStream({
   let hits: SearchHit[];
   let dropped: Dropped;
   try {
-    ({ hits, dropped } = validateHits(parseHits(rawText), blocks));
+    /* `"editable"` — the reader typed this ask and can make it smaller, which is
+       the one caller of `parseHits` that is true of. See `AskKind`. */
+    ({ hits, dropped } = validateHits(parseHits(rawText, "editable"), blocks));
   } catch (err) {
     if (stopped) {
       /* The reader already left, and what's buffered is an incomplete or

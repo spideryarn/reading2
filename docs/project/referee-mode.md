@@ -603,14 +603,13 @@ Where the cards are, and the one thing each says that the label cannot:
 | the preset chips | they replace the whole form: text, kind and both poles |
 | *Run this criterion*, *Pull the paper's claims*, *Try again* | one model call over the whole paper, at full price, nothing resumed |
 | the colour swatch, and *Automatic* | on a for/against criterion it colours the paragraph bar and the rail and **not** the marks; automatic is a hash of the criterion's id, and there are eight |
-| the rank numeral | the model's ordering of its own answers, and **not** a severity — the most misreadable thing in the mode, and the one card that also has a visible line, below |
-| Candidates' *Find reviewers* button | one model call **and** web searches, whose terms come from the paper — the only place in the mode that reaches a search engine |
-| Claims' tick, and *other text in quotes* | marks are off until asked for; and that list is **not** the claims the model missed |
-| Mirror's evidence badge, and its coverage row | what the trial actually tested; and that the coverage row has nowhere to send you, which is the whole of what it is saying |
+| Candidates' *Build the reviewer brief* button | an AI turn starts, it may take several provider requests, and it **may** run a web search — the only place in the mode that reaches a search engine |
+| Claims' tick, and *other text in quotes* | the passages are the model's pick and not a verified linkage; marks are off until asked for; and that list is **not** the claims the model missed |
+| Mirror's coverage row | it has nowhere to send you, which is the whole of what it is saying |
 | Candidates' shortlist heading and tool strip | each turn **replaces** the shortlist; the strip is the check on *"never claim a tool you did not run"* rather than decoration |
 | [`PlaceOnCriterion`](../../src/web/PlaceOnCriterion.tsx)'s criterion picker | switching criterion clears the position you pressed — the highest-value sentence in the mode |
 
-**Three labels changed, because a tooltip is not read by anybody in a hurry**, which is what a
+**Four labels changed, because a tooltip is not read by anybody in a hurry**, which is what a
 referee is and what [`MirrorPanel.tsx`](../../src/web/MirrorPanel.tsx) already says about itself.
 Where the words on the control were themselves misleading, a card is not the fix:
 
@@ -623,21 +622,64 @@ Where the words on the control were themselves misleading, a card is not the fix
 - **Mirror's `title="Go to this passage"` became a real card**, which is the anti-pattern
   [`Tooltip.tsx`](../../src/web/Tooltip.tsx) argues against in its own docstring: a second's wait,
   unstyleable, truncated, and absent altogether on a touch device.
+- **"Find reviewers — one model call and a web search" → "Build the reviewer brief."** Both halves
+  of the old label were false, in opposite directions. The press buys the **fit brief**, and
+  `CANDIDATES_OPENING` in [`src/referee-candidates.ts`](../../src/referee-candidates.ts) ends *"No
+  names yet"*; and the count was wrong twice over, because web search is offered on every round and
+  the model decides whether to use it — so it may run **zero** times — while each tool round is a
+  fresh provider request, up to `MAX_TOOL_ROUNDS + 1` of them
+  ([`src/converse.ts`](../../src/converse.ts)). A disclosure that names a number is a disclosure
+  that can be wrong. The other route on offer was to suppress search and multi-round tools for the
+  opening turn so the promise came true; it was not taken, because it means a per-turn tool policy
+  threaded from a button through the chat route into `converse` — a client deciding what the server
+  may call, in the one place "what did this cost" has to stay answerable from the server alone. The
+  words were what was wrong, so the words changed.
+
+**And two cards were deleted, because a card that repeats what is already on the screen is worse
+than no card** — a cross-family review's finding, 2026-09-02:
+
+- **The rank numeral's.** It was hover-only and could not be otherwise, and once
+  `WHAT_THE_RANK_IS` was a visible line above the list (below) the card was a second copy for the
+  one group that already had the first.
+- **Mirror's evidence badge's.** Its first paragraph restated the badge and its second *was*
+  `EVIDENCE_NOTE`, which the panel prints in full, visibly, under that same list. What pays for the
+  removal is the label change above: *"A kind tested in a trial"* is where the misreading actually
+  lived.
 
 **And one message stopped offering an action Claims does not have.** `ANSWER_OVERFLOWED` in
 [`src/messages.ts`](../../src/messages.ts) said *"Asking for something narrower usually fits"*, flat.
 `parseHits` in [`src/search.ts`](../../src/search.ts) is Search's parser *and* this mode's, so a
 criterion run, a claims pull and a Mirror run all end there — and none of those three has a scoping
-control of any kind. The advice is conditioned rather than deleted: the retry is named first, because
-it is the lever every screen has, and the narrowing keeps its clause where there is something to
-narrow. [copy.md](copy.md) rule 3.
+control of any kind. [copy.md](copy.md) rule 3.
+
+The first fix **conditioned** the clause — *"where you asked a question of your own"* — and a
+cross-family review showed that still misses: **a criterion is precisely the referee's own
+question**, so the condition reads as satisfied on the very screen it was written to exclude, and an
+errored criterion offers *Try again* and nothing else. So the message **split**, which is
+`MARK_CUT_OFF`'s shape rather than a new idea — one diagnosis, a caller who cannot take the advice,
+its own code, because [`tests/messages.test.ts`](../../tests/messages.test.ts) refuses two sentences
+under one code and is right to:
+
+- `ANSWER_OVERFLOWED`, `[ai-overflowed]`, keeps the narrowing advice and goes to **Search**, whose
+  reader typed the ask. It keeps the code because that is the one already quoted in the wild.
+- `ANSWER_OVERFLOWED_FIXED_ASK`, `[ai-overflowed-no-ask]`, is the retry and nothing else, and it is
+  what the mode's three callers get.
+
+`parseHits` takes an `AskKind` to choose, defaulting to the one that promises least, so a sub-mode
+added later cannot inherit advice about a control it does not have.
 
 **What the cards are not.** They are not where a rule lives. Everything load-bearing is still visible
 text on the panel — `LINKAGE_NOT_ADEQUACY`, `WHAT_THE_TICK_DOES`, `DOCUMENT_ORDER_NOTE`, the
 evidence badge on every Mirror row, `COI_NOT_CHECKED` — and the cards sit on top of those rather than
 in place of them. [`tests/referee-tooltips.test.tsx`](../../tests/referee-tooltips.test.tsx) pins
 that each control has a card, that the card is that control's, that a `title` attribute has not crept
-back, and the three changed labels as literals.
+back, and the changed labels as literals.
+
+**And that a card is worth its hover.** Its generic check was `body.length > 80`, which passed long
+repetition — the exact failure the review found in four cards — so it now compares the two paragraphs
+against each other and against the label. It also reaches Claims, Candidates and `PlaceOnCriterion`,
+which it did not import at all until 2026-09-02: deleting any of their cards left the whole suite
+green.
 
 ### The two gaps a card could not close
 
@@ -652,11 +694,12 @@ that cannot be reached is not an explanation.
   used to. **`aria-disabled` does not stop an activation**, so the inertness stays where it already
   was: the form's `onSubmit` returns on an incomplete criterion, which catches the click, the Enter
   and the Space alike.
-- **The rank numeral's card is hover-only and cannot be otherwise.** The numeral is a `<span>` inside
-  the jump button, so it takes no focus, and a `tabIndex` there would put a tab stop inside a button.
-  So the fact itself is now a **visible line above the list** — *the number is the model's ordering of
-  its own answers for that criterion, not a score* — printed once a run has returned something, beside
-  `WHAT_THE_TICK_DOES`. The card stays for the reader who hovers.
+- **The rank numeral's card was hover-only and could not be otherwise.** The numeral is a `<span>`
+  inside the jump button, so it takes no focus, and a `tabIndex` there would put a tab stop inside a
+  button. So the fact itself is now a **visible line above the list** — *the number is the model's
+  ordering of its own answers for that criterion, not a score* — printed once a run has returned
+  something, beside `WHAT_THE_TICK_DOES`. **And the card is gone**, 2026-09-02: once the line
+  existed the card said the same thing again to the one group that could already read it.
 
 [`tests/referee-criteria-explained.test.tsx`](../../tests/referee-criteria-explained.test.tsx) holds
 both, including the part jsdom cannot demonstrate: it dispatches events to `disabled` elements
@@ -669,10 +712,17 @@ card only opens on a control you already suspected. So there is one **"How Refer
 under the sub-mode chips at the top of the panel:
 [`src/web/RefereeCard.tsx`](../../src/web/RefereeCard.tsx).
 
-Four short parts, and the first is the refusal — *you are the referee; nothing here scores the paper
-or drafts your review* — then a line each on the four sub-modes, then what the colours mean. It is
-kept short deliberately: a card longer on screen than the panel underneath it has failed at the thing
-it is for.
+**Two short paragraphs.** The refusal — *you are the referee; nothing here scores the paper or drafts
+your review* — and what the colours mean, which is stated as the *shape* of the rule rather than as
+red and green, since `?refscale=br` paints the same two directions blue and red.
+
+**It had a third part and it was cut**, 2026-09-02. A line each on the four sub-modes sat between
+those two, and it was an artefact of the order the work landed in: stage 2 had already put a
+`ControlTip` on each of the four chips directly above this card, so every one of those lines had a
+second copy that opens on the chip it is about. The card is kept short deliberately — *a card longer
+on screen than the panel underneath it has failed at the thing it is for* — and it was breaking its
+own rule. Measured in Chrome at 1280×900 on an article with no criteria: **409.5px** before,
+**203.1px** after, against a 269.9px empty-state Criteria composer underneath it.
 
 **It is in `.ref-panel`, not `.ref-brief`.** That matters more than it looks. `.ref-brief` holds the
 confidentiality notice and the injection scan, and neither of those may ever be dismissed — a

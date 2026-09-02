@@ -482,16 +482,17 @@ const WHAT_THE_TICK_DOES =
 
 /**
  * **What the big number on a result is**, in one visible sentence above the
- * list — and the reason it is a sentence rather than the card that is already
- * on the numeral.
+ * list — and now the only place that says it.
  *
- * The card is real and says more (`CriterionResult`), but it is **hover-only**:
- * the numeral is a `<span>` inside the jump button, so it takes no focus, and a
- * `tabIndex` on it would put a tab stop inside a button. Stage 2 recorded that
- * as a gap rather than accepting it, and named this as the fix — *if the gap is
- * worth closing it wants a visible line above the list, not a card* — because a
- * card nobody can reach by keyboard is not an answer to a numeral that reads
- * like a severity score.
+ * There was a card on the numeral as well, and it was **hover-only** and could
+ * not be otherwise: the numeral is a `<span>` inside the jump button, so it
+ * takes no focus, and a `tabIndex` on it would put a tab stop inside a button.
+ * Stage 2 recorded that as a gap rather than accepting it and named this as the
+ * fix — *if the gap is worth closing it wants a visible line above the list, not
+ * a card* — because a card nobody can reach by keyboard is not an answer to a
+ * numeral that reads like a severity score. Once this line existed the card was
+ * a second copy for the one group that already had the first, so it went
+ * (`CriterionResult`), 2026-09-02.
  *
  * Printed only when something has actually returned results, so a referee who
  * has written one criterion and not run it is not told about a number they
@@ -839,12 +840,20 @@ const KIND_NOTE: Record<RefereeCriterionKind, string> = {
  * cost or a refusal rather than a restatement — what the answer is drawn from,
  * what the kind will not do, and (for `literature`) which third party it
  * reaches, which is the one thing in this panel that leaves the app.
+ *
+ * **`diverging` does not name red and green, and it did until 2026-09-02.**
+ * Stage 1 made the ramp a property of the *mode* (`?refscale=rg|br`), so
+ * *"painted red to green"* is exactly wrong on `br`, where the two ends are blue
+ * and red. A card added to explain the colour system may not be a stale copy of
+ * it — a cross-family review's finding — so this says the shape of the rule and
+ * leaves the two actual colours to `TheKey`, which draws them from whichever
+ * scale is switched on and so cannot drift from the rows beneath it.
  */
 const KIND_HOW: Record<RefereeCriterionKind, string> = {
   single:
     "The mark is the model's answer to your words, so a passage it did not return is not a passage it cleared. Every kind is one model call over the whole paper.",
   diverging:
-    "You name the two ends, so the direction is measured against your words rather than against anything we think good or bad. The paper is painted red to green by direction, and each mark carries a sign as well.",
+    "You name the two ends, so the direction is measured against your words rather than against anything we think good or bad. Its passages are painted from the two-ended scale rather than in this criterion's own colour, and each mark carries a sign as well; the key beside the list says which end is which.",
   literature:
     "The only kind that leaves this app: it searches the web, so the paper's terms reach a search engine. It brings back what it found, not a verdict on whether the paper cited it.",
 };
@@ -1119,7 +1128,10 @@ function CriterionRow({
               how={
                 identityPaintsProse
                   ? "It colours this criterion's marks in the paper, the bar down the left of each marked paragraph, and its lane in the rail. Colours are otherwise handed out automatically, one per criterion."
-                  : "A for/against criterion's phrase marks are painted red to green by direction, not by this — so this colours only the bar down the left of each marked paragraph and its lane in the rail."
+                  : /* Scale-neutral, deliberately: this said "painted red to
+                       green" until 2026-09-02 and `?refscale=br` makes that
+                       false — `KIND_HOW` carries the argument. */
+                    "A for/against criterion's phrase marks take their colour from the two-ended scale, not from this — so this colours only the bar down the left of each marked paragraph and its lane in the rail."
               }
             />
           }
@@ -1227,10 +1239,17 @@ function CriterionRow({
             keepSide
             className="tip-soon"
             content={
+              /* **The first paragraph said "Runs this criterion over the paper
+                  a second time", which is the `aria-label` in other words.** A
+                  cross-family review named it, 2026-09-02, and `ControlTip`'s
+                  rule is that a card earns its hover: what a press would have
+                  told you goes in the first line only if it is *more* than the
+                  label. Here the label is already a whole sentence, so the first
+                  line carries what the failure did to the run instead. */
               <ControlTip
                 head="Try again"
-                what="Runs this criterion over the paper a second time."
-                how="A fresh model call at full price — nothing is resumed and nothing is cached, and the answer may not be the same one. The words of the criterion are unchanged; edit them by writing a new criterion instead."
+                what="This run failed and nothing of it was kept — there is no half-answer to resume, so this asks the same question from the start."
+                how="A fresh model call over the whole paper at full price, and the answer may not be the same one. The criterion's own words cannot be edited here: to ask something different, write a new criterion."
               />
             }
           >
@@ -1464,37 +1483,19 @@ function CriterionResult({
         {/* **The numeral reads like a severity score and is not one**, which is
             the single most misreadable thing on this row: it is large, it leads,
             and a paper marked *1* beside a passage that counts against invites
-            exactly the reading the whole mode refuses. The card is on the
-            numeral rather than on the row, because the row is a jump and its own
-            card would fire every time the referee reads down the list.
+            exactly the reading the whole mode refuses.
 
-            Nested inside the button rather than wrapped around it, deliberately:
-            wrapping would make the whole quote a tooltip trigger, so a card
-            would cover the neighbouring rows every time the referee ran their
-            eye down the list, and `useFocus` would fire it on every keyboard
-            step through the results.
-
-            **The cost of that choice, said out loud: this card is hover-only.** A
-            `<span>` takes no focus, so the keyboard route `Tooltip` normally
-            gives for free is not there. A `tabIndex` on it would put a tab stop
-            *inside* a button, which is worse. What a screen reader gets instead
-            is the row's own `.sr-only` sentence, which leads with the same
-            ordinal (`valenceLabel`) — the number, not the warning that it is not
-            a score. If that gap is ever worth closing it wants a visible line
-            above the list, not a card. */}
-        <Tooltip
-          placement="left"
-          className="tip-soon"
-          content={
-            <ControlTip
-              head={`Passage ${rank} of this criterion's answers`}
-              what="Where the model put this passage in its own ordering of the passages it returned for this criterion."
-              how="Not a score and not a severity: nothing here ranks the paper, and 1 is only the passage the model thought most worth putting first. Two criteria's numbers have nothing to do with each other."
-            />
-          }
-        >
-          <span className="crit-rank">{rank}</span>
-        </Tooltip>
+            **It carried a card until 2026-09-02, and the card is gone.** It was
+            hover-only and could not be otherwise — a `<span>` takes no focus,
+            and a `tabIndex` here would put a tab stop inside a button — so stage
+            2 recorded the gap and named the fix, *a visible line above the
+            list*, which stage 3 then built: `WHAT_THE_RANK_IS`, printed above
+            the criteria as soon as any run has returned something. That line
+            says the same thing to everybody, keyboard and touch included, so the
+            card was left saying it a second time to the one group that already
+            had it. A cross-family review called it redundant, 2026-09-02, and it
+            is: the explanation stayed and the duplicate went. */}
+        <span className="crit-rank">{rank}</span>
         <span className="crit-quote">{result.quote}</span>
       </button>
 
