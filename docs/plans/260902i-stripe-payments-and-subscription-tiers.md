@@ -68,9 +68,21 @@ All agreed with Greg 2026-09-02 unless marked otherwise.
 - **At the limit: hard block with an upgrade prompt.** The ingest request is refused with a clear
   message ([copy.md](../project/copy.md)) — upgrade link for free users, reset date for paid. No
   overage, no grace band in v1. **Reading is never blocked** (Greg's quote above).
-- **Hosted Stripe Checkout + hosted Customer Portal.** We never render a card form. The entire
-  custom billing UI is two redirect buttons. Portal configured for end-of-period downgrades/
-  cancellation so nobody loses access they've paid for.
+- **Hosted Stripe Checkout + hosted Customer Portal; we never touch card data.** The entire
+  custom billing UI is two redirect buttons. Billing/invoice history, receipts, payment-method
+  changes and cancellation are all the Stripe-hosted Portal's job, not ours; the portal is
+  configured for end-of-period cancellation so nobody loses access they've paid for. Card details
+  never reach our servers — we store only opaque Stripe ids — which keeps us in Stripe's lightest
+  PCI scope (SAQ-A). Greg, 2026-09-02:
+
+  > make sure we have all the machinery we might need (ideally making as much use of Stripe as
+  > possible rather than building ourselves) for people to see their billing history, change
+  > payment methods, cancel subscriptions, etc etc. And we want to minimise our infosec risk,
+  > i.e. we don't want to process/touch/store sensitive info like card details.
+- **Set up via API, not by hand, wherever Stripe allows.** Product, price, Customer Portal
+  configuration and the production webhook endpoint are all creatable through the Stripe API with
+  the secret key, so the agent does those; Greg's manual surface is the account itself, the keys,
+  and the few dashboard-only settings (customer email receipts, live-mode activation).
 - **Webhooks feed one dumb sync function.** Four events (`checkout.session.completed`,
   `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`)
   all trigger the same `syncSubscriptionFromStripe(customerId)`: fetch current state fresh from
@@ -101,16 +113,33 @@ quota (a second clock that can disagree with billing).
 
 ### Stage: Stripe account and environment plumbing (Greg + agent)
 
-- [ ] **Greg**: Stripe account; in **test mode** create product "Spideryarn Reader" with a $10/mo
-  recurring price; note the price id. Repeat in live mode when we ship.
-- [ ] **Greg**: put `STRIPE_SECRET_KEY` (test) in `.env.local`; later, live keys +
-  `STRIPE_WEBHOOK_SECRET` in Vercel env (production).
+- [ ] **Greg (manual, test mode)**: create the Stripe account at dashboard.stripe.com; copy the
+  **test-mode secret key** (`sk_test_…`) into `.env.local` as `STRIPE_SECRET_KEY`. That is the
+  whole blocking manual step — everything below it the agent does with that key.
+- [ ] **Greg (dashboard-only, optional now)**: Settings → Customer emails — turn on email
+  receipts for successful payments and notifications for failed ones.
+- [ ] Agent: install the Stripe CLI on this box (binary from GitHub releases; `--api-key` mode,
+  no interactive login needed).
+- [ ] Agent, via API: create product "Spideryarn Reader" + $10/mo recurring price; create the
+  Customer Portal configuration (invoice history on, payment-method update on, cancellation at
+  period end); record the price id as `STRIPE_PRICE_READER`.
 - [ ] Add `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_READER` to `.env.example`,
   the deployment.md env table, and the `/api/health` env-name report.
 - [ ] `npm install --save-exact stripe`; a `src/billing/stripe.ts` that constructs the client and
   pins the API version.
-- [ ] Verify locally with Stripe CLI: `stripe listen --forward-to localhost:PORT/api/webhooks/stripe`
+- [ ] Verify locally with Stripe CLI:
+  `stripe listen --api-key sk_test_… --forward-to localhost:PORT/api/webhooks/stripe`
   (this mints the local `whsec_…`).
+
+**Go-live (later, when we ship this)**:
+
+- [ ] **Greg (manual)**: activate live mode — business verification and a bank account for
+  payouts; Stripe requires this of the account holder.
+- [ ] **Greg (manual)**: set live `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
+  `STRIPE_PRICE_READER` in Vercel env (production) — no Vercel credential exists on this box.
+- [ ] Agent, via API with the live key: recreate product/price/portal config; create the
+  production webhook endpoint pointing at `https://<prod-host>/api/webhooks/stripe` subscribed to
+  the four events; hand Greg the signing secret for the Vercel env step above.
 
 ### Stage: Schema + sync function + webhook route
 
@@ -148,8 +177,9 @@ quota (a second clock that can disagree with billing).
 - [ ] Success-page return path calls the sync function directly (don't wait for the webhook).
 - [ ] `/profile`: current plan, usage this period ("N of 100"), Upgrade / Manage-billing buttons.
 - [ ] The at-quota refusal in the ingest UI surfaces the upgrade path.
-- [ ] **Greg**: configure the Customer Portal in the Stripe dashboard (cancellation at period end;
-  plan switching when a second tier exists).
+- [ ] Confirm the API-created Portal configuration covers the full self-serve set: invoice/billing
+  history, payment-method update, cancel at period end (plan switching arrives with a second
+  tier).
 - [ ] Browser check via a Sonnet subagent ([browser-control.md](../project/browser-control.md)):
   free account hits the wall at 3, checkout round-trip in test mode with card `4242…`, portal
   round-trip, cancelled sub reverts to free limits without touching existing articles.
