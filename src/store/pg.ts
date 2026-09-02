@@ -1032,9 +1032,9 @@ export function blockHashQuery(
  *
  * It is one function because it was three. `pg-searches.ts`, `pg-referee-criteria.ts`
  * and `pg-referee-claims.ts` each carried a byte-identical private copy, and
- * each copy's own comment called itself "the third copy of this query" and
- * named the two things that must not drift — while nothing compared them and no
- * test named any of them. Written down is not checked; see
+ * `pg-referee-claims.ts`'s comment called itself "the third copy of this query
+ * in src/store/" and named the two things that must not drift — while nothing
+ * compared them and no test named any of them. Written down is not checked; see
  * docs/reusable/written-down-is-not-checked.md.
  *
  * Grepping the genre rather than the three the comments named turned up a fourth

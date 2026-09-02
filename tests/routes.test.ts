@@ -1297,6 +1297,32 @@ describe("PATCH /api/search/:slug/:id", () => {
 });
 
 /**
+ * **The hole the search PATCH beside it wrote down and nobody closed.**
+ *
+ * That route's comment has said since 2026-08-27 that "the same hole is latent
+ * in the other PATCH routes here". It was: renaming a chat thread destructured
+ * `readBody`'s result without first checking it was an object, so a body of
+ * bare `null` — valid JSON — threw a `TypeError` that the generic handler
+ * reported as a **500**. A malformed request answered as a server fault is the
+ * one thing validation must never do, and it is the shape a client bug takes,
+ * so it would have been reported as ours.
+ *
+ * Written down is not checked. Found by GPT Sol reviewing the rework plan,
+ * 2026-09-02; docs/reusable/written-down-is-not-checked.md.
+ *
+ * No thread has to exist for this: the destructure happened before any store
+ * call, so the 500 did not depend on the id being real.
+ */
+describe("PATCH /api/chat/:slug/:threadId with a body that is not an object", () => {
+  for (const body of ["null", "[]", '"3"', "7"]) {
+    it(`answers ${body} with 400, not 500`, async () => {
+      const r = await call("PATCH", "/api/chat/test-routes-colour-fixture/t1", body);
+      expect(r.status).toBe(400);
+    });
+  }
+});
+
+/**
  * The gate, at the seam it actually sits at.
  *
  * tests/auth.test.ts covers `requireUser` on its own. These two cover the thing

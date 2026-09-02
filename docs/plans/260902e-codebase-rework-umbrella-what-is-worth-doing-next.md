@@ -5,9 +5,17 @@ day. This is the umbrella doc that skill asks for: everything found, clustered, 
 **not** a commitment to do all of it. Tier 3's job here is to be named and sized, then left alone.
 
 Produced by two Sonnet sweeps over `src/` (the "codebase already knows" grep and the duplication
-genre sweep), plus `npm run check`, plus a churn × complexity ranking. **Every finding below was
-re-verified by hand** at today's line numbers before it was scored — per the skill's own rule, and
-because both previous waves' first drafts were materially wrong in places.
+genre sweep), plus `npm run check`, plus a churn × complexity ranking.
+
+**Scope, stated because the review caught what it excluded:** `src/` only. That leaves out `scripts/`
+entirely, which holds `gjd-remote.ts` (2,721 lines, 22 commits in 90 days), `deploy.ts` (1,514/14)
+and `deploy-checks.ts` (1,085/13) — operational code that ships and breaks like any other. It also
+leaves out anything only visible at runtime: static sweeps cannot see a race, which is why 0.1 came
+from reading control flow and not from a grep.
+
+The first draft of this doc said every finding had been re-verified by hand. **That was itself an
+unverified claim**, and the GPT Sol review found several that had not been — see below. The table
+that follows the numbers records which survived.
 
 ## What the numbers say
 
@@ -30,9 +38,62 @@ clones, knip and lint non-empty by design.
 names file length as the cause. `routes.ts` earns its place because it is *also* edited 66 times a
 quarter and named in 18 postmortems; `types.ts` at 2,947 lines is declaration-only and fine.
 
-## Tier 0 — a live defect, pending one confirmation
+## What the two GPT Sol reviews changed — 2026-09-02
 
-### 0.1 Six of seven job-backed read hooks lack the race guard the seventh has
+Both reviews are in the tree
+([plan](260902e-codebase-rework-umbrella-review-sol.md),
+[code](260902e-stage1-code-review-sol.md)). The plan review's verdict was *"the prioritisation is
+not right"*, and it was correct on every point I checked. What it changed:
+
+| Sol's finding | Verified? | What changed |
+|---|---|---|
+| 0.1 is reachable and "pending reproduction" is a dodge — wave 2 already proved it and left a test recipe | yes | Promoted to confirmed Tier 0, below |
+| The count is 7 of **8**, not 6 of 7 — `Tweets.tsx` too | yes — `useStepJob.ts:31` names eight surfaces; `Tweets.tsx` has 0 guard refs | Corrected |
+| A missed Tier 0: `PATCH /api/chat/:slug/:threadId` 500s on a `null` body | yes — reproduced, red test first | **Fixed this run**, see 0.2 |
+| 2.3 resurrects `stageCall`, which wave 2 explicitly rejected | yes — wave 2:193 says *"Do not build `stage-call.ts` or `stageCall`"* | `stageCall` deleted from the map |
+| 1.2 is overvalued | yes — `db-migrate.ts:41` already imports both constants | Downgraded to low |
+| "One export, one importer" for `routes.ts` is false | yes — 13 exports, 21 test files import them | Rewritten, prerequisite widened |
+| The sweeps excluded `scripts/`, and missed a better `App.tsx` seam | yes — `App.tsx:3044` names five duplicated effects | Added below |
+
+The code review said **keep the extraction** — behaviour-preserving, right home, no new dependency
+edge, and don't build it on `blockHashQuery` because resolving the revision separately would let a
+publication land between the two statements. But it found the new test **overstated what it proved**:
+see 0.3.
+
+## Tier 0
+
+### 0.2 `PATCH /api/chat/:slug/:threadId` answered a malformed body with 500 — **DONE this run**
+
+`routes.ts` destructured `readBody`'s result without checking it was an object. A body of bare
+`null` is valid JSON, destructuring it throws a `TypeError`, and the generic handler reports that as
+a **500** — a malformed request answered as a server fault, which is the shape a client bug takes
+and would have been reported as ours.
+
+**The codebase already knew, in as many words.** The search `PATCH` twenty lines away carries a
+comment dated 2026-08-27 saying *"the same hole is latent in the other PATCH routes here"*. It was,
+for six days, and the sentence was the only thing enforcing itself.
+
+Rule 1 on the genre — all seven `PATCH` routes — gives the real shape: **four hand-written copies of
+the identical four-line guard** (`patchShelf`, `patchReader`, the search and criterion PATCHes) and
+**one route that needed it and had none**. Not "a hole in the others", as the comment said.
+
+Fixed as one `objectBody()` beside `fields()`, which already owns "read this body as fields" and is
+deliberately different — it coerces a non-object to `{}`, which is right where an absent key means
+something and wrong where the field is required. Red test first: `null` gave 500, and `[]`, `"3"`
+and `7` already gave 400, so the test covers the class and one member of it was failing.
+
+### 0.3 The new SQL assertions pinned the words, not the relationship — **DONE this run**
+
+The code review broke `sourceHashQuery` in one move — no `where` at all, and
+`on articles.current_revision_id = articles.id` — and **all four new assertions passed** over a query
+that would hash blocks from unrelated articles. `toContain('"current_revision_id"')` and
+`/inner join/i` were both satisfied and neither meant anything: silent-success inside the test I had
+just written to prevent it.
+
+Now pinned as the whole `on` clause plus `where "articles"."id" = $1` and `toSQL().params`. The
+broken query above was re-run against them and fails two.
+
+### 0.1 Seven of eight job-backed read surfaces lack the race guard the eighth has
 
 **Verified.** `useGlossary.ts` carries a `generation` / `inFlight` / `trailing` guard so a slower
 opening GET cannot overwrite a job's completion GET. Grepping the whole genre:
@@ -43,18 +104,29 @@ opening GET cannot overwrite a job's completion GET. Grepping the whole genre:
 | `useIdeas.ts`, `useQuotes.ts`, `useTimeline.ts` | 1 each — all the substring "re*generation*" in prose |
 | `useSketch.ts`, `useArc.ts`, `useQuiz.ts` | 0 |
 
-So six hooks have nothing. The three that scored 1 share a byte-identical comment line, which is the
-copy-paste lineage showing through.
+So six of these seven have nothing, and `src/web/Tweets.tsx` — the eighth surface, missed in the
+first draft — has nothing either. The three that scored 1 share a byte-identical comment line, which
+is the copy-paste lineage showing through.
 
 **And the drift direction is the trap the skill names.** The commit that gave `useGlossary` its
 guard is `d5a4e03`, titled *"Three copies of a paragraph, one of which knew something the others did
 not"* — the fix landed in one copy after the others were taken, which is exactly how this class is
 minted.
 
-**Not yet promoted to a confirmed reader-facing bug.** The reachability claim — that opening one of
-these panels while a job for the same article runs elsewhere can silently lose the finished result —
-is the subagent's, and I have not reproduced it. **Reproduce it first**; if it fires, this is Tier 0
-and gets a red test before anything else. If it cannot fire, the durable fix is still 2.1.
+**Confirmed Tier 0, and my "pending reproduction" hedge was wrong.** The plan review showed the race
+is reachable by control flow — the opening effect starts `load()` while `useStepJob` can call the
+same function on job completion, `useJobs` drains completions after commit, and nothing orders the
+two responses — and, decisively, **wave 2 had already reached that conclusion and left a
+deterministic test recipe** (`260828aj-simplification-wave-2.md:225` and `:239`). Treating it as an
+unverified subagent claim ignored work already done and reviewed.
+
+**And the count was wrong.** `useStepJob.ts:31` names **eight** surfaces, not seven — the eighth is
+`src/web/Tweets.tsx`, which has the same unguarded opening load and completion reload and zero guard
+references. So it is **seven of eight exposed**. Rule 1 caught me a second time in the same document,
+and that docstring even carries a note about how a quantity a file asserts and nothing measures is a
+perfectly good reason to believe something false.
+
+**Still not fixed here.** The next stage is wave 2's reproduction, then 2.1 for all eight surfaces.
 **Effort** M · **Value** high · **Risk** medium.
 
 ## Tier 1 — cheap, mechanical, evidence in hand
@@ -97,12 +169,17 @@ sourceHashFor tests/` returns **0**. A drift makes `isStale` wrong for searches,
 with nothing to say why.
 **Effort** S · **Value** high · **Risk** low.
 
-### 1.2 The migrations schema and table are two copies of one fact — **doing this run**
+### 1.2 The migrations schema and table are two copies of one fact — **downgraded to low, not done**
 `src/migration-digest.ts:169-170` exports `MIGRATIONS_SCHEMA` / `MIGRATIONS_TABLE`;
 `drizzle.config.ts:36-37` hardcodes the same two strings independently. `migration-digest.ts`'s own
 comment says the migrator "silently starts a FRESH history" if they disagree. Nothing compares them.
-Low probability of an edit, severe and silent when it happens.
-**Effort** S · **Value** medium-high · **Risk** low.
+**The plan review was right that this is overvalued.** `scripts/db-migrate.ts:41` already imports
+both constants and passes them to `migrate()`, and `npm run db:migrate` runs that script, not Drizzle
+Kit — so the live path is already single-source. The only remaining copy is in a config file that
+Drizzle Kit reads and that deliberately carries no credentials. Worth making `drizzle.config.ts`
+import the constants; not worth a parity test, which would check a mostly inactive relationship and
+could falsely imply the live migration call was protected by it.
+**Effort** S · **Value** low · **Risk** low.
 
 ### 1.3 Two reader-facing strings bypass `messages.ts`, and their own comments say so
 `referee-claims-run.ts:170` (`CLAIMS_UNUSABLE`) and `referee-criteria-run.ts:440`
@@ -132,23 +209,50 @@ as that plan already says.
 **Effort** S per site · **Value** medium · **Risk** low.
 
 ### 2.3 `stageCall` / `articleSystem` — 10 hand-rolled `streamMessage` call sites
-Wave 2 §2.2, never built (`grep "stageCall\|articleSystem" src` is empty), and **grown from 5 sites
-to 10**: `arc.ts`, `glossary.ts`, `ideas.ts`, `quotes.ts`, `labels.ts`, `tweets.ts`, `hierarchy.ts`,
-`quiz.ts`, `timeline.ts`, `sketch.ts`, each with its own `cache_control` blocks. Home already
-chosen: `article-prompt.ts`. Design already worked out in wave 2 — don't re-litigate it, build it.
-**Effort** M–L · **Value** high · **Risk** medium.
+**`stageCall` is struck out. Wave 2 considered it and explicitly rejected it** — *"build
+`articleSystem` in `article-prompt.ts`. Do not build `stage-call.ts` or `stageCall`"*
+(`260828aj-simplification-wave-2.md:193`). My draft cited that plan as settling the design and then
+proposed the thing it refused, which is the run's worst over-engineering failure: counting ten calls
+to one API is not evidence of one abstraction. `labels` caches a batch prefix, `hierarchy` supplies a
+prebuilt system/user pair, and the rest split between `articleText` and `articleWithIds`.
+
+What survives is the narrow `articleSystem` candidate only, and its callers need re-counting before
+anyone builds it.
+**Effort** M · **Value** medium · **Risk** medium.
 
 ## Tier 3 — named and sized, then left alone
 
 ### 3.1 Split `src/routes.ts`
 Top of churn × complexity, 18 postmortem mentions, and causal at least once (a `$`-anchored regex
-that failed silently on any query string). Structurally it is **one export (`handleApi`) and one
-importer (`src/vercel.ts`)**: ~5,200 lines of handlers, then a ~1,350-line dispatcher whose own
-comment already calls itself "five hundred lines". The handlers group cleanly by resource — comments,
-chat, search, quiz, referee, export. Wave 1 named this as its Tier 3.1 and named the prerequisite:
-**a route/method matrix test first**, because the existing route tests do not cover all branches.
-With that test, this becomes a Tier 2 pure extraction. Nothing currently owns it.
-**Effort** L · **Value** high · **Risk** medium (low once the matrix test exists).
+that failed silently on any query string). ~5,200 lines of handlers, then a ~1,350-line dispatcher
+whose own comment already calls itself "five hundred lines". The handlers group by resource —
+comments, chat, search, quiz, referee, export.
+
+**This plan's first draft said "one export (`handleApi`) and one importer (`src/vercel.ts`)". That
+was false**, and it is the clearest verify-before-scoring failure in the run: I greped `src/` for
+importers, found one, and never counted the exports at all. `grep -cE "^export " src/routes.ts` is
+**13** — including test seams (`serveAuthenticatedApi`), parsers (`parseVisibilityRequest`,
+`parseJobRequest`), `heartbeat`, `inTurnOrder`, and four orphan-grace constants — and 21 test files
+import from it.
+
+A route/method matrix is therefore **necessary and nowhere near sufficient**. It protects dispatch
+only. It does not protect the request-wide owner and spend scopes (`routes.ts:5265`), the auth and
+error/logging envelope (`serveAuthenticatedApi`), order-sensitive overlaps such as `/library/search`
+against a valid `search` slug, or the module-level process state the resources own — `answering`,
+`liveMessages`, `liveRuns`, and their sweeps.
+
+So it stays Tier 3, and the prerequisite is bigger than one test: **inventory the exported seams,
+the shared module state, the wrapper boundaries and the overlapping routes first**, then extract one
+resource family per green commit, keeping the outer request envelope where it is. It wants its own
+plan, not a line in this one.
+**Effort** L · **Value** high · **Risk** medium — *not* "low once a matrix exists".
+
+### 2.4 `App.tsx`'s five timeline effects are a second copy of the ideas rules
+`App.tsx:3044` says so itself: the same five rules, and *"every one of them was got wrong once in the
+ideas panel before it was got right"*. A shared hook is named there as the intended follow-up. The
+plan review is right that this is a far better seam into `App.tsx` than "split a 4,734-line file",
+and it should be tried before 3.2.
+**Effort** M · **Value** high · **Risk** medium — needs browser checking.
 
 ### 3.2 `src/web/App.tsx`
 4,734 lines and **93 commits in 90 days — the most-edited file in the tree**. Higher value than 3.1

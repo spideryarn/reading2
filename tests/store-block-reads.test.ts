@@ -33,7 +33,9 @@ import type { Block } from "../src/types.js";
 
 const sql = blockHashQuery(new QueryBuilder() as never, "rev-1").toSQL().sql;
 const renderSql = blocksQuery(new QueryBuilder() as never, "rev-1").toSQL().sql;
-const sourceSql = sourceHashQuery(new QueryBuilder() as never, "art-1").toSQL().sql;
+const sourceQuery = sourceHashQuery(new QueryBuilder() as never, "art-1").toSQL();
+const sourceSql = sourceQuery.sql;
+const sourceParams = sourceQuery.params;
 
 describe("the fingerprint read", () => {
   it("asks for the four columns the hash is made of", () => {
@@ -74,19 +76,29 @@ describe("the fingerprint read", () => {
  *
  * Until 2026-09-02 there was no such function and no such test. There were
  * three byte-identical private copies of this query, in `pg-searches.ts`,
- * `pg-referee-criteria.ts` and `pg-referee-claims.ts`, and each one's own
- * comment called itself "the third copy" and listed the two things that must
- * not drift — the four columns and the `order by`. Nothing compared them and
- * nothing tested any of them, so all three comments were prose asserting a
- * property that nothing held. The copies are now one function beside
- * `blockHashQuery`, and this is the check the comments were asking for.
+ * `pg-referee-criteria.ts` and `pg-referee-claims.ts`. **One of them** —
+ * `pg-referee-claims.ts` — called itself "the third copy of this query in
+ * src/store/" and named the two things that must not drift, the four columns
+ * and the `order by`. Nothing compared them and nothing tested any of them, so
+ * that sentence was prose asserting a property nothing held. The copies are now
+ * one function beside `blockHashQuery`, and this is the check it was asking for.
+ *
+ * ("Each one's own comment said so" is what this docstring claimed until GPT Sol
+ * checked the parent commit and found only one did. A generalisation from a
+ * same-shaped sample, written into three files while citing the doc that names
+ * that exact mistake — docs/reusable/written-down-is-not-checked.md.)
  *
  * The assertions read the generated SQL for the reason the header gives: a
  * column constant can be right while the query says `.select()`, and an
  * in-order fixture proves nothing about `order by`.
  */
 describe("the article-keyed fingerprint read", () => {
-  it("asks for the same four columns as the revision-keyed one", () => {
+  it("asks for each of the four columns the hash is made of", () => {
+    /* Presence, not "exactly four" — an extra selected column would still
+       pass. That is deliberate: dropping any of these fails, and the two
+       negative cases below catch the bare `.select()` that would sweep in
+       `html` and `fts`. GPT Sol's third finding, and it is a fair limit to
+       state rather than to over-claim in the test name. */
     expect(sourceSql).toContain('"block_id"');
     expect(sourceSql).toContain('"text"');
     expect(sourceSql).toContain('"role"');
@@ -111,11 +123,23 @@ describe("the article-keyed fingerprint read", () => {
   });
 
   it("reaches the article's CURRENT revision, not any revision it ever had", () => {
-    /* The join is the only difference from `blockHashQuery`, and it is what
-       makes the hash mean "what this article says now". Matched on the column
-       rather than the whole clause so a formatting change does not fail it. */
-    expect(sourceSql).toContain('"current_revision_id"');
-    expect(sourceSql).toMatch(/inner join/i);
+    /* **The whole predicate, not the words in it.** This assertion first read
+       `toContain('"current_revision_id"')` and `toMatch(/inner join/i)`, and
+       GPT Sol broke it in one go: a query with no `where` at all and
+       `on articles.current_revision_id = articles.id` passed every case, while
+       hashing blocks from unrelated articles. Both tokens were present and
+       neither meant anything. That is silent-success in a test — the check
+       shared an assumption with the code — so it now pins the relationship. */
+    expect(sourceSql).toContain(
+      'inner join "spideryarn"."articles" on "spideryarn"."articles"."current_revision_id" = "spideryarn"."revision_blocks"."revision_id"',
+    );
+  });
+
+  it("is scoped to the article it was asked about", () => {
+    // The missing half of the case above: without a `where`, the join alone
+    // still returns every article's current blocks.
+    expect(sourceSql).toContain('where "spideryarn"."articles"."id" = $1');
+    expect(sourceParams).toEqual(["art-1"]);
   });
 });
 
