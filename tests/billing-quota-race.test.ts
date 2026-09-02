@@ -24,8 +24,20 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { FREE, FREE_LIFETIME_INGESTS, tierSpec } from "../src/billing/tiers.js";
 import type { Entitlement, PaidTier } from "../src/billing/tiers.js";
+import { loadEnvLocal } from "../src/env.js";
 import { releaseReservation, reserveIngest, usageFor } from "../src/store/pg-billing.js";
 import { pgReady } from "./helpers/pg-ready.js";
+
+/**
+ * **Before `pgReady`, or this whole file skips for the wrong reason.**
+ *
+ * `pgReady` reads `DATABASE_URL` from the environment, and vitest does not load
+ * `.env.local` on its own. Without this the suite reported "13 skipped" against
+ * a database that was up and migrated — the shape of silent failure this repo
+ * has a document about, and it survived precisely because a skip looks like a
+ * deliberate one. `REQUIRE_POSTGRES=1` is what finally said so.
+ */
+loadEnvLocal();
 
 const { reachable, pool } = await pgReady({
   suite: "tests/billing-quota-race.test.ts",

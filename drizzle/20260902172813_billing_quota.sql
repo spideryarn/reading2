@@ -1,28 +1,3 @@
--- The billing quota tables.
---
--- **HAND-TRIMMED, and this comment is the reason.** `drizzle-kit generate`
--- produced this file with a dozen extra statements in it — `reserves_name`,
--- `url_key`, five `jobs_*` indexes, `DROP INDEX jobs_active_slug`, a feedback
--- CHECK — all of which belong to migrations that have ALREADY RUN (0052, the
--- two feedback ones, realtime). Applying it as generated would have failed on
--- `already exists`, or worse, dropped a live index.
---
--- Why it did that: the three snapshots that follow `0052_snapshot.json` in the
--- chain — realtime, feedback_body_and_kind, feedback_one_body — do not contain
--- `reserves_name`. They were generated from a `src/db/schema.ts` that predated
--- 0052, so the newest snapshot describes a schema without it, and drizzle
--- diffed this migration against that. `npm run db:chain` is GREEN on this,
--- because it checks `prevId` linkage and not contents — which is precisely the
--- "hole or broken link" case docs/project/database.md § Two worktrees generated
--- at once warns is worse than a fork: *"it does not refuse at all — it diffs
--- against the wrong snapshot and writes SQL that looks complete and re-emits
--- DDL that has already run."*
---
--- What is kept is exactly this change and nothing else. The **snapshot** beside
--- this file is left as generated and is correct: it describes the real current
--- schema, columns from 0052 included, so the chain's contents are truthful from
--- here on and the next `generate` diffs against something real.
-
 CREATE TABLE "spideryarn"."billing_accounts" (
 	"owner_id" uuid PRIMARY KEY NOT NULL,
 	"stripe_customer_id" text,
@@ -55,6 +30,8 @@ CREATE TABLE "spideryarn"."ingest_events" (
           and ("spideryarn"."ingest_events"."released_at" is null or "spideryarn"."ingest_events"."released_at" >= "spideryarn"."ingest_events"."reserved_at"))
 );
 --> statement-breakpoint
+ALTER TABLE "spideryarn"."feedback" DROP CONSTRAINT "feedback_route_kind";--> statement-breakpoint
 ALTER TABLE "spideryarn"."jobs" ADD COLUMN "ingest_event_id" uuid;--> statement-breakpoint
 CREATE INDEX "ingest_events_owner_reserved" ON "spideryarn"."ingest_events" USING btree ("owner_id","reserved_at" DESC NULLS LAST);--> statement-breakpoint
-CREATE UNIQUE INDEX "jobs_ingest_event_unique" ON "spideryarn"."jobs" USING btree ("ingest_event_id") WHERE "spideryarn"."jobs"."ingest_event_id" is not null;
+CREATE UNIQUE INDEX "jobs_ingest_event_unique" ON "spideryarn"."jobs" USING btree ("ingest_event_id") WHERE "spideryarn"."jobs"."ingest_event_id" is not null;--> statement-breakpoint
+ALTER TABLE "spideryarn"."feedback" ADD CONSTRAINT "feedback_route_kind" CHECK ("spideryarn"."feedback"."route_kind" in ('library', 'read', 'add', 'add-upload', 'design', 'profile', 'admin', 'login', 'callback', 'privacy', 'unknown'));
