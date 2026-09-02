@@ -211,6 +211,26 @@ const EXPECTED: readonly Expected[] = [
     breaks:
       "every model call in the app fails — the whole pipeline, so nothing can be ingested or re-extracted, and explain, chat, search, PDF reading and embeddings for anyone already reading",
   },
+  /**
+   * **A second inference bill, and the only one no report can total.**
+   *
+   * `src/live.ts` needs it to mint a browser token for live conversation mode.
+   * That call goes to OpenAI directly — OpenRouter has no realtime API to route
+   * to — so it is a **separate account** from `OPENROUTER_API_KEY`, is **not**
+   * covered by the spend cap set on the OpenRouter account, and `npm run cost`
+   * cannot see a penny of it: the audio is a WebRTC connection from the reader's
+   * browser and no row is ever written (`UNMETERED_SPEND` in
+   * src/spend-declarations.ts).
+   *
+   * **`breaks: null`, so it is reported and not warned about.** Whether a
+   * deployment wants live conversation is a product decision this file cannot
+   * make, and a warning on every deployment that has not enabled it is the noise
+   * this list's own header is about. What an operator gets is the name, beside
+   * the other credentials, which is more than it had: until 2026-09-02 the one
+   * key whose spend nothing can see was also the one key nothing wrote down —
+   * not here, and not in `.env.example`.
+   */
+  { name: "OPENAI_API_KEY", breaks: null },
   { name: "SUPABASE_URL", breaks: "sign-in, and the bucket raw source bytes are written to" },
   {
     name: "SUPABASE_PUBLISHABLE_KEY",

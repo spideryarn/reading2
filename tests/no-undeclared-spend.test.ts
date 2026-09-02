@@ -62,7 +62,7 @@
 import { type ParseResult, parse } from "@babel/parser";
 import type { File } from "@babel/types";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -70,6 +70,7 @@ import {
   DECLARATIONS,
   PAID_ENDPOINT_PATHS,
   PROVIDER_HOSTS,
+  UNMETERED_SPEND,
 } from "../src/spend-declarations.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -746,6 +747,48 @@ describe("no undeclared spend", () => {
     for (const d of DECLARATIONS) {
       expect(d.why.length).toBeGreaterThan(40);
       expect(d.since).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
+  });
+
+  it("names a real file in every UNMETERED_SPEND entry, and says enough about it", () => {
+    /* **The register that `npm run cost` prints, checked against the disk.** A
+       rename would otherwise empty it silently — and an empty "nothing can see
+       this spend" section reads exactly like a repo with no such spend, which is
+       the direction that costs money. */
+    for (const u of UNMETERED_SPEND) {
+      for (const file of u.file.split(",").map((f) => f.trim())) {
+        expect(existsSync(path.join(ROOT, file)), `${file} is in UNMETERED_SPEND`).toBe(true);
+      }
+      expect(u.why.length, u.file).toBeGreaterThan(40);
+      expect(u.what.length, u.file).toBeGreaterThan(40);
+      expect(u.account.length, u.file).toBeGreaterThan(0);
+      expect(u.since).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
+  });
+
+  it("keeps UNMETERED_SPEND and the ALLOWED map agreeing about the same files", () => {
+    /* Two lists about the same files, and they answer different questions: this
+       one asks *may* a file have the capability, `UNMETERED_SPEND` asks whether
+       money leaves without a row. A file in the second that the scan can see and
+       that is in neither ALLOWED nor DECLARATIONS is a contradiction — the scan
+       would already be red — so what this pins is the readable half: a file the
+       report names as a known spender must have a written reason here too.
+
+       `scripts/run-codex.ts` is deliberately not in ALLOWED and must not be
+       added: it names no provider host and no inference credential, so the scan
+       cannot see it at all. That invisibility is precisely why it needed a line
+       in a register a human reads. */
+    const declaredFiles = new Set(DECLARATIONS.map((d) => d.file));
+    for (const u of UNMETERED_SPEND) {
+      for (const file of u.file.split(",").map((f) => f.trim())) {
+        const scan = scans.get(file);
+        const visible = scan !== undefined && scan.findings.length > 0;
+        if (!visible) continue;
+        expect(
+          file in ALLOWED || declaredFiles.has(file),
+          `${file} spends money the scan can see, and UNMETERED_SPEND names it — so it needs a reason in ALLOWED too`,
+        ).toBe(true);
+      }
     }
   });
 

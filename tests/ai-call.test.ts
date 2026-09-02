@@ -276,6 +276,61 @@ describe("one record per call, however the call ends", () => {
     expect(report.pending).toHaveLength(0);
   });
 
+  it("records the web searches the model ran, on both spellings of the field", async () => {
+    /* **Billed per search and invisible to token arithmetic.** The count was
+       hard-coded `null` here until 2026-09-02, under a comment saying no caller
+       on this wire uses a server-side web search — while `explain`, `chat`,
+       `referee-criteria` and `referee-candidates` all pass
+       `tools: [{ type: "openrouter:web_search" }]`, and
+       `whereSearchCountCameFrom` was already being called on those very calls
+       for the *logs*. So the number was computed and thrown away at the ledger
+       boundary, and `web_searches` was null on 100% of rows.
+
+       Both spellings, because OpenRouter has two — see the parser's own header.
+       Asserting only the documented one would go green against a meter that
+       read only the observed one, which is the half that actually arrives. */
+    for (const shape of [
+      { server_tool_use_details: { web_search_requests: 3 } },
+      { server_tool_use: { web_search_requests: 3 } },
+    ]) {
+      const { report } = await drain(() =>
+        streamed(
+          frame({ choices: [], usage: { cost: 0.000068, ...shape } }),
+          "data: [DONE]\n\n",
+        ),
+      );
+      expect(report.calls[0]?.webSearches, JSON.stringify(shape)).toBe(3);
+    }
+  });
+
+  it("does not let a later usage chunk reset a count an earlier one gave", async () => {
+    /* `null` means "this chunk did not say", not "zero searches" — the same
+       distinction every other field on this meter makes with `?? this.x`. A
+       streamed call can carry more than one usage frame, and the last one
+       winning would turn a real count into a permanent null. */
+    const { report } = await drain(() =>
+      streamed(
+        frame({
+          choices: [],
+          usage: { cost: 0.000068, server_tool_use_details: { web_search_requests: 2 } },
+        }),
+        frame({ choices: [], usage: { cost: 0.000068 } }),
+        "data: [DONE]\n\n",
+      ),
+    );
+    expect(report.calls[0]?.webSearches).toBe(2);
+  });
+
+  it("says nothing rather than zero when the response carried no usage at all", async () => {
+    /* A zero here would be a claim that the model searched zero times, which is
+       a different fact from not being told — and the one a cost report would
+       believe. */
+    const { report } = await drain(() =>
+      streamed(frame({ choices: [{ delta: { content: "hi" } }] }), "data: [DONE]\n\n"),
+    );
+    expect(report.calls[0]?.webSearches).toBeNull();
+  });
+
   it("records the model that answered, not only the one we asked for", async () => {
     const { report } = await drain(() =>
       streamed(

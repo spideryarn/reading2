@@ -38,6 +38,13 @@ cp .env.example .env.local     # every variable, commented, with no values in it
 OPENROUTER_API_KEY=sk-or-…
 ```
 
+**`OPENAI_API_KEY` is a second, separate bill**, and it is optional: only live conversation mode
+([live-conversation.md](live-conversation.md)) reads it, because OpenRouter has no realtime API to
+route to. It is a **different account** from `OPENROUTER_API_KEY`, so the spend cap set on the
+OpenRouter account does not cover it, and `npm run cost` cannot see a penny of it — the audio goes
+from the reader's browser straight to OpenAI and no row is written
+([ai-gateway.md](ai-gateway.md)). A cap for it has to be set in the OpenAI dashboard.
+
 [`.env.example`](../../.env.example) is the only env file in git — `.gitignore` has `.env*` and then
 `!.env.example` — so it must never gain a real value. `.env.prod` records what the remote project
 needs and is **loaded by nothing**: `src/env.ts` reads `.env.local` and only `.env.local`.
