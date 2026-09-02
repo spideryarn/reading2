@@ -53,9 +53,10 @@ shared local Postgres; B generated at 12:45 and merges; B's migration is now bel
 Nothing to build. What this plan adds is a runbook for the *fix*, because refusing loudly still
 leaves an agent holding a migration it cannot apply.
 
-## Failure 2 — the snapshot chain. **Open, and it exits 0.**
+## Failure 2 — the snapshot chain. **Was open, and exited 0. Closed 2026-09-02.**
 
-This is the one that matters, and the parent plan never names it.
+This is the one that matters, and the parent plan never names it. What follows is the diagnosis as
+written before anything was built; [Built](#built-2026-09-02) is what closed it.
 
 Every `drizzle-kit generate` writes `drizzle/meta/<prefix>_snapshot.json` carrying `id` and
 `prevId`. It is a linked list. Verified in this repo:
@@ -161,7 +162,21 @@ precedent stage 2 has to follow.
 
 ## Built, 2026-09-02
 
-Stages 1–5. Stage 6 is a plan of its own and stage 7 was never going to be built.
+Stages 1–5, landed on `dev` as `b0b1853`. Stage 7 was never going to be built.
+
+**What is left is stage 6 and only stage 6**: the shared/exclusive lock covering a migration against
+a running test suite, and what to do about `db:reset`. It is a plan of its own and has not been
+written. It is **not a prerequisite for anything above**, and it is a smaller and more contained
+piece of work than this one was —
+[§ 6](#6-locking-moves-to-its-own-plan) already hands it the seam (`globalSetup`, not `pgReady`,
+with the five DB-backed suites that would have been missed named), the deadline and the no-cycle
+rule, why the pooler refusal in `db-migrate.ts` becomes load-bearing, and why `db:reset` cannot
+honestly claim lock protection. Whoever picks it up should read that section before designing
+anything.
+
+Note that the failure it addresses is **rarer and less severe** than the one closed here: a test run
+racing a migration gives you a confusing red suite, where a forked chain gave you a command that
+reported success and did nothing. That is an argument for it being next rather than urgent.
 
 Reviewed twice more after the plan review: by Fable before building
 ([260902c-concurrent-migrations-review-fable.md](260902c-concurrent-migrations-review-fable.md)) and
@@ -176,7 +191,7 @@ It is a precondition now, and it refuses without generating.
 
 | | |
 |---|---|
-| [`scripts/migration-snapshots.ts`](../../scripts/migration-snapshots.ts) | `readSnapshots` and `snapshotProblems` — nine checks over `drizzle/meta/`, plus `HISTORICAL`, the three exceptions with a reason on each. |
+| [`scripts/migration-snapshots.ts`](../../scripts/migration-snapshots.ts) | `readSnapshots` and `snapshotProblems` — ten checks over `drizzle/meta/` (numbered 1–9; check 5 runs in both directions), plus `HISTORICAL`, the three exceptions with a reason on each. |
 | [`tests/migration-snapshots.test.ts`](../../tests/migration-snapshots.test.ts) | The real folder green, the exception list pinned in both directions, and eleven fixtures showing it refuse. |
 | [`scripts/db-generate.ts`](../../scripts/db-generate.ts) | `npm run db:generate` now requires a `.sql`, a snapshot **and** a journal entry, or an explicit `--allow-empty`. |
 | `npm run db:chain` + [`scripts/check.ts`](../../scripts/check.ts) | `drizzle-kit check` is a gate on the branch, not only at the deploy. ~2 s, offline. |
