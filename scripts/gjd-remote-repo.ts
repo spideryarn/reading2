@@ -32,8 +32,17 @@ import { execFileSync } from "node:child_process";
  * local path, an empty string — is `undefined`, which callers must treat as
  * "cannot be compared", never as "no match".
  *
- * This is the same regex `remoteSlug()` in scripts/gjd-remote.ts uses; it lives
- * here so that file can import it rather than keep a second copy.
+ * IT MINTS NOTHING `isRepoValue` WOULD REFUSE, and the check is that function
+ * rather than a second regex saying the same thing. The URL grammar and the
+ * slug grammar are not the same shape — a remote URL will happily carry
+ * `a:b/c`, `own%20er/name`, a two-hundred-character name or `owner/..` — and
+ * this used to pass all of them straight through. Each one is a real failure a
+ * step later: the slug is written into a tmux session's metadata and into the
+ * durable log, whose reader is strict, so a session started with one makes
+ * every later `ls` refuse the whole listing; and `..` as a name is joined onto
+ * the box's code folder to propose a clone path that climbs out of it. GPT Sol
+ * found it in the Stage 1 review — "the identity producer can poison its own
+ * metadata consumer".
  */
 export function remoteSlug(url: string): string | undefined {
   const m =
@@ -42,7 +51,9 @@ export function remoteSlug(url: string): string | undefined {
     );
   const owner = m?.[1];
   const name = m?.[2];
-  return owner && name ? `${owner}/${name}`.toLowerCase() : undefined;
+  if (!owner || !name) return undefined;
+  const slug = `${owner}/${name}`.toLowerCase();
+  return isRepoValue(slug) ? slug : undefined;
 }
 
 /** The value `GJD_REPO` — and the log's `repo` field — carries when the thing it
@@ -319,10 +330,48 @@ function blockedAt(dir: string, e: InventoryEntry): RemoteCheckout {
 
 // ------------------------------------------------------- the box-side scan
 
+/**
+ * The prefix `clone` gives the staging directory it clones into before renaming
+ * it into place — and the entries the inventory therefore refuses to see.
+ *
+ * A staging directory is a REAL checkout of the repo, with the right origin and
+ * a valid HEAD, sitting under the same base folder as the finished one. Left
+ * visible it would answer for the repo while the clone was still running, and
+ * beside a finished checkout it would make every command say `ambiguous` and
+ * refuse to start anything at all. The leading dot is not what hides it:
+ * `find -maxdepth 1` lists dot-directories, so the exclusion is deliberate.
+ *
+ * It lives here rather than in scripts/gjd-remote.ts because both halves — the
+ * name that is minted and the name that is ignored — have to be the same
+ * string, and a second copy of it is a copy that stops matching.
+ */
+export const STAGING_PREFIX = ".gjd-remote-staging-";
+
+/** Is this one of `clone`'s staging directories? By BASENAME, so a base folder
+ *  that itself happens to sit under such a path is not a staging entry. */
+export function isStagingDir(dir: string): boolean {
+  const base = (dir.replace(/\/+$/, "") || "/").split("/").pop() ?? "";
+  return base.startsWith(STAGING_PREFIX);
+}
+
 /** Printed last, and only if everything before it worked — the same sentinel
  *  scripts/gjd-remote-tmux.ts uses, and for the same reason: a script that
  *  fell over prints nothing, which is byte-for-byte an empty `~/code`. */
 export const INVENTORY_SENTINEL = "GJDOK";
+
+/**
+ * Whether the code folder is there at all — `1` or `0`, printed before the
+ * count.
+ *
+ * "No entries" has two meanings and they are not the same box: an empty
+ * `~/code`, and no `~/code` at all. Both used to come back as zero rows, so the
+ * one case where the tool should say "this box has never had a repo put on it"
+ * was indistinguishable from an ordinary empty listing. The script reports it;
+ * the parser turns it into an empty inventory ON PURPOSE, rather than by
+ * finding nothing. Nothing here creates the folder — `clone` does that, when
+ * somebody asks for a clone.
+ */
+export const INVENTORY_BASE = "GJDBASE";
 
 /** How many entries the box found, printed before any of them. A row lost
  *  between `find` and this laptop is a shorter list, and a shorter list is
@@ -373,12 +422,19 @@ function shq(s: string): string {
  * as `$1`, whatever is in it.
  */
 export function inventoryScript(base: string): string {
+  // EVERY REFUSAL IN HERE EXITS 0 and says GJDERR, which the parser turns into
+  // a sentence. That is deliberate: the caller rejects any non-zero ssh status
+  // before it parses anything, so a non-zero status has exactly one meaning —
+  // the box could not be asked — and never competes with an answer the script
+  // gave on purpose.
   return `
     PATH="$PATH:/usr/local/bin:/usr/bin:/bin"
-    command -v git >/dev/null 2>&1 || { echo 'GJDERR git is not on this box'; exit 3; }
-    command -v base64 >/dev/null 2>&1 || { echo 'GJDERR base64 is not on this box'; exit 3; }
+    command -v git >/dev/null 2>&1 || { echo 'GJDERR git is not on this box'; exit 0; }
+    command -v base64 >/dev/null 2>&1 || { echo 'GJDERR base64 is not on this box'; exit 0; }
     b=${shq(base)}
-    if [ ! -d "$b" ]; then
+    if [ -d "$b" ]; then base=1; else base=0; fi
+    printf '${INVENTORY_BASE} %s\\n' "$base"
+    if [ "$base" = 0 ]; then
       printf '${INVENTORY_ROWS} 0\\n'
       echo ${INVENTORY_SENTINEL}
       exit 0
@@ -402,21 +458,35 @@ export function inventoryScript(base: string): string {
       printf "%s|%s|%s|%s|%s|%s|%s\\n" "$(e "$p")" "$(e "$real")" \\
         "$lnk" "$isdir" "$co" "$(e "$origin")" "$head"
       exit 0
-    ' _ {} \\;) || { echo 'GJDERR could not list the code directory on the box'; exit 3; }
+    ' _ {} \\;) || { echo 'GJDERR could not list the code directory on the box'; exit 0; }
     if [ -z "$rows" ]; then n=0; else n=$(printf '%s\\n' "$rows" | wc -l | tr -d " "); fi
     printf '${INVENTORY_ROWS} %s\\n' "$n"
     [ -z "$rows" ] || printf '%s\\n' "$rows"
     echo ${INVENTORY_SENTINEL}`;
 }
 
-/** base64 back to text, or null if it is not valid base64 of valid UTF-8.
- *  Buffer.from ignores what it cannot read rather than throwing, so the only
- *  way to know it read the whole thing is to encode it again and compare. */
+/**
+ * base64 back to text, or null if it is not valid base64 of valid UTF-8.
+ *
+ * TWO WAYS OF NOT THROWING, and both had to be closed by hand. `Buffer.from`
+ * ignores characters it cannot read rather than refusing, so the only way to
+ * know it read the whole string is to encode it again and compare. And
+ * `buf.toString("utf8")` substitutes U+FFFD for every invalid byte, so a
+ * mangled path comes back as a plausible-looking one — a directory name we are
+ * then about to compare, print, and clone next to. `TextDecoder` with `fatal`
+ * is the one that says no.
+ */
+const STRICT_UTF8 = new TextDecoder("utf-8", { fatal: true });
+
 function decode(b64: string): string | null {
   if (!/^[A-Za-z0-9+/]*={0,2}$/.test(b64)) return null;
   const buf = Buffer.from(b64, "base64");
   if (buf.toString("base64").replace(/=+$/, "") !== b64.replace(/=+$/, "")) return null;
-  return buf.toString("utf8");
+  try {
+    return STRICT_UTF8.decode(buf);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -435,7 +505,7 @@ function decode(b64: string): string | null {
  */
 export function parseInventory(
   stdout: string,
-): { ok: true; entries: InventoryEntry[] } | { ok: false; why: string } {
+): { ok: true; entries: InventoryEntry[]; baseExists: boolean } | { ok: false; why: string } {
   const lines = stdout
     .split("\n")
     .map((l) => l.trim())
@@ -456,6 +526,18 @@ export function parseInventory(
   const body = lines.slice(0, end);
 
   const marked = (l: string, m: string) => l === m || l.startsWith(`${m} `);
+  const bases = body.filter((l) => marked(l, INVENTORY_BASE));
+  if (bases.length !== 1 || (bases[0] !== `${INVENTORY_BASE} 0` && bases[0] !== `${INVENTORY_BASE} 1`)) {
+    return {
+      ok: false,
+      why:
+        bases.length === 0
+          ? "the box never said whether the code folder is there, so an empty listing cannot be told from a missing folder"
+          : `the box said '${bases.join("', '")}' about the code folder, and this needs exactly one 0 or 1`,
+    };
+  }
+  const baseExists = bases[0] === `${INVENTORY_BASE} 1`;
+
   const counts = body.filter((l) => marked(l, INVENTORY_ROWS));
   if (counts.length !== 1) {
     return { ok: false, why: `the box gave ${counts.length} row counts, and this needs exactly one` };
@@ -465,7 +547,7 @@ export function parseInventory(
 
   const entries: InventoryEntry[] = [];
   for (const line of body) {
-    if (marked(line, INVENTORY_ROWS)) continue;
+    if (marked(line, INVENTORY_ROWS) || marked(line, INVENTORY_BASE)) continue;
     const e = parseInventoryRow(line);
     if (!e) return { ok: false, why: `the box sent a row this cannot read, so the listing is not trustworthy: '${line}'` };
     entries.push(e);
@@ -477,7 +559,11 @@ export function parseInventory(
       why: `the box found ${declared[1]} entries under ~/code and ${entries.length} reached this laptop, so the list is not the box's`,
     };
   }
-  return { ok: true, entries };
+  // AFTER the count, never before: a staging directory is one of the entries
+  // the box declared, and filtering it out earlier would turn "a row went
+  // missing on the way here" into "a row was hidden on purpose", which is the
+  // one distinction this parser exists to keep.
+  return { ok: true, entries: entries.filter((e) => !isStagingDir(e.dir)), baseExists };
 }
 
 /** One line into an entry, or null if it is not exactly the record asked for.
@@ -511,6 +597,15 @@ function parseInventoryRow(line: string): InventoryEntry | null {
   // empty — a directory the box could not resolve, a checkout with no origin —
   // and empty means unknown, which never matches anything.
   if (dir === "") return null;
+
+  // COMBINATIONS THE SCRIPT CANNOT PRODUCE, refused rather than resolved. The
+  // box only runs `git` in a directory it resolved, and only asks about HEAD
+  // once the toplevel came back — so "a checkout with no realpath" and "a HEAD
+  // outside a checkout" describe a reply that did not come from this script.
+  // Both would be read as an ordinary usable checkout: the first resolves to
+  // `found` and starts a session in a directory nothing could enter.
+  if ((isCheckout || hasHead) && real === "") return null;
+  if (hasHead && !isCheckout) return null;
 
   return {
     dir,

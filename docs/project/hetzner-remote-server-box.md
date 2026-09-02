@@ -165,6 +165,12 @@ Three roots, and they are not the same directory:
 | local target | the `.env.local` that `push-env` reads | the toplevel of the repo you are in |
 | remote target | the session's cwd, `push-env`'s destination, the `.mcp.json` `doctor` checks | the verified checkout on the box |
 
+`gjd-remote doctor` is two halves for the same reason: the box's checks belong to no repo, and the
+repo's checks — its checkout on the box, whether the box can still fetch it, its `.mcp.json`, what
+setting it up would run — need to know which repo. Outside a repo it runs the box half and names the
+ones it skipped. `--box-only` asks for that on purpose. `doctor --dir` takes a box path and verifies
+it the way `push-env` does — same origin, not a symlink, a HEAD that resolves — before checking it.
+
 `push-env` refuses any repo without an entry in the policy map at the top of `cmdPushEnv` — the
 allowlist in [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) is a list of key *names*
 and it is Spideryarn's.
@@ -489,8 +495,13 @@ product decision, not an optimisation, and it is still open.
 
 ## Getting the app running on a new box
 
-`gjd-remote clone` deliberately runs nothing, so a fresh checkout is code and no database. Three
-commands from there, and the middle one is the whole of it:
+`gjd-remote clone` with no argument clones **the repo you are standing in**, found by its git origin;
+give it `owner/name` for one you are not. It clones to a staging name beside the destination and
+renames it into place only once the origin and HEAD check out, so an interrupted clone leaves nothing
+at the destination rather than a half-made checkout.
+
+It deliberately runs nothing, so a fresh checkout is code and no database. Three commands from there,
+and the middle one is the whole of it:
 
 ```
 gjd-remote push-env                 # from the laptop: .env.local, allowlisted keys only

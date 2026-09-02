@@ -63,14 +63,25 @@ import {
   type OriginTransport,
   REPO_UNKNOWN,
   type RemoteCheckout,
+  STAGING_PREFIX,
   describeLocalRepo,
   describeResolution,
   inventoryScript,
+  isRepoValue,
   localRepo,
+  originTransport,
   parseInventory,
   remoteSlug,
   resolveRemoteCheckout,
 } from "./gjd-remote-repo.js";
+import {
+  CONFIG_FILE,
+  ConfigError,
+  type RepoConfig,
+  SETUP_SCRIPT,
+  readRepoConfig,
+} from "./gjd-remote-config.js";
+import { Cancelled, NotInteractive, type PromptIo, confirmOrRefuse, promptIo } from "./gjd-remote-prompt.js";
 import {
   type Here,
   isSessionUuid,
@@ -310,12 +321,33 @@ process.on("exit", closeSshMaster);
  * the trim would quietly make two different files look identical.
  */
 function ssh(remote: string, opts: { check?: boolean; raw?: boolean } = {}): string {
-  const r = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), remote], { encoding: "utf8" });
+  const r = sshRun(remote);
   if (opts.check !== false && r.status !== 0) {
-    die(`ssh failed (${r.status}): ${(r.stderr || "").trim() || "no output"}`);
+    die(`ssh failed (${r.status}): ${r.stderr.trim() || "no output"}`);
   }
-  const out = r.stdout || "";
-  return opts.raw ? out : out.trim();
+  return opts.raw ? r.stdout : r.stdout.trim();
+}
+
+/**
+ * The whole answer — status, stdout and stderr — for the callers that have to
+ * tell "the box said nothing" apart from "the box could not be asked".
+ *
+ * `ssh(…, { check: false })` returns stdout and throws the other two away, and
+ * that is fine for a probe whose output IS the verdict. It is not fine for
+ * anything whose empty answer means "there is nothing there": ssh exits 255 on
+ * a dropped connection having printed nothing to stdout, and an empty stdout
+ * that parses as an empty listing is what a clone gets started from.
+ */
+function sshRun(remote: string): { status: number | null; stdout: string; stderr: string } {
+  const r = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), remote], { encoding: "utf8" });
+  return { status: r.status, stdout: r.stdout || "", stderr: r.stderr || "" };
+}
+
+/** The last thing the box said on stderr, for a message that has to fit on a
+ *  line or two. Never the whole stream: ssh's failures are short and a wall of
+ *  someone else's output buries the sentence that matters. */
+function lastWords(stderr: string): string {
+  return stderr.trim().split("\n").slice(-2).join(" ") || "no output";
 }
 
 /**
@@ -728,12 +760,35 @@ function identify(repoOpt: string | undefined): { ok: true; id: Identity } | { o
   return { ok: true, id: { slug: here.slug, owner: here.owner, name: here.name, localToplevel: here.toplevel } };
 }
 
-/** Everything directly under `~/code`, strictly parsed. One round trip, and it
- *  fails closed: a reply this cannot read is not an empty box. */
-function inventory(base = REMOTE_CODE): InventoryEntry[] {
-  const got = parseInventory(ssh(inventoryScript(base), { check: false }));
+/**
+ * Everything directly under `~/code`, strictly parsed. One round trip, and it
+ * fails closed twice over.
+ *
+ * THE SSH STATUS IS PART OF THE ANSWER. It used to be discarded — `check:
+ * false`, stdout parsed, status thrown away — and the failure that hides in
+ * that is not exotic: any non-zero ssh whose stdout still looks like a finished
+ * listing reads as "nothing is under ~/code", which is the one answer that
+ * makes the tool clone. So a non-zero status is rejected BEFORE the parse, and
+ * the script's own refusals exit 0 and say `GJDERR` precisely so that the
+ * status means one thing only. GPT Sol's Stage 1 review, blocker 1.
+ *
+ * A missing `~/code` is still an empty inventory — but a DELIBERATE one: the
+ * script reports the folder's existence as its own field and the parser refuses
+ * a reply that leaves it out. Nothing here creates the folder.
+ */
+function inventory(base = REMOTE_CODE): { entries: InventoryEntry[]; baseExists: boolean } {
+  const r = sshRun(inventoryScript(base));
+  if (r.status !== 0) {
+    die(
+      `could not list ${base} on the box: ssh exited ${r.status ?? "on a signal"}.\n` +
+        `  ${lastWords(r.stderr)}\n` +
+        `  Nothing is concluded from a listing that failed — least of all that the repo\n` +
+        `  is absent, which is the answer that would start a clone.`,
+    );
+  }
+  const got = parseInventory(r.stdout);
   if (!got.ok) die(`could not read ${base} on the box: ${got.why}`);
-  return got.entries;
+  return { entries: got.entries, baseExists: got.baseExists };
 }
 
 /** The inventory row for one path, by listing its parent. The same script and
@@ -741,31 +796,50 @@ function inventory(base = REMOTE_CODE): InventoryEntry[] {
  *  checkout is this?" would be a second way of getting it wrong. */
 function entryAt(dir: string): InventoryEntry | undefined {
   const want = dir.replace(/\/+$/, "") || "/";
-  return inventory(path.posix.dirname(want)).find((e) => (e.dir.replace(/\/+$/, "") || "/") === want);
+  return inventory(path.posix.dirname(want)).entries.find((e) => (e.dir.replace(/\/+$/, "") || "/") === want);
 }
 
 /** Where the repo lives on the box. `~/code/<name>` is only the PROPOSAL — a
  *  checkout under any other name with the right origin is the answer. */
 function remoteCheckout(id: Identity): RemoteCheckout {
-  return resolveRemoteCheckout(id.slug, `${REMOTE_CODE}/${id.name}`, inventory());
+  return resolveRemoteCheckout(id.slug, `${REMOTE_CODE}/${id.name}`, inventory().entries);
 }
 
 /**
  * A directory named by hand must be the repo we are standing in, or the command
- * is about to do this repo's work in another repo's tree.
+ * is about to do this repo's work in another repo's tree. Gives back the entry
+ * it verified, so the caller need not ask the box a second time.
  *
  * This is the check that makes `GJD_REMOTE_REPO` safe to keep: as a silent
  * default it could steer a hellozenno `push-env` into Spideryarn's checkout,
  * which is exactly what an allowlisted secret must never do.
+ *
+ * IT SETS THE SAME BAR AS AUTOMATIC RESOLUTION, and it did not until GPT Sol's
+ * Stage 1 review: it compared origins and looked at nothing else, so a symlink
+ * or an interrupted clone that `resolveRemoteCheckout` blocks by name was
+ * waved through the moment somebody typed `--dir`. A hand-typed path is not a
+ * reason to check less.
  */
-function assertSameRepo(dir: string, id: Identity, what: string): void {
+function assertSameRepo(dir: string, id: Identity, what: string): InventoryEntry {
   const e = entryAt(dir);
   const found = e?.isCheckout && e.origin !== undefined ? remoteSlug(e.origin) : undefined;
-  if (found === id.slug) return;
+  if (e !== undefined && found === id.slug && !e.isSymlink && e.hasHead) return e;
+  const wrong =
+    e === undefined
+      ? "does not exist"
+      : e.isSymlink
+        ? "is a symlink, and symlinks are never followed here"
+        : !e.isCheckout
+          ? "is not a git checkout"
+          : found === undefined
+            ? "is a checkout with an origin I do not recognise"
+            : found !== id.slug
+              ? found
+              : "is a half-finished checkout — its HEAD does not resolve";
   die(
-    `${what} points at ${dir} on the box, and that is not ${id.slug}.\n` +
+    `${what} points at ${dir} on the box, and that is not a usable checkout of ${id.slug}.\n` +
       `  you are in: ${id.slug}\n` +
-      `  that path:  ${found ?? (e === undefined ? "does not exist" : e.isCheckout ? "a checkout with an origin I do not recognise" : "not a git checkout")}\n` +
+      `  that path:  ${wrong}\n` +
       `  Nothing was touched. Drop ${what}, or point it at this repo's checkout.`,
   );
 }
@@ -787,6 +861,15 @@ type Target = {
   dir: string;
   via: "--dir" | "GJD_REMOTE_REPO" | "origin";
   originTransport: OriginTransport | null;
+  /**
+   * Was `dir` PROVED to be a checkout of `slug` — by the box, this run?
+   *
+   * True on the origin path, where the box was asked which directory carries
+   * that origin, and on any path where `assertSameRepo` ran. False only for an
+   * explicit `--dir` that nothing verified, which is exactly the case where the
+   * laptop's repo says nothing about the tree being opened.
+   */
+  verified: boolean;
 };
 
 function announce(t: Target): Target {
@@ -801,19 +884,23 @@ function announce(t: Target): Target {
 /**
  * The slug to attribute a session to, or the admission that there is not one.
  *
- * ONLY THE `origin` PATH CLAIMS A REPO, and that is the whole of it: that is the
- * arm where the box was asked which directory carries this origin and answered.
- * `--dir` is an arbitrary path — `-d ~` is a home directory — and `t.slug` there
- * is the repo the LAPTOP was standing in, which says nothing about the tree the
- * session will open in. Writing it into `GJD_REPO` would make `ls` claim, in a
- * column people will filter on, that a session in `~` belongs to Spideryarn.
+ * ONLY A VERIFIED TARGET CLAIMS A REPO. That is the origin path, where the box
+ * was asked which directory carries this origin and answered, and any path
+ * where `assertSameRepo` proved it — which now includes the deprecated env var,
+ * because `namedDir` refuses it outright unless it verified. An unverified
+ * `--dir` is an arbitrary path — `-d ~` is a home directory — and `t.slug`
+ * there is the repo the LAPTOP was standing in, which says nothing about the
+ * tree the session will open in. Writing it into `GJD_REPO` would make `ls`
+ * claim, in a column people will filter on, that a session in `~` belongs to
+ * Spideryarn.
  *
- * The deprecated env var is lumped in with `--dir` deliberately, even though its
- * origin is compared when there is one to compare: it is the alias being retired,
- * and a listing that says `(unknown)` for it is one more reason to stop using it.
+ * The env var used to be lumped in with `--dir` and reported as `(unknown)`
+ * even when its origin had been compared. That threw away a fact we had proved
+ * (GPT Sol's Stage 1 review, finding 7); the deprecation line is printed every
+ * time it is used, which is the honest way to nag about it.
  */
 function targetRepo(t: Target): string {
-  return t.via === "origin" && t.slug !== null ? t.slug : REPO_UNKNOWN;
+  return t.verified && t.slug !== null ? t.slug : REPO_UNKNOWN;
 }
 
 /**
@@ -830,10 +917,24 @@ function targetRepo(t: Target): string {
  * `sessionDir()` proved enterable — not `t.dir`, so that the two cannot differ.
  */
 function metaFlags(t: Target, dir: string, kind: SessionKind): string {
+  // VALIDATED HERE, immediately before the session is created, and not only
+  // where the values were made. A session records this metadata for the rest of
+  // its life and `ls` refuses the WHOLE listing over one bad record — so a
+  // value the reader would reject must stop the one session being created,
+  // rather than break the listing for every other session on the box. The slug
+  // producer is strict now too (`remoteSlug`); this is the check that does not
+  // depend on that staying true. GPT Sol's Stage 1 review, blocker 2.
+  const repo = targetRepo(t);
+  if (!isRepoValue(repo)) {
+    die(`refusing to start a session labelled '${repo}', which is not a repo I could read back later.`);
+  }
+  if (!dir.startsWith("/") || /[\r\n\0]/.test(dir)) {
+    die(`refusing to start a session in '${dir}': the directory must be an absolute path with nothing odd in it.`);
+  }
   return [
     `-e ${META.version}=${shq(METADATA_VERSION)}`,
     `-e ${META.kind}=${shq(kind)}`,
-    `-e ${META.repo}=${shq(targetRepo(t))}`,
+    `-e ${META.repo}=${shq(repo)}`,
     `-e ${META.dir}=${shq(dir)}`,
   ].join(" ");
 }
@@ -872,6 +973,8 @@ function resolveTarget(opts: {
     dir: r.dir,
     via: "origin",
     originTransport: r.originTransport,
+    // The box was asked which directory carries this origin, and answered.
+    verified: true,
   });
 }
 
@@ -893,14 +996,30 @@ function namedDir(
 ): Target {
   const what = via === "origin" ? "--dir" : via;
   const dir = remotePath(given, what);
-  if (!id.ok && requireIdentity) die(id.why);
-  if (id.ok && (requireIdentity || via === "GJD_REMOTE_REPO")) assertSameRepo(dir, id.id, what);
+  // THE ENV VAR NEEDS AN IDENTITY EVEN WHEN THE COMMAND DOES NOT. `--dir` is
+  // something a person just typed, so an arbitrary path is a fair thing to
+  // mean; `GJD_REMOTE_REPO` is ambient, and from a directory that is not a repo
+  // it silently redirected `new-*` into whatever it named, with nothing to
+  // compare it against. An ambient redirect that cannot be checked is refused.
+  // GPT Sol's Stage 1 review, finding 5.
+  const mustVerify = requireIdentity || via === "GJD_REMOTE_REPO";
+  if (!id.ok && mustVerify) {
+    die(
+      via === "GJD_REMOTE_REPO"
+        ? `${id.why}\n` +
+            `  GJD_REMOTE_REPO is set, and it may not redirect a command whose repo I\n` +
+            `  cannot identify. Unset GJD_REMOTE_REPO, or pass --dir to say you meant it.`
+        : id.why,
+    );
+  }
+  const entry = id.ok && mustVerify ? assertSameRepo(dir, id.id, what) : undefined;
   return {
     slug: id.ok ? id.id.slug : null,
     localToplevel: id.ok ? id.id.localToplevel : null,
     dir,
     via,
-    originTransport: null,
+    originTransport: entry?.origin === undefined ? null : originTransport(entry.origin),
+    verified: entry !== undefined,
   };
 }
 
@@ -956,7 +1075,13 @@ function cmdResolve(opts: { repo?: string | undefined; dir?: string | undefined 
   }
 
   const proposed = `${REMOTE_CODE}/${id.id.name}`;
-  const r = remoteCheckout(id.id);
+  // The inventory rather than `remoteCheckout`, because this command's job is
+  // to show what the box actually said — including the one fact resolution
+  // throws away: whether the code folder is there at all. "Nothing under
+  // ~/code" and "no ~/code" both resolve to `absent`, and only one of them is a
+  // box that has never had a repo put on it.
+  const inv = inventory();
+  const r = resolveRemoteCheckout(id.id.slug, proposed, inv.entries);
   if (r.kind === "found") {
     console.log(`box:  ${bold(r.dir)}  ${dim(`(found by origin, ${r.originTransport})`)}`);
     if (r.originTransport === "ssh") {
@@ -965,6 +1090,7 @@ function cmdResolve(opts: { repo?: string | undefined; dir?: string | undefined 
     return;
   }
   console.log(`box:  ${dim(`nothing found; ${r.kind}`)}${r.kind === "absent" ? dim(`, proposed ${proposed}`) : ""}`);
+  if (!inv.baseExists) console.log(dim(`      ${REMOTE_CODE} does not exist on the box yet — clone makes it`));
   console.error(red(`✗ ${describeResolution(id.id.slug, r)}`));
   process.exit(1);
 }
@@ -1531,6 +1657,21 @@ function interactiveStdin(): number | "inherit" | null {
 }
 
 /**
+ * The streams a question is asked on, or `null` when there is no terminal to
+ * ask on at all.
+ *
+ * Both rules live in `promptIo()` in scripts/gjd-remote-prompt.ts, which is
+ * where the prompts are and where they can be tested: the input is whatever
+ * `interactiveStdin()` found and is never upgraded, so a redirected stdin
+ * refuses rather than borrowing a keyboard nobody offered; the output moves to
+ * `/dev/tty` when stdout is not a terminal, so a redirected stdout does not
+ * swallow the question. This is the seam between the two, and nothing else.
+ */
+function promptStreams(): PromptIo | null {
+  return promptIo(interactiveStdin());
+}
+
+/**
  * Create a session and start Claude Code in it.
  *
  * The prompt goes through a FILE, never a command line. It is prose: it will
@@ -2070,6 +2211,7 @@ function cloneFacts(base: string, dest: string, tokenFile: string): CloneFacts {
       printf 'branch=%s\\n' "$(git -C "$d" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
       printf 'subject=%s\\n' "$(git -C "$d" log -1 --pretty=%s 2>/dev/null | tr -d '\\n' || true)"
       printf 'dotgit=%s\\n' "$(test -e "$d/.git" && echo yes || echo no)"
+      printf 'head=%s\\n' "$(git -C "$d" rev-parse --verify -q HEAD 2>/dev/null || true)"
     else
       printf 'checkout=no\\n'
     fi
@@ -2124,37 +2266,27 @@ function describeCheckout(facts: CloneFacts): void {
  *               and an ssh remote on this box can never fetch again. So the
  *               remote is read back and compared, not assumed.
  *
+ * With no argument it clones the repo you are standing in.
+ *
+ * The tree is built at a staging name beside the destination and moved into
+ * place only once it has been checked, so an interrupted clone leaves the
+ * destination ABSENT rather than half-made — see the comment at the clone
+ * itself, and `STAGING_PREFIX` in scripts/gjd-remote-repo.ts.
+ *
  * It deliberately runs nothing else — no `npm ci`, no install. A clone that
  * quietly triggers a five-minute install is a clone you cannot use to look at
- * something. The next steps are printed instead.
+ * something. The setup command the repo's config would run is printed instead.
  */
-function cmdClone(
+async function cmdClone(
   given: string | undefined,
   opts: { baseFolder?: string | undefined; name?: string | undefined; repo?: string | undefined },
-): void {
-  // With no argument it is the repo you are standing in — the common case, and
-  // the one that needs no typing. `--repo` says the same thing explicitly; both
-  // together must agree, because a clone of the wrong repo is not a typo you
-  // notice until an agent is editing it.
-  const asked = given ?? opts.repo;
-  if (given !== undefined && opts.repo !== undefined && parseRepo(given).url !== parseRepo(opts.repo).url) {
-    die(`clone was given two different repos: '${given}' and --repo ${opts.repo}.`);
-  }
-  let repo: Repo;
-  if (asked !== undefined) {
-    repo = parseRepo(asked);
-  } else {
-    const id = identify(undefined);
-    if (!id.ok) {
-      die(
-        `gjd-remote clone [repo] [--base-folder DIR] [--name DIR-NAME]\n` +
-          `  With no argument it clones the repo you are standing in, and you are not in one.\n` +
-          `${id.why}`,
-      );
-    }
-    repo = parseRepo(id.id.slug);
-    console.log(dim(`repo: ${id.id.slug}  (${id.id.localToplevel})`));
-  }
+): Promise<void> {
+  const repo = whichRepoToClone(given, opts.repo);
+  // This laptop's checkout of the repo being cloned, when that is where we are
+  // standing — the copy whose `.gjd-remote/config.toml` can be read and shown.
+  // `identify` answers null for it when the cwd is some other repo, or none.
+  const asIdentity = identify(`${repo.owner}/${repo.name}`);
+  const localToplevel = asIdentity.ok ? asIdentity.id.localToplevel : null;
   const base = remotePath(opts.baseFolder ?? REMOTE_CODE, "--base-folder");
   const dirName = (opts.name ?? repo.name).trim();
   if (!GH_REPO.test(dirName)) {
@@ -2198,15 +2330,83 @@ function cmdClone(
 
   // The same repo under another name. This is the reading2/spideryarn2 case,
   // and cloning anyway is how you get two checkouts that drift apart.
+  //
+  // WITHOUT --name it is simply reported and nothing happens: the caller asked
+  // for the repo, the repo is there, and a second copy is not what they meant.
+  // WITH --name they have named a directory that is not the one already
+  // holding it, which is the only way to say "I do want a second copy" — so it
+  // is asked out loud, defaulting to No, rather than either refused or done
+  // quietly. Off a terminal the question cannot be asked, and `confirmOrRefuse`
+  // throws `NotInteractive`, which main() turns into a refusal.
   const twin = before.siblings.find((s) => remoteSlug(s.url) === want);
   if (twin) {
-    console.log(green(`✓ ${want} is already on the box`) + dim(` — under a different name`));
-    console.log(`  ${dim("at")}      ${twin.dir}`);
-    console.log(dim(`  nothing cloned. For a genuinely separate second copy, use --base-folder.`));
-    return;
+    if (opts.name === undefined) {
+      console.log(green(`✓ ${want} is already on the box`) + dim(` — under a different name`));
+      console.log(`  ${dim("at")}      ${twin.dir}`);
+      console.log(dim(`  nothing cloned. For a genuinely separate second copy, use --name or --base-folder.`));
+      return;
+    }
+    const yes = await confirmOrRefuse(
+      `${want} is already on the box at ${twin.dir}. Clone a second copy to ${dest} anyway?`,
+      promptStreams(),
+      {
+        default: false,
+        instead:
+          `Two checkouts of one repo diverge, and every command then refuses both as 'ambiguous'.\n` +
+          `  Answer it from a terminal, or put the second copy outside ${base} with --base-folder DIR.`,
+      },
+    );
+    if (!yes) {
+      console.log(dim(`nothing cloned. ${want} is at ${twin.dir}.`));
+      return;
+    }
   }
 
-  // Before git, not after: git's own error names neither the owner nor the file.
+  requireToken(before, repo, tokenFile);
+  const after = cloneIntoPlace(repo, { base, dest, dirName, tokenFile });
+
+  console.log(green(`✓ cloned ${want}`));
+  describeCheckout(after);
+  // The setup command is PRINTED, never run: a clone that silently starts a
+  // five-minute install is a clone you cannot use to go and look at something.
+  saySetupPlan(localToplevel);
+  console.log(dim("\nnext:"));
+  // Both are run FROM that repo's checkout on this laptop, which is how they
+  // find it on the box — by origin, not by the directory name above.
+  console.log(dim(`  gjd-remote push-env      # from ${want}'s own checkout on this laptop`));
+  console.log(dim(`  gjd-remote new-shell -d ${dest}`));
+}
+
+/**
+ * Which repo `clone` was asked for: the argument, `--repo`, or — with neither —
+ * the repo you are standing in, which is the common case and the one that needs
+ * no typing.
+ *
+ * The argument and `--repo` together must AGREE. A clone of the wrong repo is
+ * not a typo anybody notices until an agent is editing it.
+ */
+function whichRepoToClone(given: string | undefined, repoOpt: string | undefined): Repo {
+  if (given !== undefined && repoOpt !== undefined && parseRepo(given).url !== parseRepo(repoOpt).url) {
+    die(`clone was given two different repos: '${given}' and --repo ${repoOpt}.`);
+  }
+  const asked = given ?? repoOpt;
+  if (asked !== undefined) return parseRepo(asked);
+
+  const id = identify(undefined);
+  if (!id.ok) {
+    die(
+      `gjd-remote clone [repo] [--base-folder DIR] [--name DIR-NAME]\n` +
+        `  With no argument it clones the repo you are standing in, and you are not in one.\n` +
+        `${id.why}`,
+    );
+  }
+  console.log(dim(`repo: ${id.id.slug}  (${id.id.localToplevel})`));
+  return parseRepo(id.id.slug);
+}
+
+/** The box's per-owner token, checked BEFORE git rather than after: git's own
+ *  error for a missing one names neither the owner nor the file. */
+function requireToken(before: CloneFacts, repo: Repo, tokenFile: string): void {
   if (before.get("token") !== "yes") {
     die(
       `no GitHub token on the box for owner '${repo.owner}'.\n` +
@@ -2224,47 +2424,186 @@ function cmdClone(
   if (mode && mode !== `600 ${USER}`) {
     console.log(red(`  warning: ${tokenFile} is '${mode}' and should be '600 ${USER}'`));
   }
+}
+
+/**
+ * Clone, verify, and only then take the destination's name. Gives back the
+ * facts about what is now at `dest`.
+ *
+ * THE CLONE LANDS BESIDE THE DESTINATION, NOT AT IT. `git clone` creates the
+ * directory as its first act and fills it over the following minutes, so a
+ * laptop that sleeps, a network that drops or a Ctrl-C leaves a directory with
+ * the right name, the right origin and no usable tree — which every later
+ * command would have to tell apart from a finished checkout. Instead the tree
+ * is built at a name nothing looks at, verified, and then moved into place with
+ * one rename. The destination therefore either does not exist or is a checkout
+ * that was checked.
+ *
+ * The staging name is ignored by the inventory (STAGING_PREFIX in
+ * scripts/gjd-remote-repo.ts) — without that, an interrupted clone of a repo
+ * that IS on the box makes every command say `ambiguous` and start nothing.
+ */
+function cloneIntoPlace(
+  repo: Repo,
+  where: { base: string; dest: string; dirName: string; tokenFile: string },
+): CloneFacts {
+  const { base, dest, dirName, tokenFile } = where;
+  const want = `${repo.owner}/${repo.name}`.toLowerCase();
+  const staging = `${base}/${STAGING_PREFIX}${dirName}-${randomUUID().slice(0, 8)}`;
 
   // stdio inherit: a clone is the one thing here slow enough that its progress
   // is worth watching. GIT_TERMINAL_PROMPT=0 so a credential miss fails instead
   // of hanging on a username nobody is there to type.
-  const cmd = `mkdir -p ${shq(base)} && GIT_TERMINAL_PROMPT=0 git clone ${shq(repo.url)} ${shq(dest)}`;
+  const cmd = `mkdir -p ${shq(base)} && GIT_TERMINAL_PROMPT=0 git clone ${shq(repo.url)} ${shq(staging)}`;
   const r = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), cmd], { stdio: "inherit" });
   if (r.status !== 0) {
+    const swept = sweepStaging(staging);
     die(
       `git clone failed on the box (exit ${r.status}) — git's own output is above.\n` +
         `  "Repository not found" on a repo that exists usually means the token has no\n` +
-        `  grant for it, or is pending org approval; both read as a typo.`,
+        `  grant for it, or is pending org approval; both read as a typo.\n` +
+        `  ${dest} does not exist; nothing was moved into place.\n` +
+        (swept === "removed" || swept === "gone"
+          ? `  Nothing was left behind.`
+          : `  What it did create is still at ${staging} — look at it, then remove it.`),
     );
   }
 
-  // Verify rather than trust. A clone that exited 0 into the wrong shape, or
-  // with a rewritten remote, is exactly the silent success worth catching.
+  // Verify rather than trust, and verify the STAGING tree, before anything with
+  // the destination's name exists. A clone that exited 0 into the wrong shape,
+  // or with a rewritten remote, is exactly the silent success worth catching.
+  const made = cloneFacts(base, staging, tokenFile);
+  const wrong = wrongClone(made, repo, want);
+  if (wrong) {
+    die(
+      `${wrong}\n` +
+        `  ${dest} does not exist; nothing was moved into place.\n` +
+        `  The tree it made is at ${staging} — look at it, then remove it.`,
+    );
+  }
+
+  // One rename, and it refuses rather than clobbers. `mv -T` because plain `mv`
+  // moves a directory INSIDE an existing one of that name, which would bury a
+  // whole checkout one level down and still exit 0.
+  const moved = ssh(moveIntoPlaceScript(staging, dest), { check: false });
+  if (!/^GJDMOVE ok$/m.test(moved)) {
+    die(
+      `the clone finished, but moving it into place did not.\n` +
+        `  the box said: ${moved.trim().split("\n").slice(-2).join(" ") || "(nothing)"}\n` +
+        (/GJDMOVE taken/.test(moved)
+          ? `  Something appeared at ${dest} while this was cloning.\n`
+          : "") +
+        `  The verified checkout is at ${staging} — move it yourself, or remove it.`,
+    );
+  }
+
   const after = cloneFacts(base, dest, tokenFile);
   if (after.get("checkout") !== "yes" || after.get("dotgit") !== "yes") {
-    die(`git clone said it succeeded, but ${dest} is not a checkout on the box.`);
+    die(`the box reported the move as done, but ${dest} is not a checkout.`);
   }
-  const got = after.get("remote");
-  if (got !== repo.url) {
-    die(
+  return after;
+}
+
+/**
+ * Everything that would make a finished clone the wrong thing to move into
+ * place, or null. Each of these has to be asked while the tree is still at its
+ * staging name, because after the rename it is indistinguishable from a
+ * checkout somebody made by hand.
+ */
+function wrongClone(facts: CloneFacts, repo: Repo, want: string): string | null {
+  if (facts.get("checkout") !== "yes" || facts.get("dotgit") !== "yes") {
+    return `git clone said it succeeded, but what it made is not a checkout.`;
+  }
+  // The HEAD, not the branch: a clone interrupted between "objects received"
+  // and "checkout" has a branch name and no commit, and reads as finished.
+  if (!facts.get("head")) {
+    return `git clone said it succeeded, but HEAD does not resolve in what it made.`;
+  }
+  const got = facts.get("remote");
+  if (remoteSlug(got) !== want || got !== repo.url) {
+    return (
       `cloned, but git recorded a different remote than the one asked for.\n` +
-        `  asked for: ${repo.url}\n` +
-        `  recorded:  ${got || "(none)"}\n` +
-        `  A rewrite (url.insteadOf) would do this, and an ssh remote can never fetch\n` +
-        `  from this box — it has no GitHub ssh key.`,
+      `  asked for: ${repo.url}\n` +
+      `  recorded:  ${got || "(none)"}\n` +
+      `  A rewrite (url.insteadOf) would do this, and an ssh remote can never fetch\n` +
+      `  from this box — it has no GitHub ssh key.`
     );
   }
+  return null;
+}
 
-  console.log(green(`✓ cloned ${want}`));
-  describeCheckout(after);
-  // Nothing else is run for you — no `npm ci`, no install. Said out loud,
-  // because a clone that silently starts a five-minute install is a clone you
-  // cannot use to go and look at something.
-  console.log(dim("\nnext:"));
-  // Both are run FROM that repo's checkout on this laptop, which is how they
-  // find it on the box — by origin, not by the directory name above.
-  console.log(dim(`  gjd-remote push-env      # from ${want}'s own checkout on this laptop`));
-  console.log(dim(`  gjd-remote new-shell -d ${dest}   then npm ci`));
+/**
+ * Remove a staging directory, but ONLY if the clone died before it made a
+ * `.git`. Anything past that point is a tree somebody may want to look at, and
+ * `rm -rf` on the failure path is how a diagnosis gets thrown away.
+ *
+ * The `case` guard is not decoration: this is the one `rm -rf` in the tool, its
+ * argument is built here from a validated name, and a path that does not carry
+ * the staging prefix means something upstream changed and this should refuse.
+ */
+function sweepStaging(staging: string): "removed" | "kept" | "gone" | "refused" {
+  const out = ssh(
+    `
+    d=${shq(staging)}
+    case "$d" in
+      */${STAGING_PREFIX}*) ;;
+      *) echo 'GJDSWEEP refused'; exit 0;;
+    esac
+    if [ ! -e "$d" ]; then echo 'GJDSWEEP gone'; exit 0; fi
+    if [ -e "$d/.git" ]; then echo 'GJDSWEEP kept'; exit 0; fi
+    rm -rf -- "$d" && echo 'GJDSWEEP removed'`,
+    { check: false },
+  );
+  for (const word of ["removed", "kept", "gone", "refused"] as const) {
+    if (new RegExp(`^GJDSWEEP ${word}$`, "m").test(out)) return word;
+  }
+  return "kept";
+}
+
+/** The rename, guarded twice: the source must be a staging directory, and the
+ *  destination must not exist. `-T` treats the destination as a name rather
+ *  than a directory to move into. */
+function moveIntoPlaceScript(staging: string, dest: string): string {
+  return `
+    s=${shq(staging)}
+    d=${shq(dest)}
+    case "$s" in
+      */${STAGING_PREFIX}*) ;;
+      *) echo 'GJDMOVE refused — not a staging directory'; exit 0;;
+    esac
+    if [ -e "$d" ]; then echo 'GJDMOVE taken'; exit 0; fi
+    mv -T -- "$s" "$d" && echo 'GJDMOVE ok'`;
+}
+
+/**
+ * What setting this repo up on the box would run — printed, never run.
+ *
+ * It reads the config from the LAPTOP's checkout, which is the copy the person
+ * reading this can see and edit. Sol's review asks for it to be re-read from
+ * the cloned commit before anything is executed, and that belongs with the
+ * command that executes it; here nothing runs, so the honest thing to show is
+ * what is in front of you.
+ */
+function saySetupPlan(localToplevel: string | null): void {
+  console.log(dim("\nsetup:"));
+  if (localToplevel === null) {
+    console.log(dim(`  not in a local checkout of this repo; setup command unknown until 'gjd-remote setup'`));
+    return;
+  }
+  let cfg: RepoConfig;
+  try {
+    cfg = readRepoConfig(localToplevel);
+  } catch (err) {
+    console.log(yellow(`  ${err instanceof ConfigError ? err.message : String(err)}`));
+    return;
+  }
+  console.log(
+    cfg.setup.source === "none"
+      ? dim(`  no setup command known — no ${CONFIG_FILE}, no ${SETUP_SCRIPT}, no npm 'setup' script`)
+      : dim(`  ${cfg.setup.command}   (${cfg.setup.source})`),
+  );
+  for (const w of cfg.warnings) console.log(yellow(`  ${w}`));
+  console.log(dim(`  nothing was run. Running it is 'gjd-remote setup', which is not wired up yet.`));
 }
 
 /**
@@ -2351,27 +2690,6 @@ function probeTools(): Map<string, { status: number; detail: string }> {
 }
 
 /**
- * The checkout `doctor`'s repo-shaped checks are about, or why there isn't one.
- *
- * SKIPPED, NEVER GUESSED. `doctor` is run from anywhere — a cron line, a
- * terminal in the home directory — and a box check that quietly falls back to
- * some other repo's checkout would report on a tree nobody asked about. It
- * refuses nothing and fails nothing; it says which repo it could not find and
- * carries on with the box.
- */
-function doctorTarget(repoOpt: string | undefined): { kind: "dir"; dir: string } | { kind: "skip"; why: string } {
-  const id = identify(repoOpt);
-  if (!id.ok) {
-    return { kind: "skip", why: `not inside a git repository, and no --repo was given` };
-  }
-  const r = remoteCheckout(id.id);
-  if (r.kind !== "found") {
-    return { kind: "skip", why: `${id.id.slug}: ${describeResolution(id.id.slug, r).split("\n")[0] ?? r.kind}` };
-  }
-  return { kind: "dir", dir: r.dir };
-}
-
-/**
  * The MCP servers the TARGET repo declares, against what the box holds for that
  * checkout.
  *
@@ -2388,81 +2706,100 @@ function doctorTarget(repoOpt: string | undefined): { kind: "dir"; dir: string }
  *
  * Everything else `doctor` asks is about the box, which is shared, and stays on
  * the tool root — Terraform state, `provision.sh`, the browser smoke test.
+ *
+ * It takes the resolved directory rather than the `--repo` string: the repo
+ * half has already asked the box where the checkout is, and asking a second
+ * time is both a second round trip and a second chance for the two answers to
+ * differ.
  */
-function mcpOutcome(repoOpt: string | undefined): { kind: "skip"; why: string } | { kind: "check"; ok: boolean; why: string } {
-  const target = doctorTarget(repoOpt);
-  if (target.kind === "skip") return target;
-  const mcpFile = `${target.dir}/.mcp.json`;
-  const raw = ssh(`cat ${shq(mcpFile)} 2>/dev/null || true`, { check: false, raw: true });
+function mcpOutcome(dir: string): { kind: "skip"; why: string } | { kind: "check"; ok: boolean; why: string } {
+  const mcpFile = `${dir}/.mcp.json`;
+  // A TAGGED READ, not `cat … 2>/dev/null || true`. That idiom turned four
+  // different things into one empty string — the file is absent, the file is
+  // there and unreadable, the file is there and empty, and the connection died
+  // — and the caller then skipped the check and let `doctor` exit 0 on all
+  // four. Only the first is a repo with nothing to say. GPT Sol's Stage 1
+  // review, blocker 3.
+  //
+  // `cat` is last in its branch, so an unreadable file makes the whole script
+  // exit non-zero, which is the transport-or-permission arm below.
+  const read = sshRun(`f=${shq(mcpFile)}\nif [ -e "$f" ]; then echo GJDMCP-PRESENT; cat -- "$f"; else echo GJDMCP-ABSENT; fi`);
+  if (read.status !== 0) {
+    return { kind: "check", ok: false, why: `could not read ${mcpFile}: ssh exited ${read.status ?? "on a signal"}, ${lastWords(read.stderr)}` };
+  }
+  const nl = read.stdout.indexOf("\n");
+  const tag = (nl === -1 ? read.stdout : read.stdout.slice(0, nl)).trim();
+  const raw = nl === -1 ? "" : read.stdout.slice(nl + 1);
   // A repo that declares nothing has nothing to be wrong about, and failing it
-  // would make doctor red for every repo but this one.
-  if (raw.trim() === "") return { kind: "skip", why: `${mcpFile} does not exist on the box` };
+  // would make doctor red for every repo but this one. This is the ONE arm that
+  // may skip, and it is the one the box said out loud.
+  if (tag === "GJDMCP-ABSENT") return { kind: "skip", why: `${mcpFile} does not exist on the box` };
+  if (tag !== "GJDMCP-PRESENT") {
+    return { kind: "check", ok: false, why: `the box did not answer about ${mcpFile} in the form this asked for` };
+  }
+  if (raw.trim() === "") {
+    return { kind: "check", ok: false, why: `${mcpFile} exists on the box and is empty, so it declares nothing and is not nothing` };
+  }
   const declared = declaredServers(raw);
   if (!declared.ok) return { kind: "check", ok: false, why: `${mcpFile}: ${declared.why}` };
   // `|| true` and check:false: `claude mcp list` exits non-zero when any server
   // is unhealthy, including servers of Greg's that are none of our business.
   // Its OUTPUT is the answer; its exit code is not.
-  const listing = ssh(`cd ${shq(target.dir)} && timeout 120 claude mcp list 2>&1 || true`, { check: false });
+  const listing = ssh(`cd ${shq(dir)} && timeout 120 claude mcp list 2>&1 || true`, { check: false });
   const verdict = mcpVerdict(listing, declared.names);
   return { kind: "check", ok: verdict.ok, why: verdict.why };
 }
 
+type CheckState = "ok" | "fail" | "skip";
+
 /**
- * Everything that can be checked from here, in one command — because Claude
- * Code's own shell cannot reach port 22, so an agent cannot run any of this
- * itself. Run `gjd-remote doctor` and paste the output.
+ * Where a doctor check's verdict goes — and the reason the two halves below can
+ * be separate functions without either of them being able to lie about what it
+ * ran.
  *
- * It EXITS NON-ZERO if anything failed. It printed red crosses and exited 0
- * until 2026-08-31, which made every "doctor is green" claim worth nothing —
- * including the one at the end of the rebuild drill this command exists for.
- *
- * And it asserts, positively, that every check it means to run actually ran.
- * A doctor that quietly ran nothing at all otherwise looks exactly like a pass.
- *
- * MOST OF IT IS ABOUT THE BOX, which is shared, so it needs no repo at all. The
- * one repo-shaped check is `mcp`, and it is skipped out loud when there is no
- * repo to check — see doctorTarget(). Stage 2 of the plan splits the two halves
- * properly and adds the config's `check` command to the repo half.
+ * `skip` is a first-class outcome rather than "no result": a check that did not
+ * run is named in the summary as skipped, never left out, because a check
+ * silently not running looks exactly like one that passed.
  */
-function cmdDoctor(repoOpt: string | undefined): void {
-  const ip = host();
-  console.log(bold(`gjd-remote → ${ip}`));
+type Scoreboard = {
+  check: (name: string, ok: boolean, note?: string) => void;
+  skip: (name: string, why: string) => void;
+  /** For the one place that has already printed a better message than `check`
+   *  would: the ssh refusal, which needs three lines of its own. */
+  record: (name: string, state: CheckState) => void;
+};
 
-  // Every name here must be recorded exactly once before the run ends. The
-  // count is derived from this list rather than written down, so adding a check
-  // cannot leave the two out of step.
-  const EXPECTED = ["ssh", "mosh", ...TOOLS.map((t) => t.name), "tmux keys", "browser", "mcp", "provisioning"];
-  const seen = new Map<string, "ok" | "fail" | "skip">();
-  const record = (name: string, state: "ok" | "fail" | "skip") => {
-    if (seen.has(name)) die(`doctor recorded '${name}' twice — that is a bug in doctor, not in the box`);
-    seen.set(name, state);
-  };
-  /** Everything that can fail ends up here, so nothing is reported by print
-   *  alone. A red cross that does not reach the exit code is decoration. */
-  const check = (name: string, ok: boolean, note = "") => {
-    record(name, ok ? "ok" : "fail");
-    console.log((ok ? green(`✓ ${name}`) : red(`✗ ${name}`)) + (note ? dim(`  ${note}`) : ""));
-  };
+/**
+ * The two halves, by name. Each is its own list because they are expected
+ * separately: `--box-only`, or a `doctor` run from outside any repo, expects
+ * the box's list and nothing else, and the summary's denominator has to match
+ * what was actually asked for.
+ */
+const BOX_CHECKS = ["ssh", "mosh", ...TOOLS.map((t) => t.name), "tmux keys", "browser", "provisioning"];
+const REPO_CHECKS = ["setup", "HEAD", "origin", "mcp"];
 
-  const finish = (): never => {
-    const missing = EXPECTED.filter((n) => !seen.has(n));
-    const failed = [...seen].filter(([, s]) => s === "fail").map(([n]) => n);
-    const skipped = [...seen].filter(([, s]) => s === "skip").map(([n]) => n);
-    console.log("");
-    if (missing.length) {
-      // The positive assertion. A doctor that ran nothing at all otherwise
-      // prints a clean screen and exits 0, which is the worst possible pass.
-      const n = missing.length;
-      console.log(red(`✗ ${n} check${n === 1 ? "" : "s"} never ran: ${missing.join(", ")}`));
-    }
-    if (failed.length) console.log(red(`✗ ${failed.length} of ${EXPECTED.length} checks failed: ${failed.join(", ")}`));
-    if (skipped.length) console.log(dim(`  skipped: ${skipped.join(", ")}`));
-    if (!missing.length && !failed.length) {
-      console.log(green(`✓ ${seen.size - skipped.length} of ${EXPECTED.length} checks passed`));
-    }
-    process.exit(missing.length || failed.length ? 1 : 0);
-  };
+/**
+ * Whether this repo's setup has ever run on the box, and how it went.
+ *
+ * A PLACEHOLDER, and the seam the setup wiring replaces. Readiness is the
+ * status file under `~/gjd-remote/setup/`, never the checkout's presence — a
+ * failed setup leaves a perfectly ordinary-looking checkout behind (Sol's
+ * finding 2) — so this is the one line that may ever answer "is it ready?", and
+ * it says plainly that it does not know yet rather than implying a pass.
+ */
+function setupStatusLine(): string {
+  return "setup status: not yet tracked (Stage 2 wiring)";
+}
 
+/**
+ * Everything about the BOX, which is shared and belongs to no repo: can we
+ * reach it, are the tools there and working, does tmux bind nothing, does the
+ * browser come up, did provisioning finish.
+ *
+ * Returns false when ssh itself failed, because nothing below that line is
+ * knowable — the caller stops rather than reporting a wall of unknowns.
+ */
+function doctorBox(d: Scoreboard): boolean {
   const reach = spawnSync("ssh", [...SSH_OPTS, HOST(), "true"], { encoding: "utf8" });
   if (reach.status !== 0) {
     const err = reach.stderr ?? "";
@@ -2480,24 +2817,20 @@ function cmdDoctor(repoOpt: string | undefined): void {
       console.log(dim(`  ${err.trim().split("\n").slice(-2).join(" ")}`));
     }
     // Nothing below this line can run without ssh, so the rest is genuinely
-    // unknown rather than fine — finish() says so and exits non-zero.
-    record("ssh", "fail");
-    finish();
+    // unknown rather than fine — the summary says so and exits non-zero.
+    d.record("ssh", "fail");
+    return false;
   }
-  check("ssh", true);
+  d.check("ssh", true);
 
   const mosh = moshState();
-  if (mosh.state === "skip") {
-    record("mosh", "skip");
-    console.log(dim(`· mosh  not probed: ${mosh.note}`));
-  } else {
-    check("mosh", mosh.state === "ok", mosh.note);
-  }
+  if (mosh.state === "skip") d.skip("mosh", mosh.note);
+  else d.check("mosh", mosh.state === "ok", mosh.note);
 
   const probes = probeTools();
   for (const tool of TOOLS) {
     const verdict = toolVerdict(tool, probes.get(tool.name));
-    check(tool.name, verdict.ok, verdict.why);
+    d.check(tool.name, verdict.ok, verdict.why);
   }
 
   // tmux on this box binds NOTHING -- no prefix, no keys -- so every keystroke
@@ -2515,20 +2848,10 @@ function cmdDoctor(repoOpt: string | undefined): void {
   // that name, and doctor's own record() refuses a duplicate rather than
   // letting the second result overwrite the first. It caught this.
   const keys = bindingsVerdict(ssh(buildBindingsScript(), { check: false }));
-  check("tmux keys", keys.ok, keys.why);
+  d.check("tmux keys", keys.ok, keys.why);
 
   const smoke = runBrowserSmoke();
-  check("browser", smoke.ok, smoke.detail);
-
-  // The one repo-shaped check, and the only one that needs to know which repo
-  // this is — see mcpOutcome(). Everything else here is about the box.
-  const mcp = mcpOutcome(repoOpt);
-  if (mcp.kind === "skip") {
-    record("mcp", "skip");
-    console.log(dim(`· mcp  not checked: ${mcp.why}`));
-  } else {
-    check("mcp", mcp.ok, mcp.why);
-  }
+  d.check("browser", smoke.ok, smoke.detail);
 
   // cloud-init's own status is genuinely informational: it reports the FIRST
   // boot and never changes afterwards, so on a box that has been re-provisioned
@@ -2555,7 +2878,7 @@ function cmdDoctor(repoOpt: string | undefined): void {
   // the counting branch below would render it as "0 failed" — an un-provisioned
   // box reported in the words of a healthy one.
   const notRun = /^PROVISION NOT RUN/m.test(report);
-  check(
+  d.check(
     "provisioning",
     provisionOk && failedLines.length === 0,
     report.trim() === ""
@@ -2570,6 +2893,203 @@ function cmdDoctor(repoOpt: string | undefined): void {
 
   const list = sessions();
   console.log(bold(`\nsessions: ${list.length}`));
+  return true;
+}
+
+/**
+ * Everything about ONE REPO: the checkout on the box, whether the box could
+ * ever fetch it again, what its `.mcp.json` asks for, and what setting it up
+ * would run.
+ *
+ * It needs an identity and says so rather than guessing. `doctor` is run from
+ * anywhere — a cron line, a terminal in the home directory — and a repo check
+ * that quietly fell back to some other checkout would report on a tree nobody
+ * asked about.
+ *
+ * Two of these are laptop-side and box-side halves of the same question, and
+ * they are kept apart deliberately: the SETUP PLAN is read from this laptop's
+ * checkout, so it is reported even for a repo the box has never seen, while
+ * HEAD, origin and mcp are facts about the box and are skipped by name when
+ * there is no single checkout to look at.
+ */
+function doctorRepo(opts: { repo?: string | undefined; dir?: string | undefined }, d: Scoreboard): void {
+  console.log(bold("\nthis repo"));
+  const id = identify(opts.repo);
+  if (!id.ok) {
+    // With `--dir` there is nothing to verify the path AGAINST, and a repo
+    // check on an unverified path is a check on some other repo's tree. The
+    // contract's `push-env`/`setup`/repo-doctor row: those three need an
+    // identity, and a path they are given must have the same origin.
+    if (opts.dir !== undefined) die(id.why);
+    for (const name of REPO_CHECKS) d.skip(name, id.why.split("\n")[0] ?? "no repo identified");
+    return;
+  }
+  if (opts.dir === undefined) {
+    console.log(dim(`repo: ${id.id.slug}  (${id.id.localToplevel ?? "not checked out on this laptop"})`));
+  }
+
+  // The laptop's half, and it does not need the box at all.
+  doctorSetupPlan(id.id, d);
+  console.log(dim(`  ${setupStatusLine()}`));
+
+  // A path somebody typed goes through the same resolver every other per-repo
+  // command uses, with `requireIdentity` on — so it is proved to be a
+  // non-symlink checkout of THIS repo with a resolvable HEAD before a single
+  // check is run against it. Stage 1 claimed a verified `doctor --dir` and did
+  // not have one (GPT Sol's Stage 1 review, blocker 4).
+  if (opts.dir !== undefined) {
+    const t = resolveTarget({ repo: opts.repo, dir: opts.dir, requireIdentity: true });
+    d.check("HEAD", true, `${t.dir}  (verified as ${id.id.slug}'s checkout)`);
+    d.check("origin", t.originTransport === "https", originNote(t.originTransport));
+    const mcpAt = mcpOutcome(t.dir);
+    if (mcpAt.kind === "skip") d.skip("mcp", mcpAt.why);
+    else d.check("mcp", mcpAt.ok, mcpAt.why);
+    return;
+  }
+
+  const r = remoteCheckout(id.id);
+  // A `.git` at the right origin with no HEAD is an interrupted clone, and it
+  // gets its own arm rather than the generic refusal: it is the one blocked
+  // state that is a failure of THIS repo's checkout rather than an absence.
+  if (r.kind === "blocked" && r.reason === "incomplete-checkout") {
+    d.check("HEAD", false, `${r.dir} has ${id.id.slug}'s origin and no commit — an interrupted clone`);
+    for (const name of ["origin", "mcp"]) d.skip(name, `there is nothing usable at ${r.dir}`);
+    return;
+  }
+  if (r.kind !== "found") {
+    const why = describeResolution(id.id.slug, r).split("\n")[0] ?? r.kind;
+    for (const name of ["HEAD", "origin", "mcp"]) d.skip(name, why);
+    return;
+  }
+
+  d.check("HEAD", true, r.dir);
+  d.check("origin", r.originTransport === "https", originNote(r.originTransport));
+
+  const mcp = mcpOutcome(r.dir);
+  if (mcp.kind === "skip") d.skip("mcp", mcp.why);
+  else d.check("mcp", mcp.ok, mcp.why);
+}
+
+/** An ssh origin ON THE BOX is a checkout that can never fetch or push again:
+ *  the box has no GitHub ssh key and gets one per-owner HTTPS token instead. It
+ *  resolves perfectly well, which is why it needs a check of its own. */
+function originNote(transport: OriginTransport | null): string {
+  if (transport === "https") return "https, so the box can fetch it";
+  if (transport === "ssh") {
+    return "an ssh URL, and the box has no GitHub ssh key — it can never fetch or push from this checkout";
+  }
+  return "the box did not give an origin for this checkout";
+}
+
+/**
+ * What setting this repo up on the box would run, read from the LAPTOP's own
+ * checkout — so it is reported even for a repo the box has never seen.
+ *
+ * "No setup command known" is a FAIL, not a skip: it means `gjd-remote setup`
+ * has nothing to run for this repo, and reporting that as a clean skip is
+ * exactly the silent success the config module exists against.
+ */
+function doctorSetupPlan(id: Identity, d: Scoreboard): void {
+  if (id.localToplevel === null) {
+    d.skip("setup", `${id.slug} is not checked out on this laptop, so its config cannot be read`);
+    return;
+  }
+  let cfg: RepoConfig;
+  try {
+    cfg = readRepoConfig(id.localToplevel);
+  } catch (err) {
+    d.check("setup", false, err instanceof ConfigError ? (err.message.split("\n")[0] ?? err.message) : String(err));
+    return;
+  }
+  d.check(
+    "setup",
+    cfg.setup.source !== "none",
+    cfg.setup.source === "none"
+      ? `no setup command known — add ${CONFIG_FILE}, an executable ${SETUP_SCRIPT}, or an npm 'setup' script`
+      : `${cfg.setup.command}  (${cfg.setup.source})`,
+  );
+  for (const w of cfg.warnings) console.log(yellow(`  ${w}`));
+}
+
+/**
+ * Everything that can be checked from here, in one command — because Claude
+ * Code's own shell cannot reach port 22, so an agent cannot run any of this
+ * itself. Run `gjd-remote doctor` and paste the output.
+ *
+ * It EXITS NON-ZERO if anything failed. It printed red crosses and exited 0
+ * until 2026-08-31, which made every "doctor is green" claim worth nothing —
+ * including the one at the end of the rebuild drill this command exists for.
+ *
+ * And it asserts, positively, that every check it means to run actually ran.
+ * A doctor that quietly ran nothing at all otherwise looks exactly like a pass.
+ *
+ * TWO HALVES. `doctorBox` is about the shared box and needs no repo;
+ * `doctorRepo` is about one repo and needs an identity. The repo half runs when
+ * there is a repo to run it for, and when there is not, one line says why and
+ * its checks are not counted — rather than being counted as skips, which would
+ * make "0 skipped" impossible to reach from an ordinary directory.
+ */
+function cmdDoctor(opts: { repo?: string | undefined; dir?: string | undefined; boxOnly: boolean }): void {
+  const ip = host();
+  console.log(bold(`gjd-remote → ${ip}`));
+
+  // Why the repo half is not running, or null. `--repo` and `--dir` both say
+  // which repo to check explicitly, so either makes it run; otherwise the cwd
+  // has to be one.
+  let noRepo: string | null = null;
+  if (opts.boxOnly) noRepo = "--box-only";
+  else if (opts.repo === undefined && opts.dir === undefined) {
+    const here = identify(undefined);
+    if (!here.ok) noRepo = here.why.split("\n")[0] ?? "not inside a git repository";
+  }
+
+  // Every name here must be recorded exactly once before the run ends. The
+  // count is derived from these lists rather than written down, so adding a
+  // check cannot leave the two out of step.
+  const EXPECTED = noRepo === null ? [...BOX_CHECKS, ...REPO_CHECKS] : [...BOX_CHECKS];
+  const seen = new Map<string, CheckState>();
+  const d: Scoreboard = {
+    record: (name, state) => {
+      if (seen.has(name)) die(`doctor recorded '${name}' twice — that is a bug in doctor, not in the box`);
+      seen.set(name, state);
+    },
+    /** Everything that can fail ends up here, so nothing is reported by print
+     *  alone. A red cross that does not reach the exit code is decoration. */
+    check: (name, ok, note = "") => {
+      d.record(name, ok ? "ok" : "fail");
+      console.log((ok ? green(`✓ ${name}`) : red(`✗ ${name}`)) + (note ? dim(`  ${note}`) : ""));
+    },
+    skip: (name, why) => {
+      d.record(name, "skip");
+      console.log(dim(`· ${name}  not checked: ${why}`));
+    },
+  };
+
+  const finish = (): never => {
+    const missing = EXPECTED.filter((n) => !seen.has(n));
+    const failed = [...seen].filter(([, s]) => s === "fail").map(([n]) => n);
+    const skipped = [...seen].filter(([, s]) => s === "skip").map(([n]) => n);
+    console.log("");
+    if (missing.length) {
+      // The positive assertion. A doctor that ran nothing at all otherwise
+      // prints a clean screen and exits 0, which is the worst possible pass.
+      const n = missing.length;
+      console.log(red(`✗ ${n} check${n === 1 ? "" : "s"} never ran: ${missing.join(", ")}`));
+    }
+    if (failed.length) console.log(red(`✗ ${failed.length} of ${EXPECTED.length} checks failed: ${failed.join(", ")}`));
+    if (skipped.length) console.log(dim(`  skipped: ${skipped.join(", ")}`));
+    if (noRepo !== null) {
+      console.log(dim(`  repo checks not run (${noRepo.replace(/\.$/, "")}): ${REPO_CHECKS.join(", ")}`));
+    }
+    if (!missing.length && !failed.length) {
+      console.log(green(`✓ ${seen.size - skipped.length} of ${EXPECTED.length} checks passed`));
+    }
+    process.exit(missing.length || failed.length ? 1 : 0);
+  };
+
+  // The box first: without ssh, nothing about any repo is knowable either.
+  if (!doctorBox(d)) finish();
+  if (noRepo === null) doctorRepo({ repo: opts.repo, dir: opts.dir }, d);
   finish();
 }
 
@@ -2775,7 +3295,16 @@ ${bold("THE BOX")}
           --repo OWNER/NAME ask about a repo you are not standing in
   doctor                  check everything, and say what is wrong
                           exits non-zero if any check failed
-          --repo OWNER/NAME which repo's .mcp.json to check on the box
+                          two halves: the BOX (ssh, tools, tmux, browser,
+                          provisioning) and THIS REPO (its checkout on the box,
+                          whether the box can still fetch it, its .mcp.json, and
+                          what setting it up would run). The repo half needs to
+                          know which repo, so it is skipped — by name, never
+                          silently — outside a repo and without --repo.
+          --repo OWNER/NAME which repo to check, when you are not standing in it
+      -d, --dir DIR         check this box path, which must be verified as this
+                            repo's checkout — same origin, not a symlink, real HEAD
+          --box-only        the box half only, for a check that belongs to no repo
   provision               build a bootstrapped box: copy provision.sh up, run it
                           cloud-init no longer does this — user_data is capped at
                           32 KiB and the script is 67 KiB base64'd
@@ -2784,8 +3313,18 @@ ${bold("THE BOX")}
       --run-minutes N       cap on the run itself ${dim("(default 45)")}
   clone [repo]            clone one of Greg's repos onto the box, over HTTPS
                           with no argument, the repo you are standing in
+                          It clones to a staging name beside the destination and
+                          moves it into place only once the origin and HEAD check
+                          out, so an interrupted clone leaves NOTHING at the
+                          destination rather than a half-made checkout. If it
+                          fails after git has started, the staging path is named
+                          so you can look at it.
+                          Nothing is run afterwards; the setup command the repo's
+                          config would use is printed instead.
       --base-folder DIR     where to put it ${dim(`(default: ${REMOTE_CODE})`)}
-      --name DIR-NAME       directory name, if not the repo's own
+      --name DIR-NAME       directory name, if not the repo's own. With the repo
+                            already on the box under another name, this is how you
+                            ask for a second copy — and it asks you to confirm it
   push-env                send this repo's .env.local to its checkout on the box
       --file PATH           a different .env.local — the basename must be exactly that
       --dir DIR             a box path, which must be this repo's checkout
@@ -2908,7 +3447,9 @@ ${bold("EXAMPLES")}
       ${dim("  HEAD    Add a --json flag to the export script")}
   gjd-remote clone spideryarn/reading2 --name spideryarn2
       the repo is ${dim("reading2")} and its checkout is ${dim("spideryarn2")}. Without --name you are
-      told it is already on the box under another name, rather than given a second copy
+      told it is already on the box under another name, rather than given a second
+      copy; with --name you are asked whether you really want the second copy, and
+      off a terminal that question cannot be asked, so it refuses
   gjd-remote push-env
       ${dim(`gjd-remote push-env → greg@1.2.3.4:${REMOTE_CODE}/spideryarn2/.env.local`)}
       ${dim("  + OPENROUTER_API_KEY  added")}
@@ -2947,7 +3488,7 @@ Names are optional everywhere. An unnamed session starts under a placeholder and
 adopts Claude Code's own title for the work at the next ${dim("gjd-remote ls")}. A name you
 choose is never changed for you.`;
 
-function main(): void {
+async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2);
 
   // Before anything, so a mistyped colour is refused while nothing has happened
@@ -3072,8 +3613,15 @@ function main(): void {
     }
 
     case "doctor": {
-      const { values } = parseArgs({ args: rest, options: { repo: { type: "string" } } });
-      return cmdDoctor(values.repo);
+      const { values } = parseArgs({
+        args: rest,
+        options: {
+          repo: { type: "string" },
+          dir: { type: "string", short: "d" },
+          "box-only": { type: "boolean", default: false },
+        },
+      });
+      return cmdDoctor({ repo: values.repo, dir: values.dir, boxOnly: values["box-only"] });
     }
 
     // Hidden-ish, and documented in the help as a debugging aid: it answers
@@ -3230,4 +3778,29 @@ function main(): void {
   }
 }
 
-main();
+/**
+ * THE ONE PLACE A REFUSED OR CANCELLED QUESTION LANDS.
+ *
+ * `main` is async because the prompts are, and everything it dispatches to
+ * either returns or throws. The two prompt outcomes that are not errors in the
+ * ordinary sense are turned into an exit here, once, rather than in every
+ * command that asks something:
+ *
+ *  - `Cancelled` — Ctrl-C at a question. 130 is the shell's convention for
+ *    "killed by SIGINT", and the message says the thing worth knowing, which is
+ *    that the answer was never given so nothing happened.
+ *  - `NotInteractive` — there was no terminal to ask on. Its message is already
+ *    written in the tool's voice and names what to run instead, so it goes
+ *    straight to `die` and exit 1.
+ *
+ * Anything else is rethrown as it was: an unhandled rejection prints the stack,
+ * which is what an unexpected failure should still do.
+ */
+main().catch((err: unknown) => {
+  if (err instanceof Cancelled) {
+    console.error(yellow("cancelled, nothing changed"));
+    process.exit(130);
+  }
+  if (err instanceof NotInteractive) die(err.message);
+  throw err;
+});

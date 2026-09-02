@@ -18,12 +18,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  INVENTORY_BASE,
   INVENTORY_ROWS,
   INVENTORY_SENTINEL,
   type InventoryEntry,
+  STAGING_PREFIX,
   describeLocalRepo,
   describeResolution,
   inventoryScript,
+  isRepoValue,
   localRepo,
   parseInventory,
   remoteSlug,
@@ -88,12 +91,34 @@ describe("remoteSlug", () => {
     ["https://gitlab.com/spideryarn/reading2.git", undefined],
     ["/home/greg/code/somewhere", undefined],
     ["", undefined],
+
+    // A SLUG THIS MINTS MUST BE ONE `isRepoValue` ACCEPTS. It is written into a
+    // tmux session's metadata and into the durable log, and the reader there is
+    // strict — so a slug with a colon or a percent in it starts a session that
+    // makes every later `ls` refuse the whole listing. And `..` as a name would
+    // be joined onto ~/code to propose a clone path that climbs out of it.
+    ["https://github.com/a:b/c.git", undefined],
+    ["https://github.com/owner/..", undefined],
+    ["https://github.com/owner/.", undefined],
+    ["https://github.com/../name", undefined],
+    ["https://github.com/own%20er/name", undefined],
+    ["git@github.com:owner/na me", undefined],
+    [`https://github.com/owner/${"n".repeat(101)}`, undefined],
   ];
   for (const [url, want] of cases) {
     it(`${url || "(empty)"} → ${want ?? "(unrecognised)"}`, () => {
       expect(remoteSlug(url)).toBe(want);
     });
   }
+
+  it("mints nothing isRepoValue would refuse", () => {
+    // The property behind the table: one grammar, checked by the validator the
+    // metadata reader uses, so the producer and the consumer cannot drift.
+    for (const [url] of cases) {
+      const slug = remoteSlug(url);
+      if (slug !== undefined) expect(isRepoValue(slug), `${url} minted ${slug}`).toBe(true);
+    }
+  });
 });
 
 // ----------------------------------------------------------------- localRepo
@@ -505,9 +530,10 @@ function row(
   ].join("|");
 }
 
-/** A well-formed reply: the count, the rows, the sentinel last. */
+/** A well-formed reply: the base folder's existence, the count, the rows, the
+ *  sentinel last. */
 const reply = (rows: string[], count = rows.length) =>
-  [`${INVENTORY_ROWS} ${count}`, ...rows, INVENTORY_SENTINEL].join("\n");
+  [`${INVENTORY_BASE} 1`, `${INVENTORY_ROWS} ${count}`, ...rows, INVENTORY_SENTINEL].join("\n");
 
 describe("parseInventory", () => {
   it("reads a well-formed reply, including a directory name full of separators", () => {
@@ -545,14 +571,14 @@ describe("parseInventory", () => {
   });
 
   it("accepts an empty ~/code — zero rows, and the sentinel", () => {
-    expect(parseInventory(reply([]))).toEqual({ ok: true, entries: [] });
+    expect(parseInventory(reply([]))).toEqual({ ok: true, entries: [], baseExists: true });
   });
 
   it("refuses a reply that was cut off before the sentinel", () => {
     // The case this shape exists for: a script that died on its first line
     // prints nothing, which is byte-for-byte an empty ~/code — and an empty
     // ~/code is what the caller reads as permission to clone.
-    const got = parseInventory([`${INVENTORY_ROWS} 1`, row(`${CODE}/spideryarn2`)].join("\n"));
+    const got = parseInventory([`${INVENTORY_BASE} 1`, `${INVENTORY_ROWS} 1`, row(`${CODE}/spideryarn2`)].join("\n"));
     expect(got.ok).toBe(false);
     if (got.ok) throw new Error("unreachable");
     expect(got.why).toContain("completion marker");
@@ -597,6 +623,84 @@ describe("parseInventory", () => {
       ok: false,
       why: "git is not on this box",
     });
+  });
+
+  it("hides a staging sibling, so a clone in flight cannot answer for the repo", () => {
+    // `clone` clones into `<base>/.gjd-remote-staging-<name>-<random>` and only
+    // renames it into place once it has verified it. That directory has the
+    // RIGHT origin, so an inventory that reported it would read as `found`
+    // while the clone was still running — or, beside the finished checkout, as
+    // `ambiguous`, which refuses to start anything at all.
+    //
+    // The row still COUNTS: it is one of the entries the box declared, and
+    // dropping it before the count check would turn a lost row into a hidden
+    // one.
+    const got = parseInventory(
+      reply([
+        row(`${CODE}/${STAGING_PREFIX}reading2-a1b2c3d4`, {
+          co: "1",
+          origin: "https://github.com/spideryarn/reading2.git",
+          head: "1",
+        }),
+        row(`${CODE}/plain`),
+      ]),
+    );
+    expect(got.ok).toBe(true);
+    if (!got.ok) throw new Error("unreachable");
+    expect(got.entries.map((e) => e.dir)).toEqual([`${CODE}/plain`]);
+    expect(resolveRemoteCheckout("spideryarn/reading2", `${CODE}/reading2`, got.entries)).toEqual({
+      kind: "absent",
+      proposedDir: `${CODE}/reading2`,
+    });
+  });
+
+  it("refuses a reply that never said whether the code folder is there", () => {
+    // "No entries" has two meanings — an empty ~/code, and no ~/code at all —
+    // and only one of them is a box that has never had a repo put on it. The
+    // script says which, so a reply that does not is not this script's.
+    const got = parseInventory([`${INVENTORY_ROWS} 0`, INVENTORY_SENTINEL].join("\n"));
+    expect(got.ok).toBe(false);
+    if (got.ok) throw new Error("unreachable");
+    expect(got.why).toContain("code folder");
+  });
+
+  it("says the code folder is missing rather than empty", () => {
+    expect(parseInventory([`${INVENTORY_BASE} 0`, `${INVENTORY_ROWS} 0`, INVENTORY_SENTINEL].join("\n"))).toEqual({
+      ok: true,
+      entries: [],
+      baseExists: false,
+    });
+  });
+
+  it("refuses a row whose base64 is not valid UTF-8", () => {
+    // Buffer.toString("utf8") does not throw on invalid bytes: it substitutes
+    // U+FFFD and hands back a plausible-looking path. A directory name that
+    // came back mangled is a directory name we are about to compare, print and
+    // maybe clone next to, so it fails the listing rather than being guessed at.
+    const invalid = Buffer.from([0xff, 0xfe, 0x41]).toString("base64");
+    const got = parseInventory(reply([[invalid, invalid, "0", "1", "0", b64(""), "0"].join("|")]));
+    expect(got.ok).toBe(false);
+  });
+
+  it("refuses a checkout with no realpath, and a HEAD with no checkout", () => {
+    // Cross-field contradictions. The box cannot have run `git -C` in a
+    // directory it could not resolve, so a row claiming both is not a row the
+    // script produced — and `resolveRemoteCheckout` would happily call the
+    // first one `found` and start a session in it.
+    const noReal = parseInventory(
+      reply([
+        row(`${CODE}/spideryarn2`, {
+          real: "",
+          co: "1",
+          origin: "https://github.com/spideryarn/reading2.git",
+          head: "1",
+        }),
+      ]),
+    );
+    expect(noReal.ok).toBe(false);
+
+    const headNoCheckout = parseInventory(reply([row(`${CODE}/spideryarn2`, { co: "0", head: "1" })]));
+    expect(headNoCheckout.ok).toBe(false);
   });
 
   it("refuses a reply with two row counts in it", () => {
@@ -698,11 +802,38 @@ describe("inventoryScript, run for real", () => {
     });
   });
 
+  it("does not let a real staging clone make the answer ambiguous", () => {
+    // The same rule, against the real script rather than a hand-written reply:
+    // a staging directory IS a checkout of the repo, with an origin and a HEAD,
+    // and `find` sees dot-directories even though the old `*/` glob did not.
+    const base = realpathSync(mkdtempSync(join(root, "inv-staging-")));
+    const origin = "https://github.com/spideryarn/reading2.git";
+    for (const name of ["spideryarn2", `${STAGING_PREFIX}reading2-9f8e7d6c`]) {
+      const dir = join(base, name);
+      mkdirSync(dir);
+      git(dir, "init", "-q", "-b", "main");
+      writeFileSync(join(dir, "README.md"), "# x\n");
+      git(dir, "add", "README.md");
+      git(dir, "commit", "-q", "-m", "first");
+      git(dir, "remote", "add", "origin", origin);
+    }
+
+    const got = parseInventory(execFileSync("bash", ["-c", inventoryScript(base)], { encoding: "utf8" }));
+    expect(got.ok).toBe(true);
+    if (!got.ok) throw new Error("unreachable");
+    expect(got.entries.map((e) => e.dir)).toEqual([join(base, "spideryarn2")]);
+    expect(resolveRemoteCheckout("spideryarn/reading2", join(base, "reading2"), got.entries)).toEqual({
+      kind: "found",
+      dir: join(base, "spideryarn2"),
+      originTransport: "https",
+    });
+  });
+
   it("says zero rows and signs off when the base does not exist", () => {
     const out = execFileSync("bash", ["-c", inventoryScript(join(root, "no-such-code-dir"))], {
       encoding: "utf8",
     });
-    expect(parseInventory(out)).toEqual({ ok: true, entries: [] });
+    expect(parseInventory(out)).toEqual({ ok: true, entries: [], baseExists: false });
   });
 
   it("survives a directory name containing a quote, a pipe and a newline", () => {
