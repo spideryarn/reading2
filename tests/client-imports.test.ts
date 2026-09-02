@@ -68,6 +68,14 @@ const SHARED = new Set([
   // only the *comparison* is shared. Three lines and no imports but types.
   "search-stale.js",
   "sanitize-policy.js", // the DOMPurify config, shared so both passes agree
+  /* The address a reader writes to us at. On the list because it imports
+     nothing at all, and here rather than typed into the page because it is the
+     one place that address is spelled — Greg, 2026-09-02, and
+     docs/project/website-text.md. The privacy page needs it in the browser;
+     the first server-composed page or email that needs it will import the same
+     constant rather than a second copy that survives a domain move.
+     See src/site-text.ts. */
+  "site-text.js",
   // Every sentence a reader is shown when a model call fails. On the list
   // because it qualifies rather than because it was convenient: it imports
   // nothing at all. The client needs it so /design can render the real

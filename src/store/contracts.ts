@@ -52,12 +52,15 @@ import type { ClaimsRun } from "../referee-claims.js";
 import type { RefereeCriterionConfig } from "../referee-criteria.js";
 import type { SavedCriterion } from "../saved-criteria.js";
 import type {
+  AdminFeedbackDetail,
+  AdminFeedbackPage,
   Article,
   ArticleMetadata,
   ChatAnchor,
   ChatMessage,
   ChatThread,
   Comment,
+  FeedbackCursor,
   FeedbackDiagnostics,
   FeedbackEnvironment,
   FeedbackKind,
@@ -1141,7 +1144,57 @@ export interface AdminStore {
    * about the default order.
    */
   listUsersAcrossOwners(): Promise<AdminUser[]>;
+  /**
+   * **Every reader's bug reports, newest first** — `/admin/feedback`.
+   * docs/plans/260902l-admin-feedback-page.md.
+   *
+   * The one method in this file that returns a reader's own sentences, and the
+   * one place the admin rule *"counts and dates, never a sentence"* has an
+   * exception. What makes it legitimate is consent and nothing else: the reader
+   * typed that report into a box labelled with what happens to them.
+   * docs/project/feedback.md § The one rule is the boundary; it does not move
+   * because a second page found it convenient.
+   *
+   * **Newest first is promised here**, unlike the users list, and that is not
+   * an inconsistency. The users page sorts eleven columns and a store opinion
+   * would be a second one; this is an inbox with one order, and `limit` is
+   * meaningless without saying which end it cuts.
+   *
+   * `limit` is capped by the implementation. This is the only table in the app
+   * an ordinary account holder can add rows to.
+   */
+  listFeedbackAcrossOwners(limit: number, cursor: FeedbackCursor | null): Promise<AdminFeedbackPage>;
+  /**
+   * **One report in full**, including the diagnostics blob the list leaves out
+   * — `GET /api/admin/feedback/:ownerId/:id`.
+   *
+   * Keyed on the **pair**, like everything that addresses a report here: the id
+   * is minted by a browser, `feedback`'s primary key is `(owner_id, id)`, and a
+   * lookup on the id alone can hand back somebody else's report. GPT Sol caught
+   * that in the first draft, 2026-09-02.
+   */
+  readFeedbackAcrossOwners(ownerId: string, id: string): Promise<AdminFeedbackDetail | null>;
+  /**
+   * **One report's screenshot bytes, whoever filed it** — for
+   * `GET /api/admin/feedback/:ownerId/:id/screenshot`.
+   *
+   * Keyed on the **pair**, like `readFeedbackAcrossOwners` above and for the
+   * same reason.
+   *
+   * `null` for a report that has none *and* for a pair that is not a report:
+   * both are a 404 from the route, and distinguishing them would buy the caller
+   * nothing it is allowed to do anything with.
+   *
+   * **Why this is not `FeedbackStore.read`.** That one is owner-scoped on
+   * purpose — another reader's id is simply not found, the same rule as
+   * `ownedSlug` — and relaxing it would relax it for the reader's own dialog
+   * too. The cross-owner read is a different method, on the contract whose name
+   * already says what it does, reached from one gated route.
+   */
+  readFeedbackScreenshotAcrossOwners(ownerId: string, id: string): Promise<Uint8Array | null>;
 }
+
+
 
 /* --------------------------------------------- the document it came from -- */
 

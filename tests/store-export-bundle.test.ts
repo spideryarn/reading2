@@ -323,6 +323,16 @@ when("the bundle is the faithful projection", () => {
     expect(manifest.format).toBe(BUNDLE_FORMAT);
     expect(manifest.slug).toBe(SLUG);
     expect(manifest.url).toBe("https://example.test/bundle");
+    /* **Two addresses, and the test names both** — `url` is the publisher's page
+       and `spideryarnUrl` is the reading of it. A single assertion on one of
+       them would pass while the other was absent, which is the state this file
+       shipped in until 2026-09-02: a zip with no way back into the app that
+       made it. Written out in full rather than composed from `articleUrl`,
+       because a test that builds the expected value the same way the code does
+       agrees with the code by construction. */
+    expect(manifest.spideryarnUrl).toBe(
+      "https://www.spideryarn.com/read/store-export-bundle-fixture",
+    );
 
     const entries = manifest.entries as { path: string; bytes: number }[];
     /* Every file in the zip is listed, and every listed file is in the zip — a
@@ -726,10 +736,28 @@ when("index.html is safe to open", () => {
   });
 
   it("emits no href for a URL that is not http or https", () => {
-    expect(hrefs).toEqual([]);
+    /* **Exactly one href, and it is the one we composed.** This used to be
+       `toEqual([])`, which was the whole assertion: no link out unless the
+       article's own URL passed `isWebUrl`. Since 2026-09-02 the page also links
+       back to the article on Spideryarn, so the shape of the check changes but
+       not what it is defending — every href on this page is still either ours or
+       an allowlisted `http(s)` URL, and this fixture's `javascript:` one is
+       neither. */
+    expect(hrefs).toEqual(["https://www.spideryarn.com/read/store-export-bundle-xss"]);
     expect(html).not.toMatch(/href="javascript:/i);
     // Still shown, as text, so the reader can see where the article came from.
     expect(html).toContain("javascript:alert(4)");
+  });
+
+  it("links back to the article on Spideryarn, labelled apart from the original", () => {
+    /* The reason the section exists: a zip read months later, from a folder,
+       with no memory of which article it was. Both labels are asserted because
+       an unlabelled pair of URLs under a title is the failure this replaced —
+       and the labels are what let a person tell them apart. */
+    expect(html).toContain(
+      'On Spideryarn: <a href="https://www.spideryarn.com/read/store-export-bundle-xss"',
+    );
+    expect(html).toContain("Original: ");
   });
 
   it("renders no article markup: it is an index, not a reader", () => {

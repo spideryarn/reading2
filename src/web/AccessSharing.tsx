@@ -56,12 +56,23 @@ import {
   SHARING_RIGHTS_CONFIRM,
   SHARING_UNKNOWN,
   SHARING_WHAT_VISITORS_SEE,
+  SHARED_HEADING,
+  SHARING_INVENTORY_UNKNOWN,
+  SHARED_IF_BUILT_HEADING,
+  SHARED_IF_BUILT_NOTE,
+  NOT_SHARED_HEADING,
+  NOT_SHARED_NOTE,
   SHARING_WRITE_UNCERTAIN,
   sharingConfirmBody,
   sharingInFlight,
 } from "../messages.js";
-import type { ArticleSharing, VisibilityState } from "../types.js";
+import type { ArticleSharing, PublicArtefacts, VisibilityState } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import {
+  sharedInventory,
+  type InventoryItem,
+  type SharedInventory,
+} from "./shared-inventory.js";
 import { readHref } from "./router.js";
 
 /**
@@ -139,7 +150,48 @@ export function asArticleSharing(value: unknown): ArticleSharing | undefined {
   if (!Array.isArray(personalised) || personalised.some((k) => typeof k !== "string")) {
     return undefined;
   }
-  return { ...state, personalised: personalised as ArticleSharing["personalised"] };
+  /* **Not a reason to reject the body.** The visibility is what this card is
+     for, and it parsed; an inventory we cannot read is an inventory we do not
+     draw. Rejecting here took the whole switch away over one field — see
+     `ArticleSharing.available` in src/types.ts. */
+  const available = asPublicArtefacts((value as Record<string, unknown>).available);
+  return {
+    ...state,
+    personalised: personalised as ArticleSharing["personalised"],
+    ...(available ? { available } : {}),
+  };
+}
+
+/**
+ * **The five presence flags, every one of them checked.**
+ *
+ * `undefined` for anything short of five booleans, and the caller draws no list
+ * at all rather than a partial one. **A missing key is not a `false`**: that
+ * default would tell an owner their glossary stays private, which is the exact
+ * sentence this slice exists to stop being guessed at. Saying nothing about an
+ * inventory we could not read is the only honest answer, and it is a smaller
+ * one than it looks — the switch itself is unaffected, because `visibility`
+ * parsed on its own.
+ *
+ * `ARTEFACT_KEYS` rather than five hand-written reads, and it is typed
+ * `readonly (keyof PublicArtefacts)[]` with an exhaustiveness test beside it
+ * (tests/shared-inventory.test.ts) so a sixth artefact cannot be validated into
+ * existence by being forgotten.
+ */
+export const ARTEFACT_KEYS = ["arc", "tweets", "glossary", "ideas", "quotes"] as const satisfies
+  readonly (keyof PublicArtefacts)[];
+
+export function asPublicArtefacts(value: unknown): PublicArtefacts | undefined {
+  if (value === null || typeof value !== "object") return undefined;
+  const row = value as Record<string, unknown>;
+  if (ARTEFACT_KEYS.some((k) => typeof row[k] !== "boolean")) return undefined;
+  return {
+    arc: row.arc as boolean,
+    tweets: row.tweets as boolean,
+    glossary: row.glossary as boolean,
+    ideas: row.ideas as boolean,
+    quotes: row.quotes as boolean,
+  };
 }
 
 export function AccessSharing({
@@ -201,6 +253,15 @@ export function AccessSharing({
    * the model was given when it wrote a glossary last week.
    */
   const personalised = sharing?.personalised;
+  /**
+   * The inventory, from the page load for the same reason `personalised` is:
+   * `PUT …/visibility` answers with a `VisibilityState`, which carries neither
+   * — because publishing an article does not change what has been built for it.
+   *
+   * `undefined` on a store that cannot say, and the list is simply not drawn.
+   * Guessing here would be guessing about what a stranger is about to receive.
+   */
+  const inventory = sharing?.available ? sharedInventory(sharing.available) : undefined;
 
   /* One article's answer must not survive into another's. `Metadata` is keyed
      on the slug so this component remounts anyway; the effect is what keeps
@@ -288,6 +349,7 @@ export function AccessSharing({
                   Shared since {new Date(publicAt).toLocaleString()}.
                 </p>
               )}
+              <Inventory inventory={inventory} />
               <p className="tw:m-0 tw:mb-3 tw:text-ink-faint">{SHARING_CANNOT_UNRING}</p>
               <button
                 type="button"
@@ -299,7 +361,17 @@ export function AccessSharing({
             </>
           )}
 
-          {!shared && !confirming && (
+          {/* **No offer to publish while we cannot say what publishing would
+              carry**, and `inventory` is the whole test. Unsharing above is
+              untouched: taking an article back is never the direction worth
+              blocking, and a card that could not do it would strand an owner
+              over a field that has nothing to do with visibility.
+              src/messages.ts § SHARING_INVENTORY_UNKNOWN. */}
+          {!shared && !inventory && (
+            <p className="tw:m-0 tw:text-ink-faint">{SHARING_INVENTORY_UNKNOWN}</p>
+          )}
+
+          {!shared && inventory && !confirming && (
             <button type="button" className="linky" onClick={() => setConfirming(true)}>
               Share with anyone who has the link…
             </button>
@@ -311,6 +383,7 @@ export function AccessSharing({
                 {SHARING_CONFIRM_TITLE}
               </h3>
               <p className="tw:m-0 tw:mb-2 tw:text-ink-faint">{sharingConfirmBody(title)}</p>
+              <Inventory inventory={inventory} />
               <Personalisation kinds={personalised} />
               <p className="tw:m-0 tw:mb-3 tw:text-ink-faint">{SHARING_CANNOT_UNRING}</p>
               <label className="tw:mb-3 tw:flex tw:items-start tw:gap-2 tw:text-ink">
@@ -380,6 +453,90 @@ export function AccessSharing({
  * `sharing` block exists so that `[]` can only come from a store that answered:
  * src/types.ts § ArticleSharing.
  */
+/**
+ * **The three lists** — what goes out, what would go out if it existed, and what
+ * never does.
+ *
+ * Drawn in both places the card can be: under the confirmation, where it is
+ * what the owner is agreeing to, and on the already-shared card, where it is
+ * what is out there now. One component, because two would be two lists to keep
+ * in step and this one is already derived.
+ *
+ * `undefined` draws nothing at all. It means the store could not say what this
+ * article has (`ArticleSharing` is absent, or the body did not parse), and a
+ * list assembled from a guess is the one thing worse here than no list: it is
+ * a specific, checkable, wrong claim about what a stranger is about to read.
+ *
+ * The sentence is on `title` rather than beside the label because two dozen of
+ * them stacked would bury the thing the owner came here to read — Greg asked for
+ * *"tooltips if needed"* and this is where it is needed.
+ *
+ * **A known gap, stated rather than glossed.** It is also the `aria-label`, so a
+ * screen reader gets it — but a sighted keyboard or touch user gets neither, and
+ * an earlier draft of this comment claimed otherwise. `title` has no focus or
+ * tap disclosure in any browser. The honest fix is a real disclosure component,
+ * which this app does not have; until then the chips are a *skimmable index* and
+ * the three headings and their notes carry every claim an owner has to be able
+ * to read. GPT Sol's review, 2026-09-02, and it is in the plan as an open item.
+ */
+function Inventory({ inventory }: { inventory: SharedInventory | undefined }) {
+  if (!inventory) return null;
+  const { shared, ifBuilt, withheld } = inventory;
+  return (
+    <div className="tw:mb-3 tw:flex tw:flex-col tw:gap-2">
+      <InventoryList heading={SHARED_HEADING} items={shared} tone="out" />
+      {ifBuilt.length > 0 && (
+        <InventoryList heading={SHARED_IF_BUILT_HEADING} note={SHARED_IF_BUILT_NOTE} items={ifBuilt} tone="out" />
+      )}
+      <InventoryList heading={NOT_SHARED_HEADING} note={NOT_SHARED_NOTE} items={withheld} tone="kept" />
+    </div>
+  );
+}
+
+function InventoryList({
+  heading,
+  note,
+  items,
+  tone,
+}: {
+  heading: string;
+  note?: string;
+  items: InventoryItem[];
+  /** `out` is what a stranger receives; `kept` is what does not leave. */
+  tone: "out" | "kept";
+}) {
+  return (
+    <div>
+      <p className="tw:m-0 tw:flex tw:items-center tw:gap-1.5 tw:text-xs tw:font-semibold tw:text-ink">
+        {tone === "out" ? <Globe size={12} /> : <Lock size={12} />}
+        {heading}
+      </p>
+      {note && <p className="tw:m-0 tw:mt-0.5 tw:text-xs tw:text-ink-faint">{note}</p>}
+      <ul className="tw:m-0 tw:mt-1 tw:flex tw:list-none tw:flex-wrap tw:gap-x-1.5 tw:gap-y-1 tw:p-0">
+        {items.map((item) => (
+          <li
+            key={item.key}
+            title={item.detail}
+            aria-label={`${item.label} — ${item.detail}`}
+            className={`tw:rounded tw:border tw:px-1.5 tw:py-0.5 tw:text-xs ${
+              tone === "out"
+                ? "tw:border-rule tw:text-ink"
+                /* Muted, and **not struck through**, which the first draft was.
+                   Twelve struck-out chips read as twelve things that have gone
+                   wrong; the heading and the padlock beside it already say what
+                   this column is, and saying it a third time in the type is
+                   what turns a list into a warning. */
+                : "tw:border-rule tw:text-ink-faint"
+            }`}
+          >
+            {item.label}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function Personalisation({ kinds }: { kinds: StepName[] | undefined }) {
   const said =
     kinds === undefined

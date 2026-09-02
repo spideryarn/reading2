@@ -97,6 +97,7 @@ import type {
   GlossaryFound,
   Quiz,
   QuizFound,
+  PublicArtefacts,
   Quotes,
   QuotesFound,
   Ideas,
@@ -1833,6 +1834,44 @@ function personalisedSteps(revision: {
   return STEP_ORDER.filter((step) => personalised.has(step));
 }
 
+/**
+ * **Which artefacts a shared link would carry** — presence, and nothing else.
+ *
+ * The same question `src/store/public-reader.ts` answers by reading the column:
+ * `publicArticle` spreads an artefact in when it is not null and never asks
+ * whether it is current. So this is `!== null` five times, deliberately, and
+ * **not** `stages[].done` — which is `status === "done" && isCurrent(step)` a
+ * few hundred lines below, and which calls a stale glossary absent while every
+ * visitor is reading it. src/types.ts § PublicArtefacts says the same thing at
+ * the type.
+ *
+ * `Record<keyof PublicArtefacts, …>` rather than an object literal, so a sixth
+ * artefact joining the public payload is a red compiler here rather than a row
+ * missing from the owner's inventory.
+ */
+export function shareableArtefacts(revision: {
+  arc: Arc | null;
+  tweets: TweetThread | null;
+  glossary: Glossary | null;
+  ideas: Ideas | null;
+  quotes: Quotes | null;
+}): PublicArtefacts {
+  const present: Record<keyof PublicArtefacts, object | null> = {
+    arc: revision.arc,
+    tweets: revision.tweets,
+    glossary: revision.glossary,
+    ideas: revision.ideas,
+    quotes: revision.quotes,
+  };
+  return {
+    arc: present.arc !== null,
+    tweets: present.tweets !== null,
+    glossary: present.glossary !== null,
+    ideas: present.ideas !== null,
+    quotes: present.quotes !== null,
+  };
+}
+
 export const pgArticleReader: Pick<
   ArticleReader,
   | "loadArticle"
@@ -2309,6 +2348,15 @@ export const pgArticleReader: Pick<
         visibility: found.article.visibility as Visibility,
         publicAt: found.article.publicAt?.toISOString() ?? null,
         personalised: personalisedSteps(revision),
+        /* Presence, from the revision row already in hand — see
+           `shareableArtefacts` for why this is not read off `stages` below. */
+        available: shareableArtefacts({
+          arc: revision.arc as Arc | null,
+          tweets: revision.tweets as TweetThread | null,
+          glossary: revision.glossary as Glossary | null,
+          ideas: revision.ideas as Ideas | null,
+          quotes: revision.quotes as Quotes | null,
+        }),
       },
     };
   },

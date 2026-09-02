@@ -80,7 +80,9 @@
  * preference — see docs/project/web-client.md § Tailwind and shadcn. Note the
  * `tw:` prefix on every class; unprefixed names do nothing here.
  */
+import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
+import { PRIVACY_HREF } from "./router.js";
 import { SignInControls } from "./SignInControls.js";
 import glossaryShot from "./assets/glossary.png";
 import meaningShot from "./assets/meaning.png";
@@ -333,7 +335,16 @@ export function LandingPage() {
         <SignInControls />
       </section>
 
+      {/* **The privacy link belongs on the front door**, not only behind the
+          sign-in: the person who most wants to know what we do with an article
+          is the one deciding whether to hand us one. `/privacy` is rendered
+          signed-out for the same reason — App.tsx's third exception. */}
       <footer className="tw:mt-14 tw:border-t tw:border-border tw:pt-5 tw:text-xs tw:text-ink-faint">
+        <p className="tw:m-0 tw:mb-2">
+          <Link href={PRIVACY_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
+            Privacy
+          </Link>
+        </p>
         Spideryarn — alpha. Every screenshot is of <em>The Mythology of AI Consciousness</em> by Anil
         Seth, read in Spideryarn.
       </footer>

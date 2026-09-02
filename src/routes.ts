@@ -230,7 +230,7 @@ import { markAnswerStream } from "./quiz-mark.js";
 import { similarBlocks } from "./similar.js";
 import { projectArticle } from "./projection.js";
 import { EmbeddingFailure } from "./embeddings.js";
-import { isSpideryarnId } from "./ids.js";
+import { isSpideryarnId, isUuid } from "./ids.js";
 /* **The one exception to "every paid call goes through OpenRouter"**, and it is
    Greg's, weighed rather than slipped past: OpenRouter has no realtime API at
    all. src/live.ts holds the whole of it, including the only use of
@@ -263,8 +263,10 @@ import {
 } from "./jobs.js";
 import { describeAdminMiss, isAdmin } from "./admin.js";
 import type { NewFeedback, Visibility } from "./store/contracts.js";
+import { ADMIN_FEEDBACK_DEFAULT_LIMIT, decodeFeedbackCursor } from "./types.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
 import { placingFailed, UPLOAD_MISSING, UPLOAD_UNAVAILABLE } from "./messages.js";
+import { WEBHOOK_PATH, serveStripeWebhook } from "./billing/webhook.js";
 import { isPublicNamespace, servePublicApi } from "./public/routes.js";
 import { currentOwnerId, runInRequest, setRequestOwner } from "./owner.js";
 import {
@@ -5048,6 +5050,12 @@ async function transcribeDictation(
  * field at all in which to write a content type or a filename for the
  * screenshot.
  */
+/**
+ * The three fields the dialog sent before 2026-09-02, named once so that the
+ * allowlist and the shape check cannot disagree about what "the old shape" is.
+ */
+const LEGACY_ANSWER_FIELDS = ["steps", "expected", "actual"] as const;
+
 const FEEDBACK_FIELDS = [
   "id",
   "body",
@@ -5058,9 +5066,7 @@ const FEEDBACK_FIELDS = [
      reader is trying to report — so they are folded into `body` rather than
      refused. GPT Sol's review of the plan, 2026-09-02. They come out when the
      old bundles are certainly gone. */
-  "steps",
-  "expected",
-  "actual",
+  ...LEGACY_ANSWER_FIELDS,
   "consented",
   "routeKind",
   "slug",
@@ -5132,6 +5138,17 @@ function feedbackAnswer(value: unknown, field: string): string | null {
  * making something up, and there would be no right answer about which to keep.
  */
 function feedbackBody(sent: Record<string, unknown>): string {
+  /* **Which shape this is, decided on the keys and before any value is looked
+     at.** The first version asked whether each field held text, so
+     `{body: null, steps: "…"}` — both vocabularies, one of them empty — was
+     read as a well-formed old client rather than as the muddle it is. A shape
+     is a set of keys. GPT Sol's code review, 2026-09-02. */
+  const hasBody = Object.hasOwn(sent, "body");
+  const hasLegacy = LEGACY_ANSWER_FIELDS.some((key) => Object.hasOwn(sent, key));
+  if (hasBody && hasLegacy) {
+    throw httpError(400, "A report mixes two request shapes [fb-shape]");
+  }
+
   const written = feedbackAnswer(sent.body, "body");
   const steps = feedbackAnswer(sent.steps, "steps");
   const expected = feedbackAnswer(sent.expected, "expected");
@@ -5141,9 +5158,6 @@ function feedbackBody(sent: Record<string, unknown>): string {
     expected === null ? null : `What you expected to see:\n${expected}`,
     actual === null ? null : `What you saw instead:\n${actual}`,
   ].filter((part): part is string => part !== null);
-  if (written !== null && legacy.length > 0) {
-    throw httpError(400, "A report mixes two request shapes [fb-shape]");
-  }
   const body = written ?? (legacy.length > 0 ? legacy.join("\n\n") : null);
   /* The database says the same thing — `body` is `not null` — and this is the
      half that gets to explain itself. A `kind` on its own is not a report: it is
@@ -5705,6 +5719,26 @@ async function serveApi(
       return true;
     }
 
+    /**
+     * **The Stripe webhook — the second thing on this server that runs before
+     * the gate, and the only one that is handed the request.**
+     *
+     * Stripe has no session and never will, so this cannot sit behind
+     * `requireUser`. An **exact** path rather than a namespace, unlike the
+     * public branch above: nothing else under `/api/webhooks/` should become
+     * reachable because somebody added a second provider without re-reading
+     * src/billing/webhook.ts.
+     *
+     * Inside the `try` for the reason the comment below gives at length, and
+     * before anything else touches `req`, because the signature is over the
+     * bytes as they arrived — something that had already consumed the stream
+     * would leave nothing to verify.
+     */
+    if (path === WEBHOOK_PATH) {
+      await serveStripeWebhook(req, res, method);
+      return true;
+    }
+
     /* **The gate, and it is inside the `try` — that is the whole of this
        comment's content.** An earlier plan put it just after the `/api/` prefix
        check, eighty-five lines above, on the theory that this `try` would turn
@@ -5931,6 +5965,23 @@ export async function serveAuthenticatedApi(
      `/api/admin/users/anything` is a 404 rather than a quiet match — and behind
      the namespace check either way. docs/project/admin.md. */
   const adminUsers = path === "/api/admin/users";
+  /* The second admin route, and the only one that returns a reader's own
+     sentences. Exact on `path` for the same reason as the one above.
+     docs/plans/260902l-admin-feedback-page.md. */
+  const adminFeedback = path === "/api/admin/feedback";
+  /* **One report, and it takes two segments** — `feedback`'s primary key is
+     `(owner_id, id)` because the id is minted by a browser, so an address with
+     only the id in it can name two different people's reports. GPT Sol,
+     2026-09-02; src/store/pg-admin-feedback.ts has the whole argument.
+
+     The patterns are id *shapes*; `isUuid` and `isSpideryarnId` are the *rules*,
+     applied in the handler before the store sees either value — the division
+     every other id route here uses, and the reason a pattern that merely looks
+     strict is not treated as validation. */
+  const adminFeedbackOne = /^\/api\/admin\/feedback\/([\w-]+)\/([\w-]+)$/.exec(path);
+  const adminFeedbackShot = /^\/api\/admin\/feedback\/([\w-]+)\/([\w-]+)\/screenshot$/.exec(
+    path,
+  );
   const library = path === "/api/library";
   /* Before the `:slug` pattern below, and it has to be: `search` is a valid
      slug shape, so the two patterns overlap and the specific one must win.
@@ -6189,6 +6240,79 @@ export async function serveAuthenticatedApi(
          response states it. GPT Sol, 2026-08-27. */
       res.setHeader("Cache-Control", "private, no-store");
       send(res, 200, { users: await adminStore.listUsersAcrossOwners() });
+      return;
+    }
+
+    if (adminFeedback && req.method === "GET") {
+      /* `private, no-store`, and here it is not belt and braces the way it is on
+         the users list. That one carries counts; this one carries what other
+         people wrote to us in confidence, and a cache — ours, a proxy's, a
+         browser's back-forward store — is a second copy of it that nobody
+         decided to make. */
+      res.setHeader("Cache-Control", "private, no-store");
+      /* Absent means the default. A `?limit=` that is not a number is the
+         default too rather than a 400: the store clamps into
+         [1, ADMIN_FEEDBACK_MAX] whatever arrives, so there is no value here
+         that can do harm, and a refusal would be ceremony on a page only one
+         person can open. */
+      const asked = Number(query.get("limit"));
+      /* **A malformed cursor is a 400, and that one is not ceremony.** Silently
+         starting from the top instead would hand back page 1 while the reader
+         pressed *Load older* — a page that looks like it worked and quietly
+         skipped everything in between, which is the shape docs/reusable/silent-success.md
+         is about. */
+      const cursor = decodeFeedbackCursor(query.get("before"));
+      if (cursor === "malformed") throw httpError(400, "That is not a valid page cursor.");
+      send(
+        res,
+        200,
+        await adminStore.listFeedbackAcrossOwners(
+          Number.isFinite(asked) && asked > 0 ? asked : ADMIN_FEEDBACK_DEFAULT_LIMIT,
+          cursor,
+        ),
+      );
+      return;
+    }
+
+    if (adminFeedbackOne && req.method === "GET") {
+      const [, owner = "", id = ""] = adminFeedbackOne;
+      if (!isUuid(owner)) throw httpError(400, "ownerId must be a uuid");
+      if (!isSpideryarnId(id)) throw httpError(400, "id must be a report id");
+      res.setHeader("Cache-Control", "private, no-store");
+      const report = await adminStore.readFeedbackAcrossOwners(owner, id);
+      if (!report) throw httpError(404, "There is no such report.");
+      send(res, 200, { report });
+      return;
+    }
+
+    if (adminFeedbackShot && req.method === "GET") {
+      const [, owner = "", id = ""] = adminFeedbackShot;
+      /* The shapes in the pattern are not the rules. These are, and they run
+         before the store does — src/ids.ts, and docs/project/block-ids.md on
+         why a regex that looks strict enough is how range checks go quietly
+         wrong. Both halves, because both are half of the key. */
+      if (!isUuid(owner)) throw httpError(400, "ownerId must be a uuid");
+      if (!isSpideryarnId(id)) throw httpError(400, "id must be a report id");
+      const bytes = await adminStore.readFeedbackScreenshotAcrossOwners(owner, id);
+      /* No such report and a report with no screenshot are one answer, and the
+         store says so — see its docstring. Distinguishing them here would tell
+         the caller a thing it may do nothing with. */
+      if (!bytes) throw httpError(404, "That report has no screenshot.");
+
+      res.statusCode = 200;
+      /* **A literal, and it is correct by construction rather than by trust.**
+         src/feedback-image.ts does not *check* an uploaded screenshot, it
+         rebuilds one: the stored bytes are a PNG signature and a chunk stream
+         this app wrote, with every ancillary chunk — text, EXIF, colour
+         profiles — dropped. So there is no stored content type to get wrong,
+         and nothing to sniff. */
+      res.setHeader("Content-Type", CONTENT_TYPE.png);
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "private, no-store");
+      /* The bytes being written, not a stored count — the same rule the PDF
+         route follows, and the one that stays true when the two disagree. */
+      res.setHeader("Content-Length", String(bytes.byteLength));
+      res.end(Buffer.from(bytes));
       return;
     }
 
@@ -6691,11 +6815,12 @@ export async function serveAuthenticatedApi(
     }
     if (chatSpoken && req.method === "POST") {
       /* **The spend attribution the streaming route has, for the half of a live
-         session this server can see.** It buys nothing today — no row is
-         written for realtime audio at all, and `npm run cost` says so by name
-         (scripts/ai-cost.ts § `liveConversationGap`) — but this is the only
-         request in a live conversation that knows which article it belongs to,
-         so it is where a meter would attach. */
+         session this server can see.** It buys nothing today: the realtime rows
+         are written by `/api/live/:sessionId/usage` above, which takes its
+         article off the session row rather than off the ambient scope. Kept
+         because this request makes model calls of its own the moment anything
+         here does, and because it is the only request in a live conversation
+         that knows which article it belongs to. */
       const [slug, id] = [slugPart(chatSpoken, 1), part(chatSpoken, 2)];
       const spokenBody = await readBody(req);
       send(
