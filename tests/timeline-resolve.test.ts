@@ -284,7 +284,10 @@ describe("the panel, rendered", () => {
       failed: null,
       /* The tab can reach the server — src/job-state.ts § `driverStalled`. */
       stalled: false,
-      find: async () => {},
+      starting: false,
+      automatic: false,
+      ensure: async () => {},
+      regenerate: async () => {},
       cancel: () => {},
       ...over,
     };

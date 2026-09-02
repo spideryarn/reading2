@@ -241,6 +241,36 @@ export interface JobEngine {
    */
   resume(): void;
   /**
+   * **Claim the one automatic attempt this tab session gets at
+   * `(slug, step)`.** True the first time; false for ever afterwards.
+   *
+   * A mode that starts itself when the reader clicks it reverses a decision
+   * made on 2026-08-25 — *a button, on demand* — and the reason for that
+   * decision is still true: the original version generated on first view, and
+   * its effect re-fired on every failure, generating, failing and generating
+   * again for as long as the tab stayed open. A button removed that loop
+   * structurally. This is what replaces the button as the structural answer,
+   * rather than an error flag somebody has to remember to set on every path.
+   *
+   * **Synchronous, and it inserts before it answers**, so the mark lands before
+   * the caller's `await` rather than after it and two effects in one tick
+   * cannot both pass. That is the whole of its correctness: a version that
+   * checked, posted, and then recorded would be a check-then-act race with
+   * `<StrictMode>`'s double-invoked effects.
+   *
+   * **Not durable, and not a memory of what has been built.** It is one tab's
+   * account of what it has already tried, so a reload is one more attempt —
+   * deliberately, because a reader who reloads after a failure is asking again.
+   * The button beside the empty state is the other retry, and a person pressing
+   * it is not a loop.
+   *
+   * Cleared by `teardown`, so signing into a different account in the same tab
+   * does not inherit the first reader's attempts.
+   *
+   * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 2a.
+   */
+  beginAutoAttempt(slug: string, step: StepName): boolean;
+  /**
    * Apply a job list as though a poll had returned it, **without touching the
    * timer**.
    *
@@ -307,6 +337,15 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
   const announced = new Set<string>();
   let sequence = 0;
   let completions: { seq: number; job: Job }[] = [];
+
+  /**
+   * `(slug, step)` pairs this session has already tried automatically.
+   *
+   * Session-owned rather than mount-owned, which is the point: it survives a
+   * panel unmounting, a mode toggled off and on, and a re-render, so none of
+   * those buys a second paid job. See `beginAutoAttempt` on the interface.
+   */
+  const autoAttempts = new Set<string>();
 
   /* A bound session, and nothing else. See the header: a mounted subscriber
      picks the cadence, it does not grant permission to ask. With no session the
@@ -579,6 +618,10 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
     driving.clear();
     seeded = false;
     announced.clear();
+    /* A different reader in the same tab starts with a clean sheet — theirs is
+       a different shelf, and one of these pairs may name an article they have
+       never seen. See `beginAutoAttempt`. */
+    autoAttempts.clear();
     /* The *sequence* stays where it is, so a cursor a subscriber captured under
        the old session can never be met by a new session's event. Only the
        events themselves go. */
@@ -659,6 +702,12 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
       if (!started || !snapshot.authFailed) return;
       set({ authFailed: false, error: null });
       poke();
+    },
+    beginAutoAttempt(slug, step) {
+      const key = `${slug} ${step}`;
+      if (autoAttempts.has(key)) return false;
+      autoAttempts.add(key);
+      return true;
     },
     receive: apply,
     reset() {

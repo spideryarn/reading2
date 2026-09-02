@@ -347,6 +347,12 @@ const OWNED: Article = {
  * matters most to the chrome: a visitor who has an account.
  */
 let owned: () => Response;
+/**
+ * A `/api/…/` prefix the server answers 404 for — *nobody has asked for one of
+ * these yet*, which is the state the five self-starting modes act on. Null
+ * unless a test sets it. See `reply`.
+ */
+let notBuilt: string | null = null;
 
 /**
  * What the public article endpoint serves — `ARTICLE` unless a case says
@@ -387,6 +393,10 @@ function reply(url: string, method: string): Response {
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
   if (url.startsWith("/api/chat/")) return json({ threads: [] });
   if (url.startsWith("/api/glossary/")) return json({ status: "none", glossary: null });
+  /* **Nobody has built this one**, for the owner control at the foot of this
+     file: pressing a mode whose artefact is missing is what starts a job, and
+     with every artefact answered `{}` there is no such mode on the page. */
+  if (notBuilt !== null && url.startsWith(notBuilt)) return new Response(null, { status: 404 });
   /* The job list `useJobs` polls. An empty list rather than `{}` because the
      hook reads `body.jobs` and the owner control below is about the *request*,
      not about anything being in flight. */
@@ -426,6 +436,7 @@ beforeEach(() => {
   trace.length = 0;
   session.user = null;
   served = ARTICLE;
+  notBuilt = null;
   /* Reads `served` at call time, so a case may still swap the payload without
      also having to restate how the route answers. */
   publicArticle = () => json(served);
@@ -1137,6 +1148,47 @@ describe("a signed-out browser on a shared document", () => {
     expect([...pressed].sort()).toEqual([...MODES].sort());
   }, SWEEP_MS);
 
+  /**
+   * **The five modes that start themselves for an owner start nothing here.**
+   *
+   * Since 2026-09-02, pressing Glossary, Ideas, Quotes or Timeline with nothing
+   * behind it posts a job, and so does picking the Sketch picture inside
+   * Diagram. The sweep above already presses every button and asserts no POST,
+   * which covers the first four; this names them, so that a future edit which
+   * quietly narrowed the sweep is still red here.
+   *
+   * The seam is capability rather than a check inside the feature: the hooks
+   * that can do it mount under `OwnedReader` and never for a visitor. That is
+   * what makes this cheap to hold and worth holding — it fails the moment
+   * somebody moves one of them up a level.
+   */
+  it("starts none of the five paid modes, however they are reached", async () => {
+    for (const mode of ["glossary", "ideas", "quotes", "timeline"]) {
+      await remount();
+      await open(`?mode=${mode}`);
+      expect(trace.filter((r) => r.method !== "GET"), `on ${mode}`).toEqual([]);
+      expect(outsidePublic(), `on ${mode}`).toEqual([]);
+    }
+  });
+
+  /**
+   * **And the sketch, which is not a mode but a picture inside one.**
+   *
+   * `?mode=diagram&diagram=sketch` is a real address — it is what a reader who
+   * had the picture open would copy — and it is the one auto-run that is not
+   * armed by a bar button. A visitor gets the *Diagram is for whoever added
+   * this article* band instead, so there is no chip to press and no `useSketch`
+   * to fire; both halves are asserted, because the absence of a POST alone
+   * would pass over a page that had simply failed to render.
+   */
+  it("draws no sketch chip on a shared link that names one", async () => {
+    await open("?mode=diagram&diagram=sketch");
+
+    expect(host.querySelector("[data-diag-kind]"), "no picture chips for a visitor").toBeNull();
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+    expect(outsidePublic()).toEqual([]);
+  });
+
   it("opens the comments drawer without asking for anybody's comments", async () => {
     await open("?panel=questions");
     expect(outsidePublic()).toEqual([]);
@@ -1366,6 +1418,34 @@ describe("a signed-in reader who does not own it", () => {
     ).toHaveLength(1);
 
     expect(withAnAccount.filter((l) => l !== probe && l !== sessionPoll)).toEqual(stranger);
+  });
+
+  /**
+   * **A signed-in reader who does not own it presses the bar and buys nothing.**
+   *
+   * The signed-out sweep is not enough on its own, and the difference is real
+   * rather than theoretical: a signed-in reader has a session, an
+   * `Authorization` header that works, and a running job engine — everything a
+   * POST needs except the article. `OwnedReader` is what stops them, and this
+   * is the measure of it from outside.
+   *
+   * `GET /api/jobs` is expected and is theirs: the engine binds to `user.id`
+   * wherever they are. What must not appear is a **POST**.
+   */
+  it("presses every mode in the bar and posts nothing", async () => {
+    session.user = { id: "somebody-else", email: "else@example.com" };
+    owned = () => json({ error: "not yours" }, 404);
+    await open();
+    trace.length = 0;
+
+    const buttons = modeRadios();
+    expect(buttons.length, "the bar must draw its modes").toBeGreaterThan(0);
+    for (const button of buttons) {
+      const label = button.getAttribute("aria-label");
+      await act(async () => button.click());
+      await settle();
+      expect(trace.filter((r) => r.method !== "GET"), `after pressing ${label}`).toEqual([]);
+    }
   });
 
   /**
@@ -1699,6 +1779,104 @@ describe("the same address, as the owner", () => {
     const gutters = host.querySelectorAll("a.blk-permalink").length;
     expect(gutters, "the prose must have rendered").toBeGreaterThan(0);
     expect(chatButtons().length).toBe(gutters);
+  });
+
+  /**
+   * **The control for the whole of stage 2, and for every "no POST" above it.**
+   *
+   * A visitor pressing Ideas must buy nothing, and this file has half a dozen
+   * assertions saying so. Every one of them would be equally green over a
+   * feature that had never worked — which is
+   * docs/reusable/silent-success.md, and is why this is here: the owner, on the
+   * same address, pressing the same button, on an article with no ideas, posts
+   * a job.
+   *
+   * Ideas rather than any of the other four because it is the one this fixture
+   * can put into the *nobody has built one* state with a single line: the rest
+   * of `reply` answers `{}`, which the artefact hooks read as an empty but
+   * present artefact.
+   */
+  it("starts the job when the owner presses a mode nobody has run", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    notBuilt = `/api/ideas/`;
+    await open();
+    trace.length = 0;
+
+    const ideas = [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
+      (b) => b.getAttribute("aria-label") === "Ideas",
+    );
+    expect(ideas, "the bar must draw Ideas").toBeDefined();
+    await act(async () => ideas?.click());
+    await settle();
+
+    /* The artefact read really happened and really said no, so the POST below
+       is a decision rather than an accident of ordering. */
+    expect(trace.some((r) => r.url.startsWith("/api/ideas/"))).toBe(true);
+    expect(
+      trace.filter((r) => r.method === "POST" && r.url === "/api/jobs"),
+      "exactly one job, under React's double-invoked effects",
+    ).toHaveLength(1);
+  });
+
+  /**
+   * And **arriving** at the same mode at the same address does not, which is
+   * the whole of § 2b in one pair of tests. A pasted link, a shared link, a
+   * Back step and a link in from the metadata page all reach the panel this
+   * way.
+   */
+  it("does not start it for an owner who merely arrives at the mode", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    notBuilt = `/api/ideas/`;
+    await open("?mode=ideas");
+
+    expect(trace.some((r) => r.url.startsWith("/api/ideas/")), "the GET settled").toBe(true);
+    expect(trace.filter((r) => r.method === "POST" && r.url === "/api/jobs")).toEqual([]);
+  });
+
+  /**
+   * **The fifth of the five, and the only one whose gesture is not a bar
+   * button.** Sketch is armed by the chip inside Diagram
+   * (`DiagramPanel.tsx` § the kind chips), so nothing in
+   * tests/modes-that-start-themselves.test.tsx — which mounts the bar and three
+   * probe bands — can reach it. Delete that one `armActivation` call, or
+   * `useAutoRun` from `useSketch`, and every other test about stage 2 stays
+   * green. GPT Sol, 2026-09-02.
+   *
+   * The negative twin is *draws no sketch chip on a shared link that names one*
+   * in the visitor block above: a visitor gets no chip at all, so there is
+   * nothing to press.
+   */
+  it("draws a picture nobody has drawn when the owner presses the sketch chip", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    notBuilt = `/api/sketch/`;
+    await open("?mode=diagram");
+    trace.length = 0;
+
+    const chip = host.querySelector<HTMLButtonElement>('[data-diag-kind="sketch"]');
+    expect(chip, "Diagram must draw the sketch chip for its owner").not.toBeNull();
+    await act(async () => chip?.click());
+    await settle();
+
+    /* The artefact read really happened and really said no, so the POST is a
+       decision rather than an accident of ordering. */
+    expect(trace.some((r) => r.url.startsWith("/api/sketch/"))).toBe(true);
+    expect(
+      trace.filter((r) => r.method === "POST" && r.url === "/api/jobs"),
+      "exactly one job, under React's double-invoked effects",
+    ).toHaveLength(1);
+  });
+
+  /**
+   * And **arriving** at the same picture buys nothing, which is the address a
+   * reader gets when somebody shares the sketch they were looking at.
+   */
+  it("does not draw one for an owner who merely arrives at the sketch", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    notBuilt = `/api/sketch/`;
+    await open("?mode=diagram&diagram=sketch");
+
+    expect(trace.some((r) => r.url.startsWith("/api/sketch/")), "the GET settled").toBe(true);
+    expect(trace.filter((r) => r.method === "POST" && r.url === "/api/jobs")).toEqual([]);
   });
 
   it("mounts the private hooks and the record-open POST", async () => {

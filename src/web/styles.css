@@ -8338,6 +8338,13 @@ td.text.has-hit[data-hues="8"] {
 .prof-use input:disabled { cursor: default; }
 .prof-use:has(input:disabled) { opacity: 0.5; cursor: default; }
 
+/* The same row, saying what an automatic run chose rather than asking. It is a
+   statement, so it takes none of the checkbox's affordances — no pointer, no
+   hover, and not the greyed-out `opacity` a disabled tick gets, which is the
+   whole point of it not being one. src/web/WrittenForYou.tsx § `automatic`. */
+.prof-use.prof-said { cursor: default; }
+.prof-use.prof-said:hover { color: var(--ink-faint); }
+
 /* The checkbox and the run button, on one line — glossary's empty state and
    its two stale banners. `wrap` because the band is 400px and "Use your
    profile" beside "Find them again" is close to the limit. */
