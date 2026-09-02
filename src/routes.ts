@@ -266,6 +266,7 @@ import type { NewFeedback, Visibility } from "./store/contracts.js";
 import { ADMIN_FEEDBACK_DEFAULT_LIMIT, decodeFeedbackCursor } from "./types.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
 import { placingFailed, UPLOAD_MISSING, UPLOAD_UNAVAILABLE } from "./messages.js";
+import { WEBHOOK_PATH, serveStripeWebhook } from "./billing/webhook.js";
 import { isPublicNamespace, servePublicApi } from "./public/routes.js";
 import { currentOwnerId, runInRequest, setRequestOwner } from "./owner.js";
 import {
@@ -5049,6 +5050,12 @@ async function transcribeDictation(
  * field at all in which to write a content type or a filename for the
  * screenshot.
  */
+/**
+ * The three fields the dialog sent before 2026-09-02, named once so that the
+ * allowlist and the shape check cannot disagree about what "the old shape" is.
+ */
+const LEGACY_ANSWER_FIELDS = ["steps", "expected", "actual"] as const;
+
 const FEEDBACK_FIELDS = [
   "id",
   "body",
@@ -5059,9 +5066,7 @@ const FEEDBACK_FIELDS = [
      reader is trying to report — so they are folded into `body` rather than
      refused. GPT Sol's review of the plan, 2026-09-02. They come out when the
      old bundles are certainly gone. */
-  "steps",
-  "expected",
-  "actual",
+  ...LEGACY_ANSWER_FIELDS,
   "consented",
   "routeKind",
   "slug",
@@ -5133,6 +5138,17 @@ function feedbackAnswer(value: unknown, field: string): string | null {
  * making something up, and there would be no right answer about which to keep.
  */
 function feedbackBody(sent: Record<string, unknown>): string {
+  /* **Which shape this is, decided on the keys and before any value is looked
+     at.** The first version asked whether each field held text, so
+     `{body: null, steps: "…"}` — both vocabularies, one of them empty — was
+     read as a well-formed old client rather than as the muddle it is. A shape
+     is a set of keys. GPT Sol's code review, 2026-09-02. */
+  const hasBody = Object.hasOwn(sent, "body");
+  const hasLegacy = LEGACY_ANSWER_FIELDS.some((key) => Object.hasOwn(sent, key));
+  if (hasBody && hasLegacy) {
+    throw httpError(400, "A report mixes two request shapes [fb-shape]");
+  }
+
   const written = feedbackAnswer(sent.body, "body");
   const steps = feedbackAnswer(sent.steps, "steps");
   const expected = feedbackAnswer(sent.expected, "expected");
@@ -5142,9 +5158,6 @@ function feedbackBody(sent: Record<string, unknown>): string {
     expected === null ? null : `What you expected to see:\n${expected}`,
     actual === null ? null : `What you saw instead:\n${actual}`,
   ].filter((part): part is string => part !== null);
-  if (written !== null && legacy.length > 0) {
-    throw httpError(400, "A report mixes two request shapes [fb-shape]");
-  }
   const body = written ?? (legacy.length > 0 ? legacy.join("\n\n") : null);
   /* The database says the same thing — `body` is `not null` — and this is the
      half that gets to explain itself. A `kind` on its own is not a report: it is
@@ -5703,6 +5716,26 @@ async function serveApi(
          the request object, so "the public routes ignore `Authorization`" is not a
          rule anybody has to keep. */
       await servePublicApi({ res, path, method });
+      return true;
+    }
+
+    /**
+     * **The Stripe webhook — the second thing on this server that runs before
+     * the gate, and the only one that is handed the request.**
+     *
+     * Stripe has no session and never will, so this cannot sit behind
+     * `requireUser`. An **exact** path rather than a namespace, unlike the
+     * public branch above: nothing else under `/api/webhooks/` should become
+     * reachable because somebody added a second provider without re-reading
+     * src/billing/webhook.ts.
+     *
+     * Inside the `try` for the reason the comment below gives at length, and
+     * before anything else touches `req`, because the signature is over the
+     * bytes as they arrived — something that had already consumed the stream
+     * would leave nothing to verify.
+     */
+    if (path === WEBHOOK_PATH) {
+      await serveStripeWebhook(req, res, method);
       return true;
     }
 

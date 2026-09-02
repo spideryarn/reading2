@@ -19,6 +19,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { isSpideryarnId } from "../src/ids.js";
+import { MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
 
 const posts: { input: string; init: RequestInit }[] = [];
 let answer: () => Promise<Response>;
@@ -463,6 +464,58 @@ describe("the feedback dialog", () => {
     show(false);
     expect(micToggles).toEqual(["hook"]);
     mic.armed = false;
+  });
+
+  it("will not send a report past the character limit", async () => {
+    /* The counter under the box was a statement and not a rule: Send stayed
+       enabled at one character over, so the reader was told the limit, allowed
+       to press the button, and answered with a server-side `[fb-long]`. Both
+       paths, because `disabled` does not stop the keyboard chord. GPT Sol's code
+       review, 2026-09-02. */
+    mount();
+    type("x".repeat(MAX_FEEDBACK_ANSWER_CHARS + 1));
+    expect(host.querySelector<HTMLButtonElement>("button.fb-send")?.disabled).toBe(true);
+    send();
+    await act(async () => {});
+    expect(posts).toHaveLength(0);
+
+    type("x".repeat(MAX_FEEDBACK_ANSWER_CHARS));
+    expect(host.querySelector<HTMLButtonElement>("button.fb-send")?.disabled).toBe(false);
+  });
+
+  it("lets the newest attempt have the last word, whatever order they settle in", async () => {
+    /**
+     * **Two requests, one report id.** The id survives a close and reopen on
+     * purpose, and reopening releases the send latch — so a reader who gives up
+     * on a slow send, comes back and presses Send again has two in flight, and
+     * they can answer in either order. Guarding on the id alone let the *older*
+     * one write to the screen: here it fails after the retry has succeeded, and
+     * without an attempt counter it paints the failure panel over "Thank you".
+     * GPT Sol's code review, 2026-09-02.
+     */
+    mount();
+    type("Said once, sent twice.");
+    let settleFirst: ((res: Response) => void) | null = null;
+    answer = () => new Promise<Response>((resolve) => (settleFirst = resolve));
+    send();
+    await act(async () => {});
+
+    /* Give up on it and try again — same report, same id, second attempt. */
+    reopen();
+    answer = ok(201);
+    send();
+    await act(async () => {});
+    expect(host.querySelector(".fb-done"), "the retry should have been filed").not.toBeNull();
+
+    /* Only now does the first attempt come back, and it failed. */
+    await act(async () => {
+      settleFirst?.(new Response("nope", { status: 500 }));
+    });
+    expect(
+      host.querySelector(".fb-done"),
+      "an older attempt overwrote a newer success",
+    ).not.toBeNull();
+    expect(host.querySelector(".fb-failed")).toBeNull();
   });
 
   it("says so when the browser refuses the clipboard", async () => {

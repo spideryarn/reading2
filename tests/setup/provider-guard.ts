@@ -183,13 +183,33 @@ export function providerHostOf(input: unknown): string | null {
        reachable relative to a test's own origin. */
     return null;
   }
-  for (const provider of PROVIDER_HOSTS) {
+  for (const provider of [...PROVIDER_HOSTS, ...ALSO_REFUSED]) {
     /* Hostname equality or a dotted suffix, never `includes`: a substring match
        would pass `openrouter.ai.evil.example` and fail nothing. */
     if (host === provider || host.endsWith(`.${provider}`)) return provider;
   }
   return null;
 }
+
+/**
+ * Third parties a test must not reach that are **not** inference spend.
+ *
+ * Kept here rather than added to `PROVIDER_HOSTS`, and the separation is the
+ * point. That list means *this host costs money per token*: it drives
+ * `tests/no-undeclared-spend.test.ts`, which insists every source file capable
+ * of reaching one of those hosts is registered in `src/spend-declarations.ts`.
+ * Putting Stripe in it would demand a spend declaration from every billing
+ * file, for calls that buy nothing — and would quietly weaken what a
+ * declaration means.
+ *
+ * What Stripe shares with them is only the consequence: a real `.env.local`
+ * sits under every test run, so a test that reached `api.stripe.com` would do
+ * it as us, with our key, and leave customers and subscriptions behind in the
+ * dashboard. Signature verification needs no network at all — the SDK's
+ * `generateTestHeaderString` signs a payload offline — so nothing legitimate
+ * loses anything by this being refused.
+ */
+const ALSO_REFUSED: readonly string[] = ["api.stripe.com"];
 
 function methodOf(input: unknown, init: unknown): string {
   const fromInit = (init as { method?: unknown } | undefined)?.method;

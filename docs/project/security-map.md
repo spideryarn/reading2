@@ -54,6 +54,12 @@ A shallow path-traversal probe that lands on the fixture article looks exactly l
   is: one route, one path prefix, one address. Which of its three refusals is a gate and which two
   are courtesies, why the check is on the prefix rather than the route, and what the page
   deliberately does not show.
+- **[billing.md](billing.md)** — money, and the two things it is really about here. Card details
+  never reach this server at all (hosted Checkout and Portal, opaque ids only), and the ingest
+  quota is an **abuse boundary against model spend** rather than an invoice — so the interesting
+  part is what stops a script firing twenty concurrent requests at a free account, which turns out
+  to be one `insert … on conflict do nothing` in front of a `for update`. Also where test and live
+  mode are kept apart, in three places, all keyed on the credential's own prefix.
 - **[deployment.md § Who can reach it](deployment.md#who-can-reach-it)** — the app is readable by
   anybody with the address, deliberately, and it was an accident first: Vercel's protection setting
   reports itself as enabled while serving the world.

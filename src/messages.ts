@@ -352,6 +352,17 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      docs/project/feedback.md. */
   "fb-send": "retry",
   "fb-store": "ours",
+  /* The subscription allowance, `pay-`. All three are registered rather than
+     left to fall through, and the two `blocked` ones are the reason: an
+     unrecognised code means *offer another go*, so "you have used all three of
+     your free articles" would have arrived with a Retry button beside it —
+     pressing it does not move the count, and a button that cannot work is the
+     mistake this table exists to prevent. `pay-off` is `ours`: a deployment
+     with no Stripe configured is nothing the reader can act on.
+     docs/project/billing.md. */
+  "pay-free": "blocked",
+  "pay-limit": "blocked",
+  "pay-off": "ours",
 };
 
 
@@ -2138,4 +2149,87 @@ export const FEEDBACK_NOT_AVAILABLE: ReaderFacingFailure = {
     "This copy of the app cannot file reports — it is running without the database they are kept " +
     "in. Trying again will not help. The Copy button below puts the report on your clipboard. " +
     "[fb-store]",
+};
+
+/* ---- the subscription allowance. docs/project/billing.md ----------------------- */
+
+/**
+ * The account has added everything its plan allows.
+ *
+ * **`blocked`, and the `pay-` prefix is new.** `blocked` is what `kind` is for:
+ * it answers "will another go at this help", and the answer is no — the count
+ * does not move because a button was pressed twice. What it must not be is
+ * `retry`, which would put a Retry button on a wall.
+ *
+ * It stretches `blocked` slightly, and knowingly. copy.md describes that kind as
+ * a refusal the reader can get past *by asking for less*, and here they get past
+ * it by paying or by waiting. The alternative was a fifth kind for one case, and
+ * the thing `kind` is actually consulted for — should we offer another go —
+ * gives the same answer either way.
+ *
+ * **Both sentences end by saying reading is unaffected**, which is the one thing
+ * a reader will actually be worried about and the one promise this product makes
+ * about money (Greg, 2026-09-02: *"if a user has hit their quota, they should
+ * still be able to read their existing and Public-readable articles"*). Neither
+ * says "upgrade" as a bare instruction: the free one names where the button is,
+ * because a sentence telling somebody to do a thing without saying where is a
+ * sentence that makes them hunt.
+ *
+ * A factory rather than a constant because the numbers have to be in it —
+ * "you've reached your limit" without the limit leaves the reader unable to tell
+ * whether it is the plan or a fault. Registered in `FROM_FACTORIES` in
+ * tests/messages.test.ts, since `CONSTANTS` cannot see it.
+ */
+export function ingestQuotaReached(quota: {
+  limit: number;
+  /** When the allowance resets. Absent for the free tier, whose limit is lifetime. */
+  resetAt?: Date;
+}): ReaderFacingFailure {
+  const kept =
+    "Everything you have already added stays exactly where it is — reading is never limited.";
+
+  if (!quota.resetAt) {
+    return {
+      kind: "blocked",
+      message:
+        `You have added all ${quota.limit} articles a free account can add. Trying again will not ` +
+        "help — the count will be the same. Adding more needs a subscription, and the Upgrade " +
+        `button on your profile page sets one up. ${kept} [pay-free]`,
+    };
+  }
+
+  /* Day, month and year, in the reader's words rather than an ISO stamp. `UTC`
+     so the sentence does not change depending on where the server is standing —
+     the boundary itself is Stripe's, and it is not to the hour anyway. */
+  const when = quota.resetAt.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  return {
+    kind: "blocked",
+    message:
+      `You have added all ${quota.limit} articles this billing period covers. Trying again will ` +
+      `not help until your allowance starts again on ${when}. ${kept} [pay-limit]`,
+  };
+}
+
+/**
+ * Billing is configured wrongly, or not at all, on this deployment.
+ *
+ * `ours` rather than `retry` or `blocked`: nothing the reader does changes it,
+ * and it is not a refusal of what they asked for. It is what a checkout or a
+ * portal route answers when `stripeConfigProblem()` has something to say — a
+ * missing key, or a key from the wrong mode (src/billing/stripe.ts). Reachable
+ * on a developer's machine and, if we ever get it wrong, in production; written
+ * plainly for both, because copy.md's whole point is that we do not know who is
+ * reading.
+ */
+export const BILLING_NOT_AVAILABLE: ReaderFacingFailure = {
+  kind: "ours",
+  message:
+    "Subscriptions are not set up on this copy of the app, so there is nothing to buy here just " +
+    "now. Trying again will not help — it needs somebody to configure it. Nothing you have is " +
+    "affected, and reading carries on as normal. [pay-off]",
 };
