@@ -40,10 +40,15 @@ npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high --timeout-minutes
 
 Read-only, in the background, and give it three quarters of an hour.
 
-**Weight the second review higher than the first.** A plan-stage review reads prose, so it can only
-catch what the prose says. It cannot find a `PATCH` handler that writes one field and then rejects
-the request — that bug does not exist until somebody writes it. Reviewing the plan and calling the
-job done is reviewing the half where the bugs are not.
+**Weight the second review higher than the first — higher, not instead.** A plan-stage review reads
+prose, so it can only catch what the prose says. It cannot find a `PATCH` handler that writes one
+field and then rejects the request — that bug does not exist until somebody writes it. Reviewing the
+plan and calling the job done is reviewing the half where the bugs are not.
+
+But the plan review is where a design error is still cheap, and it is the round most likely to find
+something you could not have. On 2026-09-02 it returned "not ready" and was right four times over —
+one of its findings was that a list the plan proposed deriving mechanically would have fed HTML to a
+JSON parser. Building that and tearing it out at code review would have cost a stage.
 
 **Hand it the evidence, not only the prose** — the scoped diff, the results file, the script that
 produced a number. The most useful finding is often about the experiment rather than the conclusion,
@@ -51,6 +56,26 @@ and a reviewer given only the conclusion cannot make it.
 
 **Check each finding yourself before acting on it.** Some of them are wrong. Fold what survives into
 the plan, and add its questions to the ones for Greg.
+
+**If you can write the question, write the fix before you send it.** On 2026-09-02 four rounds all
+returned rejections, and *three of the four headline findings were suspicions already written into
+the prompt* — "can this loop pass while checking nothing?", "`existsSync` is weak", a list of `GIT_*`
+variables that might leak. Sol confirmed each. A round spent confirming what you already suspected
+is a round not spent on what nobody saw. Turn "is X weak?" into "X now does Y — break it."
+
+**Ask for the mutation, not for a patch.** For each finding, ask for *(a)* the input under which the
+current code fails its own claim, something you can run, and *(b)* the smallest change that closes
+it, as a code block. Rank by (a): a finding with no (a) is an opinion, and goes last. Then the
+implementer's rule is **apply (a) first and watch it go red**, apply (b), watch (a) get caught, and
+report per finding *reproduced / could not reproduce / disagree*. Never apply a (b) whose (a) you
+could not make fail.
+
+Don't ask for the patch itself. It means a write-capable run in your working tree, and on the next
+pass the reviewer checks that its own patch was *applied* rather than whether it was *right*. Nobody
+gets invested in a mutation, which is what makes it the guardrail.
+
+**On a second pass, say what is new.** *"Previous findings are at `<file>`; treat their fixes as
+unreviewed code written by someone else, and spend most of the run on what has changed since."*
 
 **And check that a verdict actually arrived** — exit 0, *and* read the answer file, because a review
 that returned nothing looks exactly like a review that found nothing. This is
@@ -149,20 +174,12 @@ ignored — anything else the loader throws is rethrown, because a half-built en
 downstream as an auth failure pointing at the wrong thing. See
 [setup-dev.md § Secrets](../project/setup-dev.md#secrets).
 
-> **This paragraph used to end "a real environment variable still wins over the file", and it no
-> longer does.** `src/env.ts` was reversed on 2026-08-26 at Greg's request — `.env.local` now beats
-> anything the shell exported, because two profile files were exporting a *different* OpenRouter key
-> and silently overriding the one the repo names. Deliberate and right for that problem, and for a
-> day it had a consequence here: a dead `CODEX_API_KEY` in `.env.local` could not be got round from
-> the calling shell, because `CODEX_API_KEY= npx tsx scripts/run-codex.ts …` prints
-> `[env] .env.local overrode CODEX_API_KEY from the shell environment` and uses the dead key anyway.
->
-> `--auth` closes that: the choice is now a flag rather than a variable you have to be able to
-> unset, and the wrapper strips the key from the child itself. The
-> [escape hatch](#raw-codex-exec-the-escape-hatch) equivalent is still `env -u CODEX_API_KEY codex
-> exec …`, with the wrapper's three guarantees carried by hand: `< prompt.md` (a finite file that
-> EOFs), a `timeout`, and `> some.log 2>&1` so the activity log lands in a file and only the `-o`
-> answer is read.
+> **`.env.local` beats anything the shell exported**, since 2026-08-26. So a dead `CODEX_API_KEY`
+> there cannot be got round from the calling shell — use `--auth` rather than trying to unset the
+> variable. The [escape hatch](#raw-codex-exec-the-escape-hatch) equivalent is
+> `env -u CODEX_API_KEY codex exec …`, carrying the wrapper's three guarantees by hand:
+> `< prompt.md` (a finite file that EOFs), a `timeout`, and `> some.log 2>&1` so the activity log
+> lands in a file and only the `-o` answer is read.
 
 ### What codex is allowed to see
 
@@ -182,15 +199,9 @@ So the child environment is **deny-by-default on the variable's name**, by three
 | ambiguous words | whole `_`-delimited segments | `KEY` `TOKEN` `AUTH` `COOKIE` `PRIVATE` `DSN` `SIGNATURE` |
 | credential-bearing values | whole name | `DATABASE_URL` and friends, `*_URI`, `*_PROXY` |
 
-Two rules rather than one because the word decides which. Requiring a segment boundary everywhere
-loses `PGPASSWORD`, `MYSQL_PWD` and `CI_JOB_JWT`, which are exactly what they look like; matching
-substrings everywhere eats `AUTHOR` and `KEYBOARD_LAYOUT`, which are not. `SSH_AUTH_SOCK` does go —
-a path rather than a secret, but it hands over the ssh agent.
-
-`SESSION` is in none of them, deliberately: `XDG_SESSION_TYPE`, `DBUS_SESSION_BUS_ADDRESS`,
-`DESKTOP_SESSION` and `SESSION_MANAGER` are ordinary Linux desktop plumbing, and a session variable
-that really is a credential is named for what it holds — `SESSION_SECRET`, `SESSION_TOKEN` — and
-caught by the word rule anyway. `PWD` is the working directory; only a `_PWD` suffix is a password.
+Two rules rather than one because the word decides which: a segment boundary everywhere would lose
+`PGPASSWORD` and `CI_JOB_JWT`, and substring matching everywhere would eat `AUTHOR`. `SSH_AUTH_SOCK`
+goes — a path rather than a secret, but it hands over the ssh agent.
 
 `--pass-env NAME` (repeatable) brings a named variable back for an MCP server that needs a token of
 its own, or for a `workspace-write` run that has to push. Each crossing is then visible in the
@@ -251,7 +262,7 @@ npx tsx scripts/run-codex.ts --model gpt-5.6-luna --effort low --prompt "Reply w
 # read-only investigation — the answer is printed, the activity log is not
 npx tsx scripts/run-codex.ts --prompt "Summarise how src/extract.ts assigns block ids"
 
-# delegated implementation — writes are an explicit opt-in; commit or stash first
+# delegated implementation — writes are an explicit opt-in; commit first, and prefer a worktree
 npx tsx scripts/run-codex.ts --sandbox workspace-write \
   --prompt-file /tmp/task.md --output /tmp/codex-answer.md
 ```
@@ -379,7 +390,11 @@ Codex more permissive: a blocked operation simply returns its failure to the mod
 `workspace-write` edits land **directly in your working tree**, interleaved with whatever
 uncommitted work is already there. Before any write-capable run:
 
-1. **Commit or stash**, so `git diff` afterwards shows exactly what Codex did and nothing else.
+1. **Commit first**, so `git diff` afterwards shows exactly what Codex did and nothing else. This
+   line used to say "commit *or stash*", and where agents share a checkout that is the most
+   destructive suggestion in this file — the work it hides belongs to people who are not in the
+   room, and one agent did it to seventeen others' files on 2026-08-30. If you cannot commit because
+   the tree holds somebody's half-finished work, use a worktree.
 2. For parallel or higher-risk runs, dispatch into a **git worktree** on its own branch.
 3. **Review the diff.** Codex's output is a proposal, not a trusted commit.
 
@@ -503,20 +518,6 @@ Flags worth knowing (verified on 0.146.0):
 - `codex exec` has **no** `-a` / `--ask-for-approval`; that's interactive-mode only. Control it with
   `-c approval_policy=…` as above.
 
-A note on the truncation itself, since three of its bugs were the kind that report success. It splits
-on **code points**, not UTF-16 code units: a `slice` on code units lands between the halves of a
-surrogate pair and emits a lone surrogate, and the "characters omitted" count is then a count of
-something else. And the tail is taken with an explicit index rather than `slice(-half)`, because at
-a cap of 1 or 2 `half` rounds down to zero and `slice(-0)` is `slice(0)` — the whole answer,
-printed under a banner claiming it had been cut. Those are the two smallest settings anyone reaches
-for when checking by hand that the cap works.
-
-The third only appeared in the *fix* for the large-file case. A byte span has to be four times the
-character cap, since that is UTF-8's worst case, so the excerpt overshoots on ASCII; the first
-version handled that by passing it through the truncator again with `maxChars * 2`, which quietly
-doubled every cap the caller asked for and restored the 1-and-2 bug by another route. The excerpt is
-now trimmed to the cap directly. Caught by GPT Sol on a second review pass, not by the first.
-
 There is also a `codex exec review` subcommand that runs a code review against the current repo, and
 `codex exec resume --last "…"` / `resume <SESSION_ID>` for multi-turn (sessions persist as JSONL
 under `~/.codex/sessions/`; capture the id from the `--json` `thread.started` event).
@@ -546,19 +547,18 @@ under `~/.codex/sessions/`; capture the id from the `--json` `thread.started` ev
   load-bearing claim ("X is already implemented", "this is safe") without a second check.
 - **Cost.** A runaway high-effort run burns quota fast. The wrapper caps any single run at
   `--timeout-minutes`.
-- **The two auth paths word "out of credits" differently, and both have to be matched.** A ChatGPT
-  subscription says `Your workspace is out of credits`; API-key billing says `You have no credits
-  remaining`. The wrapper's hint originally knew only the first, having been written from one
-  observed failure rather than both — so a key that had run dry produced a bare `exit 1` and a path,
-  which is the outcome the hint exists to prevent. Fixed 2026-08-26, after it cost two review runs.
-  Worth stating because it is the same shape as the bug: a list written from one example.
-  Two further wrinkles seen in that failure — the real reason arrives *after* five
-  `ERROR: Reconnecting... n/5` lines, so the first thing in the log is not the cause; and the run
-  still exits 0 from the wrapper's own perspective when launched in the background, so a caller
-  that checks only the exit status learns nothing.
-- **A dead key in `.env.local` cannot be overridden from the shell** — `.env.local` wins over the
-  environment since 2026-08-26. Use `--auth` rather than trying to unset the variable; see
-  [Which credential a run spends](#which-credential-a-run-spends).
+- **Running out of credit is the commonest failure, and it wears several disguises.** The two auth
+  paths word it differently and both are matched (`Your workspace is out of credits` for a
+  subscription, `You have no credits remaining` for API-key billing — the hint knew only the first
+  until 2026-08-26, a list written from one example). It usually arrives as exit 1 with the reason
+  buried in the activity log, which is why the wrapper lifts that phrase into its own error and
+  names the log path; the real reason appears *after* five `ERROR: Reconnecting... n/5` lines, so
+  the first thing in the log is not the cause. Both credentials can be dry at once, so
+  `--auth subscription-first` tries both, at ~12s on the dead one — confirm a verdict arrived rather
+  than assuming the fallback worked. A dead key in `.env.local` cannot be overridden from the shell;
+  use `--auth`, not an unset. And the error hint names *which* account, so it takes the credential
+  as an argument — it used to hedge, and sent people to top up a full key while the empty one sat
+  elsewhere.
 - **Raw `codex exec` runs out of credit and exits _zero_, having written no `-o` file at all.**
   The wrapper checks that the answer file exists, is non-empty *and is not just whitespace*
   (`existsSync` alone passed on the zero-byte file a killed run leaves behind; a size check alone
@@ -569,25 +569,15 @@ under `~/.codex/sessions/`; capture the id from the `--json` `thread.started` ev
   never created. A caller checking only the status code learns nothing, and a caller that
   `cat`s a missing file into a doc records silence as agreement. **Always test that the answer
   file exists and is non-empty**, not just that the command succeeded.
-- **The two credentials can both be dry at once, and they fail in different words.** The pair is a
-  fallback only while one of them has credit: `CODEX_API_KEY` said `You have no credits remaining`
-  and the ChatGPT subscription underneath it said `Your workspace is out of credits` on the same
-  afternoon. `--auth subscription-first` now tries both for you, at the cost of ~12s on the dead
-  one — but confirm a verdict arrived rather than assuming the fallback worked.
-- **The error hint names an account, so it has to know which one the run was spending.** It used to
-  hedge ("if `CODEX_API_KEY` is set, that key is the one that has run dry"), which was true only
-  while the key always won. Under `--auth subscription-only` the key is withheld on purpose, and
-  that sentence sent you to top up a full key while the empty one sat elsewhere. `authHint` now
-  takes the credential as an argument. The shape is worth remembering: a hint that was correct
-  because of a fact, and the fact stopped being true.
-- **Running out of credit looks like a generic non-zero exit.** `codex exec` exits 1 and the wrapper
-  reports `codex exec exited 1`; the actual reason (`Your workspace is out of credits`) is in the
-  activity log, which is why the failure message names its path — and why the wrapper now lifts that
-  one phrase, and an auth failure, into the error itself. Any *other* exit 1 still means reading the
-  log before assuming the wrapper or the prompt is at fault.
-- **Codex cites code as absolute `/Users/…/file.ts:148`.** Pasting a review into a repo doc
-  verbatim therefore imports a pile of machine-specific paths, which a link checker will flag and a
-  reader on another machine can't follow. Rewrite them repo-relative on the way in.
+- **Any *other* exit 1** means reading the log before assuming the wrapper or the prompt is at fault.
+- **Codex cites code as absolute `/Users/…/file.ts:148`, usually as a markdown link.** Leave them
+  alone, or make them code spans. **Never rewrite them as relative links** — this bullet used to say
+  to do exactly that, and on 2026-09-02 following it put 48 broken links into two review docs and
+  turned the deploy gate red. It fails twice over: `src/x.ts:148` is not a file at *any* prefix,
+  because of the `:148`; and a path written from the repo root resolves wrongly from `docs/plans/`.
+  The premise was wrong too — a link checker that skips absolute targets never flags the originals,
+  so the advice converted a silent problem into a loud one. Both shapes are the same defect: a
+  citation that reads as a link and can only be followed on the machine that produced it.
 - **A login shell undoes environment sanitising.** Codex's shell tool sources `~/.zprofile` and
   `~/.zshrc`, so anything they export reaches codex whatever the wrapper passes. Measured above.
 - **Don't export `OPENAI_API_KEY`.** `codex exec` doesn't read it (it wants `CODEX_API_KEY`), so it
