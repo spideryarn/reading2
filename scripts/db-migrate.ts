@@ -45,6 +45,7 @@ import {
   reconcileLedger,
   type LedgerRow,
 } from "./migration-ledger.js";
+import { HISTORICAL, readSnapshots, snapshotProblems } from "./migration-snapshots.js";
 
 /**
  * **The shell's `DATABASE_URL`, read before `.env.local` can bury it.**
@@ -193,6 +194,30 @@ try {
   const folder = path.resolve(import.meta.dirname, "../drizzle");
   const journal = readJournal(folder);
   const hashes = hashMigrationFiles(folder);
+
+  /**
+   * **A warning, not a refusal, and the exception to this file's habit.**
+   *
+   * A forked or holed snapshot chain does not make this run wrong: `migrate()`
+   * reads the journal and the `.sql` files and never opens a snapshot. The
+   * damage is to the *next* `drizzle-kit generate`, which refuses on it and
+   * exits 0 having written nothing. So refusing here would block a migration
+   * that is perfectly safe, over a defect it has nothing to do with — and
+   * `npm run db:generate` (scripts/db-generate.ts) already refuses at the point
+   * where it matters.
+   *
+   * It says it here anyway because this is the command somebody runs straight
+   * after a merge, which is when a fork arrives. Better to hear it now than at
+   * the deploy gate. It stays out of `journalProblems`, which is a fatal list
+   * and would have to be given a folder it currently does not read.
+   */
+  const chain = snapshotProblems(journal, readSnapshots(folder), HISTORICAL);
+  if (chain.length > 0) {
+    console.warn(`\n⚠ drizzle/meta/ is not a well-formed chain — this migration is unaffected,`);
+    console.warn("  but the next `npm run db:generate` will refuse and say nothing about why:");
+    for (const p of chain) console.warn(`    · ${p}`);
+    console.warn("  docs/project/database.md § Two worktrees generated at once.\n");
+  }
 
   lock = await pool.connect();
   const got = await lock.query<{ ok: boolean }>("select pg_try_advisory_lock($1) as ok", [

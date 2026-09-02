@@ -27,19 +27,36 @@
  * What it deliberately does NOT check is that the database matches. That is
  * `tests/db-schema.test.ts`'s job and it needs a connection to do it.
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { readJournal } from "../scripts/migration-ledger.js";
 import { STEP_ORDER } from "../src/pipeline.js";
 
 const DRIZZLE = path.resolve(import.meta.dirname, "..", "drizzle");
 const CONSTRAINT = "revision_step_runs_step";
 
-/** Every `.sql` migration, oldest first — the numeric prefix is the order. */
+/**
+ * Every `.sql` migration, in the order it runs — **journal order, which is the
+ * only order there is.**
+ *
+ * This used to sort filenames, on the reasoning that the four-digit prefix is
+ * the order. It very nearly is, and stops being so on two separate days:
+ * `drizzle.config.ts` now mints `migrations.prefix: "timestamp"`, so the folder
+ * holds `0051_…` next to `2026…_…` — which happens to sort correctly, and
+ * happening to is not a property. And journal order is array order after a
+ * merge, which is whatever the person resolving the conflict wrote, and is not
+ * sorted at all: `0035` sits before `0036` and is stamped later.
+ *
+ * The journal is what `migrate()` reads (`node_modules/drizzle-orm/migrator.cjs`),
+ * so asking it is not a proxy for the answer, it is the answer. A `.sql` the
+ * journal does not name never runs, and `tests/migration-journal.test.ts` is
+ * what refuses to let one exist.
+ */
 function migrations(): { file: string; sql: string }[] {
-  return readdirSync(DRIZZLE)
-    .filter((f) => f.endsWith(".sql"))
-    .sort()
+  return readJournal(DRIZZLE)
+    .map((e) => `${e.tag}.sql`)
+    .filter((file) => existsSync(path.join(DRIZZLE, file)))
     .map((file) => ({ file, sql: readFileSync(path.join(DRIZZLE, file), "utf-8") }));
 }
 
@@ -102,8 +119,13 @@ describe("the revision_step_runs step constraint", () => {
     // Not an assertion about behaviour — an assertion about the *message*. The
     // whole value of this test is that a person who trips it can act on it
     // without reading three migrations first, so the file name has to be here.
+    // Not `/^\d{4}_/`: since drizzle.config.ts moved to timestamp prefixes the
+    // folder holds both shapes, and what makes the message actionable is that
+    // the name points at a file somebody can open — not what it starts with.
     const found = declaredSteps();
-    expect((found as { file: string }).file).toMatch(/^\d{4}_.*\.sql$/);
+    const file = (found as { file: string }).file;
+    expect(file).toMatch(/\.sql$/);
+    expect(existsSync(path.join(DRIZZLE, file))).toBe(true);
   });
 });
 
