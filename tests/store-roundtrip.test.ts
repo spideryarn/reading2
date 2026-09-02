@@ -38,10 +38,12 @@ import { SANITIZER_VERSION } from "../src/sanitize-policy.js";
 import { exportArticle, rawFileName } from "../src/store/export.js";
 import { sniffKind } from "../src/fetch.js";
 import { releaseCorpusLock, takeCorpusLock } from "./helpers/corpus-lock.js";
+import { cleanUpThenRelease } from "./helpers/lock-lifecycle.js";
 import { forgetRevisions } from "./helpers/forget-revisions.js";
 import { loadArticleIntoPg } from "./helpers/load-article.js";
 import { seedReaderStateFromFiles } from "./helpers/seed-reader-state.js";
 import { pgReady } from "./helpers/pg-ready.js";
+import { ROUNDTRIP_JSON_ARTEFACTS } from "./helpers/roundtrip-artefacts.js";
 
 loadEnvLocal();
 
@@ -55,32 +57,14 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  * below. Until 2026-08-27 they had neither, and this comment said "every
  * artefact", which is how losing the whole source document came to be something
  * this file would pass.
+ *
+ * **The list itself lives in tests/helpers/roundtrip-artefacts.ts**, because
+ * tests/fixture-corpus.test.ts needs the same one to assert the committed corpus
+ * covers it. It used to be written out twice, the two copies drifted by exactly
+ * `quiz.json`, and the corpus self-check went blind to the gap it exists to
+ * catch. That header says why the list is written down rather than derived.
  */
-const ARTEFACTS = [
-  "meta.json",
-  "blocks.json",
-  "tree.json",
-  "assets.json",
-  "arc.json",
-  "tweets.json",
-  "glossary.json",
-  /* **No `summary.json`.** The `summary` artefact kind went with stage 5e on
-     2026-08-31 (docs/plans/260831s-gist-only-summaries.md): the store does not own the
-     file, so neither half of this round trip can move it. The column was kept
-     and is carried between revisions — tests/store-carry-forward.ts asserts
-     that — but it does not come back out as a file. */
-  "ideas.json",
-  "quotes.json",
-  "timeline.json",
-  "quiz.json",
-  "sketch.json",
-  "labels.json",
-  "comments.json",
-  "chat.json",
-  "searches.json",
-  "glossary-lookups.json",
-  "shelf.json",
-] as const;
+const ARTEFACTS = ROUNDTRIP_JSON_ARTEFACTS;
 
 /** Sort every object's keys, recursively. See the header for why. */
 function sorted(value: unknown): unknown {
@@ -291,16 +275,24 @@ if (reachable) {
   slugs = found;
 }
 
+/* **At module scope, not in the `beforeAll` below.** This suite loads every real
+   article in `data/`, and so does tests/store-parity.test.ts. One at a time —
+   see the helper for the interleaving that made parity fail on a green codebase.
+
+   Taken here rather than in the hook because on a bad day the wait is as long as
+   this suite's own work, and the hook's one 300s timeout covered both; the two
+   files fork at once, so both clocks start together and the waiter had about 10%
+   margin. A top-level `await` puts the wait in vitest's *import* phase, which
+   has no hook timeout. tests/helpers/corpus-lock.ts § "Take it at MODULE SCOPE";
+   docs/plans/260902c-make-the-test-suite-pass-reliably.md § "Cause 4". */
+if (reachable) await takeCorpusLock("tests/store-roundtrip.test.ts");
+
 const when = reachable ? describe : describe.skip;
 
 let out = "";
 
 when("a round trip through Postgres", () => {
   beforeAll(async () => {
-    /* This suite loads every real article in `data/`, and so does
-       tests/store-parity.test.ts. One at a time — see the helper for the
-       interleaving that made parity fail on a green codebase. */
-    await takeCorpusLock();
     /* **From nothing, the same as parity, and for the same reason.** Loading
        over a published revision means `beginDraftIn` carries its columns,
        blocks and step rows into the draft — so an artefact this path never
@@ -374,9 +366,17 @@ when("a round trip through Postgres", () => {
   }, 300_000);
 
   afterAll(async () => {
-    if (out) await rm(out, { recursive: true, force: true });
-    await releaseCorpusLock();
-    await closeDb();
+    /* The key goes back last and whatever the `rm` did: an `rm` that threw used
+       to skip the release, and this key is held for about 150 seconds at a time
+       by two long suites, so leaking it costs the next run its whole deadline.
+       tests/helpers/lock-lifecycle.ts. */
+    await cleanUpThenRelease(
+      async () => {
+        if (out) await rm(out, { recursive: true, force: true });
+        await closeDb();
+      },
+      () => releaseCorpusLock(),
+    );
   });
 
   it("has something to round-trip", () => {

@@ -45,18 +45,17 @@
  * request back.
  */
 
-import { and, asc, eq, lt } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { articles, refereeClaims, revisionBlocks } from "../db/schema.js";
+import { articles, refereeClaims } from "../db/schema.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import type { Claim, ClaimsRun } from "../referee-claims.js";
 import { CLAIMS_TIMEOUT_MS } from "../referee-claims-run.js";
 import { CLAIMS_SWEPT } from "../referee-claims-store.js";
-import { hashBlocks } from "../source-hash.js";
 import type { RefereeClaimsStore } from "./contracts.js";
-import { notFound, ownedSlug, requireSlug } from "./pg.js";
+import { notFound, ownedSlug, requireSlug, sourceHashFor } from "./pg.js";
 
 const logger = log("store");
 
@@ -102,38 +101,6 @@ async function articleIdFor(slug: string, db: Db | Tx = getDb()): Promise<string
   const found = rows[0];
   if (!found) throw notFound(slug);
   return found.id;
-}
-
-/**
- * The fingerprint of the article as this store has it.
- *
- * **The third copy of this query in src/store/**, after pg-searches.ts and
- * pg-referee-criteria.ts, and it is a copy rather than a call because neither of
- * those exports it. It belongs in pg.ts beside `blocksFor`; moving it is one
- * edit in three files that two other sessions are currently inside, so it is
- * written down here instead of done badly. The two things that must not drift
- * are in both originals and in this one: the **four** columns `hashBlocks` folds
- * in, and `order by ordinal` — block ids carry no position, so without the
- * clause a hash computed here matches the file's in development and drifts in
- * production, presenting every stored run as out of date with nothing to say
- * why.
- *
- * `undefined` for an article with no blocks, which `isStale` counts as stale:
- * not knowing is not the same as knowing it is fine.
- */
-async function sourceHashFor(articleId: string, db: Db | Tx = getDb()): Promise<string | undefined> {
-  const rows = await db
-    .select({
-      id: revisionBlocks.blockId,
-      text: revisionBlocks.text,
-      role: revisionBlocks.role,
-      treatment: revisionBlocks.treatment,
-    })
-    .from(revisionBlocks)
-    .innerJoin(articles, eq(articles.currentRevisionId, revisionBlocks.revisionId))
-    .where(eq(articles.id, articleId))
-    .orderBy(asc(revisionBlocks.ordinal));
-  return rows.length ? hashBlocks(rows) : undefined;
 }
 
 /**

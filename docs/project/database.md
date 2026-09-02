@@ -23,8 +23,11 @@ written as a stub for [auth.md](auth.md) to point at and had not been true for s
 
 ## Which store is live, and the one refusal that matters
 
-`SPIDERYARN_STORE` still **defaults to `files`**, so a fresh checkout runs on disk and nothing
-changes for anyone who has not opted in. But [`src/store/index.ts`](../../src/store/index.ts)
+`SPIDERYARN_STORE` still **defaults to `files`** for a CLI script, a test, or anything else that
+imports [`src/store/live.ts`](../../src/store/live.ts) directly. `npm run dev` is the one exception,
+since 2026-09-02: `package.json`'s `dev` script itself sets `postgres` unless something already set
+the variable, so a fresh checkout's dev server reads Postgres without anyone opting in. But
+[`src/store/index.ts`](../../src/store/index.ts)
 **refuses to boot on `files` in production**, and the reason generalises well beyond deployment: the
 filesystem store has **no owner column**, so it has no second reader, and a store with no second
 reader cannot express "somebody who is not the owner". That is why
@@ -203,9 +206,12 @@ nothing. `npm test` on a fresh clone reports them as skipped, not passed, so the
 visible; it was not in the first version of that file, which reported nine passes for having checked
 nothing.
 
-**Reads now come out of Postgres when you ask them to.** `SPIDERYARN_STORE=postgres npm run dev`
-serves every article, the library, the metadata page and the reader's comments from the database
-instead of from disk; `files` remains the default. The work, and what is still missing, is in
+**Reads now come out of Postgres when you ask them to — and, since 2026-09-02, without asking.**
+`npm run dev` serves every article, the library, the metadata page and the reader's comments from
+the database instead of from disk; `SPIDERYARN_STORE=files npm run dev` is the escape hatch back to
+disk, and `files` remains the default for everything that is not `npm run dev` — `vite preview`
+included, which still wants `SPIDERYARN_STORE=postgres` said out loud. The work,
+and what is still missing, is in
 [260826e-postgres-storage-implementation.md](../plans/260826e-postgres-storage-implementation.md).
 
 **Writes go straight into Postgres now — no disk in between.** Since 2026-09-01 every pipeline stage
@@ -372,6 +378,45 @@ touch anything storage-shaped:
   `/api/*` talks to Postgres. The one exception is Auth, which *does* run in the browser — the rule
   that holds is "no application **data** query leaves the server", not "no Supabase call".
 
+## The four token columns, and why they are not defaulted
+
+**`auth.users.confirmation_token`, `recovery_token`, `email_change` and `email_change_token_new` are
+nullable with no default, and we have left them that way** — not from inattention, so here is the
+reasoning before someone spends an afternoon rediscovering it.
+
+The hazard is real. GoTrue scans those four into non-null Go strings, so **one row with any of them
+NULL makes `GET /auth/v1/admin/users` answer 500 for the whole database** — the dev server's
+`/admin` page with it. Supabase's own troubleshooting page
+([scan error on `confirmation_token`](https://supabase.com/docs/guides/troubleshooting/scan-error-on-column-confirmation_token-converting-null-to-string-is-unsupported-during-auth-login-a0c686))
+names these exact four, and its remedy is a one-time `UPDATE` of existing rows rather than a default,
+so it does not stop recurrence. [supabase/auth#1940](https://github.com/supabase/auth/issues/1940)
+proposes the default and is open with no maintainer response; nothing in releases up to v2.197
+fixes it. The other four token columns on that table *already* default to `''`, and `''` is exactly
+what GoTrue writes into every row it creates — so defaulting them would have matched Supabase's own
+behaviour, not deviated from it.
+
+**We tried, and the migration cannot run.** `auth.users` is owned by `supabase_auth_admin`;
+migrations connect as `postgres`, which is **not a superuser and cannot even `SET ROLE`** to that
+owner. `alter table auth.users alter column … set default ''` therefore fails with
+`ERROR: must be owner of table users`. The SQL itself is correct — it applies as `supabase_admin`,
+verified in a rolled-back transaction — but it cannot go through `npm run db:migrate`.
+[`0001`](../../drizzle/0001_auth_fks_and_guards.sql) is not a counter-example: adding a foreign key
+*to* `auth.users` needs the `REFERENCES` privilege, not ownership.
+
+**And that settles it, because hosted Supabase is more restricted, not less.** A fix we cannot apply
+to production was never going to protect production's `/admin`, which was the main prize. What was
+left was a superuser step outside the migration system, invisible to the reconcile guard, needing a
+re-run after every `db:reset`, and protecting only local manual inserts.
+
+**What actually protects us**, and is enough for the cause we saw:
+[`tests/helpers/seed-auth-user.ts`](../../tests/helpers/seed-auth-user.ts) is the one way a test
+writes such a row, and [`tests/auth-user-seeding.test.ts`](../../tests/auth-user-seeding.test.ts)
+fails if anything under `tests/` hand-rolls the insert again. Anything creating a user through
+GoTrue's admin API — `scripts/db-seed-owner.ts`, a real signup — never produces a NULL in the first
+place. **The residue is a hand-written `psql` or Studio insert against `auth.users`**: set those four
+columns to `''`, or the account list stops answering for everybody.
+[The postmortem](../postmortems/260902b-four-bugs-behind-one-word-flaky.md) has the diagnosis.
+
 ## Connecting to the remote
 
 **The remote is up and has the data**, as of 2026-08-27: project `alschkahzfagtppxspfq`,
@@ -382,6 +427,24 @@ served from it through the **transaction** pooler, which is the path production 
 what is still missing.
 
 **And the deployed app now does point at it**, which is how the next paragraph came to be written.
+
+### The local ledger cannot tell you what the remote is missing
+
+The two databases drift independently, and they drift by a lot. On 2026-09-02 a laptop that was
+four migrations behind was used to say, in a question put to Greg, that the deploy would apply
+**four** migrations to production. It applied **fifteen** — production was at `0036` and the laptop
+at `0047`. The answer was arrived at honestly, by counting rows in
+`spideryarn_migrations.__drizzle_migrations` and subtracting; it was just the wrong database's rows.
+
+So **do not quote a pending count for production from anything local**. The number production would
+actually apply comes from `migrationPlan()` in [`scripts/deploy.ts`](../../scripts/deploy.ts), which
+reads the remote's own ledger and prints the list under `── Migrations`, each tag on its own line
+and destructive statements called out. `npm run deploy -- --dry-run` reaches that step without
+applying anything. Read that list before you promise anyone a number.
+
+The general form is the one this whole section keeps restating: [a number is about whichever
+database you asked](#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like), and it never
+says which one that was.
 
 ### The four migrations that were not there, and the command that said they were
 
@@ -555,6 +618,94 @@ exemption away rather than inheriting it.
 The whole story, including why `0033_quotes` could not be replayed verbatim and what the repair
 recorded instead, is in
 [the postmortem](../postmortems/260831h-db-migrate-applies-nothing-when-a-journal-timestamp-jumps-the-queue.md).
+
+## Two worktrees generated at once
+
+The section above is about the journal. This one is about `drizzle/meta/`, which is a **different
+file, a different failure, and the one that reports success.**
+
+Every `drizzle-kit generate` writes `drizzle/meta/<prefix>_snapshot.json` carrying an `id` and the
+`prevId` of the one before it: a linked list, and the thing the *next* migration is diffed against.
+Two worktrees generating from the same trunk write two snapshots with one `prevId`. The database
+never notices — `migrate()` reads the journal and the `.sql` files and never opens a snapshot — so
+everything works right up until somebody changes the schema again, and then:
+
+```
+npx drizzle-kit check      names both files, exit 1
+npm run db:generate        the same red "Error:", exit 0, nothing written
+```
+
+**The generate path exits zero.** Both `process.exit` calls are a few lines apart in
+`node_modules/drizzle-kit/bin.cjs` and only one of them says 1. Verified 2026-09-02 against a copy of
+`drizzle/` carrying a second snapshot that claimed `0051`'s parent. It is
+[silent-success.md](../reusable/silent-success.md) exactly: the operator asked for a migration, got a
+success code, and got no migration.
+
+### What stops it now
+
+| | |
+|---|---|
+| `migrations.prefix: "timestamp"` in [`drizzle.config.ts`](../../drizzle.config.ts) | Two agents no longer both mint `0052`. **Reduction, not prevention** — the stamp is one-second resolution, and the snapshot is named from the prefix alone, so same-second collisions survive it. |
+| `npm run db:chain` (`drizzle-kit check`), a gate in [`scripts/check.ts`](../../scripts/check.ts) | The fork, read the way `generate` will read it. It was already in `npm run deploy` and nowhere else, so a fork used to surface at the deploy. |
+| [`scripts/migration-snapshots.ts`](../../scripts/migration-snapshots.ts), via `npm test` and a warning in `db:migrate` | The holes and breaks `drizzle-kit check` is green on, plus the rename trap — drizzle diffs against whichever snapshot sorts **last**, so an old one renamed to sort last rewinds every future migration in silence. |
+| [`scripts/db-generate.ts`](../../scripts/db-generate.ts) | Success must have produced a `.sql`, a snapshot **and** a journal entry, or an explicit `-- --allow-empty`. This is the one that closes the class rather than the case: there are three exit-0-with-no-output paths in `generate`, and this does not care which one you hit. |
+
+**Write hand-written SQL with `npm run db:generate -- --custom --name <what_it_does>`, never by
+creating a file.** `--custom` writes the snapshot and the journal entry as well as the (empty) `.sql`
+for you to fill in. `0029_assets` was hand-made without one, so the next generate diffed against
+`0028`, re-emitted DDL that had already run, and failed on `column "assets" … already exists` — the
+repair is written up at the top of
+[`drizzle/0030_drop_summary_steer.sql`](../../drizzle/0030_drop_summary_steer.sql), and that hole is
+still in the folder as a named exception today.
+
+### Repairing a fork: what the losing migration is decides everything
+
+The journal half of the conflict is easy — take the trunk's file whole:
+
+```bash
+git show origin/dev:drizzle/meta/_journal.json > drizzle/meta/_journal.json
+```
+
+A file write rather than a `git checkout`, so it stays inside
+[AGENTS.md](../../AGENTS.md#working-in-a-tree-several-agents-share)'s rules.
+
+The snapshot half cannot be merged. Snapshots are a linear chain and drizzle has no notion of two
+parents — Alembic and Django both model migrations as a DAG and can write an explicit merge node;
+drizzle cannot. **And the obvious hand-fix is a trap:** repointing the loser's `prevId` at the
+winner's `id` leaves its *contents* still diffed from before the winner's changes, so the next
+generate re-emits the winner's DDL and `db:migrate` fails on `already exists` one migration later, in
+whichever worktree generates next. Deleting the loser's snapshot is the same bug mirrored — that is
+the `0029` story above.
+
+So the loser is rebuilt, and **how depends on what it is**. Keep the original file wherever it is
+going, in every row:
+
+| the losing migration is | do this |
+|---|---|
+| unpublished, purely generated | delete its `.sql`, its snapshot and its journal entry, then `npm run db:generate` again. The simple case, and the common one. |
+| unpublished, hand-edited or `--custom` | **keep the original SQL.** Regenerate only the schema part and re-apply the custom part by hand — a backfill, a grant, a function, `NOT VALID`, RLS. An ordinary `generate` may say "no schema changes" and hand you no replacement at all. |
+| already applied to the shared local Postgres | preserve it and regenerate the *other* side, or reset. **Greg's call** — `npm run db:reset` empties the database and puts nothing back. |
+| **applied to production** | **never delete, re-stamp or regenerate it.** Published migrations are immutable; the repair is a new forward migration. |
+
+Two more things that bite. `drizzle-kit generate` asks whether a thing was **renamed or dropped and
+recreated**, and answering differently the second time produces different and possibly destructive
+SQL — so answer it the same way. And regenerating changes a migration's `when`; a fresh `Date.now()`
+is later than everything only if your clock is not behind and no later-stamped branch merges
+concurrently, so the inversion check above stays load-bearing.
+
+A `db:migrate` that prints a `⚠ drizzle/meta/ is not a well-formed chain` warning is telling you
+this happened; the migration it is about to run is unaffected.
+
+### What no lock can cover
+
+A **non-additive** migration — a dropped column — applied by one worktree breaks the running dev
+server of every other worktree at once. That is inherent to one shared database, not something the
+advisory lock in `db:migrate` pretends to cover. See
+[worktrees.md](worktrees.md).
+
+The reasoning, the four failure modes, everything considered and rejected, and what the rest of the
+world does about it are in
+[260902c-concurrent-migrations-across-worktrees.md](../plans/260902c-concurrent-migrations-across-worktrees.md).
 
 ## Roles
 
@@ -956,10 +1107,11 @@ What to know before touching any of it:
   `warn`. The worst a broken checkpoint may cost is the saving. The filesystem version could not say
   that — a full `/tmp` made `mkdir` throw straight out of the stage, which is a cache becoming an
   outage.
-- **A laptop with `SPIDERYARN_STORE` unset checkpoints nothing.** `fsStoreSession` has no `articles`
-  row and so no id to key on, and hands out `nullCheckpointStore()`; the stage command lines do the
-  same. Articles come out identical and a *second* attempt after a killed one pays again. That is a
-  decision, written down at `nullCheckpointStore` in
+- **A laptop with `SPIDERYARN_STORE=files` checkpoints nothing.** `fsStoreSession` has no `articles`
+  row and so no id to key on, and hands out `nullCheckpointStore()`; the stage command lines default
+  to `files` and do the same, since none of them go through `npm run dev`'s `package.json`-level
+  `postgres` default. Articles come out identical and a *second* attempt after a killed
+  one pays again. That is a decision, written down at `nullCheckpointStore` in
   [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts), and it ends when the filesystem store
   does.
 

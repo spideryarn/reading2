@@ -66,6 +66,14 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 - [`infra/hetzner/README.md`](../../infra/hetzner/README.md) — Terraform and cloud-init: first run,
   what to check before every apply (`npx tsx scripts/check-cloud-init.ts`), the noVNC tunnel, and why
   the disposable-server/persistent-volume split exists.
+- **Claude Code itself** is installed **as `greg`**, by Anthropic's native installer, into
+  `~/.local/share/claude/versions/` with `~/.local/bin/claude` pointing at it — so it can update
+  itself without sudo. `/usr/local/bin/claude` is a symlink to that, and it is **load-bearing, not
+  cruft**: every context that runs work here (the tmux job scripts, `ssh <box> claude mcp list`,
+  cron) gets a stock PATH with no `~/.local/bin` in it. Installing it the obvious way instead — `sudo
+  npm install -g` — is what
+  [260902c-a-claude-that-could-never-update-itself.md](../postmortems/260902c-a-claude-that-could-never-update-itself.md)
+  is about.
 - [`scripts/remote-smoke-browser.mjs`](../../scripts/remote-smoke-browser.mjs) — the committed proof
   the browser stack works. `gjd-remote doctor` copies it up and runs it every time, so it is never a
   stale copy.
@@ -126,6 +134,35 @@ Two things follow, and both are in
 [infra/hetzner/README.md § Why provisioning is a separate command](../../infra/hetzner/README.md#why-provisioning-is-a-separate-command):
 `cloud-init: done` now means *bootstrapped*, and cloud-init owns the bootstrap dependencies forever,
 because it is baked into the machine at creation and never runs again.
+
+## A change to the box is a change to a file
+
+Anything you do to this box that should still be true next week — an apt package, a `sudo` install,
+a key in `.env.local`, a config file, an MCP server, and plenty this list does not name — is a change
+to **two** things: this box now, and the file that builds the next one. Do only the first and it is
+gone at the next rebuild, and no box after this one ever has it.
+
+**Ask Greg first, and offer both**: this box now, *and* every box after it. He may want only one;
+what he should not have to do is notice that you did half.
+
+The usual homes, not all of them:
+
+| What you changed | Where it lives going forwards |
+| --- | --- |
+| A package, a tool, a config file | [`provision.sh`](../../infra/hetzner/provision.sh) — re-runnable, so the only file that reaches boxes that already exist |
+| Something `provision.sh` needs before it can run | [`cloud-init.yaml`](../../infra/hetzner/cloud-init.yaml) — first boot only |
+| The machine: size, volume, firewall, keys | [`main.tf`](../../infra/hetzner/main.tf), `variables.tf` |
+| A key for `.env.local` | the allowlist in [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) and [`.env.example`](../../.env.example) — `push-env` rebuilds the file, so a line typed on the box is gone at the next push |
+| An MCP server | [`.mcp.json`](../../.mcp.json) |
+
+Not everything is made permanent: a secret belonging to this machine alone stays in
+`~/.config/spideryarn/`, and anything you were only trying out stays a trial. When in doubt, that is
+the question to ask.
+
+The failure mode this exists for is the second copy, not the missing one —
+[The editor is `emacs -nw`](#the-editor-is-emacs--nw) is in `provision.sh` and deliberately not in
+cloud-init's `packages:` list as well.
+
 ## Running `gjd-remote` from the box
 
 `gjd-remote` is written to run **from the laptop**, and for a while that was the only place it ran.
@@ -511,6 +548,31 @@ Two things worth knowing:
 [../research/260831c-remote-server-tmux-mosh.md](../research/260831c-remote-server-tmux-mosh.md)
 proposed a much larger `.tmux.conf` — mouse on, scroll bindings, a bigger history limit. That was
 written before the keys turned out to be the problem, and it is superseded here.
+
+## The editor is `emacs -nw`
+
+Every gjd-remote box gets `emacs-nox` — the terminal-only build — and it is the default editor, so
+`git commit` with no message, `crontab -e` and anything else that opens an editor lands in emacs
+rather than nano. Installed and wired up by
+[`infra/hetzner/provision.sh`](../../infra/hetzner/provision.sh).
+
+**Three things name the editor, and they come apart** — a box can have the package and still open
+nano, so all three are asserted separately by provisioning's verify section:
+
+- `$EDITOR` and `$VISUAL`, from `/etc/profile.d/editor.sh`, for anything that reads the
+  environment. A **login** shell only, which is what tmux job scripts get (`exec bash -l`).
+- the `editor` alternative (`update-alternatives --set editor /usr/bin/emacs`), for `sudoedit`,
+  `visudo`, and anything else that runs `/usr/bin/editor` with no environment to consult.
+- git's `core.editor`, set explicitly rather than left to fall through `$VISUAL`/`$EDITOR`, because
+  `ssh <box> git commit` is a non-login shell that sees neither.
+
+`emacs-nox` has no GUI to open, so `-nw` is redundant against it. It is written anyway: it is what a
+person types, and it stays correct if a graphical emacs ever arrives.
+
+**It lives in `provision.sh`, not in `cloud-init.yaml`'s `packages:` list**, even though it is a
+plain apt package exactly like tmux. cloud-init runs once, on a box's first boot; `provision.sh` is
+what gets re-run on the boxes that already exist, so it is the only file that reaches every box —
+and a second copy in cloud-init would be the copy that goes stale.
 
 ## Traps
 

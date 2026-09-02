@@ -766,7 +766,26 @@ random short id means no other reader can ever come to want that name.
 `beginStep`/`finishStep` marker and `interrupted()` on `(slug, step)` in one shared `data/<slug>/`
 directory with no job scoping, and on a laptop there is no per-job scratch to save it. Two jobs
 running at once on one article would overwrite each other's output outright.
+### On the filesystem, "one process" had to be made true
 
+The files adapter has always said its fence holds within one process and not across two, and that is
+still what it promises. What it did not survive was **one process with two copies of the module in
+it**: saving anything the server imports restarts the Vite dev server in place, re-evaluating
+[`src/store/jobs-fs.ts`](../../src/store/jobs-fs.ts) with empty Maps while the request inside a step
+carries on. The new copy swept the `running` job back to `queued` and the browser started the same
+eight-minute model call again — eleven times on one job, on 2026-08-30, at $5.43.
+
+`QueueState` goes through [`src/process-state.ts`](../../src/process-state.ts) now, so the index and
+the attempt tokens have the lifetime the file always claimed for them; `aborts` in
+[`src/jobs.ts`](../../src/jobs.ts) went with it, because a Stop after a save had been reaching an
+empty map. A restart is a **pause** rather than a duplicate: the new copy is told `busy` and the old
+claimant's work is still used. The whole story, including why aborting the abandoned call would have
+been the wrong companion fix, is
+[260902c-the-truncation-retry-cost-storm.md](../postmortems/260902c-the-truncation-retry-cost-storm.md).
+
+**Two OS processes over one `data/` are still not fenced**, and that is unchanged rather than fixed —
+`claimIn`'s single `update … where status = 'queued'` is what makes Postgres immune, and running with
+`SPIDERYARN_STORE=postgres` is what CLAUDE.md already asks for.
 ### The browser is the worker
 
 So a wedged job in production is not a queue that needs draining. It is a job whose only engine has
@@ -1472,8 +1491,9 @@ Five things about it are worth knowing before touching it.
   lets a claim adopt what an earlier request of the same job left behind — a two-step job whose first
   request ran `fetch` and handed the claim back holds that work in the draft, so the second request
   can skip the step and still publish it.
-- **It only happens under `SPIDERYARN_STORE=postgres`.** On a laptop with the flag unset the session
-  is the filesystem one and behaves exactly as it always has: no draft, no publication, no database.
+- **It only happens under `SPIDERYARN_STORE=postgres`.** On a laptop where the flag is `files` — set
+  explicitly, since `npm run dev` itself now defaults to `postgres` — the session is the filesystem
+  one and behaves exactly as it always has: no draft, no publication, no database.
   [`tests/claim-session-files.test.ts`](../../tests/claim-session-files.test.ts) is that half of the
   claim, and it proves it by taking `DATABASE_URL` away.
 - **Opening it is a database call, so it can fail — and that failure ends the job.** Two doors reach

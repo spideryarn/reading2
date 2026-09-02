@@ -13,7 +13,7 @@ at while the schema is being worked out. What goes *in* the database is
 ## Running it
 
 ```bash
-npm run setup          # all three of the steps below, in order, on a fresh checkout
+npm run setup          # all four of the steps below, in order, on a fresh checkout
 npm run db:start       # supabase start — first run pulls ~2 GB of images
 npm run db:status      # the URLs and keys again
 npm run db:stop        # containers down; the data is kept and restored on next start
@@ -21,12 +21,14 @@ npm run db:reset       # wipes the database and replays NOTHING — read below f
 npm run db:migrate     # apply drizzle/ — this is what creates the `spideryarn` schema
 npm run db:generate    # regenerate drizzle/ SQL after editing src/db/schema.ts
 npm run db:seed-owner  # the two auth.users rows: the row-owner, and the account you sign in as
+npm run db:seed-dev    # experimental features on, and a few articles on that account's shelf
 npm run db:admin-password   # the email and password to sign in with, on this machine
 npm run db:reown       # move every row from one owner to another — dry run without --apply
 ```
 
 **`npm run setup` is the one to reach for on a fresh checkout** — a box, a rebuild, a new clone. It
-runs `db:start`, `db:migrate` and `db:seed-owner` in that order and stops at the first failure with
+runs `db:start`, `db:migrate`, `db:seed-owner` and `db:seed-dev` in that order and stops at the first
+failure with
 what to do about it ([`scripts/setup-local.ts`](../../scripts/setup-local.ts)). Every step is still
 its own command, so nothing here has to be done through it. It exists because the order is real and
 was written down in three separate docs, and a box got built without two of the steps
@@ -55,12 +57,45 @@ sqlstate `23503`, a foreign key such as `uploads_owner_fk` with no owner row. Fo
 | | | |
 |---|---|---|
 | `dev@spideryarn.local` | `DEV_OWNER_ID` | what rows written *outside* a request belong to — the CLI and the pipeline. [`src/owner.ts`](../../src/owner.ts) |
-| `greg@gregdetre.com` | `ADMIN_USER_ID_LOCAL` | the account you sign in as, and the one `/api/admin/*` recognises. [`src/admin.ts`](../../src/admin.ts) |
+| `dev-admin@spideryarn.local` | `ADMIN_USER_ID_LOCAL` | the account you sign in as, and the one `/api/admin/*` recognises. [`src/admin.ts`](../../src/admin.ts) |
 
 The second has a password, so signing in is the email form on the landing page — no Google, nothing
 to click on a dashboard, and no browser on a machine you cannot reach. **That is what makes a fresh
 Hetzner box usable**, where the alternative was the noVNC tunnel
 ([260831ab](../plans/260831ab-seed-local-admin-user-for-remote-box.md)).
+
+**Neither address is a real person's, and that is the point.** The sign-in account was
+`greg@gregdetre.com` until 2026-09-02 — the same address as Greg's *production* account, which is a
+different account on a different project reached by a different sign-in. Greg:
+
+> I worry about confusion, because greg@gregdetre.com is my real user on production with Google
+> login. So I'd like the dev-dummy user to be called something distinct and different, and that
+> highlights it's a dummy.
+>
+> — Greg, 2026-09-02
+
+**Nothing that decides anything read the address.** `/api/admin/*` compares uuids and
+`SPIDERYARN_OWNER_ID` is a uuid, so authorization and ownership are untouched. Plenty of things
+*display* it — the sign-in form, the profile page, `/admin/users`, a feedback report's reporter —
+which is the point: those are what a person reads.
+[`src/admin.ts` § `ADMIN_EMAIL_LOCAL`](../../src/admin.ts) has the reasoning.
+
+Two things the rename does not reach, both found by GPT Sol rather than by running it:
+
+- **A browser you are already signed in to keeps showing the old address** until its session
+  refreshes, because the email is a claim inside the JWT it is holding. Sign out and in, or wait for
+  the refresh.
+- **A `google` identity keeps the address Google gave it.** GoTrue stores one row per sign-in method
+  and the rename updates only the `email` one, so a machine whose local account began as a Google
+  sign-in — Greg's laptop may be one; this box is not — stays renamed on the surface and old
+  underneath, in Studio and on the profile page. `db:seed-owner` **says so** when it sees one, and
+  deliberately does not delete it: removing an identity is destructive and is Greg's call.
+
+**A machine seeded before then catches up on its own.** `db:seed-owner` renames the row rather than
+refusing, and says so; the password and every open session survive it. It is the one rename this
+repo performs unasked, and `planAccountEmail` in
+[`scripts/seed-accounts.ts`](../../scripts/seed-accounts.ts) is the four-part fence that makes it
+safe: local stack, one fixed id, one fixed old address, nothing destroyed.
 
 ```
 npm run db:admin-password
@@ -228,10 +263,86 @@ the remote box that is the Hetzner firewall's SSH-and-mosh-only inbound rule
 ([infra/hetzner/README.md](../../infra/hetzner/README.md)) — worth knowing before anyone edits a
 firewall rule there.
 
-Since 2026-08-31 that list has one more entry: the seeded administrator's password, which is also a
-constant in git (§ [Signing in](#signing-in-with-no-google-and-no-browser-you-cannot-reach)). It
-changes nothing about where the boundary is — anyone reaching this port already holds a service-role
-key that outranks any account — but an inbound rule for 54361 now publishes a *login* as well.
+Since 2026-08-31 that list has one more entry: the seeded administrator's *account*, which now has a
+password (§ [Signing in](#signing-in-with-no-google-and-no-browser-you-cannot-reach)). It changes
+nothing about where the boundary is — anyone reaching this port already holds a service-role key that
+outranks any account — but an inbound rule for 54361 now publishes a *login* as well. The password
+itself is generated per machine into `~/.config/spideryarn/local-admin-password` and is **not** in
+git; this sentence said "a constant in git" until 2026-09-02, describing the version Greg rejected
+before it shipped.
+
+### A shelf with something on it
+
+An account you can sign in to is half of it. The other half is having something to open, and a fresh
+box has nothing: the corpus under `tests/fixtures/data-root/` is tracked in git but it is in the
+*filesystem* store's layout, and until 2026-09-02 nothing put it into Postgres outside the test suite.
+
+```
+npm run db:seed-dev
+```
+
+[`scripts/db-seed-dev.ts`](../../scripts/db-seed-dev.ts) turns **Experimental Features** on for the
+account you sign in as, and puts three corpus articles on its shelf — `writes`, `todo` and
+`openai-huggingface`. `npm run setup` runs it as its fourth step, so a box built the documented way
+ends with a shelf you can open. Five things about it are deliberate:
+
+- **It is not an account seed and not a third account.** `db:seed-owner` writes the rows; this needs
+  one of them to exist already. The argument against adding a `dev@` sign-in account is in
+  [260902d](../plans/260902d-a-dev-account-that-is-ready-to-use-on-every-box.md), and it comes down to
+  `/api/admin/*` gating on a uuid allowlist.
+- **It is not an importer.** It calls `loadArticleIntoPg` from
+  [`tests/helpers/load-article.ts`](../../tests/helpers/load-article.ts), which drives the real write
+  path. That makes it the **one thing under `scripts/` that imports from `tests/`** — a deliberate
+  precedent, because the alternative is a second files → Postgres implementation, which is exactly
+  what deleting `db:import` was for.
+- **Three of the corpus's five, and never the other two.** `constitution` has no `labels.sourceHash`,
+  so `publishRevision` is designed to refuse it — putting it on a shelf is not possible. `noema-…`
+  publishes perfectly well and is excluded for a weaker reason: it has no `raw.json`, so there is no
+  original document behind it, which is a poor first article to hand somebody.
+- **Idempotent on "can it be opened", not "is there a row" and not "is it on the shelf".**
+  `beginRevision` writes the `articles` row before there is anything in it, so a half-failed seed
+  leaves a slug with `current_revision_id` null; keyed on the row, every later run would call that
+  "already seeded". Keyed on the *shelf* it is subtler and still wrong: the library read trusts a
+  cached `block_count`, so an article whose block rows have gone is still listed while
+  `GET /api/article/<slug>` answers 404. So the question asked is `loadArticle`, the reading route's
+  own. A slug owned by *somebody else* is reported and left alone — `articles.slug` is globally
+  unique, and moving rows is `db:reown`'s decision, not this one's.
+- **It ends by opening every article it seeded**, one at a time, and names any that will not open.
+  A count proves nothing — eleven old articles and three failed fixtures look healthy — and a shelf
+  listing proves less than it appears to, for the cached-`block_count` reason above. It holds the
+  corpus lock across that phase, the same lock `store-parity` and `store-roundtrip` take, so a test
+  run cannot clear the corpus between the last load and the answer.
+
+**A full `npm test` turns Experimental Features back off.**
+[`tests/owner-isolation.test.ts`](../../tests/owner-isolation.test.ts) deletes the environment
+owner's `reader_profiles` row in an `afterAll`, and on a machine where `SPIDERYARN_OWNER_ID` is the
+administrator — which is what everything above tells you to do — that is this account's row. Nothing
+is wrong; re-run `npm run db:seed-dev` and it is on again in a second, with a new "since" date. Worth
+knowing before you go looking for a bug in the switch, which is what the date moving looks like.
+
+**It exits non-zero when `SPIDERYARN_STORE` is not `postgres`, and that is deliberate.** This script
+is a CLI script, `tsx scripts/db-seed-dev.ts`, and the variable defaults to `files` for those
+([`src/store/live.ts`](../../src/store/live.ts)) — unlike `npm run dev`, which since 2026-09-02
+defaults to `postgres` on its own. So the check is really asking whether *this process's* copy of
+the variable agrees with what the dev server will use: if `.env.local` has no `SPIDERYARN_STORE`
+line, this script sees "unset" (→ `files`) while a plain `npm run dev` will still read Postgres —
+but anyone who has set `SPIDERYARN_STORE=files` explicitly, or starts the server some other way,
+gets the old failure: every row this wrote is invisible in the browser, the seed works and the shelf
+looks empty. A green `npm run setup` over that is the exact failure this command exists to prevent,
+so it stops instead. **The seed itself has already committed by then**, so fixing the variable and
+re-running costs a second. Set `SPIDERYARN_STORE=postgres` in `.env.local` **on the laptop**; it is
+on `push-env`'s allowlist since 2026-09-02, so the box inherits it, and a line typed on the box would
+be destroyed by the next push.
+
+And the end-to-end check, which needs no human:
+
+```
+npx tsx scripts/browser-sign-in.ts --at /read/writes
+```
+
+That signs a browser in with this machine's password, opens a seeded article and fails on any failing
+`/api/` call. Note `--at /read/todo` **fails on purpose**: that fixture deliberately has no arc and no
+glossary, so those routes 404. Use `writes`.
 
 ## The ports, and the Postgres version
 

@@ -116,10 +116,46 @@ function backfillPre0023(r: Record<string, unknown>): void {
   if (r.priceVersion === undefined) r.priceVersion = null;
 }
 
+/**
+ * **Translate a line written before the BYOK rename, and drop the double
+ * count while doing it.**
+ *
+ * Until 2026-09-02 the field was called `upstreamInferenceNanos` and was
+ * written on **every** chat-wire call, because that is what OpenRouter reports:
+ * on an ordinary call `cost_details.upstream_inference_cost` equals `cost`, so
+ * the line carried the same money twice. `data/_ai-calls.jsonl` is append-only
+ * and is never rewritten, so every one of those lines is still there — renaming
+ * the property without this would make the whole historical ledger
+ * `unreadable`, which is the accident `backfillPre0023` above exists because of.
+ *
+ * **Only when `isByok === true`.** On a BYOK row the old value is the real
+ * money and carries straight over. On any other row it was the duplicate, and
+ * carrying it over would preserve the very defect the rename was for — so it
+ * becomes `null`, exactly as
+ * [migration 20260902141103](../../drizzle/20260902141103_byok_upstream_nanos.sql) does to the
+ * Postgres rows. `=== true` rather than truthy because `isByok` is
+ * `boolean | null` and "we were not told" is not "yes".
+ *
+ * The old key is deleted rather than left alongside, so a round-tripped row
+ * equals the row that was written and nothing downstream can read the stale
+ * name by accident.
+ */
+function translateByokUpstream(r: Record<string, unknown>): void {
+  if (!("upstreamInferenceNanos" in r)) return;
+  const old = r.upstreamInferenceNanos;
+  delete r.upstreamInferenceNanos;
+  if (r.byokUpstreamNanos !== undefined) return;
+  r.byokUpstreamNanos = r.isByok === true ? old : null;
+}
+
 function looksLikeRow(v: unknown): v is AiCallRow {
   if (!v || typeof v !== "object") return false;
   const r = v as Record<string, unknown>;
   backfillPre0023(r);
+  /* Before the shape check, not after it: an untranslated line fails
+     `money(r.byokUpstreamNanos)` on an `undefined`, and would be counted as
+     damage rather than as history. */
+  translateByokUpstream(r);
   const money = (x: unknown) => x === null || (typeof x === "number" && Number.isFinite(x));
   return (
     typeof r.id === "string" &&
@@ -133,7 +169,7 @@ function looksLikeRow(v: unknown): v is AiCallRow {
       r.costSource === "none") &&
     money(r.creditsUsedNanos) &&
     money(r.computedCostNanos) &&
-    money(r.upstreamInferenceNanos) &&
+    money(r.byokUpstreamNanos) &&
     /* **The exclusivity the database enforces with a CHECK, enforced here by
        reading it.** This store has no database, and `totalRows` adds
        `computed` in one branch and `credits` in another — a line carrying both
@@ -155,6 +191,17 @@ function agrees(r: Record<string, unknown>): boolean {
   const credits = r.creditsUsedNanos !== null && r.creditsUsedNanos !== undefined;
   const computed = r.computedCostNanos !== null && r.computedCostNanos !== undefined;
   const version = typeof r.priceVersion === "string";
+  /* **And the BYOK pocket's own rule**, which is `ai_calls_byok_upstream_only`
+     in the BYOK migration — the same three conditions, so a JSONL line and a
+     Postgres row cannot disagree about what a valid row is. A line carrying an
+     upstream figure on a non-BYOK row is the pre-rename double count, and
+     `translateByokUpstream` above has already removed it from anything this
+     reader wrote; what is left for this to catch is a hand-edited line. */
+  if (r.byokUpstreamNanos !== null && r.byokUpstreamNanos !== undefined) {
+    if (r.costSource !== "provider") return false;
+    if (r.isByok !== true) return false;
+    if (r.providerAccount !== "openrouter") return false;
+  }
   if (r.costSource === "provider") return credits && !computed && !version;
   if (r.costSource === "computed") return !credits && computed && version;
   return !credits && !computed && !version;

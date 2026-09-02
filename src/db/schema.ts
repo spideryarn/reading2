@@ -2246,8 +2246,30 @@ export const aiCalls = spideryarn.table(
        asserts a round-trip comes back a `number`, because "it should" is exactly
        the assumption those two comments exist to distrust. */
     creditsUsedNanos: bigint("credits_used_nanos", { mode: "number" }),
-    /** What the inference itself was worth. Under BYOK this is real and the above is 0. */
-    upstreamInferenceNanos: bigint("upstream_inference_nanos", { mode: "number" }),
+    /**
+     * **What the inference itself was worth, and ONLY on a BYOK row.**
+     *
+     * Under BYOK OpenRouter's own charge is legitimately `0` because somebody
+     * else's key was billed upstream, so this is where that call's real money
+     * is. On every other row it is `null`.
+     *
+     * It was called `upstream_inference_nanos` until 2026-09-02 and was written
+     * on **every** chat-wire call, where OpenRouter reports
+     * `cost_details.upstream_inference_cost` equal to `cost` — the same money
+     * twice. So `SUM(credits_used_nanos) + SUM(upstream_inference_nanos)` was
+     * double the truth, and the only expression that got it right lived in JS,
+     * in `totalRows` (src/store/ai-calls.ts). An auditor writing the obvious SQL
+     * got $23.54 where the truth was $11.77.
+     *
+     * The name now carries the condition, and
+     * [migration 20260902141103](../../drizzle/20260902141103_byok_upstream_nanos.sql) enforces it
+     * with a CHECK, so the obvious SQL sum
+     * `COALESCE(credits,0) + COALESCE(byok_upstream,0) + COALESCE(computed,0)`
+     * is now the correct one. The next thing anybody writes against this table
+     * is a per-owner monthly aggregate for Stripe, and it should not have to
+     * know a rule that is not in the schema.
+     */
+    byokUpstreamNanos: bigint("byok_upstream_nanos", { mode: "number" }),
     isByok: boolean("is_byok"),
     /**
      * **`reported_`, because the two wires do not agree what an input token

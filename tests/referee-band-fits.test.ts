@@ -45,6 +45,11 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
+import {
+  REFEREE_TEXT_ALREADY_SENT,
+  REFEREE_TEXT_ALREADY_SENT_SHORT,
+} from "../src/messages.js";
+
 const CSS = readFileSync("src/web/styles.css", "utf8");
 const APP = readFileSync("src/web/App.tsx", "utf8");
 
@@ -126,5 +131,56 @@ describe("the markup the rules above are aimed at", () => {
        whole band, which would cap and scroll the chips and the panel too. */
     const gap = band?.slice(at(TAGS.scan), at(TAGS.chips)) ?? "";
     expect(gap.match(/<\/div>/g)?.length, "`.ref-brief` does not close before the chips").toBe(1);
+  });
+});
+
+/**
+ * **Both boxes are collapsed by default now, and that is a second answer to the
+ * same problem this file is about.**
+ *
+ * The cap above is what makes the band survive a referee who has opened both;
+ * the collapse is what means they usually have not. Greg asked for it on
+ * 2026-09-02 — the scan first, *"default-collapsed unless something has been
+ * found"*, and then the confidentiality notice with it.
+ *
+ * What a test can hold here is the part that would rot silently: a collapse
+ * that took the *fact* away with the paragraph. The label on the control has to
+ * be the sentence itself, and it has to still say what the long one says.
+ * src/web/SourceScanNotice.tsx's own tests hold the scan half, where there is a
+ * component to render.
+ */
+describe("the preamble is shut until a referee asks for it", () => {
+  /* The same slice as the describe above takes, and taken again rather than
+     shared: a `band` that stopped matching would then fail in one place instead
+     of quietly emptying two. */
+  const band = APP.match(/className="mode-band gloss referee"[\s\S]*?<\/aside>/)?.[0];
+
+  it("the notice's label is the long sentence's own opening clause", () => {
+    /* Values, not source text: two strings that drift apart are the failure —
+       a label reading "Confidentiality" over a paragraph that says the text has
+       already gone would pass any test written about the markup. */
+    expect(REFEREE_TEXT_ALREADY_SENT_SHORT).toMatch(/\.$/);
+    const clause = REFEREE_TEXT_ALREADY_SENT_SHORT.replace(/\.$/, "");
+    expect(
+      REFEREE_TEXT_ALREADY_SENT.startsWith(clause),
+      `the notice's label is no longer what the notice says:\n  ${clause}\n  ${REFEREE_TEXT_ALREADY_SENT}`,
+    ).toBe(true);
+  });
+
+  it("the band shows that label outside the collapse, and the paragraph inside it", () => {
+    expect(band, "the shut notice says nothing at all").toContain(
+      "REFEREE_TEXT_ALREADY_SENT_SHORT",
+    );
+    expect(band).toContain("aria-expanded={noticeOpen}");
+    /* The long sentence and the disclosure line are the two things behind the
+       chevron, and `noticeOpen &&` is the whole of what puts them there. */
+    expect(band).toMatch(/\{noticeOpen && \(/);
+  });
+
+  it("starts shut on every visit, and remembers nothing between them", () => {
+    /* A collapse is only allowed here because it is not a dismissal — App.tsx
+       § RefereeBand. `useState(false)` is that, in one line: no storage, no
+       column, and the same first screen every time. */
+    expect(APP).toContain("const [noticeOpen, setNoticeOpen] = useState(false);");
   });
 });

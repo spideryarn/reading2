@@ -90,8 +90,10 @@ evidence — a reproduction, the logs, the on-disk state — and not only from r
 reasoning from the same source reach the same wrong answer confidently.
 
 At the end, a postmortem in `docs/postmortems/`: the real cause, the commit that introduced it, the
-fix that's right for the long term, and what would have caught the whole class. **Then do what it
-says, in this run.** The prevention it recommends becomes a stage — rearchitecting so the class
+fix that's right for the long term, and what would have caught the whole class. **Name the class
+outright** — the shape of the mistake, not this bug — and **rank what you recommend by ease and
+value**. Both are for the reader who reads forty of these looking for a pattern worth fixing, and
+neither survives being left implicit. **Then do what it says, in this run.** The prevention it recommends becomes a stage — rearchitecting so the class
 can't recur is the point of writing it down. Filed at the finish line is filed and never done, and
 the machinery is still open now.
 
@@ -109,3 +111,7 @@ the machinery is still open now.
 
 "Done, all tests pass" is a claim, not a result — read the diff, and run the gates yourself before
 you commit. See [silent-success.md](silent-success.md).
+
+## At the end
+
+Follow [debrief-progress.md](debrief-progress.md).

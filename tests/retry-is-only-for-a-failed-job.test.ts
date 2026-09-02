@@ -76,7 +76,7 @@
  *   'blocks', …(2) ]`. The missing one is `tweets`, which is the argument
  *   `forceForRetry`'s own comment makes and which nothing exercised until now.
  */
-import { readdir, readFile, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
@@ -95,10 +95,10 @@ import type {
 import { fsJobStore } from "../src/store/jobs-fs.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import { fsStoreSession } from "../src/store/session.js";
+import { jobFilesOnDisk } from "./helpers/job-files.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const JOBS_DIR = path.join(ROOT, "data", "_jobs");
 const OWNER = DEV_OWNER_ID;
 
 /**
@@ -280,10 +280,7 @@ async function runToTheEnd(
 /** The job records on disk for one slug — the money assertion, counted. */
 async function jobsOnDisk(slug: string): Promise<Job[]> {
   const out: Job[] = [];
-  for (const file of await readdir(JOBS_DIR).catch(() => [])) {
-    const record = JSON.parse(
-      await readFile(path.join(JOBS_DIR, file), "utf8").catch(() => "{}"),
-    ) as Partial<Job>;
+  for (const { record } of await jobFilesOnDisk()) {
     if (record.slug === slug) out.push(record as Job);
   }
   return out;
@@ -310,11 +307,7 @@ async function settle(id: string): Promise<Job | null> {
 describe("retrying a job", () => {
   afterAll(async () => {
     for (const id of MADE) await forgetJob(id).catch(() => undefined);
-    for (const file of await readdir(JOBS_DIR).catch(() => [])) {
-      const full = path.join(JOBS_DIR, file);
-      const record = JSON.parse(await readFile(full, "utf8").catch(() => "{}")) as {
-        slug?: string;
-      };
+    for (const { path: full, record } of await jobFilesOnDisk()) {
       if (record.slug?.startsWith(SLUG_PREFIX)) await rm(full, { force: true });
     }
     for (const slug of SLUGS) {

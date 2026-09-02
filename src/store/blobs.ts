@@ -310,7 +310,8 @@ export function postgresBlobStore(who: string): RawSourceStore {
       `${who}, but there is no Supabase Storage configured — SUPABASE_URL and ` +
         "SUPABASE_SERVICE_ROLE_KEY must both be set. The article rows are in Postgres, " +
         "and their source documents would be read from and written to data/_blobs/ on " +
-        "this machine, where nothing else can find them. See src/store/blobs.ts.",
+        "this machine, where nothing else can find them. Locally: npm run db:start, then " +
+        "these come from .env.local. See src/store/blobs.ts.",
     );
   }
 
@@ -395,7 +396,23 @@ export async function storeRawSource(
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const key = canonicalKey(sha256, kind);
 
-  const first = await store.putIfAbsent(key, bytes, CONTENT_TYPE[kind]);
+  /* **`head` first, because the POST is what breaks the local stack.** Storage
+     answers a duplicate with a 409 in ~20 ms without reading the body, and Kong
+     — which has buffered a multi-megabyte body to a temp file — returns that
+     connection to its keepalive pool with the body unsent. The next request
+     through it, whatever it is for, waits out `proxy_read_timeout`: 60 seconds,
+     178 times in 17 hours. docs/plans/260902c-make-the-test-suite-pass-reliably.md
+     § Cause 1. It is a plain win in production too — we stop pushing 6 MB of PDF
+     over the wire to be told it is already there.
+
+     This adds a fast path; it does not move the write. Every actual create
+     still goes through `putIfAbsent`, so create-only still means create-only,
+     and a `head` that says present when the object then vanishes lands in the
+     same branch as any other mismatch: `get` returns null and `CorruptObject`
+     throws. */
+  const first = (await store.head(key))
+    ? ("already-there" as const)
+    : await store.putIfAbsent(key, bytes, CONTENT_TYPE[kind]);
   /* A successful create needs no read-back: we hashed the buffer we just wrote,
      and no other writer can have been in the middle of the same key — that is
      what create-only means. Only the dedup hit is unproven. */

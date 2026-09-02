@@ -31,6 +31,7 @@ import {
   parseAsBlockId,
   parseAsDepths,
   parseAsIdList,
+  refScaleParam,
   resolveMatcher,
   resolveRuns,
   runParam,
@@ -250,6 +251,39 @@ describe("glossary mode parameters", () => {
     // And an order from a later version degrades to the default rather than
     // to an empty list.
     expect(sortParam.parse("frequency")).toBeNull();
+  });
+});
+
+describe("referee mode parameters", () => {
+  /**
+   * **One ramp for the whole mode**, `?refscale=rg|br` — which is a bug fix
+   * rather than a preference. `valenceStep` sends −100 → 0 and +100 → 8, and
+   * `--div-rg-0` is red for *against* where `--div-8` is red for *favour*: the
+   * two ramps put red at opposite ends of the truth. While each criterion chose
+   * its own, and the prose carried criterion identity, the words in the panel
+   * rescued it. Now the prose is painted by direction, so one red underline
+   * would have meant opposite verdicts in one document.
+   */
+  it("reads both ramps and nothing else", () => {
+    expect(refScaleParam.parse("rg")).toBe("rg");
+    expect(refScaleParam.parse("br")).toBe("br");
+  });
+
+  it("falls back to red↔green on a value nobody defined, rather than throwing", () => {
+    /* A hand-edited URL is not an error, which is how every other parser in
+       params.ts treats one. `null` is what nuqs resolves to the default; an
+       exception here would be a blank reading view over a typo. */
+    for (const junk of ["RG", "rgb", "", "red-green", "0", "rg,br"]) {
+      expect(refScaleParam.parse(junk), `?refscale=${junk}`).toBeNull();
+    }
+    expect(refScaleParam.defaultValue).toBe("rg");
+  });
+
+  it("replaces rather than pushes, like every other display switch here", () => {
+    /* It changes how one thing is painted rather than which thing you are
+       looking at — `?axis=` and `?hue=` are the precedent. A Back button that
+       walked back through a colour choice would undo the wrong act. */
+    expect(refScaleParam.history).toBe("replace");
   });
 });
 

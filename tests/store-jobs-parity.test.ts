@@ -42,7 +42,9 @@ import {
 import { pgJobStore, releaseStepIn } from "../src/store/pg-jobs.js";
 import type { Job, JobStep, OwnerId } from "../src/types.js";
 import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
-import { type HeldRunLock, takeRunLock } from "./helpers/run-lock.js";
+import { cleanUpThenRelease, takeRunLockAndSetUp } from "./helpers/lock-lifecycle.js";
+import type { HeldRunLock } from "./helpers/run-lock.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 loadEnvLocal();
 
@@ -169,46 +171,51 @@ if (process.env.DATABASE_URL) {
        not-null columns and the zero `instance_id` are `auth.users` being
        Supabase's table rather than ours — see scripts/db-seed-owner.ts. */
     if (reachable) {
-      runLock = await takeRunLock("tests/store-jobs-parity.test.ts");
+      /* Through `takeRunLockAndSetUp`, so the sweep below cannot walk away with
+         the key. The `catch` under here rethrows when `reachable`, and used to
+         do it past both the release and the `pool.end()` — module scope, so no
+         `afterAll` existed yet to catch either. tests/helpers/lock-lifecycle.ts. */
+      runLock = await takeRunLockAndSetUp("tests/store-jobs-parity.test.ts", async () => {
+        /* **Every owner this file has ever minted, jobs first.**
+           Not the same thing as the teardown, and not covered by it: teardown
+           does not run when the process is killed, so a run that was interrupted
+           leaves its jobs behind for ever. With a fresh owner each run those rows
+           are invisible to this one's own queries — but not to the database's,
+           and both of the rules this file leans on are global. A leftover
+           `running` row makes every claim here answer `busy` through
+           `jobs_only_one_running`, and a leftover expired one is counted by
+           `settleExpired`, which two cases below assert exactly.
 
-      /* **Every owner this file has ever minted, jobs first.**
-         Not the same thing as the teardown, and not covered by it: teardown
-         does not run when the process is killed, so a run that was interrupted
-         leaves its jobs behind for ever. With a fresh owner each run those rows
-         are invisible to this one's own queries — but not to the database's,
-         and both of the rules this file leans on are global. A leftover
-         `running` row makes every claim here answer `busy` through
-         `jobs_only_one_running`, and a leftover expired one is counted by
-         `settleExpired`, which two cases below assert exactly.
+           Safe to take the lot because the lock is already held, so no sibling
+           copy can be using any of them; and scoped by the stem, so it can only
+           ever reach rows this file made.
 
-         Safe to take the lot because the lock is already held, so no sibling
-         copy can be using any of them; and scoped by the stem, so it can only
-         ever reach rows this file made. */
-      await pool.query(`delete from spideryarn.jobs where owner_id::text like $1`, [RUBBLE]);
-      await pool.query(`delete from auth.users where id::text like $1`, [RUBBLE]);
+           On this file's own `pool` rather than on the lock's connection: the
+           lock excludes the other suites whichever connection does the work, and
+           `pool` is what seeds through `seedAuthUser` below. */
+        await pool.query(`delete from spideryarn.jobs where owner_id::text like $1`, [RUBBLE]);
+        await pool.query(`delete from auth.users where id::text like $1`, [RUBBLE]);
 
-      /* No `on conflict`: the id is fresh and the rubble is gone, so a conflict
-         here would mean something we have not thought of, and the point of the
-         rethrow above is that this file says so rather than failing later on a
-         foreign key. The email is per-run too — `users_email_partial_key` is
-         unique, so a fixed one is its own way for two runs to collide. */
-      for (const who of [OWNER, OWNER_B]) {
-        await pool.query(
-          `insert into auth.users
-             (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
-           values ($1, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-                   $2, 'x', now(), now())`,
-          [who, `store-jobs-parity-${who}@example.invalid`],
-        );
-      }
+        /* No `on conflict`: the id is fresh and the rubble is gone, so a conflict
+           here would mean something we have not thought of, and the point of the
+           rethrow above is that this file says so rather than failing later on a
+           foreign key. The email is per-run too — `users_email_partial_key` is
+           unique, so a fixed one is its own way for two runs to collide. */
+        for (const who of [OWNER, OWNER_B]) {
+          await seedAuthUser(pool, { id: who, email: `store-jobs-parity-${who}@example.invalid` });
+        }
+      });
     }
   } catch (err) {
     if (reachable) throw err;
     reachable = false;
     kind = "unreachable";
     why = `could not reach it: ${(err as Error).message}`;
+  } finally {
+    /* In a `finally` because the `catch` above rethrows on the reachable path,
+       and a leaked pool at module scope is a connection nothing ever closes. */
+    await pool.end();
   }
-  await pool.end();
 }
 
 /* This file has never said anything when it skips, so `REQUIRE_POSTGRES=1` is
@@ -2091,18 +2098,28 @@ describe.skipIf(!reachable)("Postgres, on the database's clock", () => {
  */
 afterAll(async () => {
   if (!reachable) return;
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
-  try {
-    await pool.query("delete from spideryarn.jobs where owner_id = any($1)", [[OWNER, OWNER_B]]);
-    await pool.query("delete from auth.users where id = any($1)", [[OWNER, OWNER_B]]);
-  } finally {
-    await pool.end();
-    /* And let the next suite in. Not left to the process exiting: vitest keeps
-       its worker alive for the next file, so a sibling would go on waiting long
-       after this file had finished. If we crash instead, Postgres drops the
-       lock with the connection and the sibling is let in anyway. */
-    await runLock?.release();
-  }
+  /* And let the next suite in, last and unconditionally. Not left to the process
+     exiting: vitest keeps its worker alive for the next file, so a sibling would
+     go on waiting long after this file had finished. If we crash instead,
+     Postgres drops the lock with the connection and the sibling is let in
+     anyway. The release used to sit in a `finally` behind `pool.end()`, which is
+     itself fallible. tests/helpers/lock-lifecycle.ts. */
+  await cleanUpThenRelease(
+    async () => {
+      const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+      try {
+        await pool.query("delete from spideryarn.jobs where owner_id = any($1)", [
+          [OWNER, OWNER_B],
+        ]);
+        await pool.query("delete from auth.users where id = any($1)", [[OWNER, OWNER_B]]);
+      } finally {
+        await pool.end();
+      }
+    },
+    async () => {
+      await runLock?.release();
+    },
+  );
 });
 
 process.on("beforeExit", () => {

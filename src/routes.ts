@@ -732,6 +732,37 @@ function fields(body: unknown): Record<string, unknown> {
 }
 
 /**
+ * The same test as `fields` above, but a **400 instead of a coercion** — for
+ * the routes where a body that is not an object is a malformed request rather
+ * than an empty patch.
+ *
+ * `fields` is right where an absent key means something ("this patch does not
+ * mention the body"), and it deliberately reads `null` as `{}`. A `PATCH` that
+ * must name a field cannot use it: `null` would become `{}` and be refused for
+ * the wrong reason, or worse, be destructured directly.
+ *
+ * **Destructuring `readBody`'s result without this is a 500.** A bare JSON
+ * `null` is a valid body, destructuring it throws a `TypeError`, and the
+ * generic handler turns that into a server fault — a malformed request reported
+ * as "this app is broken", which is the one thing validation must never do, and
+ * which would be reported as our bug because it is the shape a client bug takes.
+ *
+ * There were four hand-written copies of this check (`patchShelf`,
+ * `patchReader`, and the search and criterion `PATCH`es) and one route that
+ * needed it and had none — renaming a chat thread, which 500'd on `null` until
+ * 2026-09-02. The search PATCH's comment had said since 2026-08-27 that "the
+ * same hole is latent in the other PATCH routes here", and it stayed latent for
+ * as long as the sentence was the only thing enforcing it.
+ * docs/reusable/written-down-is-not-checked.md.
+ */
+function objectBody(body: unknown): Record<string, unknown> {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw httpError(400, "Expected a JSON object");
+  }
+  return body as Record<string, unknown>;
+}
+
+/**
  * The comments this process is answering right now, as `slug/id`.
  *
  * `pending` on disk does not mean "an answer is coming" — it is written
@@ -3859,10 +3890,7 @@ async function patchShelf(
   /* A JSON body that is not an object at all — `"hello"`, `42`, `null` — must
      be a 400 rather than a 500. `in` throws on a primitive, so this cannot be
      folded into the checks below. */
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    throw httpError(400, "Expected a JSON object");
-  }
-  const patch = body as Record<string, unknown>;
+  const patch = objectBody(body);
   const hasArchived = "archived" in patch;
   const hasTitle = "title" in patch;
   const hasPurpose = "purpose" in patch;
@@ -4690,10 +4718,7 @@ interface ReaderState {
  * `httpErrorFrom` below turns into the same answer this would have given.
  */
 async function patchReader(body: unknown): Promise<ReaderState> {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    throw httpError(400, "Expected a JSON object");
-  }
-  const patch = body as Record<string, unknown>;
+  const patch = objectBody(body);
   const wantsProfile = "profile" in patch;
   const wantsExperimental = "experimental" in patch;
   if (!wantsProfile && !wantsExperimental) {
@@ -6411,7 +6436,7 @@ export async function serveAuthenticatedApi(
     if (oneThread && req.method === "PATCH") {
       // Slug becomes a directory; the thread id is only ever matched in a list.
       const [slug, id] = [slugPart(oneThread, 1), part(oneThread, 2)];
-      const { title } = (await readBody(req)) as Record<string, unknown>;
+      const { title } = objectBody(await readBody(req));
       if (typeof title !== "string") throw httpError(400, "Expected { title }");
       send(res, 200, { threads: await chatStore.rename(slug, id, title) });
       return;
@@ -6447,17 +6472,12 @@ export async function serveAuthenticatedApi(
     if (oneRun && req.method === "PATCH") {
       // Slug becomes a directory; the run id is only ever matched against a list.
       const [slug, id] = [slugPart(oneRun, 1), part(oneRun, 2)];
-      const body = await readBody(req);
-      /* Checked before it is destructured. `readBody` will happily return a
-         bare JSON `null` — a body of exactly `null` is valid JSON — and
-         destructuring that throws a `TypeError`, which the generic handler
-         turns into a **500**. A malformed request answered as a server fault
-         is the one thing validation must never do. GPT Sol's review,
-         2026-08-27; the same hole is latent in the other PATCH routes here. */
-      if (typeof body !== "object" || body === null || Array.isArray(body)) {
-        throw httpError(400, "Expected a JSON object");
-      }
-      const { colour } = body as Record<string, unknown>;
+      /* Checked before it is destructured — see `objectBody`, which is where
+         the reasoning and the other four callers now live. The sentence this
+         comment used to carry, that "the same hole is latent in the other
+         PATCH routes here", stayed true for as long as it was the only thing
+         enforcing itself. */
+      const { colour } = objectBody(await readBody(req));
       /* `null` is a real value here — it is how the reader says "put this row
          back on whatever colour it would have had". So the check cannot be a
          truthiness one, and it cannot be `!colour` either: slot **0** is a
@@ -6501,13 +6521,7 @@ export async function serveAuthenticatedApi(
     if (oneCriterion && req.method === "PATCH") {
       // Slug becomes a directory; the id is only ever matched against a list.
       const [slug, id] = [slugPart(oneCriterion, 1), part(oneCriterion, 2)];
-      const body = await readBody(req);
-      // Checked before it is destructured — a bare JSON `null` is valid JSON,
-      // and destructuring it is a `TypeError` the generic handler makes a 500.
-      if (typeof body !== "object" || body === null || Array.isArray(body)) {
-        throw httpError(400, "Expected a JSON object");
-      }
-      const { colour } = body as Record<string, unknown>;
+      const { colour } = objectBody(await readBody(req));
       /* **`{ colour }` and nothing else**, exactly as the search PATCH beside
          it. A criterion's text, kind and poles are not editable through this
          route — changing the question is what POST does, because a changed

@@ -53,14 +53,13 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { articles, revisionBlocks, searchRuns } from "../db/schema.js";
+import { articles, searchRuns } from "../db/schema.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import { MAX_RUNS, requireColour, withRun } from "../searches.js";
-import { hashBlocks } from "../source-hash.js";
 import type { SearchHit, SearchRun } from "../types.js";
 import type { SearchStore, SweepOptions } from "./contracts.js";
-import { notFound, ownedSlug, requireSlug } from "./pg.js";
+import { notFound, ownedSlug, requireSlug, sourceHashFor } from "./pg.js";
 
 const logger = log("store");
 
@@ -112,48 +111,6 @@ function toRun(row: typeof searchRuns.$inferSelect): SearchRun {
     ...(row.sourceHash === null ? {} : { sourceHash: row.sourceHash }),
     ...(row.colour === null ? {} : { colour: row.colour }),
   };
-}
-
-/**
- * The fingerprint of the article as this store has it — the Postgres half of
- * `currentSourceHash` in src/searches.ts.
- *
- * **The same `hashBlocks`, not a second one that agrees today.** That is the
- * whole reason src/source-hash.ts is its own module: two fingerprints of one
- * article can only ever disagree, and the day they do, a run stored through one
- * store reports itself current against the other's idea of current. The
- * function's parameter was widened to the two fields it reads so this query
- * could feed it directly.
- *
- * `order by ordinal`, for the reason src/store/pg.ts § `blocksFor` gives at
- * length: block ids carry no position, so without the clause the rows come back
- * in whatever order the planner likes — which in development is usually
- * insertion order, so a hash computed here would match the file's in every test
- * and drift in production. A hash over reordered rows is a different hash, so
- * this would present every saved search as out of date and nothing would say
- * why.
- *
- * `undefined` for an article with no blocks, which `isStale` treats as stale —
- * the same answer the filesystem gives for a `blocks.json` it cannot read.
- */
-async function sourceHashFor(articleId: string, db: Db | Tx = getDb()): Promise<string | undefined> {
-  const rows = await db
-    /* Four columns, not two. `hashBlocks` folds in `role` and `treatment`
-       (src/source-hash.ts) — assigning a role changes no text, so without them
-       a reclassified article would present every saved search as current
-       against prose it no longer matches. Two columns here would also compare a
-       full new hash against an old narrow one, on every read, for ever. */
-    .select({
-      id: revisionBlocks.blockId,
-      text: revisionBlocks.text,
-      role: revisionBlocks.role,
-      treatment: revisionBlocks.treatment,
-    })
-    .from(revisionBlocks)
-    .innerJoin(articles, eq(articles.currentRevisionId, revisionBlocks.revisionId))
-    .where(eq(articles.id, articleId))
-    .orderBy(asc(revisionBlocks.ordinal));
-  return rows.length ? hashBlocks(rows) : undefined;
 }
 
 /**

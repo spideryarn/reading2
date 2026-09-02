@@ -272,6 +272,14 @@ import {
 } from "./referee-views.js";
 export { DEFAULT_REFEREE_VIEW, isRefereeView, REFEREE_VIEWS, type RefereeView };
 
+/* The two diverging ramps, from the file that owns the vocabulary — see
+   `refScaleParam` at the foot of this file. */
+import {
+  DEFAULT_DIVERGING_SCALE,
+  type DivergingScale,
+  isDivergingScale,
+} from "../referee-criteria.js";
+
 export const modeParam = createParser<Mode>({
   /* `isMode` and not a second `MODES.includes` here. The serverless function
      that composes a shared article's `<title>` asks the same question of the
@@ -1038,10 +1046,59 @@ export const rememberParam = createParser<RememberView>({
  * over, because it is also the cheap 80% of the anchoring problem the plan's
  * § 1 is about — the referee reads the paper before the model paints on it.
  *
+ * **Two acts write into it without a tick being pressed**, and neither weakens
+ * that: a criterion that has just *run* switches itself on, and pressing one of
+ * its result rows switches it on (`CriteriaPanel`'s `onShow`). Both are the
+ * referee asking — the rule is about *arriving* at a paper with nothing painted
+ * on it, not about the tick being the only door. The visible sentence above the
+ * list says so, because the first draft of it said the opposite and was read as
+ * a promise the panel then broke.
+ *
  * No legacy singular to reconcile, so there is no `resolveCrits` beside
  * `resolveRuns`: this parameter was born plural.
  */
 export const critsParam = parseAsIdList.withOptions({ history: "replace" });
+
+/**
+ * **Which diverging ramp the whole of Referee mode is drawn with** —
+ * `?refscale=rg` (the default, omitted) or `?refscale=br`.
+ *
+ * One scale for the mode rather than one per criterion, and that is a bug fix
+ * rather than a tidy-up. The composer used to let each criterion pick, and the
+ * two ramps put red at **opposite ends of the truth**: `valenceStep` sends
+ * −100 → 0 and +100 → 8, `--div-rg-0` is red for *against* and `--div-8` is red
+ * for *favour*. In the panel the words rescue it. In the prose, which since
+ * 2026-09-02 is painted by valence too, there are no words — so one red
+ * underline would have meant opposite verdicts in one document.
+ *
+ * In the URL rather than in a column, for what
+ * [url-state.md](../../docs/project/url-state.md) says view state does here: it
+ * needs no migration, it is what a shared link should carry, and it makes the
+ * colour-vision switch work **retroactively** over criteria that were already
+ * run — which a per-criterion column never could.
+ * `referee_criteria.scale` is still written by new rows so the column does not
+ * start lying, and is no longer read for display.
+ *
+ * `replace`, which is the precedent every display switch in this file follows
+ * (`?axis=`, `?hue=`): it changes how one thing is painted rather than which
+ * thing you are looking at, and a Back button that walked back through a
+ * colour choice would be undoing the wrong act.
+ *
+ * An unrecognised value falls back to `rg` rather than throwing — a
+ * hand-edited URL is not an error, and every other parser here treats it the
+ * same way. `isDivergingScale` and not a second list of the two spellings, for
+ * the reason `?mode=` and `?referee=` give: one place decides the vocabulary,
+ * so the client and the database cannot drift apart about what `br` is.
+ *
+ * **There is no control for it yet.** It is honoured if present; the switch
+ * arrives with the explainer card.
+ */
+export const refScaleParam = createParser<DivergingScale>({
+  parse: (v) => (isDivergingScale(v) ? v : null),
+  serialize: (v) => v,
+})
+  .withDefault(DEFAULT_DIVERGING_SCALE)
+  .withOptions({ history: "replace" });
 
 /* -------------------------------------------------------- the library --- */
 

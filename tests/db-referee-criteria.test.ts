@@ -26,6 +26,7 @@ import type { PoolClient } from "pg";
 
 import { loadEnvLocal } from "../src/env.js";
 import { pgReady } from "./helpers/pg-ready.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 loadEnvLocal();
 
@@ -71,13 +72,11 @@ const CRIT = "spya-bbbbbb";
 
 /** An article with one block identity and one diverging criterion on it. */
 async function seed(c: PoolClient): Promise<void> {
-  await c.query(
-    `insert into auth.users (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
-     values ($1,'00000000-0000-0000-0000-000000000000','authenticated','authenticated',
-             'referee-schema-test@example.invalid','x',now(),now())
-     on conflict (id) do nothing`,
-    [OWNER],
-  );
+  await seedAuthUser(c, {
+    id: OWNER,
+    email: "referee-schema-test@example.invalid",
+    onConflictDoNothing: true,
+  });
   await c.query(`insert into spideryarn.articles (id, owner_id, slug) values ($1,$2,'referee-schema-test')`, [
     ART,
     OWNER,

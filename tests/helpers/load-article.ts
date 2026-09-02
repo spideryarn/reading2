@@ -55,6 +55,23 @@
  * loader that nulled it would be inventing a policy the pipeline does not have.
  * On the real path the column is honest, because `extract` writes it before
  * `blocks` overwrites the file.
+ *
+ * ## This is no longer test-only — `scripts/db-seed-dev.ts` calls it
+ *
+ * Since 2026-09-02, `npm run db:seed-dev` puts three corpus articles on the
+ * seeded local account's shelf by calling this function, so `npm run setup`
+ * leaves a box with something to open. **It is the only thing under `scripts/`
+ * that imports from `tests/`**, and that was a deliberate choice rather than a
+ * convenience: the alternative was a second files → Postgres implementation,
+ * which is precisely what deleting `db:import` was meant to prevent
+ * (docs/plans/260827aa-delete-the-importer.md). One implementation with two
+ * callers is the inverse of that risk.
+ *
+ * What it means for anyone changing this file: **it is on a `npm run setup` path
+ * now**, so a change that only a test would notice is no longer the only kind of
+ * change there is. Keep it importable with no vitest in scope — nothing in this
+ * module or its helpers imports the test runner, and that is load-bearing.
+ * docs/plans/260902d-a-dev-account-that-is-ready-to-use-on-every-box.md.
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";

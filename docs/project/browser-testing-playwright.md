@@ -46,7 +46,7 @@ landing page and very little else. This is the rest of it, and it needs no human
 import { signedInBrowser } from "./scripts/browser-sign-in.ts";   // tsx, from the repo root
 
 const { browser, page, who } = await signedInBrowser();
-//   → signed in as greg@gregdetre.com in 1728ms, GET /api/library → 200
+//   → signed in as dev-admin@spideryarn.local in 1728ms, GET /api/library → 200
 await page.goto("http://localhost:5273/read/fowler-phrenology", { waitUntil: "domcontentloaded" });
 ```
 
@@ -57,7 +57,7 @@ npx tsx scripts/browser-sign-in.ts --at /read/fowler-phrenology --shot /tmp/x.pn
 ```
 
 **The credential is already on the machine.** `npm run db:seed-owner` writes
-`greg@gregdetre.com` with a password generated per machine into
+`dev-admin@spideryarn.local` with a password generated per machine into
 `~/.config/spideryarn/local-admin-password`, and `npm run db:admin-password` prints it — no Google,
 no dashboard —
 [supabase-local.md § Signing in](supabase-local.md#signing-in-with-no-google-and-no-browser-you-cannot-reach).

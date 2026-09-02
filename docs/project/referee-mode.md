@@ -47,9 +47,13 @@ window `RefereeClaimsStore.sweep`'s one boolean cannot express — without it a 
 loading the panel would error a run the first one is still streaming
 ([`src/store/pg-referee-claims.ts`](../../src/store/pg-referee-claims.ts)).
 
-**Candidates works end to end** as of 2026-09-01 — open the sub-mode and the fit brief arrives
-unprompted, then scope the search in the composer and names arrive with the shortlist above the
-transcript. It is a third `ThreadKind` on chat's own machinery
+**Candidates works end to end** as of 2026-09-01 — open the sub-mode, press **Build the reviewer
+brief**, and that press creates the thread and sends the opening ask; then scope the search in the
+composer and names arrive with the shortlist above the transcript. **The brief used to arrive
+unprompted**, on a `useEffect` the first time the sub-mode was opened, and that is why the button
+exists: the other three chips are inert, so a first-time referee clicking through the radiogroup paid
+for a model call and sent paper-derived terms to a search engine without having asked for either
+(2026-09-02). It is a third `ThreadKind` on chat's own machinery
 (`drizzle/0050_candidates_thread_kind.sql`, [`src/converse.ts`](../../src/converse.ts) § `systemFor`,
 [`src/referee-candidates.ts`](../../src/referee-candidates.ts),
 [`src/web/CandidatesPanel.tsx`](../../src/web/CandidatesPanel.tsx)). See § 4 below for where each of
@@ -141,23 +145,89 @@ valence are two separate numbers that are never the same field —
 tested, and `referee_criteria` is its own table
 ([`src/db/schema.ts`](../../src/db/schema.ts) § *referee criteria*).
 
-Valence lives in the panel row, never in the prose stripe: the renderer has exactly two
-channels — the wash carries confidence, the categorical stripe carries which criterion — and
-repainting the stripe by valence would throw away *which* criterion made a judgement, leaving two
-negative criteria on one phrase indistinguishable. (The plan also asked for it in the prose gutter,
-beside the marked block. That is **not built**; the gutter holds the permalink and the chat button.)
+**The prose stripe carries the valence, and until 2026-09-02 it carried criterion identity
+instead.** Greg read a paper with the old rule and found the two halves of the screen contradicting
+each other:
 
-**The scale defaults to red ↔ green**
+> I'm not convinced that the highlighting colour in the text matches the colour in the Referee
+> Claims. Here, "So if extrapolation" counts against on the left, and yet it is highlighted with a
+> green line in the text on the right. … I was thinking that it should match the colour of the
+> left-hand panel. If that's set to red/green, so should the prose be.
+>
+> — Greg, 2026-09-02
+
+That was not a rendering glitch. A `diverging` criterion's passages were painted twice from two
+palettes with nothing on screen saying they were two: the mark in the prose from `Found.slot`, an
+Okabe–Ito identity hue one of which is green, and the swatch in the panel from `valenceToken`, red ↔
+green. A criterion that drew the green identity slot underlined *every* one of its passages green,
+including the ones the panel called "counts against" in red. So the stripe is the direction now —
+`resolveCriterion` carries the number, `hitMarks` resolves the ramp token, and
+[`src/web/annotate.ts`](../../src/web/annotate.ts) deduplicates hue-bearing marks on that token so a
+criterion's own −90 and +70 over one phrase stay two stripes rather than collapsing into one.
+(The plan also asked for the valence in the prose gutter, beside the marked block. That is **not
+built**; the gutter holds the permalink and the chat button.)
+
+**What that gives up, said plainly.** The stripe no longer answers *which criterion made this red
+phrase*. The **bar down the left of the paragraph** and the rail still read `slot` and are
+deliberately untouched, so they still say which criteria are live around here — but the bar is
+paragraph-wide, capped at eight, and collapses two criteria that share a slot, so it is a coarser
+answer than the stripe used to give. Pressing a result now rings its exact phrase
+(`mark.hit[data-hit-open]`, which Referee mode was passing `null` for and Search was not), which is
+the panel→prose direction a referee actually travels. Prose→panel is not fixed: seeing a red mark
+and asking which criterion said so still needs the bar or the panel. Marks are inert to the click by
+design, so that was never really answered before either — the old stripe answered it only for a
+reader who had memorised eight hues.
+[260902f-make-referee-mode-understandable.md](../plans/260902f-make-referee-mode-understandable.md)
+has the whole argument, including the alternative (one marked diverging criterion at a time) that
+was not taken and stays the fallback.
+
+**What pays for it.** [colour-scales.md](colour-scales.md) forbids colour being the only carrier of
+a good/bad judgement, and the panel's four carriers are not beside the mark. So a valence-painted
+mark also carries a **sign** — `−` counts against, `+` counts for, `·` counts neither way, `±` where
+two results point opposite ways over one phrase and both stripes are drawn. It is written as
+`data-dir` and drawn by CSS `::after`, so it is generated content rather than text: it cannot be
+copied out of the article and cannot reach the block's rendered-text offsets, which
+[block-ids.md](block-ids.md) would never forgive. Its **alt text is the direction in words** —
+`content: "−" / "counts against"`, from `directionWords` in
+[`src/web/valence.ts`](../../src/web/valence.ts) — so a reader using a screen reader hears the
+carrier at the mark rather than only in the panel they may never have opened. It was empty for a
+day, and the argument for that (a stray minus inside the author's sentence is worse than silence)
+lost to the plainer one: a carrier nothing announces is not a carrier. And the Criteria panel prints
+a **key** — *in the paper: a swatch, `−`, counts against; a swatch, `·`, counts neither way; a
+swatch, `+`, counts for; `±`, counts both ways* — whenever a for/against criterion is switched on,
+in the mode's own ramp rather than in the words "red" and "green".
+
+**Where the reader has commented on a phrase a criterion also marked**, the mark prints both the
+sign and the comment's `✳`, from one higher-specificity rule
+([`src/web/styles.css`](../../src/web/styles.css)). An element has one `::after`, and the two rules
+had equal specificity until 2026-09-02, so ours won and the reader's own marker silently
+disappeared. The cascade is the only place that is visible, so
+[`tests/mark-sign-in-chrome.test.ts`](../../tests/mark-sign-in-chrome.test.ts) reads the computed
+content out of a real browser.
+
+**One ramp for the whole mode**, `?refscale=rg|br`, defaulting to red ↔ green
 ([`--div-rg-*`](colour-scales.md#--div-rg--is-red-green-and-it-is-here-because-it-was-asked-for)),
-which Greg asked for three times, with
-[`--div-*`, blue ↔ red](colour-scales.md#--div--is-blue-red-and-it-is-the-one-to-use) offered
-per-criterion. That is allowed only because **colour is never the carrier**: every row prints the
-ordinal rank, the direction in words, the referee's own pole label and the signed number beside the
-swatch. A browser pass on 2026-09-01 simulated deuteranopia and protanopia and confirmed both halves
-of that — every swatch collapses to the same khaki (a +70 green and a −60 red land within a few
-points of each other), and the four text carriers stay fully legible. `DEFAULT_DIVERGING_SCALE` in
-[`src/referee-criteria.ts`](../../src/referee-criteria.ts) writes down the condition under which
-this default has to move to `br`: if the panel ever stops printing the direction in words.
+which Greg asked for three times; [`--div-*`, blue ↔
+red](colour-scales.md#--div--is-blue-red-and-it-is-the-one-to-use) is the other value. It used to be
+per-criterion, and that was a second bug nobody had noticed: `valenceStep` sends −100 → 0 and
++100 → 8, so `--div-rg-0` is red for *against* where `--div-8` is red for *favour*. While the prose
+carried identity the panel's words rescued it; once the prose carries direction, two criteria on one
+ramp each would have put opposite verdicts behind the same red underline. In the URL rather than in a
+column so it needs no migration, so a shared link carries it, and so the colour-vision switch works
+*retroactively* over criteria already run. Every surface that paints a valence takes it — the panel
+row's swatch, the key, and both the current-placement swatch and the five instrument positions in
+[`PlaceOnCriterion`](../../src/web/PlaceOnCriterion.tsx). `referee_criteria.scale` is still written
+by new rows so the column does not start lying, and is no longer read for display; there is no
+control for `?refscale=` yet.
+
+Red ↔ green is allowed only because **colour is never the carrier**: every row prints the ordinal
+rank, the direction in words, the referee's own pole label and the signed number beside the swatch,
+and every mark in the prose prints a sign. A browser pass on 2026-09-01 simulated deuteranopia and
+protanopia and confirmed the panel half of that — every swatch collapses to the same khaki (a +70
+green and a −60 red land within a few points of each other), and the four text carriers stay fully
+legible. `DEFAULT_DIVERGING_SCALE` in [`src/referee-criteria.ts`](../../src/referee-criteria.ts)
+writes down the condition under which this default has to move to `br`: if the panel ever stops
+printing the direction in words.
 
 #### The referee's own mark <a id="the-referees-own-mark"></a>
 
@@ -385,11 +455,22 @@ between the drop and the re-add, unlike 0048), both stores' normalisers, the rou
 one branch in [`src/converse.ts`](../../src/converse.ts). It bills under its own job,
 `referee-candidates`, because it is the only conversation here that runs several web searches a turn.
 
-**The thread opens with the fit brief, before the editor types anything.** What a competent reviewer
-of this paper would need to know — methods, subfield, statistics, the domain knowledge the claims
-assume — each requirement anchored to the passage that motivates it. That half has no
-hallucinated-person failure mode, is useful on its own, and is the query the conversation then
-refines. The plan says explicitly that this is where to stop if the names layer disappoints.
+**The thread opens with the fit brief — on one press.** What a competent reviewer of this paper
+would need to know — methods, subfield, statistics, the domain knowledge the claims assume — each
+requirement anchored to the passage that motivates it. That half has no hallucinated-person failure
+mode, is useful on its own, and is the query the conversation then refines. The plan says explicitly
+that this is where to stop if the names layer disappoints.
+
+**It used to fire on mount, and that was wrong for a reason larger than the money**, fixed
+2026-09-02. The sub-modes are a radiogroup, a first-time referee reads a radiogroup by pressing along
+it, and the other three chips are inert to a press. So clicking Candidates to find out what the word
+meant bought a run over the paper **and** sent search terms drawn from an unpublished manuscript to a
+search engine — *a different third party at a different time* from the model provider the band's
+notice is about, and one the notice cannot cover, because it is in the past tense and this had not
+happened yet. It is behind a labelled button now, and the button's visible words name both parties
+before either is reached. Everything after the first press is unchanged: the thread is stored, and
+coming back to the sub-mode finds it and asks nothing.
+[`tests/referee-candidates-press.test.tsx`](../../tests/referee-candidates-press.test.tsx).
 
 **Chat steers; a list is what you look at.** The panel keeps a browsable shortlist *above* the
 transcript, revised by whichever answer most recently carried one. This is the editor research's
@@ -503,6 +584,191 @@ asserts there is no digit on a candidate row that is not a block id.
 co-authorship COI checks and that is the obvious next step. It is also a different project, and
 Greg's own framing was *"see how far we can get in a stage or two"*.
 
+## Every control says what it does
+
+> The new Referee mode is very confusing. Add lots of explanatory tooltips to buttons etc.
+>
+> — Greg, 2026-09-02
+
+The mode had **no** hover cards at all until that ask: four one-word sub-mode chips over four
+unrelated things, a coloured square with no glyph, a large numeral that reads like a severity score,
+and a `<select>` that throws a judgement away when you use it. Every control now carries a
+`ControlTip` — [tooltips.md § `ControlTip`](tooltips.md#controltip-which-is-what-most-of-them-are-now)
+is the shape and the rule, which is that the second sentence must be the half a press would *not*
+tell you. Here that half is nearly always one of three things: **a model call is about to be spent**,
+**something is about to be overwritten**, or **this is not the judgement it looks like**.
+
+Where the cards are, and the one thing each says that the label cannot:
+
+| Control | The half a press would not tell you |
+|---|---|
+| the four sub-mode chips ([`App.tsx`](../../src/web/App.tsx) § `RefereeViews`) | Criteria never scores; Claims asserts linkage and not adequacy; Mirror is never given the paper and stores nothing; Candidates reaches a search engine and checks no conflicts |
+| the three kind chips | `KIND_NOTE` — the same string the panel prints under the selected kind, so the two kinds a referee has *not* pressed explain themselves too |
+| the preset chips | they replace the whole form: text, kind and both poles |
+| *Run this criterion*, *Pull the paper's claims*, *Try again* | one model call over the whole paper, at full price, nothing resumed |
+| the colour swatch, and *Automatic* | on a for/against criterion it colours the paragraph bar and the rail and **not** the marks; automatic is a hash of the criterion's id, and there are eight |
+| Candidates' *Build the reviewer brief* button | an AI turn starts, it may take several provider requests, and it **may** run a web search — the only place in the mode that reaches a search engine |
+| Claims' tick, and *other text in quotes* | the passages are the model's pick and not a verified linkage; marks are off until asked for; and that list is **not** the claims the model missed |
+| Mirror's coverage row | it has nowhere to send you, which is the whole of what it is saying |
+| Mirror's jump button | the passage is where **you** anchored the comment — Mirror chose the remark and never the passage, and is not given the paper to pick one from |
+| Candidates' shortlist heading and tool strip | each turn **replaces** the shortlist; the strip is the check on *"never claim a tool you did not run"* rather than decoration |
+| [`PlaceOnCriterion`](../../src/web/PlaceOnCriterion.tsx)'s criterion picker | switching criterion clears the position you pressed — the highest-value sentence in the mode |
+
+**Four labels changed, because a tooltip is not read by anybody in a hurry**, which is what a
+referee is and what [`MirrorPanel.tsx`](../../src/web/MirrorPanel.tsx) already says about itself.
+Where the words on the control were themselves misleading, a card is not the fix:
+
+- **"Two ends" → "For / against."** Ours named the shape of the data; the referee's names the
+  question, and it says what the two fields that appear underneath are for.
+- **"Tested in a trial" → "A kind tested in a trial"**, and its negative. Beside one remark the old
+  wording read as a claim that *this* remark had been checked and had held. What the ICLR 2025 trial
+  tested is the **category**; whether any one remark is right is untested and untestable, and
+  `EVIDENCE_NOTE` says so in a line a hurried referee does not reach.
+- **Mirror's `title="Go to this passage"` became a real card**, which is the anti-pattern
+  [`Tooltip.tsx`](../../src/web/Tooltip.tsx) argues against in its own docstring: a second's wait,
+  unstyleable, truncated, and absent altogether on a touch device.
+- **"Find reviewers — one model call and a web search" → "Build the reviewer brief."** Both halves
+  of the old label were false, in opposite directions. The press buys the **fit brief**, and
+  `CANDIDATES_OPENING` in [`src/referee-candidates.ts`](../../src/referee-candidates.ts) ends *"No
+  names yet"*; and the count was wrong twice over, because web search is offered on every round and
+  the model decides whether to use it — so it may run **zero** times — while each tool round is a
+  fresh provider request, up to `MAX_TOOL_ROUNDS + 1` of them
+  ([`src/converse.ts`](../../src/converse.ts)). A disclosure that names a number is a disclosure
+  that can be wrong. The other route on offer was to suppress search and multi-round tools for the
+  opening turn so the promise came true; it was not taken, because it means a per-turn tool policy
+  threaded from a button through the chat route into `converse` — a client deciding what the server
+  may call, in the one place "what did this cost" has to stay answerable from the server alone. The
+  words were what was wrong, so the words changed.
+
+**And two cards were deleted, because a card that repeats what is already on the screen is worse
+than no card** — a cross-family review's finding, 2026-09-02:
+
+- **The rank numeral's.** It was hover-only and could not be otherwise, and once
+  `WHAT_THE_RANK_IS` was a visible line above the list (below) the card was a second copy for the
+  one group that already had the first.
+- **Mirror's evidence badge's.** Its first paragraph restated the badge and its second *was*
+  `EVIDENCE_NOTE`, which the panel prints in full, visibly, under that same list. What pays for the
+  removal is the label change above: *"A kind tested in a trial"* is where the misreading actually
+  lived.
+
+**And one message stopped offering an action Claims does not have.** `ANSWER_OVERFLOWED` in
+[`src/messages.ts`](../../src/messages.ts) said *"Asking for something narrower usually fits"*, flat.
+`parseHits` in [`src/search.ts`](../../src/search.ts) is Search's parser *and* this mode's, so a
+criterion run, a claims pull and a Mirror run all end there — and none of those three has a scoping
+control of any kind. [copy.md](copy.md) rule 3.
+
+The first fix **conditioned** the clause — *"where you asked a question of your own"* — and a
+cross-family review showed that still misses: **a criterion is precisely the referee's own
+question**, so the condition reads as satisfied on the very screen it was written to exclude, and an
+errored criterion offers *Try again* and nothing else. So the message **split**, which is
+`MARK_CUT_OFF`'s shape rather than a new idea — one diagnosis, a caller who cannot take the advice,
+its own code, because [`tests/messages.test.ts`](../../tests/messages.test.ts) refuses two sentences
+under one code and is right to:
+
+- `ANSWER_OVERFLOWED`, `[ai-overflowed]`, keeps the narrowing advice and goes to **Search**, whose
+  reader typed the ask. It keeps the code because that is the one already quoted in the wild.
+- `ANSWER_OVERFLOWED_FIXED_ASK`, `[ai-overflowed-no-ask]`, is the retry and nothing else, and it is
+  what the mode's three callers get.
+
+`parseHits` takes an `AskKind` to choose, defaulting to the one that promises least, so a sub-mode
+added later cannot inherit advice about a control it does not have.
+
+**Which caller gets which sentence is proved at the four public entry points**, not at the parser:
+[`tests/overflow-message-reaches-its-caller.test.ts`](../../tests/overflow-message-reaches-its-caller.test.ts)
+drives `findPassagesStream`, `runCriterionStream`, `runClaimsStream` and `mirrorStream` over a
+cut-off answer and asserts the exact sentence and code each one ends with. Testing the parser alone
+proved only that it branches: removing `"editable"` from Search's one call site, or adding it to a
+Referee caller, left the whole suite green until 2026-09-02.
+
+**What the cards are not.** They are not where a rule lives. Everything load-bearing is still visible
+text on the panel — `LINKAGE_NOT_ADEQUACY`, `WHAT_THE_TICK_DOES`, `DOCUMENT_ORDER_NOTE`, the
+evidence badge on every Mirror row, `COI_NOT_CHECKED` — and the cards sit on top of those rather than
+in place of them. [`tests/referee-tooltips.test.tsx`](../../tests/referee-tooltips.test.tsx) pins
+that each control has a card, that the card is that control's, that a `title` attribute has not crept
+back, and the changed labels as literals.
+
+**And that a card is worth its hover.** Its generic check was `body.length > 80`, which passed long
+repetition — the exact failure the review found in four cards — so it now compares the two paragraphs
+against each other and against the label. It also reaches Claims, Candidates and `PlaceOnCriterion`,
+which it did not import at all until 2026-09-02: deleting any of their cards left the whole suite
+green.
+
+**It is a floor and not a reader.** It ignores any label under three content words, and Mirror's jump
+card lived in exactly that gap: *"Scrolls the paper to the passage this remark is about"* under *Go
+to this passage*, which reduces to the single word *passage*. Lowering the floor was measured and
+rejected — at two the card is still missed, and at one the check fires on any honest sentence that
+uses the noun its control is named after, the replacement copy included. Important cards get an
+explicit assertion instead, which is what the jump card now has. That card's first paragraph is now
+its **provenance**: the passage is where the referee anchored their own comment.
+
+### The two gaps a card could not close
+
+Both were found by stage 2 and recorded rather than accepted, and both have the same shape: a card
+that cannot be reached is not an explanation.
+
+- **The *Run this criterion* card was unreadable in the state that needed it.** A `disabled` button
+  emits no pointer and no focus events, so nothing opens a card on one — and the referee who wants to
+  know what the button costs, or why it is dead, is standing in front of exactly that. It carries
+  `aria-disabled` now, so it stays hoverable, focusable and announced as unavailable, with
+  `.crit-run[aria-disabled="true"]` in [`styles.css`](../../src/web/styles.css) doing what `:disabled`
+  used to. **`aria-disabled` does not stop an activation**, so the inertness stays where it already
+  was: the form's `onSubmit` returns on an incomplete criterion, which catches the click, the Enter
+  and the Space alike.
+- **The rank numeral's card was hover-only and could not be otherwise.** The numeral is a `<span>`
+  inside the jump button, so it takes no focus, and a `tabIndex` there would put a tab stop inside a
+  button. So the fact itself is now a **visible line above the list** — *the number is the model's
+  ordering of its own answers for that criterion, not a score* — printed once a run has returned
+  something, beside `WHAT_THE_TICK_DOES`. **And the card is gone**, 2026-09-02: once the line
+  existed the card said the same thing again to the one group that could already read it.
+
+[`tests/referee-criteria-explained.test.tsx`](../../tests/referee-criteria-explained.test.tsx) holds
+both, including the part jsdom cannot demonstrate: it dispatches events to `disabled` elements
+happily, so the old spelling passed a "the card opens" test here and failed it in every browser.
+
+## The card that says what the mode is for
+
+The cards above answer *what does this control do*. They cannot answer *what is this mode*, because a
+card only opens on a control you already suspected. So there is one **"How Referee mode works"** card,
+under the sub-mode chips at the top of the panel:
+[`src/web/RefereeCard.tsx`](../../src/web/RefereeCard.tsx).
+
+**Two short paragraphs.** The refusal — *you are the referee; nothing here scores the paper or drafts
+your review* — and what the colours mean, which is stated as the *shape* of the rule rather than as
+red and green, since `?refscale=br` paints the same two directions blue and red.
+
+**It had a third part and it was cut**, 2026-09-02. A line each on the four sub-modes sat between
+those two, and it was an artefact of the order the work landed in: stage 2 had already put a
+`ControlTip` on each of the four chips directly above this card, so every one of those lines had a
+second copy that opens on the chip it is about. The card is kept short deliberately — *a card longer
+on screen than the panel underneath it has failed at the thing it is for* — and it was breaking its
+own rule. Measured in Chrome at 1280×900 on an article with no criteria: **409.5px** before,
+**203.1px** after, against a 269.9px empty-state Criteria composer underneath it.
+
+**It is in `.ref-panel`, not `.ref-brief`.** That matters more than it looks. `.ref-brief` holds the
+confidentiality notice and the injection scan, and neither of those may ever be dismissed — a
+closable card sitting beside a non-closable one invites closing the wrong one, and teaches a referee
+that the box above ought to close too. The card is in the scroller with the sub-mode, where
+everything is transient by construction.
+
+**Shut it and it stays shut; the header's *How this works* button brings it back.** One bit, in
+`localStorage`, and reopening clears it rather than opening the card for one mount — otherwise the
+button works once and the card is gone again on the next paper, which reads as the button not having
+worked. [`src/web/referee-card.ts`](../../src/web/referee-card.ts) is the store and the whole argument
+for it; [`tests/referee-how-card.test.tsx`](../../tests/referee-how-card.test.tsx) pins both
+directions and the case where the browser refuses to keep anything.
+
+**Why `localStorage` at all**, when `RefereeBand`'s own docstring used to say it was banned outright
+citing [url-state.md](url-state.md): that was the flat version of a real rule rather than the rule.
+View state — *how you are looking at an article* — goes in the URL because it has to survive a reload
+and travel when the address is pasted to somebody else. A per-device *"I have read this"* bit is
+neither: it is not about this article, and pasting it at somebody else would be pasting your own
+reading history at them. The install hint was already the exception; this is the second, and it is the
+same kind of thing rather than a new kind. The alternative considered and dropped was a
+reader-profile column, which is a migration for a checkbox.
+
+**What the card is not** is a way to dismiss the confidentiality notice. That notice collapses, is
+never dismissed, remembers nothing, and starts shut on every visit — see § Confidentiality below.
+
 ## The rules the whole mode obeys
 
 Each is meant to be a test rather than an intention, whichever sub-mode eventually enforces it:
@@ -555,15 +821,40 @@ Each is meant to be a test rather than an intention, whichever sub-mode eventual
    because a scan is hundreds of milliseconds on a short paper and about nine seconds on a 1.3 MB
    one.
 
-   **Four rules, and each is code rather than an intention.** A PDF says *not checked at all* and
-   can never say *nothing found* — the `switch` on `examined` is exhaustive and that arm has no
-   `findings` to count. `blindSpots` is printed beside every clean result, never behind a
-   disclosure. A finding wearing an `ordinary` label is **sorted last and still drawn**, with the
-   sentence saying the label is read off class names and is therefore forgeable. And a
-   `visible-instruction` prints its required `caveat`, because hidden text has no innocent
-   explanation and visible text usually does. `tests/source-scan-notice.test.tsx` holds all four,
+   **Five rules, and each is code rather than an intention.** A PDF says *not checked* and can never
+   say *nothing found* — the `switch` on `examined` is exhaustive and that arm has no `findings` to
+   count. A clean result never travels without its caveat. A finding wearing an `ordinary` label is
+   **sorted last and still drawn**, with the sentence saying the label is read off class names and
+   is therefore forgeable. A `visible-instruction` prints its required `caveat`, because hidden text
+   has no innocent explanation and visible text usually does. And the panel is **shut unless
+   something was found**. `tests/source-scan-notice.test.tsx` holds all five,
    `tests/referee-scan-route.test.ts` holds the wire, and `tests/source-scan.test.ts` holds the
    cache.
+
+   **Shut, and what that costs rule 2.** Greg, 2026-09-02:
+
+   > Make the "hidden instructions" default-collapsed unless something has been found. Explain in
+   > tooltip much more clearly what the intent is, and how worried to be based on the results (in
+   > this case, it didn't run any test, so we have no information one way or the other, so not very
+   > worried).
+
+   The default is **computed from the result rather than remembered**: open when the scan looked and
+   found something — a labelled finding counts, because the label is forgeable — and shut otherwise,
+   including for a PDF, which is no news in either direction. Nothing is persisted, so a referee
+   meets the same first screen every visit and one press opens it.
+
+   The cost lands on rule 2, which used to be *`blindSpots` is printed beside every clean result,
+   never behind a disclosure* — and the list is now behind one. So **the caveat moved into the
+   headline**: the line a referee reads shut says *nothing found in the HTML source — which is not a
+   clean bill*, and the list of what was missed is what opening it gets you. The headline is the
+   one thing on screen in every state, and `tests/source-scan-notice.test.tsx` § *shut unless
+   something was found* holds that.
+
+   **The tooltip on the heading says how worried to be**, and it is different in each of the seven
+   states, because *no check ran* and *a check ran and found nothing* call for different amounts of
+   worry and neither of them is much. Its first paragraph — what the scan is for at all — is also
+   the last line inside the open panel, from one constant, because a tooltip does not exist on a
+   touch device.
 
    **The result is cached in memory on the sha256 of the bytes that were scanned, and nowhere
    else.** That is a decision rather than a stage on the way to a table, and the reasoning is on
@@ -607,7 +898,13 @@ So there are three sentences, in three places, and the **tense is the whole poin
   sent. `tests/direct-add-says-the-text-has-gone.test.tsx` asserts both the sentence and the
   asymmetry, so that making the three disclosures "consistent" goes red.
 - **Past tense, inside Referee mode itself** — `REFEREE_TEXT_ALREADY_SENT`
-  (`src/messages.ts`), shown by `RefereeBand` ([`src/web/App.tsx`](../../src/web/App.tsx)). It does
+  (`src/messages.ts`), shown by `RefereeBand` ([`src/web/App.tsx`](../../src/web/App.tsx)), and
+  **collapsed since 2026-09-02** at Greg's asking. The *fact* is the label on the control —
+  `REFEREE_TEXT_ALREADY_SENT_SHORT`, which is the long sentence's own opening clause — so shutting
+  the box hides the venues and the audience, never that the text has gone; and `noticeOpen` is a
+  `useState` that remembers nothing, so every visit starts shut. That is the difference between a
+  collapse and a dismissal, and it is why the storage objection below does not apply: there is
+  nothing to store. It does
   not pretend a choice is still open: this article's text has already been sent, that happened when
   it was added, and here is what NIH, NSF, Elsevier, Springer Nature, Wiley, NeurIPS and ICLR all say
   about that as a confidentiality breach in itself, separate from who writes the review. It names
@@ -624,8 +921,8 @@ this mode's.
 
 ## The band has to fit, and for a day it did not
 
-Both of the boxes above the sub-mode chips are always on screen and neither is collapsible — that is
-the decision above, and it stands. What nobody had checked is what they cost. Measured in Chrome on
+Both of the boxes above the sub-mode chips were always on screen and open, in full, on every visit.
+What nobody had checked is what they cost. Measured in Chrome on
 2026-09-01 at **1280 × 720**, an ordinary window, on an article whose scan found **three** things:
 the head 41px + the notice 214 + the scan 386 + the chips 46 = **687px inside a 636px band**. The
 chips started below the fold, `.ref-panel` was **0px tall with 321px of content in it**, and
@@ -645,6 +942,11 @@ viewport sizes from 1280 × 1400 down to 390 × 560 and 900 × 337.
 reach: the rules exist and say the right thing, and the markup they are aimed at still puts the
 notice and the scan inside the wrapper and the chips and the panel outside it. It is explicit that
 it cannot measure anything, and why a test that tried would have passed before the fix.
+
+**Both boxes collapse now** — 2026-09-02, and it is a product change rather than a second layout
+fix. The ordinary first screen of the preamble is two lines, so the cap and its trailing fade are
+what hold the *open* case rather than the every-visit one; the measurements above are of that open
+case and are still the ones to design against.
 
 ## What the evidence actually says, and where the plan overstated it
 

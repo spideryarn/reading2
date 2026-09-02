@@ -344,8 +344,11 @@ when("the filesystem and Postgres stores agree about Referee mode", { timeout: 3
     const fromPg = await pgRefereeCriteriaStore.sourceHash(SLUG);
     expect(fromFiles).toMatch(/^[0-9a-f]{8,}$/);
     expect(fromPg).toBe(fromFiles);
-    // And the claims store computes it the same way — it is a third copy of the
-    // query (see its docstring), which is exactly how a fingerprint drifts.
+    // And the claims store computes it the same way — since 2026-09-02 by
+    // literally the same function, `sourceHashFor` in src/store/pg.ts. It was
+    // a third private copy of the query when this line was written, which is
+    // exactly how a fingerprint drifts; the assertion is still worth keeping,
+    // because "they share a function today" is not what this is checking.
     expect(await fsRefereeClaimsStore.sourceHash(SLUG)).toBe(fromFiles);
     expect(await pgRefereeClaimsStore.sourceHash(SLUG)).toBe(fromFiles);
   });

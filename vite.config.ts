@@ -14,6 +14,83 @@ import {
   PRIMARY_PORT,
 } from "./scripts/worktree-port.js";
 import { sentrySourceMaps, sentryUploadEnabled } from "./scripts/sentry-build.js";
+import { devWatchIgnored } from "./scripts/worktree-admin.js";
+
+/**
+ * What the dev server's file watcher ignores — decided by `devWatchIgnored` in
+ * `scripts/worktree-admin.ts`, which is where the reasoning and its test are.
+ *
+ * The config file's **own location**, not `process.cwd()`: which checkout is
+ * being served is a fact about where this file sits, not about where the command
+ * was typed.
+ */
+const WATCH_IGNORED = devWatchIgnored(fileURLToPath(new URL(".", import.meta.url)));
+
+/**
+ * Refuse to boot a Postgres-mode server whose database does not answer.
+ *
+ * **The env checks are not enough, and that is the whole reason this exists.**
+ * `src/store/index.ts` refuses at module load when the Supabase Storage
+ * variables are missing, and `getDb()` explains an absent `DATABASE_URL` — but
+ * both of those read *settings*. With every setting present and the containers
+ * simply stopped, nothing throws: the server boots clean and the first `/api`
+ * request dies on a raw connection error. That is precisely the outcome
+ * `createApiMiddleware` below declares this file's anti-goal, and since
+ * `npm run dev` now defaults to `postgres` it is the routine state of a fresh
+ * checkout rather than an edge case. Absent is conclusive; present is not.
+ *
+ * `select 1` and nothing more. It is not a health check, it does not retry, and
+ * it must not grow into one — the question is only whether there is a database
+ * on the other end of the URL we are about to serve every read from.
+ *
+ * **`cause` before `message`, and it is the whole value of the message.**
+ * Drizzle wraps a failure as `Failed query: select 1`, which names what we
+ * asked and not what went wrong — so an unreachable database and a permissions
+ * error read identically. The `ECONNREFUSED` a person needs is on the `cause`.
+ *
+ * **Dev and preview only.** It is reached from `createApiMiddleware`, which
+ * `apply: "serve"` keeps out of a build, so a serverless cold start pays
+ * nothing for it.
+ */
+async function assertStoreReachable(): Promise<void> {
+  const { STORE } = await import("./src/store/live.js");
+  if (STORE !== "postgres") return;
+
+  const [{ getDb }, { sql }] = await Promise.all([
+    import("./src/db/client.js"),
+    import("drizzle-orm"),
+  ]);
+
+  /* **A deadline, because the pool has none.** `new Pool(...)` in src/db/client.ts
+     sets no `connectionTimeoutMillis`, so a refused connection comes back at once
+     but a blackholed address or a stalled TLS handshake never comes back at all —
+     and a dev server that hangs before printing its URL is a worse failure than
+     the 500 this function exists to replace. Not retried: `supabase start` already
+     waits for readiness, and typing the command again is the right response to the
+     narrow case where the container is up but Postgres is still recovering.
+     GPT Sol, 2026-09-02. */
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("timed out after 5s")), 5_000);
+    timer.unref();
+  });
+
+  try {
+    await Promise.race([getDb().execute(sql`select 1`), deadline]);
+  } catch (err) {
+    const cause = err instanceof Error && err.cause instanceof Error ? err.cause : err;
+    throw new Error(
+      `SPIDERYARN_STORE is "postgres", but the database did not answer: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }. Locally: npm run db:start, and check DATABASE_URL in .env.local. To work off the ` +
+        "filesystem instead, put SPIDERYARN_STORE=files in .env.local — that file beats both this " +
+        "script's default and anything you type on the command line (src/env.ts). " +
+        "See docs/project/supabase-local.md.",
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /**
  * One process, one command (`npm run dev`). The API is mounted as dev middleware
@@ -36,6 +113,7 @@ import { sentrySourceMaps, sentryUploadEnabled } from "./scripts/sentry-build.js
  * up as a 500 on somebody's first request.
  */
 async function createApiMiddleware(): Promise<Connect.NextHandleFunction> {
+  await assertStoreReachable();
   const { handleApi } = await import("./src/routes.js");
   return (req, res, next) => {
     handleApi(req, res).then(
@@ -314,10 +392,28 @@ export default defineConfig(() => {
       /* `.claude/worktrees/**` is a peer's entire checkout. Watching it would
          reload the primary's page on their every keystroke, and Vite *appends*
          this list to its own defaults (`resolveChokidarOptions`), so naming it
-         here cannot cost us the node_modules and .git exclusions. */
-      watch: {
-        ignored: ["**/data/**", "**/docs/**", "**/evals/**", "**/.claude/worktrees/**"],
-      },
+         here cannot cost us the node_modules and .git exclusions.
+
+         **And it must not be there when this server is running *inside* one.**
+         Chokidar matches these globs against absolute paths, and a worktree's
+         absolute path contains `.claude/worktrees/` — so in a worktree the
+         pattern meant to exclude the *neighbours* excludes the server's own
+         source tree, every file of it. Nothing errors. The page loads, the app
+         works, and every edit made after the server started is invisible to it:
+         the module graph is never invalidated, so Vite keeps transforming and
+         serving the version it read at boot. An agent then measures its own
+         change in a browser and finds it did not happen, which is exactly the
+         shape docs/reusable/silent-success.md collects. Found on 2026-09-02 by
+         a browser pass that proved it three ways, `curl` included —
+         docs/postmortems/260902a-a-dev-server-that-ignored-its-own-source.md.
+
+         Dropping it there costs nothing: worktrees live under the *primary's*
+         `.claude/`, so a worktree has no neighbours of its own inside it.
+
+         The list itself is `devWatchIgnored` in scripts/worktree-admin.ts, so
+         that the case nobody can reach from the primary checkout has a test
+         rather than a comment. */
+      watch: { ignored: WATCH_IGNORED },
     },
   };
 });

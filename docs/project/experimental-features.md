@@ -13,7 +13,12 @@ properly. Features go behind it one at a time, each with a reason.
 ## The three rules
 
 **Off is the default, and off is what a reader who has never seen this page gets.** The column is
-`null` for everybody until they say otherwise.
+`null` for everybody until they say otherwise — with one exception, and it is a development one:
+`npm run db:seed-dev` turns it **on** for the seeded local account, so a box or a laptop set up the
+documented way is looking at the unfinished features rather than hiding them. That is the whole
+audience for a local stack. It uses `writeExperimental` rather than its own SQL, so the `coalesce`
+below holds and a second `npm run setup` does not move the date.
+[supabase-local.md § A shelf with something on it](supabase-local.md#a-shelf-with-something-on-it).
 
 **Hidden means hidden from the controls, not unreachable.** `?mode=outline` still works with the
 switch off. The switch is about clutter, not enforcement — an old bookmark keeps working, and a

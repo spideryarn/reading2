@@ -557,7 +557,12 @@ answering, `npm run db:migrate` for one that is behind. The suite itself still s
 `1 failed | N skipped` rather than thirty connection errors, and it exits non-zero. Unset, nothing
 changes: same verdict, same warning, same silence when there is no `DATABASE_URL` at all.
 
-Use it wherever a green run is about to be quoted as evidence — CI, the remote box (stage 3 of
+**`npm run check` sets it** on its `test` gate, because that is the command whose green result gets
+quoted ([static-analysis.md](static-analysis.md#the-gateadvisory-split)). So `npm run check` now needs
+a database; `npm run check -- --offline` runs the same steps without the flag, and says in its summary
+that the database suites were free to skip and that it is not the real gate.
+
+Use it wherever else a green run is about to be quoted as evidence — CI, the remote box (stage 3 of
 [260831x-remote-box-dev-environment.md](../plans/260831x-remote-box-dev-environment.md)), and any time you are about
 to tell somebody the tests passed.
 
@@ -602,6 +607,16 @@ which is the only thing that helps when two copies of one file share fixed fixtu
 only excludes the holders that agree to take it, and a dev server mid-ingest never will; that is what
 `insertWhenSlotFree`'s wait-on-the-constraint is for. Removing either brings back a different half of
 the problem.
+
+**Taking either key is only half of it — the release has to be unconditional.** Both helpers clean
+up every failure inside themselves, and neither can govern what the caller does next. A suite that
+takes the lock at module scope and *then* sweeps its rubble has no teardown hook registered yet, so a
+statement that throws there leaves the key held until the vitest worker exits; a teardown that
+deletes rows before releasing loses the release to the first failed delete. Both shapes go through
+[`tests/helpers/lock-lifecycle.ts`](../../tests/helpers/lock-lifecycle.ts) —
+`takeRunLockAndSetUp` and `cleanUpThenRelease` — which
+[`tests/lock-lifecycle.test.ts`](../../tests/lock-lifecycle.test.ts) checks against `pg_locks` on
+keys minted per run. A suite whose whole teardown *is* the release needs neither.
 
 **Measured 2026-08-30.** Two concurrent `npx vitest run` processes over the seven job-slot files,
 with the key neutralised so the lock excludes nobody: **23 to 50 failures per run** across four runs,

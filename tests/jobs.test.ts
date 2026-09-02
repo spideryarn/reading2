@@ -15,7 +15,7 @@
  * line is drawn here.
  */
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   advanceJob,
@@ -53,6 +53,7 @@ import { jobWorthRetrying } from "../src/job-failure.js";
 import { parseJobRequest } from "../src/routes.js";
 import { currentOwnerId, DEV_OWNER_ID } from "../src/owner.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
+import { jobFilesOnDisk } from "./helpers/job-files.js";
 
 function step(name: StepName, status: JobStep["status"]): JobStep {
   return { name, label: STEPS[name].label, status };
@@ -625,10 +626,10 @@ const OWN_SLUGS = [SLUG, "test-advance-token", "test-advance-sweeps", "test-enqu
 /* Remove only this suite's records. `data/_jobs/` is a real directory a reader
    may have jobs in — the test must not tidy away theirs. */
 afterAll(async () => {
-  for (const file of await readdir(JOBS_DIR).catch(() => [])) {
-    const full = path.join(JOBS_DIR, file);
-    const job = JSON.parse(await readFile(full, "utf8")) as { slug?: string };
-    if (job.slug !== undefined && OWN_SLUGS.includes(job.slug)) await rm(full, { force: true });
+  for (const { path: full, record } of await jobFilesOnDisk()) {
+    if (record.slug !== undefined && OWN_SLUGS.includes(record.slug)) {
+      await rm(full, { force: true });
+    }
   }
   // And the run markers those failed jobs left behind. Not tidiness: a marker
   // surviving into the next run of this suite would make the fixture's `fetch`
@@ -1199,9 +1200,7 @@ describe("advancing a job one step at a time", () => {
 
   afterAll(async () => {
     for (const slug of SLUGS) await rm(path.join(ROOT_DATA, slug), { recursive: true, force: true });
-    for (const file of await readdir(JOBS_DIR).catch(() => [])) {
-      const full = path.join(JOBS_DIR, file);
-      const record = JSON.parse(await readFile(full, "utf8")) as { slug?: string };
+    for (const { path: full, record } of await jobFilesOnDisk()) {
       if (record.slug !== undefined && SLUGS.includes(record.slug)) await rm(full, { force: true });
     }
   });

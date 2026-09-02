@@ -51,6 +51,12 @@ export const PROVIDER_HOSTS: readonly string[] = [
 export const PAID_ENDPOINT_PATHS: readonly string[] = [
   "/v1/chat/completions",
   "/v1/audio/transcriptions",
+  /* Text-to-speech, added 2026-09-02. `evals/live/jargon-recovery.mts` buys it
+     to say the test sentences, and it was reaching the scan only through the
+     hostname — so a file that named the path and built the host at run time
+     would have gone unseen. A path that costs money belongs in the list whether
+     or not something currently uses it that way. */
+  "/v1/audio/speech",
   "/v1/embeddings",
 ];
 
@@ -215,6 +221,76 @@ export const DECLARATIONS: readonly Declaration[] = [
     wire: "chat",
     metered: true,
     why: "The cheap arm's model (the quick tier) is served only on chat/completions, and the seam for that wire (`openRouterJson`) owns the per-job provider policy — this eval's arms deliberately differ from the app's policy and from each other, which is the same reason the PDF bake-off's OpenRouter arm is a declared bypass.",
+  },
+];
+
+/**
+ * **The spend a `Declaration` cannot describe** — and which `npm run cost` names
+ * anyway, every run.
+ *
+ * `DECLARATIONS` above is a table about *this app's two seams*: every entry has
+ * a `ProviderAccount` that bills it and a `Wire` it speaks, because every entry
+ * is a call that could in principle have gone through one of them. The three
+ * things below cannot be written down that way at all:
+ *
+ * - `ProviderAccount` is `"openrouter" | "anthropic"` and `Wire` is
+ *   `"messages" | "chat" | "embeddings"`. There is nowhere to say "OpenAI, over
+ *   realtime", which is what live conversation and its evals are.
+ * - `scripts/run-codex.ts` does not make an HTTP call at all. It spawns another
+ *   vendor's CLI, on a third account, and there is no response body for an
+ *   `Observer` to read.
+ *
+ * **Widening the unions is not the reason this table exists, and reading it that
+ * way is the mistake to avoid.** Stage 2 of
+ * docs/plans/260902g-cost-tracking-that-can-set-a-price.md widens them for the
+ * realtime entries, and those two will move into `DECLARATIONS` when it does.
+ * `run-codex` will not: no seam is ever going to own a subprocess.
+ *
+ * The point of the table is narrower and it is the whole of why it was added on
+ * 2026-09-02: until then these files were named only in the `ALLOWED` map of
+ * `tests/no-undeclared-spend.test.ts`, **which prints nothing**. A green test is
+ * not a register. Somebody asking "what spends money here that I cannot see"
+ * got a report that named the `metered: false` declarations and stopped, while
+ * three files spent real money on two other accounts.
+ *
+ * A row here is a claim that money leaves and no `ai_calls` row appears. Adding
+ * one is cheap and correct; leaving one out is how a report goes quietly
+ * complete — docs/reusable/silent-success.md.
+ */
+export interface UnmeteredSpend {
+  /** The file, as `npm run cost` prints it. */
+  readonly file: string;
+  /** Which account is billed, in prose — there is no type that fits these. */
+  readonly account: string;
+  /** What it buys, and roughly how much, in one line a person can act on. */
+  readonly what: string;
+  /** Why no `Declaration` can be written for it. Not "nobody got round to it". */
+  readonly why: string;
+  /** When this was written down, `YYYY-MM-DD`. Printed as an age, like a declaration's. */
+  readonly since: string;
+}
+
+export const UNMETERED_SPEND: readonly UnmeteredSpend[] = [
+  {
+    file: "src/live.ts",
+    account: "OPENAI_API_KEY — a separate bill, and outside the OpenRouter spend cap",
+    what: "Live conversation mode. The audio is a WebRTC connection from the browser straight to OpenAI, so no row is written and no figure above includes it. Roughly $0.06–$0.46 a minute on gpt-realtime-2.1, capped at 20 minutes a session and uncapped in sessions.",
+    why: "The usage exists only in the reader's browser tab, so there is no response body this process ever receives — every Observer method takes one. Closing it needs a way for a tab to report what it spent and a reason for the server to believe it. Greg accepted the gap knowingly on 2026-08-31; docs/plans/260831g-live-conversation.md says what closing it needs, and Stage 2 of docs/plans/260902g-cost-tracking-that-can-set-a-price.md is the job.",
+    since: "2026-08-31",
+  },
+  {
+    file: "evals/live/hallucination-on-noise.mts, evals/live/jargon-recovery.mts",
+    account: "OPENAI_API_KEY — the same separate bill",
+    what: "The live-mode evals. Realtime sessions on gpt-realtime-2.1 plus transcription arms, and jargon-recovery also buys text-to-speech from /v1/audio/speech to say the test sentences. A few cents a run, on a key nothing else in this report can see.",
+    why: "Same untypeable realtime wire as src/live.ts, so declaredFetch cannot cover them either — `declarationFor` refuses an id that is not in DECLARATIONS, and no Declaration for a realtime call can be written yet.",
+    since: "2026-09-02",
+  },
+  {
+    file: "scripts/run-codex.ts",
+    account: "a ChatGPT subscription first, then CODEX_API_KEY on platform.openai.com — a third account again",
+    what: "Every GPT Sol review this repo asks for. It is the most-used paid thing here that is not the app, and a long xhigh review is not free.",
+    why: "It spawns `codex exec` as a subprocess rather than making a request, so there is no HTTP call to route through a seam and no response body to meter. The provider scan cannot see it either — it names neither a provider host nor one of the inference credentials — so before this entry it was in no list anywhere.",
+    since: "2026-09-02",
   },
 ];
 

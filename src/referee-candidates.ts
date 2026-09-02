@@ -675,10 +675,19 @@ export function nameKey(raw: string): string | null {
 /* -------------------------------------------------------------- the copy -- */
 
 /**
- * **The opening ask, sent automatically when the thread is created.**
+ * **The opening ask, sent when the thread is created — which is when the editor
+ * presses *Build the reviewer brief*.**
  *
- * The thread opens with the fit brief before the editor has typed anything,
- * because that half has no hallucinated-person failure mode: it is a statement
+ * It was sent automatically, from a `useEffect` the first time the sub-mode was
+ * opened, until 2026-09-02: a first-time referee clicking through the four
+ * chips paid for a run and sent paper-derived terms to a search engine without
+ * having asked for either. Now the press creates the thread and this is what it
+ * sends. Nothing here has run until it is pressed — src/web/CandidatesPanel.tsx
+ * § `StartBrief` — and coming back to a stored thread starts nothing.
+ *
+ * The thread still opens with the fit brief before the editor has typed
+ * anything else, because that half has no hallucinated-person failure mode: it
+ * is a statement
  * about what the paper demands of a reader, every requirement anchored to the
  * passage that motivates it. It is useful on its own and it is the query the
  * conversation then refines — so if the names layer disappoints, this still

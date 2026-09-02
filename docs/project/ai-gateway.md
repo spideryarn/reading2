@@ -16,7 +16,9 @@ Two things about it belong here rather than there, because they are properties o
 and the browser opens the WebRTC connection itself, so there is no seam the spend passes through.
 And therefore **`npm run cost` cannot see a live session at all.** It is not even a declared bypass:
 a `Declaration` for it cannot currently be *typed*, since `ProviderAccount` has no `"openai"` and
-`Wire` has no `"realtime"`, so the three files sit in the scan's `ALLOWED` list instead.
+`Wire` has no `"realtime"`. Since 2026-09-02 it is written down in `UNMETERED_SPEND` instead — the
+register's second table, which `npm run cost` prints by name every run. Before that it was named
+only in the scan's `ALLOWED` list, which prints nothing at all.
 
 **Widening those two unions is not the fix, though, and reading this paragraph as if it were is the
 mistake to avoid.** Every method on the declared-bypass `Observer` takes a response body *this
@@ -88,13 +90,20 @@ like**. Only the first collapsed.
 
 | | speaks | used by | code |
 |---|---|---|---|
-| **Messages** | Anthropic's Messages protocol, via OpenRouter's Anthropic-compatible endpoint (`/api/v1/messages`, which OpenRouter calls the "Anthropic Skin") | the seven pipeline stages | [`src/messages-stream.ts`](../../src/messages-stream.ts) |
-| **chat** | OpenAI's chat/completions shape | explain, chat, search, dictation, PDF reading | [`src/ai-call.ts`](../../src/ai-call.ts) |
+| **Messages** | Anthropic's Messages protocol, via OpenRouter's Anthropic-compatible endpoint (`/api/v1/messages`, which OpenRouter calls the "Anthropic Skin") | the pipeline stages — hierarchy, labels, arc, tweets, glossary, ideas, quotes, timeline, quiz, sketch | [`src/messages-stream.ts`](../../src/messages-stream.ts) |
+| **chat** | OpenAI's chat/completions shape | explain, chat, search, quiz marking, the three referee runs, dictation, PDF reading | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **embeddings** | `/api/v1/embeddings` — OpenAI-shaped, different endpoint | turning a paragraph into a vector | [`src/ai-call.ts`](../../src/ai-call.ts) |
 
-Two files, thirteen call sites, and **no third way to spend money**. Each gateway's tests scan `src/`
-and fail if any other file constructs an Anthropic client, opens a message stream, or names an
-OpenRouter endpoint.
+Two files, and **no third way to spend money**. Each gateway's tests scan `src/` and fail if any
+other file constructs an Anthropic client, opens a message stream, or names an OpenRouter endpoint.
+
+**There is deliberately no count of the call sites here.** This sentence said "thirteen" from
+2026-08-27 until 2026-09-02, by which point it was twenty — referee mode, quiz marking and the tool
+loop had arrived, and nothing goes red when a number in prose stops being true. Replacing it with
+"twenty" was the first fix attempted and is the same bug with a fresher number, which GPT Sol
+pointed out on the day. The count that cannot drift is the one you take yourself: grep for
+`streamMessage(`, `openRouterStream(` and `openRouterJson(`. What is *enforced* is the boundary, not
+the tally, and the tests above are where it lives.
 
 [`src/models.ts`](../../src/models.ts) holds the wire assignment as `AI_JOB_WIRE: Record<AiJob,
 Wire>` — a record rather than lists, so a job nobody assigned fails to compile rather than quietly
@@ -342,6 +351,68 @@ awaited before the collector closes. [`src/store/ai-calls.ts`](../../src/store/a
 adapter; `npm run cost` reads it back. The reasoning, the column list, and the four decisions taken
 in Greg's absence are in [260827q-ai-cost-tracking.md](../plans/260827q-ai-cost-tracking.md).
 
+### `byok_upstream_nanos` — the column whose name is a condition
+
+**A row's money is now `credits + byok_upstream + computed`, with nothing conditional about it**, and
+that is a change made on 2026-09-02 rather than how it always was.
+
+OpenRouter reports `cost_details.upstream_inference_cost` on *every* chat-wire call, and on an
+ordinary one it is the same money as `cost` — equal to seven decimal places on a live probe. The
+column then called `upstream_inference_nanos` stored it on every row, so
+`SUM(credits_used_nanos) + SUM(upstream_inference_nanos)` was **twice the truth**, and the rule that
+made a total correct — add the upstream figure only when `is_byok` — lived nowhere but in
+`totalRows()` in [`src/store/ai-calls.ts`](../../src/store/ai-calls.ts). Migration 0023 had
+anticipated exactly this class for the other pair of money columns and said so; this column sat
+outside its CHECK.
+
+So the column is renamed to carry its own condition, is written only on BYOK rows, and
+[the migration](../../drizzle/20260902141103_byok_upstream_nanos.sql) nulls the historical duplicates
+and adds `ai_calls_byok_upstream_only`:
+
+```sql
+CHECK (byok_upstream_nanos IS NULL
+       OR (cost_source = 'provider' AND is_byok IS TRUE AND provider_account = 'openrouter'))
+```
+
+`is_byok IS TRUE` and not a bare `is_byok`: the column is nullable, a Postgres CHECK passes on
+`UNKNOWN`, and "the provider did not say" is not "no". The same three conditions appear twice more —
+`normaliseByokUpstream` in [`src/ai-spend.ts`](../../src/ai-spend.ts), which is the only place a
+`SpendRecord`'s figure becomes this column, and the filesystem reader's validation. **They must not
+drift apart**: a row the database refuses is a call that lands in no ledger at all, because the sink
+warns rather than throws.
+
+**The JSONL ledger cannot be migrated**, being append-only, so every line ever written still says
+`upstreamInferenceNanos`. `translateByokUpstream` in
+[`src/store/ai-calls-fs.ts`](../../src/store/ai-calls-fs.ts) converts it on read under the same
+condition — carried over on a BYOK line, nulled on any other, because there it *was* the duplicate.
+Without that the whole historical file would read as damage.
+
+**Postgres is authoritative for pricing from this change's deploy, and the filesystem history is not
+imported.** GPT Sol's call, taken rather than left to the implementer: that history is development
+evidence and contains no complete ingest.
+
+### A test may not write to the real ledger, in either store
+
+`data/_ai-calls.test.jsonl` has always kept fixture calls out of the filesystem ledger, keyed on
+`NODE_ENV`. The Postgres adapter never had the other half of that contract, and the bill for it was
+**4,714 of 4,750 rows** in the dev ledger being `test-chat-route-fixture`,
+`test-remember-route-fixture` and `test-candidates-route-fixture` — every `By owner` and `By article`
+line meaningless, and a permanent "thousands of calls reported no cost" warning burying the one
+signal that would show a real unpriced problem.
+
+Since 2026-09-02 [`costStore`](../../src/store/ai-calls.ts) hands out the **filesystem** adapter to
+anything running under the test harness, whatever `SPIDERYARN_STORE` says. Redirecting rather than
+refusing, because a store that threw under test would stop the route suites exercising the metering
+lifecycle at all — which is the half of the ledger those tests are the only cover for. The focused
+`pgCostStore` tests still go to Postgres, by importing the adapter directly and cleaning up after
+themselves. `tests/cost-store-under-test.test.ts` is what says the redirect is still there.
+
+**And the report names its database**, not just its table: `npm run cost` prints
+`postgres: spideryarn.ai_calls at <host>/<db>`, password stripped. Local and remote Postgres are
+different ledgers with different money in them, and this repo has a whole section on a command
+reaching a database other than the one on its command line —
+[database.md](database.md#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like).
+
 ### `durationMs` is per **call**, and three different ways of adding it up are wrong
 
 **This has produced a wrong number in three separate workstreams on one day — 2026-08-30 — and in
@@ -475,26 +546,42 @@ So the rule is not *"everything uses the seam"*. It is **a bypass has to be decl
 bypass still writes a row** — silence reads as zero, and zero is the one answer that is definitely
 wrong.
 
-**And there is now one call that does neither**, which is the live-conversation spike at the top of
-this doc. It is the case the register cannot yet hold: its money is spent on a wire this server never
-sees, and a `Declaration` for it cannot be typed until `ProviderAccount` and `Wire` widen. So it is
-in the scan's `ALLOWED` list, where a reason is written down but no row is ever produced — which is
-weaker than every other entry here and is exactly why it is named in the opening paragraphs rather
-than left for somebody to find at the bottom of a table.
+**And there are three that do neither** — the live-conversation spike at the top of this doc, its two
+evals, and the Codex CLI. They are the case `DECLARATIONS` cannot hold: the first three spend on a
+wire this server never sees, and a `Declaration` for them cannot be typed until `ProviderAccount` and
+`Wire` widen; `run-codex.ts` makes no request at all, it spawns a subprocess. They are in
+`UNMETERED_SPEND` — a reason written down, and no row ever produced — which is weaker than every
+other entry here and is exactly why the first is named in the opening paragraphs rather than left for
+somebody to find at the bottom of a table.
 
-- [`src/spend-declarations.ts`](../../src/spend-declarations.ts) — the register. One entry per
-  bypass: which account it bills, which file may use it, why the seam is wrong for it, and whether it
-  actually writes a row yet. `npm run cost` prints every `metered: false` entry **by name, every
-  run**, which is what makes the list finishable — the sentence it replaced ("*not counted here:
-  anything evals/ spends*") named nothing and so never could be.
-- [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts) `liveConversationGap()` — **the live-conversation
-  hole, printed on every run even though it is not in the register.** It has to be printed separately
-  because `undeclared()` reads `DECLARATIONS`, so on the day the last `metered: false` entry is wired
-  up this report would otherwise have announced that everything writes a row — while a reader could
-  be holding a live conversation billing audio by the minute into no total at all. Greg accepted the
-  gap knowingly on 2026-08-31; what it would take to close is in
-  [live-conversation.md § What is missing](../plans/260831g-live-conversation.md#what-is-missing). The
-  completeness line now says "every **declared** way", which is the true claim.
+- [`src/spend-declarations.ts`](../../src/spend-declarations.ts) — the register, and it is **two
+  tables**. `DECLARATIONS` is one entry per bypass: which account it bills, which file may use it,
+  why the seam is wrong for it, and whether it actually writes a row yet. `npm run cost` prints
+  every `metered: false` entry **by name, every run**, which is what makes the list finishable — the
+  sentence it replaced ("*not counted here: anything evals/ spends*") named nothing and so never
+  could be.
+- `UNMETERED_SPEND`, in the same file — **the spend a `Declaration` cannot describe**, printed on
+  every run by `unmetered()` in [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts). A declaration has a
+  `ProviderAccount` and a `Wire`; these have neither. Three entries: live conversation
+  ([`src/live.ts`](../../src/live.ts)), the two live-mode evals under `evals/live/`, and
+  [`scripts/run-codex.ts`](../../scripts/run-codex.ts) — the GPT Sol reviews this repo asks for on
+  every plan, which spawn another vendor's CLI on a third account and so are invisible to the
+  capability scan as well as to the ledger.
+
+  It has to be printed separately from `undeclared()`, which reads `DECLARATIONS`: on the day the
+  last `metered: false` entry is wired up this report would otherwise have announced that everything
+  writes a row — while a reader could be holding a live conversation billing audio by the minute
+  into no total at all. Greg accepted that gap knowingly on 2026-08-31; what it would take to close
+  is in [live-conversation.md § What is missing](../plans/260831g-live-conversation.md#what-is-missing).
+  The completeness line says "every **declared** way", which is the true claim.
+
+  **The other two were named only in the scan's `ALLOWED` map until 2026-09-02, and that map prints
+  nothing.** A green test is not a register: somebody asking what spends money here that they cannot
+  see got a report naming three dictation benches and stopping, while the live evals and every
+  review bought on `CODEX_API_KEY` were outside it. `OPENAI_API_KEY` is also a **separate billing
+  account** from `OPENROUTER_API_KEY` and is not covered by the cap set on the OpenRouter account —
+  it is in [`.env.example`](../../.env.example) and the health report's `EXPECTED` since the same
+  day, having been in neither.
 - [`evals/declared-spend.ts`](../../evals/declared-spend.ts) — the wrapper, kept under `evals/` so
   nothing in `src/` can reach a second way of calling a model. `declaredFetch` refuses to run outside
   a declaration, and counts attempts: a default Anthropic client retries twice, so one call can be

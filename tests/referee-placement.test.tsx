@@ -39,6 +39,7 @@
  */
 import { act, createElement, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SavedCriterion } from "../src/saved-criteria.js";
@@ -424,9 +425,22 @@ async function settle(): Promise<void> {
   });
 }
 
+/**
+ * **Inside a `NuqsAdapter`**, because `PlaceOnCriterion` reads `?refscale=`.
+ *
+ * Since 2026-09-02 the whole of Referee mode is drawn with one diverging ramp
+ * rather than one per criterion, and this section paints the current placement
+ * *and* all five instrument positions — so it has to take the mode's, or a
+ * criterion stored as `br` under the default `rg` would show the referee two
+ * opposite palettes in one session. The parameter is read here rather than
+ * threaded in, because the two dialogs this section lives in are nowhere near
+ * `RefereeBand`; the cost is this wrapper, which is the same one
+ * tests/referee-gap.test.tsx and tests/referee-criteria-panel.test.tsx already
+ * need for the band.
+ */
 async function show(element: ReturnType<typeof createElement>): Promise<void> {
   await act(async () => {
-    root.render(element);
+    root.render(createElement(NuqsAdapter, null, element));
   });
   await settle();
 }

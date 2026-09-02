@@ -87,8 +87,9 @@ That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enfo
 
 - **`docs/plans/`** — one file per piece of work, written before it lands and kept afterwards, so
   the reasoning and the evidence survive. A plan names the simpler option it passed over, and why.
-- **`docs/postmortems/`** — one file per bug worth understanding: the real root cause, the commit
-  that introduced it, the fix that's right for the long term, and what would have caught the class.
+- **`docs/postmortems/`** — one file per bug worth understanding: the real root cause and the name
+  of its class, the commit that introduced it, the fix that's right for the long term, and what
+  would have caught the class.
 - **`docs/tutorials/`** — self-contained HTML explainers of how one area works, written for somebody
   who has never read the code — [reusable/write-tutorial.md](docs/reusable/write-tutorial.md) is how
   to write one.
@@ -99,7 +100,10 @@ That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enfo
   [gjdutils](https://github.com/gregdetre/gjdutils/tree/main/docs/instructions) library of "how to
   do this kind of task well" instructions. **When a task matches one, follow it rather than
   inventing a process.** The index is [docs/reusable/README.md](docs/reusable/README.md); the one
-  worth knowing unprompted is [silent-success.md](docs/reusable/silent-success.md).
+  worth knowing unprompted is [silent-success.md](docs/reusable/silent-success.md). One of them is a
+  **ritual rather than a reaction**: [improve-the-codebase.md](docs/reusable/improve-the-codebase.md)
+  is a whole-tree sweep for the rework worth doing, run every week or so — suggest it when nobody has
+  run one lately.
 
 None of those first three is indexed here — there are a lot of files and they keep arriving. List
 the directory and read the file names; they say what each one is about, and the first paragraph of
@@ -165,9 +169,8 @@ can move. It is not the end of the world if something is briefly broken. What we
 away is design: write code that will still be good to work with in six months. It loosens nothing
 in **Real data belongs to the reader** below.
 
-**Explain plainly.** Whenever you explain, summarise or ask a question — in chat, in a doc, in a
-commit message — use plain words and short sentences. Say the thing itself, not a gesture at it. No
-jargon where an ordinary word will do, no hedging padding.
+**Explain plainly and briefly.** Whenever you explain, summarise or ask a question — in chat, in a
+doc, in a commit message.
 
 **Real data belongs to the reader, not to us.** There is one production database and no staging copy
 of it, and what is in it is real people's articles, comments, notes and profiles. Reading it is fine.
@@ -184,9 +187,22 @@ actually reaches is not always the one on its command line, and both mistakes pr
 
 ### Working in a tree several agents share
 
-- **Check which machine you are on.** A working directory under `/home/greg/` means you are probably
-  on the Hetzner remote box — [hetzner-remote-server-box.md](docs/project/hetzner-remote-server-box.md); `/Users/greg/` means
-  you are on Greg's Mac.
+- **Check which machine you are on.** `/home/greg/` is probably the Hetzner box, `/Users/greg/` is
+  Greg's Mac. A change to either that should still be true next week — a package, a key in
+  `.env.local`, a config — is also a change to the file that builds the next box, so ask Greg whether
+  to make it so now, going forwards, or both —
+  [hetzner-remote-server-box.md § A change to the box is a change to a file](docs/project/hetzner-remote-server-box.md#a-change-to-the-box-is-a-change-to-a-file).
+  On the Mac, more caution: a different OS, and not disposable — spike it first where that is safe.
+- **Use a worktree for anything non-trivial.** `claude --worktree <name>`, then
+  `npm run worktree:setup` inside it, and land the work with `git push origin HEAD:dev` —
+  [worktrees.md](docs/project/worktrees.md). It is your own checkout, so nobody else's edits are in
+  your files and most of the sharing below stops applying to you. A one-line fix or a doc edit can
+  stay in the shared tree. Run the job itself the way
+  [engineering-manager.md](docs/reusable/engineering-manager.md) says — a plan doc, a few stages,
+  the work delegated, and a GPT Sol review at the end of every stage. Commit each stage, and push to
+  `dev` when you finish. **Before deleting a worktree, run `npm run worktree:check` inside it** —
+  `data/` and `.env.local` are gitignored, so a clean `git status` says "safe" over the top of work
+  nothing else has a copy of.
 - **Other agents will get in your way; be tolerant.** Most of us work out of this one checkout,
   against one local Supabase and one dev server. Files change under you, tests go red for reasons
   that are not yours, the database is not how you left it. Absorb it, do your best, and carry on —
@@ -195,7 +211,6 @@ actually reaches is not always the one on its command line, and both mistakes pr
   production and is written only by `npm run deploy` — pushing to it yourself is an unreviewed
   deploy to real readers, and **nothing mechanical stops you**:
   [version-control.md § What protects `main`](docs/project/version-control.md#what-protects-main-and-what-does-not).
-  We are also setting up a worktree per agent, so the sharing above gets less painful.
 - **Stay inside your stage.** Talk to other stages through the artefacts they write, not by reaching
   into their code — [architecture.md § Stage ownership](docs/project/architecture.md#stage-ownership).
 - **Never run a git command that throws work away.** No `git checkout -- …`, `git restore`,
@@ -264,8 +279,9 @@ actually reaches is not always the one on its command line, and both mistakes pr
   exit code *and* answer file, because a review that returned nothing looks exactly like one that
   found nothing. [codex-cli-as-subagent.md](docs/reusable/codex-cli-as-subagent.md).
 - **Root-cause every bug in a subagent, and write it up** under `docs/postmortems/`: the real cause
-  rather than the line that broke, which commit introduced it, the fix that's right for the long
-  term, and what would have caught the whole class of it.
+  rather than the line that broke, **the class it belongs to, named**, which commit introduced it,
+  the fix that's right for the long term, and what would have caught the whole class of it — ranked
+  by ease and value where there is more than one.
 - **"Close this tab if successful" means exactly that** — close it with the recipe in
   [iterm.md](docs/reusable/iterm.md), and only once the work in that conversation is actually done
   and its checks passed. If anything failed or is unfinished, leave the tab open and say why.
@@ -279,6 +295,10 @@ actually reaches is not always the one on its command line, and both mistakes pr
   not the page dumps. **Which automation you get is decided by the machine, not by preference** —
   the Claude-in-Chrome extension on Greg's laptop, Playwright against system Chrome on the remote
   box, and the extension cannot follow you there.
+- **Ask another model while you are still thinking, not only when you are reviewing.** GPT Sol
+  ([codex-cli-as-subagent.md](docs/reusable/codex-cli-as-subagent.md)) for design calls and tricky
+  bugs, and **Fable** — a subagent with `model: "fable"` — especially when the requirements are
+  unclear or you need someone to arbitrate between two options that both look fine.
 - **When you rename anything, hunt down everything that names it.** A rename is never one edit. Send
   a cheap subagent to sweep the whole repo — code, docs, plans, tests, fixtures, scripts,
   `package.json` — and grep for fragments as well as the whole name, since a `camelCase` rename and

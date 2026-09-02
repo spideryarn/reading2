@@ -29,9 +29,12 @@ import { describe, expect, it } from "vitest";
 import type { RefereePoles } from "../src/referee-criteria.js";
 import { DIVERGING_SCALES } from "../src/referee-criteria.js";
 import {
+  directionWords,
   DIVERGING_STEPS,
   signedValence,
+  valenceDirection,
   valenceLabel,
+  valenceRgbToken,
   valenceStep,
   valenceToken,
   valenceWords,
@@ -138,6 +141,85 @@ describe("every token the emitter names is a property the stylesheet defines", (
         `with no background at all and nothing anywhere errors.`,
     ).toEqual([]);
   });
+
+  /**
+   * **The same check for the other spelling, and it is the one that fails
+   * silently in a different place.**
+   *
+   * `valenceRgbToken` names a `--*-rgb` triple, which the prose mark
+   * interpolates as `rgb(var(--h0))` (styles.css § stacked hues). Hand that a
+   * property nobody defines — or the plain `--div-rg-0`, whose value is itself
+   * an `rgb(…)` expression — and the declaration is invalid at computed-value
+   * time, so the stripe paints nothing while every other mark on the page still
+   * works. Read out of the stylesheet rather than trusted from the comment
+   * beside it, which is the rule tests/hit-colours.test.ts follows for the
+   * categorical palette.
+   */
+  it.each(DIVERGING_SCALES)("defines an -rgb triple for every step of the %s ramp", (scale) => {
+    /* The self-guard again, in the shape this block needs: a triple that exists
+       and a triple that must not, so a regex that matched nothing could not pass
+       by matching everything. */
+    expect(defined.has("--div-rg-0-rgb")).toBe(true);
+    expect(defined.has(`--div-${DIVERGING_STEPS}-rgb`)).toBe(false);
+
+    const missing: string[] = [];
+    for (const valence of AT_STEP) {
+      const token = valenceRgbToken(scale, valence);
+      const property = /^var\((--[a-z0-9-]+-rgb)\)$/i.exec(token)?.[1]?.toLowerCase();
+      expect(property, `${token} is not a bare reference to an -rgb triple`).toBeTruthy();
+      if (!defined.has(property as string)) missing.push(`${token} (valence ${valence})`);
+    }
+    expect(
+      missing,
+      `styles/colourscales.css defines no such property, so the mark's stripe ` +
+        `paints nothing at all and nothing anywhere errors.`,
+    ).toEqual([]);
+  });
+
+  it("names the same step in both spellings, so a swatch and a mark cannot disagree", () => {
+    /* The two functions share `valenceStep` precisely so this holds. A second
+       copy of the step arithmetic is how the panel and the prose end up saying
+       opposite things about one passage — which is the bug this whole change
+       started from, in its other form. */
+    for (const scale of DIVERGING_SCALES) {
+      for (const valence of AT_STEP) {
+        expect(valenceRgbToken(scale, valence)).toBe(
+          valenceToken(scale, valence).replace(")", "-rgb)"),
+        );
+      }
+    }
+  });
+});
+
+/**
+ * **The direction in a word**, which is what `data-dir` carries and what the
+ * `::after` sign is drawn from.
+ *
+ * It exists because the prose is painted by valence and has no words in it, so
+ * without this the colour would be the only carrier of a good/bad judgement —
+ * which docs/project/colour-scales.md forbids.
+ */
+describe("the direction, which is the sign the mark wears", () => {
+  it("has three answers, and zero is one of them", () => {
+    expect(valenceDirection(-1)).toBe("against");
+    expect(valenceDirection(0)).toBe("neither");
+    expect(valenceDirection(1)).toBe("for");
+  });
+
+  it("agrees with the words on every step of the ramp", () => {
+    /* Two ways of saying one thing, in two places — the panel row says
+       "counts against" and the mark says `−`. They are separate functions
+       because they have separate readers, and this is what stops them drifting
+       into disagreeing about a passage. */
+    for (let valence = -100; valence <= 100; valence += 5) {
+      const words = valenceWords(valence);
+      const dir = valenceDirection(valence);
+      expect(
+        dir === "against" ? words === "counts against" : dir === "for" ? words === "counts for" : words === "counts neither way",
+        `${valence}: "${words}" and "${dir}"`,
+      ).toBe(true);
+    }
+  });
 });
 
 describe("the words, which are the carrier the colour decorates", () => {
@@ -170,5 +252,99 @@ describe("the words, which are the carrier the colour decorates", () => {
     expect(label).toContain("counts neither way");
     expect(label).not.toContain("a control is missing");
     expect(label).not.toContain("the controls settle it");
+  });
+});
+
+/**
+ * **The sign in the prose, read out of the stylesheet** — because the sign is
+ * generated content and no assertion on the DOM can see it.
+ *
+ * `annotateHtml` writes `data-dir` and stops. Everything a reader actually
+ * meets — which glyph, and what a screen reader is handed instead of it — is in
+ * four `::after` rules in src/web/styles.css, where nothing in TypeScript can
+ * reach and where swapping two `content` lines is a one-character edit that
+ * turns every *counts against* in the paper into a plus sign, with the whole
+ * suite green through it. That is the same gap the block above closes between
+ * the emitter and `colourscales.css`, closed the same way: read the stylesheet.
+ *
+ * The alt text is checked against `directionWords` rather than against a
+ * literal, so the copy of the four phrases the stylesheet is forced to hold
+ * cannot drift from the panel's.
+ */
+describe("the sign the mark wears, which only the stylesheet knows", () => {
+  const STYLES = readFileSync(
+    path.resolve(import.meta.dirname, "..", "src", "web", "styles.css"),
+    "utf8",
+  );
+
+  /**
+   * The generated content of one `::after` rule — the glyph, and the
+   * alternative text after the slash.
+   *
+   * The **last** `content` declaration in the block, because each of these
+   * rules writes two: a plain one first, as the fallback for a browser that
+   * does not parse the alt-text syntax, and the real one after it.
+   */
+  function generated(selector: string): { glyph: string; alt: string } {
+    const at = STYLES.indexOf(`${selector}::after {`);
+    expect(at, `styles.css has no ${selector}::after rule at all`).toBeGreaterThan(-1);
+    const body = STYLES.slice(at, STYLES.indexOf("}", at));
+    const decl = [...body.matchAll(/content:\s*"([^"]*)"\s*\/\s*"([^"]*)"\s*;/g)].at(-1);
+    expect(decl, `${selector}::after has no content with alternative text`).toBeTruthy();
+    return { glyph: decl?.[1] ?? "", alt: decl?.[2] ?? "" };
+  }
+
+  /** The four states a mark can be in, and the glyph each one prints. */
+  const SIGNS = [
+    ["against", "", "−"],
+    ["for", '="for"', "+"],
+    ["neither", '="neither"', "·"],
+    ["mixed", '="mixed"', "±"],
+  ] as const;
+
+  it.each(SIGNS)("draws %s as its own glyph", (_dir, value, glyph) => {
+    /* Pinned per direction, because the failure this catches is the two
+       `content` lines being swapped: a paper whose *against* passages all wear
+       a plus sign is wrong in the most confident possible way, and nothing
+       errors. The first is a real minus, U+2212, matching `signedValence`. */
+    expect(generated(`mark.hit[data-dir${value}]`).glyph).toBe(glyph);
+  });
+
+  it("gives every direction a distinct glyph", () => {
+    /* The other half of the same worry. Two directions printing one character
+       would leave the mark unable to say anything at all, while every
+       per-direction assertion above still passed. */
+    const drawn = SIGNS.map(([, value]) => generated(`mark.hit[data-dir${value}]`).glyph);
+    expect(new Set(drawn).size).toBe(SIGNS.length);
+  });
+
+  it.each(SIGNS)("says %s in words to a screen reader", (dir, value) => {
+    /* **The alt text was empty for a day**, on the argument that a stray minus
+       announced inside the author's sentence is worse than silence. GPT Sol's
+       finding 4 is that this leaves the one carrier that is not a colour
+       inaudible to the reader who most needs it, and that the panel is no
+       substitute for somebody who arrived at the prose rather than at the
+       panel. */
+    expect(generated(`mark.hit[data-dir${value}]`).alt).toBe(directionWords(dir));
+  });
+
+  it.each(SIGNS)("keeps the reader's own comment marker beside a %s sign", (dir, value, glyph) => {
+    /* **GPT Sol's finding 2, and it erased the reader's work rather than
+       ours.** A merged mark carries every class that applies, so a passage the
+       reader has commented on and a criterion has marked carries both
+       `data-mark-end` and `data-dir` — and an element has one `::after`. The
+       two rules had equal specificity, so the later one won and the comment's
+       own marker silently disappeared from exactly the passages the reader
+       cared enough to write on.
+
+       So there is a rule per direction that prints **both**, at a specificity
+       that beats both of the rules it replaces. Checked here for existence and
+       content; that it actually wins in a browser is
+       tests/mark-sign-in-chrome.test.ts, which is the only place the cascade is
+       observable at all. */
+    const both = generated(`mark.cmt.hit[data-mark-end][data-dir${value}]`);
+    expect(both.glyph).toContain(glyph);
+    expect(both.glyph, "the comment's own marker").toContain("✳");
+    expect(both.alt).toBe(directionWords(dir));
   });
 });

@@ -37,18 +37,31 @@
  * `tests/pricing.test.ts`, kept as fixtures precisely so that this cannot be
  * "simplified" into one function later without a test going red.
  *
- * Seven of this app's twelve paid call sites are on the SDK and five are on
- * OpenRouter, so getting it wrong is not a rounding error: on a cached call the
- * cache is ~95% of the prompt. Hence two named functions and no generic one.
+ * Getting it wrong is not a rounding error: on a cached call the cache is ~95%
+ * of the prompt. Hence two named functions and no generic one.
  *
- * ## Which calls actually need this
+ * ## Which calls actually need this — and it is one, not seven
  *
- * Fewer than you would think. **OpenRouter reports what it charged**
- * (`usage.cost`), so for those five the honest record is the provider's own
- * number and this file is only the cross-check on it — see `PRICE_CHECKED` and
- * docs/plans/260827q-ai-cost-tracking.md § The reconciliation. Anthropic never returns
- * a cost figure at all, so the seven pipeline stages are priced here or not at
- * all.
+ * **This header used to say the seven pipeline stages were "priced here or not
+ * at all", and that has been false since 2026-08-27.** They moved onto
+ * OpenRouter's Anthropic-compatible endpoint that day
+ * (docs/project/ai-gateway.md), which returns a settled `usage.cost` on the
+ * Messages shape like every other call — so their rows carry OpenRouter's own
+ * figure and `priceAnthropicCall` never runs for them. The sentence survived the
+ * migration because nothing about it goes red; it is exactly the restatement
+ * CLAUDE.md warns about, left to go wrong by waiting.
+ *
+ * **`priceAnthropicCall` has one caller in the whole repo**, and a `grep` is the
+ * way to check rather than this paragraph: `evals/declared-spend.ts`, for the
+ * PDF bake-off's `transport: "anthropic"` arms — the only thing left that talks
+ * to `api.anthropic.com`, and the only reason `ANTHROPIC_API_KEY` exists here
+ * (`bakeoff-anthropic-transport` in src/spend-declarations.ts). Those rows are
+ * the whole of `cost_source: "computed"` in the ledger.
+ *
+ * For everything else **OpenRouter reports what it charged** (`usage.cost`), so
+ * the honest record is the provider's own number and this file is only the
+ * cross-check on it — see `PRICE_CHECKED` and
+ * docs/plans/260827q-ai-cost-tracking.md § The reconciliation.
  *
  * ## A model with no price is an error, not a zero
  *

@@ -17,7 +17,12 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { forceRemoveThrowawayWorktree, ghosts, parseWorktreeList } from "../scripts/worktree-admin.js";
+import {
+  devWatchIgnored,
+  forceRemoveThrowawayWorktree,
+  ghosts,
+  parseWorktreeList,
+} from "../scripts/worktree-admin.js";
 
 /* ------------------------------------------------------------------ */
 /* Against a real repository                                           */
@@ -240,5 +245,44 @@ describe("ghosts, the exclusions", () => {
        the directory is still sitting there. */
     const entries = parseWorktreeList("worktree /repo\n\nworktree /tmp/here\nprunable gitdir gone\n", () => true);
     expect(ghosts(entries).map((e) => e.path)).toEqual(["/tmp/here"]);
+  });
+});
+
+/**
+ * **The dev server that could not see its own source.**
+ *
+ * `vite.config.ts` ignores `**​/.claude/worktrees/**` so the primary's page does
+ * not reload on a peer's every keystroke. Chokidar matches that against absolute
+ * paths, so inside a worktree it matches the server's *own* tree and the watcher
+ * ignores everything. The server still starts and the app still works; it just
+ * serves the source it read at boot for the rest of its life.
+ *
+ * These are the two cases, written with the directory handed in, because the
+ * broken one cannot be reached from the primary checkout and the only other way
+ * to find it is to lose an afternoon to it — which is how it was found.
+ */
+describe("what the dev server's file watcher ignores", () => {
+  it("ignores the other worktrees when it is the primary checkout", () => {
+    const got = devWatchIgnored("/home/greg/code/spideryarn2/");
+    expect(got).toContain("**/.claude/worktrees/**");
+  });
+
+  it("does not ignore its own tree when it is running inside a worktree", () => {
+    /* The regression. With this pattern present, every file under the worktree
+       matches it, the module graph is never invalidated, and an agent measuring
+       its own change in a browser is shown the code from before the change. */
+    const got = devWatchIgnored("/home/greg/code/spideryarn2/.claude/worktrees/some-agent/");
+    expect(got).not.toContain("**/.claude/worktrees/**");
+  });
+
+  it("ignores the three noisy directories either way", () => {
+    /* data/, docs/ and evals/ are written by agents while somebody is reading,
+       and none of them is imported by the client. Losing those to this change
+       would trade one reload storm for another. */
+    for (const dir of ["/repo/", "/repo/.claude/worktrees/x/"]) {
+      expect(devWatchIgnored(dir)).toEqual(
+        expect.arrayContaining(["**/data/**", "**/docs/**", "**/evals/**"]),
+      );
+    }
   });
 });

@@ -49,15 +49,14 @@
  *   `runInJob` — which is the state production actually shipped in, and nothing
  *   caught it (docs/plans/260830k-v1-stages01-review-sol.md critical 1).
  */
-import { readdir, readFile, rm } from "node:fs/promises";
-import path from "node:path";
+import { rm } from "node:fs/promises";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
 import { mintId } from "../src/ids.js";
 import { currentJobId } from "../src/job-scope.js";
 import { advanceJobWith, LEASE_MS, STEP_BUDGET_MS, type AdvanceParts } from "../src/jobs.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
-import { STEPS, type PipelineStep, type StepProduct } from "../src/pipeline.js";
+import { STEPS, type PipelineStep, type StepContext, type StepProduct } from "../src/pipeline.js";
 import type {
   ArtifactKind,
   ArtifactMap,
@@ -67,10 +66,9 @@ import type {
 import { fsJobStore } from "../src/store/jobs-fs.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import { fsStoreSession } from "../src/store/session.js";
+import { jobFilesOnDisk } from "./helpers/job-files.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
 
-const ROOT = path.resolve(import.meta.dirname, "..");
-const JOBS_DIR = path.join(ROOT, "data", "_jobs");
 const OWNER = DEV_OWNER_ID;
 
 /**
@@ -167,20 +165,24 @@ interface Ran {
  *
  * `body` is where a case puts what it wants to happen *while a step is running*:
  * throw, look at the job row, press Stop from somewhere else.
+ *
+ * **It is handed the step's own `ctx`**, which is what a real step gets, so a
+ * case can watch `ctx.signal` — the only way to ask whether a Stop actually
+ * reached the running step rather than only the row.
  */
 function fakeStep(
   name: StepName,
   ran: Ran & { names: StepName[] },
-  body: () => Promise<void> | void = () => {},
+  body: (ctx: StepContext) => Promise<void> | void = () => {},
 ): PipelineStep {
   return {
     name,
     label: STEPS[name].label,
     outputs: () => [],
     produces: STEPS[name].produces,
-    async run(): Promise<StepProduct> {
+    async run(ctx: StepContext): Promise<StepProduct> {
       ran.names.push(name);
-      await body();
+      await body(ctx);
       /* Everything it declares, so `checkProduct` accepts it and
          `assertProduced` reads it back. The cases that want an artefact
          *already* present — a step that should skip — put it there with `put`
@@ -237,7 +239,7 @@ function partsFor(
 async function fixture(
   slug: string,
   names: StepName[],
-  bodies: Partial<Record<StepName, () => Promise<void> | void>> = {},
+  bodies: Partial<Record<StepName, (ctx: StepContext) => Promise<void> | void>> = {},
 ) {
   const artifacts = memoryArtifacts();
   const ran: Ran & { names: StepName[] } = { names: [] };
@@ -257,9 +259,7 @@ describe("one claim walks the whole job", () => {
   });
 
   afterAll(async () => {
-    for (const file of await readdir(JOBS_DIR).catch(() => [])) {
-      const full = path.join(JOBS_DIR, file);
-      const record = JSON.parse(await readFile(full, "utf8").catch(() => "{}")) as { id?: string };
+    for (const { path: full, record } of await jobFilesOnDisk()) {
       if (record.id !== undefined && MADE.includes(record.id)) await rm(full, { force: true });
     }
   });
@@ -390,6 +390,104 @@ describe("one claim walks the whole job", () => {
       advanced?.job.cancelling,
       "and the flag is cleared, or the card's Stop stays disabled for ever",
     ).toBeUndefined();
+  });
+
+  it("lets a Stop from a reloaded copy of this module reach the running step", async () => {
+    /**
+     * **The other half of Stop, and it went missing on every dev-server
+     * restart.**
+     *
+     * The case above is Stop arriving with only the row to write on, which is
+     * the between-steps path. This one is Stop arriving at a step that is
+     * *inside* an eight-minute model call, where the row is no help until the
+     * call ends and the only thing that can interrupt it is the
+     * `AbortController` in `src/jobs.ts`'s `aborts`.
+     *
+     * Saving any server file restarts the Vite dev server in place and gives
+     * `src/jobs.ts` a **second copy** with an empty `aborts`, while the step the
+     * first copy started keeps running. A Stop pressed after that landed on the
+     * new copy and reached nothing at all — the reader's button did nothing and
+     * the call kept spending. `vi.resetModules()` plus a fresh import is that
+     * restart. See docs/postmortems/260902c-the-truncation-retry-cost-storm.md.
+     *
+     * **Bounded rather than awaited**, so the failure is a red assertion in two
+     * seconds instead of a test that hangs until the runner gives up: a hang
+     * says "something is wrong somewhere", and this says which.
+     */
+    const names: StepName[] = ["fetch"];
+    let reached = false;
+    const { ran, job, parts } = await fixture("test-walk-cancel-reloaded", names, {
+      fetch: async (ctx) => {
+        vi.resetModules();
+        const reloaded = await import("../src/jobs.js");
+        /* **The reloaded copy's own `runAsOwner`, and this is not pedantry.**
+           `src/owner.js` comes back from the reset with a fresh
+           `AsyncLocalStorage`, so this file's `runAsOwner` opens a scope the
+           reloaded `currentOwnerId()` cannot see: `cancelJob` would read the
+           environment's owner, `store.get` would answer `gone`, and the case
+           would go red for a reason that has nothing to do with Stop. One
+           `resetModules` and then both imports, so the two share a registry. */
+        const reloadedOwner = await import("../src/owner.js");
+        await reloadedOwner.runAsOwner(OWNER, () => reloaded.cancelJob(job.id));
+        reached = await Promise.race([
+          new Promise<boolean>((resolve) => {
+            if (ctx.signal.aborted) return resolve(true);
+            ctx.signal.addEventListener("abort", () => resolve(true), { once: true });
+          }),
+          new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 2_000)),
+        ]);
+      },
+    });
+
+    const advanced = await advanceAsOwner(job.id, parts);
+
+    expect(ran.names).toEqual(["fetch"]);
+    expect(reached, "the Stop must reach the step this copy is running, not only the row").toBe(
+      true,
+    );
+    expect(advanced?.job.status).toBe("cancelled");
+  });
+
+  it("makes a dev-server reload a pause: the new copy waits and the old one finishes", async () => {
+    /**
+     * **The claim the whole fix rests on, and nothing pinned it.**
+     *
+     * Once the store's state has the lifetime of the process, a reload is not a
+     * duplicate — the new copy is told `busy`, the old claimant still holds the
+     * claim, its writes still pass the fence, and the ingest finishes. That is
+     * also the argument for *not* aborting the in-flight step on restart, which
+     * looks like the money-saver and would throw away a call about to be
+     * useful. An argument in a comment is not a test. GPT Sol asked for this
+     * one by name.
+     *
+     * The reload happens **inside step one**, which is where the eight minutes
+     * of model call are, and the second step is here so that the walk visibly
+     * carries on past the moment it was interrupted.
+     */
+    const names: StepName[] = ["fetch", "extract"];
+    let refused: string | undefined;
+    let reloaded: typeof import("../src/store/jobs-fs.js") | undefined;
+    const { ran, job, parts } = await fixture("test-walk-reload-pause", names, {
+      fetch: async () => {
+        vi.resetModules();
+        reloaded = await import("../src/store/jobs-fs.js");
+        const race = await reloaded.fsJobStore.claim(job.id, OWNER, mintAttempt(), LEASE_MS, 8);
+        refused = race.kind;
+      },
+    });
+
+    const advanced = await advanceAsOwner(job.id, parts);
+
+    expect(refused, "the reloaded copy must be told busy, not handed the job").toBe("busy");
+    expect(ran.names, "and the claimant it interrupted carries on past it").toEqual([
+      "fetch",
+      "extract",
+    ]);
+    expect(advanced?.job.status).toBe("done");
+    expect(
+      (await reloaded?.fsJobStore.get(job.id, OWNER))?.status,
+      "and the new copy sees the finished job, so the work was not wasted",
+    ).toBe("done");
   });
 
   it("hands the claim back rather than starting a step it cannot finish", async () => {

@@ -100,6 +100,17 @@
  * like a hung machine rather than like a sibling that will not let go. So: poll,
  * with a deadline, and fail with a message that names the file still waiting.
  *
+ * **Which makes this unfair too, and the paragraph above owes `running-slot.ts`
+ * that admission.** Polling is not a queue and it is not FIFO: there is no
+ * ordering, arriving first buys nothing, and a waiter can in principle be
+ * starved right up to its deadline while others come and go. This one contends
+ * for a key that changes hands in milliseconds rather than across a whole
+ * insert's worth of constraint, so starvation is far less likely here — but
+ * "less likely" is the honest claim, and "fair" was never one. `RUN_LOCK_WAIT_MS`
+ * below therefore says "queue depth" in the sense of *how much holding I might
+ * have to sit behind*, not of a line anybody is keeping. Same in
+ * `./corpus-lock.ts` § "Polling is not a queue, and this is not FIFO".
+ *
  * ## Call it AFTER `pgReady`, and only when reachable
  *
  * `pgReady` is probed at module scope with a top-level `await` and gates a real
@@ -119,13 +130,21 @@
  *
  * A file must take this **once**. Two takes in one file are two different
  * connections asking for the same key — Postgres re-entrancy does not apply
- * across sessions, so the second one polls until the deadline and then throws.
+ * across sessions, so a second overlapping take would poll until the deadline
+ * and then throw, blaming a sibling that does not exist.
  *
- * That is what `withRunLock`'s early return below is for, and it is why the
- * fixture loader in `./load-article.ts` takes this **only when its caller asks**
- * (`LoadOptions.serialise`): several of its callers hold this lock for their
- * file already, and an unconditional nested take would deadlock every one of
- * them.
+ * There are two guards against that, and they are for different callers.
+ * `takeRunLock` **throws immediately** when this process already holds the key,
+ * because a direct second take has nothing sensible to hand back and waiting
+ * two minutes to say so is the worst of both. `withRunLock` instead **returns
+ * early** and runs its body under the hold this process already has, because
+ * that is what a nested window wants. Sequential takes are untouched by either:
+ * `release()` clears the flag, so only an *overlapping* take is refused.
+ *
+ * That early return is why the fixture loader in `./load-article.ts` takes this
+ * **only when its caller asks** (`LoadOptions.serialise`): several of its
+ * callers hold this lock for their file already, and an unconditional nested
+ * take would deadlock every one of them.
  *
  * (This paragraph said there was no `withRunLock` wrapper and that the loader
  * never took the lock. Both halves stopped being true when the window-scoped
@@ -161,6 +180,50 @@
  * separate**, are in `./load-article.ts` § `LoadOptions.serialise` and
  * `tests/load-article-serialisation.test.ts`.
  *
+ * ## The wait is bounded end to end, not only inside the loop
+ *
+ * A deadline wrapped around a `select` is worth nothing if the `connect()` or
+ * the `select` itself can hang for ever — the same "hangs module collection in
+ * silence" failure arriving through a different door, and this file was written
+ * with exactly that hole in it until 2026-09-02. It matters more here than for
+ * `./corpus-lock.ts`, because this take runs at module scope in every file that
+ * takes it — `grep -rn takeRunLock tests/` for today's list, and it has only
+ * ever grown — where a stalled connect hangs the import phase, which has no
+ * hook timeout behind it at all.
+ *
+ * So the connection carries `connectionTimeoutMillis`, every query carries
+ * `query_timeout` (client-side, so it fires even when the server never
+ * answers), the deadline starts *before* connecting, and it is checked *before*
+ * each attempt — a key acquired past the deadline would be a key acquired by
+ * something that already promised to give up. Every exit throws an error naming
+ * the file, the poll query's own failures included.
+ *
+ * **`waitMs` is a bounded wait, not a hard deadline, and the difference is one
+ * query timeout.** The check before each attempt is `>=`, so no attempt ever
+ * *begins* past the deadline and a `waitMs` of zero acquires nothing at all;
+ * but an attempt that began a millisecond before it may take up to
+ * `QUERY_TIMEOUT_MS` to answer, and if it comes back holding the key, the key
+ * is kept. The bound is therefore about `max(waitMs, CONNECT_TIMEOUT_MS)` plus
+ * one `QUERY_TIMEOUT_MS`: 120s of budget is really 130s of wall clock, worst
+ * case.
+ *
+ * That overshoot is deliberate rather than unnoticed (GPT Sol, 2026-09-02,
+ * docs/plans/260902c-make-the-test-suite-pass-reliably-review2-sol.md § 2). The
+ * alternative is to re-check the clock after the query and *unlock a key we
+ * have just been granted* — which buys ten seconds of punctuality by inventing
+ * a new way for a suite that had the lock to fail. What this deadline is for is
+ * "never hang in silence, always name the file", and a bound of `waitMs` plus
+ * one query timeout delivers that exactly. Anything that needs the stronger
+ * promise should say so here first.
+ *
+ * Every exit from a failed take destroys its connection and ends its pool. A
+ * leaked client is not merely a socket: `max: 1` means a client left checked out
+ * also stops `pool.end()` ever resolving, and if the leak happens *after* the
+ * key is in hand the key stays held until the worker dies — the deadlock this
+ * file exists to prevent. Same reason the release path cleans up in a `finally`:
+ * it used to mark itself released and then unlock, so an unlock that threw left
+ * the connection open and the key held.
+ *
  * ## Measuring this lock: read the `import` phase, not `tests`
  *
  * `takeRunLock` is called at module load, under a top-level `await`, so the wait
@@ -184,7 +247,7 @@
  * can produce. (A dose-response confirms it too — hold for 10s and 30s and see
  * the import track the hold — but the phase split does not need a second trial.)
  */
-import type { Pool, PoolClient } from "pg";
+import type { Pool, PoolClient, QueryResult } from "pg";
 
 /**
  * The key. Arbitrary, but it must be the same number everywhere — the whole
@@ -194,13 +257,13 @@ import type { Pool, PoolClient } from "pg";
  * different resource: the real articles in `data/`.
  *
  * **Two files hold both**, and the order matters. `store-parity` and
- * `store-roundtrip` take the corpus lock in `beforeAll` and reach this one
+ * `store-roundtrip` take the corpus lock at module scope and reach this one
  * inside `loadArticleIntoPg`, so for them it is corpus-then-run. No file-scope
  * holder of this lock ever wants the corpus lock, so there is no cycle —
  * **corpus outside, run inside**, and keep it that way. A pair of locks taken in
- * two orders is the one way this can genuinely deadlock, and the corpus lock
- * uses the blocking `pg_advisory_lock`, which waits for ever rather than
- * reporting.
+ * two orders is the one way this can genuinely deadlock; both keys now poll
+ * against a deadline and name the file that was waiting, so it would at least
+ * be reported rather than hang.
  *
  * (An earlier version of this comment said no file held both and told you to
  * take this one first. Both halves were wrong once the window-scoped take
@@ -210,9 +273,11 @@ export const RUN_LOCK = 918_273_645;
 
 /**
  * Long enough for a whole run of every file that takes this, several times
- * over. Measured 2026-08-30: the twelve locked files total about 25s of solo
- * runtime, so 120s absorbs a peer's `npm test` running the same set beside
- * yours and still reports rather than hangs.
+ * over. Measured 2026-08-30, when twelve files took it: about 25s of solo
+ * runtime between them, so 120s absorbs a peer's `npm test` running the same
+ * set beside yours and still reports rather than hangs. More files take it now
+ * — the measurement is a historical reading, not a running total, and the
+ * budget wants re-measuring when it starts expiring.
  *
  * This is a queue depth, not a timeout papering over slowness: exceeding it
  * means somebody is *holding* the lock, and the message says who to look for.
@@ -223,22 +288,48 @@ const RUN_LOCK_WAIT_MS = 120_000;
 const POLL_MS = 200;
 
 /**
- * **Does this process already hold the lock?**
+ * Caps on the two operations that would otherwise have no cap at all.
+ *
+ * Both are generous next to what they bound — a local `connect()` is tens of
+ * milliseconds and `pg_try_advisory_lock` never blocks — because they are not
+ * tuning. They are the difference between "gave up and said which file was
+ * waiting" and "hung in the import phase, in silence, for ever". Same numbers
+ * as `./corpus-lock.ts`, deliberately: the two helpers are siblings.
+ */
+const CONNECT_TIMEOUT_MS = 10_000;
+const QUERY_TIMEOUT_MS = 10_000;
+
+/** How the holder announces itself in `pg_stat_activity`. */
+function applicationName(suite: string): string {
+  /* Postgres truncates this at 63 bytes, silently, so keep the suite path —
+     the half worth reading — and let the prefix be short. */
+  return `run-lock ${suite}`;
+}
+
+/**
+ * **Who in this process holds the lock**, or null when nobody does.
  *
  * Module-level, so it is per *file*: vitest runs each test file in its own fork
  * with a fresh module graph (`pool: "forks"`, `isolate: true`, both defaults),
- * so this flag is never shared between two files, and two files can never see
- * each other's. It exists only to answer "have *I* already got it".
+ * so this is never shared between two files, and two files can never see each
+ * other's. It exists only to answer "have *I* already got it", and it carries
+ * the suite name so that both readers of it can say who.
  *
- * `withRunLock` needs it because the twelve file-scope holders also call
- * `loadArticleIntoPg`, which takes the lock for its load window. Without the
- * flag that is a second connection asking for a key the first connection holds
- * — Postgres advisory locks are re-entrant within a *session* and these are two
- * sessions — so it would poll until the deadline and then throw, in every one
- * of those twelve files. Hence the guard, and hence the test that drives
+ * `withRunLock` needs it because a file-scope holder may also call
+ * `loadArticleIntoPg`, which takes the lock for its load window. Without it
+ * that is a second connection asking for a key the first connection holds —
+ * Postgres advisory locks are re-entrant within a *session* and these are two
+ * sessions — so it would poll until the deadline and then throw, in every
+ * file-scope holder. Hence the early return, and hence the test that drives
  * exactly that path.
+ *
+ * `takeRunLock` reads it for the other half of the same problem: a *direct*
+ * second take, which `withRunLock` cannot protect because it never goes
+ * through the wrapper. That one throws rather than returning early, because
+ * there is nothing sensible to hand back — see the guard at the top of
+ * `takeRunLock`.
  */
-let heldByThisProcess = false;
+let heldBy: string | null = null;
 
 /**
  * Options only the tests for this file pass.
@@ -252,6 +343,23 @@ let heldByThisProcess = false;
 export interface RunLockOptions {
   /** Overrides `RUN_LOCK_WAIT_MS`. Tests only. */
   waitMs?: number;
+  /**
+   * Overrides `RUN_LOCK`. **Tests only, and load-bearing.**
+   *
+   * `tests/run-lock.test.ts` has to hold the key from a rival session and watch
+   * this function fail to get it, and has to drive a release that throws. On the
+   * real key either would mean a test contending with — or walking away holding
+   * — the key that serialises every job-running suite and every peer's `npm
+   * test`. So the test brings its own key, minted per run, and never touches
+   * 918_273_645. The
+   * same hazard on `./corpus-lock.ts` was GPT Sol's highest finding on
+   * 2026-09-02; this is the other half of that fix.
+   */
+  key?: number;
+  /** Overrides `CONNECT_TIMEOUT_MS`. Tests only. */
+  connectTimeoutMs?: number;
+  /** Overrides `QUERY_TIMEOUT_MS`. Tests only. */
+  queryTimeoutMs?: number;
 }
 
 export interface HeldRunLock {
@@ -261,9 +369,22 @@ export interface HeldRunLock {
    * Exposed because a suite's own setup — sweeping its rubble, seeding its
    * owner — has to happen *while* the lock is held, and running it on this
    * connection is the way to be sure of that.
+   *
+   * **It carries `query_timeout`**, so a caller's query on it gives up after
+   * `QUERY_TIMEOUT_MS` rather than hanging. That is the point — this connection
+   * is checked out during vitest's import phase, where nothing else would ever
+   * time it out — and ten seconds is many times what any setup statement here
+   * takes, so a query that hits it is a fault worth being told about. A caller
+   * that genuinely needs longer can pass its own on the query.
    */
   client: PoolClient;
-  /** Unlock, hand the connection back, end the pool. Safe to call twice. */
+  /**
+   * Unlock, close the connection, end the pool. Safe to call twice.
+   *
+   * Throws if the unlock query fails — but cleans up first, so the key is gone
+   * either way and the throw is only the news that the database failed a
+   * trivial query.
+   */
   release(): Promise<void>;
 }
 
@@ -276,8 +397,29 @@ export interface HeldRunLock {
  */
 export async function takeRunLock(
   suite: string,
-  { waitMs = RUN_LOCK_WAIT_MS }: RunLockOptions = {},
+  {
+    waitMs = RUN_LOCK_WAIT_MS,
+    key = RUN_LOCK,
+    connectTimeoutMs = CONNECT_TIMEOUT_MS,
+    queryTimeoutMs = QUERY_TIMEOUT_MS,
+  }: RunLockOptions = {},
 ): Promise<HeldRunLock> {
+  if (heldBy !== null) {
+    /* **Fail fast rather than wait on ourselves.** A second take is a second
+       *connection* asking for a key this process already holds on another one;
+       advisory locks are re-entrant within a session and these are two
+       sessions, so without this the caller would poll for the whole deadline
+       and then be told a sibling file is hogging the lock. `release()` clears
+       this, so repeated sequential takes are untouched: only an *overlapping*
+       take is refused. Code that legitimately wants a nested hold calls
+       `withRunLock`, which returns early instead. */
+    throw new Error(
+      `${suite} asked for the run lock, but ${heldBy} already holds the run lock in this process. ` +
+        "A file takes it once, at module scope, and holds it to teardown; anything that needs it " +
+        "for a nested window should go through withRunLock, which returns early rather than " +
+        "opening a second connection to wait on the first.",
+    );
+  }
   const url = process.env.DATABASE_URL;
   if (!url) {
     /* Callers are supposed to have run `pgReady` first, which returns
@@ -290,34 +432,82 @@ export async function takeRunLock(
     );
   }
 
-  const { Pool } = await import("pg");
-  const pool: Pool = new Pool({ connectionString: url, max: 1 });
-  const client = await pool.connect();
-
+  /* Started before the connection, so a slow connect spends the budget it is
+     actually spending rather than a fresh one. */
   const deadline = Date.now() + waitMs;
-  for (;;) {
-    const got = await client.query<{ got: boolean }>("select pg_try_advisory_lock($1) as got", [
-      RUN_LOCK,
-    ]);
-    if (got.rows[0]?.got === true) break;
-    if (Date.now() > deadline) {
-      client.release();
-      await pool.end();
-      throw new Error(
-        `Waited ${waitMs}ms for advisory lock ${RUN_LOCK}: ${suite} could not get its turn ` +
-          "at running a job. Another suite that takes this lock is still running against " +
-          "this database — a second `npm test`, or a copy of one of those files. If nothing is " +
-          "actually running, a connection is wedged holding the lock; it goes when that process " +
-          "does.",
-      );
-    }
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+
+  const { Pool } = await import("pg");
+  const pool: Pool = new Pool({
+    connectionString: url,
+    /* One connection, and it is checked out for the whole hold — so the backend
+       that takes the key is the only one this pool can hand to anybody, and the
+       unlock below cannot land on a different session. */
+    max: 1,
+    application_name: applicationName(suite),
+    connectionTimeoutMillis: connectTimeoutMs,
+    /* Client-side, deliberately: a `statement_timeout` is the server's promise,
+       and the case being guarded against is the server not answering. */
+    query_timeout: queryTimeoutMs,
+  });
+
+  let client: PoolClient;
+  try {
+    client = await pool.connect();
+  } catch (cause) {
+    await pool.end().catch(() => {});
+    throw new Error(
+      `${suite} could not connect within ${connectTimeoutMs}ms to take advisory lock ${key}. ` +
+        "The database this suite needs is not answering; nothing is being waited on and no " +
+        "lock is held.",
+      { cause },
+    );
   }
 
-  /* Set only once the key is actually in hand, never before the loop — a flag
-     set optimistically would make `withRunLock` skip the take on the strength
-     of a lock this process failed to get. */
-  heldByThisProcess = true;
+  try {
+    for (;;) {
+      /* Before the attempt, never after it, and `>=` rather than `>`: a take
+         whose budget has run out to the millisecond must not get one more ask,
+         because that ask can come back holding a key it had already promised
+         to stop wanting. `waitMs: 0` therefore never acquires anything, which
+         is the branch `tests/run-lock.test.ts` pins. */
+      if (Date.now() >= deadline) throw new Error(timedOut(suite, key, waitMs));
+      let got: QueryResult<{ got: boolean }>;
+      try {
+        got = await client.query<{ got: boolean }>("select pg_try_advisory_lock($1) as got", [key]);
+      } catch (cause) {
+        /* Wrapped, because the headers here promise that a failed take always
+           names the file that was waiting, and a raw `Query read timeout` or
+           `invalid input syntax` arriving out of vitest's import phase names
+           nothing at all. The cleanup is the outer `catch`'s job. */
+        throw new Error(
+          `${suite} failed while polling for advisory lock ${key}: the query itself errored, so ` +
+            "nothing is being waited on and no lock is held. A `Query read timeout` here means " +
+            `the database took the statement and did not answer within ${queryTimeoutMs}ms.`,
+          { cause },
+        );
+      }
+      if (got.rows[0]?.got === true) break;
+      const left = deadline - Date.now();
+      if (left <= 0) throw new Error(timedOut(suite, key, waitMs));
+      await new Promise((resolve) => setTimeout(resolve, Math.min(POLL_MS, left)));
+    }
+  } catch (err) {
+    /* Covers the deadline *and* a query that threw — a broken connection, a
+       `query_timeout` firing, the database going away. The old shape cleaned up
+       on the deadline only, so every other way out of this loop left the client
+       checked out and the pool un-ended, which with `max: 1` is a pool that can
+       never be ended at all. `release(true)` destroys rather than returns: the
+       connection may be the reason we are here, and it must not be handed to
+       anybody else while it might still hold the key. */
+    client.release(true);
+    await pool.end().catch(() => {});
+    throw err;
+  }
+
+  /* Set only once the key is actually in hand, never before the loop — set
+     optimistically it would make `withRunLock` skip the take, and the guard
+     above refuse one, on the strength of a lock this process failed to get. */
+  heldBy = suite;
 
   let released = false;
   return {
@@ -328,15 +518,46 @@ export async function takeRunLock(
          Postgres but ending an ended pool is not. */
       if (released) return;
       released = true;
-      heldByThisProcess = false;
-      /* Explicit unlock first, so the lock is gone the moment this returns
-         rather than whenever the socket closes. `pool.end()` would do it too;
-         doing both means a slow teardown cannot delay the next file. */
-      await client.query("select pg_advisory_unlock($1)", [RUN_LOCK]);
-      client.release();
-      await pool.end();
+      heldBy = null;
+      try {
+        /* Explicit unlock first, so the lock is gone the moment this returns
+           rather than whenever the socket closes. Closing the connection would
+           do it too; doing both means a slow teardown cannot delay the next
+           file. On the same `client` the key was taken on, which is the whole
+           reason this connection is checked out and never handed back until
+           here — an unlock on a different backend of the pool would quietly do
+           nothing and report success. */
+        await client.query("select pg_advisory_unlock($1)", [key]);
+      } catch (cause) {
+        throw new Error(
+          `${suite} could not unlock advisory lock ${key}. Its connection is being closed ` +
+            "regardless, and a session advisory lock goes with its session, so the key is " +
+            "free — but the database failed a trivial query, which is the part worth chasing.",
+          { cause },
+        );
+      } finally {
+        /* In a `finally` because the shape before this marked itself released
+           and *then* unlocked: an unlock that threw left the client checked out
+           and the pool open, so the key stayed held until the worker died —
+           exactly the deadlock this file exists to prevent. `release(true)`
+           destroys the connection rather than returning a possibly-broken one
+           to the pool, and a session advisory lock dies with its session. */
+        client.release(true);
+        await pool.end().catch(() => {});
+      }
     },
   };
+}
+
+/** The message, in one place, because two exits from the loop throw it. */
+function timedOut(suite: string, key: number, waitMs: number): string {
+  return (
+    `Waited ${waitMs}ms for advisory lock ${key}: ${suite} could not get its turn ` +
+    "at running a job. Another suite that takes this lock is still running against " +
+    "this database — a second `npm test`, or a copy of one of those files. If nothing is " +
+    "actually running, a connection is wedged holding the lock; look for `run-lock …` in " +
+    "pg_stat_activity, and it goes when that process does."
+  );
 }
 
 /**
@@ -365,7 +586,7 @@ export async function takeRunLock(
  * drives the branch directly, which the old wording claimed and no test did.
  *
  * **Lock ordering.** This one is always the *inner* lock. `store-parity` and
- * `store-roundtrip` hold `CORPUS_LOCK` across their `beforeAll` and reach this
+ * `store-roundtrip` take `CORPUS_LOCK` at module scope and reach this
  * one through the fixture loader, so the order there is corpus-then-run; no
  * file-scope holder of this lock ever wants the corpus lock, so there is no
  * cycle. Keep it that way: **corpus outside, run inside.**
@@ -375,7 +596,7 @@ export async function withRunLock<T>(
   body: () => Promise<T>,
   options: RunLockOptions = {},
 ): Promise<T> {
-  if (heldByThisProcess) return await body();
+  if (heldBy !== null) return await body();
   const lock = await takeRunLock(what, options);
   try {
     return await body();

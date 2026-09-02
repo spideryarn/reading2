@@ -3,10 +3,13 @@
  * OpenRouter is built, sent, read and *accounted for*.
  *
  * The sibling of [`src/messages-stream.ts`](messages-stream.ts). That file owns
- * the eight pipeline stages, which speak Anthropic's Messages shape through the
- * SDK; this one owns the six calls that speak OpenAI's shape and are made with
- * `fetch` — chat, explain, search, dictation, the PDF reader, and embeddings.
- * Between them there is no third way to spend money, and
+ * the pipeline stages, which speak Anthropic's Messages shape through the SDK;
+ * this one owns the calls that speak OpenAI's shape and are made with `fetch` —
+ * chat, explain, search, quiz marking, the three referee runs, dictation, the
+ * PDF reader, and embeddings. It said "the six" until 2026-09-02 and had been
+ * ten for a while; a count in prose is a fact nothing keeps in step, so `grep`
+ * for `openRouterStream(` and `openRouterJson(` rather than trusting this
+ * sentence. Between the two files there is no third way to spend money, and
  * [`tests/ai-call.test.ts`](../tests/ai-call.test.ts) scans `src/` to keep it
  * that way.
  *
@@ -77,6 +80,8 @@ import {
   readerAborted,
   type StreamEnd,
   sseChunks,
+  type Usage,
+  whereSearchCountCameFrom,
 } from "./openrouter-stream.js";
 import { type Nanos, providerCostToNanos } from "./pricing.js";
 
@@ -541,6 +546,12 @@ interface WireUsage {
   cache_write_tokens?: unknown;
   /** Thinking, on this wire's spelling. Inside `completion_tokens`, not additional. */
   completion_tokens_details?: { reasoning_tokens?: unknown };
+  /* **The two web-search spellings are deliberately absent from this
+     interface.** They are declared once, on `Usage` in
+     [`openrouter-stream.ts`](openrouter-stream.ts), beside the parser that
+     reads them — a second declaration here would be a second copy of a wire
+     shape that has already changed spelling once. `saw` hands the raw object to
+     that parser instead. */
 }
 
 /**
@@ -564,6 +575,7 @@ class Meter {
   cacheReadTokens: number | null = null;
   cacheWriteTokens: number | null = null;
   reasoningTokens: number | null = null;
+  webSearches: number | null = null;
   upstream: string | null = null;
 
   constructor(
@@ -596,6 +608,14 @@ class Meter {
       this.cacheWriteTokens;
     this.reasoningTokens =
       num(u.completion_tokens_details?.reasoning_tokens) ?? this.reasoningTokens;
+    /* **The existing parser, not a third reading of the same two fields.** It
+       already runs on these very calls — src/explain.ts and
+       src/referee-criteria-run.ts call it for their own logs — so the count was
+       being computed and then thrown away here. Its `null` for "this chunk did
+       not say" is what makes `??` safe: a usage frame without the field cannot
+       reset a count an earlier one gave. */
+    this.webSearches =
+      whereSearchCountCameFrom(usage as Usage).searches ?? this.webSearches;
   }
 
   sawModel(model: unknown): void {
@@ -648,10 +668,15 @@ class Meter {
         cacheWrite5mTokens: null,
         cacheWrite1hTokens: null,
         reasoningTokens: this.reasoningTokens,
-        /* Neither is reported on this wire: no caller here uses a server-side
-           web search, and `service_tier` and `inference_geo` are Anthropic's own
-           fields on the Messages shape. */
-        webSearches: null,
+        /* **Four callers on this wire run server-side web searches** — explain
+           (up to 8 a call), chat, referee-criteria and referee-candidates all
+           send `tools: [{ type: "openrouter:web_search" }]` — and a search is
+           billed per result, so a call can cost ten cents more than its tokens
+           say. Until 2026-09-02 this was hard-coded `null` under a comment
+           asserting the opposite, and `web_searches` was null on every row in
+           the ledger. `service_tier` and `inference_geo` really are Anthropic's
+           own fields on the Messages shape, and stay null here. */
+        webSearches: this.webSearches,
         serviceTier: null,
         inferenceGeo: null,
         ms: Date.now() - this.startedAt,

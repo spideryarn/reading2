@@ -199,6 +199,11 @@ function BothHarness({ dialog }: { dialog: "annotate" | "comment" }) {
         comments: comments.comments,
         onJump: () => {},
         onFound: () => {},
+        /* Nothing here presses a result row, so no passage is ever the open
+           one. The prop pair exists because pressing a row now rings its exact
+           phrase in the prose — App.tsx holds the key. */
+        openKey: null,
+        onOpenKey: () => {},
       }),
       dialog === "annotate"
         ? createElement(AnnotateDialog, {

@@ -74,7 +74,9 @@ import { CandidatesBand } from "./CandidatesPanel.js";
    the deterministic scan of the document's own source, drawn above the chips
    because a hidden instruction bears on all four panels. src/injection-scan.ts
    is the scanner and it calls no model. */
+import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { SourceScanNotice } from "./SourceScanNotice.js";
+import { RefereeHowButton, RefereeHowCard, useHowCard } from "./RefereeCard.js";
 import { useSourceScan } from "./useSourceScan.js";
 import { SearchPanel } from "./SearchPanel.js";
 import { useSearch } from "./useSearch.js";
@@ -122,6 +124,7 @@ import {
   quoteParam,
   rankParam,
   refereeParam,
+  refScaleParam,
   REFEREE_VIEWS,
   type RefereeView,
   rememberParam,
@@ -147,7 +150,7 @@ import {
    button, the dock's button and the browser tab cannot say three things.
    src/title-text.ts § MODE_LABEL. */
 import { MODE_LABEL } from "../title-text.js";
-import { ClipboardCheck, X } from "lucide-react";
+import { ChevronDown, ChevronRight, ClipboardCheck, X } from "lucide-react";
 import {
   arrivalTarget,
   glideTarget,
@@ -188,7 +191,11 @@ import { markedModes, visitorGap } from "./visitor.js";
 import { NotSharedPage, SharedNotice, ViewOnlyChip, VisitorBand } from "./PublicChrome.js";
 import { PublicMetadataPage, VisitorTweetsPage } from "./PublicPages.js";
 import { useRenderCount } from "./perf.js";
-import { REFEREE_DECLARE_IT, REFEREE_TEXT_ALREADY_SENT } from "../messages.js";
+import {
+  REFEREE_DECLARE_IT,
+  REFEREE_TEXT_ALREADY_SENT,
+  REFEREE_TEXT_ALREADY_SENT_SHORT,
+} from "../messages.js";
 import { FEEDBACK_BLOCK_IDS, setFeedbackArticleContext } from "./feedback-context.js";
 
 /**
@@ -1724,11 +1731,18 @@ function Reader({
   /* **A fifth state, for the reason the second, third and fourth have their
      own**: two modes sharing one `Found[]` clear each other on the way out, and
      which one wins is an accident of whether the outgoing mode's cleanup is
-     passive and the incoming mode's push is layout. Referee's Criteria has no
-     `openKey` of its own yet — stepping between marked passages is search's
-     control and this panel does not offer one, so nothing here can be open.
-     docs/plans/260831an-referee-mode-for-peer-reviewers.md § 1. */
+     passive and the incoming mode's push is layout.
+
+     **And an `openKey` of its own since 2026-09-02**, which it did not have and
+     should have: pressing a criterion result jumped to the *block*, and the
+     phrase the row was about was never distinguished, while Search's identical
+     rows have always got the `mark.hit[data-hit-open]` ring. That is the
+     panel→prose direction a referee actually travels, and it matters more now
+     the stripe carries a direction rather than an identity — the ring is what
+     says *this red phrase is the row you pressed*. GPT Sol's finding 2;
+     docs/plans/260902f-make-referee-mode-understandable.md. */
   const [refereeFound, setRefereeFound] = useState<Found[]>([]);
+  const [openRefereeKey, setOpenRefereeKey] = useState<string | null>(null);
 
   /* Two maps, memoised separately from everything else on the page. `found`
      changes on every keystroke in words mode, and recomputing every comment's
@@ -1759,11 +1773,21 @@ function Reader({
         : mode === "timeline"
           ? openTimelineKey
           : mode === "referee"
-            ? null
+            ? openRefereeKey
             : openHit;
+  /* **One ramp for the whole of Referee mode**, read here because this is where
+     the marks are built. `?refscale=` and not `referee_criteria.scale`: the two
+     ramps put red at opposite ends of the truth, so a per-criterion choice
+     would have meant one red underline meaning opposite verdicts in one
+     document. `refScaleParam` in params.ts has the whole argument.
+
+     Read unconditionally rather than inside the referee branch — a hook cannot
+     be conditional — and it costs nothing in every other mode, where no passage
+     carries a valence and the scale is never consulted. */
+  const [refScale] = useQueryState("refscale", refScaleParam);
   const hitMarks = useMemo(
-    () => buildHitMarks(passages, openPassage),
-    [passages, openPassage],
+    () => buildHitMarks(passages, openPassage, refScale),
+    [passages, openPassage, refScale],
   );
   const hitStrength = useMemo(() => blockStrength(passages), [passages]);
   const hitHues = useMemo(() => blockHues(passages), [passages]);
@@ -2687,6 +2711,13 @@ function Reader({
           comments={comments}
           onJump={jumpTo}
           onFound={setRefereeFound}
+          /* Which marked passage the referee last pressed, so the prose rings
+             the exact phrase rather than washing the whole block. Search's
+             `openHit` exactly, and threaded rather than held in the band for the
+             same reason that one is: `TableView` draws the ring and it lives up
+             here. */
+          openKey={openRefereeKey}
+          onOpenKey={setOpenRefereeKey}
         />
       )}
 
@@ -4425,7 +4456,7 @@ function DiagramBand({
  * be built under — no accept/reject, no score, no per-criterion grade. Ranking
  * within the paper is the only ordering the mode offers.
  *
- * ## The notice is in the past tense, is not dismissible, and holds no state
+ * ## The notice is in the past tense, is shut until asked for, and is never dismissed
  *
  * All three are deliberate. **Past tense** because by the time anybody is
  * looking at this band the article's text has already gone to the model
@@ -4439,13 +4470,47 @@ function DiagramBand({
  * **No acknowledgement**, which the plan's first draft asked for. A box that
  * says "I understand" in front of something already done would imply that
  * ticking it makes prohibited use permissible. It would also have to be
- * remembered somewhere, and both places available are wrong: `localStorage` is
- * banned outright (docs/project/url-state.md), and a column is a migration for
- * a checkbox.
+ * remembered somewhere, and both places available are wrong: the URL is for
+ * view state — *how you are looking at an article*, which has to survive a
+ * reload and travel when the address is pasted (docs/project/url-state.md) —
+ * and a column is a migration for a checkbox.
+ *
+ * **This comment used to say `localStorage` was "banned outright", and that was
+ * the flat version of the rule rather than the rule.** It is banned for view
+ * state, which is what the paragraph above is about; a per-device "I have read
+ * this" bit is neither view state nor anything worth pasting to somebody else.
+ * `InstallHint` was already the exception and the explainer card below is the
+ * second — src/web/referee-card.ts draws the distinction in full. None of that
+ * reaches this notice, which remembers nothing on purpose; see the collapse
+ * paragraph at the end.
  *
  * **Not dismissible**, for the reason `SharedNotice` in src/web/PublicChrome.tsx
  * gives about itself: *it is what this page is, and a control to make it go away
  * would say otherwise.*
+ *
+ * **Shut by default, though**, since 2026-09-02, when Greg asked for it:
+ * *"also default-collapse the message starting with 'This article's text has
+ * already been sent to a third-party model...'"* The three sentences above are
+ * unchanged and so is the reasoning; what changed is that the paragraph a
+ * referee reads once no longer costs the band 214px on every visit.
+ *
+ * **A collapse is not a dismissal, and the two differences are what keep the
+ * paragraph above true.** First, the *fact* is the label on the control —
+ * `REFEREE_TEXT_ALREADY_SENT_SHORT` — so shutting the box hides which venues
+ * call this a breach and which manuscripts the mode is for, never that the text
+ * has gone. Second, nothing is remembered: `noticeOpen` is a `useState` that
+ * dies with the mount, so every visit starts shut and one press opens it. That
+ * is also why the storage objection this comment used to make against a
+ * collapse — the URL is the wrong place for it, and a column is a migration for
+ * a checkbox — does not apply: there is nothing to store.
+ *
+ * **The explainer card *is* remembered, and the difference between them is the
+ * point.** "How Referee mode works" is something you read once; a notice about
+ * where the manuscript has already gone is something the mode *is*, and a
+ * referee arriving on their second paper meets it again. So the card keeps a bit
+ * in `localStorage` (src/web/referee-card.ts) and this keeps none — and the two
+ * live in different boxes, `.ref-brief` and `.ref-panel`, so that no press can
+ * be mistaken for the other.
  *
  * It is styled as a notice and not as an error — src/web/styles.css § referee
  * mode. Nothing has gone wrong.
@@ -4457,6 +4522,8 @@ function RefereeBand({
   comments,
   onJump,
   onFound,
+  openKey,
+  onOpenKey,
 }: {
   slug: string;
   blocks: Block[];
@@ -4483,6 +4550,15 @@ function RefereeBand({
   onJump(blockId: BlockId): void;
   /** `Reader` owns the prose — the seam described on `found` above. */
   onFound(next: Found[]): void;
+  /**
+   * The marked passage the referee last pressed — **Criteria's, and read
+   * nowhere else**, like `comments` above.
+   *
+   * Claims paints marks too and does not have one yet; it is the same wiring
+   * when somebody wants it. Mirror and Candidates paint nothing at all.
+   */
+  openKey: string | null;
+  onOpenKey(key: string | null): void;
 }) {
   useRenderCount("RefereeBand");
   const [view, setView] = useQueryState("referee", refereeParam);
@@ -4490,12 +4566,26 @@ function RefereeBand({
      not about a sub-mode, and a hook inside `RefereeSubMode` would re-run the
      scan every time the referee pressed a different chip. */
   const scan = useSourceScan(slug);
+  /* **Shut, and not remembered** — see the header. Local state rather than a
+     `?` parameter, for the reason `Section` in src/web/Metadata.tsx gives about
+     itself: a shut box is not view state, nothing about it is worth linking to,
+     and docs/project/url-state.md keeps the address bar for places you were. */
+  const [noticeOpen, setNoticeOpen] = useState(false);
+
+  /* **One bit, and it is on the device rather than in the URL** — the card is
+     open until the referee shuts it, and the header button brings it back by
+     clearing the same bit. Every read and write of it is inside `useHowCard`,
+     so this component cannot change the screen and forget to write;
+     src/web/referee-card.ts is why it is not a `?` parameter, and why it is not
+     the flat ban this component's docstring used to assert. */
+  const how = useHowCard();
 
   return (
     <aside className="mode-band gloss referee" aria-label="Referee">
       <div className="gloss-head">
         <ClipboardCheck size={14} className="gloss-head-icon" />
         <h2>Referee</h2>
+        <RefereeHowButton open={how.open} onToggle={() => how.show(!how.open)} />
       </div>
 
       {/* **The two things that belong to the mode rather than to a sub-mode**,
@@ -4509,8 +4599,29 @@ function RefereeBand({
         {/* Always, above everything, and before any sub-mode has been pressed.
             src/messages.ts owns both sentences. */}
         <div className="ref-notice">
-          <p>{REFEREE_TEXT_ALREADY_SENT}</p>
-          <p className="ref-notice-also">{REFEREE_DECLARE_IT}</p>
+          {/* **The fact is the label on the control**, so shutting the box does
+              not take it away — only the venues and the audience, which is the
+              part a referee reads once. src/messages.ts owns all three
+              sentences. */}
+          <button
+            type="button"
+            className="ref-notice-toggle"
+            aria-expanded={noticeOpen}
+            onClick={() => setNoticeOpen((was) => !was)}
+          >
+            <span>{REFEREE_TEXT_ALREADY_SENT_SHORT}</span>
+            {noticeOpen ? (
+              <ChevronDown size={12} aria-hidden="true" />
+            ) : (
+              <ChevronRight size={12} aria-hidden="true" />
+            )}
+          </button>
+          {noticeOpen && (
+            <>
+              <p>{REFEREE_TEXT_ALREADY_SENT}</p>
+              <p className="ref-notice-also">{REFEREE_DECLARE_IT}</p>
+            </>
+          )}
         </div>
 
         {/* **Above the chips, and outside `.ref-panel`**, so it is on screen
@@ -4525,6 +4636,10 @@ function RefereeBand({
       <RefereeViews view={view} onView={(next) => void setView(next)} />
 
       <div className="ref-panel">
+        {/* **Inside the scroller, under the chips, and above the sub-mode** —
+            not in `.ref-brief` with the two notices that may never be
+            dismissed. src/web/RefereeCard.tsx § where it sits. */}
+        {how.open && <RefereeHowCard onClose={() => how.show(false)} />}
         <RefereeSubMode
           view={view}
           slug={slug}
@@ -4533,6 +4648,8 @@ function RefereeBand({
           comments={comments}
           onJump={onJump}
           onFound={onFound}
+          openKey={openKey}
+          onOpenKey={onOpenKey}
         />
       </div>
     </aside>
@@ -4570,28 +4687,97 @@ export function RefereeViews({
 }) {
   return (
     <div className="ref-views" role="radiogroup" aria-label="What Referee is showing">
-      {REFEREE_VIEWS.map((v) => (
-        // biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern and the call DiagramPanel.tsx, Dock.tsx and SearchPanel.tsx already make — a real <input type="radio"> cannot be styled as a chip without hiding the input and faking every state it already had
-        <button
-          key={v}
-          type="button"
-          role="radio"
-          aria-checked={v === view}
-          /* **Its own tab stop, and no key handler.** A roving `tabIndex` is
-             inseparable from arrow navigation — it is one tab stop for the whole
-             group and only navigable because the arrows move within it — so
-             leaving it here while removing the handler would make all but one
-             of them unreachable by keyboard altogether. */
-          tabIndex={0}
-          className={`ref-view-btn${v === view ? " on" : ""}`}
-          onClick={() => onView(v)}
-        >
-          {REFEREE_VIEW_LABEL[v]}
-        </button>
-      ))}
+      {/* **A card on every chip**, which until 2026-09-02 was the one radiogroup
+          in this app with nothing on it at all — four one-word labels naming four
+          sub-modes that do four unrelated things, one of which spends money and
+          one of which is never given the paper. Greg met the whole mode as
+          *"very confusing"*.
+
+          `TooltipGroup` so that reading along the row is one gesture rather than
+          four waits, and `keepSide` for DiagramPanel's measured reason: the band
+          sits at the right of the window, a card wider than a chip is otherwise
+          thrown onto the cross axis, and it lands on top of the chips the reader
+          is reading towards (Tooltip.tsx § keepSide). */}
+      <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+        {REFEREE_VIEWS.map((v) => (
+          <Tooltip
+            key={v}
+            placement="bottom"
+            keepSide
+            className="tip-soon"
+            content={
+              <ControlTip
+                head={REFEREE_VIEW_LABEL[v]}
+                what={REFEREE_VIEW_TIP[v].what}
+                how={REFEREE_VIEW_TIP[v].how}
+              />
+            }
+          >
+            {/* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern and the call DiagramPanel.tsx, Dock.tsx and SearchPanel.tsx already make — a real <input type="radio"> cannot be styled as a chip without hiding the input and faking every state it already had */}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={v === view}
+              /* **Its own tab stop, and no key handler.** A roving `tabIndex` is
+                 inseparable from arrow navigation — it is one tab stop for the whole
+                 group and only navigable because the arrows move within it — so
+                 leaving it here while removing the handler would make all but one
+                 of them unreachable by keyboard altogether. */
+              tabIndex={0}
+              className={`ref-view-btn${v === view ? " on" : ""}`}
+              onClick={() => onView(v)}
+            >
+              {REFEREE_VIEW_LABEL[v]}
+            </button>
+          </Tooltip>
+        ))}
+      </TooltipGroup>
     </div>
   );
 }
+
+/**
+ * **What each sub-mode is, and the thing about it a press would not tell you.**
+ *
+ * `ControlTip`'s rule, which is the whole reason the second sentence is worth a
+ * hover: `what` is what the reader could have worked out by pressing the chip
+ * and looking; `how` is what they could not — where the answer comes from, what
+ * it costs, or what the sub-mode does *not* promise. Each of these four `how`s
+ * is a refusal:
+ *
+ * - **Criteria** never scores the paper, and the run is a model call over the
+ *   whole of it, so pressing Run is not free.
+ * - **Claims** asserts linkage and never adequacy — `LINKAGE_NOT_ADEQUACY` in
+ *   src/referee-claims.ts says the same thing in the panel, above the button.
+ * - **Mirror** is never given the paper (src/referee-mirror.ts § the three
+ *   constraints) and keeps nothing (`useMirror.ts`: *one button, one run,
+ *   nothing stored*).
+ * - **Candidates** searches the web, which is a third party at a moment none of
+ *   the other three reaches one, and checks no conflicts of interest
+ *   (`COI_NOT_CHECKED`).
+ *
+ * A total `Record`, beside `REFEREE_VIEW_LABEL` and for its reason: a fifth
+ * sub-mode is a red compile here rather than a chip that silently explains
+ * nothing.
+ */
+const REFEREE_VIEW_TIP: Record<RefereeView, { what: string; how: string }> = {
+  criteria: {
+    what: "Write what you have been asked to judge this paper against. Each criterion becomes a re-runnable pass that marks the passages bearing on it.",
+    how: "Each run is a model call over the whole paper. It never scores the paper: which way a passage cuts is marked, and what that adds up to is yours.",
+  },
+  claims: {
+    what: "What the paper claims up front, and where it takes each claim up — in the paper's own order, never a ranking.",
+    how: "It asserts only that a passage takes a claim up, never whether the passage carries it. That judgement is the review.",
+  },
+  mirror: {
+    what: "The model reads your own comments back to you and points at ones an author could not act on.",
+    how: "It is never given the paper, so it can hold no opinion about it. The answer is not stored — leaving this sub-mode loses it.",
+  },
+  candidates: {
+    what: "For an editor: who could review this paper, and what expertise it would take.",
+    how: "It searches the web as you talk to it, and every name carries a link a search returned. Conflicts of interest are not checked by anything here.",
+  },
+};
 
 /**
  * What each button says.
@@ -4629,6 +4815,8 @@ function RefereeSubMode({
   comments,
   onJump,
   onFound,
+  openKey,
+  onOpenKey,
 }: {
   view: RefereeView;
   slug: string;
@@ -4638,6 +4826,9 @@ function RefereeSubMode({
   comments: readonly Comment[];
   onJump(blockId: BlockId): void;
   onFound(next: Found[]): void;
+  /** Criteria's pressed passage. See `RefereeBand`, which says why. */
+  openKey: string | null;
+  onOpenKey(key: string | null): void;
 }) {
   switch (view) {
     case "criteria":
@@ -4651,6 +4842,8 @@ function RefereeSubMode({
           comments={comments}
           onJump={onJump}
           onFound={onFound}
+          openKey={openKey}
+          onOpenKey={onOpenKey}
         />
       );
     case "claims":

@@ -52,7 +52,7 @@ import type { Config, DOMPurify } from "dompurify";
  * against a policy, and this names the policy. Tying it to the dependency would
  * re-sanitise every article in the library on every patch release, for nothing.
  */
-export const SANITIZER_VERSION = 4;
+export const SANITIZER_VERSION = 5;
 /* 1 → 2 on 2026-08-27: the policy now strips URLs pointing at our own `/api/`
    (see `isOwnApi`). Stricter, so every artefact stored under 1 was cleaned by a
    policy that has never seen this rule and has to be re-cleaned on next read —
@@ -69,7 +69,17 @@ export const SANITIZER_VERSION = 4;
    while `data-hit-open` had been forbidden all along — the asymmetry is what
    gave it away. Stricter again, and the same reasoning: an artefact cleaned
    under 3 could be carrying a forged search-or-quote highlight. GPT Sol,
-   2026-08-31, reviewing docs/plans/260831j-quotes-mode.md. */
+   2026-08-31, reviewing docs/plans/260831j-quotes-mode.md.
+
+   4 → 5 on 2026-09-02: `data-dir` is forbidden. Stricter again, and it is the
+   attribute with the most reason to be: it is the only annotation that puts a
+   *verdict* on a phrase, so an artefact cleaned under 4 could be carrying an
+   article's own `−` beside our reader's sentence. Bumping costs one extra
+   sanitise per stored article on its next read, plus the "predates the current
+   sanitiser" warn (src/api.ts), until stage 3 is re-run for it — nothing is
+   rewritten and no reader sees a difference. GPT Sol's finding 8, reviewing
+   docs/plans/260902f-make-referee-mode-understandable.md, and the change that
+   added `data-dir` had forgotten it. */
 
 /**
  * Video embeds, by exact origin and path prefix.
@@ -207,6 +217,13 @@ export const ARTICLE_CONFIG: Config = {
        (src/web/annotate.ts), so a forged pair paints our rail from a stranger's
        document. Found by GPT Sol reviewing docs/plans/260831j-quotes-mode.md. */
     "data-hit", "data-hues",
+    /* The sign after a valence-painted mark — `−`, `·` or `+`, drawn by
+       `mark.hit[data-dir]::after` (styles.css) so that a colour is never the
+       only carrier of a judgement. Forbidden here for the reason `data-hues` is
+       and one more: it is the one annotation attribute that puts a *verdict* on
+       a phrase, so an article shipping its own would be a stranger's document
+       telling our reader that we called their sentence bad. */
+    "data-dir",
     "data-open", "data-cmt-open", "data-chat-open", "data-hit-open", "data-term-open",
     /* The enlarge wrapper's own attribute (src/web/zoomable.ts). It decides
        whether the figure is laid out inline or as a block, so an article that
