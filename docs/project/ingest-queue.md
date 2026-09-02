@@ -664,6 +664,27 @@ and not this one.
 could produce there is a `running` row whose claimant is already frozen. The browser is the only
 driver in production, which is what the advance endpoint was built for.
 
+### On the filesystem, "one process" had to be made true
+
+The files adapter has always said its fence holds within one process and not across two, and that is
+still what it promises. What it did not survive was **one process with two copies of the module in
+it**: saving anything the server imports restarts the Vite dev server in place, re-evaluating
+[`src/store/jobs-fs.ts`](../../src/store/jobs-fs.ts) with empty Maps while the request inside a step
+carries on. The new copy swept the `running` job back to `queued` and the browser started the same
+eight-minute model call again — eleven times on one job, on 2026-08-30, at $5.43.
+
+`QueueState` goes through [`src/process-state.ts`](../../src/process-state.ts) now, so the index and
+the attempt tokens have the lifetime the file always claimed for them; `aborts` in
+[`src/jobs.ts`](../../src/jobs.ts) went with it, because a Stop after a save had been reaching an
+empty map. A restart is a **pause** rather than a duplicate: the new copy is told `busy` and the old
+claimant's work is still used. The whole story, including why aborting the abandoned call would have
+been the wrong companion fix, is
+[260902c-the-truncation-retry-cost-storm.md](../postmortems/260902c-the-truncation-retry-cost-storm.md).
+
+**Two OS processes over one `data/` are still not fenced**, and that is unchanged rather than fixed —
+`claimIn`'s single `update … where status = 'queued'` is what makes Postgres immune, and running with
+`SPIDERYARN_STORE=postgres` is what CLAUDE.md already asks for.
+
 ### The browser is the worker
 
 So a wedged job in production is not a queue that needs draining. It is a job whose only engine has

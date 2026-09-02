@@ -22,12 +22,20 @@
  * rule is a variable in it, so two processes over one `data/` directory — a dev
  * server and a stage CLI, say — can both believe they hold the queue. That was
  * true before this file existed and is not a regression; it is the reason the
- * Postgres adapter exists, where the same rules are partial unique indexes and
+ * Postgres adapter exists, where the same rules are enforced by the database and
  * hold across anything.
  *
  * So the fence here is real but local: the attempt token is compared, and a
  * stale claimant is refused, within the process that minted it. Across
  * processes it is not a fence at all. Nothing here pretends otherwise.
+ *
+ * **And "one process" had to be made true, because it was not.** It said
+ * *process* and meant *module*, and those stopped being the same thing the day
+ * the API became a Vite config dependency: every save under `src/` restarts the
+ * dev server in place, re-evaluating this file with empty Maps while the request
+ * inside a step keeps running. `QueueState` below is what closed that — the
+ * state has the lifetime of the process now, which is the lifetime this file
+ * always claimed for it. docs/postmortems/260902c-the-truncation-retry-cost-storm.md.
  */
 
 import { mkdir, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
@@ -36,6 +44,7 @@ import path from "node:path";
 import { errorFields, log } from "../log.js";
 import { INTERRUPTED } from "../messages.js";
 import { environmentOwnerId } from "../owner.js";
+import { processSingleton } from "../process-state.js";
 import type { Job, JobStep, OwnerId } from "../types.js";
 import {
   type ClaimOutcome,
@@ -60,18 +69,62 @@ const JOBS_DIR = path.join(ROOT, "data", "_jobs");
 
 const TERMINAL = new Set(["done", "error", "cancelled"]);
 
-/** The jobs this process knows about, live. Disk is what survives a restart. */
-const index = new Map<string, Job>();
-/** The attempt token each running job is held by. Never written to disk — it dies with the process. */
-const attempts = new Map<string, { attempt: string; expires: number }>();
-/** The work key each job was enqueued with. In memory, like the index it sits beside. */
-const keys = new Map<string, string>();
-/** Jobs the reader has dismissed. A late write must not bring one back. */
-const forgotten = new Set<string>();
-/** One write at a time per job, and the last one in flight for each. */
-const writes = new Map<string, Promise<void>>();
-/** Distinct per call, so two writes for the same job cannot share a temp file. */
-let writeCounter = 0;
+/**
+ * **Everything this adapter knows, and it belongs to the process rather than to
+ * this module.**
+ *
+ * The single-running rule and the attempt tokens below are a **lock**, and a
+ * second copy of a lock is not a slower lock, it is no lock at all. This module
+ * is re-evaluated whenever the dev server restarts — which is every save to any
+ * file under `src/`, because the API is a Vite config dependency — and the
+ * restart does not stop the request that is already inside a step. Before
+ * 2026-09-02 the new copy therefore began with empty Maps, `loadFromDisk` swept
+ * a `running` job back to `queued` believing nobody could be inside it, and the
+ * browser's next advance started the same eight-minute model call again. Eleven
+ * of them, once, on one job.
+ * docs/postmortems/260902c-the-truncation-retry-cost-storm.md, and
+ * src/process-state.ts for the mechanism and for what else belongs here.
+ *
+ * **`loaded` and `writeCounter` are in here too, and they have to be.** A
+ * private `loaded` puts the new copy through `loadFromDisk` — which is the sweep
+ * that hands the job away — and a private `writeCounter` lets two copies mint
+ * the same `.pid.N.tmp` name for one job. Two scalars in an object rather than
+ * two `let`s is the price of a value the module cannot own.
+ *
+ * The header above still says "one process", and that is now true rather than
+ * hoped. Across two *processes* it remains what it always was: not a fence.
+ */
+interface QueueState {
+  /** The jobs this process knows about, live. Disk is what survives a restart. */
+  index: Map<string, Job>;
+  /** The attempt token each running job is held by. Never written to disk. */
+  attempts: Map<string, { attempt: string; expires: number }>;
+  /** The work key each job was enqueued with. In memory, like the index it sits beside. */
+  keys: Map<string, string>;
+  /** Jobs the reader has dismissed. A late write must not bring one back. */
+  forgotten: Set<string>;
+  /** One write at a time per job, and the last one in flight for each. */
+  writes: Map<string, Promise<void>>;
+  /** Distinct per call, so two writes for the same job cannot share a temp file. */
+  writeCounter: number;
+  /** The one read of `data/_jobs/`, memoised. Null until somebody asks. */
+  loaded: Promise<void> | null;
+}
+
+const state = processSingleton<QueueState>("jobs-fs", () => ({
+  index: new Map(),
+  attempts: new Map(),
+  keys: new Map(),
+  forgotten: new Set(),
+  writes: new Map(),
+  writeCounter: 0,
+  loaded: null,
+}));
+
+/* Bound locally so the rest of this file reads as it always did. These are the
+   *same objects* every copy of the module sees, which is the whole point; the
+   two scalars are reached through `state` because a `const` cannot be. */
+const { index, attempts, keys, forgotten, writes } = state;
 
 function jobFile(id: string): string {
   return path.join(JOBS_DIR, `${id}.json`);
@@ -96,7 +149,7 @@ async function writeOnce(job: Job, workKey: string | undefined): Promise<void> {
   await mkdir(JOBS_DIR, { recursive: true });
   /* The suffix carries a counter as well as the pid — the pid alone is constant
      within a process, which is exactly the case that broke. */
-  const tmp = `${jobFile(job.id)}.${process.pid}.${++writeCounter}.tmp`;
+  const tmp = `${jobFile(job.id)}.${process.pid}.${++state.writeCounter}.tmp`;
   const stored: Stored = { ...job, ...(workKey !== undefined && { workKey }) };
   await writeFile(tmp, `${JSON.stringify(stored, null, 2)}\n`, "utf8");
   await rename(tmp, jobFile(job.id));
@@ -210,8 +263,6 @@ function settleAbandoned(job: Job, as?: "cancelled"): void {
   delete job.cancelling;
 }
 
-let loaded: Promise<void> | null = null;
-
 async function loadFromDisk(): Promise<void> {
   let files: string[] = [];
   try {
@@ -273,8 +324,8 @@ async function loadFromDisk(): Promise<void> {
 
 /** Load once, and make every entry point wait for it. */
 function ready(): Promise<void> {
-  loaded ??= loadFromDisk();
-  return loaded;
+  state.loaded ??= loadFromDisk();
+  return state.loaded;
 }
 
 /** This owner's, and `undefined` for anybody else's — see `JobStore.get`. */
@@ -653,7 +704,7 @@ export async function reloadForTests(): Promise<void> {
   index.clear();
   attempts.clear();
   keys.clear();
-  loaded = null;
+  state.loaded = null;
   await ready();
 }
 

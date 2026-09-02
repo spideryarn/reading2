@@ -170,6 +170,21 @@ It is worth noting *how* this was found: by running the stage on the real articl
 stopping when the tests went green. Nothing in the suite could have caught it, because every fixture
 in the repo was written in ASCII.
 
+## The bill this file could not explain, and it was not this bug
+
+**2026-09-02.** The same stage, the same article, and eleven paid calls for one job — which looked
+like this postmortem's failure with a retry loop on top, and was not.
+[260902c-the-truncation-retry-cost-storm.md](260902c-the-truncation-retry-cost-storm.md) has it:
+saving a file the dev server imports restarts the server in place, the filesystem job store's fence
+was a `Map` in a module that had just been re-evaluated, and the new copy handed the running job
+straight back out. Nothing retried. Five of the eleven calls were nowhere near `max_tokens`, and the
+same afternoon a *tiny* article ran its structure call six times with all six coming back fine.
+
+Worth knowing here for one reason: **this file's fix is correct and could not have helped.** A
+`failureKind` that hides a button acts after a failure, and the duplication happens before anything
+fails, to calls that mostly succeed. Two bugs on one stage, and reading one fix for both is exactly
+what that other file's own commit message warned against.
+
 ## What is still open
 
 **~~The Retry button still appears under a permanent failure.~~ Fixed, 2026-08-26.** A job now
