@@ -118,6 +118,14 @@ was checked against the source rather than taken on trust:
   the wrong person's data. Compare `src/owner.ts`, where the environment variable deliberately
   "does not get a vote" inside a request, which closed a real historical hole and is pinned by
   `tests/owner-isolation.test.ts`.
+
+  **A scope has to be open for that to be true, and until 2026-09-02 one was not on the HTML
+  page.** The tripwire needs `runInRequest`, and `handleApi` opens it for `/api/public/` only;
+  `/read/:slug` was served beside it, where `currentOwnerId()` finds no box and returns the
+  *environment* owner instead of throwing. Both doors are wrapped now, both in `src/vercel.ts` —
+  there rather than in `src/public/page.ts`, which would pull `src/owner.ts` into the import graph
+  `tests/public-imports.test.ts` keeps closed. `tests/public-page-request-scope.test.ts` is the
+  page's half.
 - **Hand-built allowlist DTOs**, below.
 
 It also refuses to work at all on the filesystem store — `requirePostgres()` answers 501 — so a

@@ -1295,6 +1295,72 @@ export const SHARED_WITH_YOU =
  */
 export const MAKE_AN_ACCOUNT = "Make a free account";
 
+/* ── When we cannot tell whose this is ─────────────────────────────────────────
+   Four sentences for one state: the reader has a session the browser still
+   believes in, and `GET /api/article/:slug` answered 401 anyway — after
+   `apiFetch` had already refreshed once and retried once (src/web/lib/api.ts).
+
+   A 401 is *we do not know whose this is*, and it says **nothing** about
+   whether the piece is world-readable, so the public route is still asked and
+   both answers decide. The two arms below are the two rows of that table, and
+   they carry different actions because the same two lines — a local sign-out
+   and a reload of this address — land the reader somewhere different in each.
+   docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C3. */
+
+/**
+ * **Shared, and the session could not be confirmed.**
+ *
+ * Beside `SHARED_WITH_YOU` rather than instead of it: both are true, and the
+ * one the reader arrived for is still the piece in front of them. It is written
+ * as *what you are getting* rather than *what went wrong*, because the outcome
+ * — the whole article, read-only — is the same thing a stranger with the link
+ * gets, and that is not a failure.
+ */
+export const SESSION_UNCONFIRMED =
+  "We couldn't confirm that you're signed in, so you're reading this the way anyone with the link would.";
+
+/**
+ * The same fact, small enough for the sticky chip.
+ *
+ * The chip is the only read-only chrome that survives a narrow window with a
+ * mode band open (src/web/PublicChrome.tsx § SharedNotice), so the *fact* has to
+ * fit here even though the action cannot.
+ */
+export const SESSION_UNCONFIRMED_CHIP = "sign-in unconfirmed";
+
+/**
+ * The action beside `SESSION_UNCONFIRMED`, and the label is the honest one.
+ *
+ * Signed out at `/read/:slug` the app does not show sign-in — it goes straight
+ * back through `ArticlePage` with no reader (src/web/App.tsx), so on a shared
+ * article this reload returns the reader to this same page as an ordinary
+ * visitor. Calling it *"sign in again"* would be a button that does not do what
+ * it says; GPT Sol caught exactly that in the first draft of this fix.
+ */
+export const CONTINUE_SIGNED_OUT = "Continue signed out";
+
+/** The heading of the whole page for the other row: 401, and not shared either. */
+export const REAUTH_REQUIRED_HEADING = "We couldn't confirm your sign-in";
+
+/**
+ * **And it must not say whether the document exists.**
+ *
+ * Same rule as `NOT_SHARED`: a slug you do not own is a 404 and never a 403.
+ * Here we know even less — a 401 leaves us unable to say whose it is — so the
+ * sentence claims nothing about the article at all, only about the session.
+ */
+export const REAUTH_REQUIRED =
+  "Your session couldn't be confirmed, so we can't tell whether this document is yours. Sign in again and you'll come back to this page.";
+
+/**
+ * And here the label *is* honest, for the opposite reason.
+ *
+ * The same reload on an unshared address reaches `LandingPage`, which draws the
+ * sign-in controls itself and leaves the address in the address bar — so
+ * signing in lands the reader back here (src/web/auth-return.ts).
+ */
+export const SIGN_IN_AGAIN = "Sign in again";
+
 /**
  * **The artefact was never built.** The first of the three, and the only one
  * with no precedent anywhere: none of the products researched has a pipeline
