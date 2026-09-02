@@ -22,9 +22,37 @@ Cost-tracking and cost-estimating are **out of scope** — other agents are work
 plan is the billing machinery: Stripe integration, a billing-account record per owner, and quota
 enforcement at the ingest choke points.
 
-**Status**: plan reviewed by GPT Sol 2026-09-02 (verdict: rework —
-[review](260902i-stripe-payments-and-subscription-tiers-review-sol.md)); findings folded into this
-revision. One open question for Greg is flagged inline (backfill, in the schema stage).
+**Status (2026-09-02)**: plan reviewed by GPT Sol (verdict: rework —
+[review](260902i-stripe-payments-and-subscription-tiers-review-sol.md)); all findings checked and
+folded into this revision. Every product question is decided — nothing is waiting on Greg. No
+implementation code exists yet; the only landed work is the env plumbing (first stage, marked ✅).
+
+## Picking this up
+
+For an agent starting fresh, with no other context than this doc:
+
+1. Read [AGENTS.md](../../AGENTS.md) — especially *Working in a tree several agents share* and
+   *Before you call it finished*. This is a multi-stage build: use a worktree
+   (`claude --worktree stripe-payments`, then `npm run worktree:setup`), run it the
+   [engineering-manager.md](../reusable/engineering-manager.md) way, commit each stage, land with
+   `git push origin HEAD:dev`.
+2. **What already exists**: a Stripe account (Greg's, test mode); `STRIPE_SECRET_KEY`
+   (`sk_test_…`) in `.env.local` on the Hetzner box and Greg's laptop, and on the
+   `gjd-remote push-env` allowlist. **What does not**: no `stripe` npm package, no Stripe CLI on
+   the box, no Stripe product/price/portal-config objects, no billing code, no
+   `STRIPE_PRICE_READER` (create the price, then add the var to `.env.local`, `.env.example` and
+   the push-env allowlist — it is not a secret).
+3. **The stages below are in build order** — start with the unfinished items of the first stage
+   (Stripe CLI, product/price/portal via API), then the thin end-to-end round trip. Tests first
+   in every stage, watched red before the fix ([AGENTS.md](../../AGENTS.md)); reader-visible
+   work runs `SPIDERYARN_STORE=postgres`.
+4. The **decisions in this doc are settled** — with Greg for the product, via review for the
+   engineering. Do not relitigate them; if implementation contradicts one (e.g. a Stripe API
+   shape has moved again), stop and say so rather than quietly diverging.
+5. When the code is built, send the **diff** back to GPT Sol
+   ([codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md)) — the second review is
+   required and weighted higher than the plan review. Then update this doc's checkboxes and the
+   evergreen docs named in the admin/docs stage.
 
 ## References
 
@@ -50,6 +78,7 @@ revision. One open question for Greg is flagged inline (backfill, in the schema 
   go.
 - [`src/ai-spend.ts`](../../src/ai-spend.ts) + `ai_calls` ledger — the existing per-owner spend
   substrate; adjacent, not touched by this plan.
+
 - [deployment.md](../project/deployment.md) — env-var table (~`:559`), `NODEJS_HELPERS=0` (raw
   bodies, which Stripe signature verification needs), `/api/health`.
 - [t3dotgg/stripe-recommendations](https://github.com/t3dotgg/stripe-recommendations) — the
@@ -61,6 +90,42 @@ revision. One open question for Greg is flagged inline (backfill, in the schema 
   [Basil changelog: subscription period fields moved to items](https://docs.stripe.com/changelog/basil/2025-03-31/deprecate-subscription-current-period-start-and-end) ·
   [idempotency](https://docs.stripe.com/api/idempotent_requests) ·
   [CLI webhook testing](https://docs.stripe.com/cli/intro_webhooks).
+
+### Note from the cost-tracking plan, 2026-09-02
+
+Left here by the agent on
+[260902g-cost-tracking-that-can-set-a-price.md](260902g-cost-tracking-that-can-set-a-price.md), so
+these are not discovered in a merge. That plan owns the ledger's integrity, metering live
+conversation, and the spend reporting. **Three things bear on this one:**
+
+- **`ai_calls` is COGS attribution, not a customer billing ledger** — GPT Sol's framing, and worth
+  keeping. A fixed subscription invoice reconciles against Stripe subscription state; do not derive
+  an invoice from model calls. Your quota unit (successful new ingests) is the right shape for
+  exactly this reason.
+- **We both want columns in
+  [`src/web/admin-columns.tsx`](../../src/web/admin-columns.tsx).** That plan's Stage 3 adds a
+  per-owner spend column (current UTC month, with a visible partial/unpriced marker). Yours adds
+  plan/status/usage. **This plan owns that file** — the spend column will be added last and will
+  follow whatever shape you land, or be dropped if it would collide. Say if you would rather it
+  waited entirely.
+- **A per-owner spend aggregate is being built** (`GROUP BY owner_id` over an arbitrary half-open
+  `[start, end)`, because billing periods are not calendar months). If you later want cost beside
+  quota, use that rather than writing a second one — and note the trap it exists to avoid:
+  `upstream_inference_nanos` is populated on non-BYOK rows too, so a naive `SUM` of the money
+  columns roughly doubles the answer. Until that stage lands, the only correct summing lives in
+  `totalRows()` ([`src/store/ai-calls.ts`](../../src/store/ai-calls.ts)).
+
+**And one product finding, offered rather than pressed.** Measurement so far says an article's cost
+is not fixed at upload: `DEFAULT_INGEST_STEPS` is five steps of which only `hierarchy` pays
+(~$0.05–0.36 depending on length), while arc, glossary, quotes, ideas, timeline, quiz and sketch are
+reader-triggered, as are chat, explain, search, quiz-marking, referee and dictation. **Live
+conversation is in a different economic class again** — roughly $0.06–$0.46 a *minute*, so one
+20-minute session can cost more than twenty article uploads, and it is currently unmetered. An
+ingest quota does not bound any of that. Sol's suggestion, for whenever tiers are set: price the
+text-reading subscription from base upload plus engaged-text p95, and treat **voice** as a separate
+allowance or a beta feature, with ingests kept as an abuse boundary rather than the economic model.
+Numbers to price against are coming from
+[260902g-estimate-article-ingestion-and-mode-generation-costs.md](260902g-estimate-article-ingestion-and-mode-generation-costs.md).
 
 ## Principles, key decisions
 
