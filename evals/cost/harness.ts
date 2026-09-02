@@ -347,3 +347,39 @@ export function assertOneOnDemandMode(steps: readonly StepName[]): void {
       "job, or pass --batched-modes to record this as a separate, labelled scenario.",
   );
 }
+
+/**
+ * **Ask the ledger a question before spending anything, because the run's whole
+ * product is rows in it.**
+ *
+ * Written after the first paid run, which cost $0.0333 and kept **neither row**:
+ * `spideryarn.ai_calls` was missing columns `src/db/schema.ts` had already
+ * declared, so every insert failed `42703` and was swallowed into a warning, and
+ * the read afterwards threw an uncaught `StoreFailure` over the top of the
+ * cleanup. Every gate this file had passed — local target, distinct owner, one
+ * mode — because none of them asked the one question that mattered.
+ *
+ * A **read** probe is enough for that class: the failing selects and the failing
+ * inserts name the same table, so a select that mentions every column fails
+ * exactly when an insert would. It cannot prove a write will land — a constraint
+ * violation or a full disk would still get through — which is why the
+ * calls-made-against-rows-kept reconciliation stays. This is the cheap gate; that
+ * is the expensive one.
+ *
+ * @param probe a read against the ledger — `costStore.forJob` of an id that
+ *   matches nothing. Injected rather than imported so the failure can be tested
+ *   without a database.
+ */
+export async function assertLedgerUsable(probe: () => Promise<unknown>): Promise<void> {
+  try {
+    await probe();
+  } catch (err) {
+    throw new Error(
+      "The ledger cannot be read, so this run would spend money and record nothing: " +
+        `${err instanceof Error ? err.message : String(err)}\n` +
+        "  Usually the database is behind the code — `npm run db:migrate`, and read its output " +
+        "rather than its exit line. See docs/project/database.md § A watermark is not a ledger.",
+      { cause: err },
+    );
+  }
+}

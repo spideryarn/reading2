@@ -65,3 +65,26 @@ export function mintUniqueId(taken: Set<string>, random?: () => number): string 
   }
   throw new Error("Could not mint a unique block id in 1000 attempts");
 }
+
+/**
+ * **An account id's shape** — `auth.users(id)`, as Postgres and GoTrue render
+ * one.
+ *
+ * Here rather than in a sixth copy of the regex, because this file is already
+ * where "is this string an id we recognise" is answered, and it imports nothing
+ * — so a route, a store and the browser can all ask the same function. The
+ * other copies (src/auth.ts, src/source.ts, src/feedback-payload.ts,
+ * src/web/feedback-diagnostics.ts) each guard a different seam with a different
+ * argument and are deliberately left alone; this one exists so the *next*
+ * caller does not make a seventh.
+ *
+ * A shape, not a rule about whose account it is. It says a value can be
+ * compared against an `owner_id` column without the driver throwing — the
+ * question of whether the row is yours is answered somewhere else, and on the
+ * admin routes deliberately is not asked at all.
+ */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isUuid(value: string | null | undefined): boolean {
+  return typeof value === "string" && UUID.test(value);
+}

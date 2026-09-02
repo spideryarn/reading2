@@ -11,16 +11,22 @@
  *
  * `TreeNode` must stay in sync with docs/project/granularity-zoom.md#node-shape.
  *
- * Two imports, and both are types. `FailureKind` belongs to src/messages.ts,
+ * Three imports. Two are types: `FailureKind` belongs to src/messages.ts,
  * where the four kinds are defined and where `canRetry` decides what each one
  * means. Writing the union out a second time here would let the two drift, and
  * the drift would show up as a Retry button under a failure that cannot succeed.
  * `Assets` belongs to src/assets.ts for the same reason, and that module is a
  * leaf with no imports of its own precisely so both the pipeline and the
  * browser can reach it.
+ *
+ * The third is a **value** import, of the two id-shape predicates in
+ * src/ids.ts — `decodeFeedbackCursor` below needs them, and src/ids.ts imports
+ * nothing at all, so it costs the browser bundle nothing and keeps this file
+ * from becoming the sixth copy of the uuid regex.
  */
 import type { FailureKind } from "./messages.js";
 import type { Assets } from "./assets.js";
+import { isSpideryarnId, isUuid } from "./ids.js";
 
 export type NodeId = string; // "n0042"
 export type BlockId = string; // "spya-k3m9qt" — see docs/project/block-ids.md
@@ -1574,6 +1580,39 @@ export interface VisibilityState {
  * drift — while `VisibilityState` itself stays what the switch returns and
  * gains nothing about artefacts, which are not the switch's business.
  */
+/**
+ * **Which of the five shareable artefacts this article actually has.**
+ *
+ * Declared here rather than in [public-types.ts](public-types.ts), which is
+ * where it is *used* and where its history is, and which re-exports it so that
+ * every existing importer is unchanged. It moved on 2026-09-02 because
+ * `ArticleSharing.available` below needs the same five booleans.
+ *
+ * **The reason is design, not the cycle gate, and the first version of this
+ * comment got that wrong.** It claimed `npm run check` would refuse a
+ * back-import because it counts type-only cycles. It does not: `types.ts` and
+ * `messages.ts` already import each other's types and `npm run cycles` is green
+ * over them (GPT Sol checked, 2026-09-02). What is true is the property
+ * `public-types.ts` states in its own header — it imports this file *and
+ * nothing else* — so the two type modules run one way. A back-import would make
+ * them mutually dependent to save moving one interface down, and a linter
+ * tolerating that is not a reason to do it.
+ *
+ * **Presence, never currency.** A `true` here means the column is not null, and
+ * that is exactly the question `src/store/public-reader.ts` asks: the public
+ * projection reads the artefact and never asks whether it is stale. Do not
+ * compute this from `StageState.done`, which is
+ * `status === "done" && isCurrent(step)` — a glossary that exists and is out of
+ * date is `done: false` and is *still what a visitor reads*.
+ */
+export interface PublicArtefacts {
+  arc: boolean;
+  tweets: boolean;
+  glossary: boolean;
+  ideas: boolean;
+  quotes: boolean;
+}
+
 export interface ArticleSharing extends VisibilityState {
   /**
    * **Which artefacts were written for this reader's profile**, by step name.
@@ -1606,6 +1645,44 @@ export interface ArticleSharing extends VisibilityState {
    * this block** — see `ArticleMetadata.sharing`.
    */
   personalised: StepName[];
+
+  /**
+   * **Which artefacts a shared link would actually carry** — the same five
+   * booleans a visitor's own page is keyed on.
+   *
+   * Here so that the confirmation dialog can list what goes out instead of
+   * gesturing at "the whole extracted text", and so that it lists it from the
+   * one function that already decides — `visitorGap` in src/web/visitor.ts,
+   * swept by `sharedInventory` in src/web/shared-inventory.ts. An inventory
+   * written out beside that function would be a second answer to a question
+   * already decided, which is how the dock tooltip and the band sentence drifted
+   * apart in August.
+   *
+   * **Not derived from `stages` on the client, and that is the point of the
+   * field.** `StageState.done` means *ran, and would not be re-run today*; this
+   * means *the column is not null*. They disagree exactly when an artefact is
+   * stale — which is a state in which the owner is sharing a glossary that
+   * `done` calls absent. See `PublicArtefacts` above.
+   *
+   * Inside this block rather than on `ArticleMetadata` for the reason
+   * `personalised` is: absent means *this store cannot say*, and the filesystem
+   * store says nothing at all.
+   *
+   * **Optional, and it was required for an hour on 2026-09-02.** Requiring it
+   * made `asArticleSharing` reject a whole body over one field, which takes the
+   * switch away and draws *"we could not check who can read this"* about a
+   * `visibility` that arrived perfectly well. That is the wrong blast radius: a
+   * missing inventory is a reason to draw no inventory, not a reason to stop an
+   * owner unsharing their article. Caught by `tests/metadata-sharing-card.test.tsx`,
+   * which is exactly the older shape a bug would produce.
+   *
+   * So absence is the same honest state it is one level up, and the rule the
+   * client keeps is the narrow one: **the list is drawn only from five real
+   * booleans, never from a default.** A `false` invented for a missing key
+   * would tell an owner their glossary stays private, which is the sentence
+   * this whole field exists to stop being guessed at.
+   */
+  available?: PublicArtefacts;
 }
 
 /** What GET /api/metadata/:slug returns: which stages have run, and nothing the article payload already carries. */
@@ -3020,4 +3097,214 @@ export interface FeedbackDiagnostics {
   /** Which shape `payload` has. Stored in `feedback.diagnostics_version`. */
   version: number;
   payload: FeedbackDiagnosticsPayload;
+}
+
+/**
+ * The most reports one request will return, however large a `limit` it asks
+ * for.
+ *
+ * `feedback` is the only table in this app an ordinary account holder can add
+ * rows to — capped at ten an hour each (`FEEDBACK_HOURLY_CAP`), which is a
+ * ceiling on the rate and not on the total. An unbounded select on it is a
+ * response whose size is decided by whoever wrote the most, so the ceiling is
+ * here rather than in the caller's good intentions.
+ *
+ * There is no pagination and that is deliberate for a v1 that expects tens of
+ * rows: the page says *"showing the newest N"* when it is full, so the moment
+ * this number starts hiding reports is a thing Greg can see rather than a thing
+ * he has to suspect. docs/plans/260902l-admin-feedback-page.md § The simpler
+ * options passed over.
+ */
+export const ADMIN_FEEDBACK_MAX = 500;
+
+/** What `/api/admin/feedback` asks for when the address says nothing. */
+export const ADMIN_FEEDBACK_DEFAULT_LIMIT = 200;
+
+/**
+ * Both numbers are **here rather than beside the store**, and it is the same
+ * reason `MAX_FEEDBACK_ANSWER_CHARS` above is: the page that says *"the newest
+ * 500, which is the cap"* and the query that cuts at 500 must be one value, and
+ * nothing under `src/web/` may import `src/store/`, which reaches `pg` and
+ * `node:fs` (tests/client-imports.test.ts). Two copies is how a page comes to
+ * claim a completeness it does not have.
+ */
+
+/**
+ * **One report on `/admin/feedback`** — a row of the one admin page that shows a
+ * reader's own sentences. docs/plans/260902l-admin-feedback-page.md.
+ *
+ * ## Why it is here and `AdminUser` is not
+ *
+ * `AdminUser` lives in src/admin.ts, and that file's whole property is that it
+ * **imports nothing** — the browser and the server ask the same `isAdmin`
+ * without either dragging the other's dependencies along. This shape cannot go
+ * there without importing `FeedbackRouteKind`, `FeedbackEnvironment` and
+ * `FeedbackDiagnostics`, all of which already live *here*. So it goes where its
+ * vocabulary is, which is also where every other wire shape in this app is.
+ *
+ * ## It is written out, and it is deliberately **not** `FeedbackReport`
+ *
+ * A first draft made this `FeedbackReport & { ownerId }`, with a type-level
+ * assertion holding the two in step. GPT Sol refused it, 2026-09-02, and was
+ * right: tying them together makes every future field added to a reader's own
+ * report **cross owners automatically**, and turns the type checker into the
+ * thing that *insists* on the widening rather than the thing that catches it.
+ *
+ * So the two shapes are independent on purpose. `pg-admin-feedback.ts` names
+ * every column it selects, and tests/admin-feedback-store.test.ts pins the exact
+ * set of keys that comes back, so a field reaches this page by somebody deciding
+ * it should or not at all.
+ *
+ * ## The one rule about what may be added
+ *
+ * The admin pages may show the account metadata documented for `/admin/users`,
+ * and **the support report the reader submitted**: what they wrote, an attachment
+ * they deliberately added, diagnostics they ticked a box for, and Spideryarn's
+ * own fixed correlation metadata. Identifiers may not be followed into articles,
+ * comments or notes. docs/project/admin.md states the boundary; this is the
+ * shape that obeys it.
+ */
+export interface AdminFeedbackReport {
+  /**
+   * **Half of the key.** A report is `(ownerId, id)`: the id is minted by a
+   * browser, so it is unique within an owner and not globally, and two readers
+   * may legitimately hold the same one. Anything that addresses a report — a
+   * URL, a React key, a sort — needs both. See pg-admin-feedback.ts.
+   */
+  id: string;
+  /** The other half, and the account to cross-reference against `/admin/users`. */
+  ownerId: string;
+  /** The address the reader held **when they wrote to us**, snapshotted, not joined. */
+  reporterEmail: string;
+  /**
+   * **What the reader wrote, in one box.**
+   *
+   * `string`, never `string | null` — the column is `not null`, which is the
+   * whole of the old `feedback_says_something`: a report with nothing in it is
+   * not a report, and that is now the type rather than a constraint beside it.
+   *
+   * **Not length-capped on the way out.** Reports filed before 2026-09-02 carry
+   * the three old answers glued together with their headings, so a legacy body
+   * can legitimately be three times the dialog's current limit. A renderer that
+   * truncates to `MAX_FEEDBACK_ANSWER_CHARS` would silently cut the oldest
+   * reports — the ones most likely to be the reason somebody opened this page.
+   * GPT Sol, 2026-09-02.
+   */
+  body: string;
+  /**
+   * *A problem* or *a suggestion*, or **`null` for "they did not say"**.
+   *
+   * Null is a real answer and not a missing one — Greg, 2026-09-02: *"don't
+   * default to Problem. Default to null/unknown."* It is also every report
+   * filed before the toggle existed, and the page must draw it as its own state
+   * rather than picking one.
+   */
+  kind: FeedbackKind | null;
+  /** Whether they ticked *Send extra diagnostics* — its own fact, never inferred. */
+  consented: boolean;
+  routeKind: FeedbackRouteKind;
+  slug: string | null;
+  buildCommit: string | null;
+  environment: FeedbackEnvironment;
+  requestVercelId: string | null;
+  /**
+   * Which shape the diagnostics blob has, or `null` for no blob. **Never the
+   * blob**: the allowlist permits ~179 KB per report, and a page of two hundred
+   * of those is tens of megabytes of something nobody has opened. The payload
+   * comes from `AdminFeedbackDetail`, one report at a time.
+   */
+  diagnosticsVersion: number | null;
+  /** How big the screenshot is, or `null` for none. **Never the bytes** — same reason. */
+  screenshotBytes: number | null;
+  /** ISO. Handed to Sentry. */
+  mirrorAttemptedAt: string | null;
+  /** ISO. Sentry acknowledged it. Attempted-but-not-acknowledged is the interesting state. */
+  mirroredAt: string | null;
+  sentryEventId: string | null;
+  /** ISO. */
+  createdAt: string;
+}
+
+/**
+ * One report **with its diagnostics blob** — what `GET /api/admin/feedback/:owner/:id`
+ * answers when somebody opens one.
+ *
+ * A second shape rather than an optional field on the first, so that "the list
+ * does not carry diagnostics" is something the types say rather than something
+ * a comment claims.
+ */
+export interface AdminFeedbackDetail extends AdminFeedbackReport {
+  diagnostics: FeedbackDiagnostics | null;
+}
+
+/**
+ * **Where the last page ended**, as the whole sort key.
+ *
+ * All three parts, because the order is `created_at, owner_id, id` and a keyset
+ * cursor built on less than the total order silently skips rows — two reports
+ * can share a millisecond, and two owners can share a report id.
+ */
+export interface FeedbackCursor {
+  /** ISO, as the row reported it. */
+  createdAt: string;
+  ownerId: string;
+  id: string;
+}
+
+/**
+ * **The cursor as one query-string value**, and the parser that refuses a bad
+ * one.
+ *
+ * One encoding, in a module both halves import, for the reason
+ * `MAX_FEEDBACK_ANSWER_CHARS` is here: the page that puts a cursor into a URL
+ * and the route that reads it back must be one decision. Two spellings of a
+ * cursor is a *Load older* that silently returns page 1.
+ *
+ * `|` as the separator, because none of the three parts can contain one — an
+ * ISO timestamp, a uuid and a Spideryarn id are all closed shapes, checked by
+ * `decodeFeedbackCursor` rather than assumed.
+ */
+export function encodeFeedbackCursor(cursor: FeedbackCursor): string {
+  return `${cursor.createdAt}|${cursor.ownerId}|${cursor.id}`;
+}
+
+/**
+ * `null` for absent — start at the top — and `"malformed"` for anything that is
+ * not a cursor.
+ *
+ * **Three answers, not two.** A malformed cursor read as "start at the top"
+ * would hand the reader page 1 while they pressed *Load older*, which is a
+ * request that looks like it worked and quietly skipped everything in between.
+ * docs/reusable/silent-success.md. The route turns `"malformed"` into a 400.
+ */
+export function decodeFeedbackCursor(
+  raw: string | null | undefined,
+): FeedbackCursor | null | "malformed" {
+  if (raw === null || raw === undefined || raw === "") return null;
+  const parts = raw.split("|");
+  if (parts.length !== 3) return "malformed";
+  const [createdAt = "", ownerId = "", id = ""] = parts;
+  /* Each part held to its own shape. A timestamp that `Date.parse` rejects
+     would reach the driver as an `Invalid Date` and compare against everything
+     as false — a page that is empty rather than one that errors, which is the
+     worse of the two. */
+  if (!Number.isFinite(Date.parse(createdAt))) return "malformed";
+  if (!isUuid(ownerId)) return "malformed";
+  if (!isSpideryarnId(id)) return "malformed";
+  return { createdAt, ownerId, id };
+}
+
+/**
+ * One page of the inbox.
+ *
+ * `hasMore` is **seen, not inferred**: the store asks for one row more than it
+ * returns. Inferring it from `reports.length === limit` is wrong exactly when
+ * the list ends on a boundary, and a page that says *that is all of them* when
+ * it is not is the failure this whole feature exists to catch elsewhere.
+ */
+export interface AdminFeedbackPage {
+  reports: AdminFeedbackReport[];
+  hasMore: boolean;
+  /** Pass back as `?before=` to get the next page. `null` when there is no next page. */
+  nextCursor: FeedbackCursor | null;
 }

@@ -24,8 +24,9 @@ import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { HomeLogo } from "./HomeLogo.js";
 import { isAdmin } from "../admin.js";
-import { AdminHome, AdminUsersPage } from "./AdminPage.js";
+import { AdminFeedbackPage, AdminHome, AdminUsersPage } from "./AdminPage.js";
 import { LandingPage } from "./LandingPage.js";
+import { PrivacyPage } from "./PrivacyPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
@@ -313,6 +314,17 @@ export function App() {
      docs/plans/260827ai-public-read-only-access.md § The seam. */
   if (!user) {
     if (route.kind === "login") return <SignInPage />;
+    /* **The third exception, since 2026-09-02.** The privacy policy is for
+       somebody deciding whether to sign in, so answering it with the pitch
+       would be answering the one question the pitch is trying to get past.
+       The landing page's footer links here. See PrivacyPage.tsx.
+
+       **This branch has been written twice.** It first reached trunk inside a
+       peer's commit that swept the working tree, and the tidy-up of that
+       commit dropped it again as a half-finished hunk — reasonably, since
+       nothing in App.tsx said it was one end of a feature whose other end was
+       a whole page. Hence this paragraph. */
+    if (route.kind === "privacy") return <PrivacyPage />;
     if (route.kind !== "read") return <LandingPage />;
     return <ArticlePage slug={route.slug} view={route.view} readerId={null} />;
   }
@@ -388,6 +400,16 @@ function SignedIn({
         <DesignPage />
       </>
     );
+  // Signed in, the policy gets the corner logo like every other standalone
+  // page. Signed out it is rendered bare, above — there is no shelf to go back
+  // to and the logo would link at one.
+  if (route.kind === "privacy")
+    return (
+      <>
+        <HomeLogo />
+        <PrivacyPage />
+      </>
+    );
   // Not under /read/, and so not inside `ArticlePage`'s shared shell: this page
   // has no article behind it. docs/project/reader-profile.md.
   if (route.kind === "profile")
@@ -411,7 +433,13 @@ function SignedIn({
     return (
       <>
         <HomeLogo />
-        {route.page === "users" ? <AdminUsersPage /> : <AdminHome />}
+        {route.page === "users" ? (
+          <AdminUsersPage />
+        ) : route.page === "feedback" ? (
+          <AdminFeedbackPage />
+        ) : (
+          <AdminHome />
+        )}
       </>
     );
   }

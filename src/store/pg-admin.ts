@@ -71,6 +71,11 @@ import type { AdminUser } from "../admin.js";
 import type { OwnerId } from "../types.js";
 import type { AdminStore } from "./contracts.js";
 import { projectMismatch } from "./blobs.js";
+import {
+  listFeedbackAcrossOwners,
+  readFeedbackAcrossOwners,
+  readFeedbackScreenshotAcrossOwners,
+} from "./pg-admin-feedback.js";
 import { onTheShelf } from "./pg.js";
 
 /* ------------------------------------------------------- the pure half --- */
@@ -312,6 +317,7 @@ export const pgAdminStore: AdminStore = {
        **The accounts are asked of the Auth service over HTTP**, not of the
        database: `auth.users` is Supabase's and `spideryarn_app` has no grants
        into it. admin-accounts.ts has the why. */
+
     const [people, shelf, uploaded, questions, chats, searches] = await Promise.all([
       listAccounts(accountSource()),
       q.shelf,
@@ -321,6 +327,21 @@ export const pgAdminStore: AdminStore = {
       q.searches,
     ]);
 
-    return mergeUsers(people, { shelf, uploads: uploaded, questions, chats, searches });
+    return mergeUsers(people, {
+      shelf,
+      uploads: uploaded,
+      questions,
+      chats,
+      searches,
+    });
   },
+
+  /* **The other cross-owner reader, and it lives in its own file.** Everything
+     above this line returns counts and dates and says so at length;
+     pg-admin-feedback.ts returns a reader's own sentences, under a different
+     rule and a different argument. Composed here rather than written here so
+     that neither header has to be hedged. */
+  listFeedbackAcrossOwners,
+  readFeedbackAcrossOwners,
+  readFeedbackScreenshotAcrossOwners,
 };

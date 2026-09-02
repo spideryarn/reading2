@@ -111,6 +111,7 @@ import type { Job, StepName } from "../../src/types.js";
 import { type CostFixture, FIXTURES, fixtureByName } from "./fixtures.js";
 import {
   assertDistinctEvalOwner,
+  assertLedgerUsable,
   assertOneOnDemandMode,
   blocksFromDetail,
   evalRegistry,
@@ -716,11 +717,15 @@ async function main(): Promise<void> {
   );
   console.log(`Steps:  ${args.steps.join(", ")}   scenario ${meta.scenario}`);
   await assertEvalOwnerReady();
+  /* Last, and before any money: the run's product is rows in this table, and on
+     2026-09-02 a run spent $0.0333 into a ledger that could not hold it. */
+  await assertLedgerUsable(() => costStore.forJob("spya-ledger-probe"));
   if (args.preflight) {
     console.log(
       "\n--preflight: the gates above are everything this run checks — local target, distinct " +
-        "seeded eval owner, one on-demand mode. It spends nothing and proves nothing about the " +
-        "pipeline; the free end-to-end proof is the dry pass in evals/cost/feasibility.md.",
+        "seeded eval owner, one on-demand mode, and a ledger that answers. It spends nothing and " +
+        "proves nothing else about the pipeline; the free end-to-end proof is the dry pass in " +
+        "evals/cost/feasibility.md.",
     );
     return;
   }
@@ -834,7 +839,26 @@ if (isMain(import.meta.url)) {
      ledger wraps the whole run so that anything the runner buys *outside* a job
      step is eval-scoped too. The steps' own calls get their scope from the
      overlay, not from here — `runStep` opens its own collector and nested
-     collectors shadow. */
+     collectors shadow.
+
+     **`EVAL_OWNER_ID`, not `environmentOwnerId()`, and this line is the whole of
+     the browser isolation.** `enqueue` and `advanceJobWith` both ask
+     `currentOwnerId()`, so this is what decides whose jobs these are — and a dev
+     tab drives every queued job of the owner it is signed in as
+     (src/web/jobEngine.ts). `assertDistinctEvalOwner` checks the two ids differ;
+     it cannot check that the *jobs* got the right one, and for a while they did
+     not: the gate passed while every article was still created under the
+     environment owner. Caught by running it and reading `articles.owner_id`,
+     which is the only thing that could have caught it. */
   loadEnvLocal();
-  await withLedger("eval", () => runAsOwner(environmentOwnerId(), main));
+  /* **A refused run is a sentence, not a stack trace.** Every gate above throws
+     an error whose message is the whole point — which database, which owner,
+     which step list, or that the ledger cannot hold what this would buy — and a
+     `StoreFailure` from Postgres arrives with forty lines of driver frames on
+     top of it. The person reading is deciding what to do next, so the message
+     goes last and alone. `cause` carries the original for anyone who wants it. */
+  await withLedger("eval", () => runAsOwner(EVAL_OWNER_ID, main)).catch((err: unknown) => {
+    console.error(`\n${err instanceof Error ? err.message : String(err)}`);
+    process.exitCode = 1;
+  });
 }

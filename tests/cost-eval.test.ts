@@ -30,9 +30,11 @@ import { type AiCallRow, collectSpend, recordSpend, type SpendRecord } from "../
 import { STEPS } from "../src/pipeline.js";
 import type { PipelineStep } from "../src/pipeline.js";
 import type { StepRegistry } from "../src/jobs.js";
+import { DEV_OWNER_ID, EVAL_OWNER_ID } from "../src/owner.js";
 import { fixtureByName } from "../evals/cost/fixtures.js";
 import {
   assertDistinctEvalOwner,
+  assertLedgerUsable,
   assertOneOnDemandMode,
   blocksFromDetail,
   evalRegistry,
@@ -730,8 +732,12 @@ describe("verifyFixtures — every fixture hashed before any job exists", () => 
 });
 
 describe("assertDistinctEvalOwner", () => {
-  const evalOwner = "00000000-0000-4000-8000-0000000000e1";
-  const dev = "00000000-0000-4000-8000-000000000001";
+  /* The constants, not literals: `tests/fixture-ids.test.ts` refuses a uuid two
+     test files write out longhand, and its own advice is to import the single
+     source of truth instead — which is also what stops this test drifting from
+     the id the runner actually uses. */
+  const evalOwner = EVAL_OWNER_ID;
+  const dev = DEV_OWNER_ID;
 
   it("accepts an eval owner nobody signs in as", () => {
     expect(() => assertDistinctEvalOwner(evalOwner, dev)).not.toThrow();
@@ -797,5 +803,31 @@ describe("requiredAiJobsFor", () => {
 
   it("maps a mode step onto the AI job of the same name", () => {
     expect(requiredAiJobsFor(html, ["glossary"])).toEqual(["glossary"]);
+  });
+});
+
+/**
+ * The gate written *after* a run spent $0.0333 into a ledger that could not
+ * hold it — `ai_calls` was missing columns the code had already declared, so
+ * every insert failed and was swallowed into a warning. Every other gate passed,
+ * because none of them asked whether the thing the run produces works.
+ */
+describe("assertLedgerUsable", () => {
+  it("lets a run past when the ledger answers", async () => {
+    await expect(assertLedgerUsable(async () => ({ rows: [], unreadable: 0 }))).resolves.toBeUndefined();
+  });
+
+  it("refuses when the ledger cannot be read, and says what to do", async () => {
+    const boom = new Error("column ai_calls.event_kind does not exist");
+    await expect(assertLedgerUsable(() => Promise.reject(boom))).rejects.toThrow(
+      /spend money and record nothing/,
+    );
+    await expect(assertLedgerUsable(() => Promise.reject(boom))).rejects.toThrow(/db:migrate/);
+  });
+
+  it("keeps the original error as the cause, so the driver detail is not lost", async () => {
+    const boom = new Error("42703");
+    const caught = await assertLedgerUsable(() => Promise.reject(boom)).catch((e: unknown) => e);
+    expect((caught as Error).cause).toBe(boom);
   });
 });

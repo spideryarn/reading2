@@ -670,7 +670,23 @@ when("the Postgres ledger", () => {
       isByok: false,
       byokUpstreamNanos: 21_523_500,
     });
-    await expect(pgCostStore.record(bad)).rejects.toThrow(/ai_calls_byok_upstream_only/);
+    /* **Asserted on the driver error, not on the message.** drizzle wraps a
+       rejection as `Failed query: insert into …` with the whole column list in
+       it, so a `toThrow(/ai_calls_byok_upstream_only/)` fails against a write
+       the constraint *did* refuse — which is a test that goes red while the
+       schema is right, the most misleading way for this one to fail. `pg` puts
+       the name on `constraint`, one link down the `cause` chain. */
+    const refused = await pgCostStore.record(bad).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(refused, "the constraint let a non-BYOK upstream figure through").not.toBeNull();
+    const names: string[] = [];
+    for (let e = refused; e instanceof Error; e = e.cause) {
+      const named = (e as { constraint?: unknown }).constraint;
+      if (typeof named === "string") names.push(named);
+    }
+    expect(names).toContain("ai_calls_byok_upstream_only");
   });
 
   it("adds up the same way in SQL as totalRows does in JavaScript", async () => {

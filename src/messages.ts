@@ -25,6 +25,7 @@
  *    brackets and last, so it is skippable by a reader who does not want it and
  *    quotable by one reporting a problem.
  */
+import type { Mode } from "./modes.js";
 import type { DateRejection, EmbeddingReason, StepName } from "./types.js";
 import { MAX_UPLOAD_BYTES } from "./uploads.js";
 
@@ -1494,9 +1495,18 @@ export const SHARING_ON = "Anyone with the link can read this, without signing i
 export const SHARING_BADGE = "Shared";
 
 /** What a visitor gets, in one line, on the card rather than behind a hover. */
+/* **"and whatever the model has written about it" was added 2026-09-02**, and
+   it is a correction rather than a flourish. Since slice 1b a shared link has
+   carried the glossary, the ideas, the quotes and the tweet thread, and this
+   sentence still named only the article and its tree — true, and true by
+   omission of the four things an owner would most want to have been told. On
+   the owner's card it now sits directly above the itemised list
+   (src/web/shared-inventory.ts), where the omission was visible. */
 export const SHARING_WHAT_VISITORS_SEE =
-  "A visitor sees the article, its table of contents and every zoom level. They never see your " +
-  "comments, your conversations, your searches or your notes, and nothing they do costs a model call.";
+  "A visitor sees the article, its table of contents, every zoom level, and the reading aids " +
+  "written for it — the summaries, the glossary, the ideas, the quotes. They never see your " +
+  "comments, your conversations, your searches or your notes, and nothing they do costs a model " +
+  "call.";
 
 /**
  * **The honest limit, and we are the only ones saying it.**
@@ -1681,6 +1691,225 @@ export function sharingInFlight(to: "private" | "public"): string {
 /** The box the owner ticks, which the server refuses the request without. */
 export const SHARING_RIGHTS_CONFIRM =
   "I have the right to share this article's text.";
+
+/* ------------------------------------------------- the sharing inventory --
+   The owner's list of what a shared link carries. Greg, 2026-09-02: *"Better
+   still, dynamically generate a list of what will be shared … And maybe even a
+   list of what won't be shared."*
+
+   **The words are here; which bucket each lands in is decided by
+   `sharedInventory` in src/web/shared-inventory.ts**, which sweeps `MODES`
+   through `visitorGap`. That split is the whole design — see that file — and it
+   is why every note below is *descriptive only*. A note that also said "and
+   this stays private" would be a second claim about the bucket, made in a file
+   that cannot see the bucket, and it would be wrong the day the bucket changed.
+   Timeline is the live example: Greg has already said he would like it
+   public-readable (docs/plans/260831i-timeline-mode.md § Making a mode
+   public-readable), and when that lands its row moves and its sentence should
+   not have to.
+
+   So the *reason* lives in the three headings, once each, where it is a fact
+   about the column rather than about the row. */
+
+/**
+ * **We could not list what this would share — so we do not offer to share it.**
+ *
+ * The one state where the switch is asymmetric, and GPT Sol asked for it,
+ * 2026-09-02: keeping the card usable when `available` is absent was right, but
+ * letting an owner *publish* under a silently missing inventory defeats the
+ * whole feature at exactly the moment it is failing. Unsharing stays available
+ * — taking an article back is never the risky direction.
+ */
+export const SHARING_INVENTORY_UNKNOWN =
+  "We could not work out what a shared link would carry for this article, so sharing is not " +
+  "offered here — reload the page to try again. Nothing has been changed.";
+
+/** The three columns, and the sentence under each. */
+export const SHARED_HEADING = "Anyone with the link gets these";
+export const SHARED_IF_BUILT_HEADING = "Not built yet — and these would go out too";
+export const SHARED_IF_BUILT_NOTE =
+  "Building one later, while the article is still shared, publishes it. Nothing asks you again.";
+export const NOT_SHARED_HEADING = "These stay with you";
+export const NOT_SHARED_NOTE =
+  "A shared link carries the piece and what the model wrote about it, never your own work on it.";
+
+/* There is deliberately **no per-row "nobody has built one" sentence**, and
+   there was for one draft. It replaced the row's own description, so the
+   not-built Glossary chip lost the only text saying what a glossary is — and
+   with it the clarification that the owner's lookups are not part of it. The
+   heading and its note above already say "not built yet" and "these would go
+   out too", once each, for the whole column; saying it again on every chip was
+   the same fact three times and cost the one fact that was not repeated
+   anywhere. GPT Sol's review, 2026-09-02. */
+
+/**
+ * **What every shared link carries, whatever has or has not been generated.**
+ *
+ * Not derived, because none of these is a mode and `visitorGap` therefore has
+ * nothing to say about them. Each is settled somewhere else — the projection in
+ * src/public/dto.ts and the reader's `select` in src/store/public-reader.ts —
+ * and `tests/shared-inventory.test.ts` is what holds these three sentences to
+ * what those two files actually do.
+ */
+export const ALWAYS_SHARED = [
+  {
+    key: "text",
+    label: "The article's text",
+    detail:
+      "Every paragraph, heading, list and footnote we extracted, in full, with its formatting and " +
+      "its links — not a summary of it.",
+  },
+  {
+    key: "pictures",
+    label: "Its pictures",
+    /* **Not "served from our copy", which the first draft said and which is not
+       true today.** The `assets` step stores the bytes and the manifest crosses
+       in the payload, but nothing in `src/web/` reads it yet: every `<img>` in
+       `block.html` still points at the publisher, for a visitor exactly as for
+       the owner (docs/plans/260829b-hosting-the-articles-images.md). The sentence
+       says what a visitor gets — the pictures, and the record — and stays true
+       whichever server ends up sending the bytes. */
+    detail:
+      "Every image in the article. A visitor's browser fetches them from the publisher, exactly " +
+      "as yours does.",
+  },
+  {
+    key: "provenance",
+    label: "Where it came from",
+    /* **"where we have one", because sometimes we do not publish it.** An
+       uploaded PDF has no address at all, and `publicSourceUrl` (src/urls.ts)
+       refuses some of the ones we do have — a `user:pw@` address among them. The
+       masthead already draws the absence honestly; a flat promise of a link here
+       would be the one row of this list the article itself contradicts. */
+    detail:
+      "The title the page itself carried, the byline, the publication, the language, the " +
+      "publication's own one-line excerpt, and a link back to the original where we have one.",
+  },
+] as const;
+
+/**
+ * **The two artefacts that cross but have no mode of their own**, and they are
+ * two rather than one.
+ *
+ * `SHARED_TWEETS` was alone here until GPT Sol pointed out, 2026-09-02, that the
+ * arc is in exactly the same position and was quietly missing: `available.arc`
+ * was computed, sent, and never read, so an article with no arc listed nothing
+ * under *not built yet* and an owner could not tell whether one existed. The
+ * comment beside the tweets line claimed it was "the one artefact with no mode
+ * of its own", which was the mistake stated out loud and still not noticed.
+ *
+ * The thread is a page beside the article (`VIEW_LABEL`, src/title-text.ts); the
+ * arc is the extra rung Outline draws when there is one, so Outline is shared
+ * either way and the arc is a separate row rather than a condition on it.
+ */
+export const SHARED_TWEETS = {
+  key: "tweets",
+  label: "Tweets",
+  detail: "The article rewritten as a numbered thread.",
+};
+
+export const SHARED_ARC = {
+  key: "arc",
+  label: "The arc",
+  detail: "One sentence per part saying where the argument has got to — the top rung of Outline.",
+};
+
+/**
+ * **What never goes out, whatever the switch says.**
+ *
+ * The modes among these — Chat, Search, Remember, Referee — are not listed
+ * here: they arrive from the sweep, which is what keeps a mode added next month
+ * on this side of the line without anybody editing this file. What is here is
+ * the things that are not modes at all.
+ */
+export const NEVER_SHARED = [
+  {
+    key: "comments",
+    label: "Comments and notes",
+    detail:
+      "Every passage you bookmarked or annotated, your questions about them, and what the model " +
+      "answered.",
+  },
+  {
+    key: "lookups",
+    label: "Glossary lookups",
+    detail:
+      "A term you asked about, its answer and its citations. They sit beside the glossary and do " +
+      "not leave with it.",
+  },
+  {
+    key: "profile",
+    label: "Your reader profile",
+    detail:
+      "What you wrote about yourself and why you are reading this. It may have shaped some of " +
+      "what goes out, but it is never sent.",
+  },
+  {
+    key: "rename",
+    label: "Your name for it",
+    detail: "If you renamed this on your shelf, visitors see the title the page itself carried.",
+  },
+  {
+    key: "original",
+    label: "The file you uploaded",
+    detail: "A PDF or a scan stays yours. Visitors read the text we extracted, not your bytes.",
+  },
+  {
+    /**
+     * **Narrowed on 2026-09-02, because the first version was false.** It said
+     * *"which model wrote what, which prompt version, when it ran, and what it
+     * cost"*, and the first two of those **do** cross: `publicTree` and
+     * `publicArc` (src/public/dto.ts) publish `version` and `generator`
+     * deliberately, as facts about which of our generators wrote the structure.
+     * GPT Sol's review found it. What genuinely never leaves is the money, the
+     * clock and the person — so that is what the row now claims.
+     */
+    key: "provenance-internal",
+    label: "What it cost, and who it was for",
+    detail:
+      "What each model call cost, how long it took, and which reader profile it ran under.",
+  },
+] as const;
+
+/**
+ * **What each mode holds, in the owner's own vocabulary** — and nothing about
+ * whether it is shared.
+ *
+ * A total `Record<Mode, string>` rather than a partial one, so a fourteenth mode
+ * is a red compiler here rather than a blank row in a list an owner is reading
+ * before publishing somebody else's article.
+ *
+ * `plain` has an entry it never uses: `sharedInventory` skips it, because
+ * `ALWAYS_SHARED` above already says "the article's text" in words that do not
+ * need the reader to know the bar has a Plain button. The entry stays so the
+ * record stays total.
+ */
+export const OWNER_MODE_NOTE: Record<Mode, string> = {
+  plain: "The article on its own, with no panel open.",
+  /* **"where there are gists", on all three**, because a *provisional* tree has
+     none: it is carved from the author's own headings while the real one is
+     still being written, and `publicTree` publishes that state on purpose so a
+     visitor is not shown empty cells with no way to read them
+     (src/public/dto.ts § `provisional`). A flat promise of a gist per section is
+     a claim about an article that has finished ingesting, and these rows are
+     shown about articles that have not. GPT Sol's review, 2026-09-02. */
+  hierarchy:
+    "The nested table of contents and the zoom levels — the headings, and the model's one-line " +
+    "gist for each section where there are gists.",
+  outline: "The whole piece as one nested list, from those same headings and gists.",
+  summary: "The one-line gist written for each section, down the page, where there is one.",
+  glossary:
+    "The terms the model pulled out of the piece, and what each one means here. Your lookups are " +
+    "listed separately and are not part of this.",
+  ideas: "The propositions the model says the piece assumes or argues for.",
+  quotes: "The lines the model picked out, in the article's own words.",
+  timeline: "When the piece says things happened, in the order it says they happened.",
+  diagram: "The pictures of the argument — the tree, the neighbours, the projection.",
+  chat: "Your conversations with the article, and where in it each one is anchored.",
+  search: "What you have searched this piece for, and what came back.",
+  remember: "What you said you took from the piece, and the quizzes on it.",
+  referee: "Your peer-review pass over the piece: your criteria, and what it found against them.",
+};
 
 /* ---------------------------------------------------------------- timeline --
    What the reader is told when the piece dates something and we could not read
