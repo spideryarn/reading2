@@ -61,6 +61,7 @@ import type {
   RefereePoles,
 } from "../referee-criteria.js";
 import { refScaleParam } from "./params.js";
+import { ControlTip, Tooltip } from "./Tooltip.js";
 import { signedValence, valenceToken, valenceWords } from "./valence.js";
 import { type SavedCriterionState, useCriteria } from "./useCriteria.js";
 
@@ -266,9 +267,34 @@ export function PlaceOnCriterion({ slug, value, onChange, showCurrent }: Props) 
               `SELECT` along with an `INPUT` and a `TEXTAREA`, so a stop here
               would buy nothing and would cost the reader Escape — which closes
               this dialog from a window listener. */}
-          <label className="place-pick" htmlFor={pickerId}>
-            <span className="place-pick-label">Criterion</span>
-            <select
+          {/* **The one thing on this dialog a referee cannot recover from by
+              looking**, and the highest-value sentence in the mode: changing the
+              criterion silently drops the position they already pressed. It is
+              deliberate, and the reasoning is in the `onChange` handler below —
+              −50 is not a quantity, it is *"leans underpowered"*, and carrying it
+              onto a criterion with different ends records the referee as having
+              said something they never read. But a referee who does not know
+              that meets it as five buttons going blank for no reason.
+
+              On the `<label>` rather than the `<select>`, so the card is reached
+              by hovering the word as well as the control, and the focus route
+              still works: the select inside is what takes focus, and a focus
+              event bubbles to the label `useFocus` is listening on. */}
+          <Tooltip
+            placement="top"
+            keepSide
+            className="tip-soon"
+            content={
+              <ControlTip
+                head="Criterion"
+                what="Which of your for/against criteria this passage is being placed on. Only criteria with two ends are listed, because a signed number needs two ends to be signed between."
+                how="Switching criterion clears the position you have chosen: the five positions are worded in one criterion's own ends, so the same press means something different under another one. You are asked again, in the new criterion's words."
+              />
+            }
+          >
+            <label className="place-pick" htmlFor={pickerId}>
+              <span className="place-pick-label">Criterion</span>
+              <select
               id={pickerId}
               value={value.criterionId ?? ""}
               onChange={(e) => {
@@ -308,14 +334,15 @@ export function PlaceOnCriterion({ slug, value, onChange, showCurrent }: Props) 
                 else onChange({ criterionId: id, valence: null });
               }}
             >
-              <option value="">Not placed</option>
-              {choices.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {pickerLabel(c)}
-                </option>
-              ))}
-            </select>
-          </label>
+                <option value="">Not placed</option>
+                {choices.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {pickerLabel(c)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </Tooltip>
 
           {chosen && (
             <>

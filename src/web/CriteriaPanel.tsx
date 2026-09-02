@@ -118,6 +118,7 @@ import { assignSlots, PALETTE_BY_HUE } from "./hit-colours.js";
 import { critsParam, refScaleParam } from "./params.js";
 import { placementWords } from "./PlaceOnCriterion.js";
 import { type Found, resolveCriterion } from "./search-hits.js";
+import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useCriteria, type SavedCriterionState } from "./useCriteria.js";
 import {
   directionWords,
@@ -628,24 +629,39 @@ function NewCriterion({
       />
 
       <div className="crit-kinds" role="radiogroup" aria-label="What kind of criterion">
-        {(["single", "diverging", "literature"] as const).map((k) => (
-          // biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern and the call DiagramPanel.tsx, Dock.tsx, SearchPanel.tsx and App.tsx's RefereeViews already make
-          <button
-            key={k}
-            type="button"
-            role="radio"
-            aria-checked={k === kind}
-            /* Its own tab stop and no key handler — the arrows belong to the
-               article, which is what `RefereeViews` in App.tsx records Greg
-               asking for and what tests/arrows-belong-to-the-article.test.tsx
-               sweeps every `role="radio"` in the client for. */
-            tabIndex={0}
-            className={`crit-kind-btn${k === kind ? " on" : ""}`}
-            onClick={() => setKind(k)}
-          >
-            {KIND_LABEL[k]}
-          </button>
-        ))}
+        {/* **`KIND_NOTE` on the chip as well as under the row**, and that is the
+            point of wiring the same constant into both rather than writing a
+            second sentence: the paragraph below only ever describes the kind
+            that is *selected*, so the two chips a referee has not pressed
+            explain themselves nowhere. The card is what lets them explain
+            themselves before the press. One string, so the two cannot drift. */}
+        <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+          {(["single", "diverging", "literature"] as const).map((k) => (
+            <Tooltip
+              key={k}
+              placement="bottom"
+              keepSide
+              className="tip-soon"
+              content={<ControlTip head={KIND_LABEL[k]} what={KIND_NOTE[k]} how={KIND_HOW[k]} />}
+            >
+              {/* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern and the call DiagramPanel.tsx, Dock.tsx, SearchPanel.tsx and App.tsx's RefereeViews already make */}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={k === kind}
+                /* Its own tab stop and no key handler — the arrows belong to the
+                   article, which is what `RefereeViews` in App.tsx records Greg
+                   asking for and what tests/arrows-belong-to-the-article.test.tsx
+                   sweeps every `role="radio"` in the client for. */
+                tabIndex={0}
+                className={`crit-kind-btn${k === kind ? " on" : ""}`}
+                onClick={() => setKind(k)}
+              >
+                {KIND_LABEL[k]}
+              </button>
+            </Tooltip>
+          ))}
+        </TooltipGroup>
       </div>
       <p className="crit-kind-note">{KIND_NOTE[kind]}</p>
 
@@ -675,33 +691,89 @@ function NewCriterion({
       )}
 
       <div className="crit-presets">
-        {CRITERION_PRESETS.map((p) => (
-          <button
-            key={p.label}
-            type="button"
-            className="crit-preset"
-            onClick={() => {
-              setText(p.criterion);
-              setKind(p.kind);
-              setAgainst(p.poles?.against ?? "");
-              setFavour(p.poles?.favour ?? "");
-            }}
-          >
-            {p.label}
-          </button>
-        ))}
+        {/* **The card says what the press overwrites**, because the press is
+            destructive and nothing on screen says so: it replaces the box, the
+            kind and both poles at once, so a referee halfway through writing
+            their own criterion loses it to what looks like a suggestion chip.
+            The card also prints the criterion itself, which is the thing they
+            are actually choosing and which the label only gestures at. */}
+        <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+          {CRITERION_PRESETS.map((p) => (
+            <Tooltip
+              key={p.label}
+              placement="bottom"
+              keepSide
+              className="tip-soon"
+              content={
+                <ControlTip
+                  head={p.label}
+                  what={`Fills the box with: “${p.criterion}”`}
+                  how={`Replaces whatever is in the form — the text, the kind and both ends — with this ${KIND_LABEL[p.kind].toLowerCase()} criterion. Nothing runs until you press Run this criterion, and the words stay yours to edit.`}
+                />
+              }
+            >
+              <button
+                type="button"
+                className="crit-preset"
+                onClick={() => {
+                  setText(p.criterion);
+                  setKind(p.kind);
+                  setAgainst(p.poles?.against ?? "");
+                  setFavour(p.poles?.favour ?? "");
+                }}
+              >
+                {p.label}
+              </button>
+            </Tooltip>
+          ))}
+        </TooltipGroup>
       </div>
 
-      <button type="submit" className="crit-run" disabled={!ready}>
-        Run this criterion
-      </button>
+      <Tooltip
+        placement="top"
+        keepSide
+        className="tip-soon"
+        content={
+          <ControlTip
+            head="Run this criterion"
+            what="Saves the criterion and asks the model to go through the paper for the passages that bear on it."
+            how="One model call over the whole paper, so it takes a few seconds and costs something. It is re-runnable afterwards, and the criterion is kept whether the run works or not."
+          />
+        }
+      >
+        {/* `disabled` rather than `aria-disabled`, which means the card is *not*
+            reachable while the form is incomplete — a disabled button emits no
+            pointer or focus events, so Floating UI never hears about it. That is
+            the wrong way round and it is left alone here on purpose: the fix is
+            a styling change (`:disabled` in styles.css) and this stage changes
+            no layout. What the referee wants explained in that state is why the
+            button is dead, and that is the explainer card's job — stage 3. */}
+        <button type="submit" className="crit-run" disabled={!ready}>
+          Run this criterion
+        </button>
+      </Tooltip>
     </form>
   );
 }
 
+/**
+ * **"Two ends" became "For / against" on 2026-09-02**, and the label is the fix
+ * rather than the card beside it: a tooltip is not read by anybody in a hurry,
+ * which is what a referee is (`MirrorPanel.tsx` says so about itself). *Two
+ * ends* is our vocabulary for the shape of the data — a pair of poles — and says
+ * nothing about what pressing it will ask for. *For / against* is the referee's
+ * own vocabulary, it is what the two fields underneath are actually called
+ * ("What counts against", "What counts for"), and it says what the chip does
+ * before those fields appear.
+ *
+ * `diverging` stays the stored kind and the type's name. This is the word on the
+ * screen, and it is pinned as a literal in tests/referee-tooltips.test.tsx,
+ * because a copy test that read this constant would pass over any wording at
+ * all.
+ */
 const KIND_LABEL: Record<RefereeCriterionKind, string> = {
   single: "Find passages",
-  diverging: "Two ends",
+  diverging: "For / against",
   literature: "Check the literature",
 };
 
@@ -712,6 +784,25 @@ const KIND_NOTE: Record<RefereeCriterionKind, string> = {
     "Also says which way each passage cuts, between two ends you name. It is not a score for the paper, and nothing adds them up.",
   literature:
     "Goes to the web and brings back sources. A passage with no source link is not shown, because you could not check it.",
+};
+
+/**
+ * **The half of each kind that pressing it would not tell you** — the second
+ * paragraph of its card, under `KIND_NOTE`.
+ *
+ * `ControlTip`'s rule: the first sentence is what a reader could have guessed by
+ * pressing the control, and this is the one they could not. Each of these is a
+ * cost or a refusal rather than a restatement — what the answer is drawn from,
+ * what the kind will not do, and (for `literature`) which third party it
+ * reaches, which is the one thing in this panel that leaves the app.
+ */
+const KIND_HOW: Record<RefereeCriterionKind, string> = {
+  single:
+    "The mark is the model's answer to your words, so a passage it did not return is not a passage it cleared. Every kind is one model call over the whole paper.",
+  diverging:
+    "You name the two ends, so the direction is measured against your words rather than against anything we think good or bad. The paper is painted red to green by direction, and each mark carries a sign as well.",
+  literature:
+    "The only kind that leaves this app: it searches the web, so the paper's terms reach a search engine. It brings back what it found, not a verdict on whether the paper cited it.",
 };
 
 /* ------------------------------------------- the referee's own placements -- */
@@ -969,21 +1060,54 @@ function CriterionRow({
           />
           <span className="crit-criterion">{row.criterion}</span>
         </label>
-        <button
-          type="button"
-          className="crit-colour"
-          /* Two labels, because the control does two different amounts. On a
-             for/against criterion it no longer reaches the prose at all, and
-             "Colour" beside a red-and-green paper is an invitation to change
-             the wrong thing and conclude the app is broken. */
-          aria-label={identityPaintsProse ? "Mark colour" : "Bar and rail colour"}
-          aria-expanded={picking}
-          onClick={() => setPicking((v) => !v)}
-          style={hue}
-        />
-        <button type="button" className="crit-del" aria-label="Delete" onClick={onRemove}>
-          ×
-        </button>
+        {/* **The two controls that look like decoration.** The swatch is a
+            coloured square with an `aria-label` and no glyph, so nothing on
+            screen says it opens anything; the × is unambiguous about what it
+            does and silent about what it takes with it. Both cards say the half
+            a press would not. */}
+        <Tooltip
+          placement="left"
+          className="tip-soon"
+          content={
+            <ControlTip
+              head={identityPaintsProse ? "Mark colour" : "Bar and rail colour"}
+              what="Opens a palette, and picks which colour this criterion is drawn in."
+              how={
+                identityPaintsProse
+                  ? "It colours this criterion's marks in the paper, the bar down the left of each marked paragraph, and its lane in the rail. Colours are otherwise handed out automatically, one per criterion."
+                  : "A for/against criterion's phrase marks are painted red to green by direction, not by this — so this colours only the bar down the left of each marked paragraph and its lane in the rail."
+              }
+            />
+          }
+        >
+          <button
+            type="button"
+            className="crit-colour"
+            /* Two labels, because the control does two different amounts. On a
+               for/against criterion it no longer reaches the prose at all, and
+               "Colour" beside a red-and-green paper is an invitation to change
+               the wrong thing and conclude the app is broken. */
+            aria-label={identityPaintsProse ? "Mark colour" : "Bar and rail colour"}
+            aria-expanded={picking}
+            onClick={() => setPicking((v) => !v)}
+            style={hue}
+          />
+        </Tooltip>
+        <Tooltip
+          placement="left"
+          className="tip-soon"
+          content={
+            <ControlTip
+              head="Delete"
+              what="Removes this criterion, its answers, and its marks in the paper."
+              how="It goes straight away, with no confirmation and no undo: getting the answers back means running the criterion again, which is another model call over the whole paper."
+            />
+          }
+        >
+          <button type="button" className="crit-del" aria-label="Delete" onClick={onRemove}>
+            ×
+          </button>
+        </Tooltip>
       </div>
 
       {picking && (
@@ -1006,16 +1130,33 @@ function CriterionRow({
               }}
             />
           ))}
-          <button
-            type="button"
-            className="crit-swatch-auto"
-            onClick={() => {
-              onRecolour(null);
-              setPicking(false);
-            }}
+          {/* **"Automatic" is the only place the default is nameable**, and the
+              word on its own does not say what it reverts *to* — nothing on this
+              panel ever says that a criterion with no chosen colour is given one
+              from its id. Without the card the referee cannot tell "automatic"
+              from "none". */}
+          <Tooltip
+            placement="left"
+            className="tip-soon"
+            content={
+              <ControlTip
+                head="Automatic"
+                what="Gives up the colour you chose and goes back to the one this criterion started with."
+                how="Colours are handed out from a hash of the criterion's own id rather than in the order you wrote them, so a criterion keeps its colour instead of shuffling when you add another. There are eight, so past eight criteria two of them wear the same one."
+              />
+            }
           >
-            Automatic
-          </button>
+            <button
+              type="button"
+              className="crit-swatch-auto"
+              onClick={() => {
+                onRecolour(null);
+                setPicking(false);
+              }}
+            >
+              Automatic
+            </button>
+          </Tooltip>
         </div>
       )}
 
@@ -1032,9 +1173,32 @@ function CriterionRow({
       {row.status === "error" && (
         <p className="crit-error">
           {row.error}{" "}
-          <button type="button" className="crit-retry" onClick={onRetry}>
-            Try again
-          </button>
+          {/* "Try again" names nothing on its own, which is `DiagramPanel`'s
+              `TryAgain` finding: a reader arriving here by Tab hears "button,
+              Try again" and no object. The `aria-label` carries the name; the
+              card carries what the press costs, which is the same call as the
+              first one rather than a cheap resume. */}
+          <Tooltip
+            placement="top"
+            keepSide
+            className="tip-soon"
+            content={
+              <ControlTip
+                head="Try again"
+                what="Runs this criterion over the paper a second time."
+                how="A fresh model call at full price — nothing is resumed and nothing is cached, and the answer may not be the same one. The words of the criterion are unchanged; edit them by writing a new criterion instead."
+              />
+            }
+          >
+            <button
+              type="button"
+              className="crit-retry"
+              aria-label="Run this criterion again"
+              onClick={onRetry}
+            >
+              Try again
+            </button>
+          </Tooltip>
         </p>
       )}
       {row.status === "done" && row.results.length === 0 && (
@@ -1253,7 +1417,40 @@ function CriterionResult({
           onJump(result.blockId);
         }}
       >
-        <span className="crit-rank">{rank}</span>
+        {/* **The numeral reads like a severity score and is not one**, which is
+            the single most misreadable thing on this row: it is large, it leads,
+            and a paper marked *1* beside a passage that counts against invites
+            exactly the reading the whole mode refuses. The card is on the
+            numeral rather than on the row, because the row is a jump and its own
+            card would fire every time the referee reads down the list.
+
+            Nested inside the button rather than wrapped around it, deliberately:
+            wrapping would make the whole quote a tooltip trigger, so a card
+            would cover the neighbouring rows every time the referee ran their
+            eye down the list, and `useFocus` would fire it on every keyboard
+            step through the results.
+
+            **The cost of that choice, said out loud: this card is hover-only.** A
+            `<span>` takes no focus, so the keyboard route `Tooltip` normally
+            gives for free is not there. A `tabIndex` on it would put a tab stop
+            *inside* a button, which is worse. What a screen reader gets instead
+            is the row's own `.sr-only` sentence, which leads with the same
+            ordinal (`valenceLabel`) — the number, not the warning that it is not
+            a score. If that gap is ever worth closing it wants a visible line
+            above the list, not a card. */}
+        <Tooltip
+          placement="left"
+          className="tip-soon"
+          content={
+            <ControlTip
+              head={`Passage ${rank} of this criterion's answers`}
+              what="Where the model put this passage in its own ordering of the passages it returned for this criterion."
+              how="Not a score and not a severity: nothing here ranks the paper, and 1 is only the passage the model thought most worth putting first. Two criteria's numbers have nothing to do with each other."
+            />
+          }
+        >
+          <span className="crit-rank">{rank}</span>
+        </Tooltip>
         <span className="crit-quote">{result.quote}</span>
       </button>
 

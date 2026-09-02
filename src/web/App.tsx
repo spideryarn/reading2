@@ -74,6 +74,7 @@ import { CandidatesBand } from "./CandidatesPanel.js";
    the deterministic scan of the document's own source, drawn above the chips
    because a hidden instruction bears on all four panels. src/injection-scan.ts
    is the scanner and it calls no model. */
+import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { SourceScanNotice } from "./SourceScanNotice.js";
 import { useSourceScan } from "./useSourceScan.js";
 import { SearchPanel } from "./SearchPanel.js";
@@ -4654,28 +4655,97 @@ export function RefereeViews({
 }) {
   return (
     <div className="ref-views" role="radiogroup" aria-label="What Referee is showing">
-      {REFEREE_VIEWS.map((v) => (
-        // biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern and the call DiagramPanel.tsx, Dock.tsx and SearchPanel.tsx already make — a real <input type="radio"> cannot be styled as a chip without hiding the input and faking every state it already had
-        <button
-          key={v}
-          type="button"
-          role="radio"
-          aria-checked={v === view}
-          /* **Its own tab stop, and no key handler.** A roving `tabIndex` is
-             inseparable from arrow navigation — it is one tab stop for the whole
-             group and only navigable because the arrows move within it — so
-             leaving it here while removing the handler would make all but one
-             of them unreachable by keyboard altogether. */
-          tabIndex={0}
-          className={`ref-view-btn${v === view ? " on" : ""}`}
-          onClick={() => onView(v)}
-        >
-          {REFEREE_VIEW_LABEL[v]}
-        </button>
-      ))}
+      {/* **A card on every chip**, which until 2026-09-02 was the one radiogroup
+          in this app with nothing on it at all — four one-word labels naming four
+          sub-modes that do four unrelated things, one of which spends money and
+          one of which is never given the paper. Greg met the whole mode as
+          *"very confusing"*.
+
+          `TooltipGroup` so that reading along the row is one gesture rather than
+          four waits, and `keepSide` for DiagramPanel's measured reason: the band
+          sits at the right of the window, a card wider than a chip is otherwise
+          thrown onto the cross axis, and it lands on top of the chips the reader
+          is reading towards (Tooltip.tsx § keepSide). */}
+      <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+        {REFEREE_VIEWS.map((v) => (
+          <Tooltip
+            key={v}
+            placement="bottom"
+            keepSide
+            className="tip-soon"
+            content={
+              <ControlTip
+                head={REFEREE_VIEW_LABEL[v]}
+                what={REFEREE_VIEW_TIP[v].what}
+                how={REFEREE_VIEW_TIP[v].how}
+              />
+            }
+          >
+            {/* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern and the call DiagramPanel.tsx, Dock.tsx and SearchPanel.tsx already make — a real <input type="radio"> cannot be styled as a chip without hiding the input and faking every state it already had */}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={v === view}
+              /* **Its own tab stop, and no key handler.** A roving `tabIndex` is
+                 inseparable from arrow navigation — it is one tab stop for the whole
+                 group and only navigable because the arrows move within it — so
+                 leaving it here while removing the handler would make all but one
+                 of them unreachable by keyboard altogether. */
+              tabIndex={0}
+              className={`ref-view-btn${v === view ? " on" : ""}`}
+              onClick={() => onView(v)}
+            >
+              {REFEREE_VIEW_LABEL[v]}
+            </button>
+          </Tooltip>
+        ))}
+      </TooltipGroup>
     </div>
   );
 }
+
+/**
+ * **What each sub-mode is, and the thing about it a press would not tell you.**
+ *
+ * `ControlTip`'s rule, which is the whole reason the second sentence is worth a
+ * hover: `what` is what the reader could have worked out by pressing the chip
+ * and looking; `how` is what they could not — where the answer comes from, what
+ * it costs, or what the sub-mode does *not* promise. Each of these four `how`s
+ * is a refusal:
+ *
+ * - **Criteria** never scores the paper, and the run is a model call over the
+ *   whole of it, so pressing Run is not free.
+ * - **Claims** asserts linkage and never adequacy — `LINKAGE_NOT_ADEQUACY` in
+ *   src/referee-claims.ts says the same thing in the panel, above the button.
+ * - **Mirror** is never given the paper (src/referee-mirror.ts § the three
+ *   constraints) and keeps nothing (`useMirror.ts`: *one button, one run,
+ *   nothing stored*).
+ * - **Candidates** searches the web, which is a third party at a moment none of
+ *   the other three reaches one, and checks no conflicts of interest
+ *   (`COI_NOT_CHECKED`).
+ *
+ * A total `Record`, beside `REFEREE_VIEW_LABEL` and for its reason: a fifth
+ * sub-mode is a red compile here rather than a chip that silently explains
+ * nothing.
+ */
+const REFEREE_VIEW_TIP: Record<RefereeView, { what: string; how: string }> = {
+  criteria: {
+    what: "Write what you have been asked to judge this paper against. Each criterion becomes a re-runnable pass that marks the passages bearing on it.",
+    how: "Each run is a model call over the whole paper. It never scores the paper: which way a passage cuts is marked, and what that adds up to is yours.",
+  },
+  claims: {
+    what: "What the paper claims up front, and where it takes each claim up — in the paper's own order, never a ranking.",
+    how: "It asserts only that a passage takes a claim up, never whether the passage carries it. That judgement is the review.",
+  },
+  mirror: {
+    what: "The model reads your own comments back to you and points at ones an author could not act on.",
+    how: "It is never given the paper, so it can hold no opinion about it. The answer is not stored — leaving this sub-mode loses it.",
+  },
+  candidates: {
+    what: "For an editor: who could review this paper, and what expertise it would take.",
+    how: "It searches the web as you talk to it, and every name carries a link a search returned. Conflicts of interest are not checked by anything here.",
+  },
+};
 
 /**
  * What each button says.

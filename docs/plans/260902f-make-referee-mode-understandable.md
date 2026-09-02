@@ -272,6 +272,61 @@ is, and which [`MirrorPanel.tsx`](../../src/web/MirrorPanel.tsx) already says ab
   **not** a tinted checkbox: Sol's finding 7 — the tick is styled through `accent-color`, which
   cannot hold a gradient, so the first draft's "miniature ramp tick" was unbuildable as written.
 
+#### Built, 2026-09-02 — what landed, and the five places it is not what is written above
+
+Eighteen `ControlTip` sites across the four sub-modes and `PlaceOnCriterion` — about thirty controls
+once the two chip rows and the six presets are counted out — three label changes and one message. [referee-mode.md § Every control says what it
+does](../project/referee-mode.md#every-control-says-what-it-does) is the table of what each card
+says; [tooltips.md](../project/tooltips.md) now carries `ControlTip`'s rule and two jsdom traps, and
+its claim that the obvious second customer was a gist cell is gone — Referee mode is the largest
+customer by a factor of five. Everything above landed except:
+
+- **The ramp glyph is not built**, and it is the one item deferred rather than done. Its job — *this
+  criterion paints by direction, so its colour control does something else* — is carried for now by
+  the two things stage 1 already changed: the swatch's `aria-label` reads *"Bar and rail colour"* on
+  a diverging row, and its card says in a sentence what the button does and does not reach. A glyph
+  is still the better answer for a referee who is not hovering, and it wants the visual pass stage 3
+  is doing anyway rather than a third mechanism bolted on now.
+- **A fourth label changed**, unplanned: Criteria's *Try again* now carries
+  `aria-label="Run this criterion again"`. `DiagramPanel`'s `TryAgain` had already found this —
+  *"Try again" on its own names nothing*, and a referee arriving by Tab hears "button, Try again"
+  with no object. The visible words are unchanged.
+- **The rank numeral's card is hover-only, and that is a real gap said out loud** rather than
+  quietly accepted. The numeral is a `<span>` inside the jump button, so it takes no focus and the
+  keyboard route `Tooltip` gives for free is not there; a `tabIndex` on it would put a tab stop
+  inside a button, which is worse, and wrapping the whole row would fire a card over the
+  neighbouring rows every time a referee ran their eye down the list. If the gap is worth closing it
+  wants a visible line above the list, not a card.
+- **The *Run this criterion* card cannot be read while the button is disabled**, which is exactly
+  when a referee wants it. A `disabled` button emits no pointer or focus events, so Floating UI
+  never hears about it. Left alone deliberately: the fix is `aria-disabled` plus a `:disabled`
+  rule in the stylesheet, and this stage changed no layout. Recorded beside the button.
+- **`ANSWER_OVERFLOWED` was reworded rather than split.** The browser pass found Claims printing
+  *"Asking for something narrower usually fits"* with nothing on screen to narrow, and the message is
+  shared: `parseHits` is Search's parser and Referee mode's, so Criteria, Claims and Mirror all reach
+  it and none of the three has a scoping control. A second message for the referee callers was the
+  alternative — three call sites, one more code for a reader to quote — and the smaller honest fix
+  was to name the retry first (the lever every screen has, and the one the `retry` kind already draws
+  a button for) and condition the narrowing clause. Two docstrings in
+  [`src/search.ts`](../../src/search.ts) that quoted the old advice were corrected with it.
+
+**Tests**: [`tests/referee-tooltips.test.tsx`](../../tests/referee-tooltips.test.tsx), nine cases —
+a card on each of the four sub-mode chips and each card that chip's; `KIND_NOTE` reaching the kind
+chips as *one string* rather than a second copy; cards on the presets and the run button; the three
+changed labels as literals; the badge's card carrying `EVIDENCE_NOTE`; the jump's `title` gone; the
+coverage row explaining its own missing door; and `ANSWER_OVERFLOWED` naming a lever every screen
+has. Suite after: **4 files / 4 tests red** — `doc-links`, `pdf-bundle-trace`,
+`store-artefact-manifest`, `store-roundtrip` — which is the baseline this stage started from and
+which is smaller than the ten files § *Baseline* records, because six of those were fixed elsewhere
+in between. Nothing that was green went red.
+
+Two things about testing a card in jsdom were **measured rather than reasoned about**, and both are
+now in [tooltips.md](../project/tooltips.md) because either one silently makes the test assert
+nothing: a native `mouseleave` does not close a card (React's synthetic `onMouseLeave` does, and it
+is synthesised from a bubbling `mouseout`), and the close needs **two** `act` blocks rather than one
+long one, because the transition's unmount timer is only scheduled by the render that the first
+block's queued state update produces.
+
 ### Stage 3 — the card, and the tab that spends money
 
 - **"How Referee mode works"**, under the chips at the top of `.ref-panel` — not inside `.ref-brief`,

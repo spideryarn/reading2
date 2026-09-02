@@ -569,6 +569,68 @@ asserts there is no digit on a candidate row that is not a block id.
 co-authorship COI checks and that is the obvious next step. It is also a different project, and
 Greg's own framing was *"see how far we can get in a stage or two"*.
 
+## Every control says what it does
+
+> The new Referee mode is very confusing. Add lots of explanatory tooltips to buttons etc.
+>
+> — Greg, 2026-09-02
+
+The mode had **no** hover cards at all until that ask: four one-word sub-mode chips over four
+unrelated things, a coloured square with no glyph, a large numeral that reads like a severity score,
+and a `<select>` that throws a judgement away when you use it. Every control now carries a
+`ControlTip` — [tooltips.md § `ControlTip`](tooltips.md#controltip-which-is-what-most-of-them-are-now)
+is the shape and the rule, which is that the second sentence must be the half a press would *not*
+tell you. Here that half is nearly always one of three things: **a model call is about to be spent**,
+**something is about to be overwritten**, or **this is not the judgement it looks like**.
+
+Where the cards are, and the one thing each says that the label cannot:
+
+| Control | The half a press would not tell you |
+|---|---|
+| the four sub-mode chips ([`App.tsx`](../../src/web/App.tsx) § `RefereeViews`) | Criteria never scores; Claims asserts linkage and not adequacy; Mirror is never given the paper and stores nothing; Candidates reaches a search engine and checks no conflicts |
+| the three kind chips | `KIND_NOTE` — the same string the panel prints under the selected kind, so the two kinds a referee has *not* pressed explain themselves too |
+| the preset chips | they replace the whole form: text, kind and both poles |
+| *Run this criterion*, *Pull the paper's claims*, *Try again* | one model call over the whole paper, at full price, nothing resumed |
+| the colour swatch, and *Automatic* | on a for/against criterion it colours the paragraph bar and the rail and **not** the marks; automatic is a hash of the criterion's id, and there are eight |
+| the rank numeral | the model's ordering of its own answers, and **not** a severity — the most misreadable thing in the mode |
+| Claims' tick, and *other text in quotes* | marks are off until asked for; and that list is **not** the claims the model missed |
+| Mirror's evidence badge, and its coverage row | what the trial actually tested; and that the coverage row has nowhere to send you, which is the whole of what it is saying |
+| Candidates' shortlist heading and tool strip | each turn **replaces** the shortlist; the strip is the check on *"never claim a tool you did not run"* rather than decoration |
+| [`PlaceOnCriterion`](../../src/web/PlaceOnCriterion.tsx)'s criterion picker | switching criterion clears the position you pressed — the highest-value sentence in the mode |
+
+**Three labels changed, because a tooltip is not read by anybody in a hurry**, which is what a
+referee is and what [`MirrorPanel.tsx`](../../src/web/MirrorPanel.tsx) already says about itself.
+Where the words on the control were themselves misleading, a card is not the fix:
+
+- **"Two ends" → "For / against."** Ours named the shape of the data; the referee's names the
+  question, and it says what the two fields that appear underneath are for.
+- **"Tested in a trial" → "A kind tested in a trial"**, and its negative. Beside one remark the old
+  wording read as a claim that *this* remark had been checked and had held. What the ICLR 2025 trial
+  tested is the **category**; whether any one remark is right is untested and untestable, and
+  `EVIDENCE_NOTE` says so in a line a hurried referee does not reach.
+- **Mirror's `title="Go to this passage"` became a real card**, which is the anti-pattern
+  [`Tooltip.tsx`](../../src/web/Tooltip.tsx) argues against in its own docstring: a second's wait,
+  unstyleable, truncated, and absent altogether on a touch device.
+
+**And one message stopped offering an action Claims does not have.** `ANSWER_OVERFLOWED` in
+[`src/messages.ts`](../../src/messages.ts) said *"Asking for something narrower usually fits"*, flat.
+`parseHits` in [`src/search.ts`](../../src/search.ts) is Search's parser *and* this mode's, so a
+criterion run, a claims pull and a Mirror run all end there — and none of those three has a scoping
+control of any kind. The advice is conditioned rather than deleted: the retry is named first, because
+it is the lever every screen has, and the narrowing keeps its clause where there is something to
+narrow. [copy.md](copy.md) rule 3.
+
+**What the cards are not.** They are not where a rule lives. Everything load-bearing is still visible
+text on the panel — `LINKAGE_NOT_ADEQUACY`, `WHAT_THE_TICK_DOES`, `DOCUMENT_ORDER_NOTE`, the
+evidence badge on every Mirror row, `COI_NOT_CHECKED` — and the cards sit on top of those rather than
+in place of them. [`tests/referee-tooltips.test.tsx`](../../tests/referee-tooltips.test.tsx) pins
+that each control has a card, that the card is that control's, that a `title` attribute has not crept
+back, and the three changed labels as literals.
+
+**Still to come, and not here:** the *"How Referee mode works"* card at the top of the panel, and
+Candidates spending money the moment its chip is first pressed. Both are stage 3 of
+[260902f-make-referee-mode-understandable.md](../plans/260902f-make-referee-mode-understandable.md).
+
 ## The rules the whole mode obeys
 
 Each is meant to be a test rather than an intention, whichever sub-mode eventually enforces it:

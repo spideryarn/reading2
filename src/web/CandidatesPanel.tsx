@@ -76,6 +76,7 @@ import {
   withoutShortlist,
 } from "../referee-candidates.js";
 import { CitedMarkdown } from "./Cited.js";
+import { ControlTip, Tooltip } from "./Tooltip.js";
 import { BlockRef } from "./BlockRef.js";
 import { hostOf } from "../urls.js";
 import { useChat } from "./useChat.js";
@@ -367,12 +368,31 @@ function Shortlisted({
   const { candidates, dropped, omitted } = shortlist;
   return (
     <section className="cnd-list-box" aria-label="Shortlist">
-      <h3 className="cnd-list-head">
-        Shortlist
-        <span className="cnd-count">
-          {candidates.length} {candidates.length === 1 ? "name" : "names"}
-        </span>
-      </h3>
+      {/* **Each turn replaces this list; it does not add to it.** That is a
+          property of how the shortlist is read rather than stored — it is parsed
+          out of the newest answer that carries one (`latestShortlist`) — and it
+          is invisible on screen: an editor who says *"prefer early-career"* and
+          watches four of the five names disappear has no way to tell a revision
+          from a bug. The heading is where that belongs, because the heading is
+          the thing the list is under. */}
+      <Tooltip
+        placement="left"
+        className="tip-soon"
+        content={
+          <ControlTip
+            head="Shortlist"
+            what="Who the model thinks could review this paper, from the newest answer in the conversation below."
+            how="Every answer that carries a list replaces this one whole — nothing accumulates, so steering the conversation can drop a name you liked. The order is the model's and is not a ranking, and no conflict-of-interest check has run."
+          />
+        }
+      >
+        <h3 className="cnd-list-head">
+          Shortlist
+          <span className="cnd-count">
+            {candidates.length} {candidates.length === 1 ? "name" : "names"}
+          </span>
+        </h3>
+      </Tooltip>
       {candidates.length === 0 ? (
         <p className="cnd-quiet">{ALL_DROPPED}</p>
       ) : (
@@ -569,28 +589,47 @@ function Tools({ tools }: { tools: ChatMessage }) {
   const searches = tools.searches ?? 0;
   if (runs.length === 0 && searches === 0) return null;
   return (
-    <ul className="chat-tools">
-      {searches > 0 && (
-        <li className="chat-tool">
-          <Globe size={12} aria-hidden />
-          <span className="chat-tool-label">
-            searched the web{searches > 1 ? ` (${searches} searches)` : ""}
-          </span>
-        </li>
-      )}
-      {runs.map((run, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: the same tool can legitimately run twice in one answer, so name-plus-label is not unique; useChat assigns into this array by index, so the index IS the row's identity. Same call as ChatPanel's ToolStrip.
-        <li key={`${i}-${run.name}`} className={`chat-tool${run.status === "running" ? " running" : ""}`}>
-          {run.status === "running" ? (
-            <LoaderCircle className="cmt-spinner" size={12} aria-hidden />
-          ) : (
+    /* **The strip is the evidence for a rule, and nothing on it says so.** It
+       reads as a progress indicator — a globe and the words "searched the web" —
+       where what it actually is is the enforcement of `CANDIDATES_SYSTEM`'s
+       "never claim a tool you did not run": the rule's whole force is that the
+       reader is shown exactly which tools ran, so a strip nobody understands is
+       a rule nobody can check. The card is on the list rather than on each row,
+       because the fact is about the list. */
+    <Tooltip
+      placement="left"
+      className="tip-soon"
+      content={
+        <ControlTip
+          head="What this answer actually ran"
+          what="Every tool call the model made while writing the answer below, listed as it ran."
+          how="This is the check on the names, not decoration: the model is told never to claim a search it did not run, and this is where you see whether it did. A search sends terms drawn from the paper to a search engine — a third party the rest of Referee mode does not reach."
+        />
+      }
+    >
+      <ul className="chat-tools">
+        {searches > 0 && (
+          <li className="chat-tool">
             <Globe size={12} aria-hidden />
-          )}
-          <span className="chat-tool-label">{run.label}</span>
-          {run.detail && <span className="chat-tool-detail">{run.detail}</span>}
-        </li>
-      ))}
-    </ul>
+            <span className="chat-tool-label">
+              searched the web{searches > 1 ? ` (${searches} searches)` : ""}
+            </span>
+          </li>
+        )}
+        {runs.map((run, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: the same tool can legitimately run twice in one answer, so name-plus-label is not unique; useChat assigns into this array by index, so the index IS the row's identity. Same call as ChatPanel's ToolStrip.
+          <li key={`${i}-${run.name}`} className={`chat-tool${run.status === "running" ? " running" : ""}`}>
+            {run.status === "running" ? (
+              <LoaderCircle className="cmt-spinner" size={12} aria-hidden />
+            ) : (
+              <Globe size={12} aria-hidden />
+            )}
+            <span className="chat-tool-label">{run.label}</span>
+            {run.detail && <span className="chat-tool-detail">{run.detail}</span>}
+          </li>
+        ))}
+      </ul>
+    </Tooltip>
   );
 }
 
