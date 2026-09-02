@@ -41,6 +41,7 @@ import { defineConfig } from "vite";
 
 import { resolveBuildStamp } from "./scripts/build-stamp.js";
 import { readClientShell } from "./scripts/client-shell.js";
+import { expectedMigrations } from "./scripts/migration-ledger.js";
 import { sentrySourceMaps, sentryUploadEnabled } from "./scripts/sentry-build.js";
 
 /**
@@ -104,6 +105,24 @@ const stamp = resolveBuildStamp();
  */
 const shell = readClientShell(fileURLToPath(new URL("./dist", import.meta.url)), stamp.commit);
 
+/**
+ * The migrations this build needs the database to have already applied.
+ *
+ * Stamped in for the same reason as the commit above: read at build time from
+ * the `drizzle/` folder that is actually being compiled, so it can only be
+ * wrong by the artefact being wrong. `/api/health` reports it beside what it
+ * finds in the database, which is what lets anything holding an HTTPS client —
+ * the remote box, a deploy check, Greg on his phone — tell whether a deployment
+ * and its schema are in step **without a database credential**.
+ *
+ * **Deliberately not caught.** `expectedMigrations` throws when the journal
+ * names a `.sql` file the folder does not have, and a build that swallowed that
+ * would stamp in a shorter list and then report itself in step with a database
+ * missing the very migration whose file went astray. Failing the build is the
+ * cheap end of that; docs/plans/260902a-remote-box-runs-production-migrations-without-a-human-in-the-loop.md.
+ */
+const migrations = expectedMigrations(fileURLToPath(new URL("./drizzle", import.meta.url)));
+
 export default defineConfig({
   /* The server half of the source-map upload, and the half that is easy to
      forget. `vercel.json` builds the client first and this second, so a plugin
@@ -127,6 +146,11 @@ export default defineConfig({
        instead would make that comparison always fail, and hashing nothing would
        make it always pass. */
     __SPIDERYARN_BUILT_SHELL_SHA256__: JSON.stringify(shell.sha256),
+    /* The whole list rather than its digest, because the digest cannot say
+       WHICH migration is missing, and a health page that says "out of step" and
+       nothing else sends whoever reads it to a database they may not be able to
+       reach. Around 3KB of constant; the function is unminified anyway. */
+    __SPIDERYARN_EXPECTED_MIGRATIONS__: JSON.stringify(migrations),
   },
   /* `ssr.noExternal`, not just `rollupOptions.external` below. Vite decides what
      an SSR build externalises before Rollup's own `external` hook is consulted,

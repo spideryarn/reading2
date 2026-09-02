@@ -62,6 +62,7 @@ import {
   ledgerDivergence,
   migratorUrlFrom,
   migrationState,
+  postApplyProblems,
   missingGateFixtures,
   readLogQuery,
   rollbackAdvice,
@@ -718,6 +719,15 @@ interface MigrationPlan {
   appRole: string;
   pending: JournalEntry[];
   appliedBefore: number;
+  /**
+   * Every migration this commit contains, with the sha256 of its file **as it
+   * is at the sha being deployed** — not as it is on disk, which several agents
+   * are editing.
+   *
+   * Carried on the plan so the post-apply check can verify by hash rather than
+   * by counting rows; see `postApplyProblems`.
+   */
+  expected: { tag: string; hash: string; created_at: number }[];
 }
 
 /**
@@ -820,6 +830,16 @@ async function migrationPlan(sha: string): Promise<MigrationPlan | null> {
     }
     if (!record("the applied history matches this commit", ledgerDivergence(journal, hashes, rows))) return null;
 
+    /* Built from the journal AND the hashes taken at this sha, so the
+       post-apply check can ask "did these exact files land" rather than "did
+       the row count move by the right amount". A journal entry whose file is
+       not in the commit is already reported by `ledgerDivergence` above, so
+       skipping it here cannot hide anything. */
+    const expected = journal.flatMap((e) => {
+      const hash = hashes.get(e.tag);
+      return hash ? [{ tag: e.tag, hash, created_at: e.when }] : [];
+    });
+
     const state = migrationState(journal, last, appliedBefore);
     if (state.ahead > 0) {
       record("migration ledger", [
@@ -832,7 +852,7 @@ async function migrationPlan(sha: string): Promise<MigrationPlan | null> {
 
     if (state.pending.length === 0) {
       ok("nothing pending — the remote is in step with this commit");
-      return { url, appRole, pending: [], appliedBefore };
+      return { url, appRole, pending: [], appliedBefore, expected };
     }
 
     info(`${state.pending.length} pending:`);
@@ -850,7 +870,7 @@ async function migrationPlan(sha: string): Promise<MigrationPlan | null> {
         say(`         ${DIM}${e.tag}: ${s} — the old code keeps serving until the new build is promoted${OFF}`);
     }
 
-    return { url, appRole, pending: state.pending, appliedBefore };
+    return { url, appRole, pending: state.pending, appliedBefore, expected };
   } catch (err) {
     /* A throw here would take the whole run down with a raw stack and no
        verdict — which is what happened on the first real run. The deploy has
@@ -928,14 +948,18 @@ async function applyMigrations(plan: MigrationPlan): Promise<void> {
   const ssl = sslDecisionFor(plan.url);
   const pool = new Pool({ connectionString: plan.url, max: 1, ssl: ssl.ssl });
   try {
-    const after = await pool.query("select count(*)::int n from spideryarn_migrations.__drizzle_migrations");
-    const moved = (after.rows[0] as { n: number }).n - plan.appliedBefore;
-    record(
-      `apply ${plan.pending.length} migration(s)`,
-      moved === plan.pending.length
-        ? []
-        : [`the ledger moved by ${moved}, not ${plan.pending.length} — something else applied migrations too`],
+    /* The rows, not a count. `postApplyProblems` says why at length: a count
+       accepts a run that applied nothing while another machine applied the same
+       migration, and accepts a DIFFERENT migration landing, which is the same
+       arithmetic and worse. */
+    const after = await pool.query(
+      "select hash, created_at from spideryarn_migrations.__drizzle_migrations",
     );
+    const applied = (after.rows as { hash: string; created_at: number }[]).map((r) => ({
+      hash: String(r.hash),
+      created_at: Number(r.created_at),
+    }));
+    record(`apply ${plan.pending.length} migration(s)`, postApplyProblems(plan.expected, applied));
     /* Again, because this is the moment a new table exists. */
     await checkAppPrivileges(pool, plan.appRole);
   } finally {
@@ -1351,13 +1375,29 @@ async function main(): Promise<void> {
     gatesAt(sha);
     if (failures.length) return summarise(null);
 
-    let plan: MigrationPlan | null = null;
-    if (SKIP_MIGRATIONS) {
-      step("Migrations");
-      info("skipped (--skip-migrations)");
-    } else {
-      plan = await migrationPlan(sha);
-      if (failures.length) return summarise(null);
+    /**
+     * **The plan is computed even under `--skip-migrations`.**
+     *
+     * The flag used to skip `migrationPlan()` itself — the *check*, not just
+     * the apply — so a deploy could ship code that needs a column nobody had
+     * created, and nothing anywhere said so. That is the exact hole the box
+     * would fall into, since a bare `git push` deploys with no migration step
+     * at all.
+     *
+     * So the flag now means what its name says: **do not apply**. If something
+     * is pending it refuses to ship, because shipping code ahead of its schema
+     * is the failure, not applying the migration.
+     */
+    const plan = await migrationPlan(sha);
+    if (failures.length) return summarise(null);
+
+    if (SKIP_MIGRATIONS && plan && plan.pending.length > 0) {
+      record("--skip-migrations, with migrations pending", [
+        `${plan.pending.length} migration(s) are pending: ${plan.pending.map((e) => e.tag).join(", ")}`,
+        "--skip-migrations means do not APPLY them; it cannot mean ship code that needs them.",
+        "Apply them (drop the flag), or deploy a commit that does not need them.",
+      ]);
+      return summarise(null);
     }
 
     if (DRY_RUN) {
@@ -1371,7 +1411,7 @@ async function main(): Promise<void> {
        that was serving when this run started rather than whatever is there now. */
     const wasServing = await currentlyServing();
 
-    if (plan && plan.pending.length > 0) await applyMigrations(plan);
+    if (!SKIP_MIGRATIONS && plan && plan.pending.length > 0) await applyMigrations(plan);
     if (failures.length) return summarise(wasServing ? `https://${wasServing.url}` : null);
 
     step("Push");

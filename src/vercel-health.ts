@@ -67,6 +67,15 @@ import {
   readActualSchema,
 } from "./db/schema-drift.js";
 import { errorFields, log } from "./log.js";
+import {
+  compareMigrations,
+  migrationDigest,
+  type AppliedMigration,
+  MIGRATIONS_SCHEMA,
+  MIGRATIONS_TABLE,
+  type ExpectedMigration,
+  type MigrationDigest,
+} from "./migration-digest.js";
 import { STORE, listArticles } from "./store/index.js";
 
 /**
@@ -492,6 +501,138 @@ async function cachedSchemaCheck(warnings: string[]): Promise<SchemaCheck> {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Migrations: what this build needs, and what the database has        */
+/* ------------------------------------------------------------------ */
+
+declare const __SPIDERYARN_EXPECTED_MIGRATIONS__: ExpectedMigration[];
+
+/**
+ * The migrations the commit that compiled this artefact expects to be applied.
+ *
+ * Same `typeof` guard and same reasoning as the build stamp above: there is no
+ * `define` outside the API build, so in dev and under test this is empty and
+ * every comparison below says "nothing expected" rather than throwing.
+ */
+const expectedMigrations: ExpectedMigration[] =
+  typeof __SPIDERYARN_EXPECTED_MIGRATIONS__ === "undefined" ? [] : __SPIDERYARN_EXPECTED_MIGRATIONS__;
+
+type MigrationCheck =
+  /* The rows as well as their digest: the digest is what a caller compares
+     cheaply, the rows are what `compareMigrations` needs to say which way the
+     two sides differ. Computing the digest here keeps the cache holding one
+     consistent pair rather than two things that could be derived apart. */
+  { applied: MigrationDigest; appliedRows: AppliedMigration[] } | { error: string };
+
+let migrationsCached: { at: number; value: MigrationCheck } | null = null;
+let migrationsInFlight: Promise<MigrationCheck> | null = null;
+
+/**
+ * Read the migration ledger as the **app role**, so that anything with an HTTPS
+ * client can compare a deployment's schema against its code.
+ *
+ * The point is what it does *not* need: no production database password, no
+ * `postgres` role, no Supabase token. The remote box can therefore tell that it
+ * must not push — see
+ * docs/plans/260902a-remote-box-runs-production-migrations-without-a-human-in-the-loop.md
+ * — while remaining completely unable to apply a migration.
+ *
+ * It needs two grants, and the second one alone is not enough:
+ *
+ *     grant usage on schema spideryarn_migrations to spideryarn_app;
+ *     grant select on spideryarn_migrations.__drizzle_migrations to spideryarn_app;
+ *
+ * Without the `usage`, the answer is `permission denied for schema
+ * spideryarn_migrations` — which `scripts/deploy-checks.ts` already records as
+ * the correct answer to the wrong question, and which must land in `error`
+ * rather than being read as an empty ledger. An empty ledger and an unreadable
+ * one mean opposite things: the first says nothing has ever been applied.
+ *
+ * Cached and coalesced exactly like the two checks above it, because this
+ * endpoint is public and unauthenticated.
+ */
+async function cachedMigrationCheck(): Promise<MigrationCheck> {
+  const now = Date.now();
+  if (migrationsCached && now - migrationsCached.at < CACHE_MS) return migrationsCached.value;
+  if (migrationsInFlight) return migrationsInFlight;
+
+  const run = async (): Promise<MigrationCheck> => {
+    let value: MigrationCheck;
+    try {
+      const result = await getDb().execute(
+        sql.raw(
+          `select hash, created_at from ${MIGRATIONS_SCHEMA}.${MIGRATIONS_TABLE} order by created_at asc`,
+        ),
+      );
+      const rows = (result as unknown as { rows: Record<string, unknown>[] }).rows;
+      const appliedRows = rows.map((r) => ({
+        hash: String(r.hash),
+        created_at: Number(r.created_at),
+      }));
+      value = { applied: migrationDigest(appliedRows), appliedRows };
+    } catch (err) {
+      const message = (err as Error).message ?? "";
+      log("health").error(errorFields(err), "migration ledger check failed");
+      value = { error: message.slice(0, 200) };
+    }
+    migrationsCached = { at: Date.now(), value };
+    return value;
+  };
+
+  migrationsInFlight = run();
+  try {
+    return await migrationsInFlight;
+  } finally {
+    migrationsInFlight = null;
+  }
+}
+
+export type MigrationReport =
+  | { expected: MigrationDigest; error: string }
+  | { expected: MigrationDigest; applied: MigrationDigest; missing: string[]; ahead: number };
+
+/**
+ * What this build needs, what the database has, and which way they differ.
+ *
+ * **Both directions are reported and only one of them warns**, which is the
+ * detail that decides whether this check survives contact with a real deploy:
+ *
+ *  - `missing` — the build selects columns a migration was meant to create and
+ *    the database has no record of it. Requests fail. This warns, and a warning
+ *    is what makes this endpoint answer 503.
+ *  - `ahead` — the database holds migrations this build has never heard of.
+ *    **Normal, and silent.** `npm run deploy` migrates *before* it pushes, so
+ *    for the minute between the migration landing and the new build going live,
+ *    the deployment actually serving traffic is exactly this. A check that
+ *    called it unhealthy would 503 a working site on every single deploy, and a
+ *    check that cries wolf on every deploy gets turned off.
+ *
+ * `missing` carries **tags**, not hashes, because the database does not store
+ * tags and a reader who is told only that something is out of step has to go to
+ * a database they may not be able to reach. The build has the names; this is
+ * the one place they can be joined.
+ */
+async function migrationReport(warnings: string[]): Promise<MigrationReport> {
+  const expected = migrationDigest(expectedMigrations);
+  const check = await cachedMigrationCheck();
+
+  if ("error" in check) {
+    /* Not silently an empty ledger. "Nothing has ever been applied" and "we are
+       not allowed to look" are opposite facts, and the grant this needs is
+       exactly the one likely to be absent — see cachedMigrationCheck. */
+    warnings.push(`the migration ledger could not be read: ${check.error}`);
+    return { expected, error: check.error };
+  }
+
+  const { missing, ahead } = compareMigrations(expectedMigrations, check.appliedRows);
+  if (missing.length > 0) {
+    warnings.push(
+      `${missing.length} migration(s) this build needs are not applied: ${missing.map((m) => m.tag).join(", ")}`,
+    );
+  }
+  return { expected, applied: check.applied, missing: missing.map((m) => m.tag), ahead };
+}
+
 const SSL_URL_KEYS = ["sslmode", "sslrootcert", "sslcert", "sslkey"];
 
 /**
@@ -676,6 +817,22 @@ export async function health(req: IncomingMessage, res: ServerResponse): Promise
      covers that case, and covers it better. */
   const schema = STORE === "postgres" ? await cachedSchemaCheck(warnings) : undefined;
 
+  /**
+   * **Reported in both directions, and only one of them is a fault.**
+   *
+   * `missing` — this build needs a migration the database has no record of — is
+   * the state where requests fail, and it warns, which makes this endpoint 503.
+   *
+   * `ahead` is the opposite and is **normal**: `npm run deploy` applies
+   * migrations before it pushes, so for the minute between the migration
+   * landing and the new build going live, the deployment still serving traffic
+   * is one whose code predates the newest row. Warning about that would 503 a
+   * perfectly healthy site on every single deploy, which is how a check gets
+   * ignored and then removed. It is reported as a number so it is visible, and
+   * it is deliberately silent.
+   */
+  const migrations = STORE === "postgres" ? await migrationReport(warnings) : undefined;
+
   const failed = "error" in store || "error" in ssl || (schema !== undefined && "error" in schema);
   const ok = !failed && warnings.length === 0;
 
@@ -703,6 +860,10 @@ export async function health(req: IncomingMessage, res: ServerResponse): Promise
         /* Absent rather than null on a filesystem store, so that "not checked"
            and "checked and found nothing" cannot be confused in the output. */
         ...(schema === undefined ? {} : { schema }),
+        /* Same rule, and the field anything can read without a database
+           credential to tell whether this deployment's code and its schema are
+           in step. docs/plans/260902a-remote-box-runs-production-migrations-without-a-human-in-the-loop.md */
+        ...(migrations === undefined ? {} : { migrations }),
         ssl,
         env,
       },

@@ -682,8 +682,7 @@ export function hashMigrationFiles(folder: string): Map<string, string> {
  * `scripts/db-migrate.ts`. They are copies of one fact, and the migrator
  * silently starts a FRESH history if they disagree.
  */
-export const MIGRATIONS_SCHEMA = "spideryarn_migrations";
-export const MIGRATIONS_TABLE = "__drizzle_migrations";
+export { MIGRATIONS_SCHEMA, MIGRATIONS_TABLE } from "../src/migration-digest.js";
 
 /**
  * The advisory-lock key `db:migrate` holds for the whole run.
@@ -694,3 +693,44 @@ export const MIGRATIONS_TABLE = "__drizzle_migrations";
  * same DDL — GPT Sol, 2026-08-31, closing paragraph.
  */
 export const MIGRATION_LOCK_KEY = 260_831;
+
+/* ------------------------------------------------------------------ */
+/* What a commit says it needs                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The migrations a checkout of `folder` expects a database to hold, in journal
+ * order, ready to be stamped into a build.
+ *
+ * Read by [`vite.api.config.ts`](../vite.api.config.ts) so the deployed
+ * function can say what it needs, and by `scripts/deploy.ts` so a push can be
+ * compared against a live `/api/health` **with no database credential**. The
+ * comparison itself is `compareMigrations` in
+ * [`src/migration-digest.ts`](../src/migration-digest.ts) — one function, both
+ * callers, so the two sides cannot drift into disagreeing about what "the same
+ * migrations" means.
+ *
+ * **It throws on a journal entry with no `.sql` file, and that is the whole
+ * design of it.** Skipping the entry instead would produce a digest that
+ * happily matches a database which never applied that migration — a checkout
+ * missing a file would report itself in step with production. The failure this
+ * function exists to make visible is exactly the one a lenient version would
+ * manufacture, so a broken folder must be loud rather than shorter.
+ * `journalProblems` above is what turns the same condition into a readable
+ * report when the caller wants every fault at once instead of the first.
+ */
+export function expectedMigrations(folder: string): { tag: string; hash: string; created_at: number }[] {
+  const journal = readJournal(folder);
+  const hashes = hashMigrationFiles(folder);
+  return journal.map((entry) => {
+    const hash = hashes.get(entry.tag);
+    if (!hash) {
+      throw new Error(
+        `${folder}/meta/_journal.json lists '${entry.tag}' but ${entry.tag}.sql is not in the folder. ` +
+          "Refusing to compute a migration digest from an incomplete checkout — it would match a " +
+          "database that never applied it. See src/migration-digest.ts.",
+      );
+    }
+    return { tag: entry.tag, hash, created_at: entry.when };
+  });
+}

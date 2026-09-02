@@ -12,6 +12,11 @@
  * See docs/plans/260827v-deploy-pipeline.md for what each of these is guarding.
  */
 
+import {
+  compareMigrations,
+  type AppliedMigration,
+  type ExpectedMigration,
+} from "../src/migration-digest.js";
 import { sameCommit } from "./build-stamp.js";
 
 /* ------------------------------------------------------------------ */
@@ -1036,4 +1041,45 @@ function stringList(value: string): string[] {
     if (!quoted) throw new Error(`supabase/config.toml: cannot read the list entry "${item}"`);
     return quoted[1] as string;
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* After the migrator returns                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Did the migrations this commit needs actually land?
+ *
+ * **Replaces a row count, and the count was the bug.** `applyMigrations` used
+ * to verify itself with `moved === plan.pending.length` — the ledger grew by as
+ * many rows as we meant to apply, so all is well. A count cannot tell one
+ * migration from another, so two states passed it that should not have:
+ *
+ *  - another machine applied the pending migration in the gap, this run applied
+ *    nothing, the count moved by one anyway, and the run reported success;
+ *  - a *different* migration landed, which is the same arithmetic and worse.
+ *
+ * drizzle stores a sha256 of each file and then never looks at it again
+ * (`scripts/migration-ledger.ts` header), so the hash is the only thing that
+ * identifies a migration after the fact. `compareMigrations` is the same
+ * function `/api/health` uses to answer the same question about a live
+ * deployment — one definition of "the same migrations", so the deploy script
+ * and the health endpoint cannot drift into disagreeing.
+ *
+ * **Rows the commit does not know about are not reported here.** A concurrent
+ * deploy of a newer commit leaves exactly that, and failing on it would turn a
+ * race into a false alarm about the migrations that did land. `migrationPlan`'s
+ * ledger-ahead refusal owns that question, before any DDL runs.
+ */
+export function postApplyProblems(
+  expected: readonly ExpectedMigration[],
+  after: readonly AppliedMigration[],
+): string[] {
+  const { missing } = compareMigrations(expected, after);
+  if (missing.length === 0) return [];
+  return [
+    `the ledger does not account for ${missing.length} migration(s) this commit needs: ` +
+      missing.map((m) => m.tag).join(", "),
+    "counting rows would have accepted this — the hashes are what identify a migration.",
+  ];
 }

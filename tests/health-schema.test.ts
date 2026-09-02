@@ -75,9 +75,25 @@ type Call = { status: number; body: Record<string, any> };
 async function callHealth(opts: {
   store?: string;
   execute?: () => Promise<unknown>;
-}): Promise<{ call: () => Promise<Call>; executeCalls: () => number }> {
+}): Promise<{
+  call: () => Promise<Call>;
+  executeCalls: () => number;
+  schemaQueries: () => number;
+}> {
   vi.resetModules();
 
+  /**
+   * Every statement the handler ran, as text.
+   *
+   * **Counted per query rather than in total**, because this endpoint now makes
+   * two independent reads — the schema drift check here, and the migration
+   * ledger check that lets the remote box tell whether a deployment's code and
+   * its schema are in step. A single total would go red the next time a third
+   * one is added, and — worse — a bare `toBe(1)` would go *green* if the schema
+   * query stopped running and something else ran twice. Naming which query is
+   * being counted is what keeps this a test of the schema cache.
+   */
+  const queries: string[] = [];
   let executeCalls = 0;
   const execute =
     opts.execute ??
@@ -87,6 +103,11 @@ async function callHealth(opts: {
     getDb: () => ({
       execute: async (...args: unknown[]) => {
         executeCalls += 1;
+        /* `sql.raw` keeps the text in `queryChunks[0].value`; going through
+           JSON rather than reaching into drizzle's internals means this keeps
+           working whatever shape the chunk is, and simply matches nothing if
+           the shape changes — which the positive controls below would catch. */
+        queries.push(JSON.stringify(args[0] ?? ""));
         return execute(...(args as []));
       },
     }),
@@ -98,6 +119,8 @@ async function callHealth(opts: {
   }));
 
   const { health } = await import("../src/vercel-health.js");
+
+  const schemaQueries = () => queries.filter((q) => q.includes("information_schema")).length;
 
   const call = async (): Promise<Call> => {
     const req = {
@@ -125,7 +148,7 @@ async function callHealth(opts: {
     return { status, body: JSON.parse(payload) };
   };
 
-  return { call, executeCalls: () => executeCalls };
+  return { call, executeCalls: () => executeCalls, schemaQueries };
 }
 
 beforeEach(() => {
@@ -204,19 +227,19 @@ describe("the schema block", () => {
     /* The cache alone does not do this — it is written after the await, so a
        burst on a cold cache all miss and all query. The existing store check
        had exactly this bug, found in an earlier review. */
-    const { call, executeCalls } = await callHealth({});
+    const { call, schemaQueries } = await callHealth({});
     await Promise.all(Array.from({ length: 25 }, () => call()));
-    expect(executeCalls()).toBe(1);
+    expect(schemaQueries()).toBe(1);
   });
 
   it("asks again once the cache has expired", async () => {
-    const { call, executeCalls } = await callHealth({});
+    const { call, schemaQueries } = await callHealth({});
     await call();
-    expect(executeCalls()).toBe(1);
+    expect(schemaQueries()).toBe(1);
     /* CACHE_MS is 30s. A check that never re-asks would report a database fixed
        an hour ago as still broken. */
     vi.advanceTimersByTime(31_000);
     await call();
-    expect(executeCalls()).toBe(2);
+    expect(schemaQueries()).toBe(2);
   });
 });

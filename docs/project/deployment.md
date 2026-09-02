@@ -170,6 +170,7 @@ short version.
 | `-- --verify-only` | check what is live right now, deploy nothing |
 | `-- --force-gate=test` | named, never blanket, and printed in the summary as `DEPLOYED WITH … FORCED` |
 | `-- --host <url>` | verify a host other than `www.spideryarn.com` |
+| `-- --skip-migrations` | do not **apply** them. Still checks, and **refuses to ship** if any are pending |
 
 Three things about it are worth knowing before you read the rest of this section,
 because each one is a mistake this page already records:
