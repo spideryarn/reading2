@@ -18,6 +18,19 @@
  * They need bash and coreutils, which is what the box is. Skipped elsewhere
  * rather than failing, because a Mac without GNU `base64 -w0` is not a bug in
  * this script — the script only ever runs on the box.
+ *
+ * **The skip did not skip, and the check that was supposed to arrange it passed
+ * on a Mac.** `base64 -w0` was the probe, and FreeBSD's `base64` — which is what
+ * macOS ships — *accepts* `-w0` silently. So `usable()` said yes on Greg's
+ * laptop, all sixteen ran, and the deploy gate's `test` step could not go green
+ * there. The actual incompatibility is one line further on: `wc -l` pads its
+ * count to a width on BSD, so the script emits `GJDROWS        1` where the
+ * parser wants `GJDROWS 1`, and every row count is unreadable.
+ *
+ * The probe is now `wc --version`, which BSD has no such option for at all,
+ * rather than another flag BSD might happen to tolerate. It asks the question
+ * the docstring above always meant — *is this GNU coreutils* — instead of
+ * sampling one flag and generalising from it.
  */
 import { execFileSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -26,10 +39,18 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildSessionScript, parseSessions, sessionState } from "../scripts/gjd-remote-tmux.js";
 
-/** GNU coreutils and bash, or there is nothing here to test. */
+/**
+ * GNU coreutils and bash, or there is nothing here to test.
+ *
+ * `wc --version` is the probe because BSD's `wc` has no long options and exits
+ * non-zero on one — there is no way for it to look like it worked. A flag test
+ * cannot promise that: `base64 -w0` was the old probe and BSD takes it happily.
+ * Grepping for the word GNU as well, so a third `wc` that grew `--version`
+ * without growing GNU's output format still counts as "not the box".
+ */
 function usable(): boolean {
   try {
-    execFileSync("bash", ["-c", "printf x | base64 -w0 >/dev/null && ps -o args= -p $$ >/dev/null"], {
+    execFileSync("bash", ["-c", "wc --version 2>/dev/null | grep -q GNU && ps -o args= -p $$ >/dev/null"], {
       stdio: "ignore",
     });
     return true;
