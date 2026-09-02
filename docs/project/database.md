@@ -658,6 +658,41 @@ repair is written up at the top of
 [`drizzle/0030_drop_summary_steer.sql`](../../drizzle/0030_drop_summary_steer.sql), and that hole is
 still in the folder as a named exception today.
 
+### Two facts about a fork repair, both learned the hard way on 2026-09-02
+
+Written down because both were reverse-engineered under pressure, by two agents independently, on
+the day four migrations forked three ways across five worktrees.
+
+**A snapshot's `id` is inert, so a repair should keep it.** `preparePgMigrationSnapshot` mints it
+with `crypto.randomUUID()`; nothing anywhere derives or validates it from the snapshot's contents.
+Its only readers are the next snapshot's `prevId` and a zod string check. So when you rebuild a
+snapshot's contents and repoint its `prevId`, **keep the existing `id`** — every migration already
+chained onto it then keeps resolving instead of dangling, including ones nobody has told you about.
+Minting a fresh id turns one repair into a cascade. Settled from drizzle-kit's own source rather
+than assumed, because "the id is inert" is exactly the kind of claim that is true until some tool
+hashes it.
+
+**`db:chain` and `tests/migration-snapshots.test.ts` check structure only — neither can see a stale
+snapshot.** [`scripts/migration-snapshots.ts`](../../scripts/migration-snapshots.ts)'s own header
+says so, and it is the trap that makes a repair *look* finished: repointing `prevId` without
+rebuilding contents passes both gates, and then the next `db:generate` in some third worktree diffs
+against a picture that never had the other branch's tables in it, re-emits their DDL, and
+`db:migrate` fails on `already exists` — landing on whoever generated, not on whoever repaired.
+
+The check that proves **contents** is:
+
+```bash
+npm run db:generate -- --allow-empty     # then answer: no schema changes
+```
+
+That is drizzle asserting the snapshot equals what it would serialise from
+[`src/db/schema.ts`](../../src/db/schema.ts) today, which is the actual claim a repair makes. Run it
+before declaring a chain repaired; green on the structural gates alone means nothing.
+
+**And rebuild from a tree that is exactly the trunk.** A rebuild takes its contents from the current
+`schema.ts`, so doing it from a tree carrying unlanded schema work bakes those objects into a
+snapshot dated before they exist — a third costume for the same fault.
+
 ### Repairing a fork: what the losing migration is decides everything
 
 The journal half of the conflict is easy — take the trunk's file whole:
