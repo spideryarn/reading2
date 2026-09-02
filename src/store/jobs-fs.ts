@@ -317,12 +317,33 @@ function runningCount(mine: string): number {
 }
 
 /**
- * Is an **older** active job already in this article's line?
+ * Is another job in the way on this article — **older, or already running**?
  *
- * The Postgres `hasPredecessor`, over the in-memory index. Same order —
- * `(createdAt, id)` — and `createdAt` compares as a string because every writer
- * of it is `new Date().toISOString()`, whose lexical order is its chronological
- * one.
+ * The Postgres `blockedByAnother`, over the in-memory index, and the two
+ * conditions are the two things it is: the article's order, and the article's
+ * mutex.
+ *
+ * **A running job blocks whatever its timestamp says.** A row that arrives
+ * after a newer one has already started has nothing older than it on the
+ * article, so an order-only rule lets it claim — and this adapter has no index
+ * underneath to refuse the second runner, so it would simply run two jobs on
+ * one `data/<slug>/` directory and report both as claimed. That is worse than
+ * the Postgres version of the same mistake, which at least ends in a `23505`.
+ * GPT Sol, reviewing the built stage 1, finding 2.
+ *
+ * Same order as Postgres — `(createdAt, id)` — and `createdAt` compares as a
+ * string because every writer of it is `new Date().toISOString()`, whose
+ * lexical order is its chronological one.
+ *
+ * **The id tie-break is equivalent to Postgres's only while Postgres orders the
+ * id alphabet the way JavaScript does.** `<` here is UTF-16 code units; there
+ * it is whatever collation `jobs.id` has, and src/db/schema.ts does not pin `C`.
+ * Job ids are `spya-` plus lower-case base36 (src/ids.ts), so every collation
+ * anybody is likely to have agrees — but nothing checks it, and a database
+ * created under a collation that sorts digits and letters differently would
+ * give the two adapters different answers for jobs queued in the same
+ * millisecond. Not a demonstrated failure; written down so the next person does
+ * not find it by being wrong. GPT Sol, 2026-09-02.
  *
  * **Global on the slug, with no owner in it**, exactly as the index is: two
  * owners can build toward one name, and what the line protects is the article's
@@ -333,9 +354,10 @@ function runningCount(mine: string): number {
  * `cancelling` until its claimant lets go, and until then it is still inside the
  * article. See the contract in ./jobs.ts § `claim`.
  */
-function aheadOf(job: Job): boolean {
+function blockedByAnother(job: Job): boolean {
   for (const other of index.values()) {
     if (other.id === job.id || other.slug !== job.slug || TERMINAL.has(other.status)) continue;
+    if (other.status === "running") return true;
     if (other.createdAt < job.createdAt) return true;
     if (other.createdAt === job.createdAt && other.id < job.id) return true;
   }
@@ -401,11 +423,23 @@ export const fsJobStore: JobStore = {
        running job than the machine agreed to, arriving through the door marked
        "enqueue", and `runningCount` would then count it against everybody else.
        Nothing does that today; the contract simply should not allow it. The
-       Postgres adapter is sealed the same way. GPT Sol, reviewing stage 1. */
-    index.set(job.id, { ...job, status: "queued" });
-    tickets.set(job.id, ticket);
-    await persist(job);
-    return { kind: "created", job: structuredClone(job) };
+       Postgres adapter is sealed the same way. GPT Sol, reviewing stage 1.
+
+       **One normalised object, used three times.** The first version of this
+       built the queued copy for the index and then persisted and returned
+       `job` — the caller's own object — so a `running` job came out queued in
+       memory, running in `data/_jobs/`, and running in the `created` outcome
+       the route answers with. Two of the three contradicted the paragraph above
+       them, and no test noticed because every caller already hands over a
+       queued job. The reload hides it too: `sweepStopped` turns a loaded
+       `running` record back into a queued one, so the only honest way to see
+       the file is to read it. GPT Sol, reviewing the built stage 1, finding 6;
+       tests/jobs-fs-load.test.ts. */
+    const queued: Job = { ...job, status: "queued" };
+    index.set(queued.id, queued);
+    tickets.set(queued.id, ticket);
+    await persist(queued);
+    return { kind: "created", job: structuredClone(queued) };
   },
 
   async claim(
@@ -421,12 +455,16 @@ export const fsJobStore: JobStore = {
     if (TERMINAL.has(job.status)) return { kind: "finished", job: structuredClone(job) };
     if (job.cancelling === true) return { kind: "stopping", job: structuredClone(job) };
     if (job.status === "running") return { kind: "busy", why: "another request is inside this job" };
+    /* **The article's line first, the cap second** — the order the Postgres
+       adapter takes, and for the reason written out there: both refuse, so the
+       order changes only which *reason* comes back, and the article is a fact
+       about this job while the cap is a fact about the machine this second. */
+    if (blockedByAnother(job)) {
+      return { kind: "busy", why: "another job on this article is ahead of it" };
+    }
     const running = runningCount(id);
     if (running >= maxRunning) {
       return { kind: "busy", why: `already running ${running} of ${maxRunning} jobs` };
-    }
-    if (aheadOf(job)) {
-      return { kind: "busy", why: "another job on this article is ahead of it" };
     }
 
     job.status = "running";
@@ -594,7 +632,11 @@ export const fsJobStore: JobStore = {
            anything can be held to. Postgres has ordered by `id` since it was
            written (src/store/pg-jobs.ts § trimFinished); this side had the
            opposite answer, and the parity suite was red before this line went
-           in. Lowest id goes, on both. */
+           in. Lowest id goes, on both.
+
+           The same collation caveat as `blockedByAnother` above applies to this
+           comparison: `<` is UTF-16 code units here and whatever collation
+           `jobs.id` carries there, and the schema does not pin `C`. */
         if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
         return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
       })

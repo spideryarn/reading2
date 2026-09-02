@@ -209,7 +209,7 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
       }
       /* The same tie-break as the store's, so the panel and the claim cannot
          disagree about which of two jobs queued in one millisecond goes first —
-         src/store/pg-jobs.ts § `hasPredecessor`. */
+         src/store/pg-jobs.ts § `blockedByAnother`. */
       if (candidate.createdAt < oldest.createdAt) oldest = candidate;
       else if (candidate.createdAt === oldest.createdAt && candidate.id < oldest.id) {
         oldest = candidate;

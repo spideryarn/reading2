@@ -2120,13 +2120,37 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
        * have caught it and the reader would have got two articles for one
        * address and paid for both.
        *
-       * So **adopt the holder's slug**, which is what `freeSlug` would have
-       * returned had it been able to see the other request — and adopt it as an
-       * *adoption*, not by re-sending this ticket. The holder's slug can be the
-       * one we just asked for, and re-asking with `reservesName` still true
-       * would take this same answer for ever.
+       * **Ask `freeSlug` again**, exactly as `nameTaken` below does, rather
+       * than writing the answer in by hand. The holder is in the store now, so
+       * the lookup sees it — `inFlightSlugForUrlKey` matches on the address —
+       * and adopts its slug, which is what allocation would have returned had
+       * it been able to see the other request.
+       *
+       * **The hand-written version was `{ kind: "adopted", slug: outcome.job.slug }`,
+       * and the bug in it was the `adopted`, not the slug.** An adoption
+       * reserves nothing, so it sits *outside* `jobs_active_source` — and it was
+       * being written on the strength of a holder we had only been told about.
+       * If that holder failed, or the reader stopped it, between the refusal and
+       * this line, a third request would see no article and no active holder,
+       * mint and reserve a second slug, and this one would land on the dead
+       * holder's. Two active jobs, one owner, one URL, two slugs, and both able
+       * to publish. Re-asking is the whole fix: it revalidates before inserting,
+       * so a holder that has gone gets a freshly minted **reserved** slug
+       * instead. GPT Sol, reviewing the built stage 1, finding 3;
+       * tests/one-article-for-one-address.test.ts.
+       *
+       * The loop still cannot ask the same question twice. If the holder is
+       * there, the answer is an adoption and the next insert is outside the
+       * source index altogether; if it has gone, the answer is a fresh random
+       * mint. Only a request carrying a URL can be told `sourceTaken` — the
+       * ticket's `urlKey` comes from `request.url` and nothing else — so the
+       * other branch is unreachable, and it adopts rather than throwing because
+       * an unreachable branch that stops the reader is worse than one that
+       * queues them behind the holder.
        */
-      allocation = { kind: "adopted", slug: outcome.job.slug };
+      allocation = request.url
+        ? await freeSlug(request.slug, request.url)
+        : { kind: "adopted", slug: outcome.job.slug };
       continue;
     }
 

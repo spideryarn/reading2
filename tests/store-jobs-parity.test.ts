@@ -421,6 +421,36 @@ for (const adapter of ADAPTERS) {
       expect(queued.job.status).toBe("queued");
     });
 
+    /**
+     * **A `running` job handed to `enqueueOrGet` is queued — in every account of
+     * it.**
+     *
+     * `enqueueOrGet` takes a whole `Job`, and honouring its `status` would let a
+     * caller put a `running` row in through the door marked *enqueue*: one that
+     * never passed the cap check, carries no attempt token, and is counted
+     * against everybody else by `runningCount`. Nothing does that today; the
+     * contract simply should not allow it.
+     *
+     * **Three places have to agree**, and the filesystem adapter had one of them
+     * wrong: it normalised the job into memory and then persisted and returned
+     * the *caller's* object, so the same job was queued in memory, running on
+     * disk, and running in the `created` outcome the route answers with. The
+     * disk half is tests/jobs-fs-load.test.ts, which can reload; these two are
+     * the ones both stores can be asked. GPT Sol, reviewing the built stage 1,
+     * finding 6.
+     *
+     * Watched red on 2026-09-02 against the filesystem adapter as it stood:
+     * *"the outcome handed back the caller's status: expected 'running' to be
+     * 'queued'"*.
+     */
+    it("queues a job it was handed as running, in the outcome as well as the store", async () => {
+      const job = aJob({ status: "running" });
+      const created = await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
+      expect(created.kind).toBe("created");
+      expect(created.job.status, "the outcome handed back the caller's status").toBe("queued");
+      expect((await store.get(job.id, OWNER))?.status).toBe("queued");
+    });
+
     it("reads somebody else's job as one that is not there", async () => {
       const job = aJob();
       await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
@@ -788,6 +818,53 @@ for (const adapter of ADAPTERS) {
     });
 
     /**
+     * **A job that commits *after* a newer one is already running still waits.**
+     *
+     * The interleaving the order rule alone cannot see, and the one that turned
+     * a wait into a 500. Two requests land on one article; A gets the earlier
+     * `createdAt` and its insert is still uncommitted when B — later, same slug
+     * — commits and claims. A then commits and claims. Nothing on the slug is
+     * *older* than A, so the predecessor read passes it, and its `UPDATE` walks
+     * straight into `jobs_one_running_per_slug`: a `23505` where the contract
+     * says `busy`, answered as 500 by the route and logged as a thrown pump.
+     *
+     * So `claim` refuses on **either** an older active row or any other
+     * *running* row on the slug. The late commit is still deliberately not FIFO
+     * — A does not get to displace a job that is already inside the article —
+     * and it no longer uses a unique violation as control flow.
+     *
+     * **The order of the calls is the test.** The neighbouring cases insert
+     * every row before anything claims, which cannot reach this: they only ever
+     * ask a *newer* row to wait. Here the enqueue happens after the claim, which
+     * is exactly what a late commit looks like to everything downstream of it.
+     *
+     * Watched red on 2026-09-02: Postgres threw
+     * *"duplicate key value violates unique constraint jobs_one_running_per_slug"*,
+     * and the filesystem store did something worse — it answered `claimed`, and
+     * two jobs were running on one article at once.
+     */
+    it("waits behind a newer job that is already running, when its own row lands late", async () => {
+      const slug = `${MINE}${mintId()}`;
+      const base = Date.now();
+      /* Older by a second, and inserted *second*. */
+      const late = aJob({ slug, createdAt: new Date(base).toISOString() });
+      const running = aJob({ slug, createdAt: new Date(base + 1000).toISOString() });
+
+      await store.enqueueOrGet(running, { workKey: "k1", reservesName: false });
+      const held = mintAttempt();
+      expect((await store.claim(running.id, OWNER, held, LEASE, CAP)).kind).toBe("claimed");
+
+      await store.enqueueOrGet(late, { workKey: "k2", reservesName: false });
+      const blocked = await store.claim(late.id, OWNER, mintAttempt(), LEASE, CAP);
+      expect(blocked.kind).toBe("busy");
+      expect(blocked.kind === "busy" && blocked.why).toMatch(/article/i);
+      /* And the running job is still the only one inside the article. */
+      expect((await store.get(late.id, OWNER))?.status).toBe("queued");
+
+      await store.releaseStep(running.id, held, running.steps, {});
+    });
+
+    /**
      * **A finished job is history and holds nothing up.** The predicate is
      * `status in ('queued','running')`, and the other direction — waiting on any
      * older row at all — is an article that can never be worked on twice.
@@ -904,6 +981,14 @@ for (const adapter of ADAPTERS) {
      * inserts really are concurrent; the filesystem adapter decides between
      * `await ready()` and `index.set` with no `await` in between, which is its
      * whole claim.
+     *
+     * **This proves the index and not the repair**, and it was once advertised
+     * as proving both. It calls `enqueueOrGet` with two preconstructed slugs and
+     * looks at the two answers; it never calls `enqueue`, so the branch that
+     * decides what the loser does *next* is not exercised here and this case
+     * would stay green if that branch were deleted. GPT Sol, reviewing the built
+     * stage 1, finding 3. The repair is
+     * tests/one-article-for-one-address.test.ts.
      */
     it("makes one article out of two simultaneous requests for one address", async () => {
       const urlKey = `example.test/race-${mintId()}`;
@@ -1666,6 +1751,51 @@ describe.skipIf(!reachable)("Postgres, on the database's clock", () => {
     );
     return id;
   }
+
+  /**
+   * **A primary-key collision is not a queue conflict, and the retry cannot
+   * clear it.**
+   *
+   * `on conflict do nothing` catches *every* unique index on `jobs`, `jobs_pkey`
+   * included. The re-read that follows classifies only the three queue
+   * predicates — same work, same name, same address — so a row that merely
+   * happens to hold this job's minted id classifies as nothing, `enqueueOrGet`
+   * reads that as *the holder finished between the two statements*, and tries
+   * the same id four more times before giving up with a sentence about the slug.
+   * The slug is not the problem and nothing about it can become true.
+   *
+   * Astronomically unlikely — the id is `spya-` plus six random base36
+   * characters — and exactly the conflict a retry cannot repair, which is why it
+   * has to be said out loud rather than left to the loop. GPT Sol, reviewing the
+   * built stage 1, finding 7.
+   *
+   * **It carries a `status`, which is what makes it visible at all.** Every
+   * error out of this store goes through `guardDbStore`, which replaces the
+   * message of anything that is not on its allowlist — so the old sentence
+   * reached nobody, and neither would a better one. Door 1 in
+   * src/store/db-errors.ts is the way through: a job id is `spya-` and six
+   * characters we minted, which is the test that file sets for a message that
+   * may cross the boundary.
+   *
+   * Watched red on 2026-09-02: the rejection was the scrubbed *"This app asked
+   * its database for something it would not do…"*, with the id nowhere in it.
+   */
+  it("says which id is taken when the conflict is the primary key, rather than blaming the slug", async () => {
+    const id = await queued();
+    const clash: Job = {
+      id,
+      ownerId: OWNER,
+      /* A different article and a different piece of work, so none of the three
+         queue classifiers can answer — the only thing in the way is the id. */
+      slug: `${MINE}${mintId()}`,
+      steps: structuredClone(STEPS),
+      status: "queued",
+      createdAt: new Date().toISOString(),
+    };
+    await expect(
+      pgJobStore.enqueueOrGet(clash, { workKey: `pk-${id}`, reservesName: false }),
+    ).rejects.toThrow(new RegExp(`${id}.*already`));
+  });
 
   it("dates the lease and the ending from the database, not from whatever this instance thinks the time is", async () => {
     const id = mintId();

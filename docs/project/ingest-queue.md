@@ -140,6 +140,14 @@ staging key is left alone. A sweep after `SWEEP_GRACE_MS` is not built;
 [`tests/upload-acquire.test.ts`](../../tests/upload-acquire.test.ts) asserts the object survives,
 which is what stops somebody adding the obvious `remove` later.
 
+**A reload of `/add/upload/<id>` is answered from the upload record once the job has gone.** Finished
+jobs are trimmed to fifty per reader, and modes are jobs, so fifty is a fortnight of ordinary use.
+After that the upload is still `claimed` and the article is still on the shelf, so `POST /api/jobs
+{uploadId}` answers `200 {article}` — the slug the record has carried since `enqueue` returned —
+rather than 202 with a job that no longer exists, and `AddPage` goes straight to the article. While
+the job *is* there it is still the answer, whatever status it is in, matched by `upload.id` rather
+than by slug.
+
 **An upload never adopts an existing article.** `freeSlug` may adopt one, because `urlKey` can
 prove two addresses are one piece. An upload has no address, so there is nothing that could make
 two of them one article — two files called `paper.pdf` get two, per
@@ -718,12 +726,20 @@ keeps `on conflict do nothing` and classifies from the rows — `EnqueueOutcome`
 [`src/store/jobs.ts`](../../src/store/jobs.ts), four answers with four different repairs.
 
 **The order is enforced at the claim**, and nowhere else: a job may claim only when **no older active
-row exists for the same slug**, ordered by `(created_at, id)`; otherwise `busy`, *another job on this
-article is ahead of it*. Called a deterministic order rather than FIFO on purpose — Postgres is given
-the application's millisecond timestamp and `id` is random, so two requests inside one millisecond
-order by luck. What the rule guarantees is that the set of predecessors is the same for every
-claimant and never empties out of order; two requests that close together are a double-click, which
-de-duplication collapses into one job before the order can matter.
+row and no other running row exist for the same slug**, ordered by `(created_at, id)`; otherwise
+`busy`, *another job on this article is ahead of it*. Called a deterministic order rather than FIFO
+on purpose — Postgres is given the application's millisecond timestamp and `id` is random, so two
+requests inside one millisecond order by luck. What the rule guarantees is that the set of
+predecessors is the same for every claimant and never empties out of order; two requests that close
+together are a double-click, which de-duplication collapses into one job before the order can matter.
+
+**The *"and no other running row"* half is not a refinement of the first**, and leaving it out cost a
+500. A row whose insert commits after a newer one has already claimed the slug has nothing older than
+it on the article, so an order-only rule lets it through — and its `UPDATE` then walks into
+`jobs_one_running_per_slug`, which is a unique violation where the contract says wait. On the
+filesystem store, which has no index underneath, it was worse: two jobs running on one
+`data/<slug>/`. The late commit still does not get to displace the job already inside the article; it
+waits like everything else.
 
 **A predecessor that is stopping still blocks.** Stop on a *queued* job settles it terminal at once
 and it leaves the line by itself; Stop on a *running* one leaves it `running` with `cancelling` set

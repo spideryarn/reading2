@@ -87,7 +87,7 @@ afterAll(async () => {
   await rm(path.join(JOBS_DIR, `${KEYED}.json`), { force: true });
   await rm(path.join(JOBS_DIR, `${RESERVER}.json`), { force: true });
   await rm(path.join(JOBS_DIR, `${NAMELESS}.json`), { force: true });
-  for (const id of ["spya-fsload3", "spya-fsload4", "spya-fsload5", "spya-fsload8"]) {
+  for (const id of ["spya-fsload3", "spya-fsload4", "spya-fsload5", "spya-fsload8", "spya-fsload9"]) {
     await rm(path.join(JOBS_DIR, `${id}.json`), { force: true });
   }
   await reloadForTests();
@@ -210,5 +210,40 @@ describe("reading the job directory back", () => {
     );
     expect(free.kind).toBe("created");
     await fsJobStore.forget(free.job.id, environmentOwnerId()).catch(() => undefined);
+  });
+
+  /**
+   * **A job enqueued as `running` is `queued` in the file, not only in memory.**
+   *
+   * `enqueueOrGet` normalises the status — a caller may not insert a row that
+   * never passed the cap check and carries no attempt token — and until
+   * 2026-09-02 it normalised it into the in-memory index and then wrote the
+   * *caller's* object to the file. GPT Sol, reviewing the built stage 1,
+   * finding 6.
+   *
+   * **The file is read directly rather than through a reload**, and that is the
+   * whole reason this case is worth writing. `loadFromDisk` runs `sweepStopped`
+   * over every record, which turns a `running` job with nobody inside it back
+   * into a `queued` one — so a reload answers `queued` either way, and a test
+   * that asked it would be green against the bug. The record is still wrong
+   * while it sits there, and anything reading `data/_jobs/` that is not this
+   * loader reads a lie. docs/reusable/silent-success.md.
+   *
+   * Watched red on 2026-09-02: *"the file kept the caller's status: expected
+   * 'running' to be 'queued'"*.
+   */
+  it("writes an enqueued job to its file as queued, whatever status it was handed", async () => {
+    const id = "spya-fsload9";
+    await fsJobStore.enqueueOrGet(
+      {
+        ...record(id),
+        ownerId: environmentOwnerId(),
+        slug: `test-fsload-${id}`,
+        status: "running",
+      } as Job,
+      { workKey: "k-running", reservesName: false },
+    );
+    const stored = JSON.parse(await readFile(path.join(JOBS_DIR, `${id}.json`), "utf8")) as Job;
+    expect(stored.status, "the file kept the caller's status").toBe("queued");
   });
 });

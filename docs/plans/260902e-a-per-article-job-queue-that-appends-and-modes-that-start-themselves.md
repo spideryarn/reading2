@@ -190,6 +190,21 @@ and the index ignores them — which is right: two uploads of one file are two d
 simultaneous URL-mint race; use separate requests/connections with a barrier"* — both callers past
 the lookup before either reaches the insert. A sequential test passes today, against the bug.
 
+**The repair re-runs the allocation; it does not write the answer in by hand.** Corrected after
+review of the built stage 1 (finding 3). *"Adopt the holder's slug"* is the right slug and the
+wrong `reserves_name`: an adoption reserves nothing, so the loser lands **outside**
+`jobs_active_source`, and it was being put there on the strength of a holder it had only been told
+about. If that holder failed or was stopped between the refusal and the repair, a third request
+would see no article and no active holder, mint and reserve a second slug, and the loser would
+insert on the dead holder's — two active jobs, one owner, one URL, two slugs, both able to publish.
+So `sourceTaken` asks [`freeSlug`](../../src/jobs.ts) again, exactly as `nameTaken` does: the holder
+is in the store now, so the lookup adopts its slug — and if it has gone, mints and reserves a fresh
+one. Revalidating before inserting is the whole of the fix.
+
+**And the test for it has to go through `enqueue`.** The store-level case proves the *index* and
+would stay green if the repair branch were deleted, which is what Sol found. The repair is
+[`tests/one-article-for-one-address.test.ts`](../../tests/one-article-for-one-address.test.ts).
+
 ### 1e. The migration has to say what existing rows are
 
 `reserves_name` and `url_key` have to mean something for rows that predate them, and guessing is
@@ -208,9 +223,19 @@ answer: they are read at start-up by `sweepStopped`, and a record without the fi
 
 ### 1f. Serialisation at claim time, in a deterministic order
 
-A job may claim only when **no older active row exists for the same slug**, ordered by
-`(created_at, id)`. Refused as
+A job may claim only when **no older active row and no other *running* row exist for the same
+slug**, ordered by `(created_at, id)`. Refused as
 `{kind: "busy", why: "another job on this article is ahead of it"}`.
+
+**The running half was added after review of the built stage 1** (finding 2), and it is not a
+refinement of the older half. A row whose insert commits *after* a newer one has already claimed the
+slug has no predecessor — nothing on the article is older than it — so an order-only rule waves it
+through, and the `UPDATE` then collides with `jobs_one_running_per_slug`. That is a `23505` where
+the contract says `busy`: a 500 on the reader's request, and a pump that logs a thrown exception and
+exits. On the filesystem adapter, which has no index underneath, it was worse — two jobs running on
+one `data/<slug>/` directory, both reported as claimed. The late commit is still deliberately not
+FIFO; it simply waits its turn. `claimIn` carries a backstop for the same collision, mapping that
+one constraint name to `busy`.
 
 **Called deterministic order and not FIFO, because it is not FIFO and saying so would be a
 claim the code cannot keep.** Sol: *"`(created_at, id)` is deterministic, but not necessarily
@@ -342,6 +367,16 @@ tidying.
   handed an unrelated later mode job on the same article. It should match `job.upload.id ===
   uploadId`, which is the thing it actually means, and must still find a *terminal* ingest after a
   reload.
+
+  **And searching every status is not enough on its own**, which review of the built stage 1 found
+  (finding 5): finished jobs are trimmed to fifty per reader, and modes are jobs now, so fifty is a
+  fortnight of ordinary use. After that the upload is still `claimed`, the article is still on the
+  shelf, and the reload was answered *"That upload is already being turned into an article."* So the
+  recovery falls back to the **upload record**, which has named the slug since `enqueue` returned and
+  is never trimmed by count — `POST /api/jobs {uploadId}` answers `200 {article}` instead of `202
+  {job}`, and `AddPage` goes straight there. The alternative considered and rejected was sparing an
+  upload's job from retention: it only covers ingests that never completed, where the case a reader
+  actually comes back to is a *successful* import, whose job is trimmed like any other success.
 - `inFlightSlugForUrlKey` ([`src/jobs.ts`](../../src/jobs.ts):2322) returns the first match. Picking
   a deterministic row is not enough on its own — it is one half of the simultaneous-mint race, and
   § 1d is the other.

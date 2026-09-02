@@ -4261,7 +4261,7 @@ function publicUpload(record: UploadRecord): Record<string, unknown> {
  * article that claim produced and hands back its job. Only a claim with nothing
  * to show for it is an error.
  */
-async function queueAnUpload(uploadId: string): Promise<Job> {
+async function queueAnUpload(uploadId: string): Promise<UploadOutcome> {
   const owner = currentOwnerId();
   const record = await readUpload(uploadId, owner);
   if (!record) throw httpError(404, "No such upload");
@@ -4272,7 +4272,37 @@ async function queueAnUpload(uploadId: string): Promise<Job> {
     /* `taken`. If the first claim got as far as a job, that job is the answer —
        this is the same request arriving twice, not a conflict. */
     const already = await jobForUpload(uploadId);
-    if (already) return already;
+    if (already) return { kind: "job", job: already };
+    /**
+     * **And when the job has gone, the upload record still knows.**
+     *
+     * Finished jobs are trimmed to fifty per reader (`KEEP_FINISHED`,
+     * src/jobs.ts), and modes are jobs now — a glossary, a set of ideas and a
+     * quiz are three more rows on one article — so fifty is a fortnight of
+     * ordinary use rather than a year of it. After that the upload is still
+     * `claimed`, the article is still on the shelf, and this answered *"That
+     * upload is already being turned into an article"* about an article the
+     * reader had finished reading. GPT Sol, reviewing the built stage 1,
+     * finding 5.
+     *
+     * **Answered from the record rather than by keeping the job alive**, and
+     * that is the choice worth writing down. Sparing an upload's job from
+     * retention only covers the ingests that never completed: a *successful*
+     * import's job is trimmed like any other success, and that is the case a
+     * reader actually comes back to. What is durable here is the **article**,
+     * and the upload record has named it since the moment `enqueue` returned —
+     * uploads are swept on their grant, never trimmed by count, so the record
+     * outlives the job by design.
+     *
+     * Re-read rather than reusing `record` above: `noteSlug` lands after
+     * `enqueue` returns, so a second request arriving in that window would
+     * otherwise read a record from before the slug was written.
+     */
+    const fresh = await readUpload(uploadId, owner);
+    if (fresh?.slug) return { kind: "article", slug: fresh.slug };
+    /* A claim with nothing at all to show for it: `enqueue` threw between the
+       claim and `noteSlug`. The reader chooses the file again, which is cheap
+       and correct. */
     throw httpError(409, "That upload is already being turned into an article.");
   }
 
@@ -4292,8 +4322,21 @@ async function queueAnUpload(uploadId: string): Promise<Job> {
      upload id — but the record still had a hole in it, and the reader's own
      `/add/upload/<id>` page reads the slug from here. */
   await noteSlug(uploadId, job.slug);
-  return job;
+  return { kind: "job", job };
 }
+
+/**
+ * What `POST /api/jobs { uploadId }` resolves to.
+ *
+ * Two answers rather than one, because after retention there is a true thing to
+ * say that is not a job: *this file is already that article*. The alternative
+ * was to invent a job record to say it with, which is a lie about what the
+ * store holds, or to keep answering 409, which is a lie about what happened.
+ *
+ * `article` rather than `slug` on the wire, so the two bodies cannot be
+ * confused: a `publicJob` carries a `slug` of its own.
+ */
+type UploadOutcome = { kind: "job"; job: Job } | { kind: "article"; slug: string };
 
 /**
  * The job this upload became, whatever state it is in. For the repeat-claim
@@ -4308,9 +4351,14 @@ async function queueAnUpload(uploadId: string): Promise<Job> {
  * on the job record from the moment `enqueue` returns.
  *
  * **Every status, deliberately.** The reader reloading `/add/upload/<id>` after
- * their ingest has finished — or failed — must be shown *that* job, not a 409.
- * That is the whole of the recovery, and narrowing this to the active statuses
- * would take it away again a minute after each import ends.
+ * their ingest has finished — or failed — must be shown *that* job, not a 409,
+ * and narrowing this to the active statuses would take that away again a minute
+ * after each import ends.
+ *
+ * It is not the *whole* of the recovery, though it was described that way until
+ * 2026-09-02: finished jobs are trimmed to fifty per reader, so this eventually
+ * finds nothing however wide its statuses are. `queueAnUpload` above falls back
+ * to the upload record for that.
  *
  * Newest first, because `listJobs` is (src/jobs.ts) and a retry of an upload
  * ingest is the more recent of the two rows.
@@ -6583,7 +6631,16 @@ export async function serveAuthenticatedApi(
       if (request.uploadId !== undefined) {
         /* No other field survives `checkUploadOrigin`, so there is nothing to
            forward: an upload is always the default ingest. */
-        send(res, 202, publicJob(await queueAnUpload(request.uploadId)));
+        const outcome = await queueAnUpload(request.uploadId);
+        /* **200, not 202**: nothing has been accepted, because there is nothing
+           left to do. The file became this article a while ago and its job
+           record has since been trimmed — `queueAnUpload` for why the record
+           rather than the job is what answers. */
+        if (outcome.kind === "article") {
+          send(res, 200, { article: outcome.slug });
+          return;
+        }
+        send(res, 202, publicJob(outcome.job));
         return;
       }
       /* **Not for the `{ url }` shape**, and that is a correctness fix rather

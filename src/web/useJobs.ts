@@ -25,6 +25,17 @@ import type { Job, StepName } from "../types.js";
 import { jobEngine, send } from "./jobEngine.js";
 import { statusOf } from "./lib/api.js";
 
+/**
+ * *There is nothing to queue: this upload is already this article.*
+ *
+ * `article` rather than `slug`, because a `Job` carries a `slug` of its own and
+ * the two answers arrive on the same wire — a key that only one of them can
+ * have is what makes `"article" in answer` a narrowing rather than a guess.
+ */
+export interface AlreadyAnArticle {
+  article: string;
+}
+
 export interface UseJobs {
   jobs: Job[];
   /** False until the first poll lands, so the UI can tell "none" from "don't know yet". */
@@ -102,8 +113,15 @@ export interface UseJobs {
    * upload can be claimed by somebody else, or its grant can have run out, and
    * neither of those is a thing a URL can be. The bytes are long gone by the
    * time this is called — see src/web/upload.ts, which is what sends them.
+   *
+   * **Three answers, and the third is why this is not `Promise<Job | null>`.**
+   * Reloading `/add/upload/<id>` long after the import finished finds an upload
+   * that is still claimed and a job record that retention has taken away, and
+   * the true thing to say then is *this file is already that article* — see
+   * `queueAnUpload` in src/routes.ts. Null is still a failure, with the reason
+   * in `error`.
    */
-  addUpload(uploadId: string): Promise<Job | null>;
+  addUpload(uploadId: string): Promise<Job | AlreadyAnArticle | null>;
   /**
    * Run named steps on an article that is already on the shelf, and hand back
    * the job so the caller can watch that one rather than the whole list.
@@ -270,8 +288,11 @@ export function useJobs(onFinished?: (job: Job) => void): UseJobs {
     }
   }, []);
 
-  const post = (body: unknown) =>
-    send<Job>("/api/jobs", {
+  /* Generic in what comes back, because one of the three bodies below is not a
+     `Job` — see `addUpload`. `Job` is the default, so the other two read as
+     they always did. */
+  const post = <T = Job,>(body: unknown) =>
+    send<T>("/api/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -284,7 +305,7 @@ export function useJobs(onFinished?: (job: Job) => void): UseJobs {
     driverFailures: snapshot.driverFailures,
     lastFailure: () => lastFailure.current,
     add: (url) => act(() => post({ url })),
-    addUpload: (uploadId) => act(() => post({ uploadId })),
+    addUpload: (uploadId) => act(() => post<Job | AlreadyAnArticle>({ uploadId })),
     run: (request) => act(() => post(request)),
     cancel: async (id) => {
       await act(() => send(`/api/jobs/${id}/cancel`, { method: "POST" }));

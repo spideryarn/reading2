@@ -45,15 +45,22 @@
  * its `23505` by name; a constant cannot express *at most N*, so on 2026-08-30 it
  * was dropped for a count taken inside the `queue_state` lock. `jobs_active_slug`
  * gave one active job per article, and on 2026-09-02 it became four narrower
- * indexes so that an article could hold a line. Nothing here catches either name
- * any more, and a `catch` that still did would be dead code reading as a live
- * guard.
+ * indexes so that an article could hold a line. Neither name is caught here any
+ * more, and a `catch` that still named one of *those* would be dead code reading
+ * as a live guard.
+ *
+ * **One name is caught, and `claimIn` says why at length.**
+ * `jobs_one_running_per_slug` is the article's running mutex, and a claim that
+ * violates it means *somebody else is inside this article* — which is `busy`,
+ * not a 500. The read above it is what normally answers; the `catch` is there
+ * for a claimant that does not take the `queue_state` lock, and it is written
+ * down as unreachable-today rather than presented as a live guard.
  */
 
 import { and, desc, eq, inArray, isNull, lte, or, type SQL, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { guardDbStore, lockUnavailable } from "./db-errors.js";
+import { guardDbStore, lockUnavailable, violatesConstraint } from "./db-errors.js";
 import { leaseIsOver, liveAttempt } from "./job-fence.js";
 import { jobs, queueState } from "../db/schema.js";
 import { INTERRUPTED } from "../messages.js";
@@ -235,12 +242,66 @@ async function tryEnqueue(job: Job, ticket: EnqueueTicket): Promise<EnqueueOutco
     if (name) return { kind: "nameTaken", job: toJob(name) };
   }
 
+  /**
+   * **Nothing classified — so either the holder finished, or the id is taken.**
+   *
+   * `on conflict do nothing` covers every unique index on the table, and only
+   * three of them are the queue's. `jobs_pkey` is the fourth kind of answer,
+   * and it is the one the retry above cannot repair: the same id is minted
+   * again on every pass, so `enqueueOrGet` would spend its whole budget and
+   * then say *nothing holds it for this slug*, which is true and is about
+   * entirely the wrong thing. Astronomically unlikely — `spya-` plus six random
+   * base36 characters — and exactly why it has to be said rather than looped
+   * over. GPT Sol, reviewing the built stage 1, finding 7.
+   *
+   * One extra read, on a path that is already the slow one: it only runs when
+   * an insert conflicted *and* none of the three classifiers answered.
+   *
+   * **The `status` is what lets the sentence out.** `guardDbStore` replaces the
+   * message of anything without one, so an unmarked error here would be as
+   * silent as the sentence it replaces — src/store/db-errors.ts § *Adding a
+   * sixth: don't. Give the class a `status` instead.* The message carries the
+   * job id and nothing else, which is `spya-` and six characters we minted
+   * ourselves; no slug, no URL, no title.
+   */
+  const [taken] = await db
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(eq(jobs.id, job.id))
+    .limit(1);
+  if (taken) {
+    throw Object.assign(
+      new Error(
+        `Job id ${job.id} is already taken by another row, so this insert can never succeed. ` +
+          "That is an id collision rather than anything about the queue.",
+      ),
+      { status: 500 },
+    );
+  }
+
   // Whoever held it finished between the two statements. The caller asks again.
   return null;
 }
 
 /**
- * Is an **older** active job already in this article's line?
+ * Is another job in the way on this article — **older, or already running**?
+ *
+ * Two conditions, and the second is not a refinement of the first.
+ *
+ * **Older** is the order rule: the article's line is `(created_at, id)`, and a
+ * job may not step in front of one that was asked for first.
+ *
+ * **Running at all** is the mutex, asked here rather than left to the index. A
+ * job whose row commits *after* a newer one has already claimed the slug has no
+ * predecessor — nothing on the article is older than it — so the order rule
+ * alone waves it through, and its `UPDATE` then collides with
+ * `jobs_one_running_per_slug`. That is a `23505` where the contract says
+ * `busy`: a 500 on the reader's request, and a pump that logs a thrown
+ * exception and exits. The late commit is still deliberately **not** FIFO — an
+ * older row arriving late does not get to displace a job already inside the
+ * article — it simply waits its turn like everything else. GPT Sol, reviewing
+ * the built stage 1, finding 2; `claimIn` carries the backstop for the window
+ * between this read and that write.
  *
  * One statement, and the row's own `(created_at, id)` is read inside it rather
  * than passed in as a parameter. That is not tidiness: `created_at` is a
@@ -252,15 +313,21 @@ async function tryEnqueue(job: Job, ticket: EnqueueTicket): Promise<EnqueueOutco
  * Row-wise `<` rather than `created_at < … or (= and id <)`, because they are
  * the same comparison and only one of them can be got wrong. `jobs_slug_order`
  * is the index it reads.
+ *
+ * `other.id <> mine.id` is load-bearing and was not before: the row-wise
+ * comparison excluded this job from itself, and `other.status = 'running'` does
+ * not.
  */
-async function hasPredecessor(tx: Tx, id: string): Promise<boolean> {
+async function blockedByAnother(tx: Tx, id: string): Promise<boolean> {
   const ahead = await tx.execute(sql`
     select 1
-      from ${jobs} as older, ${jobs} as mine
+      from ${jobs} as other, ${jobs} as mine
      where mine.id = ${id}
-       and older.slug = mine.slug
-       and older.status in ('queued', 'running')
-       and (older.created_at, older.id) < (mine.created_at, mine.id)
+       and other.slug = mine.slug
+       and other.id <> mine.id
+       and other.status in ('queued', 'running')
+       and (other.status = 'running'
+            or (other.created_at, other.id) < (mine.created_at, mine.id))
      limit 1
   `);
   return ahead.rowCount === 1;
@@ -320,12 +387,33 @@ async function claimIn(
         )
         .returning();
     } catch (err) {
-      /* **No `jobs_only_one_running` branch any more, and its absence is the
-         thing to notice.** That index was the whole of the global guarantee and
-         a `23505` here was an ordinary answer; it is gone
+      /* **The backstop, and it should not be reachable today.** Said plainly,
+         because the header of this file argues that a `catch` on a constraint
+         name is dead code reading as a live guard, and this is the exception it
+         is worth making. `blockedByAnother` above is a read and this is the
+         write — but every transition into `running` takes the `queue_state`
+         singleton first, so no other claimant can be between them, and the read
+         is what actually answers `busy`. What this covers is a claimant that
+         does *not* take that lock: an older build mid-deploy, a script, or the
+         next change to this function. An article's running mutex refusing a
+         second runner is an index doing its job, which the header says is an
+         answer rather than an error — so the failure mode it removes is a 500
+         on a request whose contract says *wait*.
+
+         **By name, and only this name.** The `UPDATE` can violate exactly one
+         unique index — `jobs_one_running_per_slug` is the only one of the four
+         over `status = 'running'` — so reading a name here is safe in the way
+         `enqueueOrGet` deliberately is not (src/store/db-errors.ts §
+         `violatesConstraint`). Anything else rethrows.
+
+         **No `jobs_only_one_running` branch, and its absence is still the thing
+         to notice.** That index was the whole of the *global* guarantee and a
+         `23505` here was an ordinary answer for it too; it is gone
          (drizzle/0032_jobs_concurrency_cap.sql) and the cap is counted by the
-         caller inside the queue_state lock. A `catch` that still named it would
-         be dead code that reads as a live guard. */
+         caller inside the queue_state lock. */
+      if (violatesConstraint(err, "jobs_one_running_per_slug")) {
+        return { kind: "busy", why: "another job on this article is ahead of it" };
+      }
       throw err;
     }
     if (taken[0]) return { kind: "claimed", job: toJob(taken[0]) };
@@ -584,6 +672,44 @@ const rawPgJobStore: JobStore = {
         );
       }
 
+      /**
+       * **The article's line is asked first, and the cap second.**
+       *
+       * Both refuse, so the order changes no outcome — only which *reason* the
+       * refusal carries, and one of the two is a fact about this job while the
+       * other is a fact about the machine. A job waiting behind an older job on
+       * its own article is waiting for a reason that will still be true in a
+       * minute; the cap is whatever the box happens to be doing this second.
+       *
+       * **Found by the cap answering for the line under load**, 2026-09-02: the
+       * count is over every `running` row in the whole table, so six concurrent
+       * test runs on one database made a parity case read *"already running N of
+       * 100"* where the article rule was what actually held it — twice, and then
+       * not at all when the box went quiet. A reason that depends on unrelated
+       * traffic is a reason nobody can act on, and it made a real test into a
+       * coin toss.
+       *
+       * **In the same lock as the cap, and exact for the same reason.** Every
+       * transition into `running` takes the `queue_state` singleton first, so
+       * no other claimant can be between this read and the `UPDATE` below; a
+       * concurrent *finish* can only shorten the line, so the worst this
+       * produces is a conservative `busy`.
+       *
+       * The reason says *article* because `busy` already means several things
+       * to the client loop, and a log that cannot tell "waiting its turn on
+       * this piece" from "the machine is full" makes them one symptom. There is
+       * no queue position in it, and that is Greg's call: a waiting job shows
+       * as waiting, in the card it already has.
+       */
+      if (await blockedByAnother(tx, id)) {
+        return (
+          (await refusalFor(tx, id, owner)) ?? {
+            kind: "busy",
+            why: "another job on this article is ahead of it",
+          }
+        );
+      }
+
       /* **Only when this job is not already running.** Re-claiming a job that is
          already `running` must be reported as *another request is inside this
          job*, not as the cap. The `UPDATE` refuses it either way on
@@ -610,29 +736,6 @@ const rawPgJobStore: JobStore = {
         );
       }
 
-      /**
-       * **The article's line, in the same lock as the cap and exact for the
-       * same reason.**
-       *
-       * Every transition into `running` takes the `queue_state` singleton
-       * first, so no other claimant can be between this read and the `UPDATE`
-       * below; a concurrent *finish* can only shorten the line, so the worst
-       * this produces is a conservative `busy`.
-       *
-       * The reason says *article*, because `busy` already means several things
-       * to the client loop and a log that cannot tell "waiting its turn on this
-       * piece" from "the machine is full" makes them one symptom. There is no
-       * queue position in it, and that is Greg's call: a waiting job shows as
-       * waiting, in the card it already has.
-       */
-      if (await hasPredecessor(tx, id)) {
-        return (
-          (await refusalFor(tx, id, owner)) ?? {
-            kind: "busy",
-            why: "another job on this article is ahead of it",
-          }
-        );
-      }
       return claimIn(tx, id, owner, attempt, leaseMs);
     });
   },

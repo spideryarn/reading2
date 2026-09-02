@@ -231,7 +231,7 @@ it("takes the oldest queued job when none is running, which is the one that runs
   ];
   mount();
   /* The same order the claim uses — `(createdAt, id)`, src/store/pg-jobs.ts §
-     `hasPredecessor` — so the panel is about the run that is about to happen
+     `blockedByAnother` — so the panel is about the run that is about to happen
      rather than about whichever row sorted first. */
   expect(seen?.job?.id).toBe("spya-older");
 });
