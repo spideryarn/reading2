@@ -75,6 +75,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 
 import { TRUNK_BRANCH } from "./deploy-checks.js";
+import { TRUNK_FETCH_TIMEOUT_MS } from "./worktree-freshen.js";
 import { forceRemoveThrowawayWorktree, listWorktrees, type WorktreeEntry } from "./worktree-admin.js";
 
 /** A worktree is never removable while it has been touched this recently. */
@@ -172,9 +173,18 @@ function tryGit(args: string[], cwd?: string): string | null {
   return r.status === 0 ? `${r.stdout ?? ""}`.trim() : null;
 }
 
-/** Fetch the trunk. Returns false rather than throwing, so the caller fails closed. */
+/**
+ * Fetch the trunk. Returns false rather than throwing, so the caller fails
+ * closed — and takes the same timeout as `worktree:setup`'s fetch, because a
+ * sweep that hangs is a sweep nobody runs. See `TRUNK_FETCH_TIMEOUT_MS`.
+ */
 export function fetchTrunk(cwd: string): boolean {
-  return spawnSync("git", ["fetch", "origin", TRUNK_BRANCH, "--quiet"], { cwd, encoding: "utf8" }).status === 0;
+  const r = spawnSync("git", ["fetch", "origin", TRUNK_BRANCH, "--quiet"], {
+    cwd,
+    encoding: "utf8",
+    timeout: TRUNK_FETCH_TIMEOUT_MS,
+  });
+  return r.status === 0;
 }
 
 /** The worktree the process is standing in, resolved the way git reports paths. */
