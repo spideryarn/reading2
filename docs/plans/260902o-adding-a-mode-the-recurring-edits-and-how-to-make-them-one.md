@@ -278,29 +278,62 @@ file sets run in parallel; the orchestrator alone edits this doc, after each wav
 
 **Wave 1 — three stages in parallel, file-disjoint.**
 
-- [ ] **Stage A — the client tables (T0.1, T0.2, T0.3, T1.1, T1.2, T1.3).** Files: `Dock.tsx`,
+- [x] **Stage A — the client tables (T0.1, T0.2, T0.3, T1.1, T1.2, T1.3).** Landed `569bad78`.
+  Two deviations: `satisfies readonly ModeUi[]` **without** `as const`, because `as const` makes
+  the element type thirteen distinct shapes and `m.keepLabel` stops compiling, and the `mode`
+  literal survives either way; and a fifth label copy found — the band-mode list in the overview
+  already had Timeline and Referee, it was Outline that was missing. One more silent branch fell
+  out: `saving()` in `lib/api.ts` read `res.headers` directly, one line outside the `header()`
+  helper the file already has. Files: `Dock.tsx`,
   `App.tsx` (controls bar only), `title-text.ts`, `visitor.ts`, `CriteriaPanel.tsx`, `lib/api.ts`,
   the tests that pin them, `reading-view-overview.md`. Red tests first for T0.1 (a test that the
   offline list covers every stored-artefact GET, derived from the code rather than hand-listed,
   plus the GET → mark → failed GET regression for quiz) and the T0.2 contract. Done when: a mode
   added to `MODES` with no `MODES_UI` row and no visitor policy is a typecheck failure, no label is
   spelled twice, and the referee routes are either cached correctly or excluded in writing.
-- [ ] **Stage B — the store totals (T1.5, T1.6, T1.8, T1.9).** Files: `src/store/artifacts.ts`,
+- [x] **Stage B — the store totals (T1.5, T1.6, T1.8, T1.9).** Landed `b78d7e2a`. Each check
+  proved red by mutation: a deleted `timeline` row is TS2741 at `STAMP_SOURCE`; a deleted
+  `loadArc` is TS2741 at `pgArticleReader` — and under the old `Pick` + cast the same deletion
+  produced **no error at all**; a `"timeline"` removed from `STEP_ORDER` is TS2344 at the
+  `StepsMissingFromOrder` type. `: ArticleReader` rather than `satisfies`, because
+  `tests/store-seams-have-two-implementations.test.ts` finds adapters by parsing the annotation.
+  The test that asks for the quiz stamp row is `quiz-step-registration`, not `quiz` as the old
+  comment said. Files: `src/store/artifacts.ts`,
   `index.ts`, `pg.ts` (the reader declaration only), `src/pipeline.ts`, `src/quotes.ts`, and
   their tests. Done when: a new `StepName` with no stamp-source row, a `pgArticleReader` missing a
   loader, and a step missing from `STEP_ORDER` are each red at typecheck.
-- [ ] **Stage D — the read-hook guard (T2.1).** Files: the seven `use*.ts` hooks, `Tweets.tsx`,
+- [x] **Stage D — the read-hook guard (T2.1).** Landed `50b25cad`: `src/web/useOrderedRead.ts`,
+  seven red then eight green in `tests/artefact-read-race.test.tsx`. Two things the plan drew
+  wrong: the read has to take a `current()` predicate, because "only the newest generation may
+  commit" is checked inside each body after every `await`; and the helper grew two verbs beyond
+  `reload`/`refresh` — `armRefresh` for the glossary's term lookup, `discard` for its delete —
+  each with one caller, which the code review is asked about. Arc lost the race like the rest in
+  the test; its self-repair is conditional, so it is a comment not a different expectation.
+  Files: the seven `use*.ts` hooks, `Tweets.tsx`,
   a new helper beside `useStepJob.ts`, `tests/artefact-read-race.test.tsx` (already red) extended
   to every consumer. Done when: the race test is green for all eight and the glossary's own
   guard is the shared one rather than a ninth copy.
 
 **Wave 2.**
 
-- [ ] **Stage C — the band head (T1.4).** After A (both touch `App.tsx`). Files: `styles.css`
-  and the panels' class names, Chat included. Browser pass on every band before and after, in a
-  Sonnet subagent, as the veto.
-- [ ] **Stage F — the signpost (T3.3), and the debrief.** The residue list in `web-client.md` and
-  `architecture.md` § Conventions; this plan's status; what is left.
+- [x] **Stage C — the band head (T1.4).** Landed `b09543bb`. Six families out, `.band-head` in;
+  ten header sites, nine icon sites; the old names survive only in the comment that says what
+  replaced them. One property beyond the two intended: chat's head gap, 0.5rem → the 0.45rem the
+  other five had. The browser veto ran both ways on every band that has a header (outline has
+  none): computed `flex`, `gap`, `padding`, `min-height`, `align-items` on the head and
+  `font-size`, `font-weight`, `white-space`, `overflow`, `text-overflow`, `min-width` on the
+  `h2`, plus 1280-wide element screenshots diffed with PIL. Verdict: differs only as intended in
+  all ten; eight screenshots byte-identical, the other two sub-pixel anti-aliasing on unchanged
+  icon glyphs; no heading's `scrollWidth` exceeds its `clientWidth`, so the ellipsis rule clips
+  nothing today.
+- [x] **Stage F — the signpost (T3.3), and the debrief.**
+  [web-client.md § Adding a mode](../project/web-client.md#adding-a-mode) and
+  [architecture.md § Adding an artefact-backed mode](../project/architecture.md#adding-an-artefact-backed-mode):
+  the totals the compiler asks for, then the residue with what tells you — for five of the six
+  client sites, *nothing; this list*. Two corrections found writing it: the model tables in
+  `models.ts` are keyed on `Task`/`ArticleStage`, not `ArtifactKind`; and
+  `tests/db-step-constraint.test.ts` derives the CHECK from the migrations' journal, so the literal
+  in `schema.ts` is a hand-kept copy that its own comment says has drifted twice.
 
 **Not this run.** T2.2 (the six-producer lifecycle helper) — its own plan, after C, with the
 boundary reviewed first.
@@ -309,3 +342,41 @@ boundary reviewed first.
 
 - 2026-09-02: audit run, four subagents, counts re-verified; plan written; to Sol.
 - 2026-09-02: race reproduced (`tests/artefact-read-race.test.tsx`); Sol's review folded in; wave 1 dispatched.
+- 2026-09-02: wave 1 landed as three commits (B `b78d7e2a`, D `50b25cad`, A `569bad78`); both
+  code reviews sent to Sol; Stage C dispatched with a before-capture of every band header.
+- 2026-09-02: Sol's code reviews back —
+  [B and D](260902o-adding-a-mode-wave1-bd-code-review-sol.md): **ship**, both; no stale-commit
+  interleaving found; the race test goes 8/8 red under either mutation of `refresh`; `armRefresh`
+  and `discard` are at the right boundary (moving them would duplicate the helper's private
+  state). One non-blocking note: `StepsMissingFromOrder` need not be exported — Sol's alternative
+  is a conditional type on `STEP_ORDER`'s annotation; **not taken**, because it is a second
+  spelling of a check that now exists in two files (`pipeline.ts`, `Dock.tsx`) and the exported
+  form is the plainer one to read. [A](260902o-adding-a-mode-wave1-a-code-review-sol.md): **ship
+  with changes** — every mode's `visitorGap` result confirmed identical before and after; four
+  findings, one medium (the derived cacheable test drops a route silently if its binding is
+  renamed) and three low (`logFailure` still reads headers directly; `storesNothing` overstates —
+  the mark writes a ledger row, just no quiz state; five stale counts and one stale quotation in
+  comments). All four applied in `238945cd`, each shown red first — Sol's rename mutation left
+  the derived test green at 14 passed; after the fix the same mutation is red naming timeline.
+- 2026-09-02: Stage C `b09543bb`, Stage F with this update. **Where it stands: done enough to
+  stop here.** Every Tier 0 and Tier 1 item that survived review is landed and reviewed; what
+  remains is real and optional.
+
+## What is left
+
+- **T2.2, the six-producer passage lifecycle** — its own plan, after this one; the boundary Sol
+  drew (publish `found`, clear on unmount, clear an invalid or open key through a keyed/unkeyed
+  union; leave auto-open and the intent jump in Ideas and Timeline) is the starting spec.
+- **T3.1, the band dispatch in `App.tsx`** — named and sized above; the cheapest shape is an
+  inline exhaustive `switch (mode)` closing over `Reader`'s locals, and it needs a three-way
+  `hierarchy | plain | band` for layout first.
+- **T3.2, a mode's public-readability as policy** — Greg's product call, not this sweep's.
+- **The referee's nested routes and the offline store** — excluded in writing; caching them means
+  `slugOf` and `resourceOf` each grow a route-aware case.
+- **The local database on the box** reports nothing pending yet lacks `feedback.route_kind`, so
+  `admin-feedback-store`, `db-schema-drift`, `feedback-store` and `health` are red for every
+  agent here. A renumbered migration's ledger row is the likely cause; the fix is a reset, which
+  needs Greg.
+- **Not taken from review, on purpose**: the conditional-type spelling of `StepsMissingFromOrder`
+  (a second spelling of a check that now lives in two files), and the dense
+  `REVISION_READ_POLICY` matrix (T1.7).
