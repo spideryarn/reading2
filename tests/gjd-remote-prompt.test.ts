@@ -34,7 +34,14 @@ import { PassThrough } from "node:stream";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { Cancelled, checklistOrRefuse, confirmOrRefuse, NotInteractive } from "../scripts/gjd-remote-prompt.js";
+import {
+  Cancelled,
+  checklistOrRefuse,
+  confirmOrRefuse,
+  NotInteractive,
+  promptIo,
+  type PromptStreams,
+} from "../scripts/gjd-remote-prompt.js";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -99,6 +106,65 @@ describe("refusing when there is no terminal", () => {
 });
 
 /**
+ * WHERE THE QUESTION IS DRAWN, which is not stdout once stdout is a file.
+ *
+ * `gjd-remote clone > out.txt` puts the question in the file and leaves the
+ * terminal showing a cursor waiting for an answer to something nobody can read
+ * — a prompt that presents as a hang. GPT Sol asked for this in Stage 1
+ * (finding 9), against a version that always wrote to `process.stdout`.
+ *
+ * The streams are injected rather than mocked: setting `isTTY = false` on the
+ * real `process.stdout` would break whatever ran next in the same worker.
+ */
+describe("choosing the output stream", () => {
+  const streams = (isTTY: boolean, openTty: () => NodeJS.WritableStream): PromptStreams => ({
+    stdout: Object.assign(new PassThrough(), { isTTY }),
+    openTty,
+  });
+
+  it("uses stdout when stdout is a terminal", () => {
+    const tty = new PassThrough();
+    const s = streams(true, () => tty);
+    expect(promptIo("inherit", s)?.output).toBe(s.stdout);
+  });
+
+  it("opens /dev/tty when stdout has been redirected", () => {
+    const tty = new PassThrough();
+    const s = streams(false, () => tty);
+    const io = promptIo("inherit", s);
+    expect(io?.output).toBe(tty);
+    expect(io?.output).not.toBe(s.stdout);
+  });
+
+  /** No controlling terminal at all — cron, a daemon. `null` here is what every
+   *  prompt turns into `NotInteractive`, rather than printing into the pipe. */
+  it("gives up when there is no controlling terminal to open", async () => {
+    const io = promptIo("inherit", {
+      stdout: Object.assign(new PassThrough(), { isTTY: false }),
+      openTty: () => {
+        throw Object.assign(new Error("ENXIO: no such device or address, open '/dev/tty'"), { code: "ENXIO" });
+      },
+    });
+    expect(io).toBeNull();
+    await expect(confirmOrRefuse("Clone it?", io)).rejects.toBeInstanceOf(NotInteractive);
+  });
+
+  it("still refuses a null keyboard before it looks at the output at all", () => {
+    let opened = false;
+    expect(
+      promptIo(null, {
+        stdout: Object.assign(new PassThrough(), { isTTY: false }),
+        openTty: () => {
+          opened = true;
+          return new PassThrough();
+        },
+      }),
+    ).toBeNull();
+    expect(opened).toBe(false);
+  });
+});
+
+/**
  * Run one expression from the wrapper inside a pty, type `keys` at it, and give
  * back what it resolved or rejected with.
  *
@@ -107,8 +173,17 @@ describe("refusing when there is no terminal", () => {
  * awaited and the keystrokes wait on it plus a beat, because keys typed before
  * inquirer's first render are deliberately thrown away — send them early and
  * every one of these tests would hang instead of failing.
+ *
+ * `ioExpr` is how `io` gets built, so the `-p -` shape — a numeric `/dev/tty`
+ * fd rather than `"inherit"` — can be exercised as well. It has to be a real
+ * pty for that: `tty.ReadStream` is what carries `isTTY`, and nothing short of
+ * a terminal can tell the right wrapper from the wrong one.
  */
-function inPty(body: string, keys: string | readonly string[]): Promise<{ ok?: unknown; err?: string; log: string }> {
+function inPty(
+  body: string,
+  keys: string | readonly string[],
+  ioExpr = `promptIo("inherit")`,
+): Promise<{ ok?: unknown; err?: string; log: string }> {
   const marker = path.join(dir, "started");
   const resultPath = path.join(dir, "result.json");
   // `.mts`, not `.ts`: the temp directory has no package.json, so tsx reads a
@@ -119,9 +194,9 @@ function inPty(body: string, keys: string | readonly string[]): Promise<{ ok?: u
   const child = path.join(dir, "child.mts");
   writeFileSync(
     child,
-    `import { writeFileSync } from "node:fs";\n` +
+    `import { openSync, writeFileSync } from "node:fs";\n` +
       `import { checklistOrRefuse, confirmOrRefuse, promptIo } from ${JSON.stringify(path.join(REPO, "scripts/gjd-remote-prompt.ts"))};\n` +
-      `const io = promptIo("inherit");\n` +
+      `const io = ${ioExpr};\n` +
       `writeFileSync(${JSON.stringify(marker)}, "");\n` +
       `try {\n` +
       `  const ok = await (${body});\n` +
@@ -239,6 +314,51 @@ macOnly("answering for real, in a pty", () => {
     expect(r, r.log).toMatchObject({ ok: ["ALPHA"] });
   }, 60_000);
 
+  /**
+   * THE REASON LINE, which is the whole point of the checklist over a list of
+   * yes/no questions: the highlighted item explains itself, so "which of these
+   * keys?" can be answered without going and looking each one up.
+   *
+   * It survived every other test here — deleting the line in
+   * `checklistOrRefuse` that copies `description` onto the choice left the
+   * suite green, which GPT Sol named in Stage 1 (finding 12). Nothing but the
+   * recording can see it, because the description is drawn and never returned.
+   */
+  it("draws the highlighted item's description, so the reason is on screen", async () => {
+    const r = await inPty(CHECKLIST, "\r");
+    expect(r, r.log).toMatchObject({ ok: ["ALPHA"] });
+    expect(r.log).toContain("local dev only");
+  }, 60_000);
+
+  /**
+   * The `-p -` shape: fd 0 has been spent reading the prompt, so the keyboard
+   * is a freshly-opened `/dev/tty` and `promptIo` is handed its number. Wrap
+   * that fd the obvious way — `createReadStream(null, { fd })` — and the stream
+   * has no `isTTY`, so every prompt refuses in exactly the case the fd was
+   * opened for. Only a real terminal can tell the two apart.
+   */
+  it("promptIo wraps a raw /dev/tty fd as something the prompts accept", async () => {
+    const r = await inPty(`confirmOrRefuse("Clone it?", io)`, "y\r", `promptIo(openSync("/dev/tty", "r"))`);
+    expect(r, r.log).toMatchObject({ ok: true });
+  }, 60_000);
+
+  /**
+   * And the same fd, examined rather than typed at — because answering through
+   * it proves less than it looks. Inside this pty, `process.stdin` is the same
+   * terminal, so a `promptIo` that ignored its fd and handed back
+   * `process.stdin` would answer that test perfectly and break `-p -` in
+   * production, where fd 0 is a drained pipe. Two facts kill both mutations:
+   * the stream is the fd's own, and it carries `isTTY`.
+   */
+  it("the fd becomes its own stream, and one that carries isTTY", async () => {
+    const r = await inPty(
+      `Promise.resolve({ ownStream: io.input !== process.stdin, isTTY: io.input.isTTY === true })`,
+      "",
+      `promptIo(openSync("/dev/tty", "r"))`,
+    );
+    expect(r, r.log).toMatchObject({ ok: { ownStream: true, isTTY: true } });
+  }, 60_000);
+
   it("the 'a' shortcut ticks everything, and Enter returns all of it", async () => {
     const r = await inPty(CHECKLIST, "a\r");
     expect(r, r.log).toMatchObject({ ok: ["ALPHA", "BETA", "GAMMA"] });
@@ -247,6 +367,19 @@ macOnly("answering for real, in a pty", () => {
   it("'a' again unticks everything, so it is one key for all and none", async () => {
     const r = await inPty(CHECKLIST, "aa\r");
     expect(r, r.log).toMatchObject({ ok: [] });
+  }, 60_000);
+
+  /**
+   * The checklist's own Ctrl-C, which the confirm test above did not cover:
+   * they catch separately, so deleting the conversion from one of them leaves
+   * the other's test green. An unconverted `ExitPromptError` reaches the CLI as
+   * a stack trace instead of "cancelled." — and worse, `[]` from a checklist is
+   * a real answer, so a Ctrl-C read as an answer would be read as "none of
+   * them" and acted on.
+   */
+  it("checklistOrRefuse turns Ctrl-C into Cancelled, not a stack trace", async () => {
+    const r = await inPty(CHECKLIST, "");
+    expect(r, r.log).toMatchObject({ err: new Cancelled().name });
   }, 60_000);
 
   /**

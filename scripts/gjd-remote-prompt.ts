@@ -24,7 +24,8 @@
  * the outside for the first few seconds, and only one of them ends.
  */
 import { checkbox, confirm } from "@inquirer/prompts";
-import { ReadStream } from "node:tty";
+import { openSync } from "node:fs";
+import { ReadStream, WriteStream } from "node:tty";
 
 /**
  * The streams a prompt talks on. `isTTY` is optional because Node only puts it
@@ -74,19 +75,62 @@ function isNoAnswer(error: unknown): boolean {
 }
 
 /**
+ * Where a prompt would draw, and how the controlling terminal gets opened.
+ * Injected so a test can hand in a stdout that is not a terminal without
+ * redirecting the real one out from under the rest of the suite.
+ */
+export type PromptStreams = {
+  stdout: NodeJS.WritableStream & { isTTY?: boolean };
+  /** Opens `/dev/tty` for writing. Throws when the process has no terminal. */
+  openTty: () => NodeJS.WritableStream;
+};
+
+const REAL_STREAMS: PromptStreams = {
+  stdout: process.stdout,
+  // The fd is deliberately never closed: it lives as long as the process, and
+  // closing it would take the prompt's own output with it.
+  openTty: () => new WriteStream(openSync("/dev/tty", "w")),
+};
+
+/**
  * The streams for a keyboard, from whatever `interactiveStdin()` returned.
  *
- * Worth using rather than assembling a `PromptIo` by hand, because the obvious
- * way to wrap the `/dev/tty` fd — `createReadStream(null, { fd })` — produces a
- * stream with **no `isTTY`**, and every prompt here would then refuse in
- * precisely the `-p -` case the fd was opened for. `tty.ReadStream` is the one
- * that carries `isTTY`. Output goes to stdout, which is still the terminal in
- * that case; only fd 0 was redirected.
+ * Worth using rather than assembling a `PromptIo` by hand, for two reasons.
+ *
+ * **Input.** The obvious way to wrap the `/dev/tty` fd —
+ * `createReadStream(null, { fd })` — produces a stream with **no `isTTY`**, and
+ * every prompt here would then refuse in precisely the `-p -` case the fd was
+ * opened for. `tty.ReadStream` is the one that carries `isTTY`.
+ *
+ * **Output, which is not stdout once stdout stops being a terminal.**
+ * `gjd-remote … > out.txt` sends fd 1 to a file, and the question then goes
+ * into the file while the terminal shows a cursor waiting for an answer to
+ * something nobody can read — a prompt that presents as a hang. So the question
+ * goes to `/dev/tty`, the controlling terminal whatever fd 1 became. If there
+ * is no controlling terminal to open, there is no terminal at all: this returns
+ * `null`, and every function below turns that into `NotInteractive` rather than
+ * printing into the pipe.
+ *
+ * The asymmetry is deliberate. The OUTPUT is upgraded; the INPUT never is. A
+ * redirected stdin stays a non-TTY and the prompt refuses, because a command
+ * that changes the box when nobody was there to say no is the thing being
+ * avoided.
  */
-export function promptIo(keyboard: number | "inherit" | null): PromptIo | null {
+export function promptIo(keyboard: number | "inherit" | null, streams: PromptStreams = REAL_STREAMS): PromptIo | null {
   if (keyboard === null) return null;
-  if (keyboard === "inherit") return { input: process.stdin, output: process.stdout };
-  return { input: new ReadStream(keyboard), output: process.stdout };
+  const output = promptOutput(streams);
+  if (output === null) return null;
+  if (keyboard === "inherit") return { input: process.stdin, output };
+  return { input: new ReadStream(keyboard), output };
+}
+
+function promptOutput(streams: PromptStreams): NodeJS.WritableStream | null {
+  if (streams.stdout.isTTY) return streams.stdout;
+  try {
+    return streams.openTty();
+  } catch {
+    return null;
+  }
 }
 
 /** What to tell the user to do instead, when there is no terminal. */

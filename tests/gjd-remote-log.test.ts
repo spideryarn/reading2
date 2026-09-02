@@ -108,6 +108,30 @@ describe("formatLine", () => {
   it("refuses a line that could not append atomically", () => {
     expect(() => formatLine({ ...rec(), cmd: "x".repeat(MAX_LINE_BYTES) })).toThrow(/atomically/);
   });
+
+  /**
+   * THE BOUNDARY, NOT THE COMMENT ABOUT IT. `LogRecord` forbids a `prompt`
+   * field only in a fresh object literal, and `appendLog` in
+   * scripts/gjd-remote.ts spreads a caller's object into the record — so before
+   * the allowlist, anything a caller happened to be carrying went into a file
+   * whose header promises it holds no prompt. GPT Sol found that in Stage 1
+   * (finding 11).
+   *
+   * The extra fields are attached through a widened local rather than in the
+   * literal, because the literal is exactly the case the type already catches
+   * and the runtime one is exactly the case it does not.
+   */
+  it("writes only the fields it knows, so a caller cannot smuggle a prompt in", () => {
+    const carrier: LogRecord = Object.assign(rec(), {
+      prompt: "the whole article, pasted",
+      argv: ["gjd-remote", "new-claude", "-p", "secret"],
+      OPENROUTER_API_KEY: "sk-or-v1-nope",
+    });
+    const line = formatLine(carrier);
+    expect(line).not.toContain("pasted");
+    expect(line).not.toContain("sk-or-v1");
+    expect(Object.keys(JSON.parse(line)).sort()).toEqual(["cmd", "id", "ms", "name", "t", "v"]);
+  });
 });
 
 describe("parseLine fails closed", () => {
@@ -425,9 +449,57 @@ describe("setup attempts", () => {
     expect(parseLine('{"v":1,"t":"x","ms":1,"cmd":"new-claude","outcome":"failed"}')).toBeNull();
   });
 
-  /** `gjd-remote log` reports launches, and a setup attempt is not one — it has
-   *  no session uuid and could never be given a verdict. */
-  it("carries no session id, so nothing can mistake it for a launch", () => {
-    expect(Object.keys(JSON.parse(formatLine(setup())))).not.toContain("id");
+  /**
+   * `gjd-remote log` reports launches, and a setup attempt is not one — it has
+   * no session uuid and could never be given a verdict.
+   *
+   * THE FIRST VERSION OF THIS TEST PROVED NOTHING, and GPT Sol said so
+   * (Stage 1, finding 12): it asserted that `formatLine(setup())` produced no
+   * `id` key, which is a fact about the fixture — the fixture never set one —
+   * rather than about production. Deleting every id rule would have left it
+   * green. So it feeds a record that HAS an id and requires the refusal.
+   */
+  it("refuses a session id on a setup line, rather than writing one", () => {
+    expect(() => formatLine(setup({ id: "3f2c1b0a-1111-4222-8333-444455556666" }))).toThrow(/session id/);
+    expect(
+      parseLine(
+        '{"v":1,"t":"x","ms":1,"cmd":"setup","repo":"a/b","attempt":"a1","outcome":"started",' +
+          '"id":"3f2c1b0a-1111-4222-8333-444455556666"}',
+      ),
+    ).toBeNull();
+  });
+
+  /**
+   * The other direction, which the shape rule needs as much: a setup line with
+   * two of the three fields reads as a complete record and is not one. A
+   * missing `outcome` in particular would be read months later as "this attempt
+   * is still running".
+   */
+  it("refuses a setup line that is missing any of repo, attempt or outcome", () => {
+    for (const field of ["repo", "attempt", "outcome"] as const) {
+      const partial: LogRecord = setup();
+      delete partial[field];
+      expect(() => formatLine(partial), field).toThrow(new RegExp(`needs ${field}`));
+    }
+    expect(parseLine('{"v":1,"t":"x","ms":1,"cmd":"setup","repo":"a/b","attempt":"a1"}')).toBeNull();
+    expect(parseLine('{"v":1,"t":"x","ms":1,"cmd":"setup","attempt":"a1","outcome":"started"}')).toBeNull();
+  });
+
+  /**
+   * The allowlist, on the setup shape too. A setup line has no `name` and no
+   * wait, and a caller that spreads something carrying them must not get them
+   * written.
+   */
+  it("writes only the setup fields, whatever it was handed", () => {
+    const extra: LogRecord = { ...setup(), name: "leaky", waitSeconds: 60 };
+    expect(Object.keys(JSON.parse(formatLine(extra))).sort()).toEqual([
+      "attempt",
+      "cmd",
+      "ms",
+      "outcome",
+      "repo",
+      "t",
+      "v",
+    ]);
   });
 });

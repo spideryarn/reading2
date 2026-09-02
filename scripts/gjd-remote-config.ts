@@ -123,10 +123,35 @@ function describeValue(value: unknown): string {
 }
 
 /**
+ * The most a command may be. A `setup` line is a command, not a program: the
+ * long ones belong in `.gjd-remote/setup`, which has no limit at all. The cap
+ * is here because this string is echoed in a confirmation prompt and joined
+ * into an ssh command line, and neither of those has a sensible answer for a
+ * megabyte.
+ */
+export const MAX_COMMAND_BYTES = 2000;
+
+/**
+ * Anything in C0 except TAB, plus DEL. ESC is the one that matters: this string
+ * is printed back to Greg in the clone prompt before it ever runs, so a `setup`
+ * carrying escape sequences could repaint the question it is being asked inside
+ * — move the cursor, clear the line, colour a "no" to look like a "yes". A
+ * config file is not a trusted input once `gjd-remote` runs in whichever repo
+ * you happen to be in.
+ */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: naming them is the point
+const FORBIDDEN_CONTROL = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/;
+
+/**
  * A key's value as a single-line shell command, or an error saying what it was
  * instead. Newlines are refused rather than passed through: a command reaches
  * the box as one non-interactive `sh -c`, and anything that wants several lines
  * wants the script file, which is what it is for.
+ *
+ * NO ERROR HERE ECHOES THE VALUE. The point of refusing control characters is
+ * that this string cannot be trusted on a terminal, and an error message that
+ * quotes it back would hand it the terminal anyway — the offset and the
+ * character's code say everything the reader needs to find it.
  */
 function requireCommand(key: string, value: unknown): string {
   if (typeof value !== "string") {
@@ -141,7 +166,27 @@ function requireCommand(key: string, value: unknown): string {
         `  Put the steps in ${SETUP_SCRIPT}, make it executable, and drop the ${key} key.`,
     );
   }
-  if (value.includes("\0")) throw new ConfigError(`${key} in ${CONFIG_FILE} contains a null byte`);
+  const control = value.search(FORBIDDEN_CONTROL);
+  if (control !== -1) {
+    // A UTF-16 index counts surrogate pairs as two, and the reader is looking
+    // at bytes in a file, so convert. The control character itself is always
+    // one byte, so the offset it reports is the one `hexdump -C` would show.
+    const offset = Buffer.byteLength(value.slice(0, control), "utf8");
+    const code = value.charCodeAt(control).toString(16).padStart(2, "0");
+    throw new ConfigError(
+      `${key} in ${CONFIG_FILE} contains a control character (0x${code}) at byte ${offset}.\n` +
+        `  A command is printed back to you before it is run, so escape sequences are not\n` +
+        `  allowed in one. Tab is; everything else below a space is not.`,
+    );
+  }
+  const bytes = Buffer.byteLength(value, "utf8");
+  if (bytes > MAX_COMMAND_BYTES) {
+    throw new ConfigError(
+      `${key} in ${CONFIG_FILE} is ${bytes} bytes, over the ${MAX_COMMAND_BYTES} a command may be.\n` +
+        `  Put the steps in ${SETUP_SCRIPT}, make it executable, and drop the ${key} key —\n` +
+        `  a script file has no limit.`,
+    );
+  }
   const trimmed = value.trim();
   if (!trimmed) {
     throw new ConfigError(

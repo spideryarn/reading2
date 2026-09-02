@@ -18,6 +18,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   ConfigError,
+  MAX_COMMAND_BYTES,
   NPM_SETUP_COMMAND,
   parseRepoConfig,
   readRepoConfig,
@@ -115,6 +116,56 @@ describe("parseRepoConfig — strictness", () => {
   it("reports malformed TOML with the line, rather than reading it as empty", () => {
     const msg = bad(`setup = "npm ci"\nthis is not toml\n`);
     expect(msg).toMatch(/line 2/);
+  });
+
+  /**
+   * A command is printed back to Greg in the clone prompt before it is ever
+   * run, so a `setup` carrying escape sequences gets to repaint the question it
+   * is being asked inside — move the cursor up, clear the line, dress a "no" as
+   * a "yes". GPT Sol asked for this in Stage 1 (finding 10), against a version
+   * that stopped at CR, LF and NUL.
+   *
+   * Every arm of the character class gets a case, because a range typed wrong
+   * looks exactly like a range typed right until something in the gap arrives.
+   */
+  it("refuses a command carrying terminal escape sequences", () => {
+    // ESC [ 2 K — erase the line, the one that makes a repaint convincing.
+    const msg = bad(`setup = "npm ci\\u001b[2K && rm -rf /"`);
+    expect(msg).toMatch(/control character/);
+    expect(msg).toMatch(/0x1b/);
+    // The offset, so it can be found — and NOT the string, which is the thing
+    // that cannot be trusted on a terminal.
+    expect(msg).toMatch(/byte 6/);
+    expect(msg).not.toContain("rm -rf");
+  });
+
+  it("refuses every C0 control character except tab, and DEL", () => {
+    for (const code of [0x00, 0x01, 0x08, 0x0b, 0x0c, 0x0e, 0x1b, 0x1f, 0x7f]) {
+      const hex = code.toString(16).padStart(4, "0");
+      expect(bad(`setup = "npm\\u${hex}ci"`), hex).toMatch(/control character/);
+    }
+    // Tab is a space, not an escape, and a command may hold one.
+    expect(parseRepoConfig(`setup = "npm\\tci"`, BARE).setup).toEqual({ command: "npm\tci", source: "config" });
+  });
+
+  /**
+   * A command, not a program. The long ones belong in `.gjd-remote/setup`,
+   * which has no limit, and an unbounded string here ends up echoed in a prompt
+   * and joined onto an ssh command line.
+   */
+  it("refuses a command over the byte cap, and accepts one at it", () => {
+    const at = "x".repeat(MAX_COMMAND_BYTES);
+    expect(parseRepoConfig(`setup = "${at}"`, BARE).setup).toEqual({ command: at, source: "config" });
+    const over = bad(`setup = "${"x".repeat(MAX_COMMAND_BYTES + 1)}"`);
+    expect(over).toContain(`${MAX_COMMAND_BYTES + 1} bytes`);
+    expect(over).not.toContain("xxxxxxxxxx");
+  });
+
+  /** Bytes, not characters: a cap counted in UTF-16 units would let a command
+   *  of multi-byte characters through at roughly three times the size. */
+  it("counts the cap in bytes rather than characters", () => {
+    // 1500 characters, and 3000 bytes because each one is two.
+    expect(bad(`setup = "${"é".repeat(1500)}"`)).toContain("3000 bytes");
   });
 });
 

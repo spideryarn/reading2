@@ -75,7 +75,9 @@ const ATTEMPT_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
  * rather than an oversight: a prompt is prose that may contain anything, the
  * repo forbids logging article content (docs/project/logging.md), and a
  * redaction step is a thing that can be got wrong later. A field that is never
- * passed in cannot leak.
+ * passed in cannot leak — and `formatLine` writes an ALLOWLIST rather than the
+ * object it was given, so a field that IS passed in, by a caller spreading its
+ * own object into `appendLog`, cannot leak either. See `LAUNCH_FIELDS`.
  *
  * **But this file is not free of the prompt, and saying it was would be a lie.**
  * An unnamed session's name is `slugify(first five words of the prompt)` —
@@ -190,10 +192,64 @@ export const LOG_FILE = "gjd-remote.ndjson";
 export const logPath = (env: NodeJS.ProcessEnv, home: string) => path.join(logDir(env, home), LOG_FILE);
 
 /**
+ * WHAT A LINE MAY CARRY, listed rather than inherited — the enforcement behind
+ * the "no prompt, no argv" claim above.
+ *
+ * The first version built the line by spreading the whole record, and GPT Sol
+ * (Stage 1, finding 11) pointed out that the claim was then a comment rather
+ * than a rule: `LogRecord` forbids a `prompt` field only in a fresh object
+ * literal, and `appendLog` in scripts/gjd-remote.ts spreads a caller's object
+ * into it. Anything a caller happened to be carrying — the prompt, the argv, a
+ * token — rode straight through `JSON.stringify` into a 0600 file nobody reads
+ * until months later. So the fields are named here and everything else is
+ * dropped, which costs one array and makes the boundary real.
+ *
+ * The two shapes are genuinely different records. A `setup` line is not a
+ * launch: it has no session and no wait, and it has three fields a launch never
+ * has. `kill`, `ls` and the rest share the launch shape because they are about
+ * a session too.
+ */
+const LAUNCH_FIELDS = [
+  "v",
+  "t",
+  "ms",
+  "cmd",
+  "name",
+  "id",
+  "dir",
+  "waitSeconds",
+  "waitUntilMs",
+  "host",
+  "promptBytes",
+  "promptPath",
+  "repo",
+] as const satisfies readonly (keyof LogRecord)[];
+
+const SETUP_FIELDS = ["v", "t", "ms", "cmd", "dir", "host", "repo", "attempt", "outcome"] as const satisfies readonly (
+  | keyof LogRecord
+)[];
+
+/** The three that are description rather than identity, so they are trimmed
+ *  rather than refused — see MAX_FIELD. */
+const CLIPPED_FIELDS: ReadonlySet<keyof LogRecord> = new Set(["name", "dir", "promptPath"]);
+
+function serialise(rec: LogRecord, fields: readonly (keyof LogRecord)[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const field of fields) {
+    const value = rec[field];
+    // Undefined fields are dropped rather than written as null, so a reader can
+    // tell "there was no wait" from "the wait was recorded as nothing".
+    if (value === undefined) continue;
+    out[field] = typeof value === "string" && CLIPPED_FIELDS.has(field) ? clip(value) : value;
+  }
+  return out;
+}
+
+/**
  * Build the line. One JSON object, one `\n`, no pretty-printing.
  *
- * Undefined fields are dropped rather than written as null, so a reader can
- * tell "there was no wait" from "the wait was recorded as nothing".
+ * Only the fields named above are written, whatever the object handed in
+ * happens to hold.
  */
 export function formatLine(rec: LogRecord): string {
   // THROWN, NOT CLIPPED. The three fields below are identity rather than
@@ -217,13 +273,18 @@ export function formatLine(rec: LogRecord): string {
   if ((rec.attempt !== undefined || rec.outcome !== undefined) && rec.cmd !== "setup") {
     throw new Error(`log: attempt and outcome belong to a setup line, not to '${rec.cmd}'`);
   }
-  const clipped: LogRecord = {
-    ...rec,
-    ...(rec.name === undefined ? {} : { name: clip(rec.name) }),
-    ...(rec.dir === undefined ? {} : { dir: clip(rec.dir) }),
-    ...(rec.promptPath === undefined ? {} : { promptPath: clip(rec.promptPath) }),
-  };
-  const line = `${JSON.stringify(clipped)}\n`;
+  // And the other direction. A setup line with no outcome would be read as an
+  // attempt still running; one with no attempt id cannot be joined to the box's
+  // status file at all; one with no repo says nothing about which repo was set
+  // up. All three are worse than refusing to write the line, because the reader
+  // months later cannot tell an incomplete record from a true one.
+  if (rec.cmd === "setup") {
+    if (rec.id !== undefined) throw new Error("log: a setup line is not a launch, so it carries no session id");
+    for (const field of ["repo", "attempt", "outcome"] as const) {
+      if (rec[field] === undefined) throw new Error(`log: a setup line needs ${field}`);
+    }
+  }
+  const line = `${JSON.stringify(serialise(rec, rec.cmd === "setup" ? SETUP_FIELDS : LAUNCH_FIELDS))}\n`;
   const size = Buffer.byteLength(line, "utf8");
   if (size > MAX_LINE_BYTES) {
     // Unreachable with the caps above, and it throws rather than writing
@@ -310,6 +371,13 @@ function readIdentity(o: Record<string, unknown>): Pick<LogRecord, "repo" | "att
   const outcome = SETUP_OUTCOMES.find((x) => x === o.outcome);
   if (o.outcome !== undefined && outcome === undefined) return null;
   if ((attempt !== undefined || outcome !== undefined) && o.cmd !== "setup") return null;
+  // The same shape rule `formatLine` enforces on the way out, checked again on
+  // the way in — a hand-edited file, or a line from a gjd-remote that predates
+  // the rule, must not read as a complete setup record when it is not one.
+  if (o.cmd === "setup") {
+    if (o.id !== undefined) return null;
+    if (repo === undefined || attempt === undefined || outcome === undefined) return null;
+  }
   return {
     ...(repo === undefined ? {} : { repo }),
     ...(attempt === undefined ? {} : { attempt }),
