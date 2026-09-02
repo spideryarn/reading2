@@ -265,9 +265,14 @@ describe("releasing a slot that never became a job", () => {
     const one = await reserveIngest(OWNER, READER_PRICE);
     if (one.kind !== "admitted") throw new Error("expected an admission");
 
+    /* A real minted id, not a readable one. `jobs_id_format` enforces the
+       `mintId` alphabet, which drops `l`, `o`, `i` and `1` — so `spya-quotaj`
+       was refused, and this test would have failed the first time it ran for a
+       reason that has nothing to do with quota. Found by exercising the
+       migration in a rolled-back transaction before pushing it. */
     await pool.query(
       `insert into spideryarn.jobs (id, owner_id, slug, steps, status, work_key, ingest_event_id)
-       values ('spya-quotaj', $1, 'quota-race-article', '[]'::jsonb, 'queued', 'wk-quota', $2)`,
+       values ('spya-nrgbe3', $1, 'quota-race-article', '[]'::jsonb, 'queued', 'wk-quota', $2)`,
       [OWNER, one.reservationId],
     );
     try {
@@ -275,7 +280,7 @@ describe("releasing a slot that never became a job", () => {
       /* Still in flight, still counted. */
       expect(await usageFor(OWNER, FREE)).toEqual({ used: 0, inFlight: 1 });
     } finally {
-      await pool.query("delete from spideryarn.jobs where id = 'spya-quotaj'");
+      await pool.query("delete from spideryarn.jobs where id = 'spya-nrgbe3'");
     }
   });
 });
