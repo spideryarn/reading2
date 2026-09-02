@@ -1088,6 +1088,14 @@ The order is the point: slice 1 makes a shared link preview properly **without**
 exposure at all, so it is a complete user-visible result rather than build infrastructure sitting
 unused waiting for a policy decision.
 
+**Slice 2 was deleted on 2026-09-02**, not deferred. The canonical tag points at the original, so
+the ranking value of a crawlable copy is near zero, the rights exposure of one is real, and the two
+marketing surfaces that matter — link previews and word of mouth — already work under `noindex`.
+Greg's decision, on GPT Sol's recommendation, in
+[260902j-public-read-only-access-audit-and-improvements.md](260902j-public-read-only-access-audit-and-improvements.md).
+If search traffic is ever wanted, that is a new decision with the publisher-complaint risk attached,
+and the design notes below are still the starting point.
+
 #### `robots.txt` says `Disallow: /`, and the plan had not noticed
 
 Sol's largest finding, and it was missing from everything above. [`public/robots.txt`](../../public/robots.txt)
@@ -2412,15 +2420,18 @@ written out rather than computed from either side.
 
 ## Open questions
 
-- **What a public visitor sees when the owner turns a doc off** while they are reading it. The next
-  fetch 404s mid-session. Probably: the read-only bar changes to say the document is no longer
-  shared, rather than the app appearing to break.
+- ~~What a public visitor sees when the owner turns a doc off while they are reading it.~~
+  **Decided 2026-09-02: nothing.** There is no post-load fetch on the visitor path, so the tab keeps
+  the payload it has until reload, and the next request 404s. Delivered bytes cannot be recalled and
+  a focus-time re-check would be cosmetic rather than authorisation.
+  [260902j](260902j-public-read-only-access-audit-and-improvements.md) § Decisions.
 - **Whether the public page should link to the original article prominently.** Argues for itself on
   every ground except the one where we want the reader to stay — and it argues much louder now that
   [§ Rights](#rights-and-takedown-the-thing-a-canonical-tag-does-not-fix) is on the table.
-- **Rate limiting the public GETs.** No AI spend, but `/api/public/article/:slug` returns a whole
-  article and caching is off in stage 1. Response-size limits, database timeouts, and a
-  rate-limit-or-WAF decision are all undecided.
+- ~~Rate limiting the public GETs.~~ **Decided 2026-09-02: a Vercel WAF rate limit on `/read/*`
+  and `/api/public/*`, log mode first**, configured by Greg. Not an in-process counter and not an
+  edge cache. The 4.5 MB function-response ceiling is a separate, unmeasured item.
+  [260902j](260902j-public-read-only-access-audit-and-improvements.md) § Tiers.
 - **Whether `visibility` belongs on `articles` or on the revision.** On `articles` here, because
   sharing is about the document rather than about one extraction of it — and because a re-extraction
   must not silently unshare or silently share anything.
