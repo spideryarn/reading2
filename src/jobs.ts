@@ -495,6 +495,9 @@ async function runStep(
   session: StoreSession,
   registry: StepRegistry,
   decide: () => JobTransition,
+  /* An observer, never a participant — see `AdvanceParts.onStepSpend`, which is
+     where the whole argument for its existence lives. `undefined` in production. */
+  onStepSpend: AdvanceParts["onStepSpend"],
 ): Promise<{ outcome: StepOutcome; settlement?: JobSettlement }> {
   const { dir, htmlFile } = contextPaths(job.slug);
 
@@ -605,6 +608,11 @@ async function runStep(
          threw, and the retry after it pays again. */
       onDone: (report) => {
         spend = report;
+        /* Here rather than after the await, so it fires on the throw path too —
+           the same reason `onDone` itself exists. `report.calls` is complete by
+           now; `report.writeFailures` is a lower bound, and
+           `AdvanceParts.onStepSpend` says why that is fine. */
+        onStepSpend?.(step.name, report);
       },
     });
     step.detail = product.detail;
@@ -1161,12 +1169,28 @@ export async function advanceJob(id: string): Promise<Advanced | null> {
  * and not through a store the caller happens to have. GPT Sol, 2026-08-29,
  * docs/plans/260827aa-delete-the-importer-d1b-design-sol.md finding 4.
  *
- * ## Narrow means these two and no more
+ * ## Narrow means these two, plus one thing that cannot change anything
  *
  * Not an injection framework and not a seam for anything else in this file:
  * `store`, `costStore`, the abort map and the lease are all still module-level
  * and still not replaceable. A session and a step registry are exactly what a
  * different *storage backend* changes, which is why they are the two.
+ *
+ * `onStepSpend` is the exception and is deliberately of a different kind: an
+ * **observer**, which can watch a step's spend and cannot alter it. It exists
+ * because nothing outside this file can otherwise find out how many calls a step
+ * made — `SpendReport` reaches only a log line here — and a cost measurement
+ * that cannot compare what a step bought against what the ledger kept will
+ * quietly under-report when a row fails to persist. See `AdvanceParts.onStepSpend`.
+ *
+ * ## The second legitimate caller
+ *
+ * This comment used to say the seam was for a different *storage backend* and
+ * for tests. `evals/cost/run.ts` is the third: it drives the production registry
+ * with `scopeKind: "eval"` overlaid on every step and stage 1 replaced by
+ * committed bytes, so that measuring what an article costs does not require a
+ * second copy of the pipeline. It replaces the chooser, never the choice —
+ * exactly as the paragraph below says.
  *
  * **Production behaviour does not change**, because `PRODUCTION` builds its
  * session through `claimSession` below rather than choosing one here — and that
@@ -1194,6 +1218,28 @@ export interface AdvanceParts {
    * branch that expensive to reach is one nobody covers.
    */
   readonly leaseMs?: number;
+  /**
+   * **Told what each step's spend collector saw.** An observer: it is handed the
+   * report and its return value is ignored, so it cannot change what it watches.
+   *
+   * The gap it closes. `costStore.record` failures are counted in
+   * `SpendReport.writeFailures` and swallowed (src/ai-spend.ts § `write`), and a
+   * Postgres `forJob` read cannot report a row that was never inserted — absence
+   * is unknowable from the reading end. So a job where the structure call
+   * persisted and every label write failed reads back as a complete, plausible,
+   * *smaller* bill. The only thing that can notice is a count taken on this side.
+   *
+   * **`report.calls` is the field to compare against the ledger.** It is final
+   * here: `fn` has returned or thrown and the box is closed, so nothing else will
+   * be recorded. `report.writeFailures` is a *lower bound* — `collectSpend` calls
+   * `onDone` before it drains `box.writes`, so a write that rejects late is not
+   * in it. That is why the reconciliation is "calls made" against "rows kept"
+   * rather than a subtraction using this number.
+   *
+   * Nothing in production passes one: `PRODUCTION` below is `{ session, steps }`.
+   * Raised by GPT Sol reviewing evals/cost/run.ts, 2026-09-02.
+   */
+  readonly onStepSpend?: (step: StepName, report: SpendReport) => void;
 }
 
 /** The pipeline's own shape, named so `AdvanceParts` can say it once. */
@@ -1730,6 +1776,7 @@ async function walkClaim(
         session,
         parts.steps,
         transitionAfter,
+        parts.onStepSpend,
       );
 
       if (ran.outcome === "skipped") continue;

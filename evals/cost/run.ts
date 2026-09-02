@@ -834,7 +834,17 @@ if (isMain(import.meta.url)) {
      ledger wraps the whole run so that anything the runner buys *outside* a job
      step is eval-scoped too. The steps' own calls get their scope from the
      overlay, not from here — `runStep` opens its own collector and nested
-     collectors shadow. */
+     collectors shadow.
+
+     **`EVAL_OWNER_ID`, not `environmentOwnerId()`, and this line is the whole of
+     the browser isolation.** `enqueue` and `advanceJobWith` both ask
+     `currentOwnerId()`, so this is what decides whose jobs these are — and a dev
+     tab drives every queued job of the owner it is signed in as
+     (src/web/jobEngine.ts). `assertDistinctEvalOwner` checks the two ids differ;
+     it cannot check that the *jobs* got the right one, and for a while they did
+     not: the gate passed while every article was still created under the
+     environment owner. Caught by running it and reading `articles.owner_id`,
+     which is the only thing that could have caught it. */
   loadEnvLocal();
-  await withLedger("eval", () => runAsOwner(environmentOwnerId(), main));
+  await withLedger("eval", () => runAsOwner(EVAL_OWNER_ID, main));
 }

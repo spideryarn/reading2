@@ -30,6 +30,7 @@ import { type AiCallRow, collectSpend, recordSpend, type SpendRecord } from "../
 import { STEPS } from "../src/pipeline.js";
 import type { PipelineStep } from "../src/pipeline.js";
 import type { StepRegistry } from "../src/jobs.js";
+import { DEV_OWNER_ID, EVAL_OWNER_ID } from "../src/owner.js";
 import { fixtureByName } from "../evals/cost/fixtures.js";
 import {
   assertDistinctEvalOwner,
@@ -730,8 +731,12 @@ describe("verifyFixtures — every fixture hashed before any job exists", () => 
 });
 
 describe("assertDistinctEvalOwner", () => {
-  const evalOwner = "00000000-0000-4000-8000-0000000000e1";
-  const dev = "00000000-0000-4000-8000-000000000001";
+  /* The constants, not literals: `tests/fixture-ids.test.ts` refuses a uuid two
+     test files write out longhand, and its own advice is to import the single
+     source of truth instead — which is also what stops this test drifting from
+     the id the runner actually uses. */
+  const evalOwner = EVAL_OWNER_ID;
+  const dev = DEV_OWNER_ID;
 
   it("accepts an eval owner nobody signs in as", () => {
     expect(() => assertDistinctEvalOwner(evalOwner, dev)).not.toThrow();
