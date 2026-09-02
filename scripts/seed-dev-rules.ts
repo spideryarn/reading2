@@ -46,22 +46,28 @@ export const NEVER_SEEDED: Readonly<Record<string, string>> = {
 /**
  * What the database already holds for one slug.
  *
- * `onTheShelf` is the answer to [`onTheShelf()`](../src/store/pg.ts) — the very
- * predicate `listArticles` uses — rather than "an `articles` row exists" or "a
- * revision exists". The caller runs that function, so this rule and the library
- * cannot disagree about what a shelf is; see the note on `planSlug` below.
+ * **`readable` is the article route's own question, not the shelf's.**
+ * `pgArticleReader.loadArticle(slug)` throws unless there is a current revision
+ * *and* a tree *and* at least one `revision_blocks` row — which is exactly what
+ * `GET /api/article/<slug>` requires.
+ *
+ * The first version of this asked `listArticles()` instead, and GPT Sol showed
+ * why that is not the same question: the library read trusts the **cached**
+ * `block_count` column, so a revision whose block rows have gone still appears on
+ * the shelf. The seed would skip it, exit 0, and the article would 404 when
+ * opened. A card is not an article.
  */
 export interface SlugRow {
   ownerId: string;
-  onTheShelf: boolean;
+  readable: boolean;
   /**
    * `articles.archived_at is not null` — the reader put this card away.
    *
-   * Separate from `onTheShelf` because `listArticles()` answers the *unarchived*
-   * shelf, so an archived article is absent from it for a reason that is not
-   * "missing". Without this distinction the seed would reload an article
-   * somebody deliberately hid, on every single `npm run setup`, and then fail its
-   * own postcondition because the reload does not unarchive it.
+   * **Reported, never a reason to skip.** It was a skip branch of its own until
+   * Sol pointed out that treating `archived_at` as proof of health lets an
+   * archived-and-broken article exit green while it is absent from *both*
+   * shelves. A healthy archived article is skipped because it is `readable`; a
+   * broken one is reloaded, and republishing preserves the archive state.
    */
   archived: boolean;
 }
@@ -78,7 +84,7 @@ export interface SlugPlan {
 /**
  * What to do about one slug, given what is already there.
  *
- * ## The predicate is "on the shelf", not "a row exists", and that is the whole rule
+ * ## Skip only what can actually be opened
  *
  * `loadArticleIntoPg` is re-runnable but is **not** a no-op: a second call opens
  * a draft based on the published revision, re-copies every step and publishes a
@@ -88,13 +94,15 @@ export interface SlugPlan {
  *
  * Skipping on the **`articles` row** would be the obvious spelling and it is the
  * dangerous one. `beginRevision` writes that row before there is anything in it
- * ([src/store/pg.ts](../src/store/pg.ts) § `onTheShelf`), so a seed that died
- * halfway leaves a slug with `current_revision_id` null — invisible on the shelf,
- * present in the table. Keyed on the row, every later run would call that
+ * (src/store/pg.ts), so a seed that died halfway leaves a slug with
+ * `current_revision_id` null. Keyed on the row, every later run would call that
  * "already seeded" and the shelf would stay empty for ever, with each run
- * reporting success. That is the shape of
- * [silent-success.md](../docs/reusable/silent-success.md), so the unpublished
- * case is a **retry**.
+ * reporting success — the shape of
+ * [silent-success.md](../docs/reusable/silent-success.md).
+ *
+ * Skipping on the **shelf** was the second version and is subtler: the library
+ * read trusts a cached `block_count`, so it says yes to an article the reading
+ * route 404s. Hence `readable`, which is the route's own bar.
  *
  * ## Somebody else's slug is reported, not fought over
  *
@@ -125,38 +133,39 @@ export function planSlug(slug: string, row: SlugRow | undefined, us: string): Sl
       why: `already owned by ${row.ownerId} — leaving it alone (npm run db:reown moves rows)`,
     };
   }
-  /* Before the shelf test, because an archived article is absent from
-     `listArticles()` and would otherwise read as "not loaded". */
-  if (row.archived) return { slug, action: "skip", why: "archived — the reader put it away, so leaving it" };
-  if (row.onTheShelf) return { slug, action: "skip", why: "already on the shelf" };
+  if (row.readable) {
+    return { slug, action: "skip", why: row.archived ? "already here, archived" : "already here" };
+  }
   return {
     slug,
     action: "load",
-    why: "present but not on the shelf — a previous seed did not finish, so loading again",
+    why: row.archived
+      ? "archived and not readable — reloading it; publishing keeps it archived"
+      : "present but not readable — a previous seed did not finish, so loading again",
   };
 }
 
 /**
- * **The postcondition: is every article we meant to put on the shelf on it?**
+ * **The postcondition: is every article we meant to seed actually openable?**
  *
  * This replaced a pair of per-load assertions (`copied.length > 0`,
  * `published === true`). Both were redundant — `loadArticleIntoPg` already
  * throws on a copy that moved nothing, and a default `publish: true` throws on a
- * refusal — and, more to the point, both asked about the *write* when the
- * question worth asking is about the *read*. GPT Sol, 2026-09-02.
+ * refusal — and both asked about the *write* when the question worth asking is
+ * about the *read*. GPT Sol, 2026-09-02.
  *
- * `expected` is the slugs this run believes should now be visible: the seeded
- * list, minus any refused for belonging to somebody else, minus any the reader
- * has archived. `shelf` is what `listArticles()` actually returned. A slug in the
- * first and not the second is the whole failure this command exists to prevent —
- * a green run over an empty shelf.
+ * `expected` is the seeded list minus anything refused for belonging to somebody
+ * else. `readable` is the slugs that came back from `loadArticle` — the reading
+ * route's own bar, not the shelf's, for the reason on `SlugRow.readable`. A slug
+ * in the first and not the second is the whole failure this command exists to
+ * prevent: a green run over an article that 404s when opened.
  *
  * Names the slugs rather than counting, because a positive total proves nothing:
  * an account with eleven old articles and three failed fixtures has a perfectly
  * healthy-looking count.
  */
-export function missingFromShelf(expected: readonly string[], shelf: readonly string[]): string[] {
-  const there = new Set(shelf);
+export function unopenable(expected: readonly string[], readable: readonly string[]): string[] {
+  const there = new Set(readable);
   return expected.filter((slug) => !there.has(slug));
 }
 
@@ -171,10 +180,13 @@ export function missingFromShelf(expected: readonly string[], shelf: readonly st
  * the browser while the seed reports three articles loaded. A check that agrees
  * with the bug, one level up.
  *
- * A warning rather than a refusal, and the reason is that several agents share
- * this one checkout and one dev server: a seed that exited non-zero would break
- * `npm run setup` for whoever set the variable deliberately, and CLAUDE.md's
- * answer to a machine in the wrong state is to say so, not to stop.
+ * **The caller exits non-zero on a `false` here**, and that was a change of mind:
+ * the plan said warn-only, because several agents share this checkout and a
+ * failing `npm run setup` is disruptive. GPT Sol's argument won, 2026-09-02 — the
+ * command's promise is *"ready to use"*, and with the filesystem store selected
+ * neither the articles nor the switch reaches the application at all, so
+ * reporting completion over that is the failure this file exists to prevent. The
+ * caller fails **after** the durable work, so a re-run costs a second.
  *
  * It cannot be fixed from in here either. The value belongs in `.env.local`,
  * which `gjd-remote push-env` **rebuilds** from the laptop's copy

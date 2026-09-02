@@ -88,10 +88,11 @@ import { type OwnerId, runAsOwner } from "../src/owner.js";
 import { postgresBlobStore } from "../src/store/blobs.js";
 import { pgArticleReader } from "../src/store/pg.js";
 import { pgReaderStore } from "../src/store/pg-reader.js";
+import { releaseCorpusLock, takeCorpusLock } from "../tests/helpers/corpus-lock.js";
 import { loadArticleIntoPg } from "../tests/helpers/load-article.js";
 import { refuseUnlessOurDatabase } from "./db-reown-rules.js";
 import { parseStatusEnv } from "./seed-accounts.js";
-import { DEV_SHELF_SLUGS, missingFromShelf, planSlug, storeVerdict } from "./seed-dev-rules.js";
+import { DEV_SHELF_SLUGS, planSlug, storeVerdict, unopenable } from "./seed-dev-rules.js";
 
 loadEnvLocal();
 
@@ -199,27 +200,6 @@ try {
     );
   }
 
-  /* ------------------------------------------------------- experimental -- */
-
-  console.log(bold("\nExperimental features"));
-  /* **Through the production store, not a hand-written upsert.** `coalesce` so a
-     re-run never moves an existing date — the column answers *since when*, and
-     turning something on that is already on is not a change of mind
-     (docs/project/experimental-features.md). Writing the SQL here would be a
-     second spelling of `writeExperimental`, free to drift from the one the
-     /profile page uses. */
-  const since = await runAsOwner(owner, () => pgReaderStore.writeExperimental(true));
-  /* Read back rather than trust the return: the write and the read are the two
-     halves that a wrong owner id, or an `on conflict do nothing`, would let
-     disagree — and disagreeing silently is the only way this fails. */
-  const readBack = await runAsOwner(owner, () => pgReaderStore.readExperimental());
-  if (!readBack) die("wrote experimental features on and read back nothing — the switch is still off");
-  console.log(`  on since ${readBack}${since === readBack ? "" : ` (write said ${since})`}`);
-
-  /* ------------------------------------------------------------ articles -- */
-
-  console.log(bold("\nFixture articles"));
-
   /**
    * **The bucket has to belong to the same project as the database**, and this
    * is where that is settled rather than discovered later.
@@ -244,104 +224,155 @@ try {
    */
   postgresBlobStore("npm run db:seed-dev is loading articles into Postgres");
 
-  /** Slugs this run says should be readable at the end. See `missingFromShelf`. */
-  const expected: string[] = [];
+  /* ------------------------------------------------------- experimental -- */
+
+  console.log(bold("\nExperimental features"));
+  /* **Through the production store, not a hand-written upsert.** `coalesce` so a
+     re-run never moves an existing date — the column answers *since when*, and
+     turning something on that is already on is not a change of mind
+     (docs/project/experimental-features.md). Writing the SQL here would be a
+     second spelling of `writeExperimental`, free to drift from the one the
+     /profile page uses. */
+  const since = await runAsOwner(owner, () => pgReaderStore.writeExperimental(true));
+  /* Read back rather than trust the return: the write and the read are the two
+     halves that a wrong owner id, or an `on conflict do nothing`, would let
+     disagree — and disagreeing silently is the only way this fails. */
+  const readBack = await runAsOwner(owner, () => pgReaderStore.readExperimental());
+  if (!readBack) die("wrote experimental features on and read back nothing — the switch is still off");
+  console.log(`  on since ${readBack}${since === readBack ? "" : ` (write said ${since})`}`);
+
+  /* ------------------------------------------------------------ articles -- */
+
+  console.log(bold("\nFixture articles"));
 
   /**
-   * **What is on the shelf, asked of the shelf** — `listArticles()`, the read
-   * `/api/library` performs, as the account that will sign in.
+   * **Can this article actually be opened?** — `loadArticle`, the read
+   * `GET /api/article/<slug>` performs, as the account that will sign in.
    *
-   * Not `onTheShelf()`, which is the SQL-expressible **half** of the rule and
-   * says so in its own comment: `listArticles` additionally drops a revision with
-   * no tree and one with no blocks, per row in TypeScript, and a database a test
-   * suite has been pointed at has both. Deciding with the half-rule would skip an
-   * article the browser cannot see and call it seeded — the exact failure this
-   * command exists to make impossible, one level up.
+   * Not `listArticles()`, and the difference is the whole of GPT Sol's first
+   * finding on the built code. The library read trusts the **cached**
+   * `block_count` column (src/store/pg.ts), so an article whose `revision_blocks`
+   * rows have gone still appears on the shelf — the seed would skip it, exit 0,
+   * and the article would 404 when opened. `loadArticle` throws unless there is a
+   * current revision, a tree, *and* at least one block row. That is the bar the
+   * reader meets, so it is the bar this asks about.
+   *
+   * A throw is the answer here, not a failure: `notFound` is what "not readable"
+   * looks like from this seam. Anything else — a dead connection, a bug — must
+   * still be raised, so only a 404-shaped refusal is caught.
    */
-  const shelfBefore = new Set(
-    (await runAsOwner(owner, () => pgArticleReader.listArticles())).map((entry) => entry.slug),
-  );
-
-  for (const slug of DEV_SHELF_SLUGS) {
-    /* Unscoped by owner, deliberately, and the only query here that is.
-       `articles.slug` is globally unique across the install (src/owner.ts), so
-       "not on MY shelf" and "free to load" are different questions — and the
-       second is the one that decides whether `publishRevision` is about to raise
-       *"the slug already belongs to another reader"*. */
-    const [row] = await db
-      .select({ ownerId: articles.ownerId, archivedAt: articles.archivedAt })
-      .from(articles)
-      .where(eq(articles.slug, slug))
-      .limit(1);
-
-    const plan = planSlug(
-      slug,
-      row
-        ? { ownerId: row.ownerId, onTheShelf: shelfBefore.has(slug), archived: row.archivedAt !== null }
-        : undefined,
-      owner,
-    );
-    if (plan.action === "skip") {
-      /* An archived article is skipped and is legitimately NOT expected back on
-         the shelf — `listArticles()` answers the unarchived half. Every other
-         skip is an article that is already there and must still be there at the
-         end. */
-      if (!row?.archivedAt) expected.push(slug);
-      console.log(`  ${dim("·")} ${slug} — ${dim(plan.why)}`);
-      continue;
+  const readable = async (slug: string): Promise<boolean> => {
+    try {
+      await runAsOwner(owner, () => pgArticleReader.loadArticle(slug));
+      return true;
+    } catch (err) {
+      if ((err as { status?: number }).status === 404) return false;
+      throw err;
     }
-    if (plan.action === "refuse") {
+  };
+
+  /**
+   * **The corpus lock, outside the run lock, held across the whole phase.**
+   *
+   * `serialise: true` on each load takes `RUN_LOCK` — but only around that one
+   * load, so the decisions, the gaps between slugs and the postcondition all sit
+   * outside it. `store-parity` and `store-roundtrip` take this *different* lock
+   * and then clear every current revision (tests/helpers/forget-revisions.ts), so
+   * without it a corpus wipe can land between this seed's last load and its own
+   * postcondition, and the run exits 0 over state that has already gone. It also
+   * explains a mid-run `404 /api/article/writes` seen while testing this.
+   *
+   * **Corpus outside, run inside** is the documented order and the one direction
+   * that cannot deadlock — tests/helpers/run-lock.ts § `RUN_LOCK` says so, and a
+   * pair of locks taken in two orders is the one way this genuinely hangs. Sol's
+   * second finding, 2026-09-02.
+   */
+  await takeCorpusLock("scripts/db-seed-dev.ts");
+  const refused = new Set<string>();
+  try {
+    for (const slug of DEV_SHELF_SLUGS) {
+      /* Unscoped by owner, deliberately, and the only query here that is.
+         `articles.slug` is globally unique across the install (src/owner.ts), so
+         "not mine" and "free to load" are different questions — and the second is
+         what decides whether `publishRevision` is about to raise *"the slug
+         already belongs to another reader"*. */
+      const [row] = await db
+        .select({ ownerId: articles.ownerId, archivedAt: articles.archivedAt })
+        .from(articles)
+        .where(eq(articles.slug, slug))
+        .limit(1);
+
+      const plan = planSlug(
+        slug,
+        row
+          ? {
+              ownerId: row.ownerId,
+              /* Only asked when the row is ours. Another owner's article is not
+                 ours to read, and `loadArticle` is owner-scoped, so it would
+                 answer "not readable" for a reason that is about permission. */
+              readable: row.ownerId.toLowerCase() === owner.toLowerCase() && (await readable(slug)),
+              archived: row.archivedAt !== null,
+            }
+          : undefined,
+        owner,
+      );
+
+      if (plan.action === "skip") {
+        console.log(`  ${dim("·")} ${slug} — ${dim(plan.why)}`);
+        continue;
+      }
+      if (plan.action === "refuse") {
+        failed = true;
+        refused.add(slug);
+        console.log(`  ${yellow("!")} ${slug} — ${yellow(plan.why)}`);
+        continue;
+      }
+      /* No `copied.length` or `published` assertion here. Both were redundant —
+         the loader throws on a copy that moved nothing, and a default
+         `publish: true` throws on a refusal — and both asked about the write when
+         the question that matters is whether the article can be opened
+         afterwards. That is the postcondition below. GPT Sol, 2026-09-02.
+
+         `serialise: true` still takes RUN_LOCK inside the corpus lock above,
+         which is the documented order; it is a no-op for a holder of neither. */
+      const loaded = await loadArticleIntoPg(slug, { ownerId: owner, serialise: true });
+      console.log(`  ${green("+")} ${slug} — ${loaded.copied.length} steps, published`);
+    }
+
+    /* ------------------------------------------------------ the verdict -- */
+
+    /**
+     * **Every seeded slug opened, one by one** — and inside the corpus lock, so
+     * nothing can wipe the corpus between the last load and this answer.
+     *
+     * The mutable `expected` list this replaced was Sol's finding too: it was
+     * built branch by branch as the loop went, and the archived branch left an
+     * article out of it on the strength of `archived_at` alone — so an
+     * archived-and-broken article was skipped, never expected, and exited green
+     * while absent from both shelves. The list is now the fixed seeded set minus
+     * whatever belongs to somebody else, which is a rule rather than bookkeeping.
+     */
+    const expected = DEV_SHELF_SLUGS.filter((slug) => !refused.has(slug));
+    const opened: string[] = [];
+    for (const slug of expected) if (await readable(slug)) opened.push(slug);
+
+    const missing = unopenable(expected, opened);
+    if (missing.length > 0) {
       failed = true;
-      console.log(`  ${yellow("!")} ${slug} — ${yellow(plan.why)}`);
-      continue;
+      console.log(bold(`\n${missing.join(", ")} — seeded, and NOT openable.`));
+      console.log(dim("  A current revision with no block rows looks exactly like this, and the"));
+      console.log(dim("  library would still list it. GET /api/article/<slug> would answer 404."));
+    } else {
+      console.log(bold(`\n${opened.length} of ${DEV_SHELF_SLUGS.length} seeded articles open cleanly`));
+      if (opened.length > 0) console.log(dim(`  ${opened.join(", ")}`));
     }
-    expected.push(slug);
-    /* `serialise: true` because the slugs are fixed and `npm test` loads the same
-       ones: without it two processes race on `jobs_active_slug`. See
-       tests/helpers/run-lock.ts. */
-    /* No `copied.length` or `published` assertion here any more. Both were
-       redundant — the loader throws on a copy that moved nothing, and a default
-       `publish: true` throws on a refusal — and both asked about the write when
-       the question that matters is whether the article is *readable* afterwards.
-       That is the postcondition below. GPT Sol, 2026-09-02. */
-    const loaded = await loadArticleIntoPg(slug, { ownerId: owner, serialise: true });
-    console.log(`  ${green("+")} ${slug} — ${loaded.copied.length} steps, published`);
-  }
 
-  /* -------------------------------------------------------- the verdict -- */
-
-  /**
-   * **The library's own read, as the account that will sign in.**
-   *
-   * Not a `count(*)` over `onTheShelf()`, which was the first version of this and
-   * was wrong by two on the box it was written on: that predicate is the
-   * **SQL-expressible half** of the rule and says so in its own comment
-   * (src/store/pg.ts § `onTheShelf`). `listArticles` additionally drops, per row
-   * in TypeScript, a revision with no tree and one with no blocks — and a
-   * database that has had a test suite pointed at it has both. So the count said
-   * 13 while the browser's `/api/library` said 11, which is a report about the
-   * shelf that the shelf disagrees with.
-   *
-   * Calling the store means the number printed here is the number `/api/library`
-   * returns, by construction rather than by two implementations agreeing. Caught
-   * by running `scripts/browser-sign-in.ts` against the seeded database, which is
-   * the whole argument for having run it.
-   */
-  const shelf = await runAsOwner(owner, () => pgArticleReader.listArticles());
-  const shelfSlugs = shelf.map((entry) => entry.slug);
-
-  console.log(bold(`\n${shelf.length} article${shelf.length === 1 ? "" : "s"} on ${ADMIN_EMAIL}'s shelf`));
-
-  /* **The named slugs, not the total.** A count is satisfied by eleven old
-     articles while all three fixtures failed — which is exactly the state a
-     shared development database gets into. GPT Sol, 2026-09-02. */
-  const missing = missingFromShelf(expected, shelfSlugs);
-  if (missing.length > 0) {
-    failed = true;
-    console.log(yellow(`  ${missing.join(", ")} — seeded, and NOT on the shelf the library returns.`));
-    console.log(dim("  A published revision with no tree or no blocks looks exactly like this."));
-  } else if (expected.length > 0) {
-    console.log(dim(`  including ${expected.join(", ")}`));
+    /* The shelf total is context for a person, and nothing depends on it. The
+       claim that matters is the one above, which asked the reading route. */
+    const shelf = await runAsOwner(owner, () => pgArticleReader.listArticles());
+    console.log(dim(`  ${shelf.length} article(s) on ${ADMIN_EMAIL}'s shelf in total`));
+  } finally {
+    await releaseCorpusLock();
   }
 
   /* **After the durable work, never before it.** Everything above is committed
@@ -353,14 +384,6 @@ try {
     console.log(store.ok ? green(`✓ ${line}`) : i === 0 ? yellow(`⚠ ${line}`) : dim(line));
   }
   if (!store.ok) {
-    /* **Non-zero, not just a warning**, and this is a deliberate change of mind:
-       the plan said warn-only, because several agents share this checkout and a
-       failing `npm run setup` is disruptive. Sol's answer is the right one — the
-       promise of this command is "ready to use", and with the filesystem store
-       selected neither the articles nor the experimental switch reaches the
-       application at all. `npm run setup` reporting completion over that is the
-       silent success this whole file is built against. The seed itself is done
-       and durable; what failed is the machine's configuration. */
     failed = true;
     console.log(dim("  The seed itself succeeded and is durable — nothing above needs doing again."));
   }

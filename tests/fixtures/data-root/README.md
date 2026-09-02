@@ -146,9 +146,10 @@ Since 2026-09-02, `npm run db:seed-dev`
 fourth step of `npm run setup`. So these three articles are what a developer sees when they sign in
 on a fresh box — a corpus article is now a thing a person looks at, not only a thing a test reads.
 
-`constitution` and `noema-…` are deliberately excluded, for the properties they are kept for: the
-first has no `labels.sourceHash` and `publishRevision` correctly refuses it, and the second has no
-`raw.json`. Both are fixtures that exist to be refused. If a sixth article is ever added here, decide
+`constitution` and `noema-…` are deliberately excluded, for the properties they are kept for.
+`constitution` has no `labels.sourceHash`, so `publishRevision` correctly refuses it and it could not
+go on a shelf at all. `noema-…` **publishes perfectly well** and is excluded for a weaker reason: no
+`raw.json`, so there is no original document behind the article. If a sixth article is ever added here, decide
 deliberately whether it belongs on that shelf —
 [`scripts/seed-dev-rules.ts`](../../../scripts/seed-dev-rules.ts) has the list and
 [`tests/seed-dev-rules.test.ts`](../../seed-dev-rules.test.ts) asserts the two exclusions by name.

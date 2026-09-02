@@ -261,17 +261,23 @@ ends with a shelf you can open. Five things about it are deliberate:
   path. That makes it the **one thing under `scripts/` that imports from `tests/`** — a deliberate
   precedent, because the alternative is a second files → Postgres implementation, which is exactly
   what deleting `db:import` was for.
-- **Three of the corpus's five, and never the other two.** `constitution` has no `labels.sourceHash`
-  so `publishRevision` is designed to refuse it, and `noema-…` has no `raw.json`. Both exist to be
-  refused, which is the wrong thing to put on a shelf somebody is going to open.
-- **Idempotent on "is it on the shelf", not "is there a row".** `beginRevision` writes the `articles`
-  row before there is anything in it, so a half-failed seed leaves a slug with `current_revision_id`
-  null. Keyed on the row, every later run would call that "already seeded" and the shelf would stay
-  empty for ever. A slug owned by *somebody else* is reported and left alone — `articles.slug` is
-  globally unique, and moving rows is `db:reown`'s decision, not this one's.
-- **The number it prints is `listArticles()`**, the read `/api/library` performs, not a `count(*)`.
-  Those differ: `onTheShelf()` is only the SQL-expressible half of the rule, and on a database a test
-  suite has been pointed at the count said 13 while the library said 11.
+- **Three of the corpus's five, and never the other two.** `constitution` has no `labels.sourceHash`,
+  so `publishRevision` is designed to refuse it — putting it on a shelf is not possible. `noema-…`
+  publishes perfectly well and is excluded for a weaker reason: it has no `raw.json`, so there is no
+  original document behind it, which is a poor first article to hand somebody.
+- **Idempotent on "can it be opened", not "is there a row" and not "is it on the shelf".**
+  `beginRevision` writes the `articles` row before there is anything in it, so a half-failed seed
+  leaves a slug with `current_revision_id` null; keyed on the row, every later run would call that
+  "already seeded". Keyed on the *shelf* it is subtler and still wrong: the library read trusts a
+  cached `block_count`, so an article whose block rows have gone is still listed while
+  `GET /api/article/<slug>` answers 404. So the question asked is `loadArticle`, the reading route's
+  own. A slug owned by *somebody else* is reported and left alone — `articles.slug` is globally
+  unique, and moving rows is `db:reown`'s decision, not this one's.
+- **It ends by opening every article it seeded**, one at a time, and names any that will not open.
+  A count proves nothing — eleven old articles and three failed fixtures look healthy — and a shelf
+  listing proves less than it appears to, for the cached-`block_count` reason above. It holds the
+  corpus lock across that phase, the same lock `store-parity` and `store-roundtrip` take, so a test
+  run cannot clear the corpus between the last load and the answer.
 
 **A full `npm test` turns Experimental Features back off.**
 [`tests/owner-isolation.test.ts`](../../tests/owner-isolation.test.ts) deletes the environment
@@ -280,12 +286,14 @@ administrator — which is what everything above tells you to do — that is thi
 is wrong; re-run `npm run db:seed-dev` and it is on again in a second, with a new "since" date. Worth
 knowing before you go looking for a bug in the switch, which is what the date moving looks like.
 
-**It warns about `SPIDERYARN_STORE`, and the warning is the point.** That variable defaults to
-`files` ([`src/store/index.ts`](../../src/store/index.ts)), so a dev server on a machine that has
-never set it serves articles off `data/` and every row this wrote is invisible in the browser — the
-seed works and the shelf looks empty. Set `SPIDERYARN_STORE=postgres` in `.env.local` **on the
-laptop**; it is on `push-env`'s allowlist since 2026-09-02, so the box inherits it, and a line typed
-on the box would be destroyed by the next push.
+**It exits non-zero when `SPIDERYARN_STORE` is not `postgres`, and that is deliberate.** The variable
+defaults to `files` ([`src/store/index.ts`](../../src/store/index.ts)), so a dev server on a machine
+that has never set it serves articles off `data/` and every row this wrote is invisible in the
+browser — the seed works and the shelf looks empty. A green `npm run setup` over that is the exact
+failure this command exists to prevent, so it stops instead. **The seed itself has already committed
+by then**, so fixing the variable and re-running costs a second. Set `SPIDERYARN_STORE=postgres` in
+`.env.local` **on the laptop**; it is on `push-env`'s allowlist since 2026-09-02, so the box inherits
+it, and a line typed on the box would be destroyed by the next push.
 
 And the end-to-end check, which needs no human:
 

@@ -14,7 +14,7 @@ import {
   DEV_SHELF_SLUGS,
   NEVER_SEEDED,
   planSlug,
-  missingFromShelf,
+  unopenable,
   storeVerdict,
 } from "../scripts/seed-dev-rules.js";
 
@@ -43,8 +43,8 @@ describe("planSlug", () => {
     expect(planSlug("writes", undefined, US).action).toBe("load");
   });
 
-  it("skips a slug already on our shelf, so a re-run writes no second revision", () => {
-    const plan = planSlug("writes", { ownerId: US, onTheShelf: true, archived: false }, US);
+  it("skips a slug that already opens, so a re-run writes no second revision", () => {
+    const plan = planSlug("writes", { ownerId: US, readable: true, archived: false }, US);
     expect(plan.action).toBe("skip");
   });
 
@@ -55,8 +55,8 @@ describe("planSlug", () => {
    * later run would call that "already seeded" and the shelf would stay empty for
    * ever while each run reported success.
    */
-  it("RETRIES a row that exists but never reached the shelf", () => {
-    const plan = planSlug("writes", { ownerId: US, onTheShelf: false, archived: false }, US);
+  it("RETRIES a row that exists but cannot be opened", () => {
+    const plan = planSlug("writes", { ownerId: US, readable: false, archived: false }, US);
     expect(plan.action).toBe("load");
     expect(plan.why).toMatch(/did not finish/);
   });
@@ -64,24 +64,31 @@ describe("planSlug", () => {
   it("leaves another owner's slug alone and names the owner", () => {
     /* `articles.slug` is globally unique, so this cannot be loaded for us — and
        stealing it is a decision `npm run db:reown` makes, not this. */
-    const plan = planSlug("writes", { ownerId: DEV_OWNER_ID, onTheShelf: true, archived: false }, US);
+    const plan = planSlug("writes", { ownerId: DEV_OWNER_ID, readable: true, archived: false }, US);
     expect(plan.action).toBe("refuse");
     expect(plan.why).toContain(DEV_OWNER_ID);
   });
 
   it("refuses another owner's half-finished row too, rather than trying to finish it", () => {
-    expect(planSlug("writes", { ownerId: DEV_OWNER_ID, onTheShelf: false, archived: false }, US).action).toBe("refuse");
+    expect(planSlug("writes", { ownerId: DEV_OWNER_ID, readable: false, archived: false }, US).action).toBe("refuse");
   });
 
   /**
-   * `listArticles()` answers the UNARCHIVED shelf, so an article the reader put
-   * away is absent from it for a reason that is not "missing". Without this
-   * branch the seed would reload it on every `npm run setup` — undoing nothing,
-   * since a reload does not unarchive — and then fail its own postcondition.
+   * **Archived is reported, never a reason to skip on its own.** It was a skip
+   * branch of its own until GPT Sol pointed out that treating `archived_at` as
+   * proof of health lets an archived-and-broken article exit green while it is
+   * absent from both the active shelf and the archived one. Health is
+   * `readable`; archived only changes the wording.
    */
-  it("leaves an archived article alone rather than reloading it for ever", () => {
-    const plan = planSlug("writes", { ownerId: US, onTheShelf: false, archived: true }, US);
+  it("skips an archived article that still opens", () => {
+    const plan = planSlug("writes", { ownerId: US, readable: true, archived: true }, US);
     expect(plan.action).toBe("skip");
+    expect(plan.why).toMatch(/archived/);
+  });
+
+  it("RELOADS an archived article that does not open, rather than calling it seeded", () => {
+    const plan = planSlug("writes", { ownerId: US, readable: false, archived: true }, US);
+    expect(plan.action).toBe("load");
     expect(plan.why).toMatch(/archived/);
   });
 
@@ -89,27 +96,28 @@ describe("planSlug", () => {
     /* Postgres renders a uuid lower-cased. A constant typed in upper case that
        compared unequal against our own row would report every seeded article as
        another owner's, and the seed would then do nothing for ever. */
-    const plan = planSlug("writes", { ownerId: US.toUpperCase(), onTheShelf: true, archived: false }, US.toLowerCase());
+    const plan = planSlug("writes", { ownerId: US.toUpperCase(), readable: true, archived: false }, US.toLowerCase());
     expect(plan.action).toBe("skip");
   });
 });
 
-describe("missingFromShelf", () => {
-  it("is empty when everything we seeded came back", () => {
-    expect(missingFromShelf(["writes", "todo"], ["writes", "todo", "old-thing"])).toEqual([]);
+describe("unopenable", () => {
+  it("is empty when everything we seeded opens", () => {
+    expect(unopenable(["writes", "todo"], ["writes", "todo", "old-thing"])).toEqual([]);
   });
 
   /**
-   * The state a count cannot see: an account with plenty of old articles and
-   * every seeded fixture failed. A total of eleven reads as a healthy shelf.
+   * The state a count cannot see, and the one a *shelf* cannot see either: the
+   * library read trusts a cached `block_count`, so an article with no block rows
+   * is still listed. Only opening it says otherwise.
    */
-  it("names the seeded slug that is absent, however full the shelf is", () => {
-    const shelf = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"];
-    expect(missingFromShelf(["writes", "todo"], shelf)).toEqual(["writes", "todo"]);
+  it("names the seeded slug that will not open, however full the shelf is", () => {
+    const opened = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"];
+    expect(unopenable(["writes", "todo"], opened)).toEqual(["writes", "todo"]);
   });
 
-  it("expects nothing when nothing was seeded, so a refused run does not double-report", () => {
-    expect(missingFromShelf([], ["anything"])).toEqual([]);
+  it("expects nothing when everything was refused, so a refused run does not double-report", () => {
+    expect(unopenable([], ["anything"])).toEqual([]);
   });
 });
 
