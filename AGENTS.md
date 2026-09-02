@@ -191,7 +191,10 @@ actually reaches is not always the one on its command line, and both mistakes pr
   `npm run worktree:setup` inside it, and land the work with `git push origin HEAD:dev` —
   [worktrees.md](docs/project/worktrees.md). It is your own checkout, so nobody else's edits are in
   your files and most of the sharing below stops applying to you. A one-line fix or a doc edit can
-  stay in the shared tree.
+  stay in the shared tree. Run the job itself the way
+  [engineering-manager.md](docs/reusable/engineering-manager.md) says — a plan doc, a few stages,
+  the work delegated, and a GPT Sol review at the end of every stage. Commit each stage, and push to
+  `dev` when you finish.
 - **Other agents will get in your way; be tolerant.** Most of us work out of this one checkout,
   against one local Supabase and one dev server. Files change under you, tests go red for reasons
   that are not yours, the database is not how you left it. Absorb it, do your best, and carry on —
@@ -283,6 +286,10 @@ actually reaches is not always the one on its command line, and both mistakes pr
   not the page dumps. **Which automation you get is decided by the machine, not by preference** —
   the Claude-in-Chrome extension on Greg's laptop, Playwright against system Chrome on the remote
   box, and the extension cannot follow you there.
+- **Ask another model while you are still thinking, not only when you are reviewing.** GPT Sol
+  ([codex-cli-as-subagent.md](docs/reusable/codex-cli-as-subagent.md)) for design calls and tricky
+  bugs, and **Fable** — a subagent with `model: "fable"` — especially when the requirements are
+  unclear or you need someone to arbitrate between two options that both look fine.
 - **When you rename anything, hunt down everything that names it.** A rename is never one edit. Send
   a cheap subagent to sweep the whole repo — code, docs, plans, tests, fixtures, scripts,
   `package.json` — and grep for fragments as well as the whole name, since a `camelCase` rename and
