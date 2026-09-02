@@ -9,12 +9,8 @@
  * noted the masthead's existing anchor on the same field had the same hole —
  * which is why `Masthead` is mounted here.
  *
- * The file is named for a control that no longer exists: `TheOriginal`, an
- * icon in the controls bar, added 2026-08-31 and removed 2026-09-02 as a
- * duplicate of the mark beside the title. Its own state tests went with it;
- * what stays is the part that was never about that one control — the grep
- * across every component that turns `meta.url` into a link, which is what
- * catches a fifth sink arriving with no guard at all.
+ * The name is historical: `TheOriginal` was an icon in the controls bar,
+ * removed on 2026-09-02 as a duplicate of the mark beside the title.
  *
  * Its sibling file, tests/masthead-source.test.tsx, covers who is offered the
  * uploaded PDF, and says at length why a gate like this is tested at the

@@ -96,18 +96,8 @@ export function SourceLink({
   className?: string;
   title?: string;
 }) {
-  /**
-   * **The failure is said beside the button**, which is where both callers want
-   * it: each of them sits in a paragraph, so the explanation can too.
-   *
-   * There used to be an `onError` escape hatch for a third caller, the icon in
-   * the controls bar — a fixed-height row that scrolls sideways and does not
-   * shrink its children, so a sentence dropped into it pushed the granularity
-   * pills off the screen. That control was removed on 2026-09-02 as a duplicate
-   * of the mark beside the title (Masthead.tsx § `OriginMark`), and the hatch
-   * went with it. A caller that needs one again should read
-   * docs/plans/plain-mode-and-the-way-out.md before rebuilding it.
-   */
+  /* Said beside the button, which is where both callers want it: each of them
+     sits in a paragraph, so the explanation can too. */
   const [error, setError] = useState<string | null>(null);
 
   const open = () => {

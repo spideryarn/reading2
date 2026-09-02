@@ -2102,13 +2102,6 @@ function Reader({
             on outranks every control that follows, and this bar is the one
             piece of chrome that is on screen at every scroll position. */}
         {!owner && <ViewOnlyChip />}
-        {/* **The way to the original is not in this bar**, and was for two
-            days. It sat here as an icon from 2026-08-31 until Greg pointed out
-            on 2026-09-02 that the masthead already carries one beside the title
-            — two controls, one destination, and the bar's was the one nobody
-            had asked for twice. `OriginMark` in Masthead.tsx is the survivor;
-            an owner's uploaded PDF is still reachable from the masthead's
-            transcription note (`SeeTheOriginal`). */}
         {/* Leftmost of the *view* controls, because the rail it names is
             leftmost — and before the mode/contents split, because it is the one
             control that survives both. See `spineToggle` above. */}
