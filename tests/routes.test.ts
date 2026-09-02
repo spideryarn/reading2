@@ -1297,6 +1297,50 @@ describe("PATCH /api/search/:slug/:id", () => {
 });
 
 /**
+ * **Every PATCH route, against a body that is not an object.**
+ *
+ * This is the check the postmortem asked for, and it is deliberately a table
+ * rather than a case per route: the search PATCH had a per-route version of
+ * this test since 2026-08-27 and it protected exactly one route, while the
+ * comment beside it said in as many words that "the same hole is latent in the
+ * other PATCH routes here". It was, for six days, in the chat rename.
+ * docs/postmortems/260902e-a-comment-that-named-the-latent-hole-and-left-it-latent.md.
+ *
+ * **4xx, not a specific code**, because these routes legitimately differ: some
+ * refuse a non-object outright through `objectBody`, and the two comment routes
+ * read it through `fields`, which coerces to `{}` and then refuses for having
+ * no fields. What none of them may do is 500 — that is a malformed request
+ * reported as a server fault, and it is the shape a client bug takes, so it
+ * arrives looking like ours.
+ *
+ * No fixtures: every one of these validates the body before it touches a store,
+ * so a route that 404s here would be failing for the wrong reason and the
+ * assertion would still hold. If one ever needs a real row to reach its
+ * validation, that is itself worth knowing.
+ */
+describe("no PATCH route answers a malformed body with a 500", () => {
+  const PATCH_ROUTES = [
+    "/api/library/a-slug",
+    "/api/reader",
+    "/api/comments/a-slug/spya-k3m9qt",
+    "/api/comments/a-slug/spya-k3m9qt/mark",
+    "/api/chat/a-slug/t1",
+    "/api/search/a-slug/r1",
+    "/api/referee/criteria/a-slug/c1",
+  ];
+
+  for (const url of PATCH_ROUTES) {
+    for (const body of ["null", "[]", '"3"', "7"]) {
+      it(`${url} refuses ${body}`, async () => {
+        const r = await call("PATCH", url, body);
+        expect(r.status).toBeGreaterThanOrEqual(400);
+        expect(r.status).toBeLessThan(500);
+      });
+    }
+  }
+});
+
+/**
  * **The hole the search PATCH beside it wrote down and nobody closed.**
  *
  * That route's comment has said since 2026-08-27 that "the same hole is latent
