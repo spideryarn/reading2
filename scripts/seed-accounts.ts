@@ -17,7 +17,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "n
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 
-import { ADMIN_EMAIL, ADMIN_USER_ID_LOCAL } from "../src/admin.js";
+import { ADMIN_EMAIL, ADMIN_EMAIL_LOCAL, ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { DEV_OWNER_EMAIL, DEV_OWNER_ID } from "../src/owner.js";
 
 /**
@@ -158,7 +158,7 @@ export function readAdminCredentials(home: string): AdminCredentials {
         "  set it on the account. Every open session for that account ends.",
     };
   }
-  return { ok: true, email: ADMIN_EMAIL, password: contents.trim(), path: file };
+  return { ok: true, email: ADMIN_EMAIL_LOCAL, password: contents.trim(), path: file };
 }
 
 /** One row `db:seed-owner` guarantees, and what it is for. */
@@ -180,10 +180,21 @@ export interface SeededAccount {
    *
    * Per account, because the two answers are genuinely different and a shared
    * sentence gets one of them wrong. That is not hypothetical: the Hetzner box
-   * already holds `greg@gregdetre.com` on an id nothing recognises, so this is
-   * the first message somebody reads there.
+   * already holds an admin address on an id nothing recognises, so this is the
+   * first message somebody reads there.
    */
   mismatchAdvice: string;
+  /**
+   * Addresses this account **used to** be called, newest first.
+   *
+   * Our id holding one of these is a machine seeded before the rename, not a
+   * collision — so the seed writes the new address on and carries on, rather
+   * than refusing and waiting for a human. Empty means the account has never
+   * been called anything else, and any other address at our id is a refusal.
+   *
+   * See `planAccountEmail` for why this is safe to act on unasked.
+   */
+  renamableFrom: readonly string[];
 }
 
 /**
@@ -213,12 +224,19 @@ export const SEEDED_ACCOUNTS: readonly SeededAccount[] = [
     mismatchAdvice:
       "Rows already written point at one id or the other, so do not just delete it.\n" +
       "  Set SPIDERYARN_OWNER_ID to the id above and leave the account alone.",
+    renamableFrom: [],
   },
   {
     id: ADMIN_USER_ID_LOCAL,
-    email: ADMIN_EMAIL,
+    email: ADMIN_EMAIL_LOCAL,
     signsIn: true,
     why: "the account Greg signs in as, and the one /api/admin/* recognises",
+    /* **The one rename this repo performs unasked**, and only here. Every
+       machine seeded between 2026-08-31 and 2026-09-02 has Greg's real
+       production address on this local row, which is the confusion the rename
+       exists to end — so it has to happen without him running anything.
+       `planAccountEmail` is the fence. */
+    renamableFrom: [ADMIN_EMAIL],
     mismatchAdvice:
       "This is the SIGN-IN account, so SPIDERYARN_OWNER_ID has nothing to do with it —\n" +
       "  /api/admin/* recognises the ids in src/admin.ts and no others, so the account\n" +
@@ -227,6 +245,97 @@ export const SEEDED_ACCOUNTS: readonly SeededAccount[] = [
       "  id to ADMIN_USER_IDS in src/admin.ts, which is a deliberate, reviewable edit.",
   },
 ];
+
+/**
+ * What to do about the address on our id. Pure, so tests/seed-accounts.test.ts
+ * can exercise every branch with no GoTrue running.
+ *
+ * - `create` — nothing at that id yet.
+ * - `keep` — it is already called what we want.
+ * - `rename` — it holds an address this account used to be called
+ *   (`renamableFrom`), so a machine seeded before the rename catches up on its
+ *   next `npm run db:seed-owner` and nobody has to be told.
+ * - `refuse` — anything else, which is somebody else's account at our id.
+ *
+ * ## Why renaming unasked is safe here and would not be anywhere else
+ *
+ * Writing an address onto an account you did not create is, in general, account
+ * takeover. Four things make this the narrow exception rather than the rule,
+ * and all four have to hold:
+ *
+ * - **The stack is local, twice over.** `refuseNonLocalSeed` checks the parsed
+ *   hostname and `refuseMismatchedStack` asks the Supabase CLI which containers
+ *   these actually are — so this cannot run against production, where Greg's
+ *   real `greg@gregdetre.com` lives.
+ * - **It is one id, fixed in git.** Only `ADMIN_USER_ID_LOCAL` has anything in
+ *   `renamableFrom`. Note what that does *not* say: it establishes **where the
+ *   row is, not where it came from**. GPT Sol was right to push on this, and the
+ *   known case proves the point — the laptop's row was made by a Google sign-in
+ *   before any of this existed (260831ab), not by a seed, and nothing here can
+ *   tell one from the other. So the assumption, said plainly rather than left
+ *   implicit: *a local stack is a single-purpose fixture whose fixed ids belong
+ *   to this repo.* A restored dump, or a stack deliberately shared with somebody
+ *   else, breaks that assumption and this would rename their row.
+ * - **It is one *from* address, also fixed in git.** Not "any address", not a
+ *   pattern — the literal previous value, listed.
+ * - **It destroys nothing.** Measured on GoTrue v2.195.0, 2026-09-02: an admin
+ *   email change leaves the password alone, leaves open sessions valid, and the
+ *   new address signs in immediately. Unlike the password write above it, which
+ *   revokes every session and is therefore done only when it must be. Nothing is
+ *   overwritten either — see `staleIdentities`, which is about what the rename
+ *   deliberately leaves behind.
+ *
+ * Compared **case-insensitively and trimmed**, because an address is not
+ * case-sensitive in the part that matters and GoTrue stores what it was given.
+ * A case difference read as "somebody else" would refuse for ever.
+ */
+export type EmailPlan = "create" | "keep" | "rename" | "refuse";
+
+export function planAccountEmail(
+  /** The row at our id, or `undefined` if there is none. */
+  row: { email?: string } | undefined,
+  account: Pick<SeededAccount, "email" | "renamableFrom">,
+): EmailPlan {
+  if (!row) return "create";
+  const norm = (value: string) => value.trim().toLowerCase();
+  /* An account with no address at all is not one of ours and not renamable —
+     it is a row somebody made by hand, and guessing is how this goes wrong. */
+  const held = row.email === undefined ? undefined : norm(row.email);
+  if (held === undefined) return "refuse";
+  if (held === norm(account.email)) return "keep";
+  if (account.renamableFrom.some((was) => norm(was) === held)) return "rename";
+  return "refuse";
+}
+
+/**
+ * Which of an account's identities still carry an address it used to be called.
+ *
+ * **Renaming `auth.users.email` does not rename an identity**, and GPT Sol
+ * caught the rename being described as more thorough than it is. GoTrue keeps a
+ * row per sign-in method: the admin `PUT` updates the `email` one, but a
+ * `google` identity left over from a browser sign-in keeps the address Google
+ * gave it, inside `identity_data`. A machine whose local row began as a Google
+ * sign-in is therefore renamed on the surface and still holding the old address
+ * underneath — visible in Studio, and enough to make `AccountSection.tsx` say
+ * "via google".
+ *
+ * Returns the provider names so the caller can say which. **It deletes
+ * nothing**: removing an identity is destructive and is Greg's call, not a setup
+ * script's.
+ */
+export function staleIdentities(
+  identities: readonly { provider?: string; identity_data?: { email?: string } }[] | undefined,
+  renamableFrom: readonly string[],
+): string[] {
+  if (!identities || renamableFrom.length === 0) return [];
+  const old = new Set(renamableFrom.map((value) => value.trim().toLowerCase()));
+  return identities
+    .filter((identity) => {
+      const email = identity.identity_data?.email;
+      return typeof email === "string" && old.has(email.trim().toLowerCase());
+    })
+    .map((identity) => identity.provider ?? "an unnamed provider");
+}
 
 /**
  * Refuse to seed anything but a local stack. Returns the refusal, or `undefined`

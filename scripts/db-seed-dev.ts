@@ -15,7 +15,7 @@
  *
  * It is **not** a third account either. The account is the one
  * [`scripts/seed-accounts.ts`](seed-accounts.ts) already writes —
- * `greg@gregdetre.com` at `ADMIN_USER_ID_LOCAL`, with a password generated per
+ * `dev-admin@spideryarn.local` at `ADMIN_USER_ID_LOCAL`, with a password generated per
  * machine into `~/.config/spideryarn/local-admin-password`. There is no Google
  * step on a local stack and there never was; `npm run db:admin-password` prints
  * the credentials and [`scripts/browser-sign-in.ts`](browser-sign-in.ts) types
@@ -79,7 +79,7 @@ import { styleText } from "node:util";
 
 import { eq, sql } from "drizzle-orm";
 
-import { ADMIN_EMAIL, ADMIN_USER_ID_LOCAL } from "../src/admin.js";
+import { ADMIN_EMAIL_LOCAL, ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import { articles } from "../src/db/schema.js";
 import { isLocalDatabaseUrl, withoutPassword } from "../src/db/ssl.js";
@@ -194,7 +194,7 @@ try {
   const account = await db.execute(sql`select email from auth.users where id = ${owner}`);
   if (account.rows.length === 0) {
     die(
-      `no auth.users row for ${owner} (${ADMIN_EMAIL}).\n` +
+      `no auth.users row for ${owner} (${ADMIN_EMAIL_LOCAL}).\n` +
         "  Run: npm run db:seed-owner — it makes the account and this puts articles on its shelf.\n" +
         "  Or npm run setup, which runs both in order.",
     );
@@ -370,7 +370,7 @@ try {
     /* The shelf total is context for a person, and nothing depends on it. The
        claim that matters is the one above, which asked the reading route. */
     const shelf = await runAsOwner(owner, () => pgArticleReader.listArticles());
-    console.log(dim(`  ${shelf.length} article(s) on ${ADMIN_EMAIL}'s shelf in total`));
+    console.log(dim(`  ${shelf.length} article(s) on ${ADMIN_EMAIL_LOCAL}'s shelf in total`));
   } finally {
     await releaseCorpusLock();
   }

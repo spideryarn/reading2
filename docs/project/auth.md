@@ -61,8 +61,8 @@ network call and no extra crypto library; and `flowType` in `createClient` **def
 
 ## Locally, signing in needs no Google at all
 
-`npm run db:seed-owner` creates `greg@gregdetre.com` at the id `src/admin.ts` recognises, with a
-password generated for that machine, so the email form on the landing page is the whole of it — no
+`npm run db:seed-owner` creates `dev-admin@spideryarn.local` at the id `src/admin.ts` recognises,
+with a password generated for that machine, so the email form on the landing page is the whole of it — no
 OAuth, no dashboard, and no browser on a machine you cannot reach. That last part is why it exists:
 a fresh Hetzner box had no way in that did not go through the noVNC tunnel.
 `npm run db:admin-password` prints the credentials.

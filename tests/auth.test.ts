@@ -15,7 +15,7 @@
 import { describe, expect, it } from "vitest";
 import type { IncomingMessage } from "node:http";
 
-import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
+import { ADMIN_EMAIL_LOCAL, ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { requireUser, type VerifyResult } from "../src/auth.js";
 
 /**
@@ -40,7 +40,7 @@ function req(authorization?: string): IncomingMessage {
 const says = (claims: Record<string, unknown>) => async (): Promise<VerifyResult> =>
   ({ ok: true, claims } as VerifyResult);
 
-const good = { sub: SUB, email: "greg@gregdetre.com", role: "authenticated", is_anonymous: false };
+const good = { sub: SUB, email: ADMIN_EMAIL_LOCAL, role: "authenticated", is_anonymous: false };
 
 /** What the thrown error says its HTTP status is. `httpError` in src/routes.ts. */
 async function statusOf(p: Promise<unknown>): Promise<number> {
@@ -104,7 +104,7 @@ describe("requireUser", () => {
 
   it("returns the user for a good token", async () => {
     const user = await requireUser(req("Bearer t"), says(good));
-    expect(user).toEqual({ id: SUB, email: "greg@gregdetre.com" });
+    expect(user).toEqual({ id: SUB, email: ADMIN_EMAIL_LOCAL });
   });
 
   /**
@@ -129,7 +129,11 @@ describe("requireUser", () => {
       );
       expect(message).not.toContain("SECRET");
       expect(message).not.toContain(SUB);
-      expect(message).not.toContain("gregdetre");
+      /* The address itself, not a fragment of it. `"gregdetre"` was the needle
+         until 2026-09-02, and once the fixture stopped using that address it
+         would have been a check that could no longer fail —
+         docs/reusable/silent-success.md. */
+      expect(message).not.toContain(good.email);
     }
   });
 });
