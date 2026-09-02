@@ -59,7 +59,8 @@ listed here; the names under each are files in `docs/project/`.
   <br>↳ `colour-scales.md` · `icons.md`
 - **[security-map.md](docs/project/security-map.md)** — start here for security: the untrusted
   parties (none of them is another reader) and where each defence physically lives.
-  <br>↳ `security.md` (the deep dive) · `auth.md` · `admin.md` (the one view across owners)
+  <br>↳ `security.md` (the deep dive) · `auth.md` · `admin.md` (the one view across owners) ·
+  `billing.md` (what a slot is, and what stops a script taking twenty)
 - **[code-quality-overview.md](docs/project/code-quality-overview.md)** — the commands that tell you
   whether what you just did works, and which of them are gates.
   <br>↳ `testing.md` · `typechecking.md` · `linting.md` · `static-analysis.md` (`npm run check`) ·
