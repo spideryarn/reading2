@@ -1,6 +1,6 @@
 {
-  "id": "ac35536b-c6bb-4df5-ae0a-5790a8eb39c6",
-  "prevId": "5a3c6ef1-d880-4f86-93d5-01f26d660177",
+  "id": "5bc5e3df-93c4-49b5-bdf2-0ed015bab42b",
+  "prevId": "4c7a96d4-237b-4f9a-9bf1-1ae62642f009",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1141,6 +1141,176 @@
         "billing_accounts_subscription_needs_customer": {
           "name": "billing_accounts_subscription_needs_customer",
           "value": "\"spideryarn\".\"billing_accounts\".\"stripe_subscription_id\" is null or \"spideryarn\".\"billing_accounts\".\"stripe_customer_id\" is not null"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.billing_tier_prices": {
+      "name": "billing_tier_prices",
+      "schema": "spideryarn",
+      "columns": {
+        "tier_id": {
+          "name": "tier_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit_amount": {
+          "name": "unit_amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "billing_tier_prices_tier_id_billing_tiers_id_fk": {
+          "name": "billing_tier_prices_tier_id_billing_tiers_id_fk",
+          "tableFrom": "billing_tier_prices",
+          "tableTo": "billing_tiers",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "tier_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "billing_tier_prices_tier_id_currency_pk": {
+          "name": "billing_tier_prices_tier_id_currency_pk",
+          "columns": [
+            "tier_id",
+            "currency"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "billing_tier_prices_amount_positive": {
+          "name": "billing_tier_prices_amount_positive",
+          "value": "\"spideryarn\".\"billing_tier_prices\".\"unit_amount\" > 0"
+        },
+        "billing_tier_prices_currency_format": {
+          "name": "billing_tier_prices_currency_format",
+          "value": "\"spideryarn\".\"billing_tier_prices\".\"currency\" ~ '^[a-z]{3}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.billing_tiers": {
+      "name": "billing_tiers",
+      "schema": "spideryarn",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "product_name": {
+          "name": "product_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ingests_per_period": {
+          "name": "ingests_per_period",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lookup_key": {
+          "name": "lookup_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stripe_price_id": {
+          "name": "stripe_price_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "livemode": {
+          "name": "livemode",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "billing_tiers_lookup_key": {
+          "name": "billing_tiers_lookup_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "lookup_key"
+          ]
+        },
+        "billing_tiers_price_id": {
+          "name": "billing_tiers_price_id",
+          "nullsNotDistinct": false,
+          "columns": [
+            "stripe_price_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "billing_tiers_ingests_positive": {
+          "name": "billing_tiers_ingests_positive",
+          "value": "\"spideryarn\".\"billing_tiers\".\"ingests_per_period\" > 0"
+        },
+        "billing_tiers_id_format": {
+          "name": "billing_tiers_id_format",
+          "value": "\"spideryarn\".\"billing_tiers\".\"id\" ~ '^[a-z][a-z0-9_-]{1,30}$'"
         }
       },
       "isRLSEnabled": false
