@@ -58,6 +58,10 @@ import path from "node:path";
 
 import { sameCommit } from "./build-stamp.js";
 import { headText } from "../src/html.js";
+/* The card's clamp, from the composer that applies it, rather than a `120`
+   written out here — a checker that carries its own copy of the number it is
+   checking cannot notice the number changing. */
+import { CARD_TITLE } from "../src/public/page-head.js";
 import { documentTitle } from "../src/title-text.js";
 
 /* ------------------------------------------------------------------ */
@@ -263,10 +267,15 @@ export function judgeCommonHeaders(head: ParsedHead): string[] {
 }
 
 /**
- * Everything about the public head except the title, which
- * {@link judgeTitleAgainstArticle} owns — this only checks that og:title is
- * *present*, since checking its exact value against nothing would be a check
- * that always passes.
+ * Everything about the public head **except both titles**, which
+ * {@link judgeTitleAgainstArticle} owns outright — `<title>` and `og:title`,
+ * each compared exactly against the article's own.
+ *
+ * This docblock used to say it checked `og:title` was present. It never did:
+ * the loop below has three keys and that is not one of them. Harmless while the
+ * title judge downgraded on a blank title — except that it was the *reason* the
+ * downgrade looked survivable, since a missing `og:title` seemed to be somebody
+ * else's problem. It was nobody's. GPT Sol, reviewing Cluster B.
  */
 export function judgePublicHead(head: ParsedHead, body: string, opts: { slug: string }): string[] {
   const problems = judgeCommonHeaders(head);
@@ -286,9 +295,18 @@ export function judgePublicHead(head: ParsedHead, body: string, opts: { slug: st
 
 export interface TitleVerdict {
   problems: string[];
-  /** True when the article's own title was blank and this fell back to the weak check. */
-  downgraded: boolean;
-  /** Set only when `downgraded` — explains why, so a downgrade is never silent. */
+  /**
+   * **Information, not an excuse**, and it was the second of those until
+   * 2026-09-02.
+   *
+   * There used to be a `downgraded` flag beside this, set when the article's
+   * own title was blank, and it meant *this run checked less*. It is gone with
+   * the branch that set it: blank is deterministic on both sides now, so every
+   * title is compared exactly and there is nothing left to be lenient about.
+   * What survives is this line of prose, set only for the blank case, so that a
+   * person reading the output knows the `Untitled` it compared came from the
+   * composers rather than from the article.
+   */
   note?: string;
 }
 
@@ -320,32 +338,38 @@ export interface TitleVerdict {
  * fetching the article proves the thing it advertises can actually be
  * delivered.
  *
- * **The one legitimate way they can differ:** an article whose stored title is
- * literally blank. `??` preserves `""` through both fallback chains, so
- * `meta.title` comes back empty and the head composes `Untitled` (page-head.ts,
- * `|| "Untitled"`) — a difference that is correct rather than a fault. So a
- * blank article title downgrades to the old weak check rather than failing, and
- * says so in `note`, so the downgrade itself is visible rather than a silent
- * pass.
+ * **A blank article title is not a reason to check less, and it used to be.**
+ * `??` preserves `""` through both fallback chains, so `meta.title` can come
+ * back empty — and while this check asked the *metadata* route that was
+ * genuinely unresolvable, because the head fell back to the article's first
+ * `<h1>` and metadata carried no such fallback, so the two could differ
+ * legitimately and by an amount nothing here could predict. It downgraded to
+ * "not the bare default" for that case.
+ *
+ * **The article route took that uncertainty away and the downgrade outlived
+ * it.** Blank is deterministic on both sides: `documentTitle("")` is
+ * `Untitled · Spideryarn` (src/title-text.ts § articleTitle, `|| "Untitled"`)
+ * and the card is `Untitled` (src/public/page-head.ts, the same `||`). So the
+ * expected values are known exactly, and every title is now compared exactly.
+ *
+ * GPT Sol found what the surviving downgrade admitted, reviewing this stage:
+ * for a blank-titled article, a head reading `<title>Some Other Article ·
+ * Spideryarn</title>` **with no `og:title` at all** passed — present, and not
+ * the bare default. A head composed from the wrong article, waved through by
+ * the branch that existed to be lenient about a difference that no longer
+ * exists. `note` survives as information rather than as an excuse: it says the
+ * article has no stored title, so the reader of the output knows which side the
+ * `Untitled` came from.
  */
 export function judgeTitleAgainstArticle(body: string, articleTitle: string): TitleVerdict {
   const title = extractTitle(body);
-
-  if (articleTitle.trim() === "") {
-    const problems: string[] = [];
-    if (title === null) problems.push("title: no <title> tag found");
-    else if (title === DEFAULT_TITLE) problems.push(`title: still the bare default '${DEFAULT_TITLE}' — page was not enhanced`);
-    return {
-      problems,
-      downgraded: true,
-      note:
-        "the article's own title is blank, so this only checked 'not the bare default' — there is nothing " +
-        "to compare the head against, and the head composes its own 'Untitled' for that case",
-    };
-  }
+  const blank = articleTitle.trim() === "";
 
   const problems: string[] = [];
-  const expectedOgTitle = headText(articleTitle, 120);
+  /* `|| "Untitled"` on both, matching the two composers exactly — a title of
+     `"   "` normalises to `""`, which is as titleless as one that was never
+     set, and both sides say `Untitled` for it. */
+  const expectedOgTitle = headText(articleTitle, CARD_TITLE) || "Untitled";
   const expectedTitle = documentTitle(articleTitle);
 
   const decodedTitle = title === null ? null : unescapeHead(title);
@@ -359,7 +383,14 @@ export function judgeTitleAgainstArticle(body: string, articleTitle: string): Ti
   else if (ogTitle !== expectedOgTitle)
     problems.push(`meta og:title: expected '${expectedOgTitle}' (from /api/public/article's meta.title, clamped to 120), got '${ogTitle}'`);
 
-  return { problems, downgraded: false };
+  return blank
+    ? {
+        problems,
+        note:
+          "this article has no stored title, so both expectations above are the composers' own " +
+          "'Untitled' rather than anything the article said — checked exactly, not waived",
+      }
+    : { problems };
 }
 
 /**
@@ -495,11 +526,73 @@ export function judgeRobotsHeaderOnRead(head: ParsedHead): string[] {
   return [];
 }
 
+/**
+ * The two crawlers `public/robots.txt` deliberately lets at `/read/`, so that a
+ * pasted shared link draws a card instead of a bare URL. Neither puts a page in
+ * a search result, and the `X-Robots-Tag` header and the `<meta name="robots">`
+ * are what actually keep the site out of search — that pair is untouched. The
+ * file itself carries the whole argument; this is the list, lower-cased because
+ * a robots.txt user-agent match is case-insensitive.
+ */
+const PREVIEW_BOTS = ["facebookexternalhit", "twitterbot"];
+
+/**
+ * **`Allow:` is not the same thing as indexing, and this check used to say it
+ * was.**
+ *
+ * It rejected any `Allow:` line at all — *"that would mean indexing is already
+ * enabled"* — which was true of the file it was written against and false of
+ * the file that shipped. `public/robots.txt` grew two `Allow: /read/` lines on
+ * purpose, one for each preview bot, and from that day this check failed
+ * against a correct deployment. Found 2026-09-02, by running the script.
+ *
+ * A check that fails on the truth is worse than no check: the first thing
+ * anybody does with a red they believe is spurious is stop reading the output.
+ * So the rule is now the one the file actually keeps — **the anonymous group is
+ * still `Disallow: /`, and every `Allow:` belongs to a group naming only the
+ * preview bots** — and a third bot, or an `Allow:` in the `*` group, still
+ * fails.
+ */
 export function judgeRobotsTxt(contentType: string, body: string): string[] {
   const problems: string[] = [];
   if (!contentType.toLowerCase().includes("text/plain")) problems.push(`served as '${contentType}', not text/plain`);
-  if (!/^Disallow:\s*\/\s*$/m.test(body)) problems.push("no 'Disallow: /' line found");
-  if (/^Allow:/m.test(body)) problems.push("an 'Allow:' line is present — that would mean indexing is already enabled");
+
+  /* Grouped the way a crawler reads it: a run of `User-agent:` lines opens a
+     group, and the rules under it belong to all of them until the next run. */
+  const groups: { agents: string[]; rules: string[] }[] = [];
+  let opening = false;
+  for (const raw of body.split("\n")) {
+    const line = raw.replace(/#.*$/, "").trim();
+    if (line === "") continue;
+    const ua = /^User-agent:\s*(.+)$/i.exec(line);
+    if (ua) {
+      if (!opening) groups.push({ agents: [], rules: [] });
+      groups[groups.length - 1]?.agents.push((ua[1] ?? "").trim().toLowerCase());
+      opening = true;
+      continue;
+    }
+    opening = false;
+    groups[groups.length - 1]?.rules.push(line);
+  }
+
+  const anonymous = groups.find((g) => g.agents.includes("*"));
+  if (!anonymous) problems.push("no 'User-agent: *' group found");
+  else if (!anonymous.rules.some((r) => /^Disallow:\s*\/$/i.test(r)))
+    problems.push("the 'User-agent: *' group does not say 'Disallow: /'");
+
+  for (const group of groups) {
+    const allows = group.rules.filter((r) => /^Allow:/i.test(r));
+    if (allows.length === 0) continue;
+    const unexpected = group.agents.filter((a) => !PREVIEW_BOTS.includes(a));
+    if (unexpected.length > 0)
+      problems.push(
+        `an 'Allow:' line under '${unexpected.join(", ")}' — only ${PREVIEW_BOTS.join(" and ")} are meant to have one`,
+      );
+    for (const allow of allows)
+      if (!/^Allow:\s*\/read\/$/i.test(allow))
+        problems.push(`unexpected rule '${allow}' — the only hole is 'Allow: /read/'`);
+  }
+
   return problems;
 }
 
@@ -700,13 +793,9 @@ function runSelfTest(): void {
   check(
     "judgeTitleAgainstArticle: catches a 200 that was never enhanced",
     /* Both halves, named specifically. "the array is non-empty" would pass on
-       any single complaint, including one about the wrong thing entirely. The
-       "bare default" wording belongs to the *downgraded* branch, which is not
-       the branch a known article title takes — an earlier version of this
-       assertion looked for it here and could never have been satisfied. */
+       any single complaint, including one about the wrong thing entirely. */
     missingEnhancementVerdict.problems.some((p) => p.startsWith("title:")) &&
-      missingEnhancementVerdict.problems.some((p) => p.startsWith("meta og:title:")) &&
-      !missingEnhancementVerdict.downgraded,
+      missingEnhancementVerdict.problems.some((p) => p.startsWith("meta og:title:")),
     missingEnhancementVerdict,
   );
 
@@ -764,21 +853,44 @@ function runSelfTest(): void {
     unescapeHead("&amp;lt;"),
   );
 
-  /* The one legitimate divergence: an article whose stored title is blank, so
-     `meta.title` comes back empty (`??` preserves `""`) while the head composes
-     its own `Untitled` — must downgrade, not fail, and must say so rather than
-     passing silently. Whitespace as well as empty, because a title of `"   "`
-     is as titleless as one of `""` and `documentTitle` treats it that way. */
-  const blankTitleVerdict = judgeTitleAgainstArticle("<title>Untitled · Spideryarn</title>", "   ");
+  /* ---- a blank article title: still checked exactly, never waived ----
+     `meta.title` comes back empty (`??` preserves `""`) and *both* composers
+     answer `Untitled` for it, so the expectations are known and the old
+     downgrade to "not the bare default" is gone. Whitespace as well as empty,
+     because a title of `"   "` is as titleless as one of `""` and both
+     composers treat it that way.
+
+     The three cases below are the mutation GPT Sol found alive in the
+     downgraded version, split into its parts: it passed a head built from the
+     **wrong article** with **no og:title at all**, because "present and not the
+     bare default" is satisfied by almost anything. */
+  const blankBody = `<title>Untitled · Spideryarn</title><meta property="og:title" content="Untitled">`;
+  const blankTitleVerdict = judgeTitleAgainstArticle(blankBody, "   ");
   check(
-    "judgeTitleAgainstArticle: a blank article title downgrades rather than failing, and says why",
-    blankTitleVerdict.downgraded && blankTitleVerdict.problems.length === 0 && !!blankTitleVerdict.note,
+    "judgeTitleAgainstArticle: a blank article title passes on the composers' own Untitled, and says so",
+    blankTitleVerdict.problems.length === 0 && !!blankTitleVerdict.note,
     blankTitleVerdict,
+  );
+  const blankWrongTitleVerdict = judgeTitleAgainstArticle(
+    `<title>Some Other Article · Spideryarn</title><meta property="og:title" content="Some Other Article">`,
+    "",
+  );
+  check(
+    "judgeTitleAgainstArticle: a blank article title still catches a head built from another article",
+    blankWrongTitleVerdict.problems.some((p) => p.startsWith("title:")) &&
+      blankWrongTitleVerdict.problems.some((p) => p.startsWith("meta og:title:")),
+    blankWrongTitleVerdict,
+  );
+  const blankNoOgVerdict = judgeTitleAgainstArticle("<title>Untitled · Spideryarn</title>", "");
+  check(
+    "judgeTitleAgainstArticle: a blank article title still catches a missing og:title",
+    blankNoOgVerdict.problems.length === 1 && blankNoOgVerdict.problems[0] === "meta og:title: missing",
+    blankNoOgVerdict,
   );
   const blankButUnenhancedVerdict = judgeTitleAgainstArticle(unenhancedBody, "");
   check(
     "judgeTitleAgainstArticle: a blank article title still catches a genuinely unenhanced page",
-    blankButUnenhancedVerdict.downgraded && blankButUnenhancedVerdict.problems.length > 0,
+    blankButUnenhancedVerdict.problems.length > 0,
     blankButUnenhancedVerdict,
   );
 
@@ -878,13 +990,45 @@ function runSelfTest(): void {
   const wrongHashHead = parseHeaderDump(dump("HTTP/1.1 200 OK", { "x-spideryarn-shell-sha256": "0".repeat(64) }));
   check("judgeShellHashMatches: catches a byte added after the digest was taken", judgeShellHashMatches(wrongHashHead, indexBytes).length > 0);
 
-  /* ---- judgeRobotsTxt ---- */
+  /* ---- judgeRobotsTxt ----
+     **The shipped file is the first fixture, and it was not before.** This
+     check rejected every `Allow:` line, `public/robots.txt` deliberately has
+     two, and so it failed against a correct deployment from the day the preview
+     hole shipped — found by running the script, 2026-09-02. Written out here
+     rather than read from disk, because this script talks only to a deployment
+     (see its header) and a fixture read from the repo would agree with whatever
+     the repo said. */
+  const shippedRobots =
+    "User-agent: *\nDisallow: /\n\n" +
+    "User-agent: facebookexternalhit\nAllow: /read/\nDisallow: /\n\n" +
+    "User-agent: Twitterbot\nAllow: /read/\nDisallow: /\n";
   check(
-    "judgeRobotsTxt: the current text/plain Disallow-all file passes",
+    "judgeRobotsTxt: the shipped file — Disallow-all plus the two preview holes — passes",
+    judgeRobotsTxt("text/plain; charset=utf-8", shippedRobots).length === 0,
+    judgeRobotsTxt("text/plain; charset=utf-8", shippedRobots),
+  );
+  check(
+    "judgeRobotsTxt: the older Disallow-all-and-nothing-else file still passes",
     judgeRobotsTxt("text/plain; charset=utf-8", "User-agent: *\nDisallow: /\n").length === 0,
   );
   check("judgeRobotsTxt: catches being served as text/html (the SPA ate it)", judgeRobotsTxt("text/html", "User-agent: *\nDisallow: /\n").length > 0);
-  check("judgeRobotsTxt: catches a stray Allow line appearing early", judgeRobotsTxt("text/plain", "User-agent: *\nAllow: /read/\nDisallow: /\n").length > 0);
+  check(
+    "judgeRobotsTxt: catches an Allow in the anonymous group, which is the real flip",
+    judgeRobotsTxt("text/plain", "User-agent: *\nAllow: /read/\nDisallow: /\n").length > 0,
+  );
+  check(
+    "judgeRobotsTxt: catches a third bot being let in beside the two",
+    judgeRobotsTxt("text/plain", `${shippedRobots}\nUser-agent: Googlebot\nAllow: /read/\nDisallow: /\n`).length > 0,
+  );
+  check(
+    "judgeRobotsTxt: catches the hole being widened past /read/",
+    judgeRobotsTxt("text/plain", "User-agent: *\nDisallow: /\n\nUser-agent: Twitterbot\nAllow: /\nDisallow: /\n").length > 0,
+  );
+  check(
+    "judgeRobotsTxt: catches the site-wide Disallow being dropped",
+    judgeRobotsTxt("text/plain", "User-agent: *\nDisallow: /profile\n").length > 0,
+  );
+  check("judgeRobotsTxt: catches losing the anonymous group altogether", judgeRobotsTxt("text/plain", "User-agent: Twitterbot\nDisallow: /\n").length > 0);
 
   /* ---- judgeMethodNotAllowed ---- */
   check("judgeMethodNotAllowed: a correct 405 passes", judgeMethodNotAllowed(parseHeaderDump(dump("HTTP/1.1 405 Method Not Allowed", { allow: "GET, HEAD" }))).length === 0);
@@ -1135,7 +1279,29 @@ async function main(): Promise<void> {
   process.exit(tally.FAIL > 0 ? 1 : 0);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+/**
+ * **Only when this file is what was run**, and it was unconditional until
+ * 2026-09-02.
+ *
+ * Every function above is exported so it can be exercised in isolation, and the
+ * `--self-test` mode exists precisely so somebody can. But a bare `main()` at
+ * module scope means *importing* one of those exports runs the whole suite —
+ * against `https://www.spideryarn.com`, because that is the default host. That
+ * happened while reviewing this file: a one-line import to try a single judge
+ * issued a dozen requests to production, including the POST that the 405 check
+ * is. Nothing was written and nothing could have been; it was still not what
+ * anybody asked for.
+ *
+ * `process.argv[1]` rather than a bundler's `import.meta.main`, which `tsx`
+ * does not define.
+ */
+const RUN_DIRECTLY =
+  process.argv[1] !== undefined &&
+  path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
+
+if (RUN_DIRECTLY) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

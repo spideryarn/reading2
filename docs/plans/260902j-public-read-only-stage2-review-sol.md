@@ -1,0 +1,24 @@
+## Findings
+
+1. **P1 — blocker: the blank-title branch is now unnecessarily weak and admits a false pass.**  
+   [check-public-shell.ts:334](/home/greg/code/spideryarn2/.claude/worktrees/public-read-improvements/scripts/check-public-shell.ts:334) accepts any `<title>` except the bare default when `meta.title` is blank, and never examines `og:title`. [judgePublicHead:275](/home/greg/code/spideryarn2/.claude/worktrees/public-read-improvements/scripts/check-public-shell.ts:275) also omits `og:title`, despite its comment saying it checks presence.
+
+   The old downgrade was necessary because metadata lacked the `<h1>` fallback. The article route removed that uncertainty: it supplies exactly the title value the composer receives. Blank is deterministic too—`documentTitle("")` produces `Untitled · Spideryarn` ([title-text.ts:154](/home/greg/code/spideryarn2/.claude/worktrees/public-read-improvements/src/title-text.ts:154)), while the card produces `Untitled` ([page-head.ts:223](/home/greg/code/spideryarn2/.claude/worktrees/public-read-improvements/src/public/page-head.ts:223)).
+
+   **Surviving mutation:** for an article whose `meta.title` is blank, emit `<title>Some Other Article · Spideryarn</title>` and delete `og:title`. The checker passes: the title is present and not exactly `Spideryarn`, while neither judge requires `og:title`. The self-test actually blesses the missing-`og:title` form at [check-public-shell.ts:772](/home/greg/code/spideryarn2/.claude/worktrees/public-read-improvements/scripts/check-public-shell.ts:772).
+
+   Remove the downgrade, or keep only its informational note while comparing every title exactly using `documentTitle(articleTitle)` and `headText(articleTitle, 120) || "Untitled"`. Add blank-title mutations for both a wrong `<title>` and missing/wrong `og:title`.
+
+2. **P2 — false current-state comment remains in the file whose false comment was supposedly removed.**  
+   [App.tsx:558](/home/greg/code/spideryarn2/.claude/worktrees/public-read-improvements/src/web/App.tsx:558) still says there is a metadata request outside a `try`, that its failure becomes `null`, and that `visitorGap` consumes that state. None exists: [App.tsx:697](/home/greg/code/spideryarn2/.claude/worktrees/public-read-improvements/src/web/App.tsx:697) makes the sole article request, and [App.tsx:715](/home/greg/code/spideryarn2/.claude/worktrees/public-read-improvements/src/web/App.tsx:715) has no nullable metadata result. Delete that obsolete subsection.
+
+## What clears
+
+- **No dispatcher hole.** Every literal path under `/api/public/` is captured before the gate by [routes.ts:5630](/home/greg/code/spideryarn2/.claude/worktrees/public-read-improvements/src/routes.ts:5630). After the sole article pattern fails, every method reaches the unconditional 404 at [public/routes.ts:308](/home/greg/code/spideryarn2/.claude/worktrees/public-read-improvements/src/public/routes.ts:308) and [public/routes.ts:325](/home/greg/code/spideryarn2/.claude/worktrees/public-read-improvements/src/public/routes.ts:325). Encodings after that prefix remain inside the closed room; production URL restoration can decode a slash into the prefix, not out of it. `Allow` is set only after a live route matches ([public/routes.ts:367](/home/greg/code/spideryarn2/.claude/worktrees/public-read-improvements/src/public/routes.ts:367)).
+- **The larger fetch is mechanically sound.** Curl writes the body directly to a temporary file, so its 64MB subprocess buffer does not truncate it ([check-public-shell.ts:579](/home/greg/code/spideryarn2/.claude/worktrees/public-read-improvements/scripts/check-public-shell.ts:579)). The 30-second timeout is explicit; failure there proves the advertised article cannot be delivered within that bound—the intended stronger check.
+- **Boneless coverage is better.** `loadArticle` rejects zero fetched rows ([public-reader.ts:431](/home/greg/code/spideryarn2/.claude/worktrees/public-read-improvements/src/store/public-reader.ts:431)); `loadHead` rejects SQL’s independent `hasBlocks` result ([public-reader.ts:520](/home/greg/code/spideryarn2/.claude/worktrees/public-read-improvements/src/store/public-reader.ts:520)). The fixture exercises both at [public-visibility-pg.test.ts:1500](/home/greg/code/spideryarn2/.claude/worktrees/public-read-improvements/tests/public-visibility-pg.test.ts:1500).
+- The eight needle survivors are deliberate; none keeps the route alive.
+- The small generic `read<T>` is justified: it centralizes the namespace-specific 404 value semantics at [public-api.ts:116](/home/greg/code/spideryarn2/.claude/worktrees/public-read-improvements/src/web/public-api.ts:116).
+- `security-map.md` names the namespace and its defenses, not individual routes or a route count; no edit was needed.
+
+**Verdict: BLOCKED on the blank-title checker false pass.** Fix that mutation and the two false comments; the route deletion itself is sound.

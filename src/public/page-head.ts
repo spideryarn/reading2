@@ -85,7 +85,11 @@ export const PUBLIC_ORIGIN = "https://www.spideryarn.com";
  * applied by the `documentTitle` this file calls, because the client applies the
  * same one to the same string.
  */
-const CARD_TITLE = 120;
+/* Exported since 2026-09-02 for `scripts/check-public-shell.ts`, which compares
+   a deployed `og:title` against the article's own and has to clamp it the same
+   way. It held a literal `120` until then — a second copy of this number, in
+   the one file whose job is to notice when the deployed head is wrong. */
+export const CARD_TITLE = 120;
 const DESCRIPTION = 240;
 
 /**

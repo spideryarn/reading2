@@ -627,3 +627,52 @@ stage 3 needs, and it is a redesign of the child tables, not of public reading.
   reference sweep names every top-level directory it looked in, and that `scripts/` is the one most
   often forgotten. Not edited here: that file's wording is a rule and goes through
   [edit-important-docs.md](../reusable/edit-important-docs.md).
+- 2026-09-02 — **the full-suite run Sol asked for, on a box at load average 43.** 36 failed of 9,227
+  across 15 files, and **none of them is in this work**: every one of the fifteen suites this plan
+  touched is green in one run together, 256 tests. What is red belongs to other people or to the
+  machine, and it is worth saying which is which rather than waving at "contention":
+
+  | Red | Whose |
+  |---|---|
+  | `doc-links` ×2 | `AGENTS.md` claims `docs/project/website-text.md`, which does not exist. Added in `fcb8b9a`, unrelated work landed on `dev` today. |
+  | `fixture-ids` | Two uuids claimed by two test files each — `cost-eval` against `store-export-isolation` and `store-artefacts-pg`. Somebody else's collision, and the test's own message says why it matters. |
+  | `db-schema`, `db-schema-drift` ×4, `feedback-store` ×13, `health` ×4, `auth-user-seeding`, `store-parity-referee` | Database state. A jobs-queue migration sits unreconciled in the shared local ledger — a peer flagged it to this session — and billing and realtime tables landed today. |
+  | `owner-isolation`, `hierarchy-write-guard`, `validate-tree-rows`, `pdf-*`, `block-policy-prompts` | Parallelism and timing. `owner-isolation` **passes in isolation**, which is the tell. |
+
+  The `pdf-*` and `block-policy-prompts` group is the same shape as the cascade found in stage 1b:
+  a five-second default against work that legitimately waits. Nobody has budgeted those the way the
+  three mode sweeps now are, and somebody should.
+- 2026-09-02 — **Sol's review of Cluster B** ([-stage2-review-sol.md](260902j-public-read-only-stage2-review-sol.md))
+  returned **BLOCKED** on one, plus a stale comment. Both fixed, and running the fix turned up a
+  third thing.
+
+  **The blank-title downgrade outlived its reason and admitted a false pass.** It existed because
+  the *metadata* route had no `<h1>` fallback while the head did, so for a blank-titled article the
+  two could differ legitimately and by an amount nothing could predict — so the check dropped to
+  "not the bare default". The article route removed that uncertainty and the downgrade stayed.
+  Sol's mutation: a blank-titled article served `<title>Some Other Article · Spideryarn</title>`
+  **with no `og:title` at all** passed, because present-and-not-default is satisfied by almost
+  anything. Blank is deterministic on both sides — `documentTitle("")` is `Untitled · Spideryarn`
+  and the card is `Untitled`, both by the same `|| "Untitled"` — so every title is compared exactly
+  now and the `downgraded` flag is gone. `note` survives as information rather than as an excuse.
+  Four self-test cases cover the mutation's parts.
+
+  Two smaller things with it. `judgePublicHead`'s docblock claimed it checked `og:title` was
+  present; it never has — the loop has three keys and that is not one of them — and that false claim
+  is part of why the downgrade looked survivable, since a missing `og:title` seemed to be somebody
+  else's problem. And `CARD_TITLE` is exported from `src/public/page-head.ts` now, so the checker
+  clamps with the composer's own number instead of a `120` written out beside it.
+
+  **And running the script found a check that fails on the truth.** `judgeRobotsTxt` rejected any
+  `Allow:` line — *"that would mean indexing is already enabled"* — while `public/robots.txt`
+  deliberately carries two, the preview holes for `facebookexternalhit` and `Twitterbot`. So it has
+  failed against a correct deployment since the day that shipped. A check that reddens on the truth
+  is worse than no check, because the first thing anyone does with a red they believe is spurious is
+  stop reading the output. It now groups the file the way a crawler reads it and keeps the rule that
+  is actually true: the anonymous group is still `Disallow: /`, and every `Allow:` belongs to a group
+  naming only those two bots. Six self-test cases, and the shipped file is the first fixture.
+
+  **Said plainly: this script talks to the deployed site, and running it reached production.** It has
+  no `import.meta.main` guard, so importing it to exercise one function ran its whole main against
+  `www.spideryarn.com`. Nothing was written — every check is a GET except one POST the platform
+  refuses with 405, which is the check — but it was not intended, and the guard is worth adding.
