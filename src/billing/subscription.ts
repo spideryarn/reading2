@@ -158,6 +158,17 @@ export interface Chosen {
 export function chooseSubscription(
   subscriptions: readonly Stripe.Subscription[],
   entitled: (status: string) => boolean,
+  /**
+   * Does this price sell something we know how to meter?
+   *
+   * **Load-bearing, and it was missing.** Without it, an active Reader
+   * subscription sitting beside a newer active subscription on some other price
+   * lost — the newer one won on date, and `tierForPrice` then returned null for
+   * it, dropping a paying customer to the free tier while their real
+   * subscription was right there. GPT Sol, 2026-09-02. Defaults to "recognise
+   * everything" so a caller that does not care still gets the old behaviour.
+   */
+  recognised: (priceId: string) => boolean = () => true,
 ): Chosen {
   const notes: string[] = [];
   const understood: SubscriptionState[] = [];
@@ -185,13 +196,28 @@ export function chooseSubscription(
        an account that looks as though it never subscribed. */
     return { state: newest(understood), notes, anomaly: false };
   }
-  if (live.length === 1) return { state: live[0] ?? null, notes, anomaly: false };
 
-  notes.push(
-    `this customer has ${live.length} live subscriptions (${live.map((s) => s.subscriptionId).join(", ")}) ` +
-      "and may be paying more than once — taking the most recent",
-  );
-  return { state: newest(live), notes, anomaly: true };
+  /* **The anomaly is counted over every live subscription, and the choice is
+     made only among the ones we sell.** Those are different questions: two live
+     subscriptions is worth a person looking at whatever they are on, while
+     picking one we cannot meter would drop a paying customer to free. */
+  const anomaly = live.length > 1;
+  if (anomaly) {
+    notes.push(
+      `this customer has ${live.length} live subscriptions (${live.map((s) => s.subscriptionId).join(", ")}) ` +
+        "and may be paying more than once — taking the most recent recognised one",
+    );
+  }
+
+  const sellable = live.filter((s) => recognised(s.priceId));
+  if (sellable.length === 0) {
+    notes.push(
+      `none of this customer's live subscriptions is on a price this build sells ` +
+        `(${live.map((s) => s.priceId).join(", ")}) — storing the most recent anyway`,
+    );
+    return { state: newest(live), notes, anomaly };
+  }
+  return { state: newest(sellable), notes, anomaly };
 }
 
 /**

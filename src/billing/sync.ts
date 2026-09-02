@@ -34,11 +34,13 @@
  * needs today.
  */
 
+import type Stripe from "stripe";
+
 import { eq } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { billingAccounts } from "../db/schema.js";
-import { errorFields, log } from "../log.js";
+import { log } from "../log.js";
 import { chooseSubscription } from "./subscription.js";
 import { assertLivemode, stripeClient } from "./stripe.js";
 import { isEntitledStatus } from "./tiers.js";
@@ -67,12 +69,20 @@ export type SyncResult =
  *
  * @param customerId a `cus_…`, taken from the event only as a lookup key.
  *
- * Idempotent: running it twice produces the same row, which is what makes a
- * Stripe retry safe. "No-op" here means *the same resulting state*, not zero
- * work — it always asks Stripe.
+ * **Idempotent in entitlement, not in the row.** Running it twice leaves the
+ * same subscription, status and period — which is what makes a Stripe retry
+ * safe — but `last_synced_at` and `updated_at` move every time, because they
+ * record when we asked rather than what we found. An earlier version of this
+ * said "the same row", which is the sort of claim somebody later tests and
+ * finds false. "No-op" here means the same resulting *entitlement*, never zero
+ * work: it always asks Stripe.
  */
 export async function syncSubscriptionFromStripe(customerId: string): Promise<SyncResult> {
   const stripe = stripeClient();
+  /* Read once, outside the transaction: it is configuration, not state, and
+     `readerPriceId()` throws when unset — which must not turn a webhook into a
+     500 on a deployment that simply has no paid tier configured. */
+  const readerPriceId = process.env.STRIPE_PRICE_READER?.trim() || null;
 
   return await getDb().transaction(
     async (tx) => {
@@ -94,18 +104,36 @@ export async function syncSubscriptionFromStripe(customerId: string): Promise<Sy
          subscription that has already been replaced would otherwise wipe the
          replacement. `status: "all"` because a cancelled one is still worth
          storing — `/profile` saying "your subscription ended" is a different
-         thing from an account that looks as though it never subscribed. */
-      const list = await stripe.subscriptions.list({
+         thing from an account that looks as though it never subscribed.
+
+         **Paginated, and it was not.** Stripe's page maximum is 100, so a
+         single `limit: 100` says "the first hundred", not "all" — and an older
+         *active* subscription can sit behind a hundred cancelled ones. The cap
+         below is a guard against an unbounded loop rather than a page size;
+         reaching it is a fact worth logging, not a normal outcome. GPT Sol,
+         2026-09-02. */
+      const subscriptions: Stripe.Subscription[] = [];
+      const MAX_SUBSCRIPTIONS = 1000;
+      for await (const subscription of stripe.subscriptions.list({
         customer: customerId,
         status: "all",
         limit: 100,
         expand: ["data.items.data.price"],
-      });
-      for (const subscription of list.data) {
+      })) {
         assertLivemode(subscription.livemode, `subscription ${subscription.id}`);
+        subscriptions.push(subscription);
+        if (subscriptions.length >= MAX_SUBSCRIPTIONS) {
+          logger.error(
+            { customerId, count: subscriptions.length },
+            "stopped reading this customer's subscriptions at the cap — something is very wrong",
+          );
+          break;
+        }
       }
 
-      const chosen = chooseSubscription(list.data, isEntitledStatus);
+      const chosen = chooseSubscription(subscriptions, isEntitledStatus, (priceId) =>
+        Boolean(readerPriceId) && priceId === readerPriceId,
+      );
       for (const note of chosen.notes) {
         logger.warn({ customerId, ownerId: row.ownerId, note }, "reading a Stripe subscription");
       }
@@ -144,9 +172,4 @@ export async function syncSubscriptionFromStripe(customerId: string): Promise<Sy
     /* Pinned, as everywhere else in the store. */
     { isolationLevel: "read committed" },
   );
-}
-
-/** Log a sync failure without letting a Stripe message reach the response. */
-export function noteSyncFailure(customerId: string, err: unknown): void {
-  logger.error({ customerId, ...errorFields(err) }, "could not sync a customer from Stripe");
 }

@@ -9,6 +9,12 @@
  * store is live there, so the app fails to start rather than serving unmetered
  * ingests. docs/project/billing.md.
  *
+ * **Nothing here is wired up yet.** `reserveIngest` has no caller in
+ * `POST /api/jobs`, and `settleReservation` has no caller in `settleIn`. The
+ * comments below describe what each function guarantees *to a correct caller*,
+ * not something the app currently does — an earlier version of this header said
+ * otherwise and was wrong (GPT Sol, 2026-09-02).
+ *
  * ## The one thing this file exists to get right
  *
  * A script firing twenty concurrent `POST /api/jobs` at a free account with
@@ -22,12 +28,17 @@
  * nothing locks nothing"*
  * (docs/postmortems/260901f-a-for-update-that-locks-nothing.md). A free reader
  * has no billing row, so locking one that might not exist would serialise
- * nobody, in exactly the case the boundary is for. `insert … on conflict do
- * nothing` then `for update` is that postmortem's prescribed shape.
+ * nobody, in exactly the case the boundary is for.
  *
  * Measured on 2026-09-02 with two real connections: the second transaction
  * blocks for as long as the first holds the row, then reads the first's
  * committed value. `tests/billing-quota-race.test.ts` is that measurement, kept.
+ *
+ * **The entitlement is read under the same lock**, from the row itself, rather
+ * than passed in by the caller. Passing it in left a window in which a webhook
+ * could cancel a subscription between the caller's read and this lock — and the
+ * function would then grant Reader quota to a cancelled account, or refuse a
+ * customer who had just paid.
  *
  * ## Why the lock is not held across `enqueue()`
  *
@@ -35,18 +46,18 @@
  * built and should not be. `enqueueOrGet` (src/store/pg-jobs.ts) is deliberately
  * not a transaction, and holding a transaction open on one pooled connection
  * while `enqueue()` takes a second would deadlock the pool at
- * `DATABASE_POOL_MAX` concurrent admissions, which defaults to 5.
+ * `DATABASE_POOL_MAX`, which defaults to 5.
  *
  * Instead the **reservation** is what is written under the lock. A later
  * admission counts unsettled reservations as used, so it sees an earlier one
  * whether or not that one has reached `enqueue()` yet. **Nothing that opens its
  * own transaction, and nothing that talks to the network, may be called between
- * the lock and the commit** — that is the rule that keeps the pool argument
- * true.
+ * the lock and the commit** — that is the rule that keeps the pool argument true.
  */
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
+import { FREE, entitlementFor, isEntitledStatus, tierForPrice } from "../billing/tiers.js";
 import type { Entitlement } from "../billing/tiers.js";
 import { getDb } from "../db/client.js";
 import { billingAccounts, ingestEvents } from "../db/schema.js";
@@ -58,6 +69,7 @@ const logger = log("store");
 export interface Admitted {
   readonly kind: "admitted";
   readonly reservationId: string;
+  readonly entitlement: Entitlement;
 }
 
 /** The account is at its ceiling. Carries what a refusal message needs. */
@@ -69,7 +81,21 @@ export interface Refused {
   readonly resetAt?: Date;
 }
 
-export type Admission = Admitted | Refused;
+/**
+ * The account looks paid, but the stored period does not contain now.
+ *
+ * Neither an admission nor a refusal, because both would be wrong: serving them
+ * the free limit falsely blocks somebody who has paid, and serving them the
+ * Reader limit against a stale window is an uncapped month. The caller resyncs
+ * from Stripe once and asks again; if it comes back `stale` a second time, that
+ * is a 503 rather than a guess.
+ */
+export interface Stale {
+  readonly kind: "stale";
+  readonly subscriptionId: string | null;
+}
+
+export type Admission = Admitted | Refused | Stale;
 
 /** What an owner has used, for `/profile` and `/admin/users`. */
 export interface Usage {
@@ -77,6 +103,51 @@ export interface Usage {
   readonly used: number;
   /** Reservations taken and not yet settled — jobs in flight. */
   readonly inFlight: number;
+}
+
+/** The columns entitlement is derived from. */
+export interface BillingRow {
+  readonly status: string | null;
+  readonly priceId: string | null;
+  readonly currentPeriodStart: Date | null;
+  readonly currentPeriodEnd: Date | null;
+  readonly stripeSubscriptionId: string | null;
+}
+
+/**
+ * What this row entitles its owner to, or `"stale"`.
+ *
+ * Pure, so the decision that governs every ingest can be tested without a
+ * database. `readerPriceId` is passed rather than read from the environment for
+ * the same reason.
+ *
+ * Order matters: an unentitled status is free whatever the price says, and an
+ * unrecognised price is free whatever the status says. Both fail towards free,
+ * because the other direction hands out a hundred ingests a month for something
+ * nobody costed.
+ */
+export function entitlementFromRow(
+  row: BillingRow | undefined,
+  readerPriceId: string | null,
+  now: Date,
+): Entitlement | Stale {
+  if (!row || !isEntitledStatus(row.status)) return FREE;
+
+  const tier = tierForPrice(row.priceId, readerPriceId ?? "");
+  if (tier !== "reader") {
+    logger.warn(
+      { priceId: row.priceId, status: row.status },
+      "an entitled subscription is on a price this build does not recognise — treating as free",
+    );
+    return FREE;
+  }
+
+  const { currentPeriodStart: start, currentPeriodEnd: end } = row;
+  /* Half-open, the same rule the usage query counts by. */
+  if (!start || !end || now < start || now >= end) {
+    return { kind: "stale", subscriptionId: row.stripeSubscriptionId };
+  }
+  return entitlementFor("reader", { start, end });
 }
 
 /**
@@ -95,10 +166,10 @@ export interface Usage {
  * Drizzle's `sql` tag turns `${…}` into `$1`, `$2`, `$3`, so the values reach
  * Postgres in the parameter array and never in the statement text. Asked of the
  * builder on 2026-09-02 with `'; drop table spideryarn.ingest_events; --` as the
- * owner id and a similar string as the period: the SQL came back with
- * placeholders and the hostile text appeared only in `params`. Worth writing
- * down because the period ultimately derives from Stripe-controlled data, so
- * "surely it parameterises" is not a thing to be surely about.
+ * owner id: the SQL came back with placeholders and the hostile text appeared
+ * only in `params`. Worth writing down because the period derives from
+ * Stripe-controlled data, so "surely it parameterises" is not a thing to be
+ * surely about.
  *
  * **Exported only so that claim has a test.** `tests/billing-quota-sql.test.ts`
  * builds this with a hostile owner id and asserts the statement text contains
@@ -107,12 +178,11 @@ export interface Usage {
  * a diff and be invisible in every other test.
  */
 export function usageSql(ownerId: string, entitlement: Entitlement) {
-  const { periodStart, periodEnd } = entitlement;
   const inPeriod =
-    periodStart && periodEnd
-      ? sql`succeeded_at >= ${periodStart.toISOString()}::timestamptz
-            and succeeded_at < ${periodEnd.toISOString()}::timestamptz`
-      : /* The free tier's period is all of time, so any success counts. */
+    entitlement.tier === "reader"
+      ? sql`succeeded_at >= ${entitlement.periodStart.toISOString()}::timestamptz
+            and succeeded_at < ${entitlement.periodEnd.toISOString()}::timestamptz`
+      : /* The free tier's allowance is lifetime, so any success counts. */
         sql`true`;
 
   return sql`
@@ -123,16 +193,32 @@ export function usageSql(ownerId: string, entitlement: Entitlement) {
     where owner_id = ${ownerId}::uuid`;
 }
 
-/** Drizzle's `execute` shape differs by driver; this reads either. */
-function firstRow(result: unknown): Record<string, unknown> | undefined {
-  const withRows = result as { rows?: Array<Record<string, unknown>> };
-  if (Array.isArray(withRows.rows)) return withRows.rows[0];
-  return Array.isArray(result) ? (result[0] as Record<string, unknown>) : undefined;
-}
-
+/**
+ * Read the one row an aggregate must produce, or throw.
+ *
+ * **Never defaults to zero**, which is the whole reason this is a function. A
+ * driver shape that changed, a query that returned nothing, a count that came
+ * back as something other than a number — every one of those, defaulted, reads
+ * as "this account has used nothing" and lets an unlimited number of ingests
+ * through. Wrong in the expensive direction, and silent. GPT Sol, 2026-09-02.
+ */
 function usageOf(result: unknown): Usage {
-  const row = firstRow(result);
-  return { used: Number(row?.used ?? 0), inFlight: Number(row?.in_flight ?? 0) };
+  const rows = (result as { rows?: unknown }).rows;
+  const row = Array.isArray(rows) ? rows[0] : undefined;
+  if (!row || typeof row !== "object") {
+    throw new Error("the ingest usage query returned no row, which an aggregate cannot do");
+  }
+  const used = Number((row as Record<string, unknown>).used);
+  const inFlight = Number((row as Record<string, unknown>).in_flight);
+  for (const [name, value] of [
+    ["used", used],
+    ["in_flight", inFlight],
+  ] as const) {
+    if (!Number.isInteger(value) || value < 0) {
+      throw new Error(`the ingest usage query returned ${name}=${String(value)}, which is not a count`);
+    }
+  }
+  return { used, inFlight };
 }
 
 /** What this owner has used against the entitlement they currently hold. */
@@ -148,12 +234,15 @@ export async function usageFor(ownerId: string, entitlement: Entitlement): Promi
  * job's own INSERT — see `jobs.ingest_event_id`. If it never reaches a job,
  * `releaseReservation` gives it back.
  *
+ * @param readerPriceId the configured `price_…`, or null when billing is
+ * unconfigured — in which case nobody is entitled and everybody gets the free
+ * allowance, which is the right behaviour for a deployment with no Stripe.
  * @param slug the intended slug, stored as a diagnostic only — it is mutable,
  * so it is never this row's identity.
  */
 export async function reserveIngest(
   ownerId: string,
-  entitlement: Entitlement,
+  readerPriceId: string | null,
   slug?: string,
 ): Promise<Admission> {
   return await getDb().transaction(
@@ -167,19 +256,30 @@ export async function reserveIngest(
         .onConflictDoNothing({ target: billingAccounts.ownerId });
 
       /* And now it is certain to be there, so this locks something. Every other
-         admission for this owner waits here. */
-      const locked = await tx
-        .select({ ownerId: billingAccounts.ownerId })
+         admission for this owner waits here — and the entitlement comes from
+         *this* read, inside the lock, so a webhook cannot change it underneath
+         the count. */
+      const [row] = await tx
+        .select({
+          status: billingAccounts.status,
+          priceId: billingAccounts.priceId,
+          currentPeriodStart: billingAccounts.currentPeriodStart,
+          currentPeriodEnd: billingAccounts.currentPeriodEnd,
+          stripeSubscriptionId: billingAccounts.stripeSubscriptionId,
+        })
         .from(billingAccounts)
         .where(eq(billingAccounts.ownerId, ownerId))
         .for("update")
         .limit(1);
-      if (locked.length === 0) {
+      if (!row) {
         /* Unreachable — the insert above guarantees a row and this transaction
            holds it. Loud rather than silent, because the only way here is the
            failure this whole file is about. */
         throw new Error(`billing_accounts row for ${ownerId} vanished under its own lock`);
       }
+
+      const entitlement = entitlementFromRow(row, readerPriceId, new Date());
+      if ("kind" in entitlement) return entitlement; // stale
 
       const usage = usageOf(await tx.execute(usageSql(ownerId, entitlement)));
       const used = usage.used + usage.inFlight;
@@ -188,7 +288,7 @@ export async function reserveIngest(
           kind: "refused",
           used,
           limit: entitlement.limit,
-          ...(entitlement.periodEnd ? { resetAt: entitlement.periodEnd } : {}),
+          ...(entitlement.tier === "reader" ? { resetAt: entitlement.periodEnd } : {}),
         } satisfies Refused;
       }
 
@@ -197,7 +297,7 @@ export async function reserveIngest(
         .values({ ownerId, ...(slug ? { slug } : {}) })
         .returning({ id: ingestEvents.id });
       if (!reservation) throw new Error("reserving an ingest slot returned no row");
-      return { kind: "admitted", reservationId: reservation.id } satisfies Admitted;
+      return { kind: "admitted", reservationId: reservation.id, entitlement } satisfies Admitted;
     },
     /* Pinned rather than inherited. `on conflict do nothing` is only an escape
        from a concurrent writer at `read committed`; at `repeatable read` it
@@ -209,33 +309,57 @@ export async function reserveIngest(
 }
 
 /**
- * Give back a slot that never became a job.
+ * Give back a slot **only if no job is spending it**.
  *
- * The **only** safe standalone release: `enqueue()` threw, or it deduplicated
- * this request onto an existing job that carries its own reservation. In both
- * cases no job row references this id, so nothing can be racing to settle it.
+ * For the paths that reserved and then could not enqueue: `enqueue()` threw, or
+ * it deduplicated this request onto an existing job carrying its own
+ * reservation.
  *
- * Releasing by *job* must never happen this way. A `/cancel` that sets
+ * **The `not exists` is load-bearing and an earlier version did not have it.**
+ * The comment then said an `enqueue()` throw proves no job exists. It does not:
+ * an INSERT can commit and the response be lost, and the caller sees a throw
+ * over a job that is now running. Releasing there would let that job publish
+ * against a released reservation — `settleReservation` would match nothing and
+ * the ingest would be free. GPT Sol, 2026-09-02.
+ *
+ * Releasing by *job* must never happen this way at all. A `/cancel` that sets
  * `released_at` from outside the job's own transition can lose a race with the
- * publication it was trying to stop — the job publishes, and its settlement
- * finds the reservation already released and charges nothing. So success and
- * release both live in `settleIn`'s transaction, below. GPT Sol, 2026-09-02.
+ * publication it was trying to stop. Success and release both live in
+ * `settleIn`'s transaction — see `settleReservation`.
+ *
+ * @returns whether the slot was actually given back.
  */
-export async function releaseReservation(reservationId: string): Promise<void> {
-  await getDb()
-    .update(ingestEvents)
-    .set({ releasedAt: new Date() })
-    .where(
-      and(
-        eq(ingestEvents.id, reservationId),
-        isNull(ingestEvents.succeededAt),
-        isNull(ingestEvents.releasedAt),
-      ),
-    );
+export async function releaseReservation(reservationId: string): Promise<boolean> {
+  /* `now()` rather than `new Date()`: the constraint that terminal timestamps
+     may not precede `reserved_at` is checked by Postgres against Postgres's
+     clock, and a serverless host running a few seconds behind would violate it
+     and leak the slot for ever. */
+  const result = await getDb().execute(sql`
+    update spideryarn.ingest_events
+       set released_at = now()
+     where id = ${reservationId}::uuid
+       and succeeded_at is null
+       and released_at is null
+       and not exists (
+         select 1 from spideryarn.jobs where ingest_event_id = ${reservationId}::uuid
+       )
+    returning id`);
+  const rows = (result as { rows?: unknown[] }).rows;
+  return Array.isArray(rows) && rows.length === 1;
 }
 
-/** The transaction handle `settleIn` has. Narrow on purpose: only `execute`. */
-export interface SettlementTx {
+/**
+ * The transaction handle the caller is already inside.
+ *
+ * **This type enforces nothing**, and saying so is the point: `getDb()` also has
+ * an `execute`, so `settleReservation(getDb(), …)` type-checks and would be
+ * wrong. An earlier version of this was called `SettlementTx`, which implied a
+ * guarantee it could not give (GPT Sol, 2026-09-02). What actually enforces the
+ * rule is where the one correct caller lives — inside `settleIn`'s transaction
+ * — and the row assertion below, which turns a misuse into a throw rather than
+ * a silent no-op.
+ */
+export interface HasExecute {
   execute(query: ReturnType<typeof sql>): Promise<unknown>;
 }
 
@@ -250,29 +374,41 @@ export interface SettlementTx {
  * the job fence is the one whose settlement lands, because they are the same
  * transaction.
  *
- * A job with a null `ingestEventId` settles nothing: pipeline work from the CLI,
- * a re-run of one step, seeding. The caller passes what the job carries and does
- * not have to know which kind it has.
+ * **A non-null reservation that cannot be settled throws**, and taking the whole
+ * transaction down with it is the intended behaviour. Zero rows means the
+ * reservation is missing, already charged, or already released — and committing
+ * a publication over that would be the free ingest this file exists to prevent.
+ * The earlier version updated and did not look, so the "atomic charge" it
+ * claimed was not one.
+ *
+ * A **null** `ingestEventId` settles nothing and is not an error: pipeline work
+ * from the CLI, a re-run of one step, seeding. The caller passes what the job
+ * carries and does not have to know which kind it has.
  */
 export async function settleReservation(
-  tx: SettlementTx,
+  tx: HasExecute,
   ingestEventId: string | null | undefined,
   outcome: "succeeded" | "released",
 ): Promise<void> {
   if (!ingestEventId) return;
-  /* **The one `sql.raw` in this file, and it can only ever be one of two
-     literals.** A column name cannot be a bind parameter, so it has to be
-     interpolated as text — which makes the closed union on `outcome` the thing
-     standing between this and an injection. It is not a string a caller
-     supplies, and it must never become one. `ingestEventId` beside it is an
-     ordinary parameter. */
-  const column = outcome === "succeeded" ? sql.raw("succeeded_at") : sql.raw("released_at");
-  await tx.execute(sql`
-    update spideryarn.ingest_events
-       set ${column} = now()
-     where id = ${ingestEventId}::uuid
-       and succeeded_at is null
-       and released_at is null`);
+  const result = await tx.execute(
+    outcome === "succeeded"
+      ? sql`update spideryarn.ingest_events set succeeded_at = now()
+             where id = ${ingestEventId}::uuid
+               and succeeded_at is null and released_at is null
+           returning id`
+      : sql`update spideryarn.ingest_events set released_at = now()
+             where id = ${ingestEventId}::uuid
+               and succeeded_at is null and released_at is null
+           returning id`,
+  );
+  const rows = (result as { rows?: unknown[] }).rows;
+  if (!Array.isArray(rows) || rows.length !== 1) {
+    throw new Error(
+      `ingest reservation ${ingestEventId} could not be settled as ${outcome} — it is missing or ` +
+        "already settled, and committing over that would give away an ingest",
+    );
+  }
 }
 
 /** Log a refusal where the reason is still in hand. Never the reader's prose. */

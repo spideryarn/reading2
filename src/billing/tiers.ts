@@ -17,7 +17,15 @@
  * something new, which is the only action that spends.
  */
 
-/** The two tiers. A second paid tier is a row here, a price in Stripe, and nothing else. */
+/**
+ * The two tiers.
+ *
+ * A second paid tier is a member of this union, a quota constant, a case in
+ * `tierForPrice`, a case in `entitlementFor`, and a price in Stripe. An earlier
+ * version of this comment called it "a row here", which made it sound like
+ * config; there is no table, and saying so was the sort of comment that costs
+ * somebody an afternoon before they find out.
+ */
 export type Tier = "free" | "reader";
 
 /** Three, lifetime — enough to play with, and no period logic for people who never pay. */
@@ -29,18 +37,26 @@ export const READER_PERIOD_INGESTS = 100;
 /**
  * What an owner may do right now.
  *
- * `periodStart`/`periodEnd` are a **half-open** interval `[start, end)` and are
- * absent for the free tier, whose period is all of time — so a caller must
- * treat "no period" as "count everything ever" rather than as "count nothing",
- * and the types say which by making them optional together.
+ * **A discriminated union, not a bag of optionals**, and the difference is the
+ * whole point. The period is a **half-open** interval `[start, end)`; the free
+ * tier has no period, because its allowance is lifetime. Written as two
+ * optional fields, "a Reader entitlement with a start and no end" was a state
+ * the compiler allowed and no code handled — and an earlier version of this
+ * comment claimed the types made them optional *together*, which they did not.
+ * GPT Sol caught the claim; this is the fix that makes it true rather than a
+ * reword.
+ *
+ * A caller must treat the free tier as "count everything ever" rather than
+ * "count nothing", and now it cannot get there by reading an absent field.
  */
-export interface Entitlement {
-  readonly tier: Tier;
-  /** How many new ingests the period allows. */
-  readonly limit: number;
-  readonly periodStart?: Date;
-  readonly periodEnd?: Date;
-}
+export type Entitlement =
+  | { readonly tier: "free"; readonly limit: number }
+  | {
+      readonly tier: "reader";
+      readonly limit: number;
+      readonly periodStart: Date;
+      readonly periodEnd: Date;
+    };
 
 /** Nobody has paid, or nobody could be identified. Never an error — it is a tier. */
 export const FREE: Entitlement = { tier: "free", limit: FREE_LIFETIME_INGESTS };
@@ -83,14 +99,28 @@ export function tierForPrice(priceId: string | null | undefined, readerPriceId: 
   return priceId === readerPriceId ? "reader" : null;
 }
 
-/** What that tier allows over the period Stripe says the subscription is in. */
+/**
+ * What that tier allows over the period Stripe says the subscription is in.
+ *
+ * **A Reader subscription with no readable period comes back as `FREE`**, and
+ * that is a deliberate floor rather than the whole answer. It forecloses the
+ * appealing bug — "we know they pay, so let them through" — which turns an
+ * unreadable period into an uncapped month. What it is *not* is a good outcome
+ * for the customer, who has paid and is being metered at three.
+ *
+ * The caller is what makes that rare: it resyncs from Stripe before asking, and
+ * a paid account still without a period after a resync is a fault to surface,
+ * not a tier to serve. An earlier version of this comment said the caller
+ * "fails closed", which described a caller that did not exist and still does
+ * not — the admission wiring is unbuilt. Written this way round so the sentence
+ * stays true until it does. GPT Sol, 2026-09-02.
+ */
 export function entitlementFor(tier: Tier, period?: { start: Date; end: Date }): Entitlement {
-  if (tier === "free") return FREE;
-  return period
-    ? { tier: "reader", limit: READER_PERIOD_INGESTS, periodStart: period.start, periodEnd: period.end }
-    : /* A Reader subscription whose period we could not read is not a Reader
-         subscription we can meter. The caller resyncs once and then fails
-         closed rather than choosing between an unlimited window and a false
-         block on somebody who has paid — see the plan's period arithmetic. */
-      FREE;
+  if (tier === "free" || !period) return FREE;
+  return {
+    tier: "reader",
+    limit: READER_PERIOD_INGESTS,
+    periodStart: period.start,
+    periodEnd: period.end,
+  };
 }

@@ -30,7 +30,12 @@
  *   put any owner id in it, and the only reason they cannot is the signature.
  * - **The event type is allowlisted.** Stripe can send ~250 event shapes and we
  *   act on four.
- * - **A body larger than the cap is refused before it is read into memory.**
+ * - **A body larger than the cap stops being accumulated.** Not "is refused
+ *   before it is read into memory" — the current chunk has already been
+ *   materialised by Node before this code sees it, and pretending otherwise
+ *   would be a comment promising a defence that is not there. What it does is
+ *   stop retaining chunks past the cap and refuse, which bounds the memory a
+ *   single unauthenticated request can cost to roughly one chunk over.
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -210,12 +215,18 @@ function answer(res: ServerResponse, status: number, body: Record<string, unknow
  * subscription keeps its entitlement for ever: one 200 over a failed write and
  * the event is gone.
  *
- * **An unmapped customer is 503 rather than 200**, and the window it covers is
- * real: Checkout completes, Stripe fires immediately, and our own success
- * callback has not yet written the mapping. A retry a few seconds later finds
- * it. For a customer created by hand in the dashboard the retries eventually
- * stop, which is the right end for an event about somebody who is not a reader
- * here.
+ * **An unmapped customer is 503 rather than 200, and it should be an anomaly.**
+ * An earlier version of this comment said it covers the window between Checkout
+ * completing and our own success callback writing the mapping — which described
+ * a design that must not be built: a browser return callback is not reliable,
+ * so the customer→owner mapping has to be **durable before a Checkout Session
+ * capable of taking payment exists at all**. Under that invariant an unmapped
+ * customer means a customer created by hand in the dashboard, or a real fault,
+ * and it is logged as such rather than shrugged at. GPT Sol, 2026-09-02.
+ *
+ * Keeping 503 is still right: Stripe retries non-2xx with exponential backoff
+ * for about three days and then stops, so the cost of being wrong is finite
+ * noise rather than a storm.
  *
  * **The response body never carries a reason.** Stripe does not read it, and
  * the one other party who might is somebody probing the endpoint — for whom
@@ -258,8 +269,10 @@ export async function serveStripeWebhook(
 
   const customer = customerOf(event);
   if (!customer) {
-    /* A handled event with no customer is malformed rather than unlucky, and a
-       retry would send the same malformed thing again. */
+    /* A handled event with no customer is malformed rather than unlucky. **The
+       400 does not stop Stripe retrying** — it retries any non-2xx, this one
+       included — so this is a statement of what happened for our logs, not a
+       way to decline delivery. An earlier comment implied otherwise. */
     logger.error({ type: event.type, event: event.id }, "a handled Stripe event named no customer");
     answer(res, 400, { error: "Webhook refused" });
     return;
@@ -268,9 +281,12 @@ export async function serveStripeWebhook(
   try {
     const result = await sync(customer);
     if (result.kind === "unmapped") {
-      logger.warn(
+      /* `error`, not `warn`: the mapping is written before a Checkout Session
+         exists, so this is a customer made by hand in the dashboard or a real
+         fault, and neither should scroll past unnoticed. */
+      logger.error(
         { type: event.type, customerId: customer },
-        "no billing account maps to this Stripe customer yet — asking Stripe to retry",
+        "no billing account maps to this Stripe customer — asking Stripe to retry",
       );
       answer(res, 503, { error: "Not ready" });
       return;

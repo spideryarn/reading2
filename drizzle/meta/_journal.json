@@ -379,6 +379,20 @@
       "when": 1788358263301,
       "tag": "20260902141103_byok_upstream_nanos",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1788366858073,
+      "tag": "20260902163418_billing_quota",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1788366873451,
+      "tag": "20260902163433_billing_owner_and_event_fks",
+      "breakpoints": true
     }
   ]
 }

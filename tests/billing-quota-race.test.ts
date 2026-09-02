@@ -24,7 +24,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { FREE, FREE_LIFETIME_INGESTS, READER_PERIOD_INGESTS } from "../src/billing/tiers.js";
 import type { Entitlement } from "../src/billing/tiers.js";
-import { reserveIngest, releaseReservation, usageFor } from "../src/store/pg-billing.js";
+import { releaseReservation, reserveIngest, usageFor } from "../src/store/pg-billing.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 const { reachable, pool } = await pgReady({
@@ -45,11 +45,16 @@ const dbIt = reachable ? it : it.skip;
  */
 const OWNER = "0b111a99-0000-4000-8000-00000000c0da";
 
+/** The configured Reader price, as `reserveIngest` is given it. */
+const READER_PRICE = "price_reader_for_tests";
+
+const PERIOD = { start: "2026-09-01T00:00:00Z", end: "2026-10-01T00:00:00Z" };
+
 const PAID: Entitlement = {
   tier: "reader",
   limit: READER_PERIOD_INGESTS,
-  periodStart: new Date("2026-09-01T00:00:00Z"),
-  periodEnd: new Date("2026-10-01T00:00:00Z"),
+  periodStart: new Date(PERIOD.start),
+  periodEnd: new Date(PERIOD.end),
 };
 
 async function seedOwner(): Promise<void> {
@@ -62,6 +67,36 @@ async function seedOwner(): Promise<void> {
      on conflict (id) do nothing`,
     [OWNER, `quota-race-${OWNER}@spideryarn.local`],
   );
+}
+
+/**
+ * Make this owner a paying subscriber, in the database, the way a webhook would.
+ *
+ * The period **contains now**, computed rather than hardcoded: `reserveIngest`
+ * reads the row under its lock and answers `stale` for a period that has
+ * closed, so a fixed 2026 window would make every paid test here answer
+ * `stale` the moment the clock passes it.
+ */
+async function makePaid(): Promise<{ start: Date; end: Date }> {
+  const start = new Date(Date.now() - 5 * 24 * 3600 * 1000);
+  const end = new Date(Date.now() + 25 * 24 * 3600 * 1000);
+  if (pool) {
+    await pool.query(
+      `insert into spideryarn.billing_accounts
+         (owner_id, stripe_customer_id, stripe_subscription_id, price_id, status,
+          current_period_start, current_period_end)
+       values ($1, $2, $3, $4, 'active', $5, $6)
+       on conflict (owner_id) do update set
+         stripe_customer_id = excluded.stripe_customer_id,
+         stripe_subscription_id = excluded.stripe_subscription_id,
+         price_id = excluded.price_id,
+         status = excluded.status,
+         current_period_start = excluded.current_period_start,
+         current_period_end = excluded.current_period_end`,
+      [OWNER, `cus_${OWNER}`, `sub_${OWNER}`, READER_PRICE, start, end],
+    );
+  }
+  return { start, end };
 }
 
 async function clear(): Promise<void> {
@@ -102,7 +137,7 @@ describe("the anchor row is created before it is locked", () => {
       ]);
 
       let settled = false;
-      const b = reserveIngest(OWNER, FREE).then((r) => {
+      const b = reserveIngest(OWNER, READER_PRICE).then((r) => {
         settled = true;
         return r;
       });
@@ -113,8 +148,7 @@ describe("the anchor row is created before it is locked", () => {
       expect(settled).toBe(false);
 
       await a.query("commit");
-      const result = await b;
-      expect(result.kind).toBe("admitted");
+      expect((await b).kind).toBe("admitted");
     } finally {
       a.release();
     }
@@ -133,49 +167,125 @@ describe("a barrier-synchronised burst cannot exceed the allowance", () => {
    */
   dbIt("admits exactly three of twenty for a free account", async () => {
     const results = await Promise.all(
-      Array.from({ length: 20 }, () => reserveIngest(OWNER, FREE)),
+      Array.from({ length: 20 }, () => reserveIngest(OWNER, READER_PRICE)),
     );
-    const admitted = results.filter((r) => r.kind === "admitted");
-    expect(admitted).toHaveLength(FREE_LIFETIME_INGESTS);
+    expect(results.filter((r) => r.kind === "admitted")).toHaveLength(FREE_LIFETIME_INGESTS);
     expect(results.filter((r) => r.kind === "refused")).toHaveLength(20 - FREE_LIFETIME_INGESTS);
   });
 
   dbIt("counts an unsettled reservation, so the next request sees it", async () => {
-    const first = await reserveIngest(OWNER, FREE);
-    expect(first.kind).toBe("admitted");
+    expect((await reserveIngest(OWNER, READER_PRICE)).kind).toBe("admitted");
     /* Nothing has succeeded — the job has not even been created — and the
        usage still has to include it, or N concurrent requests all read zero. */
     expect(await usageFor(OWNER, FREE)).toEqual({ used: 0, inFlight: 1 });
   });
 });
 
+describe("the entitlement is read under the lock, not handed in", () => {
+  dbIt("gives a paying subscriber the Reader allowance", async () => {
+    await makePaid();
+    const admitted = await reserveIngest(OWNER, READER_PRICE);
+    expect(admitted).toMatchObject({ kind: "admitted" });
+    if (admitted.kind !== "admitted") throw new Error("expected an admission");
+    expect(admitted.entitlement).toMatchObject({ tier: "reader", limit: READER_PERIOD_INGESTS });
+  });
+
+  /* An entitled status on a price this build does not sell is free, not Reader.
+     The failure direction matters: the other way hands out a hundred ingests a
+     month for something nobody costed. */
+  dbIt("falls to free when the subscription is on an unrecognised price", async () => {
+    await makePaid();
+    const admitted = await reserveIngest(OWNER, "price_something_else");
+    if (admitted.kind !== "admitted") throw new Error("expected an admission");
+    expect(admitted.entitlement.tier).toBe("free");
+  });
+
+  /**
+   * Neither an admission nor a refusal. Serving the free limit would falsely
+   * block somebody who has paid; serving the Reader limit against a window that
+   * has closed is an uncapped month.
+   */
+  dbIt("answers `stale` when the stored period has closed", async () => {
+    if (!pool) return;
+    await makePaid();
+    await pool.query(
+      `update spideryarn.billing_accounts
+          set current_period_start = $2, current_period_end = $3
+        where owner_id = $1`,
+      [OWNER, "2026-01-01T00:00:00Z", "2026-02-01T00:00:00Z"],
+    );
+    const answer = await reserveIngest(OWNER, READER_PRICE);
+    expect(answer.kind).toBe("stale");
+    /* And it took no slot on the way past. */
+    expect(await usageFor(OWNER, FREE)).toEqual({ used: 0, inFlight: 0 });
+  });
+
+  dbIt("treats a cancelled subscription as free rather than as Reader", async () => {
+    if (!pool) return;
+    await makePaid();
+    await pool.query("update spideryarn.billing_accounts set status = 'canceled' where owner_id = $1", [
+      OWNER,
+    ]);
+    const admitted = await reserveIngest(OWNER, READER_PRICE);
+    if (admitted.kind !== "admitted") throw new Error("expected an admission");
+    expect(admitted.entitlement.tier).toBe("free");
+  });
+});
+
 describe("releasing a slot that never became a job", () => {
   dbIt("gives the allowance back", async () => {
     const taken = await Promise.all(
-      Array.from({ length: FREE_LIFETIME_INGESTS }, () => reserveIngest(OWNER, FREE)),
+      Array.from({ length: FREE_LIFETIME_INGESTS }, () => reserveIngest(OWNER, READER_PRICE)),
     );
-    expect(await reserveIngest(OWNER, FREE)).toMatchObject({ kind: "refused" });
+    expect(await reserveIngest(OWNER, READER_PRICE)).toMatchObject({ kind: "refused" });
 
     const first = taken[0];
     if (first?.kind !== "admitted") throw new Error("expected an admission");
-    await releaseReservation(first.reservationId);
+    expect(await releaseReservation(first.reservationId)).toBe(true);
 
-    expect(await reserveIngest(OWNER, FREE)).toMatchObject({ kind: "admitted" });
+    expect(await reserveIngest(OWNER, READER_PRICE)).toMatchObject({ kind: "admitted" });
   });
 
   dbIt("is idempotent, so a double release cannot free two slots", async () => {
-    const one = await reserveIngest(OWNER, FREE);
+    const one = await reserveIngest(OWNER, READER_PRICE);
     if (one.kind !== "admitted") throw new Error("expected an admission");
-    await releaseReservation(one.reservationId);
-    await releaseReservation(one.reservationId);
+    expect(await releaseReservation(one.reservationId)).toBe(true);
+    expect(await releaseReservation(one.reservationId)).toBe(false);
     expect(await usageFor(OWNER, FREE)).toEqual({ used: 0, inFlight: 0 });
+  });
+
+  /**
+   * **The one that would give an ingest away.** `enqueue()` can throw over a
+   * job whose INSERT committed and whose response was lost. Releasing then
+   * would leave a running job whose reservation is settled, so its publication
+   * charges nothing. The `not exists` in `releaseReservation` is what stops it.
+   */
+  dbIt("refuses to release a reservation a job is already spending", async () => {
+    if (!pool) return;
+    const one = await reserveIngest(OWNER, READER_PRICE);
+    if (one.kind !== "admitted") throw new Error("expected an admission");
+
+    await pool.query(
+      `insert into spideryarn.jobs (id, owner_id, slug, steps, status, work_key, ingest_event_id)
+       values ('spya-quotaj', $1, 'quota-race-article', '[]'::jsonb, 'queued', 'wk-quota', $2)`,
+      [OWNER, one.reservationId],
+    );
+    try {
+      expect(await releaseReservation(one.reservationId)).toBe(false);
+      /* Still in flight, still counted. */
+      expect(await usageFor(OWNER, FREE)).toEqual({ used: 0, inFlight: 1 });
+    } finally {
+      await pool.query("delete from spideryarn.jobs where id = 'spya-quotaj'");
+    }
   });
 });
 
 describe("the refusal says what a reader needs", () => {
   dbIt("carries the count, the limit, and no reset date for the free tier", async () => {
-    await Promise.all(Array.from({ length: FREE_LIFETIME_INGESTS }, () => reserveIngest(OWNER, FREE)));
-    const refused = await reserveIngest(OWNER, FREE);
+    await Promise.all(
+      Array.from({ length: FREE_LIFETIME_INGESTS }, () => reserveIngest(OWNER, READER_PRICE)),
+    );
+    const refused = await reserveIngest(OWNER, READER_PRICE);
     expect(refused).toEqual({
       kind: "refused",
       used: FREE_LIFETIME_INGESTS,
@@ -188,18 +298,19 @@ describe("the refusal says what a reader needs", () => {
 
   dbIt("carries the period end for a paid account", async () => {
     if (!pool) return;
+    const { end } = await makePaid();
     /* Fill the paid allowance by hand rather than by 100 admissions. */
     await pool.query(
       `insert into spideryarn.ingest_events (owner_id, reserved_at, succeeded_at)
-       select $1, $2::timestamptz, $2::timestamptz from generate_series(1, $3)`,
-      [OWNER, "2026-09-05T00:00:00Z", READER_PERIOD_INGESTS],
+       select $1, now(), now() from generate_series(1, $2)`,
+      [OWNER, READER_PERIOD_INGESTS],
     );
-    const refused = await reserveIngest(OWNER, PAID);
+    const refused = await reserveIngest(OWNER, READER_PRICE);
     expect(refused).toMatchObject({
       kind: "refused",
       used: READER_PERIOD_INGESTS,
       limit: READER_PERIOD_INGESTS,
-      resetAt: PAID.periodEnd,
+      resetAt: end,
     });
   });
 });
@@ -214,12 +325,12 @@ describe("the period is half-open", () => {
         [OWNER, when],
       );
     };
-    await at("2026-09-01T00:00:00Z"); // exactly the start — inside
-    await at("2026-10-01T00:00:00Z"); // exactly the end — outside
+    await at(PERIOD.start); // exactly the start — inside
+    await at(PERIOD.end); // exactly the end — outside
     await at("2026-08-31T23:59:59Z"); // before — outside
 
     expect(await usageFor(OWNER, PAID)).toEqual({ used: 1, inFlight: 0 });
-    /* And the free tier's "period" is all of time, so it sees all three. */
+    /* And the free tier's allowance is lifetime, so it sees all three. */
     expect(await usageFor(OWNER, FREE)).toEqual({ used: 3, inFlight: 0 });
   });
 });

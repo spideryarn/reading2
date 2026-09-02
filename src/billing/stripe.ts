@@ -146,6 +146,22 @@ export function stripeClient(): Stripe {
     /* Named so a support request, and Stripe's own dashboard log, say which
        application made the call rather than "unknown Node app". */
     appInfo: { name: "Spideryarn", url: "https://spideryarn.com" },
+    /**
+     * **Ten seconds, not the SDK's eighty.**
+     *
+     * `syncSubscriptionFromStripe` holds a pooled database connection across
+     * its Stripe call, deliberately (see that file). `DATABASE_POOL_MAX`
+     * defaults to 5, so five degraded calls at the default timeout would hold
+     * every connection in the pool for well over a minute and stall everything
+     * else on the instance — a webhook slowdown becoming an outage. GPT Sol,
+     * 2026-09-02.
+     *
+     * Ten seconds is far beyond a healthy Stripe round trip and short enough
+     * that a bad one fails while somebody is still watching. `maxNetworkRetries`
+     * stays at the SDK default of one, so the worst case is bounded at roughly
+     * twice this.
+     */
+    timeout: 10_000,
   });
   cached = { key, client };
   return client;

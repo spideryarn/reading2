@@ -1752,10 +1752,17 @@ export const jobs = spideryarn.table(
      * settle nothing, because there is nothing to settle, and no flag anywhere
      * had to be remembered to make that true.
      *
-     * **Not a foreign key**, and deliberately: `ingest_events` is the record of
-     * what an account was charged for, jobs are reader-deletable, and a
-     * cascade in either direction would be wrong. It is a plain uuid, exactly
-     * as `owner_id` is.
+     * **A foreign key, and composite on purpose** — see
+     * `jobs_ingest_event_fk` in the custom migration. An earlier version of
+     * this comment said a foreign key would be wrong because jobs are
+     * reader-deletable and "a cascade in either direction would be wrong". That
+     * was simply mistaken: the default is `NO ACTION`, nothing cascades, and
+     * deleting a job never touches the reservation it was spending. GPT Sol,
+     * 2026-09-02.
+     *
+     * It references `(id, owner_id)` rather than `id` alone, so a job cannot
+     * spend **another owner's** reservation — a property no amount of
+     * application code can promise as cheaply.
      */
     ingestEventId: uuid("ingest_event_id"),
 
@@ -3310,13 +3317,17 @@ export const billingAccounts = spideryarn.table(
  *
  * ## The three timestamps, and why they are not one status column
  *
+ * **Written in the future tense on purpose: none of this is wired up yet.** The
+ * functions exist in `src/store/pg-billing.ts` and nothing calls them, so what
+ * follows is the contract they are built to, not something the app does today.
+ *
  * `reserved_at` is set at admission, inside the transaction holding the owner's
  * `billing_accounts` lock — that write is what makes a second concurrent
- * request see the first one. `succeeded_at` is set in the *same* Postgres
+ * request see the first one. `succeeded_at` is to be set in the *same* Postgres
  * transaction that publishes the revision (src/store/pg-session.ts `settleIn`,
- * the `done` branch), so there is no window in which an ingest has succeeded
- * and not been counted, and none in which a failure has been charged.
- * `released_at` is set when the job fails or is cancelled.
+ * the `done` branch), so that there is no window in which an ingest has
+ * succeeded and not been counted, and none in which a failure has been charged.
+ * `released_at` likewise, from the branch that ends a failed or cancelled job.
  *
  * Nullable timestamps rather than a status enum because a nullable timestamp
  * says more than a boolean (docs/project/sql.md): each of these is genuinely an
@@ -3397,5 +3408,15 @@ export const ingestEvents = spideryarn.table(
     ),
     /* The admission query, which runs on the critical path of every ingest. */
     index("ingest_events_owner_reserved").on(t.ownerId, t.reservedAt.desc()),
+    /**
+     * **Redundant as a uniqueness claim, and not here for that.** `id` is
+     * already the primary key, so `(id, owner_id)` cannot repeat. It exists so
+     * that `jobs.ingest_event_id` can carry a *composite* foreign key against
+     * `(id, owner_id)` — Postgres requires a unique constraint on exactly the
+     * referenced columns — which is what makes "a job cannot spend another
+     * owner's reservation" a thing the database refuses rather than a thing the
+     * application remembers. GPT Sol, 2026-09-02.
+     */
+    unique("ingest_events_id_owner").on(t.id, t.ownerId),
   ],
 );

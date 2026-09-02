@@ -29,12 +29,12 @@ describe("the numbers", () => {
 
   /* The free tier has no period, and that absence is load-bearing: a caller
      that read it as "count nothing" would give every free account unlimited
-     ingests. Both fields are optional together so the two states are
-     distinguishable. */
+     ingests. `Entitlement` is a discriminated union rather than a bag of
+     optionals, so "a period start with no end" is a state the compiler refuses
+     — which is what the comment on the type used to claim before it was true. */
   it("gives the free tier no period at all, rather than an empty one", () => {
-    expect(FREE.periodStart).toBeUndefined();
-    expect(FREE.periodEnd).toBeUndefined();
-    expect(FREE.limit).toBe(FREE_LIFETIME_INGESTS);
+    expect(FREE).toEqual({ tier: "free", limit: FREE_LIFETIME_INGESTS });
+    expect(Object.keys(FREE)).not.toContain("periodStart");
   });
 });
 
