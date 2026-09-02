@@ -555,15 +555,40 @@ Each is meant to be a test rather than an intention, whichever sub-mode eventual
    because a scan is hundreds of milliseconds on a short paper and about nine seconds on a 1.3 MB
    one.
 
-   **Four rules, and each is code rather than an intention.** A PDF says *not checked at all* and
-   can never say *nothing found* — the `switch` on `examined` is exhaustive and that arm has no
-   `findings` to count. `blindSpots` is printed beside every clean result, never behind a
-   disclosure. A finding wearing an `ordinary` label is **sorted last and still drawn**, with the
-   sentence saying the label is read off class names and is therefore forgeable. And a
-   `visible-instruction` prints its required `caveat`, because hidden text has no innocent
-   explanation and visible text usually does. `tests/source-scan-notice.test.tsx` holds all four,
+   **Five rules, and each is code rather than an intention.** A PDF says *not checked* and can never
+   say *nothing found* — the `switch` on `examined` is exhaustive and that arm has no `findings` to
+   count. A clean result never travels without its caveat. A finding wearing an `ordinary` label is
+   **sorted last and still drawn**, with the sentence saying the label is read off class names and
+   is therefore forgeable. A `visible-instruction` prints its required `caveat`, because hidden text
+   has no innocent explanation and visible text usually does. And the panel is **shut unless
+   something was found**. `tests/source-scan-notice.test.tsx` holds all five,
    `tests/referee-scan-route.test.ts` holds the wire, and `tests/source-scan.test.ts` holds the
    cache.
+
+   **Shut, and what that costs rule 2.** Greg, 2026-09-02:
+
+   > Make the "hidden instructions" default-collapsed unless something has been found. Explain in
+   > tooltip much more clearly what the intent is, and how worried to be based on the results (in
+   > this case, it didn't run any test, so we have no information one way or the other, so not very
+   > worried).
+
+   The default is **computed from the result rather than remembered**: open when the scan looked and
+   found something — a labelled finding counts, because the label is forgeable — and shut otherwise,
+   including for a PDF, which is no news in either direction. Nothing is persisted, so a referee
+   meets the same first screen every visit and one press opens it.
+
+   The cost lands on rule 2, which used to be *`blindSpots` is printed beside every clean result,
+   never behind a disclosure* — and the list is now behind one. So **the caveat moved into the
+   headline**: the line a referee reads shut says *nothing found in the HTML source — which is not a
+   clean bill*, and the list of what was missed is what opening it gets you. The headline is the
+   one thing on screen in every state, and `tests/source-scan-notice.test.tsx` § *shut unless
+   something was found* holds that.
+
+   **The tooltip on the heading says how worried to be**, and it is different in each of the seven
+   states, because *no check ran* and *a check ran and found nothing* call for different amounts of
+   worry and neither of them is much. Its first paragraph — what the scan is for at all — is also
+   the last line inside the open panel, from one constant, because a tooltip does not exist on a
+   touch device.
 
    **The result is cached in memory on the sha256 of the bytes that were scanned, and nowhere
    else.** That is a decision rather than a stage on the way to a table, and the reasoning is on
@@ -607,7 +632,13 @@ So there are three sentences, in three places, and the **tense is the whole poin
   sent. `tests/direct-add-says-the-text-has-gone.test.tsx` asserts both the sentence and the
   asymmetry, so that making the three disclosures "consistent" goes red.
 - **Past tense, inside Referee mode itself** — `REFEREE_TEXT_ALREADY_SENT`
-  (`src/messages.ts`), shown by `RefereeBand` ([`src/web/App.tsx`](../../src/web/App.tsx)). It does
+  (`src/messages.ts`), shown by `RefereeBand` ([`src/web/App.tsx`](../../src/web/App.tsx)), and
+  **collapsed since 2026-09-02** at Greg's asking. The *fact* is the label on the control —
+  `REFEREE_TEXT_ALREADY_SENT_SHORT`, which is the long sentence's own opening clause — so shutting
+  the box hides the venues and the audience, never that the text has gone; and `noticeOpen` is a
+  `useState` that remembers nothing, so every visit starts shut. That is the difference between a
+  collapse and a dismissal, and it is why the storage objection below does not apply: there is
+  nothing to store. It does
   not pretend a choice is still open: this article's text has already been sent, that happened when
   it was added, and here is what NIH, NSF, Elsevier, Springer Nature, Wiley, NeurIPS and ICLR all say
   about that as a confidentiality breach in itself, separate from who writes the review. It names
@@ -624,8 +655,8 @@ this mode's.
 
 ## The band has to fit, and for a day it did not
 
-Both of the boxes above the sub-mode chips are always on screen and neither is collapsible — that is
-the decision above, and it stands. What nobody had checked is what they cost. Measured in Chrome on
+Both of the boxes above the sub-mode chips were always on screen and open, in full, on every visit.
+What nobody had checked is what they cost. Measured in Chrome on
 2026-09-01 at **1280 × 720**, an ordinary window, on an article whose scan found **three** things:
 the head 41px + the notice 214 + the scan 386 + the chips 46 = **687px inside a 636px band**. The
 chips started below the fold, `.ref-panel` was **0px tall with 321px of content in it**, and
@@ -645,6 +676,11 @@ viewport sizes from 1280 × 1400 down to 390 × 560 and 900 × 337.
 reach: the rules exist and say the right thing, and the markup they are aimed at still puts the
 notice and the scan inside the wrapper and the chips and the panel outside it. It is explicit that
 it cannot measure anything, and why a test that tried would have passed before the fix.
+
+**Both boxes collapse now** — 2026-09-02, and it is a product change rather than a second layout
+fix. The ordinary first screen of the preamble is two lines, so the cap and its trailing fade are
+what hold the *open* case rather than the every-visit one; the measurements above are of that open
+case and are still the ones to design against.
 
 ## What the evidence actually says, and where the plan overstated it
 
