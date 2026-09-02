@@ -2933,7 +2933,26 @@ export const FEEDBACK_ENVIRONMENTS = ["production", "preview", "development", "t
 export type FeedbackEnvironment = (typeof FEEDBACK_ENVIRONMENTS)[number];
 
 /**
- * The longest any one of the three answers may be.
+ * **What the reader says this is** — a problem, or a suggestion.
+ *
+ * Greg asked for the toggle on 2026-09-02 and then, a message later, for what it
+ * starts as: *"don't default to Problem. Default to null/unknown."* So the third
+ * state is **absence**, and it is a real answer rather than a missing one: every
+ * report filed before this existed is null, and so is one from a reader who did
+ * not feel like categorising their own complaint.
+ *
+ * That is why there is no `"unknown"` member. A value spelled `unknown` beside a
+ * nullable column would be two spellings of one fact — the same call `consented`
+ * and `comments_body_nonempty` already make.
+ *
+ * docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md.
+ */
+export const FEEDBACK_KINDS = ["problem", "suggestion"] as const;
+
+export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
+
+/**
+ * The longest the reader's report may be.
  *
  * Here rather than beside the store for the reason `MAX_PROFILE_CHARS` is here:
  * the dialog's `maxlength` and the number the server refuses at must be one
@@ -2944,8 +2963,33 @@ export type FeedbackEnvironment = (typeof FEEDBACK_ENVIRONMENTS)[number];
  * costs us the detail that would have identified it — and small enough that a
  * pasted article cannot become an attachment, which is the case the cap is
  * really for.
+ *
+ * It used to be *per answer*, and there were three of them, so the reader's
+ * ceiling has quietly dropped from 12,000 characters to 4,000. Left where it is
+ * on purpose: 4,000 characters is a very long report, the number is written into
+ * a CHECK constraint by hand, and the failure is a sentence asking the reader to
+ * trim rather than a report that goes missing.
  */
 export const MAX_FEEDBACK_ANSWER_CHARS = 4_000;
+
+/**
+ * The longest a `feedback.body` may be **in the database**, which is three times
+ * the number above plus the headings — and that is not sloppiness, it is what
+ * the backfill needs.
+ *
+ * Reports filed before 2026-09-02 are three answers, each capped at
+ * `MAX_FEEDBACK_ANSWER_CHARS` separately, glued under the headings src/feedback.ts
+ * used to write. Three full ones come to exactly 12,072 characters. The column's
+ * CHECK has to admit that, or the migration that wrote them into `body` would
+ * fail on a row that was legal when it was filed — and the alternative, cutting
+ * the backfill to 4,000, silently throws away something a reader wrote.
+ *
+ * **The reader's limit is still `MAX_FEEDBACK_ANSWER_CHARS`**: the route refuses
+ * more and the dialog says so. This one is the ceiling under which no historical
+ * row is illegal, and it is also what a report from a *stale client* folds into
+ * — src/routes.ts § `legacyBody`.
+ */
+export const MAX_FEEDBACK_BODY_CHARS = 12_072;
 
 /**
  * The largest screenshot the database will take, in **decoded** bytes.

@@ -101,7 +101,7 @@ export function FeedbackButton({ readerEmail }: Props) {
         type="button"
         className="fb-button"
         onClick={() => setOpen(true)}
-        title="Report a problem with this page"
+        title="Send feedback about this page"
       >
         <MessageSquareWarning size={15} />
         {/* Given up below the narrow breakpoint, the way the wordmark gives up

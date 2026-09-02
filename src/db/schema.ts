@@ -3134,14 +3134,28 @@ export const readerProfiles = spideryarn.table("reader_profiles", {
  * outbox is more machinery than an alpha feedback button is worth, and
  * `mirrored_at is null` is the query that finds anything stranded.
  *
- * ## Three answers, three columns
+ * ## One answer, and it used to be three
  *
- * *Steps to reproduce*, *what you expected*, *what you saw* are three `text`
- * columns and not one blob, so "how many reports mention scrolling" is a query
- * rather than a regex over prose — docs/project/sql.md. All three are nullable
- * (a reader may leave one blank) and all three are non-empty when present, the
- * same rule and the same reason as `comments_body_nonempty`: empty and absent
- * must not be two spellings of one fact.
+ * *Steps to reproduce*, *what you expected*, *what you saw* were three `text`
+ * columns, on the argument that "how many reports mention scrolling" should be a
+ * query rather than a regex over prose — docs/project/sql.md. They are gone, and
+ * the argument for splitting them turned out to be worth less than what it cost
+ * at the other end. Greg, 2026-09-02:
+ *
+ * > It has three input boxes. I worry that will be intimidating/off-putting to
+ * > users, so let's combine them into one.
+ *
+ * Three boxes is a form, and a form is a thing you fill in once you have decided
+ * to file a bug. The reader this feature exists for is the one who was merely
+ * annoyed — docs/reusable/silent-success.md is why: most of what goes wrong in
+ * this app never throws, so the reader is the only instrument that detects it,
+ * and an instrument you have to fill in a form to use is an instrument nobody
+ * uses.
+ *
+ * So there is one `body`, and `kind` beside it. The three old columns were
+ * **backfilled into `body` with their headings kept and then dropped** — Greg's
+ * call, over keeping them as dead nullable columns:
+ * docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md.
  *
  * ## What is deliberately NOT here
  *
@@ -3183,12 +3197,26 @@ export const feedback = spideryarn.table(
      * reader had when they wrote to us. Never a value the browser supplied.
      */
     reporterEmail: text("reporter_email").notNull(),
-    /** *Steps to reproduce.* */
-    steps: text("steps"),
-    /** *What you expected to see.* */
-    expected: text("expected"),
-    /** *What you saw instead.* */
-    actual: text("actual"),
+    /**
+     * **What the reader wrote**, in one box, in their own order.
+     *
+     * `not null`, which is the whole of the old `feedback_says_something`: a
+     * report with nothing in it is not a report, and that is now the column's
+     * type rather than a constraint beside it. Reports filed before 2026-09-02
+     * carry the three old answers glued together with their headings, so the
+     * backfill is what made this possible — see the migration.
+     */
+    body: text("body").notNull(),
+    /**
+     * *A problem* or *a suggestion* — `FEEDBACK_KINDS` in src/types.ts.
+     *
+     * **Nullable, and starting unset is the design.** Greg, 2026-09-02: *"don't
+     * default to Problem. Default to null/unknown."* So null means the reader
+     * did not say, which is also true of every report filed before the toggle
+     * existed, and the two are the same fact rather than two that have to be
+     * told apart.
+     */
+    kind: text("kind"),
     /**
      * Whether the reader ticked *Send extra diagnostics*, recorded as its own
      * fact rather than inferred from `diagnostics` being present: "they said yes
@@ -3288,7 +3316,7 @@ export const feedback = spideryarn.table(
       sql`${t.environment} in ('production', 'preview', 'development', 'test')`,
     ),
     /**
-     * Non-empty when present, and **capped**, on all three answers.
+     * Non-empty when present, and **capped**.
      *
      * The cap is the one that matters: it is what stops one paste of an entire
      * article becoming an attachment on its way to Sentry. In the database as
@@ -3300,27 +3328,28 @@ export const feedback = spideryarn.table(
      * here rather than imported for the reason the vocabularies above are — and
      * pinned to that constant behaviourally by tests/feedback-store.test.ts,
      * which writes exactly the cap and exactly one character more.
+     *
+     * **12,072 is `MAX_FEEDBACK_BODY_CHARS`, and it is deliberately not 4,000.**
+     * The cap the reader meets is `MAX_FEEDBACK_ANSWER_CHARS` — the route
+     * refuses more and the dialog says so — but the backfill glued three
+     * separately-capped answers under their headings, and three full ones come
+     * to exactly this. A 4,000 CHECK would either fail the migration on a row
+     * that was legal when it was filed, or force it to truncate, which throws
+     * away something a reader wrote. GPT Sol's review of the plan, 2026-09-02.
      */
     check(
-      "feedback_steps_shape",
-      sql`${t.steps} is null or (length(btrim(${t.steps})) > 0 and length(${t.steps}) <= 4000)`,
-    ),
-    check(
-      "feedback_expected_shape",
-      sql`${t.expected} is null or (length(btrim(${t.expected})) > 0 and length(${t.expected}) <= 4000)`,
-    ),
-    check(
-      "feedback_actual_shape",
-      sql`${t.actual} is null or (length(btrim(${t.actual})) > 0 and length(${t.actual}) <= 4000)`,
+      "feedback_body_shape",
+      sql`length(btrim(${t.body})) > 0 and length(${t.body}) <= 12072`,
     ),
     /**
-     * **A report with nothing in it is not a report.** The dialog refuses one
-     * too; this is the half that holds for every other writer.
+     * The third closed vocabulary, written out by hand for the reason the two
+     * above are. `FEEDBACK_KINDS` in src/types.ts is the same list, and
+     * tests/feedback-store.test.ts files a report under every value of it.
+     *
+     * **Null is a member of the domain and not of the list**: it means the
+     * reader did not say, which is what the toggle starts as.
      */
-    check(
-      "feedback_says_something",
-      sql`${t.steps} is not null or ${t.expected} is not null or ${t.actual} is not null`,
-    ),
+    check("feedback_kind", sql`${t.kind} is null or ${t.kind} in ('problem', 'suggestion')`),
     check("feedback_reporter_email", sql`length(btrim(${t.reporterEmail})) > 0`),
     /**
      * **Diagnostics cannot exist without consent.** The tick-box is the whole
