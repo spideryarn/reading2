@@ -18,8 +18,16 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { CheckFacts } from "../scripts/worktree-check.js";
-import { classifyAll, classifyOne, gatherAll, MIN_IDLE_HOURS, removeOne, type SweepFacts } from "../scripts/worktree-sweep.js";
+import { blockers, type CheckFacts } from "../scripts/worktree-check.js";
+import {
+  classifyAll,
+  classifyOne,
+  gatherAll,
+  MIN_IDLE_HOURS,
+  removeOne,
+  type SweepFacts,
+  type Verdict,
+} from "../scripts/worktree-sweep.js";
 import { listWorktrees } from "../scripts/worktree-admin.js";
 
 let root: string;
@@ -62,6 +70,24 @@ function freshWorktree(name: string): string {
   return wt;
 }
 
+/**
+ * The sweep must surface **every** blocker `worktree:check` found, and it must
+ * not paraphrase them.
+ *
+ * Asserted against `blockers()` rather than against the message text, on
+ * purpose: those strings belong to worktree-check.ts and get reworded by whoever
+ * owns it — one was reworded the same afternoon this landed. A test that pins
+ * the prose would go red at that, reporting a defect that is not there, and the
+ * contract worth holding is the relay, not the wording.
+ */
+function expectRelaysEveryBlocker(row: { facts: SweepFacts; verdict: Verdict }): void {
+  if (row.verdict.kind !== "keep") throw new Error(`expected a keep, got ${row.verdict.kind}`);
+  if ("error" in row.facts.check) throw new Error("expected readable facts");
+  const expected = blockers(row.facts.check).map((b) => b.why);
+  expect(expected.length).toBeGreaterThan(0);
+  expect(row.verdict.reasons).toEqual(expect.arrayContaining(expected));
+}
+
 function rowFor(rows: ReturnType<typeof classifyAll>, branch: string) {
   const row = rows.find((r) => r.facts.branch === branch);
   if (row === undefined) throw new Error(`no row for ${branch}`);
@@ -101,7 +127,7 @@ describe("classifyAll, against real worktrees", () => {
 
     expect(row.verdict.kind).toBe("keep");
     if (row.verdict.kind !== "keep") throw new Error("unreachable");
-    expect(row.verdict.reasons.join(" ")).toContain("origin/dev does not have");
+    expectRelaysEveryBlocker(row);
   });
 
   it("counts an untracked file as work, so a scratch file is not swept away", () => {
@@ -112,7 +138,7 @@ describe("classifyAll, against real worktrees", () => {
 
     expect(row.verdict.kind).toBe("keep");
     if (row.verdict.kind !== "keep") throw new Error("unreachable");
-    expect(row.verdict.reasons.join(" ")).toContain("uncommitted or untracked");
+    expectRelaysEveryBlocker(row);
   });
 
   it("dates a fast-forwarded worktree by the merge, not by the old commit it landed on", () => {
@@ -194,10 +220,13 @@ describe("classifyOne, on facts alone", () => {
   it("blocks on gitignored strays that git status cannot see — the whole point", () => {
     /* `dirty` is empty and the trunk is landed: every signal the old sweep had
        says removable. Only the ignored-state check disagrees. */
-    const v = classifyOne(base({ check: { ...clean, unexplained: ["data/some-article/"] } }), { now: 999 * HOUR });
+    const stray: CheckFacts = { ...clean, unexplained: ["data/some-article/"] };
+    const v = classifyOne(base({ check: stray }), { now: 999 * HOUR });
     expect(v.kind).toBe("keep");
     if (v.kind !== "keep") throw new Error("unreachable");
-    expect(v.reasons.join(" ")).toContain("ignored");
+    /* Whatever worktree-check calls it — the point is that the sweep says the
+       thing the check said, and would have said nothing on its own. */
+    expect(v.reasons).toEqual(blockers(stray).map((b) => b.why));
   });
 
   it("calls a registration with no directory a ghost, even when nothing could be read", () => {
@@ -264,7 +293,7 @@ describe("removeOne", () => {
     const out = removeOne(primary, "worktree-changed-its-mind", { now: now() + 999 * HOUR });
 
     expect(out.ok).toBe(false);
-    expect(out.steps.join(" ")).toContain("uncommitted or untracked");
+    expect(out.steps.length).toBeGreaterThan(1);
     expect(existsSync(wt)).toBe(true);
   });
 
@@ -275,7 +304,7 @@ describe("removeOne", () => {
     const out = removeOne(primary, "worktree-unlanded", { now: now() + 999 * HOUR });
 
     expect(out.ok).toBe(false);
-    expect(out.steps.join(" ")).toContain("origin/dev does not have");
+    expect(out.steps.length).toBeGreaterThan(1);
     expect(existsSync(wt)).toBe(true);
   });
 
