@@ -275,7 +275,7 @@ export const UNMETERED_SPEND: readonly UnmeteredSpend[] = [
     file: "src/live.ts",
     account: "OPENAI_API_KEY — a separate bill, and outside the OpenRouter spend cap",
     what: "Live conversation mode. The audio is a WebRTC connection from the browser straight to OpenAI, so no row is written and no figure above includes it. Roughly $0.06–$0.46 a minute on gpt-realtime-2.1, capped at 20 minutes a session and uncapped in sessions.",
-    why: "The usage exists only in the reader's browser tab, so there is no response body this process ever receives — every Observer method takes one. Closing it needs a way for a tab to report what it spent and a reason for the server to believe it. Greg accepted the gap knowingly on 2026-08-31; docs/plans/260831g-live-conversation.md says what closing it needs, and Stage 2 of docs/plans/260902g-cost-tracking-that-can-set-a-price.md is the job.",
+    why: "The usage exists only in the reader’s browser tab, so there is no response body this process ever receives — every Observer method takes one. HALF CLOSED, 2026-09-02: the server now journals every issued session and will accept, validate and price a usage report posted against it — the realtime_sessions table and the endpoints under /api/live/, which is Stage 2A. The browser does not post one yet, so this entry is still true and is still printed every run; Stage 2B of docs/plans/260902g-cost-tracking-that-can-set-a-price.md is what makes it false, and it comes out then rather than now. Greg accepted the gap knowingly on 2026-08-31.",
     since: "2026-08-31",
   },
   {

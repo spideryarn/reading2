@@ -14,19 +14,24 @@ was OpenAI or no live mode, and Greg's own question ("*I'd love to just have a s
 Two things about it belong here rather than there, because they are properties of *this* claim.
 **The audio never touches our server** — [`src/live.ts`](../../src/live.ts) mints a short-lived token
 and the browser opens the WebRTC connection itself, so there is no seam the spend passes through.
-And therefore **`npm run cost` cannot see a live session at all.** It is not even a declared bypass:
-a `Declaration` for it cannot currently be *typed*, since `ProviderAccount` has no `"openai"` and
-`Wire` has no `"realtime"`. Since 2026-09-02 it is written down in `UNMETERED_SPEND` instead — the
-register's second table, which `npm run cost` prints by name every run. Before that it was named
-only in the scan's `ALLOWED` list, which prints nothing at all.
+And therefore **`npm run cost` cannot see a live session yet.** It is written down in
+`UNMETERED_SPEND` — the register's second table, which `npm run cost` prints by name every run;
+before 2026-09-02 it was named only in the scan's `ALLOWED` list, which prints nothing at all.
 
-**Widening those two unions is not the fix, though, and reading this paragraph as if it were is the
-mistake to avoid.** Every method on the declared-bypass `Observer` takes a response body *this
-process received*. Nobody here receives one — the usage exists only in the reader's browser tab — so
-metering this needs a way for a tab to report what it spent and a reason for the server to believe
-it, which is a larger question than the register answers today. That is a hole with a name rather
-than a to-do:
-[live-conversation.md § What is not built](live-conversation.md#what-is-not-built).
+**It is still not a declared bypass, and the reason changed on 2026-09-02.** It used to be that a
+`Declaration` for it could not be *typed*: `ProviderAccount` had no `"openai"` and `Wire` had no
+`"realtime"`. Both unions are wider now and the ledger holds realtime rows — and this is still not a
+`Declaration`, because the shape of the call is wrong for one rather than the shape of the types.
+Every method on the declared-bypass `Observer` takes a response body *this process received*, and
+nobody here receives one: the usage exists only in the reader's browser tab.
+
+So the rule is restated rather than broken. **Live conversation is a sanctioned provider bypass
+whose accounting arrives through a different seam** — an authenticated acceptance endpoint the
+browser posts to, instead of a gateway that reads a response. GPT Sol was explicit that the
+allowlist entry must be *reclassified* and not retired, and
+[`tests/no-undeclared-spend.test.ts`](../../tests/no-undeclared-spend.test.ts) carries that wording.
+The seam is built and the browser does not post to it yet:
+[live-conversation.md § The meter](live-conversation.md#the-meter).
 
 **Greg decided to ship with it open**, 2026-08-31: *"make a comment in `npm run cost` and
 cost-tracking docs re this gap, and let's accept it for now."* This paragraph used to say the hole
@@ -546,13 +551,17 @@ So the rule is not *"everything uses the seam"*. It is **a bypass has to be decl
 bypass still writes a row** — silence reads as zero, and zero is the one answer that is definitely
 wrong.
 
-**And there are three that do neither** — the live-conversation spike at the top of this doc, its two
-evals, and the Codex CLI. They are the case `DECLARATIONS` cannot hold: the first three spend on a
-wire this server never sees, and a `Declaration` for them cannot be typed until `ProviderAccount` and
-`Wire` widen; `run-codex.ts` makes no request at all, it spawns a subprocess. They are in
-`UNMETERED_SPEND` — a reason written down, and no row ever produced — which is weaker than every
-other entry here and is exactly why the first is named in the opening paragraphs rather than left for
-somebody to find at the bottom of a table.
+**And there are three that do neither** — live conversation, its two evals, and the Codex CLI. They
+are the case `DECLARATIONS` cannot hold, and for two different reasons: the first three spend on a
+wire this server never sees, so there is no response body for an `Observer` to read; `run-codex.ts`
+makes no request at all, it spawns a subprocess. They are in `UNMETERED_SPEND` — a reason written
+down, and no row ever produced — which is weaker than every other entry here and is exactly why the
+first is named in the opening paragraphs rather than left for somebody to find at the bottom of a
+table.
+
+*"A `Declaration` for them cannot be typed until `ProviderAccount` and `Wire` widen"* was the reason
+given here until 2026-09-02. Both widened that day and none of them moved, which is the point: the
+types were never what stood in the way.
 
 - [`src/spend-declarations.ts`](../../src/spend-declarations.ts) — the register, and it is **two
   tables**. `DECLARATIONS` is one entry per bypass: which account it bills, which file may use it,
@@ -562,7 +571,8 @@ somebody to find at the bottom of a table.
   could be.
 - `UNMETERED_SPEND`, in the same file — **the spend a `Declaration` cannot describe**, printed on
   every run by `unmetered()` in [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts). A declaration has a
-  `ProviderAccount` and a `Wire`; these have neither. Three entries: live conversation
+  `ProviderAccount` and a `Wire`; these have both now and still cannot be declared, because a
+  `Declaration` describes a request this process made. Three entries: live conversation
   ([`src/live.ts`](../../src/live.ts)), the two live-mode evals under `evals/live/`, and
   [`scripts/run-codex.ts`](../../scripts/run-codex.ts) — the GPT Sol reviews this repo asks for on
   every plan, which spawn another vendor's CLI on a third account and so are invisible to the
@@ -571,8 +581,9 @@ somebody to find at the bottom of a table.
   It has to be printed separately from `undeclared()`, which reads `DECLARATIONS`: on the day the
   last `metered: false` entry is wired up this report would otherwise have announced that everything
   writes a row — while a reader could be holding a live conversation billing audio by the minute
-  into no total at all. Greg accepted that gap knowingly on 2026-08-31; what it would take to close
-  is in [live-conversation.md § What is missing](../plans/260831g-live-conversation.md#what-is-missing).
+  into no total at all. Greg accepted that gap knowingly on 2026-08-31; half of it closed on
+  2026-09-02, and what is left is in
+  [live-conversation.md § The meter](live-conversation.md#the-meter).
   The completeness line says "every **declared** way", which is the true claim.
 
   **The other two were named only in the scan's `ALLOWED` map until 2026-09-02, and that map prints
@@ -630,28 +641,35 @@ The report keeps the two apart and says which half it has never checked.
 
 Written up in [260828g-ai-spend-outside-the-gateway.md](../plans/260828g-ai-spend-outside-the-gateway.md).
 
-## The exception that is coming, and what it costs the rule
+## The exception that arrived, and what it costs the rule
 
-Everything above rests on one vendor. **Live Conversations — interactive voice dialogue on OpenAI's
-Realtime API — cannot rest on it**, because OpenRouter does not proxy that API. Nothing is built yet,
-so the "no exceptions" claim at the top of this file is still true; the day it ships, it stops being.
+Everything above rests on one vendor. **Live conversation — interactive voice dialogue on OpenAI's
+Realtime API — cannot rest on it**, because OpenRouter does not proxy that API. The decision was
+made in advance rather than discovered in a diff
+([realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md)), and the server half
+was built on 2026-09-02.
 
-The decision was made in advance rather than discovered in a diff, and it is in
-[realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md): a **third first-class
-seam**, not a [declared bypass](../../src/spend-declarations.ts) — *"a permanent product feature is
-not an admitted bypass"* — with the rule restated as *every paid operation goes through one of three
-owned seams; OpenRouter owns messages/chat/embeddings, OpenAI owns realtime.*
+The rule is now: **every paid operation goes through one of two owned seams or through the realtime
+acceptance endpoint.** OpenRouter owns messages, chat and embeddings; live conversation is metered
+from the browser's own report, because there is no seam for it to pass through.
 
-Two things about it are worth knowing before you touch this file's claims:
+Three things about it are worth knowing before you touch this file's claims:
 
-- **The usage numbers will come from the reader's browser**, because with browser WebRTC the
-  `response.done` events land there and there is no way to ask OpenAI afterwards. So realtime rows
-  carry a new `usageSource` field: `CostSource` says who did the arithmetic, and that is a different
-  question from whether the numbers were observed or reported.
-- **`beginSpend`'s guarantee does not stretch that far.** It holds the pending call in memory
+- **The usage numbers come from the reader's browser**, because with browser WebRTC the
+  `response.done` events land there and there is no way to ask OpenAI afterwards. The rows are
+  `cost_source: "computed"` — our arithmetic over a table we typed in — which is what that value has
+  always meant here.
+- **There is no `usageSource` column, and that was a decision.** The design proposed one
+  (`"client_report" | "sideband"`) so a server-side sideband could be swapped in later without a
+  schema change. It was left out: today `wire = 'realtime'` **is** "a browser reported this", so the
+  column would have exactly one value, and an additive migration on the day a sideband exists is
+  cheaper than a column nothing distinguishes in the meantime.
+- **`beginSpend`'s guarantee does not stretch this far.** It holds the pending call in memory
   ([`src/ai-spend.ts`](../../src/ai-spend.ts)), which is honest about itself — *"if the process dies,
-  this dies with it"* — and a five-minute conversation across many Vercel invocations is the case
-  that makes it bite. Realtime gets its own durable session lifecycle instead.
+  this dies with it"* — and a twenty-minute conversation across many Vercel invocations is the case
+  that makes it bite. So realtime does not go through `collectSpend` at all: it has its own durable
+  lifecycle in `spideryarn.realtime_sessions`, and `acceptRealtimeUsage` builds the row and hands it
+  straight to `costStore`.
 
 ## The one thing still open
 

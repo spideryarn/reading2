@@ -302,6 +302,45 @@ that is the outstanding verification for this stage, and it is the only part of 
 
 ### Stage 2A — the server-owned journal and the acceptance seam
 
+**✅ Built, 2026-09-02; one step outstanding.** `spideryarn.realtime_sessions` and thirteen nullable
+realtime columns on `ai_calls`
+([the migration](../../drizzle/20260902150952_realtime_sessions_and_usage.sql)); the session row
+written between minting the secret and returning the token; `connected` / `usage` / `close` under
+`/api/live/:sessionId/`; `parseRealtimeUsage` and `acceptRealtimeUsage` in
+[`src/live.ts`](../../src/live.ts), pure and tested without HTTP; `REALTIME_PRICES` and
+`TRANSCRIPTION_PRICES` in [`src/pricing.ts`](../../src/pricing.ts), effective-dated; `Wire`,
+`Provider`, `ProviderAccount`, `AiJob`, `AI_JOB_WIRE` and `ChatJob` all widened. 63 new tests, each
+guard watched to fail first.
+
+**Four decisions taken in the build that the plan left open, and one thing left out:**
+
+- **`AiJob` gains `live_conversation` as its own category, not a fourth `NonTaskAiJob`.** Those three
+  each have one fixed model that the profile page lists; a live session buys two on two rate cards,
+  and their ids live in `src/live.ts`, which imports `src/converse.ts`, which imports
+  `src/models.ts` — so naming them there would close an import cycle and `npm run cycles` is a gate.
+- **`ai_calls.duration_ms` loses its `NOT NULL`**, narrowed straight back by
+  `ai_calls_duration_known_off_realtime`. A transcription event has no matching start event, and both
+  alternatives were invisible lies: a `0` reads as an instant call, and the session's wall-clock is
+  the length of a conversation rather than of a call.
+- **A report carrying image tokens is refused**, not priced. `liveSession` configures no image input
+  and there is no image rate; inventing one is what `src/pricing.ts` spends four paragraphs
+  forbidding.
+- **The session journal gets both store adapters, not a filesystem refusal.** `AdminStore`,
+  `VisibilityStore` and `FeedbackStore` refuse on files because there is genuinely nothing on a
+  filesystem to hold them; a session journal is a file quite happily, and refusing would have turned
+  off a working feature on every default checkout — including the suite that covers the ticket route.
+- **No `usageSource` column.** The design proposed `"client_report" | "sideband"`; today
+  `wire = 'realtime'` *is* "a browser reported this", so it would carry one value. An additive
+  migration on the day a sideband exists is cheaper than a column nothing distinguishes.
+
+**Outstanding, and not mine to clear — the same peer collision as 1b.** `npm run db:migrate` still
+refuses (`1 ledger row(s) belong to no migration in this journal: 1788351034981`), so the migration
+has been applied nowhere. `tests/store-realtime-sessions.test.ts` skips its Postgres half loudly
+(*"spideryarn.realtime_sessions is not there — run npm run db:migrate"*) and the filesystem half of
+the same parity suite runs. **Run `npm run db:migrate` and then
+`npx vitest run tests/store-realtime-sessions.test.ts tests/db-schema.test.ts tests/db-schema-drift.test.ts`
+once `0052` lands** — that is the whole of what is unverified here.
+
 Sol split Stage 2 in two, **at the server/client contract** — deliberately not between responses and
 transcription, because that would ship a meter known to omit a cost source.
 

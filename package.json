@@ -34,6 +34,7 @@
     "labels": "tsx src/labels.ts",
     "eval:hierarchy": "tsx evals/hierarchy-labels.ts",
     "eval:hierarchy-structure": "tsx evals/hierarchy-structure/run.ts",
+    "eval:cost": "SPIDERYARN_STORE=postgres tsx evals/cost/run.ts",
     "typecheck": "tsx scripts/typecheck.ts",
     "db:generate": "tsx scripts/db-generate.ts",
     "db:migrate": "tsx scripts/db-migrate.ts",
