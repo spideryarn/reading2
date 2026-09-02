@@ -72,7 +72,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Article } from "../src/types.js";
-import type { PublicArticle, PublicMetadata, PublicTweets } from "../src/public-types.js";
+import type { PublicArticle, PublicTweets } from "../src/public-types.js";
 /* The vocabulary itself, so the sweeps below cannot fall behind it — src/modes.ts
    imports nothing, which is why the server can read it too. */
 import { DEFAULT_MODE, MODES, type Mode } from "../src/modes.js";
@@ -315,20 +315,6 @@ const ARTICLE: PublicArticle = {
  */
 const THREAD: PublicTweets = { limit: 280, tweets: [{ text: PUBLIC_TWEET, chars: 24 }] };
 
-const METADATA: PublicMetadata = {
-  slug: SLUG,
-  title: "A piece",
-  /* Asymmetric on purpose: a visitor pressing Glossary must get a different
-     sentence from one pressing Quotes, and a fixture that answered the same to
-     every question could not tell that apart. */
-  available: {
-    arc: false,
-    tweets: false,
-    glossary: true,
-    ideas: false,
-    quotes: false,
-  },
-};
 
 /**
  * The same article as its **owner** is served it.
@@ -396,7 +382,6 @@ function json(body: unknown, status = 200): Response {
  */
 function reply(url: string, method: string): Response {
   if (url === `/api/public/article/${SLUG}`) return publicArticle();
-  if (url === `/api/public/metadata/${SLUG}`) return json(METADATA);
   if (url === `/api/article/${SLUG}`) return owned();
   if (method === "POST") return new Response(null, { status: 204 });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
@@ -706,14 +691,17 @@ describe("a signed-out browser on a shared document", () => {
        absence is checked in the owner control below. */
     expect(host.textContent).toContain("View only");
     /**
-     * **One request, and it used to be two.** `GET /api/public/metadata/:slug`
-     * was fetched immediately after the article, purely so a marked mode could
-     * pick between two true sentences, with its failure swallowed to `null`.
-     * The artefacts ride on the article payload since slice 1b, so the payload
-     * answers that question and the request is gone. The endpoint itself stays
-     * — it is still in the route inventory and still tested — which is why this
-     * asserts the exact list rather than a prefix.
-     * docs/plans/260827ai-public-read-only-access.md § The second request disappears.
+     * **One request, and it used to be two.** A second GET, for a public
+     * metadata endpoint, was made immediately after the article, purely so a
+     * marked mode could pick between two true sentences, with its failure
+     * swallowed to `null`. The artefacts ride on the article payload since
+     * slice 1b, so the payload answers that question and the request is gone;
+     * the endpoint itself was deleted on 2026-09-02. The exact list rather than
+     * a prefix, because *one* request is the claim.
+     * docs/plans/260827ai-public-read-only-access.md § The second request
+     * disappears, and
+     * docs/plans/260902j-public-read-only-access-audit-and-improvements.md
+     * § Cluster B.
      */
     expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
   });

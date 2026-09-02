@@ -1662,9 +1662,10 @@ export interface ArticleMetadata {
    *
    * Added 2026-08-28, and it closes a real hole in stage 1a rather than a
    * nicety: the owner's Access & Sharing card had nothing owner-facing to read,
-   * so it was asking `GET /api/public/metadata/:slug` anonymously — the only
-   * non-mutating question available to it — and **that endpoint cannot tell
-   * *private* from *no such article***. Both are 404, deliberately, so a
+   * so it was asking the public metadata endpoint anonymously — the only
+   * non-mutating question available to it — and **that endpoint could not tell
+   * *private* from *no such article***. (That endpoint was itself deleted on
+   * 2026-09-02; this field is what replaced its misuse.) Both are 404, deliberately, so a
    * stranger learns nothing about what exists. The card was drawing "we could
    * not check" because it could not honestly draw anything else.
    *

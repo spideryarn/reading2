@@ -491,10 +491,10 @@ type ArticleAccess =
        * payload above rather than fetched.
        *
        * It used to be `PublicArtefacts | null`, filled by a **second** request
-       * to `GET /api/public/metadata/:slug` whose failure was swallowed to
-       * `null` — and `null` needed a `VisitorGap` member and a sentence of its
-       * own so that a lost request would not be rendered as a claim about
-       * somebody's article. There is no second request now, so there is no
+       * to a public metadata endpoint, since deleted, whose failure was
+       * swallowed to `null` — and `null` needed a `VisitorGap` member and a
+       * sentence of its own so that a lost request would not be rendered as a
+       * claim about somebody's article. There is no second request now, so no
        * `null`: either this payload arrived or the reader is looking at
        * *this document isn't shared*. public-artefacts.ts.
        */
@@ -695,13 +695,19 @@ async function findArticle(
     }
   }
 
-  /* **One request, and it used to be two.** A second `GET /api/public/metadata/:slug`
-     stood here purely to learn which artefacts existed, with its failure
-     swallowed to `null`. The artefacts are in this payload now, so the payload
-     answers that — and the endpoint itself stays, tested and in the route
-     inventory, for stage 2's link preview. The win was the request, never the
-     route. docs/plans/260827ai-public-read-only-access.md § The second request
-     disappears. */
+  /* **One request, and it used to be two.** A second GET, for a public metadata
+     endpoint, stood here purely to learn which artefacts existed, with its
+     failure swallowed to `null`. The artefacts are in this payload now, so the
+     payload answers that.
+
+     A comment here said the endpoint itself stayed *"for stage 2's link
+     preview"*, and it was false when it was written: the preview function calls
+     `loadHead`. The route was deleted on 2026-09-02 with nothing but a
+     deployment checker on it.
+     docs/plans/260827ai-public-read-only-access.md § The second request
+     disappears, and
+     docs/plans/260902j-public-read-only-access-audit-and-improvements.md
+     § Cluster B. */
   const read = await loadPublicArticle(slug);
   /* **Both answers, and this is the line where they meet.** *Nobody shared it*
      is a complete answer to a reader we could identify; to one we could not it

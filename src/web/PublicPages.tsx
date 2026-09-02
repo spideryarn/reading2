@@ -10,9 +10,10 @@
  * correct-looking page that the capability seam exists to prevent.
  *
  * So: a different, smaller metadata page, and a plain notice where the tweet
- * thread would be. Both draw from what the visitor already has —
- * `GET /api/public/article/:slug` and `GET /api/public/metadata/:slug` — and
- * neither fetches anything of its own.
+ * thread would be. Both draw from what the visitor already has — the one
+ * `GET /api/public/article/:slug` the reading view made — and neither fetches
+ * anything of its own. There was a second public route until 2026-09-02; this
+ * page never called it either.
  */
 import { ArrowLeft, ExternalLink } from "lucide-react";
 
@@ -64,8 +65,8 @@ const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-space)_+_2rem)]";
  * The owner's metadata page answers *which stage ran, when, into which column,
  * over how many bytes, and would we write it again today* — internal paths,
  * column names and run times, none of it a visitor's business and most of it
- * about our pipeline rather than about the piece. `PublicMetadata` replaces the
- * lot with five booleans, and this page is those five booleans plus what is
+ * about our pipeline rather than about the piece. `PublicArtefacts` replaces
+ * the lot with five booleans, and this page is those five booleans plus what is
  * already in the article payload. src/public-types.ts.
  */
 export function PublicMetadataPage({
@@ -133,7 +134,7 @@ export function PublicMetadataPage({
           {/* **Only what exists, never how it was made.** No paths, no
               timestamps, no byte counts, no generator versions — that is the
               whole difference between this page and the owner's, and the reason
-              `PublicMetadata` is five booleans rather than a projection of
+              `PublicArtefacts` is five booleans rather than a projection of
               `ArticleMetadata`. */}
           {/* **No "we could not check" arm any more**, and its absence is the
               slice. These five used to come from a second request whose failure

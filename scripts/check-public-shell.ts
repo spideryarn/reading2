@@ -264,7 +264,7 @@ export function judgeCommonHeaders(head: ParsedHead): string[] {
 
 /**
  * Everything about the public head except the title, which
- * {@link judgeTitleAgainstMetadata} owns — this only checks that og:title is
+ * {@link judgeTitleAgainstArticle} owns — this only checks that og:title is
  * *present*, since checking its exact value against nothing would be a check
  * that always passes.
  */
@@ -286,7 +286,7 @@ export function judgePublicHead(head: ParsedHead, body: string, opts: { slug: st
 
 export interface TitleVerdict {
   problems: string[];
-  /** True when the metadata title was blank and this fell back to the weak check. */
+  /** True when the article's own title was blank and this fell back to the weak check. */
   downgraded: boolean;
   /** Set only when `downgraded` — explains why, so a downgrade is never silent. */
   note?: string;
@@ -295,25 +295,43 @@ export interface TitleVerdict {
 /**
  * Is the title *the right article's*, not just *some* enhancement?
  *
- * `GET /api/public/metadata/:slug` is an independent, already-public source of
+ * `GET /api/public/article/:slug` is an independent, already-public source of
  * truth for the article's title — assembled by the same server, but not by the
  * same code path that composes the head, so agreement between them means
  * something. Checking only "not the bare default" (the old, weaker version of
  * this check) would pass a head built from the wrong article, or a stale
- * cache: any non-default string satisfies it. Comparing against the metadata
- * title, run through the same `headText()` clamp the head-builder itself uses,
- * catches that.
+ * cache: any non-default string satisfies it. Comparing against the article's
+ * own `meta.title`, run through the same `headText()` clamp the head-builder
+ * itself uses, catches that.
  *
- * **The one legitimate way they can differ:** the head falls back to the
- * article's first `<h1>` when the article has no title of its own; the
- * metadata endpoint does not carry that fallback. So a blank metadata title
- * downgrades to the old weak check rather than failing — and says so in
- * `note`, so the downgrade itself is visible rather than a silent pass.
+ * ## Why the article route, when this used to ask `/api/public/metadata/:slug`
+ *
+ * That route was deleted on 2026-09-02 —
+ * docs/plans/260902j-public-read-only-access-audit-and-improvements.md
+ * § Cluster B — and the article route is the *more* independent of the two, not
+ * a fallback. All three public reads share `publicCurrentRevisionQuery`, so
+ * none of them could ever catch a bug in that; past it, metadata and head
+ * evaluated the **same `PUBLIC_HEADING_TITLE` SQL expression**, while the
+ * article read derives its heading title from the sanitised blocks
+ * (`headingTitleOf`, src/store/public-reader.ts). Two chains that agree by
+ * arriving separately is what this comparison was always after.
+ *
+ * It also buys a check nobody had: the head *advertises* an article, and
+ * fetching the article proves the thing it advertises can actually be
+ * delivered.
+ *
+ * **The one legitimate way they can differ:** an article whose stored title is
+ * literally blank. `??` preserves `""` through both fallback chains, so
+ * `meta.title` comes back empty and the head composes `Untitled` (page-head.ts,
+ * `|| "Untitled"`) — a difference that is correct rather than a fault. So a
+ * blank article title downgrades to the old weak check rather than failing, and
+ * says so in `note`, so the downgrade itself is visible rather than a silent
+ * pass.
  */
-export function judgeTitleAgainstMetadata(body: string, metadataTitle: string): TitleVerdict {
+export function judgeTitleAgainstArticle(body: string, articleTitle: string): TitleVerdict {
   const title = extractTitle(body);
 
-  if (metadataTitle.trim() === "") {
+  if (articleTitle.trim() === "") {
     const problems: string[] = [];
     if (title === null) problems.push("title: no <title> tag found");
     else if (title === DEFAULT_TITLE) problems.push(`title: still the bare default '${DEFAULT_TITLE}' — page was not enhanced`);
@@ -321,27 +339,56 @@ export function judgeTitleAgainstMetadata(body: string, metadataTitle: string): 
       problems,
       downgraded: true,
       note:
-        "metadata title is blank, so this only checked 'not the bare default' — the head may be using the " +
-        "article's first <h1>, which /api/public/metadata does not fall back to",
+        "the article's own title is blank, so this only checked 'not the bare default' — there is nothing " +
+        "to compare the head against, and the head composes its own 'Untitled' for that case",
     };
   }
 
   const problems: string[] = [];
-  const expectedOgTitle = headText(metadataTitle, 120);
-  const expectedTitle = documentTitle(metadataTitle);
+  const expectedOgTitle = headText(articleTitle, 120);
+  const expectedTitle = documentTitle(articleTitle);
 
   const decodedTitle = title === null ? null : unescapeHead(title);
   if (decodedTitle === null) problems.push("title: no <title> tag found");
   else if (decodedTitle !== expectedTitle)
-    problems.push(`title: expected '${expectedTitle}' (from /api/public/metadata's title, through documentTitle()), got '${decodedTitle}'`);
+    problems.push(`title: expected '${expectedTitle}' (from /api/public/article's meta.title, through documentTitle()), got '${decodedTitle}'`);
 
   const rawOgTitle = metaContent(body, "og:title");
   const ogTitle = rawOgTitle === null ? null : unescapeHead(rawOgTitle);
   if (ogTitle === null) problems.push("meta og:title: missing");
   else if (ogTitle !== expectedOgTitle)
-    problems.push(`meta og:title: expected '${expectedOgTitle}' (from /api/public/metadata's title, clamped to 120), got '${ogTitle}'`);
+    problems.push(`meta og:title: expected '${expectedOgTitle}' (from /api/public/article's meta.title, clamped to 120), got '${ogTitle}'`);
 
   return { problems, downgraded: false };
+}
+
+/**
+ * The article's own title, out of a `GET /api/public/article/:slug` body.
+ *
+ * **Pure, and separate from the request, so `--self-test` can reach it.** The
+ * field moved when this check was repointed: the deleted metadata payload had
+ * `title` at the top level, and the article payload has it at `meta.title`
+ * (src/public/dto.ts § publicMeta). A version that kept reading the top-level
+ * key would find `undefined` on every real response and report *no string
+ * title*, which looks like a broken deployment rather than a broken checker —
+ * so the shape is pinned by a self-test case rather than by whatever
+ * production happens to return. docs/reusable/silent-success.md.
+ *
+ * Anything short of a string is a `problems` entry, never a quiet `null`: this
+ * is a public route that is supposed to work.
+ */
+export function articleTitleFrom(bodyText: string, path: string): { title: string | null; problems: string[] } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(bodyText);
+  } catch {
+    return { title: null, problems: [`GET ${path}: response was not JSON`] };
+  }
+  const meta = (parsed as { meta?: unknown }).meta;
+  if (typeof meta !== "object" || meta === null) return { title: null, problems: [`GET ${path}: response has no 'meta' object`] };
+  const title = (meta as { title?: unknown }).title;
+  if (typeof title !== "string") return { title: null, problems: [`GET ${path}: response has no string 'meta.title' field`] };
+  return { title, problems: [] };
 }
 
 /** The unmodified default shell: private, absent, unreadable, or malformed. */
@@ -649,13 +696,13 @@ function runSelfTest(): void {
     unenhancedPublicProblems.length > 0,
     unenhancedPublicProblems,
   );
-  const missingEnhancementVerdict = judgeTitleAgainstMetadata(unenhancedBody, "My Great Article");
+  const missingEnhancementVerdict = judgeTitleAgainstArticle(unenhancedBody, "My Great Article");
   check(
-    "judgeTitleAgainstMetadata: catches a 200 that was never enhanced",
+    "judgeTitleAgainstArticle: catches a 200 that was never enhanced",
     /* Both halves, named specifically. "the array is non-empty" would pass on
        any single complaint, including one about the wrong thing entirely. The
        "bare default" wording belongs to the *downgraded* branch, which is not
-       the branch a known metadata title takes — an earlier version of this
+       the branch a known article title takes — an earlier version of this
        assertion looked for it here and could never have been satisfied. */
     missingEnhancementVerdict.problems.some((p) => p.startsWith("title:")) &&
       missingEnhancementVerdict.problems.some((p) => p.startsWith("meta og:title:")) &&
@@ -663,23 +710,23 @@ function runSelfTest(): void {
     missingEnhancementVerdict,
   );
 
-  /* ---- judgeTitleAgainstMetadata: the actual point of this strengthening ---- */
+  /* ---- judgeTitleAgainstArticle: the actual point of this strengthening ---- */
   check(
-    "judgeTitleAgainstMetadata: the good fixture's title matches its own metadata",
-    judgeTitleAgainstMetadata(goodBody, "My Great Article").problems.length === 0,
-    judgeTitleAgainstMetadata(goodBody, "My Great Article"),
+    "judgeTitleAgainstArticle: the good fixture's title matches its own article payload",
+    judgeTitleAgainstArticle(goodBody, "My Great Article").problems.length === 0,
+    judgeTitleAgainstArticle(goodBody, "My Great Article"),
   );
   /* This is the case the old "just not the bare default" check could not see:
      a fully-enhanced, well-formed head — for the WRONG article. */
-  const wrongArticleVerdict = judgeTitleAgainstMetadata(goodBody, "A Totally Different Article");
+  const wrongArticleVerdict = judgeTitleAgainstArticle(goodBody, "A Totally Different Article");
   check(
-    "judgeTitleAgainstMetadata: catches a well-formed head enhanced from the wrong article",
+    "judgeTitleAgainstArticle: catches a well-formed head enhanced from the wrong article",
     wrongArticleVerdict.problems.some((p) => p.includes("title:")) && wrongArticleVerdict.problems.some((p) => p.includes("og:title")),
     wrongArticleVerdict,
   );
   check(
-    "judgeTitleAgainstMetadata: clamps the metadata title the same way the server does (documentTitle / 120)",
-    judgeTitleAgainstMetadata(
+    "judgeTitleAgainstArticle: clamps the article title the same way the server does (documentTitle / 120)",
+    judgeTitleAgainstArticle(
       /* Spelled out, not built from `documentTitle`/`headText` — the judge
          calls those, so a body composed with them would agree with any
          behaviour they had, which is a positive case that cannot fail. 200 A's
@@ -698,16 +745,16 @@ function runSelfTest(): void {
   const escapedHeadBody =
     `<title>Marks &amp; Spencer&#39;s &quot;Big&quot; &lt;Sale&gt; · Spideryarn</title>` +
     `<meta property="og:title" content="Marks &amp; Spencer&#39;s &quot;Big&quot; &lt;Sale&gt;">`;
-  const punctuatedVerdict = judgeTitleAgainstMetadata(escapedHeadBody, punctuated);
+  const punctuatedVerdict = judgeTitleAgainstArticle(escapedHeadBody, punctuated);
   check(
-    "judgeTitleAgainstMetadata: a correctly escaped title matches its unescaped metadata",
+    "judgeTitleAgainstArticle: a correctly escaped title matches its unescaped article title",
     punctuatedVerdict.problems.length === 0,
     punctuatedVerdict,
   );
   /* And the control on that control: decoding must not make everything match. */
-  const stillWrongVerdict = judgeTitleAgainstMetadata(escapedHeadBody, "Marks & Spencer's Small Sale");
+  const stillWrongVerdict = judgeTitleAgainstArticle(escapedHeadBody, "Marks & Spencer's Small Sale");
   check(
-    "judgeTitleAgainstMetadata: decoding does not make a genuinely different title match",
+    "judgeTitleAgainstArticle: decoding does not make a genuinely different title match",
     stillWrongVerdict.problems.length > 0,
     stillWrongVerdict,
   );
@@ -717,20 +764,57 @@ function runSelfTest(): void {
     unescapeHead("&amp;lt;"),
   );
 
-  /* The one legitimate divergence: no title of its own, head falls back to an
-     <h1> the metadata endpoint never sees — must downgrade, not fail, and must
-     say so rather than passing silently. */
-  const h1FallbackVerdict = judgeTitleAgainstMetadata("<title>Some First Heading · Spideryarn</title>", "   ");
+  /* The one legitimate divergence: an article whose stored title is blank, so
+     `meta.title` comes back empty (`??` preserves `""`) while the head composes
+     its own `Untitled` — must downgrade, not fail, and must say so rather than
+     passing silently. Whitespace as well as empty, because a title of `"   "`
+     is as titleless as one of `""` and `documentTitle` treats it that way. */
+  const blankTitleVerdict = judgeTitleAgainstArticle("<title>Untitled · Spideryarn</title>", "   ");
   check(
-    "judgeTitleAgainstMetadata: a blank metadata title downgrades rather than failing, and says why",
-    h1FallbackVerdict.downgraded && h1FallbackVerdict.problems.length === 0 && !!h1FallbackVerdict.note,
-    h1FallbackVerdict,
+    "judgeTitleAgainstArticle: a blank article title downgrades rather than failing, and says why",
+    blankTitleVerdict.downgraded && blankTitleVerdict.problems.length === 0 && !!blankTitleVerdict.note,
+    blankTitleVerdict,
   );
-  const h1FallbackButUnenhancedVerdict = judgeTitleAgainstMetadata(unenhancedBody, "");
+  const blankButUnenhancedVerdict = judgeTitleAgainstArticle(unenhancedBody, "");
   check(
-    "judgeTitleAgainstMetadata: a blank metadata title still catches a genuinely unenhanced page",
-    h1FallbackButUnenhancedVerdict.downgraded && h1FallbackButUnenhancedVerdict.problems.length > 0,
-    h1FallbackButUnenhancedVerdict,
+    "judgeTitleAgainstArticle: a blank article title still catches a genuinely unenhanced page",
+    blankButUnenhancedVerdict.downgraded && blankButUnenhancedVerdict.problems.length > 0,
+    blankButUnenhancedVerdict,
+  );
+
+  /* ---- articleTitleFrom: the field this check moved to, pinned by shape ---- */
+  /* **The mutation that would otherwise be invisible.** The deleted metadata
+     payload carried `title` at the top level; the article payload carries it at
+     `meta.title`. A repointed checker that kept reading the top-level key would
+     report "no string title" against every healthy deployment — a checker
+     failure wearing a deployment failure's clothes. Both shapes are fed in, and
+     the wrong one has to be rejected. */
+  const articleBody = JSON.stringify({ meta: { slug: "my-great-article", title: "My Great Article" }, blocks: [] });
+  const fromArticle = articleTitleFrom(articleBody, "/api/public/article/x");
+  check(
+    "articleTitleFrom: reads meta.title out of an article payload",
+    fromArticle.title === "My Great Article" && fromArticle.problems.length === 0,
+    fromArticle,
+  );
+  const fromFlat = articleTitleFrom(JSON.stringify({ title: "My Great Article" }), "/api/public/article/x");
+  check(
+    "articleTitleFrom: refuses a top-level title — the deleted metadata shape is not this one",
+    fromFlat.title === null && fromFlat.problems.length > 0,
+    fromFlat,
+  );
+  /* A blank title is a *value*, not a failure: it is the downgrade path's input,
+     and turning it into a problem here would make that path unreachable. */
+  const fromBlank = articleTitleFrom(JSON.stringify({ meta: { title: "" } }), "/api/public/article/x");
+  check(
+    "articleTitleFrom: an empty meta.title is a title, not a problem",
+    fromBlank.title === "" && fromBlank.problems.length === 0,
+    fromBlank,
+  );
+  const fromHtml = articleTitleFrom("<html>not json at all</html>", "/api/public/article/x");
+  check(
+    "articleTitleFrom: a non-JSON body is a problem, never a silent null",
+    fromHtml.title === null && fromHtml.problems.length > 0,
+    fromHtml,
   );
 
   /* ---- Fixture 4: the private article's title leaking into the body ---- */
@@ -845,42 +929,39 @@ function problemsOf(rs: readonly RawResponse[], judge: () => string[]): string[]
 }
 
 /**
- * `GET /api/public/metadata/:slug`'s `title` field — the independent source of
- * truth {@link judgeTitleAgainstMetadata} checks the head against. This is a
+ * `GET /api/public/article/:slug`'s `meta.title` — the independent source of
+ * truth {@link judgeTitleAgainstArticle} checks the head against. This is a
  * public route that is supposed to work, so anything short of a clean 200 with
- * a string `title` is reported as a problem, never silently treated as "no
- * title to compare against".
+ * a string title is reported as a problem, never silently treated as "no title
+ * to compare against".
+ *
+ * The transport half only; the parsing is {@link articleTitleFrom}, which
+ * `--self-test` covers.
  */
-function fetchMetadataTitle(host: string, slug: string): { title: string | null; problems: string[] } {
-  const metaR = curlRequest(`${host}/api/public/metadata/${encodeURIComponent(slug)}`);
-  const path = `/api/public/metadata/${slug}`;
-  if (metaR.curlError) return { title: null, problems: [`GET ${path}: ${metaR.curlError}`] };
-  if (metaR.head.status !== 200) return { title: null, problems: [`GET ${path} answered ${metaR.head.status ?? "(no status)"}, not 200`] };
-  try {
-    const parsed = JSON.parse(metaR.bodyText) as { title?: unknown };
-    if (typeof parsed.title !== "string") return { title: null, problems: [`GET ${path}: response has no string 'title' field`] };
-    return { title: parsed.title, problems: [] };
-  } catch {
-    return { title: null, problems: [`GET ${path}: response was not JSON`] };
-  }
+function fetchArticleTitle(host: string, slug: string): { title: string | null; problems: string[] } {
+  const articleR = curlRequest(`${host}/api/public/article/${encodeURIComponent(slug)}`);
+  const path = `/api/public/article/${slug}`;
+  if (articleR.curlError) return { title: null, problems: [`GET ${path}: ${articleR.curlError}`] };
+  if (articleR.head.status !== 200) return { title: null, problems: [`GET ${path} answered ${articleR.head.status ?? "(no status)"}, not 200`] };
+  return articleTitleFrom(articleR.bodyText, path);
 }
 
-/** 1. Public slug — enhanced head, with its title checked against /api/public/metadata's. */
+/** 1. Public slug — enhanced head, with its title checked against /api/public/article's. */
 function checkPublicHead(host: string, publicSlug: string | undefined): void {
   if (!publicSlug) {
     skip("public slug — enhanced head", "no --public-slug given");
     return;
   }
   const r = curlRequest(`${host}/read/${encodeURIComponent(publicSlug)}`);
-  const { title: metadataTitle, problems: metadataProblems } = fetchMetadataTitle(host, publicSlug);
+  const { title: articleTitle, problems: articleProblems } = fetchArticleTitle(host, publicSlug);
 
   let note: string | undefined;
   const problems = [
-    ...metadataProblems,
+    ...articleProblems,
     ...problemsOf([r], () => {
       const headProblems = judgePublicHead(r.head, r.bodyText, { slug: publicSlug });
-      if (metadataTitle === null) return headProblems;
-      const titleVerdict = judgeTitleAgainstMetadata(r.bodyText, metadataTitle);
+      if (articleTitle === null) return headProblems;
+      const titleVerdict = judgeTitleAgainstArticle(r.bodyText, articleTitle);
       note = titleVerdict.note;
       return [...headProblems, ...titleVerdict.problems];
     }),

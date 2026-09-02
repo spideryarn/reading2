@@ -579,3 +579,51 @@ stage 3 needs, and it is a redesign of the child tables, not of public reading.
   `handler` means importing `src/vercel.ts`, which pulls the whole of `src/routes.ts` behind it —
   about eight seconds cold on this box, against vitest's five-second default. The first run
   "failed" as a timeout that looked nothing like the bug.
+- 2026-09-02 — **Cluster B built**, minus S2 above. `GET /api/public/metadata/:slug` is gone, and so
+  are `loadMetadata`, the `metadata` projection, the `publicMetadata` DTO, the `PublicMetadata` type
+  and the client's `loadPublicMetadata`. `PUBLIC_ROUTE_NAMES` has one entry; the two module-load
+  guards in `src/public/routes.ts` are untouched, and one of them is what catches a rename — mutating
+  `article` to `articles` fails the file at import with *"has no reader"*, before any test body runs.
+  `PublicMetadataPage` stays: it is the `/read/:slug/metadata` UI and it draws from the article
+  payload.
+
+  **The deployed checker was repointed, not weakened.** `scripts/check-public-shell.ts` reads
+  `meta.title` off `GET /api/public/article/:slug` now, and `judgeTitleAgainstMetadata` /
+  `fetchMetadataTitle` were renamed for what they actually compare. The parsing was split out as
+  `articleTitleFrom` so `--self-test` can reach it, because the *shape* moved with the route: the
+  metadata payload had `title` at the top level and the article payload has it at `meta.title`, and a
+  version that kept reading the old key would have reported "no string title" against every healthy
+  deployment — a checker failure wearing a deployment failure's clothes. Self-test: 46 cases before,
+  50 after, all passing, and mutating `articleTitleFrom` to read the top level reddens three of them.
+
+  **The semantic disagreement went with the route.** `loadMetadata` served a revision with a tree and
+  no blocks that `loadArticle` and `loadHead` both refuse, and the boneless fixture in
+  `tests/public-visibility-pg.test.ts` existed to pin that. It now asserts the opposite and better
+  thing: both surviving reads refuse it, by two different mechanisms — `loadArticle` counts the rows
+  it fetched, `loadHead` asks Postgres `has_blocks` because it fetches none.
+
+  **A deleted public path has to 404 from inside the closed room**, and that is the one way this
+  deletion could have opened a hole: a path the dispatcher no longer matches falling through to the
+  gate and answering 401, which reads as *sign in and you may see it*. Asserted three times, red
+  before the deletion — in `tests/public-dispatch.test.ts` for every method (404, no `Allow`,
+  `no-store`), and in `tests/public-visibility-pg.test.ts` over real HTTP for both a private article
+  and a shared one, reading the sentence (`No public API route`) and not just the status.
+
+  **Two false comments died with it.** `App.tsx`'s *"stays for stage 2's link preview"* — the preview
+  reads `loadHead` and never read this route — and `public-reader.ts`'s claim that the assets
+  projection is what stops a public article hot-linking, which S3 disproved; that one now points at
+  Cluster D, where it becomes true.
+
+  References under the five needles: **61 before, 8 after**, and every survivor is deliberate — four
+  are the new assertions, which have to name the path in order to refuse it, and four are comments
+  recording the deletion. `docs/project/` never mentioned the route, so `security-map.md` needed no
+  edit: it names no route and counts no routes.
+
+  **The lesson is about the sweep rather than the route.** Four audits and the first ledger swept
+  `src/`, `tests/` and `docs/` and not `scripts/` — and `scripts/` is where the only live caller
+  was. A deletion is exactly the change where an unswept directory is expensive, because the
+  evidence for "nothing calls this" is an absence. Worth adding to
+  [improve-the-codebase.md](../reusable/improve-the-codebase.md)'s standing instruction that a
+  reference sweep names every top-level directory it looked in, and that `scripts/` is the one most
+  often forgotten. Not edited here: that file's wording is a rule and goes through
+  [edit-important-docs.md](../reusable/edit-important-docs.md).
