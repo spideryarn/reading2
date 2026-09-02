@@ -289,6 +289,18 @@ has seen refuse is not a gate.**
   only the wait for the lock, not the work after it. Set `statement_timeout` as well.
 - **`create index concurrently` cannot run here at all** — the migrator wraps each file in one
   transaction, which `scanSql`'s `NON_TRANSACTIONAL` list already knows. That stays a laptop job.
+- **"Additive, so the old code is fine" is a convention, not a guarantee, and it has failed for
+  somebody.** [Val Town's postmortem](https://blog.val.town/post-mortem-db-migration) (April 2025) is
+  this exact shape: the migration landed, the code deploy lagged by minutes, the old code ran against
+  the new schema and crashed — twelve minutes of 503s. Their fix was not a platform change but a
+  **required test asserting each migration is backward-compatible with the code currently running**.
+  Worth copying, because our design widens that window rather than narrowing it: the migration
+  applies in Actions while Vercel is still building.
+
+  The [four-hour `NOT NULL` lock](https://medium.com/engineering-playbook/the-database-migration-that-locked-production-for-4-hours-complete-postmortem-1a4955f64b63)
+  is the other recurring one, and is why `statement_timeout` is not optional. Across every writeup
+  found, **nobody automates the destructive class** — which is what the recogniser's rejection list
+  is for.
 
 ### Step 3 — hand ownership to a restricted role, so the database is the last boundary
 
@@ -318,6 +330,33 @@ built: the existing migrations in `drizzle/` contain `DO` blocks, DML, drops, co
 partial indexes and `auth` foreign keys. A safe recogniser will reject a meaningful fraction of real
 migrations. **(A) is autonomous for the boring subset, and hands the interesting ones to the
 laptop.** That is still most nights, and it is not the same as never being in the loop.
+
+### Four options ruled out, so nobody researches them again
+
+The 2026-08-31 thread and this session's web research between them closed these. Recorded here
+because each one looks promising for about ten minutes.
+
+- **Migrate in the Vercel build command.** It is the ecosystem's pragmatic default and Prisma's own
+  documented pattern, and it is wrong here: it runs on preview builds too, a Redeploy or Deploy Hook
+  **re-runs the whole build command including the migration**, and a build that fails *after* the
+  migration leaves the schema advanced with no new code live — the `SCHEMA ADVANCED; CODE MAY NOT
+  HAVE` state `deploy.ts` already exists to detect.
+- **A Vercel webhook after `deployment.promoted`.** Vercel has **no release-phase primitive** — no
+  "run this before traffic switches, abort on failure" hook of the kind Heroku and Fly.io have. A
+  webhook fires *after* traffic has moved, so it cannot block anything, and Vercel documents no
+  ordering guarantee, retry policy, or concurrency guidance for it.
+- **OIDC, in either direction.** GitHub's OIDC and Vercel's OIDC federation both target cloud IAM
+  (AWS/GCP/Azure), not Postgres authentication. Supabase's temporary-access short-lived database
+  credentials need Postgres 17+ **and** are themselves gated behind a long-lived Supabase PAT, so
+  they change the shape of the long-lived secret rather than removing it.
+- **Just-in-time credential pull from the Vercel API.** It requires putting the password on Vercel as
+  a non-sensitive variable first, and Vercel API tokens have no scope narrower than the full team
+  role — so it ends up downloading every readable production variable onto the shared box.
+
+Worth noting on the other side: **Supabase's own documentation recommends CI rather than a
+developer's laptop** for production migrations, which is the direction this plan takes. Its
+recommended topology is two projects, staging then production, which does not map onto one
+production database with no staging copy — a real gap between documented practice and this setup.
 
 ### The simpler option, and why not
 
