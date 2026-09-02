@@ -55,6 +55,30 @@ There is still no GitHub Action, and `vercel deploy` does upload your *working t
 separate hazard, since that tree contains somebody else's half-finished edit. See
 [deployment.md](deployment.md).
 
+### What protects `main`, and what does not
+
+**Nothing mechanical, as of 2026-09-02.** The invariant above is enforced by this document and by
+AGENTS.md, and by nothing else. Measured on the box that day rather than assumed:
+
+- **No git hooks exist.** `.git/hooks` holds only `.sample` files and `core.hooksPath` is unset. So
+  `git push origin main`, `git push origin dev:main` and `git push origin <sha>:refs/heads/main` are
+  all unblocked, from an agent's shell or yours.
+- **A bare `git push` is safe.** `push.default` is unset, so git 2.43 uses `simple`: from `dev` it
+  pushes `dev` and nothing else. Confirmed with `git push --dry-run`, which named only `dev -> dev`.
+  So reaching `main` takes a command that *names* `main`.
+- **`git push --all` ignores which branch you are on.** A dry run would have created `worktree-e2e`
+  and `worktree-spike` on the remote. Those do not build (`"**": false`), but if local `main` were
+  ever ahead, `--all` would ship it. Don't use it here.
+
+The plan to make this mechanical — a tracked `pre-push` hook, and why it is the right layer rather
+than an extension of `.claude/hooks/protect-shared-tree.sh` — is
+[260902b-protect-main-from-an-accidental-push.md](../plans/260902b-protect-main-from-an-accidental-push.md).
+One thing from it is worth knowing now, because it is not obvious: **a worktree resolves hooks to the
+primary's `.git/hooks`**, so a single hook file would cover every worktree with no per-worktree step.
+
+Until it exists, the rule is the protection: **do not push anything to `main` yourself.** Deploying
+does it for you, from `dev`, by sha and by name.
+
 ## The reason this doc exists: one tree, several agents
 
 Several Claude sessions work in this directory at the same time. Their in-flight edits sit in the
