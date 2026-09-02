@@ -88,7 +88,6 @@ import { FEEDBACK_NOT_AVAILABLE, FEEDBACK_SEND_FAILED } from "../messages.js";
 import {
   MAX_FEEDBACK_ANSWER_CHARS,
   type FeedbackKind,
-  type FeedbackRouteKind,
 } from "../types.js";
 import type { FeedbackDiagnosticsV1 } from "../feedback-payload.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
@@ -99,9 +98,10 @@ import { useDictationField } from "./useDictationField.js";
 
 declare const __SPIDERYARN_BUILD_COMMIT__: string;
 
-/** Where the reader is, in the closed vocabulary the server and the table share. */
+/** Where the reader is: the address bar, and the article if there is one. */
 export interface FeedbackWhere {
-  routeKind: FeedbackRouteKind;
+  /** `location.href`. See FeedbackButton.tsx for why it is the whole thing. */
+  url: string;
   slug: string | null;
 }
 
@@ -143,7 +143,7 @@ function asPlainText(body: string, kind: FeedbackKind | null, where: FeedbackWhe
        problem or a suggestion. GPT Sol, 2026-09-02. */
     `Kind: ${kind === null ? "not specified" : KIND_LABEL[kind]}`,
     body,
-    `Page: ${where.routeKind}${where.slug ? ` / ${where.slug}` : ""}`,
+    `Page: ${where.url}${where.slug ? ` / ${where.slug}` : ""}`,
     `Build: ${buildCommit() ?? "unknown"}`,
   ].join("\n\n");
 }
@@ -178,7 +178,7 @@ function reportBody(input: {
     body: input.body.trim(),
     kind: input.kind,
     consented: input.consented,
-    routeKind: input.where.routeKind,
+    url: input.where.url,
     slug: input.where.slug,
     buildCommit: buildCommit(),
     diagnostics: input.diagnostics,

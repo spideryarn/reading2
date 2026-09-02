@@ -68,7 +68,6 @@ import type {
   FeedbackDiagnosticsPayload,
   FeedbackEnvironment,
   FeedbackKind,
-  FeedbackRouteKind,
 } from "../types.js";
 import { ADMIN_FEEDBACK_DEFAULT_LIMIT, ADMIN_FEEDBACK_MAX } from "../types.js";
 
@@ -91,7 +90,7 @@ const LIST_COLUMNS = {
   body: feedbackTable.body,
   kind: feedbackTable.kind,
   consented: feedbackTable.consented,
-  routeKind: feedbackTable.routeKind,
+  url: feedbackTable.url,
   slug: feedbackTable.slug,
   buildCommit: feedbackTable.buildCommit,
   environment: feedbackTable.environment,
@@ -112,7 +111,7 @@ interface ListRow {
   body: string;
   kind: string | null;
   consented: boolean;
-  routeKind: string;
+  url: string | null;
   slug: string | null;
   buildCommit: string | null;
   environment: string;
@@ -145,7 +144,7 @@ function toListed(row: ListRow): AdminFeedbackReport {
        FEEDBACK_KINDS. */
     kind: row.kind as FeedbackKind | null,
     consented: row.consented,
-    routeKind: row.routeKind as FeedbackRouteKind,
+    url: row.url,
     slug: row.slug,
     buildCommit: row.buildCommit,
     environment: row.environment as FeedbackEnvironment,

@@ -157,7 +157,7 @@ function report(over: Partial<NewFeedback> & { id: string }): NewFeedback {
        state and not a missing field. src/types.ts § FEEDBACK_KINDS. */
     kind: null,
     consented: false,
-    routeKind: "read",
+    url: "https://www.spideryarn.com/read/a-piece",
     slug: "some-article",
     buildCommit: "abc1234",
     environment: "development",
@@ -290,7 +290,7 @@ when("the admin feedback read on Postgres", () => {
         "ownerId",
         "reporterEmail",
         "requestVercelId",
-        "routeKind",
+        "url",
         "screenshotBytes",
         "sentryEventId",
         "slug",
