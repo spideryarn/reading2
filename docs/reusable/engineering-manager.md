@@ -114,5 +114,4 @@ you commit. See [silent-success.md](silent-success.md).
 
 ## At the end
 
-Debrief: [debrief-progress.md](debrief-progress.md). Update the plan doc, then say out loud how the
-job went, what surprised you, what is left, and whether the rest is worth doing. Plainly and briefly.
+Follow [debrief-progress.md](debrief-progress.md).
