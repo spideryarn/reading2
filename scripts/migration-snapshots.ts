@@ -260,7 +260,9 @@ export function readSnapshots(folder: string): Snapshot[] {
  *     against `0028` and re-emit DDL that had already run.
  *  6. **lexical order agrees with journal order** — they are two orderings of
  *     one sequence and drizzle uses both.
- *  7. **each snapshot links to the physically preceding one.**
+ *  7. **each snapshot links to the physically preceding one, and the first one
+ *     links to nothing** — the second half is what catches a whole-folder
+ *     cycle, where every link resolves and none of them resolves rightly.
  *  8. **the lexically last snapshot belongs to the last journal entry** — the
  *     rename trap. `preparePrevSnapshot` takes the lexically last file as the
  *     base for the next diff, so renaming an old snapshot to sort last silently
