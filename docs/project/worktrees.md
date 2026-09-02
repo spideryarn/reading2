@@ -399,14 +399,17 @@ rules and at least one rule is `true`, a deployment will occur"*
 for is safe. **`**`, not `*`** — minimatch's single star does not cross a slash, so `*: false` would
 miss a branch named `agent/foo`; checked against the repo's installed minimatch, not assumed.
 
-### The AGENTS.md wording this still needs
+### The AGENTS.md wording (approved and landed, 2026-09-02)
 
 Rule changes to AGENTS.md go one approved set at a time
-([edit-important-docs.md](../reusable/edit-important-docs.md)), so this is proposed rather than
-landed. The bullet under **Working in a tree several agents share** that says the primary *"is moving
-off `main` onto `dev`"* has now happened, and *"Pushing to `main` will still deploy"* is true but
-reads as permission. It wants replacing with: commit and push to `dev`; `main` is production and is
-written only by `npm run deploy`.
+([edit-important-docs.md](../reusable/edit-important-docs.md)); Greg approved both of these. The
+bullet under **Working in a tree several agents share** said the primary *"is moving off `main` onto
+`dev`"*, which had happened, and *"Pushing to `main` will still deploy"*, which was true but read as
+permission. It now says: commit and push to `dev`, a push there builds nothing, and `main` is
+production written only by `npm run deploy`.
+
+The second was the convention Greg asked for: **"Commit when the work is done… and push it."**
+Unpushed work is invisible to the other machine and to every check that asks whether it landed.
 
 **And that is the only one**, because the workflow merges rather than rebases. An earlier draft wanted
 a second change carving out a rebase exception for worktrees; choosing merge deletes it, and leaves the
@@ -418,8 +421,8 @@ afterthought, and is done: its `Branch` row said "`main`, and only `main`", whic
 agent following it to push to production or to mistake which branch is authoritative. A stale source
 of truth is worse than none.
 
-And the convention Greg asked for, which belongs in AGENTS.md and
-[engineering-manager.md](../reusable/engineering-manager.md): **push at the end of a piece of work.**
+The push convention also belongs in
+[engineering-manager.md](../reusable/engineering-manager.md), which does not have it yet.
 Rebel has the postmortem that argues for it — a fix that had been implemented, reviewed at 96/100 and
 committed sat on an unmerged branch with no remote ref for 31 hours while the bug it fixed stayed
 live. It is what makes a sweep's "merged" guard mean anything, and it is the only way work reaches the
