@@ -627,3 +627,18 @@ stage 3 needs, and it is a redesign of the child tables, not of public reading.
   reference sweep names every top-level directory it looked in, and that `scripts/` is the one most
   often forgotten. Not edited here: that file's wording is a rule and goes through
   [edit-important-docs.md](../reusable/edit-important-docs.md).
+- 2026-09-02 — **the full-suite run Sol asked for, on a box at load average 43.** 36 failed of 9,227
+  across 15 files, and **none of them is in this work**: every one of the fifteen suites this plan
+  touched is green in one run together, 256 tests. What is red belongs to other people or to the
+  machine, and it is worth saying which is which rather than waving at "contention":
+
+  | Red | Whose |
+  |---|---|
+  | `doc-links` ×2 | `AGENTS.md` claims `docs/project/website-text.md`, which does not exist. Added in `fcb8b9a`, unrelated work landed on `dev` today. |
+  | `fixture-ids` | Two uuids claimed by two test files each — `cost-eval` against `store-export-isolation` and `store-artefacts-pg`. Somebody else's collision, and the test's own message says why it matters. |
+  | `db-schema`, `db-schema-drift` ×4, `feedback-store` ×13, `health` ×4, `auth-user-seeding`, `store-parity-referee` | Database state. A jobs-queue migration sits unreconciled in the shared local ledger — a peer flagged it to this session — and billing and realtime tables landed today. |
+  | `owner-isolation`, `hierarchy-write-guard`, `validate-tree-rows`, `pdf-*`, `block-policy-prompts` | Parallelism and timing. `owner-isolation` **passes in isolation**, which is the tell. |
+
+  The `pdf-*` and `block-policy-prompts` group is the same shape as the cascade found in stage 1b:
+  a five-second default against work that legitimately waits. Nobody has budgeted those the way the
+  three mode sweeps now are, and somebody should.
