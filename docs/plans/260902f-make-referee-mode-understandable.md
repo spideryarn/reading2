@@ -1,10 +1,33 @@
 # Make Referee mode understandable
 
-**Status: planning, revised after GPT Sol's first review, 2026-09-02.** Worktree
-`referee-mode-clarity`, branch `worktree-referee-mode-clarity`, dev server on 5274 against Postgres.
-Review: [260902e-…-review-sol.md](260902f-make-referee-mode-understandable-review-sol.md), which
-returned **do not build as written** on the first draft. Eight of its nine findings changed this
-plan; § *Where this plan still disagrees with the review* is the one that did not.
+**Status: built and on `dev`, all six stages, 2026-09-02.** Worktree `referee-mode-clarity`.
+
+**Four cross-family reviews, and every one of them changed the work.** The plan came back **do not
+build as written**; eight of its nine findings reshaped it before anything was built, and § *Where
+this plan still disagrees with the review* is the one that did not.
+[Stage 1's code](260902f-make-referee-mode-understandable-stage1-review-sol.md) came back with twelve
+findings including a real regression — a valence sign silently erasing a reader's own comment marker.
+[Stages 2 and 3](260902f-make-referee-mode-understandable-stage23-review-sol.md) came back with a
+false disclosure on a button that spends money, two tooltips that lied under `?refscale=br`, and five
+tests that would have passed over a deletion.
+[Stage 5](260902f-make-referee-mode-understandable-stage5-review-sol.md) found the test for the
+message split calling the parser directly and never touching the four callers it was meant to
+protect. Stages 4 and 6 are the responses to the last two.
+
+**Two things were measured in a browser rather than asserted**, and both changed a decision: the
+prose and panel colours agree to the RGB triple on a real article, and the explainer card was
+409.5px against a 287.7px empty-state panel — failing the test its own docstring sets, which is why
+it was cut to 203.1px.
+
+**What was verified by mutation, not by a green tick**: every reversed or new test in this plan was
+run against the defect it claims to catch. Where one could not be — a `::after` in jsdom, a hover on
+a disabled button — the test says so instead of implying a measurement it did not make.
+
+Two things this plan turned up that were not about Referee mode at all: a dev server that could never
+see its own edits inside a worktree
+([postmortem](../postmortems/260902a-a-dev-server-that-ignored-its-own-source.md)), and a
+confidentiality-adjacent cost — Candidates reaching a search engine on a tab press — that nobody had
+named.
 
 Greg, 2026-09-02:
 
@@ -413,7 +436,230 @@ stylesheet rule, and says so rather than claiming a measurement it did not make.
 A Playwright pass on a real paper through all four sub-modes, fixing what it finds; the remaining doc
 updates ([tooltips.md](../project/tooltips.md)); final cross-family review.
 
+### Stage 5 — the cross-family review of stages 2 and 3, acted on
+
+[260902f-…-stage23-review-sol.md](260902f-make-referee-mode-understandable-stage23-review-sol.md) —
+*ship with changes*, and it would not ship until findings 1–4 were fixed. All seven are done. Where
+this departs from what the review asked, it says so and why.
+
+**1. Candidates' cost wording was false in both directions**, and this took the honest-labelling
+route rather than suppressing tools. The button said *"Find reviewers — one model call and a web
+search"*. It does not find reviewers: `CANDIDATES_OPENING` asks for the fit brief and ends *"No names
+yet"*. And the count was wrong twice — web search is offered on every round and the model decides, so
+it may run **zero** times, while each tool round is a fresh provider request, up to
+`MAX_TOOL_ROUNDS + 1` ([`converse.ts`](../../src/converse.ts)). It now says **"Build the reviewer
+brief"**, with a visible note that pressing it starts an AI turn and **may** run a web search that
+would send terms drawn from the paper to a search engine. The third-party warning is unchanged in
+strength.
+
+*Why not suppress search and multi-round tools for the opening turn*, which would have made the
+one-call claim true: it means a per-turn tool policy threaded from this button through `useChat`, the
+chat route and into `converse` — a **client** deciding what the **server** may call, in the one place
+where "what did this cost" has to stay answerable from the server alone. The words were what was
+wrong. The stale *"the one automatic turn"* docstring on `CandidatesBand` went with them.
+
+**2. The card — kept, and cut, which is not what the review asked.** Sol wanted the card, its header
+button and its storage machinery deleted. Greg asked for a dismissible *"how Referee mode works"*
+card by name, so it stays; a reviewer does not overturn a product decision. But the substance of the
+finding was right and a browser pass measured it. The four sub-mode lines are gone — they repeated
+the four chip `ControlTip`s that stage 2 had added directly above the card, which is an artefact of
+the order the two stages landed in rather than a writing mistake. What stayed is the two things
+nothing else on screen says: the refusal, and what the colours mean (scale-neutral, as stage 3 left
+it). Measured in Chrome at 1280×900 on an article with no criteria, reading
+`getBoundingClientRect().height` out of the live DOM:
+
+| | height |
+|---|---|
+| the card, before | **409.5px** |
+| the card, after | **203.1px** |
+| the empty-state Criteria composer under it | 269.9px |
+| the whole empty Criteria panel (`.crit`) | 277.9px |
+
+`RefereeCard.tsx`'s own docstring says a card longer than the panel underneath it has failed; it was
+failing by 140px and now clears the bar by 67. The numbers are in that docstring, with what they were
+measured against. `.ref-how-list` went from the stylesheet with the lines it styled.
+
+**3. Two Criteria cards still named red-to-green** — `KIND_HOW.diverging` and the colour swatch's
+card — which `?refscale=br` makes exactly wrong. Both are scale-neutral now, in `TheKey`'s spirit: they
+say the shape of the rule and leave the two colours to the key, which is drawn from whichever scale is
+on. Derived-from-the-scale wording was the other option and was not taken: the key is already the
+place that cannot drift, and a second copy of the mapping is a second thing to keep in step.
+
+**4. `ANSWER_OVERFLOWED` split, and the first attempt at the split was wrong.** Sol is right that
+conditioning the clause on *"where you asked a question of your own"* still misses, because a
+criterion **is** the referee's own question and an errored one offers *Try again* and nothing else.
+The first version of this fix gave both halves the same `[ai-overflowed]` code, on the reasoning that
+it is one failure — and `tests/messages.test.ts` refused it, because **two sentences under one code
+makes the code useless for the one job it has**. That rule is right and `MARK_CUT_OFF` is the
+precedent: same diagnosis, a caller who cannot take the advice, its own code. So:
+
+- `ANSWER_OVERFLOWED` keeps `[ai-overflowed]` and the narrowing advice, and goes to **Search** — the
+  one caller whose reader typed the ask. It keeps the code because that is the one already quoted.
+- `ANSWER_OVERFLOWED_FIXED_ASK`, `[ai-overflowed-no-ask]`, is the retry and nothing else, and is what
+  the mode's three callers get.
+
+`parseHits` takes an `AskKind` and **defaults to the one that promises least**, so a sub-mode added
+later cannot inherit advice about a control it does not have. The test that greped for `where you`
+and blessed the mismatch is gone; what replaces it checks the split and the two codes.
+
+**5. Five cards that restated their own label.** Criteria's *Try again* (its first line was the
+`aria-label` again; it now says what the failure did to the run) and Claims' tick (its first line
+paraphrased the label; it now says what the passages **are** — the model's pick, not a verified
+linkage) were rewritten. Three were **removed**:
+
+- **The rank numeral's**, as the review asked: hover-only, unreachable by keyboard, and stage 3 had
+  already added the visible line that says the same thing to everybody.
+- **Both Mirror evidence badges**, which is a removal rather than a rewrite and is the one place
+  this went further than it had to. Everything non-duplicative in that card is thin: the first
+  paragraph restated the badge, the second *was* `EVIDENCE_NOTE`, and that note is printed in full,
+  visibly, under the same list. `MirrorPanel.tsx`'s own header says the distinction may not be a
+  tooltip. **One fact was lost with it** — that an untested kind is here because it is cheap to check
+  and easy to dismiss — and it was not moved into the visible footnote, because lengthening visible
+  copy is the opposite of what this stage is for. Easy to put back if Greg wants it.
+
+**6. Docs**: [referee-mode.md](../project/referee-mode.md) — the control table, the label list (now
+four), the two deleted cards, the message split, the card's two paragraphs and its measurement — and
+two paragraphs in [tooltips.md](../project/tooltips.md), because the rule the four cards broke is
+that file's. **[url-state.md](../project/url-state.md) is deliberately untouched**: it is rule-bearing,
+it is owed two edits already, and those go to Greg together.
+
+**7. The tests that left real regressions green.** Every one named is fixed, and every fix was run
+against the mutation it is supposed to catch:
+
+| Mutation | Now caught by |
+|---|---|
+| delete Claims' tick card | `referee-tooltips` — Claims was never imported before |
+| point Candidates' card at the wrong control | `referee-tooltips` — nor was Candidates |
+| gut `PlaceOnCriterion`'s "switching clears it" card | `referee-tooltips` — nor was that |
+| put Mirror's badge card back | `referee-tooltips` |
+| make a card's second paragraph the first one again | `referee-tooltips` — the old check was `body.length > 80` |
+| restore the conditional narrowing clause | `referee-tooltips` |
+| collapse the split so Search shares the referee's message | `referee-tooltips` |
+| put the false cost words back on the Candidates button | `referee-candidates-press`, `referee-tooltips` |
+| put the rank numeral's card back | `referee-criteria-explained` |
+| hide the rank line with `.sr-only` rather than deleting it | `referee-criteria-explained` — it read `textContent` |
+| delete `.crit-run[aria-disabled="true"]` from the stylesheet | `referee-criteria-explained` |
+
+Two of the review's specifics in finding 7 are **not** as stated, and it is worth writing down
+which:
+
+- **The stylesheet comment does not contain the selector.** Sol says the Criteria stylesheet test
+  passes with the real rule deleted because `.crit-run[aria-disabled="true"]` also appears in the
+  comment at `styles.css:6643`. It does not — that comment names `aria-disabled` and `:disabled` in
+  prose, and deleting the rule reddens the test today, which is what the mutation above shows. The
+  underlying point stands anyway: a `toContain` over a file that holds both rules and arguments about
+  rules cannot tell them apart, so the test now strips comments before it looks. A test that is right
+  by luck about the wording of a comment is not right.
+- **The `body.length > 80` replacement catches copying, not paraphrase.** *"Draws this claim's
+  passages in the article"* under a label reading *Mark these passages in the paper* shares one
+  content word in three and would pass. Nothing mechanical reads for meaning, and the test says so
+  rather than implying otherwise. What actually closes the hole is coverage: the three panels the
+  file never imported.
+
+`referee-candidates-press.test.tsx` now claims only what it measures. It counts requests at **this
+app's own HTTP boundary** — one client POST per press — and says out loud that this is not the same
+fact as one model call, and that how many provider requests a turn makes, and whether a web search
+runs, is decided inside `converse.ts` and is invisible from there.
+
+**Suite after: 4 files / 4 tests red** — `doc-links`, `pdf-bundle-trace`, `store-artefact-manifest`,
+`store-roundtrip` — the same baseline stages 2 and 3 ended on. Nothing that was green went red. A
+handful of Postgres-backed files flake run-to-run on this shared box and were re-run in isolation to
+confirm they are not this work.
+
+**Browser evidence**: a dev server started on **5276** *after* the edits
+(docs/postmortems/260902a-a-dev-server-that-ignored-its-own-source.md), Playwright against system
+Chrome, signed in by hand — `scripts/browser-sign-in.ts` refuses on this box right now, because
+another agent's in-flight work has renamed the seeded admin to `dev-admin@spideryarn.local` while
+this worktree's `ADMIN_EMAIL` still says `greg@gregdetre.com`. Checked live: the card's two
+paragraphs and both heights, the Candidates button and note, and that hovering the rank numeral opens
+nothing. The `404 POST /api/jobs/…/advance` noise is the one already recorded above and is not this.
+
+### Stage 6 — the review of stage 5, acted on
+
+[260902f-…-stage5-review-sol.md](260902f-make-referee-mode-understandable-stage5-review-sol.md) —
+*ship with changes*, three findings, all closed. Its six adjudications are recorded there and needed
+no work; the two that were **refusals** rather than approvals are worth repeating, because they are
+the shape of what stage 6 is not: no generic paraphrase detector, and *"cheap to check and easy to
+dismiss"* stays out of Mirror's footnote.
+
+**1. Nothing proved that each overflow message reached the caller it was written for.** Stage 5 split
+the message and then tested the split by calling `parseHits` directly with each `AskKind`, which
+proves the parser branches and nothing else. Measured, not argued: removing `"editable"` from
+[`src/search.ts`](../../src/search.ts)'s one call site left the whole suite green, and so did adding
+it to any of the three Referee callers.
+
+[`tests/overflow-message-reaches-its-caller.test.ts`](../../tests/overflow-message-reaches-its-caller.test.ts)
+now drives the **four public entry points** over stubbed SSE — an object that opens and never closes,
+`finish_reason: "length"`, a clean `[DONE]`, which is what the token ceiling looks like from here —
+and asserts the exact sentence and the exact code each ends with. One new file rather than four cases
+in four run files, because the property is the *contrast* between the callers and it is only legible
+with them side by side; the SSE helper is duplicated the way every other streaming test in this repo
+duplicates it. The parser-level cases moved there from
+[`referee-tooltips.test.tsx`](../../tests/referee-tooltips.test.tsx) unchanged — that file is about
+tooltips. And the truncated-stream case in
+[`search-stream.test.ts`](../../tests/search-stream.test.ts), which asserted `toBeDefined()` over a
+module where every failure is defined, now asserts `ANSWER_OVERFLOWED.message`.
+
+| Mutation | Caught by |
+|---|---|
+| drop `"editable"` at `search.ts:906` | the Search case, and `search-stream`'s truncated case |
+| add `"editable"` to `runCriterionStream`'s `parseHits` | the criterion case |
+| add `"editable"` to `runClaimsStream`'s `parseHits` | the claims case |
+| add `"editable"` to `mirrorStream`'s `parseHits` | the Mirror case |
+| strip *"terms drawn from the paper … to a search engine"* from Candidates' visible note | the new disclosure case in `referee-candidates-press` — and **not** by the case beside it, which is the review's point |
+
+The Candidates disclosure had the same weakness in miniature: the existing case required *"model"*,
+*"search"* and *"may run"*, all three of which survive a note that has stopped saying **where the
+search terms come from and who receives them**. That sentence is the disclosure — the search engine
+is a *different* third party from the model, reached at a *different* time — so it is now asserted in
+`.cnd-start-note` itself, deliberately not in the `ControlTip` that says the same thing, because a
+card is not read by anybody in a hurry.
+
+**2. Mirror's jump card said its heading again** — *"Scrolls the paper to the passage this remark is
+about"* under *Go to this passage*. Its first paragraph is now the provenance fact the label cannot
+carry: **the passage is where the referee anchored their own comment**, and Mirror chose the remark,
+never the passage. The second paragraph is unchanged.
+
+**Whether the generic check should cover short headings: no, and it was measured rather than
+reasoned.** `restates` in `referee-tooltips.test.tsx` ignores any label under three content words,
+and *Go to this passage* reduces to one — `go`, `to` and `this` are all stopwords.
+
+| floor | the old Mirror card | honest copy under *Try again* / *For / against* |
+|---|---|---|
+| 3 (today) | passes | passes |
+| 2 | **still** passes — the head is one content word, not two | *Try again* now fails |
+| 1 | caught | both fail, **and so does the honest rewrite** that replaced it |
+
+So no floor both catches this and keeps the honest cards: at two it is not caught at all, and at one
+the check fires on any card that uses the noun its control is named after. The floor stays, the table
+is in the test file beside it, and the card gets an explicit assertion — which is exactly the
+adjudication ("keep the present copying heuristic as a floor and add explicit assertions for
+important cards"). The assertion pins the two halves of the provenance *and* refuses the sentence it
+replaced by name, since a rewrite that says the provenance and then adds the heading back would
+otherwise pass.
+
+**3. Two docs contradicted the button.** [referee-mode.md](../project/referee-mode.md) said the fit
+brief "arrives unprompted" and `CANDIDATES_OPENING`'s docstring in
+[`src/referee-candidates.ts`](../../src/referee-candidates.ts) called it automatic; both now say the
+press creates the thread and sends the opening ask, and both keep the old behaviour in the past tense
+with the reason the button exists. **A sweep found no third**: every other mention — `CandidatesPanel`,
+`referee-candidates-press`, this plan and its reviews, the original 260831an plan — is either already
+past-tense or is about the brief's *content* rather than its trigger.
+
+Two doc edits that were not asked for and are the same work: the control table in
+[referee-mode.md](../project/referee-mode.md) gained the jump card's row, and § the message split now
+says the split is proved at the four entry points rather than at the parser.
+
+**Suite after**: the referee, search and message files all green (32 referee files, 529 tests). The
+four stable baseline failures are unchanged — `doc-links`, `pdf-bundle-trace`,
+`store-artefact-manifest`, `store-roundtrip` — and `doc-links`'s 48 broken links are every one of them
+from another agent's `260902g-…` plan doc, none from anything touched here.
+
 ## The card's words
+
+**Superseded twice; kept as the record of what was proposed.** Stage 3 dropped the red-and-green
+naming (`?refscale=br` makes it false), and stage 5 cut the four sub-mode lines entirely. The words
+that are actually on screen are in [`RefereeCard.tsx`](../../src/web/RefereeCard.tsx).
 
 Corrected per Sol's finding 8 — the first draft said marks appear when a criterion runs (they do not;
 `?crits=` starts empty and the tick is what paints), and said "every row is a door into the prose"

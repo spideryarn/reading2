@@ -221,3 +221,49 @@ describe("Supabase keys that are not the local stack's", () => {
     expect(got.problems.join(" ")).toContain("SUPABASE_SERVICE_ROLE_KEY");
   });
 });
+
+/**
+ * Stripe keys carry their mode in the prefix — `sk_test_…` vs `sk_live_…` — so
+ * the same shape-over-name rule as the Supabase check applies: the box may hold
+ * the test key (Greg's call, 2026-09-02, for the payments work in
+ * docs/plans/260902i-stripe-payments-and-subscription-tiers.md), and a
+ * live-mode secret must never travel to a machine shared by autonomous agents,
+ * whatever variable name it is sitting under.
+ */
+describe("Stripe keys", () => {
+  const base = [
+    "DATABASE_URL=postgres://postgres:pw@127.0.0.1:54362/postgres",
+    "SUPABASE_URL=http://127.0.0.1:54361",
+    "VITE_SUPABASE_URL=http://127.0.0.1:54361",
+  ];
+
+  it("pushes the test-mode secret key", () => {
+    const env = [...base, "STRIPE_SECRET_KEY=sk_test_fixture123"].join("\n");
+    const got = buildEnvPayload(env);
+    expect(got.problems).toEqual([]);
+    expect(got.pushed.get("STRIPE_SECRET_KEY")).toBe("sk_test_fixture123");
+  });
+
+  it.each(["sk_live_fixture123", "rk_live_fixture123"])(
+    "refuses a live-mode secret (%s) even on the allowlisted name",
+    (value) => {
+      const env = [...base, `STRIPE_SECRET_KEY=${value}`].join("\n");
+      const got = buildEnvPayload(env);
+      expect(got.problems.join(" ")).toContain("STRIPE_SECRET_KEY");
+      // The refusal names the key, never the value.
+      expect(got.problems.join(" ")).not.toContain("fixture123");
+    },
+  );
+
+  it("catches a live-mode secret hiding under a name the rule never anticipated", () => {
+    // Shape over name, like the Supabase-JWT check: an allowlisted key added
+    // later under any name is covered the day it is added.
+    const env = [...base, "OPENROUTER_API_KEY=sk_live_fixture123"].join("\n");
+    expect(buildEnvPayload(env).problems.join(" ")).toContain("OPENROUTER_API_KEY");
+  });
+
+  it("leaves ordinary non-Stripe values alone", () => {
+    const env = [...base, "OPENROUTER_API_KEY=sk-or-v1-not-stripe"].join("\n");
+    expect(buildEnvPayload(env).problems).toEqual([]);
+  });
+});

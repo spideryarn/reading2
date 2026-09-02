@@ -13,9 +13,9 @@ Greg's framing was structural:
 > imagine a book, you could think of the book as being divided into chapters, which are divided into
 > sections, which are divided into, I don't know, pages or paragraphs
 
-But most web essays aren't books. The test article ([Noema, Anil Seth](../../output/noema-mythology-of-conscious-ai.html))
-is ~54 minutes of largely bare `<p>` with few subheads, so "chapters → sections" mostly has to be
-*invented* rather than read off the document.
+But most web essays aren't books. The test article (Noema, Anil Seth —
+`output/noema-mythology-of-conscious-ai.html`) is ~54 minutes of largely bare `<p>` with few
+subheads, so "chapters → sections" mostly has to be *invented* rather than read off the document.
 
 | Option | For | Against |
 |---|---|---|

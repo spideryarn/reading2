@@ -187,9 +187,12 @@ actually reaches is not always the one on its command line, and both mistakes pr
 
 ### Working in a tree several agents share
 
-- **Check which machine you are on.** A working directory under `/home/greg/` means you are probably
-  on the Hetzner remote box — [hetzner-remote-server-box.md](docs/project/hetzner-remote-server-box.md); `/Users/greg/` means
-  you are on Greg's Mac.
+- **Check which machine you are on.** `/home/greg/` is probably the Hetzner box, `/Users/greg/` is
+  Greg's Mac. A change to either that should still be true next week — a package, a key in
+  `.env.local`, a config — is also a change to the file that builds the next box, so ask Greg whether
+  to make it so now, going forwards, or both —
+  [hetzner-remote-server-box.md § A change to the box is a change to a file](docs/project/hetzner-remote-server-box.md#a-change-to-the-box-is-a-change-to-a-file).
+  On the Mac, more caution: a different OS, and not disposable — spike it first where that is safe.
 - **Use a worktree for anything non-trivial.** `claude --worktree <name>`, then
   `npm run worktree:setup` inside it, and land the work with `git push origin HEAD:dev` —
   [worktrees.md](docs/project/worktrees.md). It is your own checkout, so nobody else's edits are in
@@ -197,7 +200,9 @@ actually reaches is not always the one on its command line, and both mistakes pr
   stay in the shared tree. Run the job itself the way
   [engineering-manager.md](docs/reusable/engineering-manager.md) says — a plan doc, a few stages,
   the work delegated, and a GPT Sol review at the end of every stage. Commit each stage, and push to
-  `dev` when you finish.
+  `dev` when you finish. **Before deleting a worktree, run `npm run worktree:check` inside it** —
+  `data/` and `.env.local` are gitignored, so a clean `git status` says "safe" over the top of work
+  nothing else has a copy of.
 - **Other agents will get in your way; be tolerant.** Most of us work out of this one checkout,
   against one local Supabase and one dev server. Files change under you, tests go red for reasons
   that are not yours, the database is not how you left it. Absorb it, do your best, and carry on —

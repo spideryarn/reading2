@@ -25,6 +25,7 @@ import { and, asc, eq, gte, lt } from "drizzle-orm";
 import type { AiCallRow } from "../ai-spend.js";
 import { getDb } from "../db/client.js";
 import { aiCalls, articles } from "../db/schema.js";
+import { withoutPassword } from "../db/ssl.js";
 import type { OwnerId } from "../owner.js";
 import type { CostStore, LedgerRead } from "./contracts.js";
 import { ownedSlug } from "./owned-slug.js";
@@ -89,7 +90,7 @@ function toRow(r: Row): AiCallRow {
     durationMs: r.durationMs,
     outcome: r.outcome as AiCallRow["outcome"],
     creditsUsedNanos: r.creditsUsedNanos,
-    upstreamInferenceNanos: r.upstreamInferenceNanos,
+    byokUpstreamNanos: r.byokUpstreamNanos,
     isByok: r.isByok,
     providerAccount: r.providerAccount as AiCallRow["providerAccount"],
     costSource: r.costSource as AiCallRow["costSource"],
@@ -109,7 +110,29 @@ function toRow(r: Row): AiCallRow {
 }
 
 export const pgCostStore: CostStore = {
-  describe: () => "postgres: spideryarn.ai_calls",
+  /**
+   * **The table AND the database**, because "postgres" is not an answer.
+   *
+   * `npm run cost` prints this line, and until 2026-09-02 it said only
+   * `postgres: spideryarn.ai_calls` — which is true of the laptop, of the
+   * always-on box and of production alike. Local and remote Postgres are
+   * different ledgers with different money in them, and this repo already has
+   * a whole doc section about a command reaching a database other than the one
+   * on its command line and printing success either way
+   * (docs/project/database.md § `DATABASE_URL=… npm run db:migrate` does not do
+   * what it looks like). The `Target:` line every `db-*` script prints is the
+   * answer to the same question; this is that answer, for the report.
+   *
+   * `withoutPassword` rather than the raw string, and it fails closed: an
+   * unparsable URL prints a placeholder rather than itself, because a redactor
+   * that falls back to showing the original is not a redactor.
+   */
+  describe: () => {
+    const url = process.env.DATABASE_URL;
+    if (!url) return "postgres: spideryarn.ai_calls — but DATABASE_URL is not set";
+    const where = withoutPassword(url) ?? "(a DATABASE_URL that is not a parsable URL)";
+    return `postgres: spideryarn.ai_calls at ${where}`;
+  },
 
   async record(row: AiCallRow): Promise<void> {
     const articleId = row.articleSlug
@@ -138,7 +161,7 @@ export const pgCostStore: CostStore = {
         durationMs: row.durationMs,
         outcome: row.outcome,
         creditsUsedNanos: row.creditsUsedNanos,
-        upstreamInferenceNanos: row.upstreamInferenceNanos,
+        byokUpstreamNanos: row.byokUpstreamNanos,
         isByok: row.isByok,
         providerAccount: row.providerAccount,
         costSource: row.costSource,

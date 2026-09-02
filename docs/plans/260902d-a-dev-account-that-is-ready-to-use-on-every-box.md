@@ -322,3 +322,182 @@ configuration — it refuses a missing credential and a database/bucket project 
 no Storage call, so on an all-skip run a present-but-invalid key passes. Adding a `loadSource` probe
 would be the fix if "ready" has to include opening the original document. It does not today, and the
 narrower claim is now what the comment says.
+
+## The follow-on: the account needed a name of its own
+
+Greg, reading the finished work, 2026-09-02:
+
+> I think I worry about confusion, because greg@gregdetre.com is my real user on production with
+> Google login. So I'd like the dev-dummy user to be called something distinct and different, and
+> that highlights it's a dummy.
+
+He is right, and the confusion was worse than cosmetic. Two accounts held one address: one on
+production, reached by a Google sign-in, holding real readers' neighbours in the same table; one on
+a laptop or the box, holding a generated password precisely so that no human is involved. A Studio
+user list, an `/admin/users` screenshot or a line of script output could not be read for which of
+the two it came from — and **doing something to production while believing you are local is the
+worst single mistake available in this repo.**
+
+### The rename is free, because the gate never read the address
+
+`/api/admin/*` compares uuids, `SPIDERYARN_OWNER_ID` is a uuid, and `tests/helpers/authed.ts` signs
+with a uuid — [`src/admin.ts`](../../src/admin.ts) argues that at length and none of it changes. The
+email is a label on a row, so this alters what a person sees and nothing that code decides. Proven
+rather than assumed: after the rename, `browser-sign-in --at /admin/users` still gets
+`200 /api/admin/users`.
+
+`ADMIN_EMAIL` stays `greg@gregdetre.com` and is now documented as production's alone — it is what
+`describeAdminMiss` compares and what the Feedback dialog builds a `mailto:` from. The new
+`ADMIN_EMAIL_LOCAL` sits beside it, mirroring the `ADMIN_USER_ID_LOCAL` / `ADMIN_USER_ID_PROD` pair
+that is already there for exactly the same reason.
+
+### The name
+
+`dev-admin@spideryarn.local`. Fable arbitrated between four candidates and made the argument that
+settled it: **"dummy" would be actively misleading.** This is the one account a human *does* sign in
+as and type into a form; the row that is truly a dummy is `dev@spideryarn.local`, the owner nobody
+signs in as. `dev-` is the accurate scope and `admin` the accurate role, the two read as a matched
+pair, and `.local` is a reserved undeliverable TLD (RFC 6762) so nothing can send to it by accident.
+Fable also advised *against* renaming `dev@spideryarn.local` for symmetry — churn through
+`src/owner.ts` and the docs for no confusion actually prevented. Taken.
+
+### Every existing machine catches up on its own
+
+This is the part that needed real design. Every laptop and box seeded since 31 August holds the old
+address at `ADMIN_USER_ID_LOCAL`, and `ensureAccount` refused an id holding an address it did not
+expect — so a straight constant change would have stopped `npm run setup` at step 3 on every machine
+that already worked, with a refusal only Greg could clear. That is the opposite of the brief.
+
+So `db:seed-owner` **renames the row rather than refusing**, and says so on the line it prints. The
+decision is a pure `planAccountEmail` in [`scripts/seed-accounts.ts`](../../scripts/seed-accounts.ts)
+— `create` / `keep` / `rename` / `refuse` — tested with no GoTrue running.
+
+Writing an address onto an account you did not create is, in general, account takeover, so the
+fence is four-part and every part has to hold:
+
+- **It cannot reach production.** `refuseNonLocalSeed` checks the parsed hostname (not a substring —
+  see the userinfo case it already defends against) and `refuseMismatchedStack` asks the Supabase CLI
+  which containers these actually are.
+- **One id.** Only `ADMIN_USER_ID_LOCAL` has a non-empty `renamableFrom`; the owner row's is `[]` and
+  a test pins that it can never be renamed.
+- **One old address**, a literal in git, not a pattern.
+- **It destroys nothing.** *Measured*, on GoTrue v2.195.0, 2026-09-02, on a throwaway account, before
+  the design was chosen: an admin email change leaves the password alone, leaves an open refresh
+  token valid, and the new address signs in immediately. Worth measuring because its neighbour is
+  the opposite — the password write revokes every session, which is why that one is done only when
+  it must be.
+
+The rename runs **before** the password block, not after, because everything below it signs in *at
+the new address*: left until later it would falsify its own precondition and the run would report a
+wrong password on an account whose password is fine.
+
+### `TEST_EMAIL` was the one identity still written longhand
+
+`tests/helpers/authed.ts` carries a comment about exactly this failure — three test files once spelled
+Greg's `sub` out by hand, so a changed dev identity would have left them all quietly describing
+somebody who is not there. `TEST_SUB` was fixed then; `TEST_EMAIL` was not, and was still the literal
+`"greg@gregdetre.com"`. It now imports the constant.
+
+That mattered more than it looks: `tests/feedback-route.test.ts` asserts a submitted bug report
+carries `TEST_EMAIL` as its `reporterEmail`, so the suite was manufacturing feedback from Greg's real
+address and checking it came out intact.
+
+It also turned up **a check that was about to stop being able to fail**. `tests/auth.test.ts` proves
+no thrown message leaks an email, and its needle was the literal `"gregdetre"` — once the fixture
+stopped using that address the assertion would have passed for ever, over any leak at all. It now
+searches for the address the fixture actually uses. `tests/admin.test.ts` had the mirror problem in
+the other direction: `expect(ADMIN_EMAIL).toBe(TEST_EMAIL)` was what pinned the suite to Greg's real
+address, and it now asserts the opposite property on purpose.
+
+### Evidence
+
+Red before green, on the new rules: backing out `renamableFrom` and the new address failed exactly
+the four new tests (`4 failed | 30 passed`), and restoring them passed all 34. Then the live path, on
+this box, which was in the pre-rename state:
+
+```
+✓ renamed greg@gregdetre.com to dev-admin@spideryarn.local (f4d08b58-…) — same account, same password
+✓ already present, password already correct: dev-admin@spideryarn.local (f4d08b58-…)
+✓ signed in as dev-admin@spideryarn.local, token sub is f4d08b58-…
+```
+
+A second run prints no rename line — idempotent. `browser-sign-in --at /read/writes` opens the
+article, `--at /admin/users` gets `200 /api/admin/users`, and `db:seed-dev` reports
+`3 of 3 seeded articles open cleanly`.
+
+### What Greg has to do on the laptop for this part
+
+Nothing, beyond the `git pull` and the `SPIDERYARN_STORE=postgres` line already listed above. The
+next `npm run setup` — or `npm run db:seed-owner` on its own — renames the row and prints what it
+did. The password does not change and open browser sessions are not signed out.
+
+### What the rename review changed
+
+[The review](260902d-rename-review-sol.md). No finding was wrong, and two of them were about the
+rename claiming more than it did.
+
+- **Medium: `db:admin-password` printed an address the database did not have yet.** Pull the commit,
+  run it before the seed, and it prints `dev-admin@spideryarn.local` on a machine still holding the
+  old address — exits 0, sign-in refused. The repo's own success-over-stale-state shape. **Not fixed
+  by reading the database**, because that file's header argues at length that touching it would be
+  wrong: the command has to work with Docker off, which is when somebody is most likely hunting for
+  it. Sol's stronger suggestion — a version marker in the password file — is a permanent format
+  change bought for a window that closes the first time anybody runs the seed. So it prints what to
+  do when the credential is refused, which is also the right advice on a never-seeded machine.
+- **Medium: the fence establishes location, not provenance.** The comment claimed "no row we did not
+  seed is reachable", which is false: the laptop's row was made by a Google sign-in before any of
+  this existed, and `planAccountEmail` sees only an id and an address. Sol proposed proving ownership
+  by signing in with the old credentials first — which fails on exactly the legitimate case, since
+  that Google row had no password. So the claim is corrected instead, and the assumption written
+  down: *a local stack is a single-purpose fixture whose fixed ids belong to this repo*, and a
+  restored dump or a genuinely shared stack breaks it.
+- **Medium: the rename does not reach a `google` identity.** GoTrue keeps a row per sign-in method
+  and the admin `PUT` updates only the `email` one. A machine whose local account began as a Google
+  sign-in therefore ends up renamed on the surface and still holding Greg's real address underneath,
+  in Studio and on the profile page — which is a real part of the confusion he asked to end. This
+  box is not in that state (checked: one `email` identity, `provider: "email"`), but the laptop may
+  be. `db:seed-owner` now **re-reads the account from the `PUT` response and says which provider
+  still holds the old address**, and deliberately deletes nothing: removing an identity signs that
+  method out for good and is Greg's call. `staleIdentities` is the pure part, with four tests.
+- **Low, and accepted rather than fixed: an unrelated concurrent writer could race the rename.** The
+  code reads, then writes unconditionally. Cooperative peer seed runs are fine — a concurrent
+  creation of the target address makes GoTrue reject the rename, and the final sign-in prevents a
+  false success — and closing it properly needs locking or a conditional update. Written down here
+  rather than papered over.
+
+Four overclaims, all corrected: `.local` is reserved for mDNS but is **not** undeliverable (this
+stack runs Mailpit, which would accept a message for it); "nothing in code read the address" is too
+broad, since sign-in, display and feedback attribution all do — the true claim is that
+*authorization and ownership* do not; `ADMIN_EMAIL` is not literally production-only, because the
+migration names it as the address to move *off*; and a test called "never onto a live one" checked
+no such thing, so it is now called what it does.
+
+Sol confirmed the sweep: no other tracked executable reader of the old address, nothing in
+`.env.local`, and no remaining test that depends on it being Greg's specifically.
+
+### The check that would have cried wolf every time
+
+The stale-identity warning above was written to read `identities` off the `PUT`'s own response body,
+on the reasoning that GoTrue's reply *is* the account afterwards. Exercised rather than assumed, and
+it is not:
+
+```
+PUT body says stale: [ 'email' ]
+fresh GET says stale: []
+```
+
+The response is composed before the identity row is updated, so it always shows the `email` identity
+on the old address. A warning built on it would have fired on **every** rename, including the clean
+ones — and a check that cries wolf every time is worse than no check at all, because the one run
+where it means something reads exactly like the others. It now re-reads with `findById`.
+
+Then both halves were watched, because a warning nobody has seen fire is not evidence either. On the
+real account: renamed, no note. On a throwaway given a `google` identity holding the old address, the
+way a browser sign-in would have left one:
+
+```
+✓ renamed probe-legacy@… to probe-renamed@… — same account, same password
+  note: the google identity still holds probe-legacy@spideryarn.local.
+```
+
+The probe account and its identity were deleted afterwards; `auth.users` is back to its five rows.

@@ -189,8 +189,68 @@ case "$NODE_V" in
 esac
 command -v npm >/dev/null || { echo "FATAL: node installed but npm is missing" >&2; exit 1; }
 
-run 300 "install claude code" npm install -g @anthropic-ai/claude-code
-command -v claude >/dev/null || { echo "FATAL: npm reported success but claude is not on PATH" >&2; exit 1; }
+# Claude Code, installed AS THE USER with Anthropic's native installer -- not
+# `npm install -g` as root, which is what this line used to be.
+#
+# npm's global prefix on this box is /usr, not /usr/local: NodeSource's
+# packaging computes it and no npmrc sets it, so nobody chose it and nothing
+# says it out loud. `npm install -g` as root therefore put claude in a
+# root-owned /usr/lib/node_modules, and Claude Code's self-updater -- which runs
+# as $USER_NAME -- could not write a byte of it. Every session opened with
+#   Auto-update failed: no write permission to npm prefix. Run claude doctor
+# and the box sat on 2.1.251 while 2.1.258 shipped.
+# docs/postmortems/260902c-a-claude-that-could-never-update-itself.md.
+#
+# The native installer is Anthropic's current recommendation and `claude doctor`
+# names it as the fix. It puts a versioned binary under
+# ~/.local/share/claude/versions/ and points ~/.local/bin/claude at it, all owned
+# by the user, so the updater can swap versions with no sudo at all. It REFUSES
+# to run under sudo (it installs into $HOME, which under sudo is root's), hence
+# `su -` rather than the plain `run` the npm line used.
+#
+# Downloaded in full and then run, rather than `curl | bash`. A pipe executes
+# the script as it arrives, so a connection that dies mid-transfer runs the
+# first half of an installer and stops -- and `set -o pipefail` reports that
+# correctly, long after the half-install already happened. This file pins node
+# and supabase for adjacent reasons.
+run 300 "install claude code" su - "$USER_NAME" -c 'set -eu; t=$(mktemp); curl -fsSL https://claude.ai/install.sh -o "$t"; rc=0; bash "$t" || rc=$?; rm -f "$t"; exit $rc'
+
+# Expose the user-owned binary at a path a stock PATH already contains.
+#
+# Every non-login context on this box gets a stock PATH with no ~/.local/bin in
+# it: the tmux job scripts gjd-remote writes (scripts/gjd-remote.ts, which sets
+# its own PATH and says why), the `ssh <box> claude mcp list` behind
+# `gjd-remote doctor`, cron. ~/.profile adds ~/.local/bin for login shells only,
+# and only once the directory exists. So without this line `claude` resolves in
+# an ssh login shell and nowhere that actually runs the work -- which is the
+# same wrong-tree failure gjd-remote's own guards exist to catch, and it would
+# pass the "claude runs" check below.
+#
+# /usr/local/bin is where FHS puts a local override, and it precedes /usr/bin in
+# every PATH on this box. One symlink, so there is exactly one answer to "which
+# claude" no matter who is asking.
+#
+# This is also the half that a rebuild needs. /home is the persistent volume, so
+# a new server arrives with ~/.local/bin/claude already on it and the install
+# step above is a no-op -- while /usr/local/bin is on the disposable root disk
+# and comes back empty. Without this line a rebuilt box would have a perfectly
+# good Claude that no job script could find.
+#
+# -T so that an unexpected real DIRECTORY at /usr/local/bin/claude fails loudly
+# rather than quietly becoming /usr/local/bin/claude/claude, which nothing would
+# ever find.
+ln -sfnT "/home/$USER_NAME/.local/bin/claude" /usr/local/bin/claude
+
+command -v claude >/dev/null || { echo "FATAL: installer reported success but claude is not on PATH" >&2; exit 1; }
+# `command -v` could not see the bug this replaced: a claude that runs perfectly
+# and can never update itself. So assert the property that was missing rather
+# than the one that was always true -- the user can WRITE what the updater has
+# to rewrite. Ownership is not that property: owning a symlink does not let you
+# repoint it, the parent directory does. Checked again, more fully, at the end
+# of the run.
+CLAUDE_BIN=$(readlink -f /usr/local/bin/claude)
+su - "$USER_NAME" -c "test -w '$(dirname "$CLAUDE_BIN")' && test -w '/home/$USER_NAME/.local/bin'" \
+  || { echo "FATAL: $USER_NAME cannot write $CLAUDE_BIN or its launcher dir - auto-update would fail exactly as it did before" >&2; exit 1; }
 
 echo "=== codex cli ==="
 # OpenAI's agent CLI, so scripts/run-codex.ts works here as it does on the
@@ -200,14 +260,66 @@ echo "=== codex cli ==="
 # on every invocation, so a floating version steers nothing.
 #
 # @openai/codex ships a prebuilt platform binary rather than JS, so it is the
-# one npm global here that can install "successfully" with nothing runnable for
+# one global here that can install "successfully" with nothing runnable for
 # this architecture. Hence running it rather than looking for the file.
-run 300 "install codex cli" npm install -g @openai/codex
+#
+# Installed AS THE USER with OpenAI's own installer, for the reason the claude
+# block above spells out at length: `npm install -g` as root lands in a
+# root-owned /usr prefix, and `codex update` -- which is a real subcommand, and
+# which runs as $USER_NAME -- cannot write there. Codex had exactly the same
+# latent bug as Claude Code and was left alone in the first pass because it
+# looked less urgent, not because it was well.
+#
+# It is quieter about it than Claude Code is, which is the reason to fix it
+# rather than wait: `claude doctor` said "no write permission to npm prefix" on
+# every session start, whereas `codex doctor` reports `install: consistent` and
+# prints `npm update target /usr/lib/node_modules/@openai/codex` without ever
+# checking whether that target is writable. Nothing would have told us.
+#
+# CODEX_NON_INTERACTIVE=1 because provisioning has no terminal.
+#
+# CODEX_HOME and CODEX_INSTALL_DIR are PINNED rather than left to default. They
+# would default to exactly these paths, but the checks below hardcode them, and
+# a check that is only true while nobody has exported a variable is a check that
+# will quietly stop meaning anything. `su -` clears the caller's environment,
+# but a login startup file on the persistent /home volume can set either again.
+# Provisioning owns this machine's layout, so it says so.
+#
+# The installer also appends a marker-guarded PATH block to a shell rc file.
+# That is intentional and idempotent rather than harmless -- it changes the PATH
+# of every shell started afterwards, which is what we want, but it is a real
+# observable effect and the only dotfile edit in this whole script. The symlink
+# below is what makes codex findable everywhere the rc file is never read.
+run 300 "install codex cli" su - "$USER_NAME" -c 'set -eu; t=$(mktemp); curl -fsSL https://chatgpt.com/codex/install.sh -o "$t"; rc=0; CODEX_HOME='"/home/$USER_NAME/.codex"' CODEX_INSTALL_DIR='"/home/$USER_NAME/.local/bin"' CODEX_NON_INTERACTIVE=1 sh "$t" || rc=$?; rm -f "$t"; exit $rc'
+
+# Same stock-PATH problem, same one-line answer -- see the claude symlink above
+# for the full reasoning.
+#
+# `codex` is the only binary to LINK. The installer's other one,
+# codex-code-mode-host, gets a launcher in BIN_DIR on darwin only and is
+# actively removed there on linux -- but the executable itself very much runs
+# here: every `codex exec` on this box spawns one out of the release directory,
+# which is visible in /proc. It is reached from inside the install, never from
+# PATH, so it needs nothing from us. That distinction is the whole reason the
+# npm tree cannot simply be deleted underneath a running review.
+ln -sfnT "/home/$USER_NAME/.local/bin/codex" /usr/local/bin/codex
+
 CODEX_V=$(timeout 60 codex --version 2>/dev/null || echo none)
 case "$CODEX_V" in
   codex-cli\ *) echo "$CODEX_V" ;;
-  *) echo "FATAL: npm reported success but 'codex --version' printed '$CODEX_V'" >&2; exit 1 ;;
+  *) echo "FATAL: installer reported success but 'codex --version' printed '$CODEX_V'" >&2; exit 1 ;;
 esac
+# And the property `--version` cannot see, the one that was wrong for Claude:
+# that the user can actually rewrite what `codex update` has to replace.
+#
+# THREE directories, not two, and `-x` as well as `-w`: mutating a directory
+# needs both. `standalone/` holds the lock and the `current` symlink the updater
+# repoints; `releases/` is where the new version is staged; `.local/bin` is the
+# launcher. Missing any one of them is an update that fails partway.
+for d in "/home/$USER_NAME/.local/bin" "/home/$USER_NAME/.codex/packages/standalone" "/home/$USER_NAME/.codex/packages/standalone/releases"; do
+  su - "$USER_NAME" -c "test -d '$d' && test -w '$d' && test -x '$d'" \
+    || { echo "FATAL: $USER_NAME cannot mutate '$d' - 'codex update' would fail, and codex doctor would not say so" >&2; exit 1; }
+done
 # No ~/.codex/config.toml is written on purpose: run-codex.ts passes
 # -c approval_policy=never itself precisely BECAUSE a local config file
 # silently overrides codex's safe default (the approval-policy trap in that
@@ -360,6 +472,43 @@ if [ "$SUPA_V" != "$SUPABASE_VERSION" ]; then
   exit 1
 fi
 echo "supabase $SUPA_V"
+
+echo "=== editor ==="
+# `emacs -nw` is the editor on every gjd-remote box, because it is Greg's
+# editor. emacs-nox is the terminal-only build -- no X, no GUI toolkit, which is
+# what a headless box wants -- so `-nw` is redundant against it and is written
+# anyway, because it is what a person types and it stays correct if a graphical
+# emacs ever arrives.
+#
+# Installed HERE rather than added to cloud-init.yaml's `packages:` list, even
+# though it is a plain apt package exactly like tmux. cloud-init runs once, on a
+# box's first boot; provision.sh is what gets re-run on the boxes that already
+# exist. "Going forwards including this one" is only true of this file. One
+# copy, in the file that reaches every box -- a second in cloud-init would be
+# the copy that goes stale.
+run 600 "install emacs" bash -c 'apt-get -o DPkg::Lock::Timeout=600 -y install emacs-nox'
+
+# Three things name the editor, because three different callers ask a different
+# question and only one of them reads the environment:
+#   1. $EDITOR / $VISUAL, for everything that does. A login shell is enough --
+#      tmux job scripts end in `exec bash -l`, same as GJD_REMOTE_HOST below.
+#   2. the `editor` alternative, for sudoedit, visudo, and anything else that
+#      runs /usr/bin/editor with no environment to consult. Ubuntu points it at
+#      nano and nothing else here would change that.
+#   3. git's core.editor, set explicitly rather than left to fall through
+#      $VISUAL/$EDITOR: `ssh box git commit` is a non-login shell that sees
+#      neither, and git then falls back to its build-time default.
+cat > /etc/profile.d/editor.sh <<'EOF'
+# Written by provision.sh. See docs/project/hetzner-remote-server-box.md.
+export EDITOR='emacs -nw'
+export VISUAL='emacs -nw'
+EOF
+chmod 0644 /etc/profile.d/editor.sh
+# --set, not --auto: this is a decision, and auto mode would hand the link back
+# to whichever alternative has the highest priority the next time one is
+# installed or removed.
+update-alternatives --set editor /usr/bin/emacs
+run 30 "git editor" su - "$GJD_USERNAME" -c 'git config --global core.editor "emacs -nw"'
 
 echo "=== git ==="
 # Identity, so commits from the box are attributed like commits from the laptop.
@@ -885,7 +1034,37 @@ check "/home is the volume"      'test "$(stat -c %d /home)" = "$(stat -c %d /mn
 check "swap active"              'swapon --show | grep -q swapfile'
 check "node is the wanted major" 'su - '"$USER_NAME"' -c "node -v" | grep -q "^v${GJD_NODE_MAJOR}\."'
 check "npm present"              'su - '"$USER_NAME"' -c "command -v npm"'
-check "claude runs"              'timeout 30 su - '"$USER_NAME"' -c "claude --version"'
+# The check that would have caught the bug. `claude --version` stayed green for
+# two days on a box whose updater could not write a byte, because running and
+# being able to replace yourself are different facts and only one of them was
+# ever asserted.
+#
+# It asserts WRITABILITY OF THE DIRECTORIES, and as the user. An earlier version
+# of this check tested `stat -c %U` on the launcher and the binary, which was
+# the same mistake one level in: owning a symlink does not let you repoint it,
+# the parent directory does -- and a user-owned binary inside an unwritable
+# `versions/` cannot be joined by the next version. GPT Sol caught it, having
+# been handed this file's own postmortem about asserting the wrong property.
+#
+# `test -w` as root is meaningless (root passes on almost anything), hence `su -`.
+# `-x` as well as `-w`: mutating a directory needs both, and a directory with
+# the execute bit off is writable-but-unusable.
+check "claude can auto-update (user can rewrite its install)" 'timeout 30 su - '"$USER_NAME"' -c "for d in /home/'"$USER_NAME"'/.local/bin /home/'"$USER_NAME"'/.local/share/claude/versions; do test -d \"\$d\" && test -w \"\$d\" && test -x \"\$d\" || exit 1; done"'
+# ...and that the two links still point where the updater will move them. Both
+# were assumed by the check above and neither was tested: a launcher replaced by
+# a stray regular file, or a /usr/local/bin symlink left pointing at the old npm
+# path, both leave the directories perfectly writable.
+check "claude launcher points into the versions dir" 'case "$(readlink -f /home/'"$USER_NAME"'/.local/bin/claude)" in /home/'"$USER_NAME"'/.local/share/claude/versions/*) true ;; *) false ;; esac'
+check "/usr/local/bin/claude points at that launcher" 'test "$(readlink /usr/local/bin/claude)" = "/home/'"$USER_NAME"'/.local/bin/claude"'
+# And that the npm-global copy has not come back. A re-run of an OLD
+# provision.sh would resurrect it, and it would sit there winning nothing while
+# /usr/local/bin points at the native one -- two installs, one of them stale,
+# which is what `claude doctor` warns about.
+#
+# `npm root -g` rather than the literal /usr/lib/node_modules: the whole bug was
+# that npm's prefix here is computed rather than chosen, so hardcoding today's
+# answer would quietly stop checking anything if NodeSource ever changed it.
+check "no npm-global claude beside the native one" 'root=$(npm root -g) && test -n "$root" && ! test -e "$root/@anthropic-ai/claude-code"'
 # The loopback, end to end and as the user -- not "the key file exists". Three
 # separate things have to be true at once (a key, a line in authorized_keys, a
 # Host block that makes ssh actually OFFER a non-default key name), each of them
@@ -893,6 +1072,27 @@ check "claude runs"              'timeout 30 su - '"$USER_NAME"' -c "claude --ve
 # having is the connection. BatchMode is what stops a broken one hanging on a
 # password prompt until the run times out.
 check "gjd-remote loopback ssh works" 'timeout 20 su - '"$USER_NAME"' -c "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new 127.0.0.1 hostname"'
+# Claude, over that same loopback -- deliberately AFTER it, so a broken ssh is
+# reported as a broken ssh rather than as a missing Claude.
+#
+# `claude runs` used to be a LOGIN shell, and it passed throughout the
+# npm-prefix bug. What runs the work is non-interactive: the tmux job scripts,
+# and the `ssh <box> claude mcp list` behind `gjd-remote doctor`, source neither
+# .profile nor .bashrc and get a stock PATH with no ~/.local/bin in it. So this
+# is that path itself rather than an imitation of it. A claude only a login
+# shell can find leaves every tmux session with no Claude in it -- the same
+# wrong-tree failure gjd-remote's own job guards exist to catch.
+#
+# `ssh -n`: check() has no `</dev/null` of its own the way run() does, and ssh
+# forwards stdin, so without it this swallows the rest of whatever is feeding
+# the script and the run dies further down somewhere unrelated. Found by doing
+# exactly that to a heredoc while testing these three checks.
+# Captured and then matched, never piped into grep: check() runs without
+# pipefail, so through a pipe the verdict would be grep's alone and a claude
+# that printed its version and then died -- or an ssh that timed out after
+# printing it -- would pass. The statusline check below says the same thing for
+# the same reason; this file has been bitten by it before.
+check "claude runs over non-interactive ssh" 'out=$(timeout 30 su - '"$USER_NAME"' -c "ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new 127.0.0.1 claude --version") && case "$out" in *"(Claude Code)"*) true ;; *) false ;; esac'
 # ...and the address it will use, which is the other half: the ssh above can
 # work perfectly and `gjd-remote ls` still die at "could not read the server
 # address from Terraform state", because the box has no tofu. A login shell,
@@ -919,11 +1119,30 @@ check "claude statusline is wired up" 'jq -er ".statusLine.command" /home/'"$USE
 # The path is written out rather than read from settings.json because the check
 # above has already insisted the two are the same string.
 check "claude statusline shows context %" 'out=$(printf %s "{\"model\":{\"display_name\":\"M\"},\"workspace\":{\"current_dir\":\"/tmp\"},\"context_window\":{\"used_percentage\":42}}" | su - '"$USER_NAME"' -c /home/'"$USER_NAME"'/.claude/statusline-script.sh) && case "$out" in *42%*) true ;; *) false ;; esac'
-# Asserts the OUTPUT, not just the exit status. @openai/codex installs a
-# prebuilt platform binary, so the interesting failure is one that exists and
-# does not run -- and it is the login shell that has to find it, which is where
-# a global npm bin directory missing from PATH would show up.
-check "codex runs"               'timeout 60 su - '"$USER_NAME"' -c "codex --version" | grep -q "^codex-cli "'
+# Asserts the OUTPUT, not just the exit status. codex ships a prebuilt platform
+# binary, so the interesting failure is one that exists and does not run.
+#
+# Over the loopback rather than a login shell, and captured rather than piped,
+# for the two reasons the claude checks above give: what runs codex is
+# scripts/run-codex.ts, which spawns bare `codex` and inherits whatever PATH it
+# was given -- non-interactive, no ~/.local/bin -- and a pipe would hand the
+# verdict to grep alone, passing a codex that printed its version and then died.
+check "codex runs over non-interactive ssh" 'out=$(timeout 60 su - '"$USER_NAME"' -c "ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new 127.0.0.1 codex --version") && case "$out" in codex-cli\ *) true ;; *) false ;; esac'
+# The same auto-update property as claude, and it matters more here because
+# `codex doctor` does not check it: it reports `install: consistent` and names
+# an npm update target without ever asking whether that target is writable.
+check "codex can auto-update (user can rewrite its install)" 'timeout 30 su - '"$USER_NAME"' -c "for d in /home/'"$USER_NAME"'/.local/bin /home/'"$USER_NAME"'/.codex/packages/standalone /home/'"$USER_NAME"'/.codex/packages/standalone/releases; do test -d \"\$d\" && test -w \"\$d\" && test -x \"\$d\" || exit 1; done"'
+# Narrow on purpose. `standalone/*` would also match the install lock, a stray
+# file, or a half-staged directory -- anything at all under the store -- so it
+# would have gone on passing after the layout it is describing had stopped
+# being true. The second arm is the installer's older layout, which it still
+# emits when a release has no bin/ subdirectory.
+check "codex launcher points at a standalone release binary" 'case "$(readlink -f /home/'"$USER_NAME"'/.local/bin/codex)" in /home/'"$USER_NAME"'/.codex/packages/standalone/releases/*/bin/codex|/home/'"$USER_NAME"'/.codex/packages/standalone/releases/*/codex) true ;; *) false ;; esac'
+check "/usr/local/bin/codex points at that launcher" 'test "$(readlink /usr/local/bin/codex)" = "/home/'"$USER_NAME"'/.local/bin/codex"'
+# Unlike claude's single self-contained executable, codex resolves ripgrep and
+# its resources out of its install tree at RUNTIME, so a leftover npm copy is
+# not merely stale -- it is a second tree that a stray PATH could still reach.
+check "no npm-global codex beside the native one" 'root=$(npm root -g) && test -n "$root" && ! test -e "$root/@openai/codex"'
 check "chrome runs"              'timeout 30 su - '"$USER_NAME"' -c "google-chrome --version"'
 # Was: `playwright cr --version || ls ~/.cache/ms-playwright/.../chrome`. Both
 # halves were wrong. The `||` put the WEAK test first -- `cr --version` prints
@@ -953,6 +1172,19 @@ check "docker daemon runs"       'timeout 30 docker info'
 # The image was pulled above, so this needs no network.
 check "docker run as $USER_NAME" 'timeout 120 su - '"$USER_NAME"' -c "docker run --rm hello-world" | grep -q "Hello from Docker"'
 check "supabase cli pinned"      'timeout 30 su - '"$USER_NAME"' -c "supabase --version" | grep -qx "'"$SUPABASE_VERSION"'"'
+# The editor, in the three places that name it -- because they come apart. The
+# package can be present while $EDITOR still says nothing, and both can be right
+# while /usr/bin/editor still opens nano.
+#
+# Captured rather than piped, for the reason the claude and codex checks give
+# above: check() runs without pipefail, so through a pipe an emacs that printed
+# its version and then died would still pass on grep's verdict alone.
+check "emacs runs"               'out=$(timeout 60 su - '"$USER_NAME"' -c "emacs --version") && case "$out" in "GNU Emacs "*) true ;; *) false ;; esac'
+check "EDITOR is emacs -nw"      'su - '"$USER_NAME"' -c "echo \$EDITOR" | grep -qx "emacs -nw"'
+# Runs /usr/bin/editor and asks what answered, rather than reading the symlink:
+# a link is only evidence about a file, and this is the question sudoedit asks.
+check "editor alternative is emacs" 'out=$(/usr/bin/editor --version 2>&1) && case "$out" in "GNU Emacs "*) true ;; *) false ;; esac'
+check "git core.editor"          'su - '"$USER_NAME"' -c "git config --global core.editor" | grep -qx "emacs -nw"'
 # Git plumbing. Deliberately NOT a check that tokens are present: they are a
 # human step, and a check that stays red until somebody does it is how a report
 # stops being read. The helper refuses loudly at first use if a token is absent.

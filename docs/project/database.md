@@ -23,8 +23,11 @@ written as a stub for [auth.md](auth.md) to point at and had not been true for s
 
 ## Which store is live, and the one refusal that matters
 
-`SPIDERYARN_STORE` still **defaults to `files`**, so a fresh checkout runs on disk and nothing
-changes for anyone who has not opted in. But [`src/store/index.ts`](../../src/store/index.ts)
+`SPIDERYARN_STORE` still **defaults to `files`** for a CLI script, a test, or anything else that
+imports [`src/store/live.ts`](../../src/store/live.ts) directly. `npm run dev` is the one exception,
+since 2026-09-02: `package.json`'s `dev` script itself sets `postgres` unless something already set
+the variable, so a fresh checkout's dev server reads Postgres without anyone opting in. But
+[`src/store/index.ts`](../../src/store/index.ts)
 **refuses to boot on `files` in production**, and the reason generalises well beyond deployment: the
 filesystem store has **no owner column**, so it has no second reader, and a store with no second
 reader cannot express "somebody who is not the owner". That is why
@@ -203,9 +206,12 @@ nothing. `npm test` on a fresh clone reports them as skipped, not passed, so the
 visible; it was not in the first version of that file, which reported nine passes for having checked
 nothing.
 
-**Reads now come out of Postgres when you ask them to.** `SPIDERYARN_STORE=postgres npm run dev`
-serves every article, the library, the metadata page and the reader's comments from the database
-instead of from disk; `files` remains the default. The work, and what is still missing, is in
+**Reads now come out of Postgres when you ask them to — and, since 2026-09-02, without asking.**
+`npm run dev` serves every article, the library, the metadata page and the reader's comments from
+the database instead of from disk; `SPIDERYARN_STORE=files npm run dev` is the escape hatch back to
+disk, and `files` remains the default for everything that is not `npm run dev` — `vite preview`
+included, which still wants `SPIDERYARN_STORE=postgres` said out loud. The work,
+and what is still missing, is in
 [260826e-postgres-storage-implementation.md](../plans/260826e-postgres-storage-implementation.md).
 
 **Writes go straight into Postgres now — no disk in between.** Since 2026-09-01 every pipeline stage
@@ -371,6 +377,45 @@ touch anything storage-shaped:
 - **Supabase is the store and the login, never the transport.** The browser talks to `/api/*`, and
   `/api/*` talks to Postgres. The one exception is Auth, which *does* run in the browser — the rule
   that holds is "no application **data** query leaves the server", not "no Supabase call".
+
+## The four token columns, and why they are not defaulted
+
+**`auth.users.confirmation_token`, `recovery_token`, `email_change` and `email_change_token_new` are
+nullable with no default, and we have left them that way** — not from inattention, so here is the
+reasoning before someone spends an afternoon rediscovering it.
+
+The hazard is real. GoTrue scans those four into non-null Go strings, so **one row with any of them
+NULL makes `GET /auth/v1/admin/users` answer 500 for the whole database** — the dev server's
+`/admin` page with it. Supabase's own troubleshooting page
+([scan error on `confirmation_token`](https://supabase.com/docs/guides/troubleshooting/scan-error-on-column-confirmation_token-converting-null-to-string-is-unsupported-during-auth-login-a0c686))
+names these exact four, and its remedy is a one-time `UPDATE` of existing rows rather than a default,
+so it does not stop recurrence. [supabase/auth#1940](https://github.com/supabase/auth/issues/1940)
+proposes the default and is open with no maintainer response; nothing in releases up to v2.197
+fixes it. The other four token columns on that table *already* default to `''`, and `''` is exactly
+what GoTrue writes into every row it creates — so defaulting them would have matched Supabase's own
+behaviour, not deviated from it.
+
+**We tried, and the migration cannot run.** `auth.users` is owned by `supabase_auth_admin`;
+migrations connect as `postgres`, which is **not a superuser and cannot even `SET ROLE`** to that
+owner. `alter table auth.users alter column … set default ''` therefore fails with
+`ERROR: must be owner of table users`. The SQL itself is correct — it applies as `supabase_admin`,
+verified in a rolled-back transaction — but it cannot go through `npm run db:migrate`.
+[`0001`](../../drizzle/0001_auth_fks_and_guards.sql) is not a counter-example: adding a foreign key
+*to* `auth.users` needs the `REFERENCES` privilege, not ownership.
+
+**And that settles it, because hosted Supabase is more restricted, not less.** A fix we cannot apply
+to production was never going to protect production's `/admin`, which was the main prize. What was
+left was a superuser step outside the migration system, invisible to the reconcile guard, needing a
+re-run after every `db:reset`, and protecting only local manual inserts.
+
+**What actually protects us**, and is enough for the cause we saw:
+[`tests/helpers/seed-auth-user.ts`](../../tests/helpers/seed-auth-user.ts) is the one way a test
+writes such a row, and [`tests/auth-user-seeding.test.ts`](../../tests/auth-user-seeding.test.ts)
+fails if anything under `tests/` hand-rolls the insert again. Anything creating a user through
+GoTrue's admin API — `scripts/db-seed-owner.ts`, a real signup — never produces a NULL in the first
+place. **The residue is a hand-written `psql` or Studio insert against `auth.users`**: set those four
+columns to `''`, or the account list stops answering for everybody.
+[The postmortem](../postmortems/260902b-four-bugs-behind-one-word-flaky.md) has the diagnosis.
 
 ## Connecting to the remote
 
@@ -1062,10 +1107,11 @@ What to know before touching any of it:
   `warn`. The worst a broken checkpoint may cost is the saving. The filesystem version could not say
   that — a full `/tmp` made `mkdir` throw straight out of the stage, which is a cache becoming an
   outage.
-- **A laptop with `SPIDERYARN_STORE` unset checkpoints nothing.** `fsStoreSession` has no `articles`
-  row and so no id to key on, and hands out `nullCheckpointStore()`; the stage command lines do the
-  same. Articles come out identical and a *second* attempt after a killed one pays again. That is a
-  decision, written down at `nullCheckpointStore` in
+- **A laptop with `SPIDERYARN_STORE=files` checkpoints nothing.** `fsStoreSession` has no `articles`
+  row and so no id to key on, and hands out `nullCheckpointStore()`; the stage command lines default
+  to `files` and do the same, since none of them go through `npm run dev`'s `package.json`-level
+  `postgres` default. Articles come out identical and a *second* attempt after a killed
+  one pays again. That is a decision, written down at `nullCheckpointStore` in
   [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts), and it ends when the filesystem store
   does.
 

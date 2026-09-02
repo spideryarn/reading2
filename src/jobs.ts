@@ -39,6 +39,7 @@
  */
 import { createHash } from "node:crypto";
 import {
+  type AiCallRow,
   type SpendReport,
   collectSpend,
   emptySpend,
@@ -72,6 +73,7 @@ import { runInJob } from "./job-scope.js";
 import { errorFields, log, type Log, since } from "./log.js";
 import { captureFailure } from "./monitoring.js";
 import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
+import { processSingleton } from "./process-state.js";
 import { slugForUrlKey } from "./store/find-article.js";
 import { fsStoreSession } from "./store/session.js";
 import type { JobSettlement, JobTransition, StoreSession } from "./store/session.js";
@@ -121,8 +123,20 @@ const store: JobStore = STORE === "postgres" ? pgJobStore : fsJobStore;
  * everybody can see it, and this aborts the step if the step happens to be
  * here. An instance that is not running it reads the flag at its next step
  * boundary instead, which is a moment later and correct.
+ *
+ * **Keyed to the process rather than to this module**, and that is not the same
+ * hedge as the sentence above. "A second instance has no function to interrupt"
+ * is true of a second *machine* and false of a second copy of this module in
+ * this process — which is what every dev-server restart makes, while the step it
+ * abandoned is still running and still listening. A private `Map` meant Stop
+ * reached nothing at all after a save. src/process-state.ts, and
+ * docs/postmortems/260902c-the-truncation-retry-cost-storm.md.
  */
-const aborts = new Map<string, AbortController>();
+const aborts = processSingleton<Map<string, AbortController>>(
+  "jobs.aborts",
+  "2026-09-02",
+  () => new Map(),
+);
 
 /**
  * How long a claim is good for, and how long before that the claimant stops.
@@ -745,20 +759,48 @@ async function jobSpend(job: Job, jlog: Log): Promise<Record<string, unknown>> {
     return { aiCostStatus: "unavailable" };
   }
   const { rows, unreadable } = read;
+  return jobSpendFields(rows, unreadable);
+}
+
+/**
+ * The arithmetic half of `jobSpend`, with the ledger read taken out.
+ *
+ * Exported for [tests/job-spend-fields.test.ts](../tests/job-spend-fields.test.ts),
+ * for the same reason `by` in scripts/ai-cost.ts is: every bug this line has had
+ * was in **what the number includes**, and none of them showed up in a type.
+ */
+export function jobSpendFields(
+  rows: readonly AiCallRow[],
+  unreadable: number,
+): Record<string, unknown> {
   if (rows.length === 0) {
     /* An unreadable ledger and a job that spent nothing must not look the same,
        so a damaged ledger says so even when it has no rows to show for this
        job. */
     return unreadable > 0 ? { aiCostStatus: "partial", aiUnreadable: unreadable } : {};
   }
-  const { credits, upstream, unpriced } = totalRows(rows);
+  /* **All three pockets.** `computed` was dropped here until 2026-09-02 — zero
+     at the time, because our own arithmetic is only ever used by the declared
+     eval bypasses, but a latent under-report on the single line that says what
+     an ingest cost. The conditional that makes a total correct lives in
+     `totalRows` and nowhere else, which is why this adds its three answers
+     rather than summing columns itself:
+     docs/project/ai-gateway.md, and the `byok_upstream_nanos` trap — which was
+     spelt `upstream_inference_nanos` until 2026-09-02, and the rename is the
+     point: the old name did not say that adding it is conditional. */
+  const { credits, upstream, computed, unpriced } = totalRows(rows);
+  const nanos = credits + upstream + computed;
   return {
     aiCalls: rows.length,
-    aiCostNanos: credits + upstream,
-    aiCost: formatNanos(credits + upstream),
+    aiCostNanos: nanos,
+    aiCost: formatNanos(nanos),
     /* Only when it is not zero, so an ordinary line stays short and an unusual
        one says why. Each of these is a claim that the number above is wrong.  */
     ...(upstream > 0 ? { aiUpstreamNanos: upstream } : {}),
+    /* Our estimate rather than a settled figure, so it is named apart from the
+       total it is inside — a price table drifts silently, and the day a rate
+       changes every computed figure after it is wrong with nothing failing. */
+    ...(computed > 0 ? { aiComputedNanos: computed } : {}),
     ...(unpriced > 0 ? { aiUnpriced: unpriced } : {}),
     /* **The total is short and this is the only place that can say so.** A
        damaged line is a call that happened and cannot be read; a partial total

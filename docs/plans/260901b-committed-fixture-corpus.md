@@ -31,8 +31,8 @@ laptop**, invisible until a checkout without that laptop's state ran it:
 |---|---|
 | `store-parity` ×2 | green because `data/constitution/shelf.json` carries `archivedAt` — Greg archived it on 2026-08-27, so the filesystem library never listed it and the comparison never met it. Fixed in `3b40441`. |
 | `store-roundtrip` | the synthesised reader-state ids were `spya-fix…`; `src/ids.ts` excludes `i`, `l`, `o` and `1`, and Postgres enforces it as `chat_threads_id_format`. Fixed in `2258f87`. |
-| `store-artefact-manifest` | `raw.pdf` and `labels-progress.json` read as unhomed, because the corpus carries neither. Open. |
-| `doc-links` | `260828l-dictation-vocabulary-review-sol.md` links to `../../data/reader.json`, which is gitignored — so it resolves here and nowhere else. Open, and not this plan's to fix. |
+| `store-artefact-manifest` | `raw.pdf` and `labels-progress.json` read as unhomed, because the corpus carries neither. **Closed 2026-09-02** by [260902g](260902g-corpus-evidence-for-artefact-coverage.md) — but it widened first, to five names, and cost a production deploy with `--force-gate=test` before anyone looked. The fix was not a corpus example for each: it was that this test gathered its evidence from the laptop's `data/`, so the same commit answered differently on different machines. `labels-progress.json` is migrated-but-retired, `raw.pdf` still has no honest coverage and says so. |
+| `doc-links` | `260828l-dictation-vocabulary-review-sol.md` links to `../../data/reader.json`, which is gitignored — so it resolves here and nowhere else. **Closed 2026-09-02**: the link is prose now, and `never link into gitignored runtime output` rejects the shape rather than waiting for the file to go missing ([260902g](260902g-corpus-evidence-for-artefact-coverage.md)). It broke twice more the same day from a different direction — Sol's `file:line` citations pasted in as markdown links — so the rule alone is not the whole answer. |
 
 That last one is the tidiest illustration of the whole problem: `doc-links` was run four times during
 this work and called green each time. It was green because the file it points at happens to exist on

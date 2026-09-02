@@ -6,6 +6,8 @@
   "scripts": {
     "test": "vitest run",
     "worktree:setup": "tsx scripts/worktree-setup.ts",
+    "worktree:sweep": "tsx scripts/worktree-sweep.ts",
+    "worktree:check": "tsx scripts/worktree-check.ts",
     "lint": "biome lint --max-diagnostics=none .",
     "lint:fix": "biome lint --write --max-diagnostics=none .",
     "cycles": "biome lint --only=suspicious/noImportCycles .",
@@ -21,8 +23,8 @@
     "pdf": "tsx src/pdf-read.ts",
     "pdf:pass0": "tsx src/pdf.ts",
     "blocks": "tsx src/blocks.ts",
-    "dev": "vite",
-    "dev:pretty": "vite | pino-pretty",
+    "dev": "SPIDERYARN_STORE=${SPIDERYARN_STORE:-postgres} vite",
+    "dev:pretty": "SPIDERYARN_STORE=${SPIDERYARN_STORE:-postgres} vite | pino-pretty",
     "live:spike": "tsx scripts/live-spike.ts",
     "build": "vite build",
     "validate-tree": "tsx src/validate-tree.ts",
@@ -92,6 +94,7 @@
     "radix-ui": "^1.6.7",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "stripe": "22.6.1",
     "tailwind-merge": "^3.6.0",
     "undici": "^7.29.0"
   },

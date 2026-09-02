@@ -347,33 +347,25 @@ function Remark({
     <li className="mir-remark" data-kind={remark.kind}>
       <p className="mir-head">
         <span className="mir-kind">{KIND_LABEL[remark.kind]}</span>
-        {/* **The card is on top of the word, never instead of it.** This file's
-            header says the distinction may not be a tooltip, and that stands:
-            the word is rendered, readable and on every row, and it is what a
-            referee in a hurry gets. What the card adds is the trial itself —
-            which trial, how big the effect was, and the line the note under the
-            list ends on, which is that none of it says whether *this* remark is
-            right. `EVIDENCE_NOTE` is imported into the card rather than
-            rewritten, so the row and the footnote cannot drift. */}
-        <Tooltip
-          placement="left"
-          className="tip-soon"
-          content={
-            <ControlTip
-              head={remark.trialTested ? TESTED : UNTESTED}
-              what={
-                remark.trialTested
-                  ? "A randomised trial tested feedback of this shape on real reviewers."
-                  : "No trial has tested feedback of this shape; it is here because it is cheap to check and easy to dismiss."
-              }
-              how={EVIDENCE_NOTE}
-            />
-          }
-        >
-          <span className="mir-evidence" data-trial-tested={String(remark.trialTested)}>
-            {remark.trialTested ? TESTED : UNTESTED}
-          </span>
-        </Tooltip>
+        {/* **This badge carried a card, and the card is gone**, 2026-09-02. Its
+            first paragraph restated the badge — *"A randomised trial tested
+            feedback of this shape"* under a label reading *A kind tested in a
+            trial* — and its second was `EVIDENCE_NOTE`, which is printed in full,
+            visibly, under this very list. A hover card that repeats the two
+            things already on screen is not an explanation; it is a third copy
+            that only a mouse can reach. A cross-family review named it and it is
+            right.
+
+            What pays for the removal is that the words themselves changed in the
+            same piece of work: *"Tested in a trial"* became *"A kind tested in a
+            trial"*, which is where the misreading actually lived. The label is
+            on every row, and `EVIDENCE_NOTE` under the list says which kinds,
+            which trial, and that none of it says whether *this* remark is right.
+            This file's header — the distinction may not be a tooltip — is the
+            rule that was being bent. */}
+        <span className="mir-evidence" data-trial-tested={String(remark.trialTested)}>
+          {remark.trialTested ? TESTED : UNTESTED}
+        </span>
       </p>
 
       {remark.kind === "coverage" ? (
@@ -407,16 +399,24 @@ function Remark({
            2026-09-02, which is precisely the anti-pattern Tooltip.tsx's own
            docstring argues against: a second's wait, unstyleable, truncated at
            the OS's idea of a line, and **not there at all on a touch device**.
-           The card also has room for the half a `title` had no space for — that
-           the words on the button are the referee's own, quoted back, rather
-           than anything the model wrote. */
+           The card also has room for the half a `title` had no space for — the
+           **provenance** of both the destination and the label: the passage is
+           where the referee anchored their own comment, and the words on the
+           button are that comment's, quoted back.
+
+           **The first paragraph used to be the heading again** — *"Scrolls the
+           paper to the passage this remark is about"* under *Go to this
+           passage* — which is the one thing a card may not be
+           (docs/project/tooltips.md). The generic restatement check in
+           tests/referee-tooltips.test.tsx missed it because the heading is four
+           short words; a cross-family review found it by reading, 2026-09-02. */
         <Tooltip
           placement="left"
           className="tip-soon"
           content={
             <ControlTip
               head="Go to this passage"
-              what="Scrolls the paper to the passage this remark is about."
+              what="The passage is where you anchored the comment this remark is about. Mirror chose the remark, never the passage — it is not given the paper to pick one from."
               how={
                 comment
                   ? "The words on this button are your own comment's, quoted back — the model wrote only the line at the foot of the row."

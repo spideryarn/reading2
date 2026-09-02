@@ -395,6 +395,47 @@ describe("the sink", () => {
     expect(rows[0]?.computedCostNanos).toBeNull();
   });
 
+  it("puts the upstream figure on the row only when the call was BYOK", async () => {
+    /* **The write path for the double-count trap.** OpenRouter reports
+       `cost_details.upstream_inference_cost` on an ordinary call as well as a
+       BYOK one, and on an ordinary call it is the SAME money as `cost` — the
+       default `call()` above has both at 21,523,500 because that is what a real
+       probe returned. Storing it there gave every non-BYOK row a duplicate of
+       its own credits, so `SUM(credits) + SUM(upstream)` was twice the truth
+       and only `totalRows()` knew better.
+
+       `SpendRecord` still carries what the provider said; the narrowing happens
+       at the projection into the ledger, which is where the column's name
+       becomes a claim. The database CHECK
+       (`ai_calls_byok_upstream_only`) rejects a row that gets this wrong, and a
+       rejected insert is a call that lands in no ledger at all — `recordSpend`
+       warns rather than throws — so this is the assertion that stops that being
+       discovered by a missing row. */
+    const ordinary = await rowsFrom({}, () => {
+      recordSpend(call());
+    });
+    expect(ordinary[0]?.isByok).toBe(false);
+    expect(ordinary[0]?.creditsUsedNanos).toBe(21_523_500);
+    expect(ordinary[0]?.byokUpstreamNanos).toBeNull();
+
+    const byok = await rowsFrom({}, () => {
+      recordSpend(call({ costNanos: 0, upstreamCostNanos: 4_000, isByok: true }));
+    });
+    expect(byok[0]?.byokUpstreamNanos).toBe(4_000);
+  });
+
+  it("keeps the upstream figure off a row that could not be priced at all", async () => {
+    /* The three conditions are the CHECK's, and `cost_source` is one of them: a
+       BYOK call OpenRouter told us nothing about is `none`, and a `none` row
+       carrying money would be a row claiming both that it has a figure and that
+       it has not. Rare, and cheap to be right about. */
+    const rows = await rowsFrom({}, () => {
+      recordSpend(call({ costNanos: null, upstreamCostNanos: 4_000, isByok: true }));
+    });
+    expect(rows[0]?.costSource).toBe("none");
+    expect(rows[0]?.byokUpstreamNanos).toBeNull();
+  });
+
   it("says a call nobody could price is `none`, not `computed`", async () => {
     const rows = await rowsFrom({}, () => {
       recordSpend(call({ costNanos: null, upstreamCostNanos: null, isByok: null }));

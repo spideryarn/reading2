@@ -52,7 +52,12 @@ function row(over: Partial<AiCallRow> = {}): AiCallRow {
     durationMs: 1200,
     outcome: "ok",
     creditsUsedNanos: 21_523_500,
-    upstreamInferenceNanos: 21_523_500,
+    /* **Null, because this row is not BYOK.** It carried the credits figure a
+       second time until 2026-09-02, which is exactly the shape that made
+       `SUM(credits) + SUM(upstream)` twice the truth — and it is now refused by
+       `ai_calls_byok_upstream_only`, so a fixture in the old shape would not
+       reach Postgres at all. */
+    byokUpstreamNanos: null,
     isByok: false,
     reportedInputTokens: 13,
     outputTokens: 4,
@@ -115,7 +120,7 @@ describe("totalRows", () => {
        contributes nothing and `unpriced` stays zero, so the total reads correct
        while missing real money. */
     const t = totalRows([
-      row({ isByok: true, creditsUsedNanos: 0, upstreamInferenceNanos: 9_000_000 }),
+      row({ isByok: true, creditsUsedNanos: 0, byokUpstreamNanos: 9_000_000 }),
     ]);
     expect(t.upstream).toBe(9_000_000);
     expect(t.unpriced).toBe(0);
@@ -124,7 +129,7 @@ describe("totalRows", () => {
 
   it("counts a BYOK call with no upstream figure as unpriced, not as zero", () => {
     const t = totalRows([
-      row({ isByok: true, creditsUsedNanos: 0, upstreamInferenceNanos: null }),
+      row({ isByok: true, creditsUsedNanos: 0, byokUpstreamNanos: null }),
     ]);
     expect(t.unpriced).toBe(1);
     expect(t.upstream).toBe(0);
@@ -137,7 +142,7 @@ describe("totalRows", () => {
        at the last step. GPT Sol. The fix is in the caller; this pins what the
        caller has to add. */
     const failed = totalRows([
-      row({ outcome: "error", isByok: true, creditsUsedNanos: 0, upstreamInferenceNanos: 10_000_000 }),
+      row({ outcome: "error", isByok: true, creditsUsedNanos: 0, byokUpstreamNanos: 10_000_000 }),
     ]);
     expect(failed.credits + failed.upstream).toBe(10_000_000);
     expect(failed.credits).toBe(0);
@@ -146,9 +151,62 @@ describe("totalRows", () => {
   it("does not add the two pockets together on an ordinary call", () => {
     /* On a non-BYOK call `cost` and `upstream_inference_cost` are the same money
        — measured equal to seven decimal places on 2026-08-27 — so adding both
-       would double every bill. */
-    const t = totalRows([row()]);
+       would double every bill. Since the rename a stored row cannot carry the
+       duplicate, but this stays the last line of defence: `totalRows` is handed
+       `AiCallRow`s from a hand-written JSONL line as well as from Postgres. */
+    const t = totalRows([row({ byokUpstreamNanos: 21_523_500 })]);
     expect(t.credits + t.upstream).toBe(21_523_500);
+    expect(t.upstream).toBe(0);
+  });
+
+  /**
+   * **The obvious SQL sum, written in JS.**
+   *
+   * `COALESCE(credits_used_nanos,0) + COALESCE(byok_upstream_nanos,0) +
+   * COALESCE(computed_cost_nanos,0)` is what anybody writing a per-owner
+   * monthly aggregate for Stripe will write, because it is the only expression
+   * the schema suggests. Before the rename it was double the truth on every
+   * non-BYOK row. The Postgres half of this file runs the same expression as
+   * real SQL; this is the arithmetic on its own, with no database needed.
+   */
+  const naive = (rows: readonly AiCallRow[]): number =>
+    rows.reduce(
+      (n, r) =>
+        n + (r.creditsUsedNanos ?? 0) + (r.byokUpstreamNanos ?? 0) + (r.computedCostNanos ?? 0),
+      0,
+    );
+
+  it("agrees with the obvious sum over provider, BYOK, computed and unpriced rows", () => {
+    const rows = [
+      row({ creditsUsedNanos: 1_000 }),
+      row({ isByok: true, creditsUsedNanos: 0, byokUpstreamNanos: 9_000_000 }),
+      row({
+        costSource: "computed",
+        creditsUsedNanos: null,
+        computedCostNanos: 7_000,
+        providerAccount: "anthropic",
+        priceVersion: "claude-sonnet-5@2026-08-01",
+      }),
+      row({ costSource: "none", creditsUsedNanos: null }),
+    ];
+    const t = totalRows(rows);
+    expect(t.credits + t.upstream + t.computed).toBe(naive(rows));
+    /* And the unpriced row is a *count*, not a zero folded into the money — the
+       total above is short by an unknown amount and something has to say so. */
+    expect(t.unpriced).toBe(1);
+  });
+
+  it("would have doubled the total on a row in the pre-rename shape", () => {
+    /* **The defect, reproduced.** Until 2026-09-02 an ordinary chat-wire row
+       carried OpenRouter's `cost_details.upstream_inference_cost` — equal to
+       `cost` — in this column, so the obvious sum counted the same money twice.
+       `totalRows` was right because of a conditional that existed nowhere but
+       in it. This is what the rename, the backfill and the CHECK removed, kept
+       as an executable statement of what "wrong" looked like. */
+    const preRename = [row({ byokUpstreamNanos: 21_523_500 })];
+    expect(naive(preRename)).toBe(2 * 21_523_500);
+    const t = totalRows(preRename);
+    expect(t.credits + t.upstream + t.computed).toBe(21_523_500);
   });
 });
 
@@ -320,6 +378,64 @@ describe("the filesystem ledger", () => {
     expect(after.rows.some((r) => r.id === "00000000-0000-4000-8000-00000000f001")).toBe(true);
   });
 
+  it("reads a line written before the BYOK rename, and drops the double count", async () => {
+    /* **The surface the plan had missed, and GPT Sol named.** This ledger is
+       append-only and is never rewritten, so every line ever written still
+       carries `upstreamInferenceNanos`. Renaming the TypeScript property
+       without a read-time translation would make the whole historical file
+       `unreadable` — the same accident the pre-0023 backfill above exists
+       because of, at a larger scale.
+
+       And the translation is conditional, which is the part that matters. On a
+       BYOK line the old value is the real money and carries over. On any other
+       line it was OpenRouter's `upstream_inference_cost`, equal to `cost` —
+       the duplicate that made the obvious sum twice the truth — so it becomes
+       null, exactly as the migration does to the Postgres rows. */
+    const legacy = (over: Partial<AiCallRow>, upstream: number): string => {
+      const r = row({ jobId: "job-byok-rename", ...over }) as unknown as Record<string, unknown>;
+      delete r.byokUpstreamNanos;
+      r.upstreamInferenceNanos = upstream;
+      return JSON.stringify(r);
+    };
+    const ordinary = legacy(
+      { id: "00000000-0000-4000-8000-00000000f201", creditsUsedNanos: 4_000, isByok: false },
+      /* Equal to the credits, which is what OpenRouter actually reported. */
+      4_000,
+    );
+    const byok = legacy(
+      { id: "00000000-0000-4000-8000-00000000f202", creditsUsedNanos: 0, isByok: true },
+      9_000_000,
+    );
+    const before = (await store.read()).unreadable;
+    await writeFile(store.describe(), `${ordinary}\n${byok}\n`, { flag: "a" });
+    const after = await store.read();
+    /* Readable, not damage. This is the assertion that would have gone red on
+       the whole ledger. */
+    expect(after.unreadable).toBe(before);
+
+    const mine = after.rows.filter((r) => r.jobId === "job-byok-rename");
+    expect(mine).toHaveLength(2);
+    const one = mine.find((r) => r.id === "00000000-0000-4000-8000-00000000f201");
+    const two = mine.find((r) => r.id === "00000000-0000-4000-8000-00000000f202");
+    expect(one?.byokUpstreamNanos).toBe(null);
+    expect(two?.byokUpstreamNanos).toBe(9_000_000);
+    /* The stale name is gone from the row, so nothing downstream can read it by
+       accident and no round trip writes it back out. */
+    expect(one).not.toHaveProperty("upstreamInferenceNanos");
+
+    /* And the obvious sum now matches `totalRows` over lines that used to
+       double it: 4,000 + 0 credits, 9,000,000 upstream. Written the naive way
+       on the *old* shape it would have been 13,004,000. */
+    const sum = mine.reduce(
+      (n, r) =>
+        n + (r.creditsUsedNanos ?? 0) + (r.byokUpstreamNanos ?? 0) + (r.computedCostNanos ?? 0),
+      0,
+    );
+    const t = totalRows(mine);
+    expect(sum).toBe(t.credits + t.upstream + t.computed);
+    expect(sum).toBe(9_004_000);
+  });
+
   it("does not interleave two writes racing each other", async () => {
     /* Append-only is not the same as atomic — Node says plainly that its
        promise-based fs calls are not synchronised, and nothing established that
@@ -361,11 +477,18 @@ describe("the filesystem ledger", () => {
 /* Both, and in that order. The table has existed since 0000 with a different
    shape, so a probe that only asks whether it exists would let this suite run
    against the old columns and fail in a way that reads like a bug in the
-   store. */
+   store.
+
+   **The column asked for is `byok_upstream_nanos`, not `credits_used_nanos`,
+   since 2026-09-02**: the migration that renamed it is the thing three of the
+   tests below are about, so a database one migration behind should say "run
+   npm run db:migrate" rather than fail with a confusing column error from
+   inside the store. That is the reason four other suites name a column here —
+   see tests/helpers/pg-ready.ts. */
 const { reachable } = await pgReady({
   suite: "tests/store-ai-calls.test.ts",
   tables: ["spideryarn.ai_calls"],
-  columns: [{ table: "spideryarn.ai_calls", column: "credits_used_nanos" }],
+  columns: [{ table: "spideryarn.ai_calls", column: "byok_upstream_nanos" }],
   max: 4,
 });
 
@@ -373,12 +496,25 @@ const when = reachable ? describe : describe.skip;
 
 when("the Postgres ledger", () => {
   const RUN = "00000000-0000-4000-8000-00000000c001";
+  /**
+   * A second run id for the money tests, so the sum below counts its own four
+   * fixtures and nothing the two round-trip tests above happen to have left.
+   *
+   * **Explicit cleanup, because these are the tests that still write to the
+   * real dev ledger.** Since 2026-09-02 `costStore` hands the *filesystem*
+   * store to anything running under the test harness — src/store/ai-calls.ts
+   * says why — so the route suites no longer fill this table with fixture rows.
+   * These tests deliberately go round that, by importing `pgCostStore`
+   * directly, because a Postgres CHECK is not something a JSONL file can prove.
+   * The cost of that is that they have to tidy up after themselves.
+   */
+  const MONEY = "00000000-0000-4000-8000-00000000c002";
 
   afterAll(async () => {
     const { getDb, closeDb } = await import("../src/db/client.js");
     const { aiCalls } = await import("../src/db/schema.js");
-    const { eq } = await import("drizzle-orm");
-    await getDb().delete(aiCalls).where(eq(aiCalls.runId, RUN));
+    const { inArray } = await import("drizzle-orm");
+    await getDb().delete(aiCalls).where(inArray(aiCalls.runId, [RUN, MONEY]));
     await closeDb();
   });
 
@@ -405,6 +541,99 @@ when("the Postgres ledger", () => {
     expect(typeof found?.creditsUsedNanos).toBe("number");
     expect(found?.articleSlug).toBe("no-such-article-here");
     expect(found?.cacheWrite5mTokens).toBe(8583);
+  });
+
+  it("refuses a non-BYOK row that carries a BYOK upstream figure", async () => {
+    /* **The constraint, watched doing its job.** `byok_upstream_nanos` was
+       written on every chat-wire call until 2026-09-02 — OpenRouter reports
+       `cost_details.upstream_inference_cost` equal to `cost` on an ordinary
+       call — so the column held the same money as `credits_used_nanos` and the
+       obvious `SUM(a) + SUM(b)` was double the truth. The rule that made a
+       total correct lived only in `totalRows()`, in TypeScript, where the next
+       person writing SQL for Stripe would never see it.
+
+       An earlier draft of this plan proposed proving the fix by *computing a
+       total the wrong way and watching the constraint catch it*, which cannot
+       work: a CHECK does not inspect a SELECT. GPT Sol said so, and this is
+       what it asked for instead. */
+    const { pgCostStore } = await import("../src/store/ai-calls-pg.js");
+    const { currentOwnerId } = await import("../src/owner.js");
+    const bad = row({
+      id: "00000000-0000-4000-8000-00000000a103",
+      runId: MONEY,
+      ownerId: currentOwnerId(),
+      articleSlug: null,
+      isByok: false,
+      byokUpstreamNanos: 21_523_500,
+    });
+    await expect(pgCostStore.record(bad)).rejects.toThrow(/ai_calls_byok_upstream_only/);
+  });
+
+  it("adds up the same way in SQL as totalRows does in JavaScript", async () => {
+    /* **The assertion the whole rename exists for.** `COALESCE(credits,0) +
+       COALESCE(byok_upstream,0) + COALESCE(computed,0)` is the expression
+       anybody writing a per-owner monthly aggregate will write, because it is
+       the only one the schema suggests. It has to be right on every kind of
+       row, so all four are here: a settled provider figure, a BYOK call whose
+       OpenRouter charge is legitimately zero, one of our own computed bypass
+       figures, and a call that reported no money at all.
+
+       Real SQL rather than the JS restatement in the `totalRows` block above,
+       because the point is that the *database* now supports the naive query. */
+    const { pgCostStore } = await import("../src/store/ai-calls-pg.js");
+    const { currentOwnerId } = await import("../src/owner.js");
+    const { getDb } = await import("../src/db/client.js");
+    const { sql } = await import("drizzle-orm");
+    const owner = currentOwnerId();
+    const base = { runId: MONEY, ownerId: owner, articleSlug: null };
+    const fixtures = [
+      row({ ...base, id: "00000000-0000-4000-8000-00000000a201", creditsUsedNanos: 1_000 }),
+      row({
+        ...base,
+        id: "00000000-0000-4000-8000-00000000a202",
+        isByok: true,
+        creditsUsedNanos: 0,
+        byokUpstreamNanos: 9_000_000,
+      }),
+      row({
+        ...base,
+        id: "00000000-0000-4000-8000-00000000a203",
+        providerAccount: "anthropic",
+        costSource: "computed",
+        creditsUsedNanos: null,
+        computedCostNanos: 7_000,
+        priceVersion: "claude-sonnet-5@2026-08-01",
+      }),
+      row({
+        ...base,
+        id: "00000000-0000-4000-8000-00000000a204",
+        costSource: "none",
+        creditsUsedNanos: null,
+      }),
+    ];
+    for (const f of fixtures) await pgCostStore.record(f);
+
+    const answer = await getDb().execute(sql`
+      select coalesce(sum(
+               coalesce(credits_used_nanos, 0)
+             + coalesce(byok_upstream_nanos, 0)
+             + coalesce(computed_cost_nanos, 0)
+             ), 0)::bigint as total
+        from spideryarn.ai_calls
+       where run_id = ${MONEY}
+    `);
+    const inSql = Number((answer.rows[0] as { total: string | number }).total);
+
+    const { rows } = await pgCostStore.read();
+    const mine = rows.filter((r) => r.runId === MONEY);
+    expect(mine).toHaveLength(fixtures.length);
+    const t = totalRows(mine);
+    expect(inSql).toBe(t.credits + t.upstream + t.computed);
+    expect(inSql).toBe(9_008_000);
+    /* The unpriced row is a count and not a zero folded into the money. SQL
+       cannot say this, which is why the report reads rows rather than only
+       summing them. */
+    expect(t.unpriced).toBe(1);
   });
 
   it("writes one row for one call, however often the insert is retried", async () => {

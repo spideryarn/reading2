@@ -83,8 +83,13 @@ import { useChat } from "./useChat.js";
 import { useRenderCount } from "./perf.js";
 
 /**
- * The band: the thread, the fetch that belongs to it, and the one automatic
- * turn.
+ * The band: the thread, the fetch that belongs to it, and the opening turn
+ * behind its button.
+ *
+ * **There is no automatic turn any more**, and this docstring said there was
+ * until 2026-09-02. The opening ask used to fire from a `useEffect` on mount;
+ * it now fires from `StartBrief`'s press and from nothing else — see
+ * `startBrief` below.
  *
  * A component of its own for `ConversationBand`'s reason — `useChat` fetches on
  * mount, and a reader who never opens this sub-mode should not pay for it.
@@ -309,6 +314,36 @@ export function CandidatesPanel({
  * would be hiding here is that pressing this sends terms drawn from an
  * unpublished manuscript out to be searched. docs/project/copy.md.
  *
+ * ## What the button said until 2026-09-02, and why it was false both ways
+ *
+ * It said *"Find reviewers — one model call and a web search"*, and a
+ * cross-family review took that apart. Both halves were wrong, in opposite
+ * directions:
+ *
+ * - **Not "find reviewers".** `CANDIDATES_OPENING` in src/referee-candidates.ts
+ *   asks for the fit brief and ends *"No names yet."* The press buys the brief;
+ *   the names come from a turn the editor asks for afterwards.
+ * - **Not "one … and a web search".** Web search is offered on every round and
+ *   the model decides whether to use it, so on this opening turn it may run
+ *   **zero** times — while the conversation loop makes a fresh provider request
+ *   per tool round, up to `MAX_TOOL_ROUNDS + 1` of them (src/converse.ts). A
+ *   disclosure that names a count is a disclosure that can be wrong, and this
+ *   one was wrong at both ends.
+ *
+ * **The honest-labelling route was taken rather than the other one on offer**,
+ * which was to suppress search and multi-round tools for this opening turn so
+ * the one-call promise came true. That would have meant a per-turn tool policy
+ * threaded from this button through `useChat`, the chat route and into
+ * `converse`, so that a *client* could decide what a *server* may call — a new
+ * seam in the one place where "what did this cost" has to stay answerable from
+ * the server alone. The words were the thing that was wrong; the words are what
+ * changed.
+ *
+ * So it names the product (the brief), and it says *may* about the search
+ * because *may* is the truth. The third-party warning stays exactly as strong:
+ * when search does run it really does reach Exa through OpenRouter, and a
+ * referee cannot know in advance which turn will.
+ *
  * No `disabled` state and no busy state: the button is unmounted the moment a
  * thread exists, which `send` makes true synchronously (`useChat` § the
  * optimistic insert), so there is no window in which it can be pressed twice.
@@ -322,19 +357,20 @@ function StartBrief({ onStart }: { onStart(): void }) {
         className="tip-soon"
         content={
           <ControlTip
-            head="Find reviewers"
-            what="Asks the model who could review this paper and what expertise it would take, and searches the web for the names."
-            how="One model call over the paper plus web searches run for you, so it takes a few seconds and costs something. The search terms are drawn from the paper, and they go to a search engine — a different third party from the model. Nothing here has run until you press it."
+            head="Build the reviewer brief"
+            what="The answer is a description of the reader this paper needs — each requirement tied to the passage that asks for it — and no names at all. Names come from a follow-up you ask for, each one with a source."
+            how="An AI turn over the whole paper, which may take several provider requests and may run a web search; either way it costs money. A search sends terms drawn from the paper to a search engine, which is a different third party from the model. Nothing here has run until you press it."
           />
         }
       >
         <button type="button" className="cnd-start-btn" onClick={onStart}>
-          <Globe size={13} aria-hidden="true" /> Find reviewers — one model call and a web search
+          <Globe size={13} aria-hidden="true" /> Build the reviewer brief
         </button>
       </Tooltip>
       <p className="cnd-start-note">
-        Nothing has been asked yet. Pressing this sends search terms drawn from the paper to a
-        search engine, as well as to the model.
+        Nothing has been asked yet. Pressing this starts an AI turn over the paper, and it may run a
+        web search — which would send terms drawn from the paper to a search engine, as well as to
+        the model.
       </p>
     </div>
   );

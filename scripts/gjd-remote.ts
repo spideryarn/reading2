@@ -3247,6 +3247,11 @@ const TOOLS: { name: string; run: string; want: RegExp }[] = [
   // and found nothing, which is a different failure from a tool that is absent.
   { name: "rg", run: "rg --count PATH /etc/environment", want: /^[1-9]\d*$/ },
   { name: "unzip", run: "unzip -v", want: /^UnZip \d+\.\d+/ },
+  // `emacs -nw` is the box's editor (docs/project/hetzner-remote-server-box.md).
+  // This probe says the binary is there; whether $EDITOR and the `editor`
+  // alternative point at it is asserted by provision.sh's own verify section,
+  // because those are login-shell and root facts and this runs neither.
+  { name: "emacs", run: "emacs --version", want: /^GNU Emacs \d+\./ },
 ];
 
 /**

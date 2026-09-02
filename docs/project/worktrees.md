@@ -22,7 +22,8 @@ What is built:
 | | |
 |---|---|
 | [`scripts/lockfile.ts`](../../scripts/lockfile.ts) | Atomic file lock. **Never steals a stale lock** — so a `SIGKILL`ed holder leaves a file a human must `rm`, and the error message says which. Deliberate: never two writers. |
-| [`scripts/worktree-admin.ts`](../../scripts/worktree-admin.ts) | Forced removal of a throwaway worktree, a `--porcelain -z` parser, and `ghosts()` for the sweep that does not exist yet. |
+| [`scripts/worktree-admin.ts`](../../scripts/worktree-admin.ts) | Forced removal of a throwaway worktree, a `--porcelain -z` parser, and `ghosts()`, which the sweep now uses. |
+| [`scripts/worktree-sweep.ts`](../../scripts/worktree-sweep.ts) | `npm run worktree:sweep`, run in the **primary**: which trees have landed, and the removal of one that has. Owns only what one tree cannot see — enumeration, ghosts, the 24h age floor — and asks `worktree:check` everything else. See [Sweeping them up](#sweeping-them-up). |
 | [`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts) | `DEPLOY_SOURCE_BRANCHES` and `deployBranchProblem` — `npm run deploy` accepts **`dev` alone** since the flip, and refuses `main` and any `worktree-*` branch by name. Plus `trunkGap`, below. |
 | the `level with origin/dev` gate | **Being on the trunk is not being level with it.** `preflight` only ever compared against `origin/main`, which proves the candidate contains current *production* and says nothing about current *trunk* — so a stale `dev` could promote code missing commits that had landed, and report success. The gate requires the captured sha to equal a freshly fetched `origin/dev`, and fails closed if the trunk cannot be read. Forcible as `--force-gate='level with origin/dev'`. |
 | [`vercel.json`](../../vercel.json) | `git.deploymentEnabled` is default-deny — `{"**": false, "main": true}` — so only production builds. |
@@ -32,13 +33,19 @@ What is built:
 | [`vite.config.ts`](../../vite.config.ts) | `server.watch.ignored` gains `**/.claude/worktrees/**`, so a peer's keystrokes do not reload your page. Plus a startup warning when the port is not allow-listed — see [Ports and the ceiling](#ports-and-the-ceiling). |
 | [`scripts/worktree-port.ts`](../../scripts/worktree-port.ts) | The range, `PRIMARY_PORT`, `portInRange`, `parseDevPortEnv` and `allowListedPorts`. **No allocator**: Greg redirected the design to dynamic allocation on 2026-09-01, and the reservation, its tests and an export added to `lockfile.ts` for it were deleted — see [Ports and the ceiling](#ports-and-the-ceiling). |
 | [`supabase/config.toml`](../../supabase/config.toml) | `additional_redirect_urls` covers **5273–5303**, matching `DEV_PORT_RANGE` exactly, so sign-in works on whichever port a worktree lands on. GoTrue bakes the list in at start, so editing it needs a Supabase restart. |
-| [`scripts/worktree-setup.ts`](../../scripts/worktree-setup.ts) | `npm run worktree:setup`, run **inside** a worktree. Installs dependencies, materialises the corpus, and says what is still missing. **Refuses in the primary**, because it runs `npm ci` — see below. |
+| [`scripts/worktree-setup.ts`](../../scripts/worktree-setup.ts) | `npm run worktree:setup`, run **inside** a worktree. Merges `origin/dev`, installs dependencies, materialises the corpus, and says what is still missing. **Refuses in the primary**, because it runs `npm ci` — see below. |
+| [`scripts/worktree-freshen.ts`](../../scripts/worktree-freshen.ts) | The merge, on its own: fetch `origin/dev` and merge it into the worktree's branch, refusing over modified tracked files and stopping on a conflict. Why the merge rather than a different `baseRef` is [below](#why-a-worktree-branches-from-head-and-then-merges-the-remote). |
 | [`scripts/corpus-materialise.ts`](../../scripts/corpus-materialise.ts) | The corpus copy, extracted from `deploy.ts` so the gate and the setup script share one implementation rather than two that drift. |
-| [`.claude/settings.json`](../../.claude/settings.json) | `worktree.baseRef: "head"` — worktrees branch from the primary's local `HEAD`, not from the remote. See [Why not the remote](#why-a-worktree-branches-from-head-and-not-from-the-remote). |
+| [`scripts/worktree-check.ts`](../../scripts/worktree-check.ts) | `npm run worktree:check`, run **inside** a worktree: **is it safe to delete this directory?** Reads only. Fails closed on every unknown, and the part no other signal covers is the gitignored one — it compares `data/` and `output/` against the committed fixture corpus file by file, so a pipeline run nobody committed shows up as a blocker rather than as silence. See [Before you remove one](#before-you-remove-one). |
+| [`.claude/settings.json`](../../.claude/settings.json) | `worktree.baseRef: "head"` — worktrees branch from the primary's local `HEAD`, not from the remote, and `worktree:setup` then merges `origin/dev` on top. See [below](#why-a-worktree-branches-from-head-and-then-merges-the-remote). |
 
-Still to build: an identity endpoint and `worktree:sweep` —
+Still to build: an identity endpoint —
 [the plan's work list](../plans/260828r-worktrees.md#what-is-left-to-do). The auth allow-list is
-done.
+done, and so is the sweep, which landed on 2026-09-02 in two pieces on the same day:
+`worktree:check` answers for **one** tree and prints, and `worktree:sweep` reads across every tree
+and is the only thing that removes one. The sweep asks `blockers(gather(path))` for its per-tree
+verdict rather than deriving a weaker one from `git status` — one judgement, in one place, so the
+two cannot quietly disagree.
 
 **The "database lease" on that list is half built already, and not where the plan looks for it.**
 `db:migrate` has taken a Postgres advisory lock since before worktrees —
@@ -66,7 +73,7 @@ schema; the advisory lock serialises the writers and cannot do anything about th
 
 ```bash
 claude --worktree my-thing      # creates .claude/worktrees/my-thing, branch worktree-my-thing
-npm run worktree:setup         # inside it: dependencies + the article store
+npm run worktree:setup         # inside it: merge origin/dev, dependencies, the article store
 npm test                        # expect a handful red, about what the primary has at the same moment
 npm run dev                     # walks up from 5273; warns if the port is not allow-listed
 ```
@@ -97,7 +104,7 @@ the primary. It asks git rather than guessing from the path — in a worktree `-
 identical. Verified by running it in the primary and checking `node_modules` came out with the same
 inode and mtime.
 
-### Why a worktree branches from `HEAD` and not from the remote
+### Why a worktree branches from `HEAD` and then merges the remote
 
 `worktree.baseRef: "head"` in [`.claude/settings.json`](../../.claude/settings.json), rather than the
 default `"fresh"`, which branches from the default branch **on the remote**. Measured on 2026-09-01:
@@ -116,6 +123,42 @@ A](#runbook-a-flip-the-trunk-to-dev-done-2026-09-02) to land, on 2026-09-02, and
 the wait cost nothing: `"fresh"` would resolve through `origin/HEAD`, and `"head"` never asks. A
 worktree branches from this box's `dev` whatever GitHub says, and whatever a stale `origin/HEAD`
 says.
+
+**But `HEAD` is stale too, and since the flip to `dev` it is stale in the other direction.** The
+argument above was written when the trunk was `main`, which only a deploy moves. `dev` moves every
+time any agent finishes something, and the primary is only as current as the last time somebody
+pulled into it. Measured on 2026-09-02, minutes after Runbook A landed:
+
+```
+  local dev   ←  7 commits behind origin/dev
+```
+
+So a worktree created that minute started seven commits stale, and nothing said so. Greg, 2026-09-02:
+
+> When we start a new worktree, ideally it would initialise that worktree with the latest changes
+> from dev remote, rather than the primary checkout (because that might be stale).
+
+The fix is **not** to flip `baseRef` to `"fresh"`. Branching from the remote drops any commit the
+primary has and has not pushed, and this box has had both at once. Branching from `HEAD` and then
+**merging** `origin/dev` keeps both — and merge is what this repo does anyway
+([version-control.md](version-control.md#always-merge-never-rebase)). That merge is the first thing
+`worktree:setup` does, before `npm ci`, because the merge can move `package-lock.json` and installing
+the old one first leaves `node_modules` describing a lockfile that is gone.
+
+Three things it will not do, each because the alternative loses work:
+
+- **It will not merge over modified tracked files.** In a fresh worktree there are none; in one you
+  re-run setup in, there might be. It says so and carries on to the install.
+- **It will not resolve a conflict.** The tree is left mid-merge and setup stops, because a conflict
+  is a proposal before it is an edit —
+  [git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md).
+- **It will not pretend a failed fetch means "current".** Offline, you get a `FAIL` line naming the
+  command to run by hand, not a green tick.
+
+[`tests/worktree-freshen.test.ts`](../../tests/worktree-freshen.test.ts) builds a real origin, a real
+primary that is behind it and a real worktree of that primary, and asserts the *number of commits
+recovered* rather than merely that a merge ran — a merge of a trunk you already contain passes the
+weaker test and proves nothing.
 
 ### What a worktree costs, measured rather than assumed
 
@@ -171,7 +214,17 @@ git fetch origin dev
 git merge origin/dev           # NOT rebase — see below
 npm test && npm run typecheck
 git push origin HEAD:dev       # commits land on dev; no worktree-* ref on origin
+
+# and to see just your own branch's changes — for a review, or a scoped diff:
+git diff origin/dev...HEAD     # THREE dots. Two is a trap; see below.
 ```
+
+**Type the three dots.** `git diff origin/dev..HEAD` — two — is a live comparison against wherever
+`origin/dev` has got to, and it renders commits *other agents landed* as deletions your branch makes.
+That is not a display problem: the workflow hands GPT Sol "the scoped diff" as review evidence, so a
+two-dot diff spends a review on phantom findings, or gets an agent to "restore" the phantom deletions
+and silently revert landed work. Three dots compares against the merge base — where you actually
+forked — which is the question you meant. [Below](#traps) for why this bites here in particular.
 
 Three things follow from `push origin HEAD:dev`, and they are all improvements:
 
@@ -194,6 +247,82 @@ Three things follow from `push origin HEAD:dev`, and they are all improvements:
 moving the trunk to `dev` costs one line in [`scripts/deploy.ts`](../../scripts/deploy.ts) rather than
 a rewrite, and why Vercel's git auto-deploy on `main` must stay **on** — the script polls for the
 production build that the push causes.
+
+## Before you remove one
+
+```bash
+npm run worktree:check          # inside the worktree, before anyone deletes it
+```
+
+One question — **would deleting this directory lose anything?** — and it fails closed on every part
+of the answer it cannot get. Read-only: it never removes the tree, and it never will, because the
+whole reason it can afford to be blunt is that nothing follows automatically from what it prints.
+
+`git status` is not this check, and that is the point:
+
+- **`data/`, `output/` and `.env.local` are gitignored**, so committing and pushing does not save
+  them and a clean `git status` says nothing about them. The corpus halves are compared against
+  [`tests/fixtures/data-root/`](../../tests/fixtures/data-root) **file by file, by content**, so a
+  pipeline run somebody paid for shows up by name. Claude Code's own cleanup has this same blind
+  spot — see [Traps](#traps) — and **so does git**: `git worktree remove` refuses over modified and
+  untracked files but not over ignored ones, so for the case that matters most there is no second
+  guard behind this one.
+- **A copy elsewhere is checked, not assumed.** `.env.local` and `.claude/settings.local.json` are
+  compared byte for byte against the primary's, because they arrive by being copied and an edit made
+  only here exists nowhere else. They were plain "worth an eye" notes until a GPT Sol review pointed
+  out that a worktree whose only uncommitted state was an edited `.env.local` printed SAFE.
+- **Tracked files can be hidden from `git status`** by `assume-unchanged` or `skip-worktree`. That
+  bit lives in this worktree's own index, so it goes with the directory and so does the edit.
+- **"Nothing unpushed" is not "it landed."** The native sweep asks the first; this asks the second,
+  with `git merge-base --is-ancestor HEAD origin/dev` after a **fresh fetch**. A fetch that fails is
+  `unknown`, which blocks — a stale remote-tracking ref answers a question about an hour ago.
+- A half-finished merge, cherry-pick, rebase or bisect lives in the git dir and can sit under a
+  clean-looking tree.
+
+Anything it does not recognise is a blocker rather than a shrug, so a new `.gitignore` entry makes it
+cautious instead of silent. What it does not check is printed when it passes rather than left to be
+discovered: file modes under `data/`, a commit reachable only through this worktree's HEAD reflog
+(which needs a branch-moving operation [AGENTS.md](../../AGENTS.md) bans), and whatever is only in the
+session's context.
+
+It answers for the tree you are standing in and takes no arguments. For every tree at once, and for
+the removal itself, see below — the sweep calls `blockers(gather(path))` here rather than keeping a
+cheaper copy of the same judgement.
+
+### Sweeping them up
+
+```bash
+npm run worktree:sweep                                    # read-only. Deletes nothing.
+npm run worktree:sweep -- remove --branch <name> --dry-run
+npm run worktree:sweep -- remove --branch <name>
+```
+
+**`remove` takes one branch and has no bulk form**, and re-runs the whole classification — fresh
+fetch included — before each deletion, so a verdict cannot be carried from an earlier decision into a
+later removal. Three things it owns that `worktree:check` deliberately does not, because they need the
+primary's vantage point or would be wrong inside a single tree:
+
+- **Ghosts** — a registration whose directory is gone. Unregistered, but its **branch is left alone**:
+  the tree is gone, and its commits are not this command's to judge.
+- **You are standing in it.**
+- **The 24-hour age floor.** A worktree touched this recently is never removable, however landed. This
+  is not caution, it is the bug that retired the sibling repo's sweep: a fresh tree whose tip equals
+  the trunk passes the merged check trivially, and since `worktree:setup` merges `origin/dev` that is
+  the *normal* state of every worktree here for its first day. `worktree:check` has no age floor and
+  should not — asked inside a three-hour-old landed tree it is right to say "safe", because the person
+  standing in it knows whether they are done.
+
+Two things worth knowing about how it is wired:
+
+**It fetches once, not once per tree.** `gather()` fetches the trunk for itself, which is right for
+one tree and is one shared ref fetched thirty times across thirty. The sweep calls `fetchTrunkSha`
+once and passes the **sha** down — a sha and not a ref name, because a ref can be moved under you by
+any peer between the fetch and the test, which is the hazard `FETCH_HEAD` was chosen to dodge. A
+failed central fetch makes every tree `UNKNOWN`, never removable.
+
+**A tree it cannot read is `UNKNOWN`, kept, and still printed.** One tree's failure never costs you
+the others' answers, and a tree that silently dropped out of the list would be the failure mode where
+success is the absence of something.
 
 ## The database: one stack, and a lease
 
@@ -549,9 +678,28 @@ moment that flipped. Either spelling lands on `dev` today.
 - **Claude Code's own worktree cleanup cannot see `data/` or `.env.local`.** Both are gitignored, so a
   clean `git status` reports "safe" and then deletes real work. Any removal path must check
   `git status --porcelain=v1 --untracked-files=all` **and** `--ignored`.
+  [`npm run worktree:check`](#before-you-remove-one) is the one that does — nothing stops the native
+  cleanup, so run it first.
 - **Age of the last commit is the wrong clock** for deciding a worktree is abandoned: one created ten
-  minutes ago from a month-old commit passes that test immediately. Record a creation timestamp at
-  setup and age from that.
+  minutes ago from a month-old commit passes that test immediately, and so does one that merged the
+  trunk by fast-forward, which writes no commit at all. Solved without the recorded creation timestamp
+  this trap used to ask for: `lastActivityAt` in
+  [`scripts/worktree-sweep.ts`](../../scripts/worktree-sweep.ts) takes the **branch reflog's** top
+  entry too — that moves when the branch is created and on every merge — and the mtime of the
+  worktree's own `.git/worktrees/<name>`, which is the only one of the three a **detached** worktree
+  has. Without that third signal a detached tree checked out from an old commit is born looking
+  abandoned, which is this same trap arriving through the one door the reflog does not cover. Latest
+  of the three wins.
+- **`git diff origin/dev..HEAD` in a worktree shows other agents' landed commits as your deletions.**
+  Two dots is a live comparison against wherever `origin/dev` has reached, so every commit it has that
+  you do not reads as a deletion on your side. Use `git diff origin/dev...HEAD`, three dots, which
+  compares against the merge base.
+
+  **This is not caused by worktrees**, and believing it is will get you two-dotting confidently in the
+  primary. Any checkout has it the moment it fetches. What the shared `.git` removes is your control
+  over *when*: `refs/remotes/` lives in the common directory, so a **peer's** fetch moves `origin/dev`
+  between two of your own commands while you sit still — and since 2026-09-02 every
+  `npm run worktree:setup` fetches, so this now happens whenever anyone starts a worktree.
 - **Every repo scanner walks into `.claude/worktrees/`** unless told not to — `SKIP` in
   `scripts/typecheck.ts`, `watch.ignored` in `vite.config.ts`, then `check.ts`, knip, biome, jscpd.
   Without this the primary typechecks ten peers' half-finished trees.

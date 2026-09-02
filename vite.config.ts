@@ -27,6 +27,72 @@ import { devWatchIgnored } from "./scripts/worktree-admin.js";
 const WATCH_IGNORED = devWatchIgnored(fileURLToPath(new URL(".", import.meta.url)));
 
 /**
+ * Refuse to boot a Postgres-mode server whose database does not answer.
+ *
+ * **The env checks are not enough, and that is the whole reason this exists.**
+ * `src/store/index.ts` refuses at module load when the Supabase Storage
+ * variables are missing, and `getDb()` explains an absent `DATABASE_URL` — but
+ * both of those read *settings*. With every setting present and the containers
+ * simply stopped, nothing throws: the server boots clean and the first `/api`
+ * request dies on a raw connection error. That is precisely the outcome
+ * `createApiMiddleware` below declares this file's anti-goal, and since
+ * `npm run dev` now defaults to `postgres` it is the routine state of a fresh
+ * checkout rather than an edge case. Absent is conclusive; present is not.
+ *
+ * `select 1` and nothing more. It is not a health check, it does not retry, and
+ * it must not grow into one — the question is only whether there is a database
+ * on the other end of the URL we are about to serve every read from.
+ *
+ * **`cause` before `message`, and it is the whole value of the message.**
+ * Drizzle wraps a failure as `Failed query: select 1`, which names what we
+ * asked and not what went wrong — so an unreachable database and a permissions
+ * error read identically. The `ECONNREFUSED` a person needs is on the `cause`.
+ *
+ * **Dev and preview only.** It is reached from `createApiMiddleware`, which
+ * `apply: "serve"` keeps out of a build, so a serverless cold start pays
+ * nothing for it.
+ */
+async function assertStoreReachable(): Promise<void> {
+  const { STORE } = await import("./src/store/live.js");
+  if (STORE !== "postgres") return;
+
+  const [{ getDb }, { sql }] = await Promise.all([
+    import("./src/db/client.js"),
+    import("drizzle-orm"),
+  ]);
+
+  /* **A deadline, because the pool has none.** `new Pool(...)` in src/db/client.ts
+     sets no `connectionTimeoutMillis`, so a refused connection comes back at once
+     but a blackholed address or a stalled TLS handshake never comes back at all —
+     and a dev server that hangs before printing its URL is a worse failure than
+     the 500 this function exists to replace. Not retried: `supabase start` already
+     waits for readiness, and typing the command again is the right response to the
+     narrow case where the container is up but Postgres is still recovering.
+     GPT Sol, 2026-09-02. */
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("timed out after 5s")), 5_000);
+    timer.unref();
+  });
+
+  try {
+    await Promise.race([getDb().execute(sql`select 1`), deadline]);
+  } catch (err) {
+    const cause = err instanceof Error && err.cause instanceof Error ? err.cause : err;
+    throw new Error(
+      `SPIDERYARN_STORE is "postgres", but the database did not answer: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }. Locally: npm run db:start, and check DATABASE_URL in .env.local. To work off the ` +
+        "filesystem instead, put SPIDERYARN_STORE=files in .env.local — that file beats both this " +
+        "script's default and anything you type on the command line (src/env.ts). " +
+        "See docs/project/supabase-local.md.",
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * One process, one command (`npm run dev`). The API is mounted as dev middleware
  * rather than as a separate server so there's nothing to run in a second
  * terminal while the ideas are still moving — see src/routes.ts for the routes
@@ -47,6 +113,7 @@ const WATCH_IGNORED = devWatchIgnored(fileURLToPath(new URL(".", import.meta.url
  * up as a 500 on somebody's first request.
  */
 async function createApiMiddleware(): Promise<Connect.NextHandleFunction> {
+  await assertStoreReachable();
   const { handleApi } = await import("./src/routes.js");
   return (req, res, next) => {
     handleApi(req, res).then(

@@ -25,13 +25,19 @@ Two rules an agent will otherwise break:
 | `npm run knip` | unused files, exports, dependencies | advice |
 | `npm run complexity` | functions worth a second look | advice |
 | `npm run dupes` | copy-paste | advice |
-| `npm run check` | all eight of the above, gates first, ~20s (`-- --fast` skips the build) | **gate** |
+| `npm run check` | all eight of the above, gates first, ~20s (`-- --fast` skips the build; `-- --offline` drops the database requirement below) | **gate** |
 | `npm run count-lines` | how big the repo is, by what a file is *for* | — |
 | `npm run db:check` | that the database in `DATABASE_URL` has the columns this build reads | needs a database |
 | `npm run eval:*` | model quality — by hand, costs money, minutes | — |
 
-`db:check` is not in `npm run check` because it needs a database and the rest of that command
-deliberately does not. Point it at the **app's** credential rather than an administrator's — it asks
+**`npm run check` needs a local database**, because its test gate runs under `REQUIRE_POSTGRES=1` —
+without it, seventy-odd suites skip themselves and the gate goes green over a quarter of the suite
+not running ([static-analysis.md](static-analysis.md#the-gateadvisory-split)). `-- --offline` runs
+everything else and says in its summary that it is not the real gate.
+
+`db:check` is still not in `npm run check`, because it asks about one particular deployment's
+database rather than about this code. Point it at the **app's** credential rather than an
+administrator's — it asks
 what the connecting role can see, and `information_schema` hides columns the role has no privilege
 on, so a superuser seeing everything proves nothing about what Vercel can select. It is the answer
 to "have the migrations reached the database this code is about to talk to?", which cost production

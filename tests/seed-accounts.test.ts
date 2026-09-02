@@ -12,7 +12,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { ADMIN_EMAIL, ADMIN_USER_ID_LOCAL, isAdmin } from "../src/admin.js";
+import { ADMIN_EMAIL, ADMIN_EMAIL_LOCAL, ADMIN_USER_ID_LOCAL, isAdmin } from "../src/admin.js";
 import { DEV_OWNER_ID } from "../src/owner.js";
 import { mkdtempSync, chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -21,6 +21,8 @@ import path from "node:path";
 import {
   SEEDED_ACCOUNTS,
   adminPasswordPath,
+  planAccountEmail,
+  staleIdentities,
   newAdminPassword,
   passwordFileIsUsable,
   readAdminCredentials,
@@ -35,7 +37,7 @@ const NOTHING_SET = {} as Record<string, string | undefined>;
 
 describe("what gets seeded", () => {
   it("seeds an account the admin gate actually recognises", () => {
-    const admin = SEEDED_ACCOUNTS.find((a) => a.email === ADMIN_EMAIL);
+    const admin = SEEDED_ACCOUNTS.find((a) => a.id === ADMIN_USER_ID_LOCAL);
     expect(admin).toBeDefined();
     expect(admin?.id).toBe(ADMIN_USER_ID_LOCAL);
     /* The claim that matters: not "the constant equals itself" but "the gate
@@ -44,7 +46,7 @@ describe("what gets seeded", () => {
   });
 
   it("expects a sign-in for the administrator and none for the row-owner", () => {
-    const admin = SEEDED_ACCOUNTS.find((a) => a.email === ADMIN_EMAIL);
+    const admin = SEEDED_ACCOUNTS.find((a) => a.id === ADMIN_USER_ID_LOCAL);
     const owner = SEEDED_ACCOUNTS.find((a) => a.id === DEV_OWNER_ID);
     expect(admin?.signsIn).toBe(true);
     /* Nothing signs in as the row-owner, so a credential on it would be one that
@@ -55,6 +57,24 @@ describe("what gets seeded", () => {
   it("has no two accounts sharing an id or an address", () => {
     expect(new Set(SEEDED_ACCOUNTS.map((a) => a.id)).size).toBe(SEEDED_ACCOUNTS.length);
     expect(new Set(SEEDED_ACCOUNTS.map((a) => a.email)).size).toBe(SEEDED_ACCOUNTS.length);
+  });
+
+  /**
+   * **Greg's real address is not what a local stack is called**, which is the
+   * whole of the 2026-09-02 rename. Written as a property rather than as
+   * `toBe("dev-admin@…")` so that changing the fixture address again does not
+   * need this test edited — the claim is "not a real person's", not "this
+   * string".
+   */
+  it("gives no seeded account a real person's address", () => {
+    for (const account of SEEDED_ACCOUNTS) {
+      expect(account.email).not.toBe(ADMIN_EMAIL);
+      /* `.local` is reserved for mDNS (RFC 6762), so it is not a domain anybody
+         can hold. Not a claim that nothing will send to it — the local stack
+         runs Mailpit, which would accept one. This asserts the two things it
+         can: not the known real address, and on the fixture domain. */
+      expect(account.email.endsWith("@spideryarn.local")).toBe(true);
+    }
   });
 
 });
@@ -113,6 +133,103 @@ describe("the administrator's password file", () => {
 });
 
 /**
+ * Catching up a machine that was seeded before the address changed.
+ *
+ * The interesting property is not that a rename happens but that it is the ONLY
+ * thing that happens: every address other than the one listed in
+ * `renamableFrom` is still a refusal, and the owner row — which lists none — can
+ * never be renamed at all.
+ */
+describe("planAccountEmail", () => {
+  const admin = SEEDED_ACCOUNTS.find((a) => a.id === ADMIN_USER_ID_LOCAL)!;
+  const owner = SEEDED_ACCOUNTS.find((a) => a.id === DEV_OWNER_ID)!;
+
+  it("creates when nothing is at the id", () => {
+    expect(planAccountEmail(undefined, admin)).toBe("create");
+  });
+
+  it("leaves an account that is already called the right thing alone", () => {
+    expect(planAccountEmail({ email: ADMIN_EMAIL_LOCAL }, admin)).toBe("keep");
+  });
+
+  it("renames the pre-2026-09-02 row rather than refusing and waiting for a human", () => {
+    /* The case every existing laptop and box is in. Without this the seed dies
+       on `the id … is already held by …`, and setup stops at step 3 on every
+       machine that already worked. */
+    expect(planAccountEmail({ email: ADMIN_EMAIL }, admin)).toBe("rename");
+  });
+
+  it("does not mistake a case difference for somebody else", () => {
+    expect(planAccountEmail({ email: ADMIN_EMAIL.toUpperCase() }, admin)).toBe("rename");
+    expect(planAccountEmail({ email: ` ${ADMIN_EMAIL_LOCAL.toUpperCase()} ` }, admin)).toBe("keep");
+  });
+
+  it("refuses an address that is neither ours nor one we used to have", () => {
+    expect(planAccountEmail({ email: "someone@example.com" }, admin)).toBe("refuse");
+  });
+
+  it("refuses a row with no address rather than guessing it is ours", () => {
+    expect(planAccountEmail({}, admin)).toBe("refuse");
+  });
+
+  it("will not rename the row-owner, which has never been called anything else", () => {
+    expect(owner.renamableFrom).toEqual([]);
+    expect(planAccountEmail({ email: ADMIN_EMAIL }, owner)).toBe("refuse");
+  });
+
+  it("never lists its own destination as an address to rename from", () => {
+    /* The dangerous inversion: `renamableFrom` containing the address we are
+       moving TO would make the plan circular. Named for exactly what it checks —
+       it says nothing about a live row at the destination, which is
+       `findByEmail`'s job in scripts/db-seed-owner.ts and not testable here. */
+    for (const account of SEEDED_ACCOUNTS) {
+      expect(account.renamableFrom).not.toContain(account.email);
+    }
+  });
+});
+
+/**
+ * What the rename deliberately leaves behind.
+ *
+ * GoTrue keeps one identity per sign-in method and the admin `PUT` updates only
+ * the `email` one, so a row that began as a Google sign-in stays renamed on the
+ * surface and old underneath. GPT Sol found the gap; this is the reporting for
+ * it, and it reports rather than deletes.
+ */
+describe("staleIdentities", () => {
+  const admin = SEEDED_ACCOUNTS.find((a) => a.id === ADMIN_USER_ID_LOCAL)!;
+
+  it("says nothing when every identity has caught up", () => {
+    const identities = [{ provider: "email", identity_data: { email: ADMIN_EMAIL_LOCAL } }];
+    expect(staleIdentities(identities, admin.renamableFrom)).toEqual([]);
+  });
+
+  it("names the provider still holding the old address", () => {
+    /* The laptop's shape: a Google sign-in made the row before any of this
+       existed, so `google` keeps the address Google gave it. */
+    const identities = [
+      { provider: "email", identity_data: { email: ADMIN_EMAIL_LOCAL } },
+      { provider: "google", identity_data: { email: ADMIN_EMAIL } },
+    ];
+    expect(staleIdentities(identities, admin.renamableFrom)).toEqual(["google"]);
+  });
+
+  it("is empty for an account that was never called anything else", () => {
+    const identities = [{ provider: "google", identity_data: { email: ADMIN_EMAIL } }];
+    /* The owner row lists no old address, so nothing about it can be stale — and
+       a function that reported one anyway would send somebody hunting. */
+    expect(staleIdentities(identities, [])).toEqual([]);
+  });
+
+  it("survives GoTrue omitting the parts it does not always send", () => {
+    expect(staleIdentities(undefined, admin.renamableFrom)).toEqual([]);
+    expect(staleIdentities([{ provider: "email" }], admin.renamableFrom)).toEqual([]);
+    expect(staleIdentities([{ identity_data: { email: ADMIN_EMAIL } }], admin.renamableFrom))
+      .toEqual(["an unnamed provider"]);
+  });
+});
+
+/**
  * The half of the password file that must NEVER write.
  *
  * `readAdminCredentials` is what `npm run db:admin-password` prints and what
@@ -133,7 +250,7 @@ describe("readAdminCredentials", () => {
     expect(found.ok).toBe(true);
     if (!found.ok) return;
     expect(found.password).toBe(made.password);
-    expect(found.email).toBe(ADMIN_EMAIL);
+    expect(found.email).toBe(ADMIN_EMAIL_LOCAL);
     expect(found.path).toBe(adminPasswordPath(dir));
   });
 

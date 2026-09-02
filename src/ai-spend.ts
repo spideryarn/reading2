@@ -238,6 +238,34 @@ export type CostSource = "provider" | "computed" | "none";
  * absence, so `provider` is decided by "did OpenRouter say anything" and not by
  * "is the number non-zero".
  */
+/**
+ * **The BYOK pocket, or nothing** — the one place a `SpendRecord`'s upstream
+ * figure becomes the ledger's `byok_upstream_nanos`.
+ *
+ * `SpendRecord.upstreamCostNanos` is a faithful note of what the provider said,
+ * and on an ordinary OpenRouter call the provider says
+ * `cost_details.upstream_inference_cost` equal to `cost` — the same money,
+ * reported twice. Storing that made `SUM(credits) + SUM(upstream)` double the
+ * truth, and the rule that made a total correct lived only in `totalRows`. So
+ * the narrowing happens here, at the boundary between "what we were told" and
+ * "what the ledger claims", and the column now means exactly its name.
+ *
+ * **The three conditions are the CHECK in
+ * drizzle/20260902141103_byok_upstream_nanos.sql, restated in TypeScript, and
+ * they must not drift apart.** A row that fails them is rejected by
+ * Postgres, and a rejected insert is a call that lands in no ledger at all —
+ * `recordSpend` catches the error and warns rather than throwing, so getting
+ * this wrong would lose rows quietly. `isByok` is deliberately `=== true`
+ * rather than truthy: it is `boolean | null`, and "we were not told" is not
+ * "no".
+ */
+function normaliseByokUpstream(record: SpendRecord): Nanos | null {
+  if (record.isByok !== true) return null;
+  if (record.providerAccount !== "openrouter") return null;
+  if (costSourceOf(record) !== "provider") return null;
+  return record.upstreamCostNanos;
+}
+
 function costSourceOf(record: SpendRecord): CostSource {
   if (record.costNanos !== null) return "provider";
   if (record.computedCostNanos !== null) return "computed";
@@ -340,7 +368,20 @@ export interface AiCallRow {
    * docs/plans/260827q-ai-cost-tracking.md § Questions for Greg, Q5.
    */
   creditsUsedNanos: Nanos | null;
-  upstreamInferenceNanos: Nanos | null;
+  /**
+   * **What the inference was worth, and only on a BYOK row.** Null everywhere
+   * else, so `credits + byokUpstream + computed` is the whole of a row's money
+   * and nothing has to be conditional to add it up.
+   *
+   * Called `upstreamInferenceNanos` until 2026-09-02, when it was written on
+   * every chat-wire call — OpenRouter reports
+   * `cost_details.upstream_inference_cost` equal to `cost` on an ordinary call,
+   * so the column held the same money as `creditsUsedNanos` and a naive sum
+   * doubled every bill. `normaliseByokUpstream` in this file is what makes the new
+   * name true; the database `CHECK` in
+   * drizzle/20260902141103_byok_upstream_nanos.sql is what keeps it true.
+   */
+  byokUpstreamNanos: Nanos | null;
   isByok: boolean | null;
   /** `openrouter` or `anthropic` — which of the two bills this lands on. */
   providerAccount: ProviderAccount;
@@ -757,7 +798,7 @@ function write(
     durationMs: record.ms,
     outcome: record.outcome,
     creditsUsedNanos: record.costNanos,
-    upstreamInferenceNanos: record.upstreamCostNanos,
+    byokUpstreamNanos: normaliseByokUpstream(record),
     isByok: record.isByok,
     providerAccount: record.providerAccount,
     costSource: costSourceOf(record),

@@ -15,6 +15,16 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    /* **Vitest's default, written down because something now depends on it.**
+       `src/process-state.ts` keeps the job queue's locks on `globalThis` so that
+       they survive a dev-server reload, which means they also survive
+       `vi.resetModules()` — and with isolation off they would survive from one
+       *test file* to the next, so one file's leftover `running` job would count
+       against another file's concurrency cap. Isolation per file is what makes
+       that impossible; it is on by default and this line is here so that turning
+       it off is a decision rather than an accident. GPT Sol, 2026-09-02,
+       docs/postmortems/260902c-the-truncation-retry-cost-storm.md. */
+    isolate: true,
     /* **Loaded into every test file: a test may not spend money.** It wraps
        `globalThis.fetch` and refuses a request to a provider host before it is
        sent. Not a nicety — two tests in `tests/referee-mirror-route.test.ts`
