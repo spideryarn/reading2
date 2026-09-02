@@ -383,6 +383,24 @@ what is still missing.
 
 **And the deployed app now does point at it**, which is how the next paragraph came to be written.
 
+### The local ledger cannot tell you what the remote is missing
+
+The two databases drift independently, and they drift by a lot. On 2026-09-02 a laptop that was
+four migrations behind was used to say, in a question put to Greg, that the deploy would apply
+**four** migrations to production. It applied **fifteen** — production was at `0036` and the laptop
+at `0047`. The answer was arrived at honestly, by counting rows in
+`spideryarn_migrations.__drizzle_migrations` and subtracting; it was just the wrong database's rows.
+
+So **do not quote a pending count for production from anything local**. The number production would
+actually apply comes from `migrationPlan()` in [`scripts/deploy.ts`](../../scripts/deploy.ts), which
+reads the remote's own ledger and prints the list under `── Migrations`, each tag on its own line
+and destructive statements called out. `npm run deploy -- --dry-run` reaches that step without
+applying anything. Read that list before you promise anyone a number.
+
+The general form is the one this whole section keeps restating: [a number is about whichever
+database you asked](#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like), and it never
+says which one that was.
+
 ### The four migrations that were not there, and the command that said they were
 
 Later on 2026-08-27, `spideryarn.com` rendered a failed
