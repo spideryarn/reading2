@@ -44,7 +44,6 @@ import { QuizPanel, RememberSubModeToggle } from "./QuizPanel.js";
 import { useQuiz } from "./useQuiz.js";
 import { Tweets } from "./Tweets.js";
 import { sanitizeArticle } from "./sanitize.js";
-import { TheOriginal } from "./SourceLink.js";
 import { TableView } from "./TableView.js";
 import type { TermSelection } from "./annotate.js";
 import { formsOf } from "../term-match.js";
@@ -1568,16 +1567,6 @@ function Reader({
   const comments = owner?.comments.comments ?? NO_COMMENTS;
   const commentError = owner?.comments.error ?? null;
   /**
-   * A failed *view the original*, held here rather than beside the button.
-   *
-   * Component state and not a URL parameter, deliberately: it is a transient
-   * report about a request that just failed, not a place the reader is, and
-   * `?…=` is for the second of those (docs/project/url-state.md). It is also the
-   * one thing in this bar that a **reload** should clear.
-   */
-  const [sourceError, setSourceError] = useState<string | null>(null);
-
-  /**
    * The floating chat, and the passage it is about.
    *
    * **One id, not two.** `?thread=` says which conversation is open and `mode`
@@ -2188,23 +2177,6 @@ function Reader({
             on outranks every control that follows, and this bar is the one
             piece of chrome that is on screen at every scroll position. */}
         {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} />}
-        {/* **The way to the original, first in the bar.**
-            Greg asked for it in the top bar, 2026-08-31; SourceLink.tsx says
-            why the masthead's existing link on the title is not an answer, and
-            what the three states are.
-
-            First rather than last, which was the obvious place for a fact about
-            the article rather than a control over the view. On a phone this bar
-            scrolls sideways and nothing in it shrinks, so a rightmost icon can
-            start past the edge of the screen — reachable only by scrolling a bar
-            most readers will not know scrolls. GPT Sol measured it, 2026-08-31.
-            Nothing that must be findable goes at that end. */}
-        <TheOriginal
-          meta={article.meta}
-          slug={slug}
-          owner={!!owner}
-          onError={setSourceError}
-        />
         {/* Leftmost of the *view* controls, because the rail it names is
             leftmost — and before the mode/contents split, because it is the one
             control that survives both. See `spineToggle` above. */}
@@ -2348,22 +2320,6 @@ function Reader({
         {commentError && (
           <span className="cmt-transport-error" title={commentError}>
             comments: {commentError}
-          </span>
-        )}
-        {/* A failed source download, said here rather than beside the button it
-            came from. The bar is a fixed-height row that scrolls sideways and
-            does not shrink its children, so a sentence next to the icon would
-            push the granularity pills off the screen — SourceLink.tsx § onError.
-            Shaped exactly on the line above it: a short label, the whole message
-            in the tooltip. */}
-        {sourceError && (
-          /* `role="alert"`, for the reason SourceLink.tsx gives beside its own
-             arm: the blank tab closing and a label appearing here are both
-             silent to a screen reader, so without this the press had no
-             outcome at all. The whole message is in the tooltip, which is
-             where a pointer reader finds it — hence `title` as well. */
-          <span role="alert" className="cmt-transport-error" title={sourceError}>
-            original: couldn't open it
           </span>
         )}
         <span className="provenance" title={article.tree.generator}>

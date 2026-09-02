@@ -353,22 +353,39 @@ free, which was checked in the code before running rather than assumed.
       landed → delay an hour or two and re-check until it has (see Principles). The rest of
       this stage is code and can be written and unit-tested meanwhile — only the first paid run
       waits on the gate.
-- [ ] `evals/cost/run.ts`, modelled on `evals/hierarchy-structure/run.ts` (including incremental
-      result persistence); `npm run eval:cost`. Production-path calls run under normal
-      `collectSpend`; `declared-spend` only if any arm later bypasses the gateway.
-- [ ] Drive the fixture through ingest via the design the feasibility stage chose, under a fresh
-      run-prefixed slug. Read the ledger back (`CostStore.read` window + in-memory filter);
-      capture reports via `onDone` so a thrown stage still reports; name an owner or no row is
-      written.
-- [ ] Per step, report: cost (BYOK-aware), calls, input/output/cache-read/cache-write/reasoning
-      tokens, gateway outcome **and** stage outcome, ledger wall-clock envelope *plus*
-      runner-measured elapsed time.
-- [ ] Record comparability metadata per run: commit, fixture hash, block/gistable counts,
-      requested and answered model, upstream, effort, service tier, geo, cache counters.
-- [ ] Assert cold: every step expected to pay must have non-zero spend; flag unexpected call
-      counts (duplicate execution would show here — report, don't hide).
-- [ ] Unit-test the pure parts (ledger aggregation, BYOK totalling, report formatting) with
-      fixture rows before the paid path runs.
+- [x] **Built 2026-09-02, in four files.** `evals/cost/run.ts` drives and prints;
+      [`harness.ts`](../../evals/cost/harness.ts) holds the three mechanisms;
+      [`report.ts`](../../evals/cost/report.ts) is the arithmetic and has no IO;
+      [`fixtures.ts`](../../evals/cost/fixtures.ts) is the committed corpus manifest. Same
+      pure/impure split as `evals/hierarchy-structure/{score,run}.ts`. `npm run eval:cost` sets
+      `SPIDERYARN_STORE=postgres` — the flag is read at module load, so the runner can only
+      *assert* it. Production-path calls run under normal `collectSpend`; `declared-spend` is not
+      used and should not be.
+- [x] Drives the fixture through ingest under a fresh run-tagged slug **and URL**, with
+      `advanceJobWith(id, { session: claimSession, steps })` — the whole production registry with
+      `scopeKind: "eval"` overlaid and stage 1 replaced. Incremental persistence: `run.json` is
+      rewritten after every draw and **before** the job runs, so a crash leaves a cleanup
+      manifest. Reads the ledger back with **`costStore.forJob(jobId)`**, which supersedes the
+      "read a window and filter in memory" line in References above.
+- [x] Per step and **per `AiJob`** — there is no `labels` step, so the hierarchy/labels split
+      exists only in the second cut. Cost (BYOK-aware), calls, every token counter, gateway
+      outcome *and* stage outcome, ledger wall-clock envelope *and* runner-measured elapsed.
+- [x] Comparability metadata: commit (plus whether the tree was dirty), fixture sha256 hashed at
+      run time against the manifest, observed block count against the manifest's, requested and
+      answered model, upstream, service tier, effort. **Hierarchy's effort is read through
+      `structureRequest`** rather than restated — the constant is module-private and has already
+      moved once. Labels' is module-private with no exported reader; `commit` is what pins it.
+- [x] Cold assertion, with `scope-leak` and `no-spend` fatal and duplicate execution, gateway
+      failures, call-count mismatches and unexpected paid steps reported rather than hidden.
+- [x] Unit tests: `tests/cost-eval.test.ts`, 40 of them, no database and no network. Includes the
+      dry pass's **control arm** as a test — the same stubbed step without the overlay records
+      `job_step`, which is Product spend.
+- [ ] **Not run against a model, and cannot be.** The `ai_calls` table still has
+      `upstream_inference_nanos`, so every insert and select fails and `costStore.forJob` is
+      unexercised — see the blocker above. Free end-to-end passes with `--steps
+      fetch,extract,blocks` did run: all three fixtures through the fixture ingress, 19 and 186
+      blocks matching the manifest exactly, cleanup returning the article and job counts to where
+      they started.
 - [ ] Run on the short HTML fixture (expected well under $0.50 total). Commit runner + result.
 
 ### Stage: All modes, all three articles, with repeats where variance lives

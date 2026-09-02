@@ -461,6 +461,229 @@ export function crossCheckOpenRouter(
   };
 }
 
+/* ------------------------------------------------- live conversation -- */
+
+/**
+ * **What a realtime token costs, by modality** — and the reason this is a
+ * separate shape from `ModelPrice` rather than three more fields on it.
+ *
+ * `ModelPrice` describes a text model: one input rate, one output rate, and
+ * cache multipliers derived from the input rate. None of that survives contact
+ * with the Realtime API. Audio and text are priced an **order of magnitude**
+ * apart in the same request — $32 against $4 in, $64 against $24 out — so
+ * "input" is not one number; and cached audio is $0.40 against $32 uncached,
+ * which is a 0.0125x multiplier rather than the 0.1x every text model uses. A
+ * shared shape would have had to carry the audio rates as optional fields that
+ * are null on every other row, and the first caller to forget one would have
+ * priced a conversation at an eightieth of its cost with nothing going red.
+ *
+ * There is no image rate here, deliberately. `liveSession` in src/live.ts
+ * configures no image input, so a report carrying image tokens is refused rather
+ * than priced from a number nobody has checked — this file's header is emphatic
+ * that a model with no price is an error and not a zero, and the same is true of
+ * a *modality* with no price.
+ */
+export interface RealtimePrice {
+  /** USD per million text input tokens. */
+  textIn: number;
+  /** USD per million cached text input tokens. */
+  cachedTextIn: number;
+  /** USD per million text output tokens. */
+  textOut: number;
+  /** USD per million **audio** input tokens. The expensive half of a conversation. */
+  audioIn: number;
+  /** USD per million cached audio input tokens. Eighty times cheaper than uncached. */
+  cachedAudioIn: number;
+  /** USD per million audio output tokens. The most expensive rate in this file. */
+  audioOut: number;
+}
+
+/** A realtime price, and the instant it started applying. `PriceRow`'s sibling. */
+export interface RealtimePriceRow {
+  /** `YYYY-MM-DD`, UTC. The row applies from 00:00:00Z on this date. */
+  from: string;
+  price: RealtimePrice;
+}
+
+/**
+ * **Every realtime model this app can reach**, effective-dated like
+ * `ANTHROPIC_PRICES` and for the same reason: a price that changes at midnight
+ * UTC and a deploy at nine in the morning is nine hours of calls priced wrong,
+ * permanently, because the snapshot is what gets billed from.
+ *
+ * Read off OpenAI's own model pages and confirmed by GPT Sol against them on
+ * 2026-09-02 — `REALTIME_PRICE_SOURCE` below. The `1970-01-01` row means "this
+ * price has always applied as far as this app is concerned", which is true:
+ * nothing realtime was recorded before today.
+ *
+ * **`gpt-realtime-2.1-mini` is here and is not used.** Greg declined it on
+ * 2026-09-02 — *"Let's stick with gpt-realtime-2.1 for now - it's smarter"* — so
+ * this row buys nothing today. It is here because it is roughly a **3x cut** on
+ * the single most expensive thing this app does, it is the decision most likely
+ * to be revisited once Stage 4 says what voice actually costs, and a row whose
+ * price silently read zero would be a poor way to find out the model had been
+ * switched. `ANTHROPIC_PRICES` carries two unused rows for exactly this reason.
+ */
+export const REALTIME_PRICES: Readonly<Record<string, readonly RealtimePriceRow[]>> = {
+  "gpt-realtime-2.1": [
+    {
+      from: "1970-01-01",
+      price: {
+        textIn: 4.0,
+        cachedTextIn: 0.4,
+        textOut: 24.0,
+        audioIn: 32.0,
+        cachedAudioIn: 0.4,
+        audioOut: 64.0,
+      },
+    },
+  ],
+  "gpt-realtime-2.1-mini": [
+    {
+      from: "1970-01-01",
+      price: {
+        textIn: 0.6,
+        cachedTextIn: 0.06,
+        textOut: 2.4,
+        audioIn: 10.0,
+        cachedAudioIn: 0.3,
+        audioOut: 20.0,
+      },
+    },
+  ],
+};
+
+/**
+ * **USD per audio MINUTE, not per token** — the transcription rate card, and the
+ * reason the usage report is a discriminated union.
+ *
+ * `gpt-live-transcribe` writes down what the reader said, and OpenAI bills it by
+ * the minute of audio rather than by the token. A meter that only understood
+ * token counts would have priced the model that *answers* and silently
+ * contributed zero for the model that *listens* — half the feature, missing, in
+ * a table that looked complete. That is why `RealtimeUsage` in src/live.ts has a
+ * `transcription` arm carrying seconds and no token counts at all.
+ */
+export const TRANSCRIPTION_PRICES: Readonly<Record<string, readonly { from: string; usdPerMinute: number }[]>> = {
+  "gpt-live-transcribe": [{ from: "1970-01-01", usdPerMinute: 0.017 }],
+};
+
+/** Where the realtime and transcription numbers came from. A different vendor, a different page. */
+export const REALTIME_PRICE_SOURCE = "https://developers.openai.com/api/docs/pricing";
+
+/** When the realtime numbers were last checked, against `REALTIME_PRICE_SOURCE`. */
+export const REALTIME_PRICE_CHECKED = "2026-09-02";
+
+function realtimeRowAt(model: string, at: Date): RealtimePriceRow | null {
+  const rows = REALTIME_PRICES[model];
+  if (!rows) return null;
+  let found: RealtimePriceRow | null = null;
+  for (const row of rows) {
+    if (Date.parse(`${row.from}T00:00:00Z`) <= at.getTime()) found = row;
+  }
+  return found;
+}
+
+/**
+ * The token counts a realtime response reported, already split by modality.
+ *
+ * **Fresh, not total.** `cachedTextTokens` and `cachedAudioTokens` are billed at
+ * the cached rate, and the caller has already subtracted them from the text and
+ * audio figures — the subtraction happens in `acceptRealtimeUsage`, where the
+ * report's own totals are checked against their parts, rather than here where a
+ * negative would have to be silently clamped. This file is arithmetic, and
+ * arithmetic on numbers that have not been validated is how a clamp gets added.
+ */
+export interface RealtimeResponseTokens {
+  freshTextTokens: number;
+  freshAudioTokens: number;
+  cachedTextTokens: number;
+  cachedAudioTokens: number;
+  outputTextTokens: number;
+  outputAudioTokens: number;
+}
+
+/**
+ * **What one spoken turn cost.** `null` for a model with no row — recorded as
+ * `unpriced`, never as `0`, per this file's header.
+ *
+ * The split is returned as well as the total for the reason `PricedCall` gives:
+ * a surprising number should be readable rather than merely disbelieved. On a
+ * live conversation the readable part is nearly always the same — the audio out
+ * dominates — and being able to see that on the row is what will make the
+ * eventual product decision about voice an informed one.
+ */
+export function priceRealtimeResponse(
+  model: string,
+  tokens: RealtimeResponseTokens,
+  at: Date,
+): PricedCall | null {
+  const row = realtimeRowAt(model, at);
+  if (!row) return null;
+  const p = row.price;
+
+  /* **Input is the FRESH tokens only, and the cached ones are the cache read.**
+     `PricedCall` promises that its four parts sum to the total, so the cached
+     tokens have to appear in exactly one of them. Splitting them out this way
+     also matches `priceAnthropicCall`, where `input_tokens` excludes the cache
+     figures — so the two functions mean the same thing by `inputNanos`, which
+     they would not if this one folded the cache in. The caller has already done
+     the subtraction and checked it; see `RealtimeResponseTokens`. */
+  const inputUsd =
+    usd(tokens.freshTextTokens, p.textIn) + usd(tokens.freshAudioTokens, p.audioIn);
+  const cacheReadUsd =
+    usd(tokens.cachedTextTokens, p.cachedTextIn) + usd(tokens.cachedAudioTokens, p.cachedAudioIn);
+  const outputUsd =
+    usd(tokens.outputTextTokens, p.textOut) + usd(tokens.outputAudioTokens, p.audioOut);
+
+  return {
+    totalNanos: toNanos(inputUsd + cacheReadUsd + outputUsd),
+    inputNanos: toNanos(inputUsd),
+    outputNanos: toNanos(outputUsd),
+    /* Realtime has no cache *write* charge at all — the session's cache is built
+       as a side effect of the conversation, not bought. A zero here is a fact
+       rather than a missing figure. */
+    cacheWriteNanos: 0,
+    cacheReadNanos: toNanos(cacheReadUsd),
+    priceVersion: `${model}@${row.from}`,
+  };
+}
+
+/**
+ * **What writing down one of the reader's turns cost**, from seconds of audio.
+ *
+ * `null` for a model with no row. Seconds in, because that is what the browser
+ * can observe; the per-minute rate is divided here so that exactly one place in
+ * this repo knows the unit conversion — the same discipline the header states
+ * about per-million rates and `toNanos`.
+ */
+export function priceRealtimeTranscription(
+  model: string,
+  audioSeconds: number,
+  at: Date,
+): PricedCall | null {
+  const rows = TRANSCRIPTION_PRICES[model];
+  if (!rows) return null;
+  let found: { from: string; usdPerMinute: number } | null = null;
+  for (const row of rows) {
+    if (Date.parse(`${row.from}T00:00:00Z`) <= at.getTime()) found = row;
+  }
+  if (!found) return null;
+
+  const total = toNanos((audioSeconds / 60) * found.usdPerMinute);
+  return {
+    /* All of it is input: the reader's own audio, and nothing is generated.
+       Putting it in `inputNanos` rather than inventing a fifth field keeps
+       `PricedCall`'s promise that the parts sum to the total. */
+    totalNanos: total,
+    inputNanos: total,
+    outputNanos: 0,
+    cacheWriteNanos: 0,
+    cacheReadNanos: 0,
+    priceVersion: `${model}@${found.from}`,
+  };
+}
+
 /** A dollar figure OpenRouter reported, as nano-dollars. */
 export function providerCostToNanos(cost: number | null | undefined): Nanos | null {
   if (typeof cost !== "number" || !Number.isFinite(cost) || cost < 0) return null;

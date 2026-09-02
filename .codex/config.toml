@@ -1,0 +1,24 @@
+# Codex's per-project config. Loaded by `codex exec --cd <this repo>` on top of ~/.codex/config.toml.
+#
+# One thing lives here: the `review` permissions profile, which scripts/run-codex.ts selects by
+# default (`-c default_permissions=review`). It is `--sandbox read-only` with the two exceptions a
+# reviewer needs in order to *run* a test rather than reason about it: `/tmp`, where tsx opens its
+# IPC pipe, and the caches under node_modules, where vitest bundles its config. Everything git
+# tracks stays read-only, and the sandbox enforces that, not the prompt.
+#
+# Measured 2026-09-02 on codex 0.152.1: under this profile `npx vitest run <one file>` passes,
+# `node --import tsx <script>` and `npx tsc --noEmit` run, a write to src/ is refused with EROFS.
+# `npm run typecheck` still fails — the tsx CLI listens on a unix socket and the sandbox denies
+# that in every mode — and the full suite is out of reach (it writes to data/ and needs Postgres
+# over loopback). Both are fine: a reviewer wants one red test, not a green suite.
+#
+# docs/reusable/codex-cli-as-subagent.md § The review profile.
+
+[permissions.review.filesystem]
+"/" = "read"
+"/tmp" = "write"
+
+[permissions.review.filesystem.":workspace_roots"]
+"node_modules/.vite-temp" = "write"
+"node_modules/.vite" = "write"
+"node_modules/.cache" = "write"

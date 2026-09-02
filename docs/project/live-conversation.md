@@ -39,20 +39,73 @@ The browser opens a `RTCPeerConnection` straight to OpenAI with a short-lived `e
 server minted. That is not a shortcut, it is the only shape available: relayed audio needs a
 long-lived socket and a Vercel function does not have one.
 
-Our server sees three requests and none of them carries audio:
-`POST /api/chat/:slug/:threadId/live` for a ticket, `POST /api/chat/:slug/live-tool` to run a tool
-the model called, and `POST /api/chat/:slug/:threadId/spoken` once per finished exchange.
+Our server sees six requests and none of them carries audio: `POST /api/chat/:slug/:threadId/live`
+for a ticket, `POST /api/chat/:slug/live-tool` to run a tool the model called,
+`POST /api/chat/:slug/:threadId/spoken` once per finished exchange, and the three accounting
+endpoints under `/api/live/:sessionId/` below.
 
 **This is the one exception to "every paid call goes through OpenRouter"**
 ([ai-gateway.md](ai-gateway.md)), because OpenRouter has no realtime API at all. Two consequences
 follow and both are written down rather than hoped about:
 
-- **Nothing is metered.** No row is written for realtime audio, so `npm run cost` cannot see this
-  spend. It says so by name every run — [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts)
-  `liveConversationGap()`.
+- **The meter is half built**, and until the other half lands nothing is metered — see § The meter
+  below, which is where that gap now lives.
 - **Nothing is capped on the server.** The browser ends its own session after five minutes of quiet
   or twenty in total — see § What is not built — which is a clock a tab can be wrong about. A
   per-reader ceiling this server could enforce does not exist.
+
+## The meter
+
+> we'll just use the browser to report itself for now (documenting this as untrustworthy, but good
+> enough for an Alpha version)
+>
+> — Greg, 2026-08-31
+
+The design is [realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md), and the
+job that builds it is
+[260902g-cost-tracking-that-can-set-a-price.md](../plans/260902g-cost-tracking-that-can-set-a-price.md).
+**"Untrustworthy" is the wrong word for the risk.** Nobody has an incentive to under-report their
+own token count — [security-map.md](security-map.md) says plainly that a signed-in reader is not one
+of the untrusted parties, and there is no per-reader cap to duck under. What will actually happen is
+that **the tab closes**, and a report that fires once at the end never fires at all. So the design
+is not "trust the client"; it is *make the untrustworthy thing as small as possible*.
+
+**The server half is built** (2026-09-02, Stage 2A).
+
+| | |
+| --- | --- |
+| `spideryarn.realtime_sessions` | One row per **issued** session, written when the client secret is minted and *before* the token reaches the browser. If the insert fails the token is never released. |
+| `POST /api/live/:sessionId/connected` | The data channel opened. A minted token is not a conversation — a reader can press the button and change their mind — so "issued" and "connected" are separate facts. |
+| `POST /api/live/:sessionId/usage` | One paid event. The server prices it; the browser never sends a cost. |
+| `POST /api/live/:sessionId/close` | The conversation ended, best-effort. A closed laptop says nothing, so a session with no `closed_at` is ordinary and **must not** be read as one still running. |
+| `acceptRealtimeUsage` in [`src/live.ts`](../../src/live.ts) | Parse, validate, price, project — pure, and tested without HTTP in [`tests/realtime-usage.test.ts`](../../tests/realtime-usage.test.ts). |
+
+Four decisions in it are worth knowing before touching any of them:
+
+- **"Not expired" is the server's twenty-minute session limit plus tolerance, never the ephemeral
+  client secret's expiry.** Those are different clocks — the token admits one connection and lasts
+  about ten minutes — and using the wrong one silently drops the reports from the longest, and so
+  the most expensive, conversations. The deadline is stored on the session row, so a session keeps
+  the rule it was issued under.
+- **The usage report is a discriminated union: token detail *or* seconds.** `gpt-live-transcribe` is
+  billed per audio **minute**, so a token-only shape could not price half the feature.
+- **The row keeps the modality splits**, not just the totals. Audio in is $32/Mtok against $4 for
+  text and audio out $64 against $24, so a row with only totals can be priced once and never
+  repriced or audited. [sql.md](sql.md): columns, not JSON.
+- **No cumulative tokens-per-minute ceiling.** Realtime rebills the whole conversation context every
+  turn, so cumulative input legitimately outgrows wall-clock — a rate ceiling would start refusing
+  true reports exactly as a conversation got long.
+
+**The browser half is not built** (Stage 2B), so every session currently shows as *issued, reported
+nothing*. That is the honest state and it is the whole reason the session row exists: without it a
+conversation that reported nothing would be an absence rather than a gap, and a total that was short
+by an unknown amount would look healthy. `npm run cost` still names live conversation as unmetered
+spend by name every run — [`src/spend-declarations.ts`](../../src/spend-declarations.ts)
+`UNMETERED_SPEND` — and that line comes out with Stage 2B, not before.
+
+**Accepted loss, permanently:** the final turn can vanish on a crash or an instant tab close, so the
+aggregate is biased low by a probably-small unknown. GPT Sol: *"Add the durable outbox before usage
+affects an allowance, an invoice, or a promise made to users."*
 
 ## The three orderings, and why each is a rule
 
@@ -194,8 +247,10 @@ thread, and start a fresh seeded session if the reader wants one.
 
 ## What is not built
 
-- **No meter.** Greg accepted this on 2026-08-31 — *"let's accept it for now"* — and it is printed
-  by name on every `npm run cost` run. A session's spend is visible only in OpenAI's own dashboard.
+- **The browser does not report its usage yet**, so no spend appears in `npm run cost` — § The meter
+  above has the whole of it, and what is left is Stage 2B. Greg accepted the gap on 2026-08-31 —
+  *"let's accept it for now"* — and it is printed by name on every run until then. A session's spend
+  is meanwhile visible only in OpenAI's own dashboard.
 
   The **cap** is built, because it is the half that costs money rather than visibility: a session
   ends itself after five minutes of quiet or twenty minutes in total, so a forgotten tab bills

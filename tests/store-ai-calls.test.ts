@@ -69,6 +69,23 @@ function row(over: Partial<AiCallRow> = {}): AiCallRow {
     webSearches: null,
     serviceTier: "standard",
     inferenceGeo: null,
+    /* **The realtime block, null because this is a chat-wire row.** Spelled out
+       rather than spread from a helper, so that a field arriving on `AiCallRow`
+       makes this fixture fail to compile and somebody decides what it means for
+       an ordinary call — which is how these twelve got here.
+       drizzle/20260902150952_realtime_sessions_and_usage.sql. */
+    realtimeSessionId: null,
+    providerEventId: null,
+    eventKind: null,
+    providerStatus: null,
+    inputTextTokens: null,
+    inputAudioTokens: null,
+    inputImageTokens: null,
+    cachedTextTokens: null,
+    cachedAudioTokens: null,
+    outputTextTokens: null,
+    outputAudioTokens: null,
+    transcriptionSeconds: null,
     ...over,
   };
 }
@@ -378,6 +395,83 @@ describe("the filesystem ledger", () => {
     expect(after.rows.some((r) => r.id === "00000000-0000-4000-8000-00000000f001")).toBe(true);
   });
 
+  it("reads a live-conversation row rather than counting it as damage", async () => {
+    /* **The bug this went red on, and it was found by a database dry run rather
+       than by reading the code.** `looksLikeRow` enumerated the provider
+       accounts — `openrouter || anthropic` — so the day live conversation
+       started writing `openai` rows, every one of them would have been counted
+       `unreadable` and dropped from every total. The most expensive feature in
+       the app, invisible to `npm run cost`, through the very shape check that
+       exists to stop a total being quietly short.
+
+       Two hand-written copies of one union did it: this list and the SQL CHECK
+       `ai_calls_provider_account_known`, neither of which the compiler can see
+       when `ProviderAccount` in src/ai-spend.ts widens. The SQL half was caught
+       first, by applying the migration inside a rolled-back transaction and
+       inserting a realtime row; this half was found by looking for the other
+       copies. docs/reusable/silent-success.md.
+
+       A whole realtime row rather than just the account, so the modality
+       columns and the null duration are on the same line the reader has to
+       accept. */
+    const live = JSON.stringify(
+      row({
+        id: "00000000-0000-4000-8000-00000000f301",
+        jobId: "job-live-readable",
+        wire: "realtime",
+        job: "live_conversation",
+        providerAccount: "openai",
+        requestedModel: "gpt-realtime-2.1",
+        costSource: "computed",
+        creditsUsedNanos: null,
+        computedCostNanos: 12_345_678,
+        priceVersion: "gpt-realtime-2.1@1970-01-01",
+        isByok: null,
+        durationMs: null,
+        /* Its own uuid, not the one `tests/realtime-usage.test.ts` uses for its
+           own session fixture — tests/fixture-ids.test.ts insists on that, and
+           caught these two sharing one. */
+        realtimeSessionId: "00000000-0000-4000-8000-0000000005e9",
+        providerEventId: "resp_readable",
+        eventKind: "response",
+        providerStatus: "completed",
+        reportedInputTokens: 1000,
+        outputTokens: 200,
+        cacheReadTokens: 300,
+        cacheWriteTokens: null,
+        cacheWrite5mTokens: null,
+        cacheWrite1hTokens: null,
+        reasoningTokens: null,
+        serviceTier: null,
+        inputTextTokens: 400,
+        inputAudioTokens: 600,
+        inputImageTokens: 0,
+        cachedTextTokens: 250,
+        cachedAudioTokens: 50,
+        outputTextTokens: 40,
+        outputAudioTokens: 160,
+      }),
+    );
+    const before = (await store.read()).unreadable;
+    await writeFile(store.describe(), `${live}\n`, { flag: "a" });
+    const after = await store.read();
+    expect(after.unreadable).toBe(before);
+
+    const mine = after.rows.find((r) => r.jobId === "job-live-readable");
+    expect(mine?.providerAccount).toBe("openai");
+    expect(mine?.outputAudioTokens).toBe(160);
+    expect(mine?.durationMs).toBeNull();
+    /* And it is money the total can see, in the `computed` pocket where our own
+       arithmetic belongs — not `credits`, which `--reconcile` compares against
+       OpenRouter's running total and could never match. */
+    expect(totalRows([mine as AiCallRow])).toEqual({
+      credits: 0,
+      upstream: 0,
+      computed: 12_345_678,
+      unpriced: 0,
+    });
+  });
+
   it("reads a line written before the BYOK rename, and drops the double count", async () => {
     /* **The surface the plan had missed, and GPT Sol named.** This ledger is
        append-only and is never rewritten, so every line ever written still
@@ -479,16 +573,26 @@ describe("the filesystem ledger", () => {
    against the old columns and fail in a way that reads like a bug in the
    store.
 
-   **The column asked for is `byok_upstream_nanos`, not `credits_used_nanos`,
-   since 2026-09-02**: the migration that renamed it is the thing three of the
-   tests below are about, so a database one migration behind should say "run
-   npm run db:migrate" rather than fail with a confusing column error from
-   inside the store. That is the reason four other suites name a column here —
-   see tests/helpers/pg-ready.ts. */
+   **Two columns are asked for, not `credits_used_nanos`, and both are named
+   for the same reason.** `byok_upstream_nanos` is what three of the tests below
+   are actually about (drizzle/20260902141103). `realtime_session_id` is not
+   the subject of any of them — it is named because `pgCostStore.record` writes
+   every column of `AiCallRow`, so a database that has the first migration and
+   not drizzle/20260902150952 fails these tests with a bare `42703 column does
+   not exist` from inside the store, which says nothing about what to do.
+   Watched doing exactly that on 2026-09-02, in the window where a peer had
+   applied one of the two and not the other.
+
+   A probe that names only the columns a suite *asserts on* is therefore too
+   narrow: what it has to cover is every column the code under test will touch.
+   See tests/helpers/pg-ready.ts. */
 const { reachable } = await pgReady({
   suite: "tests/store-ai-calls.test.ts",
   tables: ["spideryarn.ai_calls"],
-  columns: [{ table: "spideryarn.ai_calls", column: "byok_upstream_nanos" }],
+  columns: [
+    { table: "spideryarn.ai_calls", column: "byok_upstream_nanos" },
+    { table: "spideryarn.ai_calls", column: "realtime_session_id" },
+  ],
   max: 4,
 });
 

@@ -111,6 +111,30 @@ export const DEV_OWNER_ID = "00000000-0000-4000-8000-000000000001" as OwnerId;
  */
 export const DEV_OWNER_EMAIL = process.env.SPIDERYARN_OWNER_EMAIL ?? "dev@spideryarn.local";
 
+/**
+ * **The owner the cost eval's articles belong to, and nobody else's.**
+ *
+ * Fixed and seeded exactly like `DEV_OWNER_ID` above, and a third account rather
+ * than a reuse of that one for a reason that is about the *queue*, not about
+ * tidiness: an open dev tab signed in as an owner discovers every queued or
+ * running job of that owner and drives it itself
+ * ([`src/web/jobEngine.ts`](web/jobEngine.ts) § `apply`). If the eval's jobs
+ * belonged to the development owner, a browser somebody left open could win a
+ * claim mid-job and run the remaining paid step through the **production** step
+ * registry — writing `job_step` rows that `npm run cost` counts as Product spend,
+ * with the eval's own scope check noticing only after the money had landed.
+ * `VERCEL=1` silences the runner process's own pump and says nothing to a
+ * browser. A separate owner is what actually isolates it, because
+ * `GET /api/jobs` lists by owner.
+ *
+ * Raised by GPT Sol reviewing the cost runner, 2026-09-02;
+ * docs/plans/260902g-estimate-article-ingestion-and-mode-generation-costs.md.
+ */
+export const EVAL_OWNER_ID = "00000000-0000-4000-8000-0000000000e1" as OwnerId;
+
+/** Deliberately not a real address, for the reason `DEV_OWNER_EMAIL` gives. */
+export const EVAL_OWNER_EMAIL = "eval@spideryarn.local";
+
 /** Narrow a string to an `OwnerId`, checking it is uuid-shaped. */
 function asOwnerId(value: string): OwnerId {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {

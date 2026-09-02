@@ -202,19 +202,27 @@ export interface PendingCall {
 export type ScopeKind = "request" | "job_step" | "cli" | "eval";
 
 /**
- * **Which of the two bills a call lands on.**
+ * **Which of the three bills a call lands on.**
  *
- * Everything the app itself does is `"openrouter"` — that is what "one seam per
- * wire" bought. `"anthropic"` exists for the three declared bypasses under
- * [`evals/declared-spend.ts`](../evals/declared-spend.ts), which talk to
+ * Almost everything the app itself does is `"openrouter"` — that is what "one
+ * seam per wire" bought. `"anthropic"` exists for the three declared bypasses
+ * under [`evals/declared-spend.ts`](../evals/declared-spend.ts), which talk to
  * Anthropic directly because comparing transports is the thing they measure.
  *
+ * **`"openai"` is live conversation**, and it is the first *product* feature to
+ * land on a bill other than OpenRouter's. It is a separate credential
+ * (`OPENAI_API_KEY`) on a separate account, and — the part that matters for
+ * anybody reading a total — **it is outside the spend cap Greg set in
+ * OpenRouter**, so the one safety net the other two rows sit behind does not
+ * cover these. docs/project/live-conversation.md, and
+ * docs/plans/260902g-cost-tracking-that-can-set-a-price.md.
+ *
  * On the row because `npm run cost --reconcile` reads OpenRouter's key and
- * nothing reads Anthropic's. Without this column the difference between our
+ * nothing reads the other two. Without this column the difference between our
  * total and theirs would be permanently non-zero for a reason nobody could
  * name, and a check that is always wrong is a check nobody runs.
  */
-export type ProviderAccount = "openrouter" | "anthropic";
+export type ProviderAccount = "openrouter" | "anthropic" | "openai";
 
 /**
  * **Where a row's dollar figure came from.**
@@ -354,7 +362,22 @@ export interface AiCallRow {
   credentialFingerprint: string | null;
   startedAt: string;
   finishedAt: string;
-  durationMs: number;
+  /**
+   * Wall-clock milliseconds for **this one call**, or `null` when nobody
+   * observed its start.
+   *
+   * Nullable since 2026-09-02, and only realtime rows can be null. The two
+   * gateways always know — they time their own request — so `SpendRecord.ms`
+   * stays a plain `number` and `write()` below can never produce a null. What
+   * changed is that a live session's input transcription arrives as a single
+   * `…input_audio_transcription.completed` event with **no matching start
+   * event**, so there is nothing to subtract from. The alternatives were both
+   * lies the ledger would then be asked to average: a `0`, which reads as an
+   * instant call, or the session's own wall-clock, which is a duration of a
+   * conversation and not of a call. docs/project/live-conversation.md § What the
+   * meter can and cannot say.
+   */
+  durationMs: number | null;
   outcome: SpendRecord["outcome"];
   /**
    * **Credits OpenRouter deducted**, in nano-dollars — not cash, and the name
@@ -417,7 +440,110 @@ export interface AiCallRow {
   webSearches: number | null;
   serviceTier: string | null;
   inferenceGeo: string | null;
+
+  /* ------------------------------------------------- live conversation -- */
+
+  /**
+   * **The realtime block: null on every row that is not a live conversation.**
+   *
+   * These follow the pattern the table already has rather than starting a new
+   * one — `cacheWrite5mTokens`/`cacheWrite1hTokens` are Messages-wire only,
+   * `serviceTier` and `inferenceGeo` are Anthropic's own fields, `webSearches`
+   * is chat-wire only. Explicit nullable columns, not a JSON blob, per
+   * docs/project/sql.md: every one of these is a number somebody will want to
+   * filter, constrain or sum.
+   *
+   * **Why the modality splits are the whole point.** Audio input on
+   * `gpt-realtime-2.1` is $32 per million tokens and text input is $4; audio
+   * output is $64 against $24. A row that kept only `reportedInputTokens` and
+   * `outputTokens` could be *given* a price by whoever wrote it and could never
+   * be repriced or audited afterwards — and the price table will move, because
+   * OpenAI's has moved twice in the life of this repo. The totals stay on the
+   * two existing columns; these say what they were made of.
+   *
+   * Which session this belongs to. `null` on everything else, and the anchor for
+   * "this session reported nothing", which is the one shape a browser-reported
+   * meter fails in — see docs/project/live-conversation.md.
+   */
+  realtimeSessionId: string | null;
+  /**
+   * **The idempotency key's second component** — OpenAI's own `response.id`, or
+   * the transcribed item's id.
+   *
+   * A browser posts each event as it happens and may retry; without this a
+   * dropped acknowledgement becomes a second row and the ledger is wrong in the
+   * direction that looks like the thing being measured. Unique together with
+   * `realtimeSessionId` and `eventKind`, in the database rather than only here.
+   */
+  providerEventId: string | null;
+  /**
+   * `"response"` or `"transcription"` — **which of the two rate cards this row
+   * is on**, and the third component of the idempotency key.
+   *
+   * Not derivable from the model id, because that is a string off a report and
+   * the key has to hold whatever arrives. Not derivable from which token
+   * columns are set either: a response with no audio in it and a transcription
+   * both look like "some numbers and no audio tokens" from far enough away.
+   */
+  eventKind: RealtimeEventKind | null;
+  /**
+   * OpenAI's own `response.status` — `completed`, `cancelled`, `failed` or
+   * `incomplete` — kept verbatim beside the three-valued `outcome` it is mapped
+   * onto, because that map loses information and this is where it is not lost.
+   * `realtimeOutcome` in src/live.ts is the map.
+   */
+  providerStatus: string | null;
+  /** `input_token_details.text_tokens`. Inside `reportedInputTokens`, not added to it. */
+  inputTextTokens: number | null;
+  /** `input_token_details.audio_tokens`. The expensive one: $32/Mtok against $4. */
+  inputAudioTokens: number | null;
+  /**
+   * `input_token_details.image_tokens`. Always zero today — `liveSession` in
+   * src/live.ts configures no image input — and stored anyway so that the day it
+   * is not zero is visible rather than silently mispriced. `acceptRealtimeUsage`
+   * refuses a report carrying one, for the reason given there.
+   */
+  inputImageTokens: number | null;
+  /**
+   * `input_token_details.cached_tokens_details.text_tokens` and `.audio_tokens`
+   * — **the split of the cached count, which says how much of the saving was on
+   * the expensive modality.**
+   *
+   * The parent total goes in `cacheReadTokens`, like every other wire's. These
+   * two exist because cached audio is $0.40/Mtok against $32 uncached, an
+   * eightyfold difference, so "how many tokens were cached" cannot be priced
+   * without knowing which kind they were. `cached_tokens_details` was missing
+   * from `openai-node`'s own types for a while (openai-node#1600), which is why
+   * hand-rolled realtime meters tend to drop it.
+   */
+  cachedTextTokens: number | null;
+  cachedAudioTokens: number | null;
+  /** `output_token_details.text_tokens`. Inside `outputTokens`. */
+  outputTextTokens: number | null;
+  /** `output_token_details.audio_tokens` — $64/Mtok, the most expensive number here. */
+  outputAudioTokens: number | null;
+  /**
+   * **Seconds of audio transcribed**, for the half of live conversation that is
+   * not billed per token at all.
+   *
+   * `gpt-live-transcribe` is $0.017 per audio *minute*, so a token-only row
+   * shape could not price it and a token-only meter would have shipped missing a
+   * whole cost line. This is why the usage DTO is a discriminated union rather
+   * than one bag of optional counts — src/live.ts § `RealtimeUsage`.
+   */
+  transcriptionSeconds: number | null;
 }
+
+/**
+ * Which of a live session's two paid operations a row is.
+ *
+ * Here rather than in src/live.ts because `AiCallRow` needs it and the store
+ * adapters need it, and neither of those may import the feature's own module —
+ * src/live.ts reaches src/converse.ts, which reaches src/models.ts, which
+ * reaches this file's neighbourhood. A union of two string literals is not worth
+ * a cycle.
+ */
+export type RealtimeEventKind = "response" | "transcription";
 
 /**
  * Where a finished row goes. Supplied by whoever opened the collector.
@@ -814,6 +940,31 @@ function write(
     webSearches: record.webSearches,
     serviceTier: record.serviceTier,
     inferenceGeo: record.inferenceGeo,
+    /* **The realtime block, null here and written nowhere else in this file.**
+
+       Spelled out one field at a time rather than spread from a shared `const`,
+       because this is the projection every non-realtime row goes through and a
+       spread would let a future field arrive on `AiCallRow` without anybody
+       deciding what it means for an ordinary call. A live session's row does not
+       come through here at all — nothing in this module ever sees it. It is
+       built by `acceptRealtimeUsage` in src/live.ts from a browser's report and
+       handed straight to `costStore.record`, because the call it describes was
+       made on a wire this process never touched and inside no collector this
+       process ever opened. src/ai-spend.ts's whole design — begin, record,
+       collect — assumes the money is spent inside an `await` we are holding, and
+       that is exactly what realtime is not. */
+    realtimeSessionId: null,
+    providerEventId: null,
+    eventKind: null,
+    providerStatus: null,
+    inputTextTokens: null,
+    inputAudioTokens: null,
+    inputImageTokens: null,
+    cachedTextTokens: null,
+    cachedAudioTokens: null,
+    outputTextTokens: null,
+    outputAudioTokens: null,
+    transcriptionSeconds: null,
   };
   const promise = sink(row).catch((err: Error) => {
     scope.box.writeFailures += 1;
