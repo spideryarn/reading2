@@ -12,235 +12,290 @@ models. Deliverables:
 3. **Cost-reduction suggestions**, each with the product tradeoff it would require, named so Greg
    decides rather than inherits.
 
-This doc is the plan only — reviewed by GPT Sol before anything is built (Greg, 2026-09-02:
-"For now, let's just write up a plan, with a review from GPT Sol, don't actually implement yet").
-Other agents are concurrently building payments machinery and checking cost-tracking; this work
-reads the cost-tracking machinery and must not modify it.
+This doc is the plan only (Greg, 2026-09-02: "For now, let's just write up a plan, with a review
+from GPT Sol, don't actually implement yet"). **Review round 1 is done**: GPT Sol returned
+*rework* with three blockers
+([review](260902g-estimate-article-ingestion-and-mode-generation-costs-review-sol.md)); every
+blocker was verified against the code/ledger and confirmed, and this version folds them in. The
+biggest: what looked like a truncation-retry tail was actually **concurrent duplicate execution
+of one job** — see Context below.
+
+Other agents are concurrently building payments machinery and cost-tracking; this work reads the
+cost-tracking machinery and must not modify it.
 
 ## Context: most of the machinery already exists
 
 - **Cost capture is done.** Every paid call already lands in the `ai_calls` ledger
   ([`src/ai-spend.ts`](../../src/ai-spend.ts), sink [`src/store/ai-calls.ts`](../../src/store/ai-calls.ts))
-  with OpenRouter's authoritative `usage.cost`, token breakdowns (input, output, cache read/write,
-  reasoning), `job_id`, `step_name`, `article_slug`, `duration_ms`. `ScopeKind` already includes
-  `"eval"`. We build a **harness that drives articles through the pipeline and reads the ledger
-  back**, not new instrumentation.
-- **We already have real numbers** (from `data/_ai-calls.jsonl`, 565 rows, files mode on Greg's
-  laptop): happy-path ingest ≈ **$0.40/article** (hierarchy ~$0.24–0.30 + labels ~$0.09–0.15 + arc
-  ~$0.06). The tail: on `towards-a-theory-of-bugs` the hierarchy step ran **11 paid calls in one
-  job, $5.43** — every call hit its `max_tokens` cap, produced truncated JSON, and the queue
-  retried the whole 8-minute call. Adjacent jobs on the same slug: $5.05, $0.82. **Any estimate
-  ignoring retry-on-truncation on long articles is off by an order of magnitude**, and it is where
-  the money actually is. See [260826a-toc-max-tokens.md](../postmortems/260826a-toc-max-tokens.md).
+  with OpenRouter's authoritative `usage.cost`, token breakdowns, `job_id`, `step_name`,
+  `article_slug`, `duration_ms`. `ScopeKind` already includes `"eval"`. We build a **harness that
+  drives articles through the pipeline and reads the ledger back**, not new instrumentation.
+- **We already have real numbers** (`data/_ai-calls.jsonl`, 565 rows, files mode, Greg's laptop):
+  a single hierarchy+labels execution on a 468-word article costs **$0.047–0.078**; on a
+  13,476-word article, **$0.36** (hierarchy $0.24 + labels), and with arc, glossary, ideas and
+  sketch added the observed partial total is **~$0.91**. See the appendix for the named cases.
+- **The $5.43 incident is duplicate execution, not a retry chain.** On
+  `towards-a-theory-of-bugs…`, one job's eleven hierarchy calls have eleven **distinct runIds**
+  starting 7–60 s apart while earlier calls were still in flight, and several finished *below*
+  the token ceiling — something kept starting fresh attempts of a step already running.
+  The same overlap appears on the 468-word `read` article (six executions under one job), so it
+  is not length-dependent. Consistent with the old files-mode queue; possibly already prevented
+  by the Postgres attempt-token/lease claiming ([`src/jobs.ts`](../../src/jobs.ts)). **An Opus
+  agent is root-causing and fixing/pinning this now** (dispatched 2026-09-02 at Greg's request,
+  with its own plan + Sol reviews); this eval treats it as a separate historical anomaly, and
+  separately measures *stochastic* hierarchy cost under current code — where hierarchy runs at
+  effort `medium` precisely because this article filled the ceiling at `high`
+  ([`src/hierarchy.ts`](../../src/hierarchy.ts)), and a truncation surfaces as a `bug` failure
+  with no Retry button.
 - **Only five steps run at ingest** (`DEFAULT_INGEST_STEPS`, [`src/pipeline.ts`](../../src/pipeline.ts)):
-  fetch, extract, blocks, hierarchy (+labels fan-out), assets. Of those, only hierarchy/labels pay
-  (extract pays too, but only for PDFs). Everything else — arc, tweets, glossary, quotes, ideas,
-  timeline, quiz, sketch — is **on-demand**, one job per mode press; arc also auto-fires when an
-  owner opens an article. **Summary mode is free** since 2026-08-31: no stage, it draws the gists
-  hierarchy already wrote ([summaries.md](../project/summaries.md)).
+  fetch, extract, blocks, hierarchy (+labels fan-out), assets. Of those, only hierarchy/labels
+  pay (extract pays too, but only for PDFs). Everything else — arc, tweets, glossary, quotes,
+  ideas, timeline, quiz, sketch — is **on-demand**; arc also auto-fires when an owner opens an
+  article. **Summary mode is free** since 2026-08-31: no stage, it draws the gists hierarchy
+  already wrote ([summaries.md](../project/summaries.md)).
 - **One model does nearly everything**: `anthropic/claude-sonnet-5` on both wires
   ([`src/models.ts`](../../src/models.ts)). Exceptions: PDF extraction (`openai/gpt-5.6-luna`,
-  per-chunk), embeddings (`voyageai/voyage-4`, ~$0.0003/article), dictation
-  (`google/gemini-3.1-flash-lite`). Per-job env overrides (`SPIDERYARN_*_MODEL`,
-  `SPIDERYARN_PIPELINE_EFFORT`, `MODEL_ENV_VAR` table in `src/models.ts`) are the eval's
-  arm-switching mechanism — no new plumbing needed.
-- **An arms-style eval harness exists**: `evals/hierarchy-structure/` (`run.ts`,
-  `model-arms.ts`, `corpus.ts`) is the template. Paid evals must use the
-  [`evals/declared-spend.ts`](../../evals/declared-spend.ts) wrapper
-  (`tests/no-undeclared-spend.test.ts` enforces it).
+  per-chunk, BYOK), embeddings (`voyageai/voyage-4`), dictation (`google/gemini-3.1-flash-lite`).
+  **There is no per-stage pipeline model override**: every pipeline entry in `MODEL_ENV_VAR` is
+  deliberately `null`, only `SPIDERYARN_PIPELINE_EFFORT` exists, and Luna cannot ride the
+  Messages-shaped pipeline wire without a protocol rewrite (`src/models.ts`). Model arms
+  therefore need a real injection/bypass mechanism (as `evals/hierarchy-structure/model-arms.ts`
+  built for itself) and are **deferred to a follow-up plan**.
+- **An arms-style eval harness exists**: `evals/hierarchy-structure/` is the template —
+  including its incremental result persistence and interleaved repeats. Paid evals that bypass
+  the gateways use [`evals/declared-spend.ts`](../../evals/declared-spend.ts); ordinary
+  production-path calls need `collectSpend`/`withLedger`, not the declared wrapper.
 
 ## References
 
 - [`src/pipeline.ts`](../../src/pipeline.ts) — `STEP_ORDER`, `DEFAULT_INGEST_STEPS`, the step
-  implementations; which steps pay and what each prompt contains.
-- [`src/ai-spend.ts`](../../src/ai-spend.ts) / [`src/store/ai-calls.ts`](../../src/store/ai-calls.ts) —
-  the ledger the eval reads back (`collectSpend`, `scopeKind: "eval"`, `runId`).
-- [ai-gateway.md](../project/ai-gateway.md) — the two wires; also §345–383: summing `durationMs`
-  is wrong, use `max(finishedAt) − min(startedAt)` filtered on `scopeKind` **and** `runId` (three
-  workstreams got this wrong in one day).
+  implementations; `fetchDocument` is hardcoded in stage 1 and accepts only HTTP(S) (no local
+  files) — [`src/fetch.ts`](../../src/fetch.ts).
+- [`src/jobs.ts`](../../src/jobs.ts) — `runStep` opens its own `collectSpend` with
+  `scopeKind: "job_step"`; nested collectors **shadow** rather than merge
+  ([`src/ai-spend.ts`](../../src/ai-spend.ts)), so wrapping the queue in an eval scope yields no
+  eval rows. The feasibility stage exists because of this.
+- [`src/store/contracts.ts`](../../src/store/contracts.ts) — `CostStore.read(since, until)`; there
+  is **no `forRun`**, so the runner reads a bounded window and filters in memory (fine at current
+  size).
+- [ai-gateway.md](../project/ai-gateway.md) — the two wires; the duration trap
+  (`max(finishedAt) − min(startedAt)` per step, never `sum(durationMs)`); OpenRouter's provider
+  choice is a preference with fallback, so `upstream` can vary run to run.
 - [260827q-ai-cost-tracking.md](260827q-ai-cost-tracking.md),
   [260827d-ai-cost-tracking-options.md](../research/260827d-ai-cost-tracking-options.md) — the
-  cost-tracking work this reads from; the research doc opens with exactly this question ("what did
-  ingesting this article cost?") and records it as unanswered-by-a-runner.
-- [prompt-caching.md](../project/prompt-caching.md) — what caching actually does today, including
-  that on the normal add path the pipeline cache breakpoints **lose money** (1.25× write premium,
-  no later reader in `DEFAULT_INGEST_STEPS`), and that labels' shared prefix is under the
-  1,024-token cache floor so caches nothing on real articles.
+  cost-tracking work this reads from.
+- [prompt-caching.md](../project/prompt-caching.md) — pipeline cache breakpoints are
+  **conditional and off by default** (`sharesArticleCache`); an ordinary ingest marks nothing.
+  Request-path search/chat/explain have real per-task article caches, so their scenarios must
+  distinguish a cold first touch from a warm later turn.
 - [`src/token-budget.ts`](../../src/token-budget.ts) +
-  [260826a-toc-max-tokens.md](../postmortems/260826a-toc-max-tokens.md) — the machinery behind the
-  truncation-retry tail.
-- [`src/pdf-read.ts`](../../src/pdf-read.ts) — PDF chunking (≤6 pages/chunk), per-chunk response
-  cache keyed on prompt version: re-runs are free, which a cost eval must defeat, not inherit.
-- `evals/hierarchy-structure/`, [`evals/README.md`](../../evals/README.md) — harness template and
-  the rules (eval rows are deliberately **excluded** from `npm run cost`; the eval self-reports by
-  querying the ledger for its own `runId`).
+  [260826a-toc-max-tokens.md](../postmortems/260826a-toc-max-tokens.md) — budgets, truncation
+  failure kinds, and why adaptive thinking makes repeated draws vary.
+- [`src/pdf-read.ts`](../../src/pdf-read.ts) — chunk planning (dense pages can become one-page
+  chunks, so "20 pages ≈ 4 chunks" is not guaranteed); checkpoints are article-scoped Postgres
+  rows that `force` does **not** bypass; files mode uses `nullCheckpointStore` and never resumes.
+- `evals/hierarchy-structure/`, [`evals/README.md`](../../evals/README.md) — harness template;
+  eval rows are deliberately excluded from `npm run cost`, so the eval self-reports.
 - [`evals/results/effort-vs-quality.md`](../../evals/results/effort-vs-quality.md) — arc/glossary
-  at `medium` vs `high` already measured; input to the cost-reduction section.
+  `medium` vs `high` already measured.
+- [`src/article-vectors.ts`](../../src/article-vectors.ts) — the embeddings purchase seam;
+  `similar.ts` still buys its own vectors (a known debt), so Force/Drift can pay twice.
 - Fixtures: `tests/fixtures/data-root/` (5 HTML articles), `evals/pdf/{easy,harder,much-harder}/`
-  (licensed PDFs), `evals/extraction/fixtures/` (21 hard HTML pages).
+  (licensed PDFs; the easy one already measured at about a penny — `evals/pdf/README.md`),
+  `evals/extraction/fixtures/` (21 hard HTML pages).
 - [260831ah-toc-on-request-and-the-tree-that-costs-nothing.md](260831ah-toc-on-request-and-the-tree-that-costs-nothing.md)
-  — a stopped plan that bears on the hierarchy cost; read before proposing hierarchy changes.
+  — STOPPED plan bearing on hierarchy cost; read before proposing hierarchy changes.
 
 ## Principles, key decisions
 
-- **All modes, not just three** (Greg, 2026-09-02). Core table covers ingestion + Hierarchy,
-  Summary, Glossary; the eval also runs every other per-article mode step so we see the full
-  worst-case "reader pressed everything" cost.
-- **Real runs, not a dry-run estimator** (Greg, 2026-09-02). The eval ingests fixtures for real
-  through OpenRouter and reads actual usage from the ledger. True numbers including cache and
-  retry behaviour; costs real money per run (est. $2–10 per full cold run over three articles —
-  see appendix; model arms multiply this).
-- **Simpler option passed over: no runner, just aggregate the existing ledger.** We *do* do that
-  first (stage one, free, immediate range) — but it can't compare models, can't hold fixtures
-  constant, mixes warm and cold cache, and the modes barely appear in it (most have 1–2 rows).
-  Repeatability needs the runner.
-- **Cold cost is the number.** The content-hash caches (`articleFingerprint` on the mode steps,
-  the per-chunk PDF cache) make a re-run silently cost $0 — a classic
-  [silent success](../reusable/silent-success.md). The runner must force cold runs (the pipeline's
-  `force` mechanism; a fresh PDF cache location) and assert non-zero spend per paid step.
-- **Per-article vs per-interaction, kept separate.** Modes that generate one artefact per article
-  (arc, tweets, glossary, quotes, ideas, timeline, quiz-generation, sketch, hierarchy, extract)
-  are measured per article. Per-interaction features (chat turn, quiz marking, comment explain,
-  search, remember, dictation, embeddings, glossary term lookup) are reported as **per-interaction
-  unit costs** — one sample real call each, or existing ledger rows — never folded into the
-  per-article number, because usage count is a product unknown.
-- **Read-only towards the cost-tracking machinery.** Other agents are working in it; this plan
-  adds an eval that consumes it. If the ledger schema moves under us, adapt the eval, don't touch
-  the ledger.
-- **Out of scope**: live conversation (OpenAI Realtime, browser-direct, invisible to the ledger —
-  known and accepted, [ai-gateway.md](../project/ai-gateway.md)); infrastructure costs (Vercel,
-  Supabase); implementing any cost reduction (this plan only names and prices the options).
+- **All modes, not just three** (Greg, 2026-09-02). The inventory includes the four referee
+  tasks, and classifies Force/Drift diagram embeddings as **cold first-open article costs** (an
+  article-scoped purchase, currently sometimes made twice), not per-interaction costs.
+- **Real runs, not a dry-run estimator** (Greg, 2026-09-02). Costs real money per run; the
+  feasibility stage produces the per-run price before the corpus runs.
+- **Simpler option passed over: no runner, just aggregate the existing ledger.** Stage one does
+  exactly that, free — but it can't compare models, can't hold fixtures constant, mixes warm,
+  cold and duplicate executions, and most modes have 1–2 rows. Repeatability needs the runner.
+- **"Cold first generation" is the headline number** — the cost of the first paid generation of
+  each stored artefact. Legitimate warm/resume costs (prompt-cache reads on request-path
+  scenarios, PDF checkpoint resume) are **reported separately**, not declared harness failures;
+  a $0 that should have been cold is still a failure. Within-run chunk/label caching is part of
+  production cost and stays.
+- **Independent draws need fresh articles.** PDF checkpoints and step artefacts are
+  article-scoped and `force` does not bypass checkpoints — each independent draw ingests under a
+  fresh run-prefixed slug/article id rather than fighting the caches.
+- **Variation is measured, not assumed.** Long-article hierarchy gets 3–5 independent cold
+  draws, interleaved; report median, range, truncation/semantic-failure count, cost conditional
+  on success, and total paid cost — called *observed variation*, never a tail probability. The
+  ledger's `outcome: "ok"` only means the gateway returned; the stage/job outcome is recorded
+  beside spend.
+- **Per-article vs per-interaction, kept separate.** Per-article: the eight mode steps, extract,
+  hierarchy+labels, article embeddings, referee stored artefacts. Per-interaction: chat turn,
+  quiz marking, explain, search, remember, dictation, glossary term lookup, referee per-turn
+  calls — unit costs, one sample call each or existing ledger rows, never folded into the
+  per-article number.
+- **BYOK-aware totals.** Sum the way [`src/store/ai-calls.ts`](../../src/store/ai-calls.ts)
+  does — Luna PDF rows carry $0 OpenRouter credits and the real cost in
+  `upstreamInferenceNanos` (78 such rows today). The 39 unpriced rows are *unknown*, not zero.
+- **Read-only towards the cost-tracking machinery.** The one open coordination point: eval
+  attribution through the production queue (blocker 2) must be designed **with** the
+  cost-tracking agents, not around them.
+- **Out of scope**: live conversation (browser-direct OpenAI Realtime, invisible to the ledger —
+  known and accepted); infrastructure costs; implementing cost reductions (the duplicate-execution
+  fix is already in flight separately); model arms (follow-up plan once an injection mechanism
+  exists).
 
 ## Stages & actions
 
 ### Stage: Baseline from the ledger we already have (no code, no spend)
 
 - [ ] Aggregate `data/_ai-calls.jsonl` (and the Postgres `ai_calls` table where populated) per
-      slug × step: cost, calls, tokens, retries. A short script or even a jq one-liner; output a
-      table into this doc's appendix.
-- [ ] From it, publish the **prior**: happy-path ingest cost, per-mode costs where rows exist, and
-      the truncation tail, with slugs named.
+      slug × step × runId, **separating overlapping duplicate executions from single executions**
+      and using BYOK-aware totals. Output the named-cases table into this doc's appendix,
+      replacing the current one.
 - [ ] Sanity-check against `npm run cost --reconcile` for the same period.
-- This stage alone answers "roughly what's the range and what's expensive" — the rest buys
-  repeatability and model comparison. Stop and show Greg before building the runner.
+- [ ] Stop and show Greg: the observed range, labelled extrapolations, ranked expensive bits.
+      This alone answers "roughly what does an article cost" — the rest buys repeatability and
+      model comparison.
+
+### Stage: No-spend feasibility — orchestration, attribution, fixtures
+
+The runner design has to answer three couplings before any money moves (Sol blocker 2):
+
+- [ ] **How eval spend gets attributed.** `runStep` opens its own `job_step` collector and
+      nested collectors shadow, so "wrap the queue in an eval scope" produces no eval rows.
+      Decide between (a) driving the production queue with an explicit eval-attribution seam —
+      requires agreeing the seam with the cost-tracking agents — or (b) an eval coordinator that
+      faithfully does session begin/run/commit itself (probably over-built; say why if chosen).
+      Also possible: attribute by run-prefixed slug + `job_step` rows rather than by
+      `scopeKind: "eval"` at all — evaluate this first, it may need no seam.
+- [ ] **How a checked-in HTML fixture enters stage 1.** `fetchDocument` accepts only HTTP(S) and
+      rejects loopback; refetching live URLs doesn't hold bytes constant. Candidates: a
+      fixture-input seam, or a tiny local static server on a non-loopback interface, or seeding
+      the fetched blob directly (the store is content-addressed). Pick the smallest.
+- [ ] **Shared-state safety** (several agents share the dev database): a local-target assertion
+      before any run; a dedicated eval owner; collision-proof run-prefixed slugs; record every
+      created article/job id; cleanup deletes exactly those rows and **retains** ledger history
+      (deleting an eval article nulls `ai_calls.article_id` but keeps the spend row).
+- [ ] Prove the chosen design with a **free end-to-end dry pass** (a no-model or stubbed step)
+      showing rows land attributable and cleanup removes exactly what was created.
+- [ ] Write the decision into this doc; stop & review with Greg if the attribution seam needs
+      cost-tracking coordination.
 
 ### Stage: Fixture corpus — three articles, held constant
 
-- [ ] **Short HTML** (~1,000 words): pick from `tests/fixtures/data-root/` if one fits, else from
+- [ ] **Short HTML** (~1,000 words): pick from `tests/fixtures/data-root/` or
       `evals/extraction/fixtures/`.
-- [ ] **Long/dense HTML** (10k+ words, the shape that triggers the truncation tail): nothing
-      checked in is known to qualify — find a licence-safe candidate (or snapshot
-      `towards-a-theory-of-bugs`'s source if licensing allows) and check it in with a hash, the
-      way `evals/extraction/fixtures/hashes.json` does.
-- [ ] **~20-page PDF**: pick from `evals/pdf/` (check page counts of `easy`/`harder`/
-      `much-harder`; add one if none is near 20 pages — with LICENCE, as the existing ones have).
-- [ ] Record word/page/block counts for each in the eval's corpus file so the report can show
-      cost-per-1k-words.
+- [ ] **Long/dense HTML** (10k+ words): find a licence-safe candidate (or snapshot
+      `towards-a-theory-of-bugs…`'s source if licensing allows); check in with a hash as
+      `evals/extraction/fixtures/hashes.json` does.
+- [ ] **~20-page PDF**: check page counts of the existing `evals/pdf/` fixtures; add one near 20
+      pages if needed (with LICENCE). Run `planChunks` on it (free) to learn the real chunk
+      count rather than assuming pages/6.
+- [ ] Record word/page/block/gistable counts per fixture so the report can show cost-per-1k-words.
 
 ### Stage: v1 runner — one article, end to end, cold
 
-- [ ] `evals/cost/run.ts`, modelled on `evals/hierarchy-structure/run.ts`; wire in
-      `evals/declared-spend.ts`; add `npm run eval:cost`.
-- [ ] Drive the fixture through the ingest steps in-process (the same step functions the queue
-      calls), inside a `collectSpend` scope with `scopeKind: "eval"` and a fresh `runId`, with
-      `force` set so every paid step runs cold. Note: the eight article-reading stage CLIs were
-      deleted 2026-09-01; in-process invocation or `POST /api/jobs` are the two routes — decide at
-      implementation time, prefer in-process (no server dependency).
-- [ ] Read the ledger back by `runId` + `scopeKind`; print per-step: cost (USD), calls (so retries
-      are visible), input/output/cache-read/cache-write/reasoning tokens, and wall clock as
-      `max(finishedAt) − min(startedAt)`.
-- [ ] Assert non-zero spend on every step expected to pay; fail loudly if a step cost $0
-      (cache leak) or a step ran more calls than expected (retry storm — report, don't hide it).
-- [ ] Tests before code where they're cheap: the ledger-readback aggregation and the report
-      formatting are pure functions — unit-test those with fixture rows; the paid path is
-      exercised by running the eval itself.
-- [ ] Run it on the short HTML fixture. Expected ≈ $0.40. Commit the runner and the first result.
+- [ ] `evals/cost/run.ts`, modelled on `evals/hierarchy-structure/run.ts` (including incremental
+      result persistence); `npm run eval:cost`. Production-path calls run under normal
+      `collectSpend`; `declared-spend` only if any arm later bypasses the gateway.
+- [ ] Drive the fixture through ingest via the design the feasibility stage chose, under a fresh
+      run-prefixed slug. Read the ledger back (`CostStore.read` window + in-memory filter);
+      capture reports via `onDone` so a thrown stage still reports; name an owner or no row is
+      written.
+- [ ] Per step, report: cost (BYOK-aware), calls, input/output/cache-read/cache-write/reasoning
+      tokens, gateway outcome **and** stage outcome, ledger wall-clock envelope *plus*
+      runner-measured elapsed time.
+- [ ] Record comparability metadata per run: commit, fixture hash, block/gistable counts,
+      requested and answered model, upstream, effort, service tier, geo, cache counters.
+- [ ] Assert cold: every step expected to pay must have non-zero spend; flag unexpected call
+      counts (duplicate execution would show here — report, don't hide).
+- [ ] Unit-test the pure parts (ledger aggregation, BYOK totalling, report formatting) with
+      fixture rows before the paid path runs.
+- [ ] Run on the short HTML fixture (expected well under $0.50 total). Commit runner + result.
 
-### Stage: All modes, all three articles
+### Stage: All modes, all three articles, with repeats where variance lives
 
-- [ ] Extend the runner to fire every per-article mode step (arc, tweets, glossary, quotes,
-      ideas, timeline, quiz, sketch) after ingest, still cold, still one `runId` per
-      (article, step) so steps are separable.
-- [ ] Add the per-interaction unit costs: one sample call each for chat turn, quiz marking,
-      explain, search, embeddings (or reuse existing ledger rows where they're representative);
-      report per-unit, in a separate table.
-- [ ] Run over all three fixtures. Watch the long article for the truncation tail — if hierarchy
-      retries, that *is* the finding; record it, don't re-run until it goes away.
-- [ ] Stop & review with Greg: the range, the ranked expensive bits.
+- [ ] Extend to every per-article mode step (arc, tweets, glossary, quotes, ideas, timeline,
+      quiz, sketch) plus article embeddings and referee stored artefacts, after ingest, cold,
+      separable per (article, step).
+- [ ] Long-article hierarchy: 3–5 independent cold draws under fresh slugs, interleaved; report
+      the variation treatment from Principles.
+- [ ] Per-interaction unit costs (chat turn, quiz marking, explain, search, referee per-turn,
+      dictation): one sample call each or representative ledger rows; for request-path scenarios
+      report cold first touch and warm later turn separately (the article cache is real there).
+- [ ] Run over all three fixtures. Stop & review with Greg: the range, ranked expensive bits.
 
 ### Stage: Committed report + docs
 
-- [ ] Write `evals/results/cost-per-article-<date>.md`: per-article × per-step cost table, the
-      range, cost-per-1k-words, the per-interaction table, ranked expensive bits, and the exact
-      command to reproduce.
-- [ ] Update [`evals/README.md`](../../evals/README.md) with the new runner; add a line to
-      [code-quality-overview.md](../project/code-quality-overview.md) only if that's where evals
-      are signposted (check; don't duplicate).
+- [ ] `evals/results/cost-per-article-<date>.md`: per-article × per-step table, range,
+      cost-per-1k-words, per-interaction table, variation for long hierarchy, ranked expensive
+      bits, exact reproduction command.
+- [ ] Update [`evals/README.md`](../../evals/README.md); check where evals are signposted before
+      adding lines elsewhere.
 - [ ] `npm test` + `npm run typecheck`; `npm run lint` on touched files.
-
-### Stage: Model arms (only after the baseline is committed)
-
-- [ ] Add `--arm` support (as `hierarchy-structure` does) using the existing
-      `SPIDERYARN_*_MODEL` / `SPIDERYARN_PIPELINE_EFFORT` env overrides. First arms: the top two
-      expensive stages from the baseline (expected: hierarchy, then PDF extract or sketch).
-- [ ] Candidate arms: `claude-haiku-4-5` and `gpt-5.6-luna` for stages currently on sonnet-5;
-      `medium` vs `high` effort where [effort-vs-quality.md](../../evals/results/effort-vs-quality.md)
-      hasn't already answered it.
-- [ ] **Cost alone can't pick a model** — pair each arm's cost with the existing quality evals for
-      that stage (`eval:hierarchy`, extraction corpus, effort-vs-quality) and report both columns.
-- [ ] Stop & review with Greg before any model change ships.
 
 ### Stage: Cost-reduction write-up
 
-- [ ] Turn the appendix's candidate list (below) into a recommendation ranked by saving × ease,
-      each with its product tradeoff named, informed by the measured numbers. Deliver as a section
-      of the results doc, decisions to Greg.
+- [ ] Turn the appendix candidates into a recommendation ranked by measured saving × ease, each
+      with its tradeoff named; decisions to Greg.
+
+### Stage (follow-up plan, not this one): Model arms
+
+- [ ] A separate plan once the baseline is committed: a per-stage model injection/bypass
+      mechanism (the `MODEL_ENV_VAR` pipeline entries are deliberately null; Luna can't ride the
+      Messages wire), paired with the existing quality evals so cost never picks a model alone.
 
 ## Appendix
 
-### Preliminary range (from existing ledger data, before any new runs)
+### Observed named cases (from the existing ledger; extrapolations labelled)
 
-Treat as priors to be replaced by the eval:
+| Case | Observed |
+|---|---|
+| `read`, 468 words / 23 blocks — hierarchy+labels, per single execution | **$0.047–0.078** (six overlapping duplicate executions in the file; per-execution is the honest unit) |
+| `what-if-we-had-bigger-brains…`, 13,476 words / 172 blocks — hierarchy+labels | **$0.36** |
+| same article + arc, glossary, ideas, sketch (the four measured modes) | **~$0.91** partial total; quotes/tweets/timeline/quiz unmeasured |
+| `towards-a-theory-of-bugs…` — the duplicate-execution incident | $5.43 in one job (11 overlapping executions, distinct runIds; a *waste* incident, not a per-article cost) |
+| PDF extraction, easy fixture | ~$0.01 (`evals/pdf/README.md`); full BYOK eval runs span ~$0.015–0.118 upstream |
+| chat turn | ~$0.04 |
+| embeddings per article | ~$0.0003 |
 
-| Article shape | Ingest (fetch→hierarchy) | + all per-article modes | Tail |
-|---|---|---|---|
-| ~1k-word HTML | ~$0.30–0.45 | ~$0.9–1.6 (arc .06, glossary .06/pass, quotes .03, ideas .17, sketch .23, tweets/timeline/quiz ~.05–.20 each) | — |
-| long/dense HTML | $0.4–0.8 happy path | ~$1.5–3 | **$5–6+** when hierarchy hits retry-on-truncation |
-| ~20-page PDF | ingest + extract: ~4 luna chunks, price unmeasured (est. cents, to be measured) | as HTML + extract | chunk retries |
+**Labelled extrapolations** (to be replaced by the eval): a short article with all per-article
+modes pressed plausibly lands **under ~$1**; a long article **roughly $1–3**; per-run eval cost
+over three fixtures with repeats, order of **$3–8**. The historical $5+ figures are duplicate
+execution, not a cost any single ingest should pay.
 
-Per-interaction (rough, from ledger): chat turn ~$0.04, embeddings ~$0.0003/article,
-quiz-mark/explain/search unmeasured.
+### Cost-reduction candidates (Sol's re-ranking adopted; to be priced by the eval)
 
-**Eval run cost**: three articles, cold, all modes ≈ $2–10 per full run (the long article
-dominates; a truncation storm could double it). Arms multiply by the number of arms.
+1. **Duplicate job execution** — the largest historical waste. Root-cause/fix already in flight
+   (Opus agent, 2026-09-02). If the Postgres queue already prevents it, the deliverable is the
+   concurrency test that pins that.
+2. **Keep artefact modes on demand** (status quo, and the largest product-level saving already
+   operating). One eager exception to reconsider: arc auto-fires on owner open
+   (`src/web/useArc.ts`); tradeoff of changing it: the L0 column appears only after a press.
+3. **Effort tuning** on the `high` modes, paired with quality measures per mode
+   (effort-vs-quality already covers arc/glossary). Tradeoff: per-mode quality, decided by Greg.
+4. **Cheaper models where selection is measurable** — search first; labels have volume but much
+   higher product risk; quotes/glossary are cheap enough to rank lower. Tradeoff: quality,
+   measured not guessed. Needs the arms follow-up.
+5. **Remove the duplicate Force/Drift embedding purchase** (`similar.ts` not yet on the
+   `article-vectors.ts` seam). Tiny, easy, tradeoff-free.
+6. **Bound tool/web-search turns** where interaction data shows they dominate (explain has the
+   web-search tool). Tradeoff: answer depth and external evidence.
+7. **PDF chunk/retry policy** — only if measurement shows it matters.
 
-### Cost-reduction candidates (to be priced by the eval, tradeoffs named now)
-
-1. **Stop paying for retry-on-truncation** (hierarchy, long articles). The queue re-runs the whole
-   8-minute call when output hits `max_tokens`; three jobs on one slug cost $11+. Fix is
-   engineering (detect truncation and split/resume rather than retry whole; see the stopped plan
-   260831ah before redesigning). **Product tradeoff: none.** Expected biggest single saving.
-2. **Effort tuning** on modes running at `high` (arc, ideas, timeline, quiz, sketch, tweets).
-   effort-vs-quality already measured arc/glossary; extend per mode. **Tradeoff: per-mode output
-   quality — decided per mode, by Greg, with the quality eval in hand.**
-3. **Cheaper model for cheap-safe stages** (quotes, glossary, labels are candidates; the quick
-   tier exists in `src/models.ts` and nothing uses it today). **Tradeoff: quality; measured, not
-   guessed, via the arms stage.**
-4. **Fix or drop the losing cache breakpoints on the ingest path** — today they pay the 1.25×
-   write premium with no later reader ([prompt-caching.md](../project/prompt-caching.md)). Small,
-   tradeoff-free. The bigger caching play — batch several mode generations into one job so they
-   share one cache entry within the TTL — **trades away on-demand**: you pay eagerly for modes
-   nobody opens, and on-demand is itself the biggest cost saver we already have.
-5. **Keep modes on-demand** (status quo; worth stating because it's doing more work than anything
-   we might add). One eager exception to reconsider: arc auto-fires when an owner opens an
-   article (`src/web/useArc.ts`). **Tradeoff of changing it: the L0 column appears only after a
-   press.**
+Hierarchy split/resume work is a **latency/quality/engineering** question (see the stopped
+260831ah), not a free cost win, and is not on this list.
 
 ### What the eval must not get wrong (traps already documented)
 
-- Eval rows are excluded from `npm run cost` by design — self-report by `runId`.
-- Wall clock = `max(finishedAt) − min(startedAt)`, never `sum(durationMs)`.
-- A $0 step is a failure of the eval (warm cache), not a saving.
-- `npm run pdf` re-pays for chunks the queue would resume ([setup-dev.md](../project/setup-dev.md));
-  drive PDFs the way the queue does, or account for it.
-- Store: run with `SPIDERYARN_STORE=postgres` like everything else new.
+- Eval rows are excluded from `npm run cost` by design — self-report from the ledger.
+- Nested `collectSpend` shadows; naive eval-scope wrapping records nothing (feasibility stage).
+- Per-step wall clock = `max(finishedAt) − min(startedAt)`; add runner-measured elapsed for the
+  free local work around the calls.
+- Total = credits **plus** BYOK upstream nanos; unpriced rows are unknown, not zero.
+- A $0 cold step is a failure of the eval; a $0 warm read in a request-path scenario is a
+  finding.
+- `gateway ok` ≠ `stage ok`; record both.
+- Fresh article per independent draw; `force` does not bypass PDF checkpoints.
+- Run with `SPIDERYARN_STORE=postgres`; assert the local target before spending.
