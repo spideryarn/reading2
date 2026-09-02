@@ -92,10 +92,12 @@ interface Implementation {
  * The interface a `const` is annotated with, unwrapping the type operators that
  * still name one seam.
  *
- * `Pick<ArticleReader, …>` is how `pgArticleReader` and `fsGlossaryStore` are
- * both declared, and reading those as "no contract" would drop two real seams —
- * including `GlossaryStore`, which is the one live example of the direction this
- * file exists to flag.
+ * `Pick<GlossaryStore, "deleteGlossary">` is how `fsGlossaryStore` is declared,
+ * and reading that as "no contract" would drop `GlossaryStore` — the one live
+ * example of the direction this file exists to flag. (`pgArticleReader` was a
+ * `Pick` too until 2026-09-02; it is now annotated `: ArticleReader` outright,
+ * so a missing loader is a typecheck error rather than a boot-time `TypeError`
+ * — src/store/pg.ts.)
  */
 function contractOf(annotation: unknown): string | undefined {
   const node = annotation as AstNode | undefined;
@@ -236,9 +238,13 @@ describe("the store seams are found by reading the contract, not a list", () => 
        could break and the list would silently shrink to "the stores annotated
        without a type operator" while staying green — and it would lose
        `GlossaryStore`, the one seam in this repo that is actually missing its
-       Postgres side. */
+       Postgres side. `fsGlossaryStore` is now the only `Pick`-declared adapter,
+       so it carries this on its own. */
     const glossary = SEAMS.get("GlossaryStore") ?? [];
     expect(glossary.map((i) => i.name)).toContain("fsGlossaryStore");
+    /* And the plain-annotation path, on the seam that used to take the `Pick`
+       route: `pgArticleReader` must still be found as an `ArticleReader`, or
+       the reader seam would look one-sided. */
     const reader = SEAMS.get("ArticleReader") ?? [];
     expect(reader.map((i) => i.name)).toContain("pgArticleReader");
   });

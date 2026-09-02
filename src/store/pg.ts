@@ -1872,21 +1872,28 @@ export function shareableArtefacts(revision: {
   };
 }
 
-export const pgArticleReader: Pick<
-  ArticleReader,
-  | "loadArticle"
-  | "listArticles"
-  | "articleMetadata"
-  | "loadTweets"
-  | "loadGlossary"
-  | "loadQuotes"
-  | "loadIdeas"
-  | "loadTimeline"
-  | "loadQuiz"
-  | "loadSketch"
-  | "loadArc"
-  | "loadSource"
-> = {
+/**
+ * **The whole `ArticleReader`, annotated as one — not a `Pick` of the twelve
+ * names that happen to be here today.**
+ *
+ * It was a `Pick` re-listing every method, and src/store/index.ts then cast it
+ * back with `as ArticleReader`. Between them, a loader this file forgot was a
+ * `TypeError` the first time a route called it in production, rather than a red
+ * typecheck — the shape of postmortem
+ * docs/postmortems/260901e-claims-shipped-filesystem-only-and-returned-501-in-production.md.
+ * No supported adapter may legitimately omit a loader (GPT Sol, 2026-09-02), so
+ * the `Pick` was recording nothing except which names existed when it was last
+ * edited.
+ *
+ * **Annotated, not `satisfies`**, for two reasons. `fsArticleReader` in
+ * src/store/fs.ts is annotated the same way, and the twin adapters should read
+ * the same; and tests/store-seams-have-two-implementations.test.ts finds an
+ * adapter by parsing its *type annotation* out of the source, so a `satisfies`
+ * clause would make this one invisible to the test that counts sides of a seam.
+ * The narrower inferred type buys callers nothing here: every method already
+ * returns exactly what the interface declares.
+ */
+export const pgArticleReader: ArticleReader = {
   /**
    * **The raw document, out of the object store the revision names.**
    *
