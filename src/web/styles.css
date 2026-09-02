@@ -615,34 +615,6 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   border-color: var(--highlight);
 }
 
-/* **The way to the original** — SourceLink.tsx § TheOriginal, first in the bar.
-   One rule for both arms, because an `<a>` to a URL and a `<button>` that
-   fetches an uploaded file are the same affordance to the reader and must not
-   look like two. Shaped on `.mode-close` above for the same reason it is shaped
-   on `.linky`: everything in this row has to line up with the pills. */
-.controls .source-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  font: inherit;
-  width: 1.725rem;
-  height: 1.725rem;
-  padding: 0;
-  margin-right: 0.15rem;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--ink-faint);
-  text-decoration: none;
-  cursor: pointer;
-  transition: color 0.12s, border-color 0.12s;
-}
-.controls .source-link:hover {
-  color: var(--highlight);
-  border-color: var(--highlight);
-}
-
 .mode {
   font-size: 0.68rem;
   letter-spacing: 0.09em;
