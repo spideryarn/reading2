@@ -104,7 +104,16 @@ type Executor = Db | Tx;
 
 /** The three statuses a job never leaves. */
 const TERMINAL = ["done", "error", "cancelled"] as const;
-const ACTIVE = ["queued", "running"] as const;
+/**
+ * The two a job can still be doing something in.
+ *
+ * Exported for tests/helpers/forget-revisions.ts, which refuses to delete an
+ * article's revisions while a job is inside one of these — the second writer in
+ * docs/postmortems/260902f-a-lost-claim-that-was-never-lost-and-a-publication-that-was-never-buried.md.
+ * A second copy of this list in a helper is a list that would go stale the day a
+ * status is added.
+ */
+export const ACTIVE = ["queued", "running"] as const;
 
 /**
  * A row as the rest of the app wants it.

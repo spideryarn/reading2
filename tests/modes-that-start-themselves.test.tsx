@@ -1,0 +1,702 @@
+// @vitest-environment jsdom
+/**
+ * **Pressing a mode with nothing in it runs it. Arriving at one does not.**
+ *
+ * The money is in the second sentence. The auto-run fires from the panel's own
+ * `status === "none"`, and a panel reaches that state whether the reader pressed
+ * a button or pasted a link — so every test here is really about whether a
+ * *press* is what happened, and a version that fired on mount would pass the
+ * cheerful half of them.
+ *
+ * ## Why the bar is real and the band is not
+ *
+ * The press has to be a real `click()` on the real `DockModes` button, because
+ * the whole design of the activation token is *which code minted it*. A version
+ * that armed inside the query-state setter would be indistinguishable from the
+ * right one here — and would fire on Back and Forward, which is the bug.
+ * So `Dock` is mounted as itself.
+ *
+ * The band is a three-line probe rather than `IdeasPanel`, for the reason
+ * tests/glossary-one-fetch.test.tsx gives: mounting `Reader` drags in nuqs,
+ * Supabase and the layout. What that leaves uncovered — which button in the
+ * real panel calls which verb — is tests/step-job-force.test.tsx § what the
+ * empty state asks for, which asserts it for all five.
+ *
+ * ## Under a real `<StrictMode>`
+ *
+ * Not two hand-written mounts. Mounting twice by hand tests remounting; what
+ * has to be survived is React invoking one mount's effects **twice inside one
+ * commit**, which is what happens in development and which a check-then-clear
+ * token would not survive. GPT Sol, 2026-09-02. Every tree here is under one,
+ * so *exactly one POST* is the StrictMode assertion as well as the ordinary one.
+ *
+ * ## And the GET is let settle before anything is asserted
+ *
+ * A "no POST on a pasted URL" assertion made before the artefact fetch has
+ * resolved and its effects have run is vacuous: it passes because nothing has
+ * happened yet, on the broken code as much as on the right code. Every negative
+ * case here settles first, and the positive cases beside them are what prove
+ * the harness can see a POST at all.
+ *
+ * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 2e.
+ */
+import { act, createElement, StrictMode, useState, type ReactElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Mode } from "../src/modes.js";
+import type { Job } from "../src/types.js";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+class NoResizeObserver {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+Object.assign(globalThis, { ResizeObserver: NoResizeObserver });
+Object.defineProperty(window, "matchMedia", {
+  writable: true,
+  value: (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent: () => false,
+  }),
+});
+
+/* ------------------------------------------------------------ the network --
+
+   `apiFetch` rather than `globalThis.fetch`: what is being counted is the
+   artefact GET each band makes and the job request each hook asks the queue
+   for. Replies can be **held**, so that "the GET has not settled yet" is a
+   state a test can put the page in and act from. */
+
+/** Every artefact GET, in order. */
+const gets: string[] = [];
+/** Every job request the queue was asked for, in order. */
+const posts: { slug: string; steps: string[]; force?: string[] }[] = [];
+
+/** What the artefact GET answers: 404 is "nobody has asked for one yet". */
+let artefactStatus = 404;
+/** Whether the artefact GET rejects outright — a dead network, not a 404. */
+let artefactFails = false;
+/** Whether replies wait to be released. Off unless a test needs the gap. */
+let holdGets = false;
+let held: Array<() => void> = [];
+
+function releaseGets(): void {
+  const waiting = held;
+  held = [];
+  for (const go of waiting) go();
+}
+
+/** A body the four artefact hooks can read when the answer is 200. */
+const READY_BODY = JSON.stringify({
+  ideas: { ideas: [], profileHash: null },
+  quotes: { quotes: [], profileHash: null },
+  stale: false,
+  outdated: false,
+  profileChanged: false,
+});
+
+vi.mock("../src/web/lib/api.js", () => ({
+  apiFetch: async (url: string) => {
+    gets.push(url);
+    if (holdGets) await new Promise<void>((go) => held.push(go));
+    if (artefactFails) throw new Error("network");
+    return new Response(artefactStatus === 404 ? null : READY_BODY, { status: artefactStatus });
+  },
+  readJson: async (res: Response) => res.json(),
+  fetchOk: async () => new Response(null, { status: 204 }),
+  failure: async (res: Response) => new Error(String(res.status)),
+}));
+
+vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => true }));
+
+/** Whether `run` refuses, so the automatic attempt can be made to fail. */
+let postRefuses = false;
+let nextJobId = 0;
+let jobs: Job[] = [];
+
+vi.mock("../src/web/useJobs.js", async () => {
+  const actual =
+    await vi.importActual<typeof import("../src/web/useJobs.js")>("../src/web/useJobs.js");
+  return {
+    ...actual,
+    /* Posed, because what this file counts is *whether a request was made*.
+       The engine's own seeding rule — the other half of stage 2c — needs the
+       real one, and has its own file: tests/first-poll-completion.test.tsx. */
+    useJobs: () => ({
+      jobs,
+      loaded: true,
+      error: null,
+      driverFailures: {},
+      lastFailure: () => "The queue said no.",
+      run: async (request: { slug: string; steps: string[]; force?: string[] }) => {
+        posts.push(request);
+        if (postRefuses) return null;
+        nextJobId += 1;
+        return { id: `job${nextJobId}` };
+      },
+      cancel: async () => {},
+      add: async () => null,
+      addUpload: async () => null,
+      retry: async () => {},
+      forget: async () => {},
+    }),
+  };
+});
+
+const { Dock } = await import("../src/web/Dock.js");
+const { useIdeas } = await import("../src/web/useIdeas.js");
+const { useQuotes } = await import("../src/web/useQuotes.js");
+const { useTimeline } = await import("../src/web/useTimeline.js");
+const { useGlossary } = await import("../src/web/useGlossary.js");
+const { resetActivations } = await import("../src/web/activation.js");
+const { jobEngine } = await import("../src/web/jobEngine.js");
+
+/**
+ * The band, reduced to the three facts this file is about: it calls the real
+ * hook, it says whether the run under way started itself, and it offers the
+ * verb the empty state's button calls.
+ */
+function IdeasBand({ slug }: { slug: string }): ReactElement {
+  const view = useIdeas(slug);
+  return createElement(
+    "div",
+    { "data-band": "ideas" },
+    view.automatic ? "auto" : view.starting ? "starting" : view.status,
+    createElement("button", { type: "button", onClick: () => void view.ensure() }, "Find them"),
+  );
+}
+
+/**
+ * **The glossary, and it is the one that mounts with its GET already settled.**
+ *
+ * Its read lives in `Reader` and runs for every reader of every article
+ * (useGlossary.ts § the band: the jobs and the verbs, over a read somebody else
+ * owns), so by the time the band opens, `status` is very often already `none` —
+ * which means the auto-run effect fires **on mount**, and `<StrictMode>`
+ * invokes it twice inside one commit. The other four always start at `loading`
+ * and settle on an update, where React invokes an effect once.
+ *
+ * So this band is the only place in this file where the atomic consumption is
+ * actually under test. Replace it with a read followed by a clear and this
+ * posts twice.
+ */
+function GlossaryBand({ slug }: { slug: string }): ReactElement {
+  const view = useGlossary(slug, SETTLED_EMPTY_READ);
+  return createElement("div", { "data-band": "glossary" }, view.status);
+}
+
+/**
+ * **Timeline, which is here as a positive control and for nothing else.**
+ *
+ * Ideas and Quotes carry the awkward sequences; this band asks one question —
+ * does pressing Timeline in the real bar start a timeline? — because nothing
+ * else in the suite did. Remove `useAutoRun` from `useTimeline`, or drop
+ * `timeline` from `MODE_TARGET`, and every other test here stays green. GPT
+ * Sol, 2026-09-02.
+ */
+function TimelineBand({ slug }: { slug: string }): ReactElement {
+  const view = useTimeline(slug);
+  return createElement(
+    "div",
+    { "data-band": "timeline" },
+    view.automatic ? "auto" : view.starting ? "starting" : view.status,
+  );
+}
+
+function QuotesBand({ slug }: { slug: string }): ReactElement {
+  const view = useQuotes(slug);
+  return createElement(
+    "div",
+    { "data-band": "quotes" },
+    view.automatic ? "auto" : view.starting ? "starting" : view.status,
+  );
+}
+
+/**
+ * What `Reader` hands the glossary band: a read that has already come back
+ * empty. Posed rather than run — the fetch is `useGlossaryRead`'s, one level up,
+ * and this file is about what the band does with the answer.
+ */
+const SETTLED_EMPTY_READ = {
+  status: "none" as const,
+  glossary: null,
+  stale: false,
+  outdated: false,
+  profiled: false,
+  profileChanged: false,
+  error: null,
+  reload: async () => {},
+  refresh: async () => {},
+  clear: () => {},
+  patchEntry: () => {},
+};
+
+/**
+ * The reading view, as far as this file is concerned: a mode, the real bar that
+ * changes it, and the band that mode opens.
+ *
+ * `mode` is component state rather than `?mode=` — nuqs is not what is under
+ * test, and the distinction the feature turns on is *pressed* versus *arrived*,
+ * which a direct call to the setter reproduces exactly. `arrive()` below is the
+ * pasted link, the Back step and the link in from the metadata page, all of
+ * which reach the panel through that setter and through nothing else.
+ */
+let arrive: (next: Mode) => void = () => {};
+
+function Reading({ slug, start }: { slug: string; start: Mode }): ReactElement {
+  const [mode, setMode] = useState<Mode>(start);
+  arrive = setMode;
+  return createElement(
+    "div",
+    null,
+    mode === "ideas" ? createElement(IdeasBand, { slug }) : null,
+    mode === "quotes" ? createElement(QuotesBand, { slug }) : null,
+    mode === "timeline" ? createElement(TimelineBand, { slug }) : null,
+    mode === "glossary" ? createElement(GlossaryBand, { slug }) : null,
+    createElement(Dock, { slug, view: "article" as const, mode, onMode: setMode, signedIn: true }),
+  );
+}
+
+let host: HTMLDivElement;
+let root: Root;
+
+async function settle(): Promise<void> {
+  for (let i = 0; i < 6; i += 1) {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+}
+
+/** Mount the page in the mode a reader would arrive in, and let it settle. */
+async function open(start: Mode, slug = "constitution"): Promise<void> {
+  await act(async () => {
+    root.render(createElement(StrictMode, null, createElement(Reading, { slug, start })));
+  });
+  await settle();
+}
+
+/** Re-render at a different slug, without unmounting. */
+async function reopen(slug: string, start: Mode): Promise<void> {
+  await act(async () => {
+    root.render(createElement(StrictMode, null, createElement(Reading, { slug, start })));
+  });
+}
+
+function press(label: string): Promise<void> {
+  const found = host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+  if (!found) throw new Error(`no ${label} button in the bar`);
+  return act(async () => {
+    found.click();
+  });
+}
+
+/** The band's own button — the one the empty state draws. */
+function pressTheButton(): Promise<void> {
+  const found = host.querySelector<HTMLButtonElement>('[data-band="ideas"] button');
+  if (!found) throw new Error("the ideas band is not on screen");
+  return act(async () => {
+    found.click();
+  });
+}
+
+function bandSays(): string | null {
+  return (
+    host.querySelector('[data-band="ideas"], [data-band="quotes"], [data-band="timeline"]')
+      ?.textContent ?? null
+  );
+}
+
+/** Artefact GETs only — the bar makes none, but this keeps the count honest. */
+function artefactGets(step: string): string[] {
+  return gets.filter((u) => u.startsWith(`/api/${step}/`));
+}
+
+beforeEach(() => {
+  gets.length = 0;
+  posts.length = 0;
+  jobs = [];
+  nextJobId = 0;
+  artefactStatus = 404;
+  artefactFails = false;
+  postRefuses = false;
+  holdGets = false;
+  held = [];
+  resetActivations();
+  jobEngine.reset();
+  host = document.createElement("div");
+  document.body.appendChild(host);
+  root = createRoot(host);
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  host.remove();
+});
+
+describe("a press", () => {
+  it("runs a mode that has never been run, once", async () => {
+    await open("plain");
+    await press("Ideas");
+    await settle();
+
+    /* The GET really happened, so "no POST" elsewhere in this file is a claim
+       about a settled panel rather than about an empty one. Two of them, not
+       one: `<StrictMode>` double-invokes the load effect, which is exactly the
+       thing the token has to survive and the artefact read does not care about. */
+    expect(artefactGets("ideas").length).toBeGreaterThan(0);
+    /* One, under `<StrictMode>`. Two would be the double-invoked effect. */
+    expect(posts).toEqual([{ slug: "constitution", steps: ["ideas"] }]);
+  });
+
+  it("says it is starting, instead of offering the button again", async () => {
+    await open("plain");
+    await press("Ideas");
+    await settle();
+    /* `automatic` wins the label here — it is the more specific fact, and both
+       are true. What matters is that neither is `none`, which is what draws the
+       run button. */
+    expect(bandSays()).toContain("auto");
+  });
+
+  it("does not run it a second time, however many times it is pressed", async () => {
+    await open("plain");
+    await press("Ideas");
+    await settle();
+    expect(posts).toHaveLength(1);
+
+    await press("Plain");
+    await settle();
+    await press("Ideas");
+    await settle();
+    await press("Ideas");
+    await settle();
+
+    expect(posts).toHaveLength(1);
+  });
+
+  it("does not run it again after the first attempt was refused", async () => {
+    /* The reason the button was chosen over generating on first view, in 2026-08:
+       the original version re-fired on every failure and generated, failed and
+       generated again for as long as the tab stayed open. One attempt per
+       (slug, step) per session is what closes that structurally. */
+    postRefuses = true;
+    await open("plain");
+    await press("Ideas");
+    await settle();
+    expect(posts).toHaveLength(1);
+
+    await press("Plain");
+    await settle();
+    await press("Ideas");
+    await settle();
+
+    expect(posts).toHaveLength(1);
+  });
+
+  it("leaves the button working after a failed attempt", async () => {
+    /* The other half of the rule: a person pressing a button is not a loop, and
+       the button is the only retry there is. */
+    postRefuses = true;
+    await open("plain");
+    await press("Ideas");
+    await settle();
+    expect(posts).toHaveLength(1);
+
+    postRefuses = false;
+    await pressTheButton();
+    await settle();
+
+    expect(posts).toHaveLength(2);
+    /* And it is the same request the automatic one made — unforced. A forced
+       button here would carry a different `work_key`, which stage 1 would not
+       de-duplicate. */
+    expect(posts[1]).toEqual(posts[0]);
+  });
+
+  it("runs a band whose read had already settled, once and not twice", async () => {
+    /* The glossary's read is `Reader`'s and is usually finished before the band
+       is opened, so its auto-run effect fires **on mount** — where
+       `<StrictMode>` invokes it twice inside one commit. The other four settle
+       on an update, where React invokes an effect once, so this is the only
+       place in the file where the double invocation actually happens.
+
+       **Two synchronous gates stand in front of it, and this test holds the
+       pair rather than either one**: the token is deleted before
+       `consumeActivation` returns, and the pair is inserted before
+       `beginAutoAttempt` returns. All three mutations were run, 2026-09-02,
+       and the honest reading of them is worth writing down —
+
+         - defer only the token delete (`queueMicrotask` around it): **green**;
+         - defer only the attempt insert: **green**;
+         - defer both: **red**, two `glossary` POSTs.
+
+       So each gate really is sufficient on its own, and no test in this file can
+       tell them apart — which is what the comment used to imply and did not
+       show. GPT Sol, 2026-09-02. The atomic consumption is held on its own by
+       § the press itself at the foot of this file, which asks
+       `consumeActivation` directly with no second gate behind it. */
+    await open("plain");
+    await press("Glossary");
+    await settle();
+
+    expect(posts).toEqual([{ slug: "constitution", steps: ["glossary"] }]);
+  });
+
+  it("runs the timeline, which nothing else here presses", async () => {
+    /* A positive control for the third of the five, held by no other test in
+       this file. See TimelineBand above. */
+    await open("plain");
+    await press("Timeline");
+    await settle();
+
+    expect(artefactGets("timeline").length).toBeGreaterThan(0);
+    expect(posts).toEqual([{ slug: "constitution", steps: ["timeline"] }]);
+  });
+
+  it("runs it when the mode pressed is the one already open", async () => {
+    /* A reader who arrived by link, saw the empty state, and pressed the button
+       in the bar rather than the one in the band. Without a fresh nonce per
+       press, nothing at all happens — the mode did not change, so no effect
+       re-runs. */
+    await open("ideas");
+    expect(posts).toEqual([]);
+
+    await press("Ideas");
+    await settle();
+
+    expect(posts).toHaveLength(1);
+  });
+});
+
+describe("arriving without pressing", () => {
+  it("spends nothing on a pasted or bookmarked link", async () => {
+    await open("ideas");
+
+    expect(artefactGets("ideas").length).toBeGreaterThan(0);
+    expect(bandSays()).toBe("noneFind them");
+    expect(posts).toEqual([]);
+  });
+
+  it("spends nothing on a Back or Forward step through modes", async () => {
+    await open("plain");
+    await act(async () => arrive("ideas"));
+    await settle();
+    await act(async () => arrive("quotes"));
+    await settle();
+    await act(async () => arrive("ideas"));
+    await settle();
+
+    expect(artefactGets("ideas").length).toBeGreaterThan(0);
+    expect(posts).toEqual([]);
+  });
+
+  it("spends nothing when the artefact is already there", async () => {
+    artefactStatus = 200;
+    await open("plain");
+    await press("Ideas");
+    await settle();
+
+    expect(bandSays()).toContain("ready");
+    expect(posts).toEqual([]);
+  });
+});
+
+describe("the awkward sequences", () => {
+  it("drops a press whose band left the screen, rather than spending it on the way back", async () => {
+    /* Ideas, then Quotes before the first GET has settled. The Ideas band is
+       gone before it can spend its press, and the press dies with it.
+       Rapid Ideas → Quotes therefore runs **only** Quotes, which is the
+       non-spending direction of the two.
+       src/web/activation.ts § A press belongs to the band that was on screen. */
+    holdGets = true;
+    await open("plain");
+    await press("Ideas");
+    await press("Quotes");
+    holdGets = false;
+    releaseGets();
+    await settle();
+
+    expect(posts).toEqual([{ slug: "constitution", steps: ["quotes"] }]);
+
+    /* **The step that used to spend.** Arriving back at Ideas without pressing
+       anything — a Back step, a pasted link — inherited the press the first one
+       left behind and started a paid job. GPT Sol, 2026-09-02: *"The later Back
+       step is still what causes the paid request."* */
+    await act(async () => arrive("ideas"));
+    await settle();
+
+    expect(posts).toEqual([{ slug: "constitution", steps: ["quotes"] }]);
+  });
+
+  it("does not let a later mount inherit a press, even when the reader presses on the way back", async () => {
+    /* The same hole, reached the other way round: the press that could be
+       inherited is the *earlier* one, and the reader's second press is real. It
+       must buy exactly one job, not two. */
+    holdGets = true;
+    await open("plain");
+    await press("Ideas");
+    await press("Quotes");
+    holdGets = false;
+    releaseGets();
+    await settle();
+    expect(posts).toHaveLength(1);
+
+    await press("Ideas");
+    await settle();
+
+    expect(posts).toEqual([
+      { slug: "constitution", steps: ["quotes"] },
+      { slug: "constitution", steps: ["ideas"] },
+    ]);
+  });
+
+  it("spends nothing when the article changes under the press", async () => {
+    holdGets = true;
+    await open("plain");
+    await press("Ideas");
+    await reopen("elsewhere", "ideas");
+    holdGets = false;
+    releaseGets();
+    await settle();
+
+    /* The token names `constitution`; the panel is now about `elsewhere`. A
+       press that navigates to a different article must not arm a panel there. */
+    expect(posts).toEqual([]);
+  });
+
+  it("does not fire a failed read's press against whatever mounts next", async () => {
+    /* An errored GET **keeps** the press — a failed read is not an answer, and
+       the reader has to be able to press again (the case above this one). What
+       makes that safe is that the press belongs to the mount that was on
+       screen: the band the reader comes back to is a new mount, and it retires
+       the press rather than spending it. This is the one shape of the bug that
+       costs money on a mode nobody pressed, so it is asserted separately from
+       the mechanism that prevents it. */
+    artefactFails = true;
+    await open("plain");
+    await press("Ideas");
+    await settle();
+    expect(posts).toEqual([]);
+
+    artefactFails = false;
+    await act(async () => arrive("quotes"));
+    await settle();
+    await act(async () => arrive("ideas"));
+    await settle();
+
+    expect(posts).toEqual([]);
+  });
+
+  it("asks again when the reader presses again after a failed read", async () => {
+    /* **The reader has to be able to get out of a failed GET**, and pressing
+       the mode they are already in is the only control they have: Ideas, Quotes
+       and Timeline draw no button at all in their error state.
+       The press re-reads rather than spending — a failed GET means we do not
+       know whether there is anything there — and the press is still in hand
+       when the answer arrives, so an empty answer runs it.
+       src/web/useAutoRun.ts § A failed read is not an answer. */
+    artefactFails = true;
+    await open("plain");
+    await press("Ideas");
+    await settle();
+    expect(posts).toEqual([]);
+    expect(bandSays()).toContain("error");
+    const readsBefore = artefactGets("ideas").length;
+
+    artefactFails = false;
+    await press("Ideas");
+    await settle();
+
+    expect(artefactGets("ideas").length).toBeGreaterThan(readsBefore);
+    expect(posts).toEqual([{ slug: "constitution", steps: ["ideas"] }]);
+  });
+
+  it("makes the same request whether the reader waits or presses the button", async () => {
+    /* The overlap that costs money: the automatic run is unforced, and a press
+       landing inside the window it is open must be the same key. */
+    holdGets = true;
+    await open("plain");
+    await press("Ideas");
+    holdGets = false;
+    releaseGets();
+    await settle();
+    await pressTheButton();
+    await settle();
+
+    expect(posts).toHaveLength(2);
+    expect(posts[1]).toEqual(posts[0]);
+  });
+});
+
+/**
+ * **The store on its own**, and the only part of this file that does not go
+ * through the bar.
+ *
+ * Everything above is a page, which is the right altitude for a rule about
+ * money — but it means both synchronous gates stand behind every assertion, and
+ * the mutation notes in § runs a band whose read had already settled say that
+ * neither can be seen alone from up there. These four lines can: they ask
+ * `consumeActivation` twice with nothing behind it.
+ */
+describe("the press itself", () => {
+  it("is spendable exactly once, by exactly one caller", async () => {
+    const { armActivation, claimActivation, consumeActivation, pendingActivation } = await import(
+      "../src/web/activation.js"
+    );
+    const band = Symbol("a band");
+    armActivation("constitution", "ideas");
+    const nonce = pendingActivation("constitution", "ideas");
+    expect(nonce).not.toBeNull();
+    expect(claimActivation("constitution", "ideas", nonce as number, band)).toBe(true);
+
+    expect(consumeActivation("constitution", "ideas", nonce as number, band)).toBe(true);
+    /* The second invocation of a `<StrictMode>` effect, in one line. A check
+       followed by a clear returns true twice here. */
+    expect(consumeActivation("constitution", "ideas", nonce as number, band)).toBe(false);
+  });
+
+  it("belongs to the band that was on screen, and no later one", async () => {
+    const { armActivation, claimActivation, consumeActivation, pendingActivation } = await import(
+      "../src/web/activation.js"
+    );
+    const first = Symbol("the band that was open");
+    const second = Symbol("the band the reader came back to");
+    armActivation("constitution", "ideas");
+    const nonce = pendingActivation("constitution", "ideas") as number;
+    expect(claimActivation("constitution", "ideas", nonce, first)).toBe(true);
+
+    /* The Back step. It must not be able to claim it, and it must not be able
+       to reach past the claim and spend it either. */
+    expect(claimActivation("constitution", "ideas", nonce, second)).toBe(false);
+    expect(consumeActivation("constitution", "ideas", nonce, second)).toBe(false);
+    /* And it is gone, rather than lying about for the mount after that. */
+    expect(pendingActivation("constitution", "ideas")).toBeNull();
+  });
+});
+
+describe("a different reader in the same tab", () => {
+  it("does not inherit the first reader's one attempt", async () => {
+    await open("plain");
+    await press("Ideas");
+    await settle();
+    expect(posts).toHaveLength(1);
+
+    /* What `App` does when the signed-in reader changes: the engine tears down,
+       and its record of what has already been tried goes with it — one of those
+       pairs may name an article the new reader has never seen. */
+    jobEngine.reset();
+    await press("Plain");
+    await settle();
+    await press("Ideas");
+    await settle();
+
+    expect(posts).toHaveLength(2);
+  });
+});

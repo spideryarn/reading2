@@ -216,6 +216,8 @@ describe("declaredTables", () => {
       "article_visibility_changes",
       "articles",
       "billing_accounts",
+      "billing_tier_prices",
+      "billing_tiers",
       "block_identities",
       "chat_messages",
       "chat_threads",
@@ -306,7 +308,7 @@ when("against a real database", () => {
     await inRollback(async (c) => {
       const report = await reportFrom(c);
       expect(report.schemaUsable).toBe(true);
-      expect(report.declaredTables).toBe(24);
+      expect(report.declaredTables).toBe(26);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

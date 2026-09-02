@@ -175,7 +175,11 @@ function tagsFor(
   screenshot: FeedbackScreenshot | null,
 ): Partial<Record<Exclude<FeedbackTagKey, "report_id">, FeedbackTagValue>> {
   return {
-    route_kind: report.routeKind,
+    /* `?? ""` rather than dropping the tag: a tag that is sometimes absent is
+       a Sentry search that silently misses rows, and an empty string is a
+       visible "we did not get one" — a report from a bundle older than
+       2026-09-02. src/db/schema.ts § `url`. */
+    url: report.url ?? "",
     consented: report.consented,
     /* Absent rather than empty when the reader did not say. A tag whose value is
        `""` is a tag Sentry will happily group by, and "reports that say nothing

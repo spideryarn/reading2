@@ -64,7 +64,6 @@ import type {
   FeedbackDiagnostics,
   FeedbackEnvironment,
   FeedbackKind,
-  FeedbackRouteKind,
   GlossaryEntry,
   GlossaryLookup,
   GlossaryFound,
@@ -1473,7 +1472,6 @@ export type {
   FeedbackDiagnostics,
   FeedbackEnvironment,
   FeedbackKind,
-  FeedbackRouteKind,
 } from "../types.js";
 
 /**
@@ -1527,7 +1525,14 @@ export interface NewFeedback {
    * only one of them is a bug in the collector.
    */
   consented: boolean;
-  routeKind: FeedbackRouteKind;
+  /**
+   * **The address they were at, whole.** `routeKind`, a name from a closed
+   * list, until 2026-09-02 — src/db/schema.ts § `url` has why it changed.
+   * Validated by the route with `isWebUrl` and capped at
+   * `MAX_FEEDBACK_URL_CHARS`. `null` from a bundle loaded before the change —
+   * src/db/schema.ts says why an old report is filed rather than refused.
+   */
+  url: string | null;
   /** The article they were on, where there was one. Validated by the route. */
   slug: string | null;
   /** `__SPIDERYARN_BUILD_COMMIT__` — the string the release and the source maps went up under. */

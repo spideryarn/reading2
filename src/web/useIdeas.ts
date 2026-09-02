@@ -15,9 +15,16 @@
  *
  * Ideas replaces. A piece has three to ten of them, not forty, so there is
  * nothing to paginate and nothing to append — which means running the step
- * again already *is* "start again". One verb, no DELETE route, and the class of
- * bugs that comes with an append path (a FORBIDDEN list, `existingFor`, "a
- * stale list is not appended to") does not exist here to be got wrong.
+ * again already *is* "start again". No DELETE route, and the class of bugs that
+ * comes with an append path (a FORBIDDEN list, `existingFor`, "a stale list is
+ * not appended to") does not exist here to be got wrong.
+ *
+ * **Two verbs since 2026-09-02, and the split is `force`, not append.**
+ * `ensure` for *there is nothing here* and `regenerate` for *do it again*. It
+ * was one verb that forced always, which was right while a person pressing a
+ * button was the only caller; a mode that starts itself is a second caller, and
+ * two callers with different `force` are two `work_key`s and two paid jobs. See
+ * `ensure` on the interface.
  *
  * See docs/plans/260826ac-ideas-mode.md and src/ideas.ts.
  */
@@ -25,6 +32,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Ideas, IdeasResponse, Job } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
+import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
 
@@ -70,13 +78,40 @@ export interface UseIdeas {
    * not on the record.
    */
   stalled: boolean;
+  /** The POST has gone and the queue has not seen it yet. `StepJob.starting`. */
+  starting: boolean;
   /**
-   * Write the list — the only verb. `force` is passed always, because the
-   * button means "find them again" whether or not there is a current artefact,
-   * and the freshness check would otherwise turn a deliberate regeneration into
-   * a no-op that looks exactly like a broken button.
+   * **The run in flight was started automatically**, so the panel says which
+   * profile it is using rather than offering a tick it has already decided.
+   *
+   * Narrowed to *and something is running* here rather than in the panel, so
+   * five panels cannot each get the narrowing slightly different: once the job
+   * lands or fails, the tickbox is the honest control again.
    */
-  find(useProfile?: boolean): Promise<void>;
+  automatic: boolean;
+  /**
+   * **Write the list if there is not one** — unforced, for the automatic run
+   * and for the button beside the empty state.
+   *
+   * The two must be the same request. `work_key` is computed from the request,
+   * `force` included, so an unforced automatic run and a forced press inside
+   * the same second are two different keys, `enqueueOrGet` does not collapse
+   * them, and the reader pays for two model calls. There used to be one verb
+   * here and it forced always, which is exactly that bug waiting for a second
+   * caller.
+   */
+  ensure(useProfile?: boolean): Promise<void>;
+  /**
+   * **Write the list again** — forced, for the button offered *beside a list
+   * that is current*, where an unforced run would skip and the reader would
+   * watch a job start and finish having changed nothing.
+   *
+   * Forcing is safe in a way it is not for the glossary: this step replaces
+   * rather than appends, so a forced run cannot silently lengthen anything.
+   * `ideas` is in FORCE_ONLY_WHEN_NAMED, and `useStepJob` names the step it is
+   * forcing — which is what makes that true rather than a hope.
+   */
+  regenerate(useProfile?: boolean): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -153,27 +188,28 @@ export function useIdeas(slug: string): UseIdeas {
      the summaries. It carries the reasoning that used to be copied here. */
   const queue = useStepJob(slug, "ideas", refresh);
 
-  const find = useCallback(
+  /* Two verbs where there was one. See `ensure` and `regenerate` on the
+     interface above for why the difference is the identity of the request
+     rather than a convenience. */
+  const ensure = useCallback(
     async (useProfile = true) => {
-      await queue.start({
-        /* **Always forced**, which is the one place this differs from
-           `useGlossary.find`. There the unforced call is meaningful because the
-           step's own freshness check will agree when there is nothing current;
-           here the button says "find them again" and is offered *beside a list
-           that is current*, so an unforced run would skip and the reader would
-           watch a job start and finish having changed nothing.
-
-           Forcing is safe in a way it is not for the glossary: this step
-           replaces rather than appends, so a forced run cannot silently
-           lengthen anything. `ideas` is in FORCE_ONLY_WHEN_NAMED, and
-           `useStepJob` names the step it is forcing — which is what makes that
-           true rather than a hope. */
-        force: true,
-        useProfile,
-      });
+      await queue.start({ useProfile });
     },
     [queue],
   );
+  const regenerate = useCallback(
+    async (useProfile = true) => {
+      await queue.start({ force: true, useProfile });
+    },
+    [queue],
+  );
+
+  /* `reload`, not `ensure`, for the last argument: a read that failed is
+     answered by reading again, not by spending. useAutoRun.ts § A failed read
+     is not an answer. And `reload` rather than the raw `load`, which takes the
+     ordering predicate from useOrderedRead and is not a standalone read — the
+     merge of the two on 2026-09-02 was a typecheck error at this line. */
+  const auto = useAutoRun(slug, "ideas", status, ensure, reload);
 
   return {
     status,
@@ -188,7 +224,10 @@ export function useIdeas(slug: string): UseIdeas {
     job: queue.job,
     failed: queue.failed,
     stalled: queue.stalled,
-    find,
+    starting: queue.starting,
+    automatic: auto && (queue.job !== null || queue.starting),
+    ensure,
+    regenerate,
     cancel: queue.cancel,
   };
 }

@@ -506,7 +506,13 @@ export function QuotesPanel({
      because re-seeding on every poll would fight a reader who just unticked it. */
   const [withProfile, setWithProfile] = useState(() => (quotes ? (owner?.profiled ?? false) : true));
 
-  const rerun = (label: string) => (
+  /**
+   * @param again beside a list that is already there, so the run must be
+   *   forced. The empty state's button must **not** be: it has to make the
+   *   identical request the automatic run makes, or the two carry different
+   *   `work_key`s and the reader pays twice. useQuotes.ts § `ensure`.
+   */
+  const rerun = (label: string, again = false) => (
     <div className="quotes-run">
       <UseProfile
         checked={withProfile}
@@ -514,12 +520,17 @@ export function QuotesPanel({
         hasProfile={owner?.hasProfile ?? false}
         slug={owner?.slug ?? ""}
         disabled={owner?.job !== null}
+        automatic={owner?.automatic ?? false}
       />
       <Progress
         job={owner?.job ?? null}
+        starting={owner?.starting ?? false}
         failed={owner?.failed ?? null}
         stalled={owner?.stalled ?? false}
-        onRun={() => owner?.find(withProfile) ?? Promise.resolve()}
+        onRun={() =>
+          (again ? owner?.regenerate(withProfile) : owner?.ensure(withProfile)) ??
+          Promise.resolve()
+        }
         onCancel={(id) => owner?.cancel(id)}
         label={label}
       />
@@ -601,7 +612,7 @@ export function QuotesPanel({
                 The article has changed since these were chosen. Some of these lines may no longer
                 be in it.
               </p>
-              {rerun("Choose them again")}
+              {rerun("Choose them again", true)}
             </div>
           ) : owner?.outdated ? (
             <div className="quotes-stale">
@@ -609,7 +620,7 @@ export function QuotesPanel({
                 <TriangleAlert size={13} />
                 These were chosen by an earlier version of the prompt.
               </p>
-              {rerun("Choose them again")}
+              {rerun("Choose them again", true)}
             </div>
           ) : null}
 
@@ -937,20 +948,21 @@ function Foot({
   rerun,
 }: {
   quotes: { generator: string; version: string };
-  rerun(label: string): ReactElement;
+  rerun(label: string, again?: boolean): ReactElement;
 }) {
   return (
     <div className="quotes-foot">
       <p className="quotes-provenance">
         {quotes.generator} · {quotes.version}
       </p>
-      {rerun("Choose them again")}
+      {rerun("Choose them again", true)}
     </div>
   );
 }
 
 function Progress(props: {
   job: Job | null;
+  starting: boolean;
   failed: string | null;
   stalled: boolean;
   onRun(): Promise<void>;

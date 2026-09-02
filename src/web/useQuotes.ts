@@ -15,8 +15,12 @@
  *
  * Quotes replaces. A piece has a dozen lines worth keeping, not forty, so there
  * is nothing to paginate — which means running the step again already *is*
- * "choose them again". One verb, no DELETE route, and the class of bugs that
- * comes with an append path does not exist here to be got wrong.
+ * "choose them again". No DELETE route, and the class of bugs that comes with
+ * an append path does not exist here to be got wrong.
+ *
+ * **Two verbs since 2026-09-02** — `ensure` and `regenerate` — and the split is
+ * `force` rather than append: see useIdeas.ts, which made the same change for
+ * the same reason on the same day.
  *
  * ## What this hook carries that its siblings do not
  *
@@ -33,6 +37,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Job, Quotes, QuotesResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
+import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
 
@@ -72,13 +77,24 @@ export interface UseQuotes {
    * not on the record.
    */
   stalled: boolean;
+  /** The POST has gone and the queue has not seen it yet. `StepJob.starting`. */
+  starting: boolean;
+  /** The run in flight was started automatically. `UseIdeas.automatic`. */
+  automatic: boolean;
   /**
-   * Choose the quotes — the only verb. `force` is passed always, because the
-   * button means "choose them again" whether or not there is a current artefact,
-   * and the freshness check would otherwise turn a deliberate regeneration into
-   * a no-op that looks exactly like a broken button.
+   * **Choose the quotes if none have been** — unforced, for the automatic run
+   * and for the button beside the empty state. They have to be the same
+   * request, or their `work_key`s differ and the reader pays twice:
+   * useIdeas.ts § `ensure`.
    */
-  find(useProfile?: boolean): Promise<void>;
+  ensure(useProfile?: boolean): Promise<void>;
+  /**
+   * **Choose them again** — forced, for the button offered beside a list that
+   * is current, where an unforced run would skip. Safe to force because this
+   * step replaces rather than appends, and `quotes` is in
+   * FORCE_ONLY_WHEN_NAMED with `useStepJob` naming the step.
+   */
+  regenerate(useProfile?: boolean): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -155,25 +171,23 @@ export function useQuotes(slug: string): UseQuotes {
      summaries and the ideas. */
   const queue = useStepJob(slug, "quotes", refresh);
 
-  const find = useCallback(
+  /* Two verbs, split on `force`. See the interface above, and useIdeas.ts. */
+  const ensure = useCallback(
     async (useProfile = true) => {
-      await queue.start({
-        /* **Always forced**, the same call `useIdeas.find` makes. The button
-           says "choose them again" and is offered beside a list that is
-           current, so an unforced run would skip and the reader would watch a
-           job start and finish having changed nothing.
-
-           Forcing is safe in a way it is not for the glossary: this step
-           replaces rather than appends, so a forced run cannot silently
-           lengthen anything. `quotes` is in FORCE_ONLY_WHEN_NAMED, and
-           `useStepJob` names the step it is forcing — which is what makes that
-           true rather than a hope. */
-        force: true,
-        useProfile,
-      });
+      await queue.start({ useProfile });
     },
     [queue],
   );
+  const regenerate = useCallback(
+    async (useProfile = true) => {
+      await queue.start({ force: true, useProfile });
+    },
+    [queue],
+  );
+
+  /* `reload` is the way out of a failed read — useAutoRun.ts § A failed read is
+     not an answer, and useIdeas.ts says why it is `reload` and not `load`. */
+  const auto = useAutoRun(slug, "quotes", status, ensure, reload);
 
   return {
     status,
@@ -188,7 +202,10 @@ export function useQuotes(slug: string): UseQuotes {
     job: queue.job,
     failed: queue.failed,
     stalled: queue.stalled,
-    find,
+    starting: queue.starting,
+    automatic: auto && (queue.job !== null || queue.starting),
+    ensure,
+    regenerate,
     cancel: queue.cancel,
   };
 }

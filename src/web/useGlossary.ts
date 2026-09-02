@@ -24,6 +24,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import type { Glossary, GlossaryEntry, GlossaryLookup, GlossaryResponse, Job } from "../types.js";
+import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 import { apiFetch, fetchOk, readJson } from "./lib/api.js";
@@ -361,6 +362,10 @@ export interface UseGlossary {
    * not on the record.
    */
   stalled: boolean;
+  /** The POST has gone and the queue has not seen it yet. `StepJob.starting`. */
+  starting: boolean;
+  /** The run in flight was started automatically. `UseIdeas.automatic`. */
+  automatic: boolean;
   /**
    * Write the list. `useProfile` defaults to true; pass false for a plain one.
    *
@@ -432,8 +437,23 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     [queue],
   );
 
+  /**
+   * `find` is already the unforced verb, so it is already `ensure`.
+   *
+   * The glossary is the one of the five that never needed the 2026-09-02 split:
+   * forcing this step **appends** rather than replaces (src/glossary.ts), so a
+   * `find` that forced would silently lengthen the reader's list — which is why
+   * "find more terms" has always been a second verb here and a `force` flag
+   * nowhere else. The automatic run below therefore posts the identical request
+   * this button does, without anything having to be changed to make it true.
+   */
   const find = useCallback((useProfile = true) => run(false, useProfile), [run]);
   const more = useCallback((useProfile = true) => run(true, useProfile), [run]);
+
+  /* `reload` rather than `refresh`: the way out of a failed read is to read
+     again, and `reload` joins a request already in flight rather than making a
+     second one. useAutoRun.ts § A failed read is not an answer. */
+  const auto = useAutoRun(slug, "glossary", status, find, reload);
 
   /**
    * Throw the list away and find a new one.
@@ -520,6 +540,8 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     job: queue.job,
     failed: queue.failed,
     stalled: queue.stalled,
+    starting: queue.starting,
+    automatic: auto && (queue.job !== null || queue.starting),
     find,
     more,
     reset,

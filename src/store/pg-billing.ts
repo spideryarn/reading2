@@ -57,11 +57,12 @@
 
 import { eq, sql } from "drizzle-orm";
 
-import { FREE, entitlementFor, isEntitledStatus, priceTierMap, tierForPrice } from "../billing/tiers.js";
-import type { Entitlement, PaidTier } from "../billing/tiers.js";
+import { FREE, entitlementForTier, isEntitledStatus, tierForPrice } from "../billing/tiers.js";
+import type { Entitlement, TierRow } from "../billing/tiers.js";
 import { getDb } from "../db/client.js";
 import { billingAccounts, ingestEvents } from "../db/schema.js";
 import { log } from "../log.js";
+import { allTiers } from "./pg-tiers.js";
 
 const logger = log("store");
 
@@ -128,16 +129,16 @@ export interface BillingRow {
  */
 export function entitlementFromRow(
   row: BillingRow | undefined,
-  prices: ReadonlyMap<string, PaidTier>,
+  tiers: readonly TierRow[],
   now: Date,
 ): Entitlement | Stale {
   if (!row || !isEntitledStatus(row.status)) return FREE;
 
-  const tier = tierForPrice(row.priceId, prices);
+  const tier = tierForPrice(row.priceId, tiers);
   if (!tier) {
     logger.warn(
       { priceId: row.priceId, status: row.status },
-      "an entitled subscription is on a price this build does not recognise — treating as free",
+      "an entitled subscription is on a price no tier sells — treating as free",
     );
     return FREE;
   }
@@ -147,7 +148,7 @@ export function entitlementFromRow(
   if (!start || !end || now < start || now >= end) {
     return { kind: "stale", subscriptionId: row.stripeSubscriptionId };
   }
-  return entitlementFor(tier, { start, end });
+  return entitlementForTier(tier, { start, end });
 }
 
 /**
@@ -179,7 +180,7 @@ export function entitlementFromRow(
  */
 export function usageSql(ownerId: string, entitlement: Entitlement) {
   const inPeriod =
-    entitlement.tier === "reader"
+    entitlement.tier === "paid"
       ? sql`succeeded_at >= ${entitlement.periodStart.toISOString()}::timestamptz
             and succeeded_at < ${entitlement.periodEnd.toISOString()}::timestamptz`
       : /* The free tier's allowance is lifetime, so any success counts. */
@@ -234,18 +235,21 @@ export async function usageFor(ownerId: string, entitlement: Entitlement): Promi
  * job's own INSERT — see `jobs.ingest_event_id`. If it never reaches a job,
  * `releaseReservation` gives it back.
  *
- * @param prices which `price_…` sells which tier. Defaults to whatever the
- * environment says; an empty map means billing is unconfigured, so nobody is
- * entitled and everybody gets the free allowance — the right behaviour for a
- * deployment with no Stripe.
+ * @param tiers what we sell, from `billing_tiers`. Defaults to the cached read;
+ * an empty list means no tier has a Stripe price yet, so nobody is entitled and
+ * everybody gets the free allowance — the right behaviour for a deployment
+ * where the setup script has not been run.
  * @param slug the intended slug, stored as a diagnostic only — it is mutable,
  * so it is never this row's identity.
  */
 export async function reserveIngest(
   ownerId: string,
   slug?: string,
-  prices: ReadonlyMap<string, PaidTier> = priceTierMap(),
+  tiers?: readonly TierRow[],
 ): Promise<Admission> {
+  /* Read before the transaction opens, never inside it: this is a second query
+     and the rule for the locked section is that nothing else runs in it. */
+  const sold = tiers ?? (await allTiers());
   return await getDb().transaction(
     async (tx) => {
       /* The anchor. `do nothing` rather than `do update` because there is
@@ -279,7 +283,7 @@ export async function reserveIngest(
         throw new Error(`billing_accounts row for ${ownerId} vanished under its own lock`);
       }
 
-      const entitlement = entitlementFromRow(row, prices, new Date());
+      const entitlement = entitlementFromRow(row, sold, new Date());
       if ("kind" in entitlement) return entitlement; // stale
 
       const usage = usageOf(await tx.execute(usageSql(ownerId, entitlement)));
@@ -289,7 +293,7 @@ export async function reserveIngest(
           kind: "refused",
           used,
           limit: entitlement.limit,
-          ...(entitlement.tier === "reader" ? { resetAt: entitlement.periodEnd } : {}),
+          ...(entitlement.tier === "paid" ? { resetAt: entitlement.periodEnd } : {}),
         } satisfies Refused;
       }
 

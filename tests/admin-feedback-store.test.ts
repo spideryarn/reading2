@@ -164,7 +164,7 @@ function report(over: Partial<NewFeedback> & { id: string }): NewFeedback {
        here exercise without having to ask for it. */
     kind: null,
     consented: false,
-    routeKind: "read",
+    url: "https://www.spideryarn.com/read/a-piece",
     slug: "some-article",
     buildCommit: "abc1234",
     environment: "development",
@@ -308,7 +308,7 @@ when("the admin feedback read on Postgres", () => {
         "ownerId",
         "reporterEmail",
         "requestVercelId",
-        "routeKind",
+        "url",
         "screenshotBytes",
         "sentryEventId",
         "slug",

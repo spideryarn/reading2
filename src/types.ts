@@ -2965,36 +2965,36 @@ export const MAX_QUIZ_ANSWER_CHARS = 4000;
 /* ------------------------------------------------------------- feedback -- */
 
 /**
- * **Which page the reader was on when they pressed Feedback**, as a name from a
- * list we wrote — never the address bar.
+ * **The longest address a bug report may carry.**
  *
- * docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md § Always — where
- * they were: this app's URLs carry `?q=` and `?find=`, which are reader-typed
- * search text, and `/add/<a whole third-party URL>`, which may carry a token.
- * So the raw location may not leave the browser at all, and this closed
- * vocabulary is the part of it that may.
+ * `feedback.url` was a closed vocabulary of ten route names until 2026-09-02 —
+ * `FEEDBACK_ROUTE_KINDS`, mirrored by hand into a TypeScript union, a SQL
+ * CHECK and an exhaustive `Record` in the client — because the reasoning at the
+ * time was that the raw address may not leave the browser: this app's URLs
+ * carry `?q=` and `?find=`, which are reader-typed search text, and
+ * `/add/<a whole third-party URL>`, which may carry a token.
  *
- * It mirrors `Route["kind"]` in src/web/router.ts and is written out here by
- * hand rather than derived from it, because this file is imported by the server
- * and by src/db/schema.ts while that one is a client module. `unknown` is in the
- * list on purpose: a route added later must still be *reportable*, and a report
- * that cannot be filed because the reader was on a new page is the worst way to
- * lose the one report that mattered.
+ * Greg reversed it, 2026-09-02: *"I think it's fine (and even advantageous) to
+ * store the url with the Feedback - if that means we can get rid of the
+ * route_kind and simplify things"*. Two things made the old design worse than
+ * the thing it guarded. **It cost a migration per page** — adding `/privacy`
+ * meant widening a CHECK, and the page shipped filing its reports as `unknown`
+ * instead. And **when the four copies drift, a valid report gets a 500**, which
+ * is a worse failure than the one the constraint prevents. The escape hatch was
+ * used at the first opportunity, so the label had become less accurate by being
+ * more closed. GPT Sol and Fable both argued it independently; the reasoning is
+ * in docs/project/privacy.md § What a bug report carries.
+ *
+ * What replaces the vocabulary is **`isWebUrl` at the seam** (src/urls.ts) and
+ * this cap. The address is stored whole, and it reaches Sentry whole too —
+ * Greg's call, and docs/project/privacy.md says so to the reader in as many
+ * words, which is the part that makes it a choice rather than a leak.
+ *
+ * 2048 is the practical ceiling every browser and proxy agrees on. It is a
+ * `CHECK` in src/db/schema.ts as well, because a cap the server forgets is not
+ * a cap.
  */
-export const FEEDBACK_ROUTE_KINDS = [
-  "library",
-  "read",
-  "add",
-  "add-upload",
-  "design",
-  "profile",
-  "admin",
-  "login",
-  "callback",
-  "unknown",
-] as const;
-
-export type FeedbackRouteKind = (typeof FEEDBACK_ROUTE_KINDS)[number];
+export const MAX_FEEDBACK_URL_CHARS = 2048;
 
 /**
  * **Which deployment the report came from** — the union of what `VERCEL_ENV`
@@ -3138,7 +3138,7 @@ export const ADMIN_FEEDBACK_DEFAULT_LIMIT = 200;
  * `AdminUser` lives in src/admin.ts, and that file's whole property is that it
  * **imports nothing** — the browser and the server ask the same `isAdmin`
  * without either dragging the other's dependencies along. This shape cannot go
- * there without importing `FeedbackRouteKind`, `FeedbackEnvironment` and
+ * there without importing `FeedbackKind`, `FeedbackEnvironment` and
  * `FeedbackDiagnostics`, all of which already live *here*. So it goes where its
  * vocabulary is, which is also where every other wire shape in this app is.
  *
@@ -3202,7 +3202,11 @@ export interface AdminFeedbackReport {
   kind: FeedbackKind | null;
   /** Whether they ticked *Send extra diagnostics* — its own fact, never inferred. */
   consented: boolean;
-  routeKind: FeedbackRouteKind;
+  /**
+   * The address they were at, whole, or `null` from a bundle loaded before
+   * 2026-09-02. See `MAX_FEEDBACK_URL_CHARS` and src/db/schema.ts § `url`.
+   */
+  url: string | null;
   slug: string | null;
   buildCommit: string | null;
   environment: FeedbackEnvironment;

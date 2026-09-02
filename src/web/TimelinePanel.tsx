@@ -312,12 +312,19 @@ export function TimelinePanel({
   const withYear = years.size !== 1;
   const filled = events.some((e) => e.dating.kind === "dated" && e.dating.when.yearFilled);
 
-  const run = (label: string) => (
+  /**
+   * @param again beside a timeline that is already there, so the run is forced.
+   *   The empty state's button is not: it has to make the identical, unforced
+   *   request the automatic run makes, or the two carry different `work_key`s
+   *   and the reader pays twice. useTimeline.ts § `ensure`.
+   */
+  const run = (label: string, again = false) => (
     <JobProgress
       job={owner.job}
+      starting={owner.starting}
       failed={owner.failed}
       stalled={owner.stalled}
-      onRun={() => owner.find()}
+      onRun={() => (again ? owner.regenerate() : owner.ensure())}
       onCancel={owner.cancel}
       label={label}
       step="timeline"
@@ -371,7 +378,7 @@ export function TimelinePanel({
                 <TriangleAlert size={13} />
                 This describes an older version of the article.
               </p>
-              {run("Read it again")}
+              {run("Read it again", true)}
             </div>
           ) : owner.outdated ? (
             <div className="gloss-stale">
@@ -379,7 +386,7 @@ export function TimelinePanel({
                 <TriangleAlert size={13} />
                 This was read by an older version of the prompt.
               </p>
-              {run("Read it again")}
+              {run("Read it again", true)}
             </div>
           ) : null}
 
@@ -479,7 +486,7 @@ export function TimelinePanel({
               Nothing-to-re-run is a statement about this article, and a stale
               artefact is by definition about a different one. */}
           {events.length > 0 && !owner.stale && !owner.outdated && (
-            <div className="tl-again">{run("Read it again")}</div>
+            <div className="tl-again">{run("Read it again", true)}</div>
           )}
         </>
       )}

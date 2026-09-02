@@ -88,6 +88,7 @@ import type { SummaryNode } from "./tree.js";
 import { useRenderCount } from "./perf.js";
 import { CHAIN_MS, measureRow, stepTarget } from "./keynav.js";
 import { activeSectionIndex } from "./position.js";
+import { armActivation } from "./activation.js";
 import { SketchView } from "./SketchView.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 
@@ -1370,7 +1371,17 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
                      tests/arrows-belong-to-the-article.test.tsx holds it. */
                   tabIndex={0}
                   className={`diag-kind${k === kind ? " on" : ""}`}
-                  onClick={() => onKind(k)}
+                  onClick={() => {
+                    /* **The gesture seam for the sketch**, and the reason the
+                       token is minted here rather than in `onKind`: `?diagram=`
+                       is query state, so Back and Forward move it too, and a
+                       pasted `?mode=diagram&diagram=sketch` must not buy a
+                       two-minute, $0.20 model call. Opening Diagram itself
+                       costs nothing, so only this chip arms anything.
+                       src/web/activation.ts. */
+                    if (k === "sketch") armActivation(slug, "sketch");
+                    onKind(k);
+                  }}
                   data-diag-kind={k}
                 >
                   <Icon size={12} />

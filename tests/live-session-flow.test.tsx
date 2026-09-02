@@ -32,6 +32,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetMicrophoneLock } from "../src/web/mic-lock.js";
 import { useLiveConversation, type LiveOptions } from "../src/web/live/useLiveConversation.js";
+import type { LiveUsageReport } from "../src/web/live/meter.js";
 import type { LiveTicket, LiveWiring } from "../src/web/live/wiring.js";
 import type { SpokenLanded } from "../src/web/chat/controller.js";
 import type { SpokenExchange } from "../src/web/useChat.js";
@@ -46,6 +47,15 @@ let channel: FakeChannel | null = null;
 let mic: { enabled: boolean; stopped: boolean } | null = null;
 /** Every peer connection the hook built, so a test can break the last one. */
 let pcs: unknown[] = [];
+/**
+ * Everything the hook told our own server about what the session cost.
+ *
+ * The audio goes browser↔OpenAI, so the `usage` object on every turn is
+ * delivered here and nowhere else: if this list stays empty the most expensive
+ * feature in the app contributes nothing to `npm run cost`, and nothing else in
+ * the suite would notice. src/web/live/meter.ts.
+ */
+let metered: { kind: string; sessionId: string; report?: LiveUsageReport; reason?: string | null }[] = [];
 
 class FakeChannel {
   readyState = "connecting";
@@ -92,6 +102,7 @@ beforeEach(() => {
   channel = null;
   mic = null;
   pcs = [];
+  metered = [];
   resetMicrophoneLock();
 
   vi.stubGlobal("navigator", {
@@ -162,13 +173,44 @@ afterEach(() => {
 const THREAD = "spya-thra01";
 
 function ticketWith(over: Partial<LiveTicket> = {}): LiveTicket {
-  return { token: "ek_test", expiresAt: 0, model: "m", seed: [], tailId: null, ...over };
+  return {
+    token: "ek_test",
+    expiresAt: 0,
+    model: "m",
+    seed: [],
+    tailId: null,
+    /* The server's own journal row for this conversation, which every usage
+       report is addressed to. Not a uuid here on purpose — nothing in this file
+       reaches a database, and tests/fixture-ids.test.ts is about ids that name
+       rows. */
+    sessionId: "live-session-1",
+    ...over,
+  };
+}
+
+/** The three accounting posts, recorded rather than made. */
+function meterCalls(): Pick<LiveWiring, "liveConnected" | "liveUsage" | "liveClose"> {
+  return {
+    liveConnected: async (sessionId) => {
+      metered.push({ kind: "connected", sessionId });
+      return "accepted";
+    },
+    liveUsage: async (sessionId, report) => {
+      metered.push({ kind: "usage", sessionId, report });
+      return "accepted";
+    },
+    liveClose: async (sessionId, reason) => {
+      metered.push({ kind: "close", sessionId, reason });
+      return "accepted";
+    },
+  };
 }
 
 function wiringFor(ticket: LiveTicket): LiveWiring {
   return {
     ticket: async () => ticket,
     runTool: async () => ({ content: "", label: "", detail: "" }),
+    ...meterCalls(),
   };
 }
 
@@ -251,8 +293,39 @@ const turn = (u: string, r: string, q: string, a: string) => [
     item_id: `${u}-a`,
     transcript: a,
   },
-  { type: "response.done", response: { id: r, status: "completed", output: [{ type: "message" }] } },
-  { type: "conversation.item.input_audio_transcription.completed", item_id: u, transcript: q },
+  /* **With the `usage` the real event carries**, because it is the only place
+     OpenAI says what a turn cost and the browser is the only thing that sees
+     it. src/web/live/meter.ts, and docs/research/realtime-voice-cost-tracking-web.md
+     § 1 for the shape. */
+  {
+    type: "response.done",
+    response: {
+      id: r,
+      status: "completed",
+      output: [{ type: "message" }],
+      usage: {
+        total_tokens: 253,
+        input_tokens: 132,
+        output_tokens: 121,
+        input_token_details: {
+          text_tokens: 119,
+          audio_tokens: 13,
+          image_tokens: 0,
+          cached_tokens: 64,
+          cached_tokens_details: { text_tokens: 60, audio_tokens: 4 },
+        },
+        output_token_details: { text_tokens: 30, audio_tokens: 91 },
+      },
+    },
+  },
+  /* The transcription is a **second** bill, on its own event and in seconds
+     rather than tokens — `gpt-live-transcribe` is charged per audio minute. */
+  {
+    type: "conversation.item.input_audio_transcription.completed",
+    item_id: u,
+    transcript: q,
+    usage: { type: "duration", seconds: 2.5 },
+  },
 ];
 
 async function speakTurn(u: string, r: string, q: string, a: string) {
@@ -552,10 +625,10 @@ describe("writing the exchanges down", () => {
 });
 
 describe("the caps, which are the only thing between a forgotten tab and a bill", () => {
-  /* Nothing meters realtime audio — no row is written and `npm run cost` says
-     so by name — so a clock in the browser is the whole of the defence. OpenAI
-     ends a session at sixty minutes, which bounds the damage and does not
-     prevent it. */
+  /* The meter measures this now (§ the meter below), but measuring is not
+     limiting: nothing on our server can end somebody's session, so a clock in
+     the browser is the whole of the defence. OpenAI ends a session at sixty
+     minutes, which bounds the damage and does not prevent it. */
 
   it("ends a session nobody has spoken into for a while", async () => {
     vi.useFakeTimers();
@@ -774,7 +847,11 @@ describe("hanging up", () => {
       handOverTheTicket = r;
     });
     const h = mount({
-      wiring: { ticket: () => held, runTool: async () => ({ content: "", label: "", detail: "" }) },
+      wiring: {
+        ticket: () => held,
+        runTool: async () => ({ content: "", label: "", detail: "" }),
+        ...meterCalls(),
+      },
     });
     act(() => h.get().start({ threadId: THREAD, microphone: true }));
     await settle();
@@ -923,5 +1000,157 @@ describe("hanging up", () => {
       await first;
     });
     expect(written).toHaveLength(1);
+  });
+});
+
+describe("the meter, which is the only place a live conversation's cost exists", () => {
+  /**
+   * The audio is a WebRTC connection from this tab straight to OpenAI, so the
+   * `usage` object attached to every turn is delivered to client JavaScript and
+   * to nothing else — there is no server-side copy anywhere and no admin key
+   * here to reconcile against. Until Stage 2B the hook received those numbers
+   * every turn and read them only for function calls.
+   *
+   * What `meter.ts` decides on its own has its own tests. This is the part only
+   * the hook can be wrong about: which events reach the meter at all, which
+   * session id they are addressed to, and whether a hang-up says so.
+   */
+
+  it("says the channel opened, because a minted token is not a conversation", async () => {
+    /* A reader can press Live and change their mind. A denominator built on
+       issued sessions would then understate what a real conversation costs by
+       however many of those there are, with nothing looking wrong. */
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+    await settle();
+    expect(metered).toMatchObject([{ kind: "connected", sessionId: "live-session-1" }]);
+    await act(async () => {
+      await h.get().stop();
+    });
+  });
+
+  it("reports both bills of one turn — the answer and the transcription", async () => {
+    /* **The two halves are billed in different units**, on different events, by
+       different models. `gpt-realtime-2.1` answers and is billed per token split
+       by modality; `gpt-live-transcribe` writes down what the reader said and is
+       billed per audio minute. A meter that watched `response.done` alone would
+       price half of live conversation at nothing. */
+    const h = await connected({
+      wiring: wiringFor(ticketWith()),
+      speak: async () => ({ ok: true, threadId: THREAD, tailId: "spya-srva01" }),
+    });
+    await speakTurn("u1", "r1", "Q1", "A1");
+    await settle();
+
+    const usage = metered.filter((m) => m.kind === "usage").map((m) => m.report);
+    expect(usage).toHaveLength(2);
+    expect(usage[0]).toMatchObject({
+      kind: "response",
+      providerEventId: "r1",
+      status: "completed",
+      inputAudioTokens: 13,
+      outputAudioTokens: 91,
+      /* The split openai-node dropped for a while, and the one that says how
+         much of the cache saving landed on the expensive modality. */
+      cachedTextTokens: 60,
+      cachedAudioTokens: 4,
+    });
+    expect(usage[1]).toMatchObject({
+      kind: "transcription",
+      providerEventId: "u1",
+      audioSeconds: 2.5,
+    });
+    /* **The start time is the one this tab observed**, from `response.created`.
+       Realtime events carry no timestamps, so without it the row's duration
+       would have to be a zero or the whole conversation's wall-clock — both of
+       which are lies about how long a call took. */
+    expect(usage[0]?.startedAt).toEqual(expect.any(String));
+
+    /* **Never a dollar amount, a model, an owner or an article.** All four come
+       from the session row the server wrote when it minted the token; a client
+       that could name its own model could name the cheap one. */
+    for (const report of usage) {
+      expect(Object.keys(report ?? {})).not.toContain("cost");
+      expect(Object.keys(report ?? {})).not.toContain("model");
+    }
+
+    await act(async () => {
+      await h.get().stop();
+    });
+  });
+
+  it("posts nothing for a turn whose numbers it could not read", async () => {
+    /* `response.done` arriving with the totals and no modality split is a
+       reported provider defect (openai-agents-js#538). Filling the gaps with
+       zeros would produce a report the server accepts and prices at
+       approximately nothing — a turn that cost real money, in the ledger as
+       free. Nothing is sent instead. */
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+    await act(async () => {
+      channel?.deliver({ type: "response.created", response: { id: "r9" } });
+      channel?.deliver({
+        type: "response.done",
+        response: { id: "r9", status: "completed", output: [], usage: { input_tokens: 90, output_tokens: 5 } },
+      });
+    });
+    await settle();
+    expect(metered.filter((m) => m.kind === "usage")).toHaveLength(0);
+    await act(async () => {
+      await h.get().stop();
+    });
+  });
+
+  it("says how the conversation ended, and the reason is the browser's own word", async () => {
+    /* Best-effort by nature: a closed laptop says nothing, so a session with no
+       `closed_at` is ordinary rather than an error. The value is in the ones
+       that do close — it is what makes "issued, never connected" and
+       "connected, ended, reported nothing" different rows rather than one
+       shrug. */
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+    await act(async () => {
+      await h.get().stop();
+    });
+    await settle();
+    expect(metered.at(-1)).toMatchObject({ kind: "close", reason: "reader" });
+  });
+
+  it("names the cap when a cap is what ended it", async () => {
+    vi.useFakeTimers();
+    try {
+      const h = mount({ wiring: wiringFor(ticketWith()) });
+      act(() => h.get().start({ threadId: THREAD, microphone: true }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await act(async () => {
+        channel?.open();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(6 * 60_000);
+      });
+      expect(h.get().error).toMatch(/quiet/);
+      expect(metered.at(-1)).toMatchObject({ kind: "close", reason: "idle-cap" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("meters nothing, and says so, when the ticket carries no journal row", async () => {
+    /* The preview page's spike server mints a token and writes no session row,
+       so a conversation there is honestly unmetered rather than reported against
+       an id nobody owns. Silence would be the wrong answer: a feature that
+       quietly stops being metered is the failure this whole stage is about. */
+    const said = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const h = await connected({ wiring: wiringFor(ticketWith({ sessionId: null })) });
+      await speakTurn("u1", "r1", "Q1", "A1");
+      await settle();
+      expect(metered).toHaveLength(0);
+      expect(said).toHaveBeenCalled();
+      await act(async () => {
+        await h.get().stop();
+      });
+    } finally {
+      said.mockRestore();
+    }
   });
 });

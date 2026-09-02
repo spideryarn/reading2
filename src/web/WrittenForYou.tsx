@@ -99,12 +99,25 @@ export function UseProfile({
   onChange,
   hasProfile,
   disabled,
+  automatic = false,
   slug,
 }: {
   checked: boolean;
   onChange(next: boolean): void;
   hasProfile: boolean;
   disabled?: boolean;
+  /**
+   * **The run under way started itself, so this says what it is using rather
+   * than offering a choice.**
+   *
+   * A mode that runs on being pressed has nobody to ask, so it takes the
+   * default — profile on — and the honest thing is to state that as a fact.
+   * **Not a disabled tickbox**, which reads as a choice the reader missed
+   * rather than a decision already taken; changing it means regenerating, which
+   * is a second model call, and the *find them again* control is where that
+   * lives. Greg's call, 2026-08-31.
+   */
+  automatic?: boolean;
   /** The article, for the half of the profile that is about it. */
   slug: string;
 }) {
@@ -116,17 +129,21 @@ export function UseProfile({
           button below is how a first profile gets written, so it is exactly the
           state it must not disappear in. GPT Sol's review of the plan,
           2026-08-30; docs/plans/260830c-profile-panel.md. */}
-      {hasProfile && (
-        <label className="prof-use">
-          <input
-            type="checkbox"
-            checked={checked}
-            disabled={disabled}
-            onChange={(e) => onChange(e.target.checked)}
-          />
-          <span>Use your profile</span>
-        </label>
-      )}
+      {hasProfile &&
+        (automatic ? (
+          /* A sentence rather than a control. See `automatic` above. */
+          <span className="prof-use prof-said">Using your profile</span>
+        ) : (
+          <label className="prof-use">
+            <input
+              type="checkbox"
+              checked={checked}
+              disabled={disabled}
+              onChange={(e) => onChange(e.target.checked)}
+            />
+            <span>Use your profile</span>
+          </label>
+        ))}
       {/* **Outside the `<label>`, and not `disabled`.**
 
           Outside, because a `<label>` turns every click inside it into a

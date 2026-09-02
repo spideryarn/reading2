@@ -295,7 +295,14 @@ export function FeedbackCard({ report, now }: { report: AdminFeedbackReport; now
             deliberately NOT here. */}
         <Kind kind={report.kind} />
         <span>{report.environment}</span>
-        <span>{report.routeKind}</span>
+        {/* **The address, as text and not a link.** It is a value a browser
+            posted, so `isWebUrl` at the route is what keeps a `javascript:`
+            string out of the column — but an inbox is not a place to be one
+            click from following a stranger's URL, and the admin reading this
+            can copy it. `break-all` because an `/add/<whole third-party URL>`
+            has no spaces in it and would otherwise push the card off the page.
+            `null` is a report from a bundle older than 2026-09-02. */}
+        <span className="tw:break-all">{report.url ?? "an older client"}</span>
         {report.slug && <code className="tw:font-mono tw:text-[0.7rem]">{report.slug}</code>}
         <span className={`tw:inline-flex tw:items-center tw:gap-1 ${TONE[mirror.tone]}`}>
           {mirror.tone === "ok" ? (

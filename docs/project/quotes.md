@@ -308,6 +308,26 @@ POST /api/jobs { "slug": "…", "steps": ["quotes"] }
 which is what the panel's button does, and is the only way in — the stage's own command line was
 deleted on 2026-09-01 ([setup-dev.md § The pipeline stages](setup-dev.md#the-pipeline-stages)).
 
+### It starts itself when you press the mode
+
+Since 2026-09-02, pressing **Quotes** in the bottom bar on an article that has never had one starts
+the job — no second button. Only a *press* does: a pasted `?mode=quotes` link, a Back step, and a
+link in from the metadata page all show the empty state and its button, and spend nothing. A press is
+recorded as data by the bar itself ([`src/web/activation.ts`](../../src/web/activation.ts)), because
+a mount is not a click.
+
+The loop that made Greg choose a button in the first place —
+[glossary.md § That decision was reversed](glossary.md#that-decision-was-reversed-on-2026-09-02-and-the-loop-is-still-closed-structurally)
+— is closed structurally: one automatic attempt per `(slug, step)` per tab session, claimed before
+the request goes out. The two verbs exist for the same reason: `ensure` is unforced and is what
+**both** the automatic run and the empty state's button call, because `work_key` is computed from the
+request and two keys are two paid jobs; `regenerate` is forced and is the *Choose them again* button beside a
+result that is already there. [`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts).
+
+An automatic run has nobody to ask about the reader's profile, so it uses it and the panel says so —
+*Using your profile* — rather than showing a tickbox it has disabled.
+
+
 **It is a converted step**, like `sketch` and unlike its eight other neighbours:
 `generateQuotes` writes nothing and hands the artefact back, and the caller decides — the step
 returns it as `parts`. A step that wrote `<dir>/quotes.json` inside `run`

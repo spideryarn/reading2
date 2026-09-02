@@ -9,9 +9,15 @@
  * ## Why it reads the queue rather than remembering the click
  *
  * That reasoning, kept because it is the whole design: a run may have been
- * started **in another tab, or from the CLI**, so this shows whatever the queue
- * is actually doing rather than what this session remembers pressing. Which is
- * why the only thing it takes about a running job is the `Job` itself.
+ * started **in another tab**, so this shows whatever the queue is actually
+ * doing rather than what this session remembers pressing. Which is why the only
+ * thing it takes about a running job is the `Job` itself. (It said "or from the
+ * CLI" until 2026-09-02; `npm run glossary` writes no job record, so nothing
+ * about it ever reaches the queue — src/web/useStepJob.ts § `job`.)
+ *
+ * `starting` is the one exception, and it is deliberately narrow: it is what
+ * *this* mount is waiting to see appear, and it is gone the moment the record
+ * does.
  *
  * The step's own `label` and `detail` come off the server too, so the words a
  * reader sees here are the words the add box shows for the same step. A local
@@ -92,6 +98,7 @@ import {
   displayJob,
   DRIVER_STALLED,
   elapsedLabel,
+  STARTING,
   WAITING_TO_CONTINUE,
 } from "../job-state.js";
 import type { Job, JobStep, StepName } from "../types.js";
@@ -99,6 +106,7 @@ import { useNow } from "./useNow.js";
 
 export function JobProgress({
   job,
+  starting = false,
   failed,
   stalled,
   onRun,
@@ -110,6 +118,20 @@ export function JobProgress({
 }: {
   /** The job the queue says is running for this step, or null. */
   job: Job | null;
+  /**
+   * **The request has gone and the queue has not caught up.**
+   *
+   * Without it this component draws its run button again in the gap between
+   * the press and the first poll that sees the job — so a reader who pressed
+   * once was offered the button a second time, and a reader whose mode started
+   * itself was offered it before they had pressed anything at all.
+   *
+   * No Stop: there is no id to stop yet, and a control that cannot act is
+   * worse than a wait that says what it is doing. `StepJob.starting`,
+   * src/web/useStepJob.ts. Optional because two of the eight callers watch a
+   * job they did not start (the thread page, the quiz) and have no such gap.
+   */
+  starting?: boolean;
   /** A message to show under the button, or null. Never a boolean — see above. */
   failed: string | null;
   /**
@@ -175,6 +197,21 @@ export function JobProgress({
         fallbackLabel={runningLabel}
         onCancel={onCancel}
       />
+    );
+  }
+
+  /* **After the `job` branch, not before it.** The two overlap for one poll —
+     `starting` is cleared by the same list that produces the job — and the
+     record is the better thing to draw the instant there is one. */
+  if (starting) {
+    return (
+      <div
+        className="tw:flex tw:items-center tw:gap-2 tw:text-xs tw:text-ink-faint"
+        role="status"
+      >
+        <LoaderCircle size={13} className="cmt-spinner" />
+        <span>{STARTING}</span>
+      </div>
     );
   }
 

@@ -79,7 +79,7 @@ const REPORT: FeedbackReport = {
   body: "Pressed the button on the third paragraph, expected a gist in the margin, got an empty column",
   kind: "problem",
   consented: true,
-  routeKind: "read",
+  url: "https://www.spideryarn.com/read/a-piece",
   slug: "an-article",
   buildCommit: "abc1234",
   environment: "test",
@@ -293,7 +293,9 @@ describe("the Sentry mirror", () => {
 
     const tags = event.tags as Record<string, unknown>;
     expect(tags.report_id).toBe(REPORT.id);
-    expect(tags.route_kind).toBe("read");
+    /* The whole address, since 2026-09-02 — query string and all, which is
+       Greg's call and is disclosed on /privacy. src/db/schema.ts § `url`. */
+    expect(tags.url).toBe("https://www.spideryarn.com/read/a-piece");
     expect(tags.kind).toBe("problem");
     expect(tags.slug).toBe("an-article");
     expect(tags.leakyTag).toBeUndefined();
@@ -308,7 +310,9 @@ describe("the Sentry mirror", () => {
     await mirrorFeedback({ report: { ...REPORT, kind: null }, user: USER, screenshot: null });
 
     const tags = feedbackEvent(envelopes[0]!).tags as Record<string, unknown>;
-    expect(tags.route_kind).toBe("read");
+    /* The whole address, since 2026-09-02 — query string and all, which is
+       Greg's call and is disclosed on /privacy. src/db/schema.ts § `url`. */
+    expect(tags.url).toBe("https://www.spideryarn.com/read/a-piece");
     expect("kind" in tags).toBe(false);
   });
 

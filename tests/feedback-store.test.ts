@@ -71,10 +71,10 @@ import {
 import {
   FEEDBACK_ENVIRONMENTS,
   FEEDBACK_KINDS,
-  FEEDBACK_ROUTE_KINDS,
   MAX_FEEDBACK_BODY_CHARS,
+  MAX_FEEDBACK_URL_CHARS,
+  type FeedbackEnvironment,
   type FeedbackKind,
-  type FeedbackRouteKind,
 } from "../src/types.js";
 import { pgFeedbackStore } from "../src/store/pg-feedback.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
@@ -146,7 +146,7 @@ function report(over: Partial<NewFeedback> & { id: string }): NewFeedback {
     body: "Open an article and press the button, and nothing at all happens",
     kind: "problem",
     consented: false,
-    routeKind: "read",
+    url: "https://www.spideryarn.com/read/a-piece?q=footnotes",
     slug: "some-article",
     buildCommit: "abc1234",
     environment: "development",
@@ -268,7 +268,7 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
     expect(stored?.kind).toBe("problem");
     expect(stored?.reporterEmail).toBe("reporter@example.invalid");
     expect(stored?.consented).toBe(true);
-    expect(stored?.routeKind).toBe("read");
+    expect(stored?.url).toBe("https://www.spideryarn.com/read/a-piece?q=footnotes");
     expect(stored?.slug).toBe("some-article");
     expect(stored?.buildCommit).toBe("abc1234");
     expect(stored?.environment).toBe("development");
@@ -475,10 +475,12 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
   });
 
   /**
-   * **The two closed vocabularies, and the cap, checked against the database
+   * **The closed vocabulary, and the caps, checked against the database
    * rather than against themselves.**
    *
-   * `FEEDBACK_ROUTE_KINDS`, `FEEDBACK_ENVIRONMENTS` and
+   * There were two vocabularies until 2026-09-02, when `route_kind` became a
+   * URL and stopped being one — src/db/schema.ts § `url`.
+   * `FEEDBACK_ENVIRONMENTS` and
    * `MAX_FEEDBACK_ANSWER_CHARS` live in src/types.ts, where the dialog and the
    * route read them, and the CHECK constraints in src/db/schema.ts write the
    * same values out by hand — because building them from these arrays would make
@@ -490,14 +492,7 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
    * union and not to the CHECK goes red here, at the insert, which is where it
    * would have hurt. Written after that trade was made, not before.
    */
-  it("takes every route kind and every environment the types allow", async () => {
-    for (const routeKind of FEEDBACK_ROUTE_KINDS) {
-      const filed = await runAsOwner(ALICE, () =>
-        pgFeedbackStore.submit(report({ id: mintId(), routeKind })),
-      );
-      expect([routeKind, filed.kind]).toEqual([routeKind, "created"]);
-      await clear();
-    }
+  it("takes every environment the types allow", async () => {
     for (const environment of FEEDBACK_ENVIRONMENTS) {
       const filed = await runAsOwner(ALICE, () =>
         pgFeedbackStore.submit(report({ id: mintId(), environment })),
@@ -512,11 +507,47 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
       await violation(() =>
         runAsOwner(ALICE, () =>
           pgFeedbackStore.submit(
-            report({ id: mintId(), routeKind: "somewhere-else" as FeedbackRouteKind }),
+            report({ id: mintId(), environment: "somewhere-else" as FeedbackEnvironment }),
           ),
         ),
       ),
-    ).toBe("feedback_route_kind");
+    ).toBe("feedback_environment");
+  });
+
+  /**
+   * **The cap on the address, from the database's side.**
+   *
+   * `route_kind` was a closed vocabulary until 2026-09-02, and the loop above
+   * used to walk it. There is nothing to walk now — a URL has no vocabulary —
+   * so what is left to hold is the pair of things `feedback_url_shape` really
+   * promises: `null` is allowed (a bundle older than the change), and 2048 is
+   * the ceiling. `MAX_FEEDBACK_URL_CHARS` in src/types.ts is the same number,
+   * and this is the test that notices when the two stop agreeing.
+   */
+  it("takes an address of exactly the cap, refuses one more, and allows none at all", async () => {
+    const pad = (n: number) => `https://www.spideryarn.com/read/a?q=${"x".repeat(n)}`;
+    const exact = pad(MAX_FEEDBACK_URL_CHARS - pad(0).length);
+    expect(exact).toHaveLength(MAX_FEEDBACK_URL_CHARS);
+
+    const filed = await runAsOwner(ALICE, () =>
+      pgFeedbackStore.submit(report({ id: mintId(), url: exact })),
+    );
+    expect(filed.kind).toBe("created");
+    await clear();
+
+    expect(
+      await violation(() =>
+        runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: mintId(), url: `${exact}x` }))),
+      ),
+    ).toBe("feedback_url_shape");
+    await clear();
+
+    /* `null` is a real answer rather than a hole: src/db/schema.ts § `url`
+       files an old client's report instead of refusing it. */
+    const old = await runAsOwner(ALICE, () =>
+      pgFeedbackStore.submit(report({ id: mintId(), url: null })),
+    );
+    expect(old.kind).toBe("created");
   });
 
   it("takes a body of exactly the database's cap, and refuses one character more", async () => {

@@ -1481,6 +1481,24 @@ glossary, and three consequences follow from it rather than from taste:
 
 - **Never the default and never in an ingest.** `sketch` is off
   `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED`, so nothing sweeps it in.
+- **Picking the Sketch chip draws it, if nobody ever has.** Since 2026-09-02,
+  and it is the chip's `onClick` that arms it, never `?diagram=` — that is query
+  state, so Back and Forward move it, and a pasted
+  `?mode=diagram&diagram=sketch` must not buy a two-minute call. *Opening
+  Diagram costs nothing*: the mode lands on a picture drawn from the tree, so
+  the bar's Diagram button arms nothing at all.
+  [`src/web/activation.ts`](../../src/web/activation.ts),
+  [`useAutoRun.ts`](../../src/web/useAutoRun.ts), and
+  [glossary.md § That decision was reversed](glossary.md#that-decision-was-reversed-on-2026-09-02-and-the-loop-is-still-closed-structurally)
+  for the loop it has to close and how. One automatic attempt per article per
+  tab session; the button is the only retry.
+- **`useSketch` grew a second verb for it.** `ensure` is unforced and is what
+  both the automatic draw and the empty state's button call — a forced press
+  landing inside the automatic start's window would be a different `work_key`,
+  which stage 1 does not de-duplicate, and the reader would pay twice.
+  `regenerate` is forced and keeps the reasoning the old single verb had: a
+  redraw is offered beside a picture that is current, where an unforced run
+  would skip while the reader watched two minutes go by.
 - **The empty state says the price before the press**, not after it — a reader
   who presses a button and then watches a spinner for two minutes with no idea
   why is owed the sentence.
