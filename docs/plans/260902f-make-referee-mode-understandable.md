@@ -1,10 +1,33 @@
 # Make Referee mode understandable
 
-**Status: planning, revised after GPT Sol's first review, 2026-09-02.** Worktree
-`referee-mode-clarity`, branch `worktree-referee-mode-clarity`, dev server on 5274 against Postgres.
-Review: [260902e-…-review-sol.md](260902f-make-referee-mode-understandable-review-sol.md), which
-returned **do not build as written** on the first draft. Eight of its nine findings changed this
-plan; § *Where this plan still disagrees with the review* is the one that did not.
+**Status: built and on `dev`, all six stages, 2026-09-02.** Worktree `referee-mode-clarity`.
+
+**Four cross-family reviews, and every one of them changed the work.** The plan came back **do not
+build as written**; eight of its nine findings reshaped it before anything was built, and § *Where
+this plan still disagrees with the review* is the one that did not.
+[Stage 1's code](260902f-make-referee-mode-understandable-stage1-review-sol.md) came back with twelve
+findings including a real regression — a valence sign silently erasing a reader's own comment marker.
+[Stages 2 and 3](260902f-make-referee-mode-understandable-stage23-review-sol.md) came back with a
+false disclosure on a button that spends money, two tooltips that lied under `?refscale=br`, and five
+tests that would have passed over a deletion.
+[Stage 5](260902f-make-referee-mode-understandable-stage5-review-sol.md) found the test for the
+message split calling the parser directly and never touching the four callers it was meant to
+protect. Stages 4 and 6 are the responses to the last two.
+
+**Two things were measured in a browser rather than asserted**, and both changed a decision: the
+prose and panel colours agree to the RGB triple on a real article, and the explainer card was
+409.5px against a 287.7px empty-state panel — failing the test its own docstring sets, which is why
+it was cut to 203.1px.
+
+**What was verified by mutation, not by a green tick**: every reversed or new test in this plan was
+run against the defect it claims to catch. Where one could not be — a `::after` in jsdom, a hover on
+a disabled button — the test says so instead of implying a measurement it did not make.
+
+Two things this plan turned up that were not about Referee mode at all: a dev server that could never
+see its own edits inside a worktree
+([postmortem](../postmortems/260902a-a-dev-server-that-ignored-its-own-source.md)), and a
+confidentiality-adjacent cost — Candidates reaching a search engine on a tab press — that nobody had
+named.
 
 Greg, 2026-09-02:
 
