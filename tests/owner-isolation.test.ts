@@ -342,34 +342,53 @@ describe("every article lookup names an owner", () => {
   });
 
   /**
+   * **The two files allowed to ask a question across owners**, and why each one
+   * is.
+   *
+   * - `pg-admin.ts` is the admin page's counts, behind the `/api/admin` gate —
+   *   docs/project/admin.md is the whole argument.
+   * - `ai-calls-spend-pg.ts` is the per-owner spend aggregate, added 2026-09-02.
+   *   It has the same shape and the same justification: `/admin/users` reads it
+   *   through that same gate, and `npm run cost -- --owners` reads it from a CLI
+   *   Greg runs on his own machine. It returns **money and an owner id and
+   *   nothing else** — no title, no URL, no slug, no sentence of anybody's
+   *   reading — which is the rule admin.md states for the page and the reason
+   *   this second entry is a widening rather than a hole.
+   *
+   * Adding a third is a decision about who may see across owners, which is why
+   * it is a list here rather than a per-file opt-out somewhere quieter.
+   */
+  const ACROSS_OWNERS = ["pg-admin.ts", "ai-calls-spend-pg.ts"];
+
+  /**
    * **The other direction: a query that groups by owner is looking at everybody.**
    *
    * `group by owner_id` is the shape of a question asked *across* owners rather
-   * than within one, and there is exactly one place in this repo that is
-   * allowed to ask it — `pg-admin.ts`, behind the `/api/admin` gate
-   * (docs/project/admin.md). Anywhere else it would be a route quietly
-   * aggregating over other people's rows.
+   * than within one, and there are exactly two places in this repo allowed to
+   * ask it. Anywhere else it would be a route quietly aggregating over other
+   * people's rows.
    *
    * Narrow on purpose. This is not "find every query missing a `where`", which
-   * no grep can do and which would overclaim; it is one syntactic shape with
-   * one legitimate home. GPT Sol asked for exactly that distinction, 2026-08-27.
+   * no grep can do and which would overclaim; it is one syntactic shape with a
+   * named home. GPT Sol asked for exactly that distinction, 2026-08-27.
    */
-  it("and only the admin store groups by owner, because only it may", async () => {
+  it("and only the two cross-owner readers group by owner, because only they may", async () => {
     const dir = fileURLToPath(new URL("../src/store/", import.meta.url));
     const offenders: string[] = [];
     for (const name of await readdir(dir)) {
-      if (!name.endsWith(".ts") || name === "pg-admin.ts") continue;
+      if (!name.endsWith(".ts") || ACROSS_OWNERS.includes(name)) continue;
       const source = await readFile(dir + name, "utf8");
       const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
       if (/groupBy\([^)]*\.ownerId/.test(code)) offenders.push(name);
     }
     expect(offenders).toEqual([]);
 
-    /* And the exemption really does contain what it is exempted for — a rule
-       whose one allowed case has silently moved is a rule that now protects
+    /* And each exemption really does contain what it is exempted for — a rule
+       whose allowed case has silently moved is a rule that now protects
        nothing. */
-    const admin = await readFile(dir + "pg-admin.ts", "utf8");
-    expect(admin).toMatch(/groupBy\([^)]*\.ownerId/);
+    for (const name of ACROSS_OWNERS) {
+      expect(await readFile(dir + name, "utf8")).toMatch(/groupBy\([^)]*\.ownerId/);
+    }
   });
 });
 

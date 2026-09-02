@@ -139,6 +139,11 @@ The metadata is exact and worth listing rather than gesturing at: the account **
 address**, and the **providers** GoTrue records for it (`google`, `email`). Everything else on the
 page is a number or a date.
 
+**Money is the one thing on the page that is not a count of the reader's own things**, and it is
+still a fact about the account rather than about their reading: what their model calls cost us, over
+a stated month, with no article, model or job named. See
+[The spend column](#the-spend-column-and-the-two-things-that-keep-it-honest).
+
 How many articles somebody has is a fact about their account. *Which* articles they are is their
 reading, and it does not leave their session. That line is the one paragraph to re-read before
 adding a column, and it is written into
@@ -320,10 +325,11 @@ means "email *or* phone was confirmed", and the page prints "email unconfirmed" 
 address, so the wrong one labels a phone-confirmed account the opposite of the truth. Sol found that
 in the query; it is pinned again against the API.
 
-The counts are **five grouped aggregates, run together and joined by a `Map`** — one per table, not
-one per user. A fixed five statements however many accounts there are, issued alongside the account
+The counts are **six grouped aggregates, run together and joined by a `Map`** — one per table, not
+one per user. A fixed six statements however many accounts there are, issued alongside the account
 listing rather than after it, and the join is a pure function (`mergeUsers`) so the arithmetic can
-be tested with two owners and no database.
+be tested with two owners and no database. The sixth is money, and it came with the spend column
+below.
 
 **One grep guards the exception.** `tests/owner-isolation.test.ts` asserts that no file under
 `src/store/` except `pg-admin.ts` writes `groupBy(….ownerId)` — the shape of a question asked
@@ -412,6 +418,42 @@ to a real account on the project being deployed to.** That is the gap the accoun
 through — the only mitigation for a silent lockout turned out to be unreachable from the failure it
 was written for ([260828f-admin-id-was-the-local-one.md](../postmortems/260828f-admin-id-was-the-local-one.md)) —
 and it is the check that would make the id-versus-email question stop mattering.
+
+## The spend column, and the two things that keep it honest
+
+Added 2026-09-02, because Greg is setting a subscription price and could not see what an account
+costs. GPT Sol had argued against putting money on this page and withdrew the objection when Greg
+made the product call, on two conditions:
+
+> It does need a defined period — e.g. "current UTC month" — and a visible partial/unpriced marker.
+> A bare currency number would overclaim.
+
+Both are behaviour rather than prose, and both are in
+[`tests/admin-spend-column.test.tsx`](../../tests/admin-spend-column.test.tsx):
+
+- **The period is on every cell**, from the row's own `spendMonth` rather than the browser's clock,
+  so a page left open across a month boundary says which month the server actually measured. The
+  period is the current UTC month — `currentUtcMonth()` in
+  [`src/store/ai-calls-spend-pg.ts`](../../src/store/ai-calls-spend-pg.ts), the same definition
+  `npm run cost` uses, because a column headed "this month" that meant something else from the CLI
+  is a discrepancy nobody would chase. It is **not** a Stripe billing period, which starts on the
+  day somebody subscribed.
+- **A `· N unpriced` line** under the figure whenever any call behind it reported no cost. Not an
+  edge case: on 2026-09-02 the local ledger had 207 of 243 rows reporting nothing, and a confident
+  `$1.63` drawn over that would be the page lying quietly.
+
+Two more choices worth knowing:
+
+- **Eval and dev-CLI spend is excluded** (`productSpendByOwner` filters on `scope_kind`). That money
+  is ours rather than a reader's, and on a per-account page it would draw whoever's owner id the
+  environment was carrying as costing far more than anybody else.
+- **An account with no calls draws an em dash, not `$0.0000`.** A zero with a currency sign reads as
+  a measurement, and "we recorded nothing for this person" is the one thing it is not. The sort still
+  treats it as zero, because for ranking who is expensive it genuinely is one.
+
+The wider version of the same numbers — by category, with a median/p95/max spread across every
+account — is `npm run cost -- --owners`:
+[ai-gateway.md § The pricing report](ai-gateway.md#the-pricing-report-per-owner-by-category-with-the-spread).
 
 ## The page itself
 

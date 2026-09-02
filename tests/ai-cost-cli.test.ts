@@ -158,3 +158,34 @@ describe("the breakdowns", () => {
     expect(pdf?.unpriced).toBe(0);
   });
 });
+
+/**
+ * `--owners` is a **different report**, not a flag on this one: per-owner spend
+ * by category, from a Postgres `GROUP BY`. These two tests are about the flags
+ * only — what the report draws is
+ * tests/cost-report.test.ts and tests/ai-calls-spend-pg.test.ts.
+ */
+describe("--owners and --price", () => {
+  it("carries both through every range shape, including --all", () => {
+    /* The `--all` branch builds a fresh object rather than spreading, and it has
+       already dropped a flag that way once — a `--reconcile --all` that silently
+       did not reconcile. Both new flags go through the same door. */
+    expect(parseArgs(["--owners"]).owners).toBe(true);
+    expect(parseArgs(["--owners", "--all"]).owners).toBe(true);
+    expect(parseArgs(["--owners", "--price", "20", "--all"]).price).toBe(20);
+    expect(parseArgs(["--month", "2026-08", "--owners"]).owners).toBe(true);
+    expect(parseArgs([]).owners).toBe(false);
+    expect(parseArgs([]).price).toBeUndefined();
+  });
+
+  it("refuses a price it cannot subtract rather than printing $NaN", () => {
+    /* `Number("twenty")` is `NaN`, and every margin computed from it would print
+       as `$NaN` on a page whose whole purpose is a number somebody will act on.
+       Zero is refused for the same reason a zero pocket is not printed: it is
+       not a candidate price. */
+    expect(() => parseArgs(["--price", "twenty"])).toThrow(/positive number of dollars/);
+    expect(() => parseArgs(["--price", "0"])).toThrow(/positive number of dollars/);
+    expect(() => parseArgs(["--price", "-5"])).toThrow(/positive number of dollars/);
+    expect(() => parseArgs(["--price"])).toThrow(/needs a value/);
+  });
+});

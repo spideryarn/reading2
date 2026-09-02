@@ -7,6 +7,23 @@
  *     npm run cost -- --since 2026-08-01 --until 2026-08-15
  *     npm run cost -- --all             everything there is
  *     npm run cost -- --reconcile       ask OpenRouter what it thinks (network, free)
+ *     npm run cost -- --owners          what each owner cost, by category, with the spread
+ *     npm run cost -- --owners --price 20   …and the contribution margin at $20/month
+ *
+ * ## `--owners` is a different report, not a flag on this one
+ *
+ * Everything else here is a developer asking "where did the money go". `--owners`
+ * is the **pricing** report: per-owner spend over an arbitrary half-open range,
+ * split by what kind of work it bought, with a median/p95/max spread across
+ * *every account* rather than only the ones that spent something.
+ *
+ * It is Postgres-only, deliberately — src/store/ai-calls-spend-pg.ts says why —
+ * and it never calls `costStore.read()`. Two reasons, and the second is the
+ * interesting one: a `GROUP BY` in the database is the point (a fold over every
+ * row in JavaScript is fine at four thousand rows and not at four hundred
+ * thousand), and reading whole rows would make the report fail on any box whose
+ * migrations are behind, which is precisely the box that most needs to be told
+ * what its own coverage is.
  *
  * ## UTC, and half-open
  *
@@ -35,6 +52,24 @@ import { formatNanos } from "../src/ai-spend.js";
 import type { AiCallRow } from "../src/ai-spend.js";
 import { loadEnvLocal } from "../src/env.js";
 import { costStore, totalRows } from "../src/store/ai-calls.js";
+import {
+  type CredentialTally,
+  type RealtimeCoverage,
+  credentialsInWindow,
+  currentUtcMonth,
+  realtimeSessionCoverage,
+  spendGroupedByOwner,
+} from "../src/store/ai-calls-spend-pg.js";
+import { CATEGORY_MEANING, COST_CATEGORIES } from "../src/cost-categories.js";
+import {
+  OPENROUTER_CREDIT_FEE,
+  type SpendFold,
+  cashNanos,
+  foldSpend,
+  spendPerAccount,
+  spread,
+  totalNanos,
+} from "../src/cost-report.js";
 import { DECLARATIONS, UNMETERED_SPEND } from "../src/spend-declarations.js";
 import { isMain } from "../src/is-main.js";
 
@@ -43,6 +78,17 @@ interface Args {
   until?: string;
   all: boolean;
   reconcile: boolean;
+  /** `--owners` — the pricing report. See the header. */
+  owners: boolean;
+  /**
+   * `--price 20` — a candidate monthly subscription, in dollars.
+   *
+   * Only ever used to subtract: *price minus what the models cost this account*.
+   * It is **not** a scenario engine and must not become one — GPT Sol cut that
+   * from this stage, and the candidate-price arithmetic belongs in a measured
+   * plan document rather than in code.
+   */
+  price?: number;
   label: string;
 }
 
@@ -61,14 +107,23 @@ function monthRange(month: string): { since: string; until: string } {
   return { since: since.toISOString(), until: until.toISOString() };
 }
 
+/**
+ * **One definition, shared with the admin page.** `currentUtcMonth` lives in
+ * src/store/ai-calls-spend-pg.ts because that is where the query it bounds
+ * lives; `/admin/users` labels its spend column with the same period, and a
+ * column headed "this month" that meant something slightly different from this
+ * report is a discrepancy nobody would ever chase.
+ *
+ * `monthRange` above stays, and does a different job: it *parses* a `--month`
+ * somebody typed, with a regex that has already caught `2026-13` inverting the
+ * range. This one constructs rather than parses.
+ */
 function thisMonth(): { since: string; until: string; label: string } {
-  const now = new Date();
-  const label = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-  return { ...monthRange(label), label };
+  return currentUtcMonth();
 }
 
 export function parseArgs(argv: string[]): Args {
-  const out: Args = { all: false, reconcile: false, label: "" };
+  const out: Args = { all: false, reconcile: false, owners: false, label: "" };
   const rest = [...argv];
   const value = (flag: string): string => {
     const v = rest.shift();
@@ -95,11 +150,35 @@ export function parseArgs(argv: string[]): Args {
       case "--reconcile":
         out.reconcile = true;
         break;
+      case "--owners":
+        out.owners = true;
+        break;
+      case "--price": {
+        const raw = value("--price");
+        const price = Number(raw);
+        /* Refused rather than coerced. `Number("twenty")` is `NaN`, and every
+           margin computed from it would print as `$NaN` on a page whose whole
+           purpose is a number somebody will act on. Zero is refused for the same
+           reason a zero pocket is not printed: it is not a candidate price. */
+        if (!Number.isFinite(price) || price <= 0) {
+          throw new Error(`--price wants a positive number of dollars, got ${JSON.stringify(raw)}`);
+        }
+        out.price = price;
+        break;
+      }
       default:
         throw new Error(`Unknown flag ${JSON.stringify(flag)}`);
     }
   }
-  if (out.all) return { all: true, reconcile: out.reconcile, label: "all time" };
+  if (out.all) {
+    return {
+      all: true,
+      reconcile: out.reconcile,
+      owners: out.owners,
+      ...(out.price === undefined ? {} : { price: out.price }),
+      label: "all time",
+    };
+  }
   if (!out.since && !out.until) {
     const m = thisMonth();
     return { ...out, since: m.since, until: m.until, label: `${m.label} (UTC)` };
@@ -194,12 +273,26 @@ function table(title: string, rows: Breakdown[]): void {
  * everything spent on this key before the ledger existed, and every stage CLI
  * and eval run since. Watch whether the gap *moves*, not whether it is zero.
  */
-async function reconcile(): Promise<void> {
+/**
+ * What OpenRouter says about the key in the environment, or `null`.
+ *
+ * Pulled out of `reconcile()` on 2026-09-02 so that `--owners` can print the
+ * same gap without going through `costStore.read()` — which fetches every row in
+ * the window, and is the one thing the pricing report is arranged not to do.
+ * Extracted rather than copied: two functions asking OpenRouter what a key has
+ * spent, in slightly different words, is two answers to reconcile.
+ *
+ * **Every failure sets a non-zero exit code**, because a reconciliation that
+ * could not run must not look like one that found nothing.
+ */
+async function openRouterKeyUsage(
+  why: string,
+): Promise<{ fingerprint: string; credits: number | null; byok: number | null } | null> {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) {
-    console.error("\n--reconcile needs OPENROUTER_API_KEY, and there is none set.");
+    console.error(`\n${why} needs OPENROUTER_API_KEY, and there is none set.`);
     process.exitCode = 1;
-    return;
+    return null;
   }
   const { keyFingerprint } = await import("../src/ai-spend.js");
   const fingerprint = keyFingerprint(key);
@@ -210,16 +303,27 @@ async function reconcile(): Promise<void> {
       headers: { Authorization: `Bearer ${key}` },
     });
     if (!response.ok) {
-      console.error(`\n--reconcile: OpenRouter answered ${response.status}. Nothing was compared.`);
+      console.error(`\n${why}: OpenRouter answered ${response.status}. Nothing was compared.`);
       process.exitCode = 1;
-      return;
+      return null;
     }
     body = (await response.json()) as { data?: Record<string, unknown> };
   } catch (err) {
-    console.error(`\n--reconcile: could not reach OpenRouter — ${(err as Error).message}`);
+    console.error(`\n${why}: could not reach OpenRouter — ${(err as Error).message}`);
     process.exitCode = 1;
-    return;
+    return null;
   }
+  const theirs = (name: string): number | null => {
+    const v = body.data?.[name];
+    return typeof v === "number" ? v : null;
+  };
+  return { fingerprint, credits: theirs("usage_monthly"), byok: theirs("byok_usage_monthly") };
+}
+
+async function reconcile(): Promise<void> {
+  const usage = await openRouterKeyUsage("--reconcile");
+  if (!usage) return;
+  const { fingerprint } = usage;
 
   const month = thisMonth();
   const { rows } = await costStore.read(month.since, month.until);
@@ -227,12 +331,8 @@ async function reconcile(): Promise<void> {
   const others = rows.length - mine.length;
   const { credits, upstream } = totalRows(mine);
 
-  const theirs = (name: string): number | null => {
-    const v = body.data?.[name];
-    return typeof v === "number" ? v : null;
-  };
-  const theirCredits = theirs("usage_monthly");
-  const theirByok = theirs("byok_usage_monthly");
+  const theirCredits = usage.credits;
+  const theirByok = usage.byok;
 
   console.log(`\nAgainst OpenRouter, key ${fingerprint}, ${month.label} (UTC):`);
   console.log(`  our credits    ${formatNanos(credits).padStart(12)}  (${mine.length} call(s))`);
@@ -329,18 +429,30 @@ function pocket(label: string, rows: readonly AiCallRow[]): void {
  * never posted because the tab died first, so the live figure is biased low by a
  * probably-small unknown. docs/project/live-conversation.md § The meter.
  */
-/** Six-space-indented, wrapped to a terminal width — these reasons are sentences, not labels. */
-function wrapped(text: string, width = 84): string[] {
+/** Indented and wrapped to a terminal width — these reasons are sentences, not labels. */
+function wrapped(text: string, width = 84, indent = 6): string[] {
   const lines: string[] = [];
+  const pad = " ".repeat(indent);
   let line = "";
   for (const word of text.split(/\s+/)) {
     if (line !== "" && `${line} ${word}`.length > width) {
-      lines.push(`      ${line}`);
+      lines.push(`${pad}${line}`);
       line = word;
     } else line = line === "" ? word : `${line} ${word}`;
   }
-  if (line !== "") lines.push(`      ${line}`);
+  if (line !== "") lines.push(`${pad}${line}`);
   return lines;
+}
+
+/**
+ * A paragraph under a table, wrapped rather than hard-newlined.
+ *
+ * Hand-broken lines in a template literal go wrong the moment somebody edits the
+ * sentence, and every caveat in the `--owners` report is a sentence that will be
+ * edited — they are the part a reader is meant to argue with.
+ */
+function note(text: string, indent = 2): void {
+  for (const line of wrapped(text, 92, indent)) console.log(line);
 }
 
 function unmetered(): void {
@@ -396,9 +508,469 @@ function undeclared(): void {
   console.log("  src/spend-declarations.ts says why each one is still open.");
 }
 
+/* ============================================================ --owners === */
+
+/**
+ * The population every per-account figure is divided by, and where it came from.
+ *
+ * `ids` empty means it could not be obtained and `why` says so — the report then
+ * falls back to the owners the ledger has rows for and prints a warning beside
+ * every figure, because that fallback silently turns "per account" into "per
+ * *spending* account".
+ */
+interface Denominator {
+  ids: string[];
+  emails: Map<string, string>;
+  source: string;
+  why: string;
+}
+
+/**
+ * `label` in a fixed-width gutter, with continuation lines under the text
+ * rather than under the label — the coverage header is a table of sentences,
+ * and a caveat that wraps back to column zero reads as a new heading.
+ */
+function say(label: string, ...lines: string[]): void {
+  const [first, ...rest] = lines;
+  console.log(`  ${label.padEnd(20)}${first ?? ""}`);
+  for (const line of rest) console.log(`  ${" ".repeat(20)}${line}`);
+}
+
+/** Cash, which is the figure a price is compared against. Credits + the fee. */
+function money(t: { creditsNanos: number; byokNanos: number; computedNanos: number }): number {
+  return cashNanos(t);
+}
+
+/**
+ * **The coverage header** — printed before any money, and not a preamble.
+ *
+ * Without it every figure below is unfalsifiable: a total of $2.54 looks
+ * identical whether it is the whole truth or the 8% of calls that happened to
+ * report a cost, and this ledger has already spent a fortnight in the second
+ * state with nobody noticing.
+ */
+function printCoverage(
+  args: Args,
+  seen: {
+    fold: SpendFold;
+    credentials: CredentialTally[];
+    realtime: RealtimeCoverage | null;
+    accounts: Denominator;
+  },
+): void {
+  const { fold, credentials, realtime, accounts } = seen;
+  console.log("\nCoverage — read this before believing any figure below");
+  say(
+    "Authoritative",
+    "Postgres. The filesystem ledger is development evidence and is",
+    "deliberately not imported (Stage 1 cutoff, GPT Sol 2026-09-02).",
+  );
+  say("Reading", costStore.describe());
+  say(
+    "Period",
+    `${args.since ?? "the beginning"} → ${args.until ?? "now"}`,
+    "Half-open [start, end) in UTC, so two adjacent periods cannot both",
+    "claim a call. Arbitrary bounds, because Stripe periods are not months.",
+  );
+
+  let settled = 0;
+  let computedCalls = 0;
+  let unpriced = 0;
+  for (const totals of fold.byCategory.values()) {
+    settled += totals.settledCalls;
+    computedCalls += totals.computedCalls;
+    unpriced += totals.unpricedCalls;
+  }
+  say("Rows", `${fold.totalCalls} call(s) from ${fold.byOwner.size} owner(s) with spend`);
+  say("  settled", `${settled} — OpenRouter answered; reconcilable against their own total`);
+  say("  computed by us", `${computedCalls} — priced from our price tables; never reconciled`);
+  say(
+    "  reported no cost",
+    `${unpriced} — every total below is short by an unknown amount`,
+    "These three do not partition: a BYOK row where OpenRouter answered",
+    "but reported no upstream figure is settled AND unpriced.",
+  );
+
+  if (credentials.length === 0) say("Paid with", "no rows, so no credential to name");
+  for (const c of credentials) {
+    /* Every key, not just the first. `--reconcile` compares one key's month
+       against OpenRouter's own figure, and that comparison means nothing if half
+       the rows were bought on a different account — printing the tally is
+       cheaper than explaining the gap afterwards. */
+    say(
+      credentials[0] === c ? "Paid with" : "",
+      `${c.fingerprint ?? "(no fingerprint recorded)"} — ${c.calls} call(s), ` +
+        `${formatNanos(c.creditsNanos)} in credits`,
+    );
+  }
+
+  if (realtime === null) {
+    say(
+      "Live sessions",
+      "NOT VISIBLE from this database — spideryarn.realtime_sessions is not",
+      "there. Run npm run db:migrate. Any voice figure below is whatever",
+      "reached ai_calls, with no session count to qualify it.",
+    );
+  } else {
+    say(
+      "Live sessions",
+      `${realtime.issued} issued, ${realtime.connected} connected, ${realtime.silent} connected ` +
+        "and reported nothing",
+      "A silent session is a conversation whose meter was lost or a reader",
+      "who never spoke; the ledger cannot tell those apart, so the voice",
+      "figure below is biased low by up to that many sessions.",
+    );
+  }
+
+  if (accounts.ids.length === 0) {
+    say(
+      "Denominator",
+      `UNAVAILABLE — ${accounts.why}`,
+      "Falling back to the owners the ledger has rows for, which excludes",
+      "everyone who spent nothing and biases every per-account figure UP.",
+    );
+  } else {
+    say(
+      "Denominator",
+      `${accounts.ids.length} account(s), from ${accounts.source}`,
+      "EVERY account, not subscribers — Stripe's subscriber set does not",
+      "exist yet. Accounts that spent nothing are counted as zero, which is",
+      "the whole point: a GROUP BY over the ledger cannot see them at all.",
+    );
+  }
+}
+
+/**
+ * **The rows no rule recognised, named one by one.**
+ *
+ * A subtotal under "unknown" with nothing beside it is unactionable — the reader
+ * cannot tell a retired job name from a new feature nobody has classified. These
+ * are *not* folded into a neighbouring category, because that would invent the
+ * provenance the schema cannot supply, which is the whole thing
+ * src/cost-categories.ts is arranged against.
+ */
+function printUnclassified(fold: SpendFold): void {
+  const totals = fold.byCategory.get("unknown");
+  if (!totals || totals.calls === 0) return;
+  const grand = [...fold.byCategory.values()].reduce((n, t) => n + money(t), 0);
+  const share = grand === 0 ? 0 : (money(totals) / grand) * 100;
+  console.log(
+    `\nUNCLASSIFIED — ${totals.calls} call(s), ${formatNanos(money(totals))}, ` +
+      `${share.toFixed(1)}% of the money`,
+  );
+  for (const u of fold.unknownFacts) {
+    console.log(
+      `  ${u.facts.padEnd(44)}  ${String(u.calls).padStart(5)} call(s)  ${formatNanos(u.nanos)}`,
+    );
+  }
+  note(
+    "Each is a scope/job/step that no rule in src/cost-categories.ts recognises — usually a " +
+      "retired name from an older row. They are NOT folded into a neighbouring category, " +
+      "because that would invent the provenance the schema cannot supply. Classify them there, " +
+      "or read this as the noise floor.",
+  );
+}
+
+/** What each kind of work cost, over everything in the period. */
+function printCategories(fold: SpendFold): void {
+  console.log("\nBy category, over everything in the period");
+  console.log(
+    `  ${"category".padEnd(26)}${"calls".padStart(7)}${"credits".padStart(13)}` +
+      `${"cash".padStart(13)}${"unpriced".padStart(10)}`,
+  );
+  for (const category of COST_CATEGORIES) {
+    const totals = fold.byCategory.get(category);
+    if (!totals || totals.calls === 0) continue;
+    console.log(
+      `  ${category.padEnd(26)}${String(totals.calls).padStart(7)}` +
+        `${formatNanos(totalNanos(totals)).padStart(13)}${formatNanos(money(totals)).padStart(13)}` +
+        `${String(totals.unpricedCalls).padStart(10)}`,
+    );
+  }
+  note(
+    `Cash is credits + ${(OPENROUTER_CREDIT_FEE * 100).toFixed(1)}%. OpenRouter's fee is on BUYING ` +
+      "credits, not per token, so it is allocated here and never written to a row. BYOK and " +
+      "computed rows never bought a credit and carry no uplift.",
+  );
+  for (const category of COST_CATEGORIES) {
+    const totals = fold.byCategory.get(category);
+    if (totals && totals.calls > 0) note(`${category} — ${CATEGORY_MEANING[category]}`, 4);
+  }
+}
+
+/**
+ * **The distribution, which is the answer a total is not.**
+ *
+ * A median says what the typical account costs, a p95 says what a price would be
+ * underwriting, and a max says what one account has already managed. An average
+ * says none of those and is the statistic a subscription price cannot be set
+ * from.
+ */
+function printSpread(fold: SpendFold, population: string[], denominatorIsReal: boolean): number[] {
+  const product = COST_CATEGORIES.filter((c) => c !== "non-product");
+  console.log(
+    `\nPer-account spread — cash, over ${population.length} account(s), zero-spend included` +
+      (denominatorIsReal ? "" : "  ** SPENDING OWNERS ONLY — see Denominator **"),
+  );
+  console.log(
+    `  ${"category".padEnd(26)}${"spending".padStart(9)}${"median".padStart(13)}` +
+      `${"p95".padStart(13)}${"max".padStart(13)}${"total".padStart(13)}`,
+  );
+  const line = (name: string, values: number[]): void => {
+    const s = spread(values);
+    console.log(
+      `  ${name.padEnd(26)}${String(s.spending).padStart(9)}${formatNanos(s.median).padStart(13)}` +
+        `${formatNanos(s.p95).padStart(13)}${formatNanos(s.max).padStart(13)}` +
+        `${formatNanos(s.total).padStart(13)}`,
+    );
+  };
+  for (const category of product) {
+    const totals = fold.byCategory.get(category);
+    if (!totals || totals.calls === 0) continue;
+    line(category, spendPerAccount(fold, population, [category], money));
+  }
+  const allProduct = spendPerAccount(fold, population, product, money);
+  line("ALL PRODUCT", allProduct);
+  note(
+    "Non-product spend is excluded from this table on purpose — it is ours, not a reader's, and " +
+      "a bake-off landing in the figure a price is set from is how a price gets set wrong. " +
+      `Nearest-rank percentiles: at ${population.length} account(s) the p95 IS the most expensive ` +
+      'account, so read it as "the worst we have seen" rather than as a stable statistic.',
+  );
+  return allProduct;
+}
+
+/** Who cost what, by name where the Auth service could supply one. */
+function printOwners(fold: SpendFold, accounts: Denominator, population: string[]): void {
+  const product = COST_CATEGORIES.filter((c) => c !== "non-product");
+  console.log("\nBy owner — product spend only, cash");
+  const named = [...fold.byOwner.entries()]
+    .map(([id, mine]) => {
+      let cash = 0;
+      let calls = 0;
+      let short = 0;
+      for (const category of product) {
+        const totals = mine.get(category);
+        if (!totals) continue;
+        cash += money(totals);
+        calls += totals.calls;
+        short += totals.unpricedCalls;
+      }
+      return { id, name: accounts.emails.get(id) ?? id, cash, calls, unpriced: short };
+    })
+    .sort((a, b) => b.cash - a.cash);
+  for (const owner of named) {
+    console.log(
+      `  ${owner.name.slice(0, 40).padEnd(40)}${formatNanos(owner.cash).padStart(13)}` +
+        `${String(owner.calls).padStart(7)} call(s)` +
+        (owner.unpriced > 0 ? `  ${owner.unpriced} unpriced` : ""),
+    );
+  }
+  const silent = population.filter((id) => !fold.byOwner.has(id)).length;
+  if (silent > 0) console.log(`  ${silent} more account(s) spent nothing at all in this period.`);
+}
+
+/** Price minus what the models cost, and nothing else. */
+function printMargin(price: number, allProduct: number[]): void {
+  const priceNanos = Math.round(price * 1e9);
+  /* **Derived from the COST spread, not from a spread of the margins.** A
+     nearest-rank p95 over margins returns the *largest* margin, which is the
+     cheapest account — the opposite of the number anybody wants. Subtracting the
+     p95 cost gives the margin on the account at the 95th percentile of spend,
+     which is what "what am I underwriting" means. Getting this backwards would
+     have printed a reassuring figure with nothing red anywhere. */
+  const cost = spread(allProduct);
+  console.log(`\nModel-cost contribution margin at $${price.toFixed(2)} per account`);
+  console.log(
+    `  at the median account ${formatNanos(priceNanos - cost.median)}   ` +
+      `at the p95 account ${formatNanos(priceNanos - cost.p95)}   ` +
+      `at the worst ${formatNanos(priceNanos - cost.max)}   ` +
+      `underwater ${allProduct.filter((c) => c > priceNanos).length} of ${allProduct.length}`,
+  );
+  note(
+    "MODEL-COST contribution margin, not gross margin. It is the price minus what the models " +
+      "cost and nothing else: Stripe's fees, hosting, storage, bandwidth and every unmetered " +
+      "spend listed below are all still to come out of it. The spread is over the same period " +
+      "as everything above, so a period shorter than a month flatters it.",
+  );
+}
+
+/**
+ * **The pricing report.** One command that answers "what did each owner cost
+ * over this period, by category, with the spread" — and, first, how much of
+ * itself it could not see.
+ *
+ * ## Non-product spend is printed and then excluded
+ *
+ * Eval and dev-CLI rows are ours. They are shown, because a report that hid them
+ * would be hiding real money on the OpenRouter bill, and they are kept out of
+ * the per-account spread, because a bake-off over forty PDF pages landing in the
+ * figure Greg prices against is how a price gets set wrong. The same argument
+ * `pocket()` above makes for the ordinary report.
+ */
+async function ownersReport(args: Args): Promise<void> {
+  const { STORE } = await import("../src/store/live.js");
+  if (STORE !== "postgres") {
+    /* Refused rather than answered from the filesystem ledger. GPT Sol settled
+       the cutoff: **Postgres is authoritative and the JSONL history is not
+       imported**, so a per-owner figure computed from files would be a second,
+       plausible, wrong answer to the question a price gets set from. */
+    console.error(
+      "\n--owners reads Postgres, and this process is on the filesystem store.\n" +
+        "  Postgres is the authoritative ledger (docs/plans/260902g-… § the cutoff);\n" +
+        "  the JSONL file is development evidence and was deliberately never imported.\n" +
+        "  Re-run as:  SPIDERYARN_STORE=postgres npm run cost -- --owners",
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const [groups, credentials, realtime] = await Promise.all([
+    spendGroupedByOwner(args.since, args.until),
+    credentialsInWindow(args.since, args.until),
+    realtimeSessionCoverage(args.since, args.until),
+  ]);
+  const fold = foldSpend(groups);
+  const accounts = await accountDenominator();
+
+  console.log(`AI spend by owner — ${args.label}`);
+  printCoverage(args, { fold, credentials, realtime, accounts });
+  await reconciliationLine(args);
+
+  if (fold.totalCalls === 0) {
+    /* **Said, rather than drawn as a table of zeroes.** The same rule
+       `pocket()` follows above: a `$0.0000` with a label on it reads as a
+       measurement, and "we recorded nothing here" is the one thing it is not.
+       The second line is the one that matters — a misconfigured store and a
+       genuinely quiet month are indistinguishable from this side, and the
+       coverage header above is where to look for which one it is. */
+    console.log("\nNo calls recorded in this range.");
+    console.log("(An empty range and an unwired ledger look identical from here.)");
+    unmetered();
+    undeclared();
+    return;
+  }
+
+  printUnclassified(fold);
+  printCategories(fold);
+
+  /* **The population, and the fallback said out loud.** Without the Auth
+     service the only owners this process can name are the ones the ledger has
+     rows for, which excludes everybody who spent nothing — so every figure in
+     the spread is biased upward by exactly the population a subscription price
+     cares most about. Falling back silently would be the worse half of that. */
+  const population = accounts.ids.length > 0 ? accounts.ids : [...fold.byOwner.keys()];
+  const allProduct = printSpread(fold, population, accounts.ids.length > 0);
+  printOwners(fold, accounts, population);
+  if (args.price !== undefined) printMargin(args.price, allProduct);
+
+  unmetered();
+  undeclared();
+}
+
+/**
+ * **The population every per-account figure is divided by**, and where it came
+ * from.
+ *
+ * From the Auth service over HTTP rather than a join, because `auth.users`
+ * belongs to Supabase and the deployed role has no grants into that schema —
+ * src/store/admin-accounts.ts has the measurement. So this cannot be one SQL
+ * statement however much a per-owner report would like it to be.
+ *
+ * **A failure here is reported, never swallowed.** Losing the denominator does
+ * not make the report wrong in a way anybody would see; it silently turns every
+ * "per account" figure into a "per *spending* account" figure, which is biased
+ * upward by exactly the population that matters most to a subscription price.
+ */
+async function accountDenominator(): Promise<Denominator> {
+  const none = { ids: [] as string[], emails: new Map<string, string>() };
+  const url = process.env.SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) {
+    return {
+      ...none,
+      source: "",
+      why: "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not both set, and the accounts live in the Auth service rather than in a table",
+    };
+  }
+  try {
+    const { gotruePages, listAccounts } = await import("../src/store/admin-accounts.js");
+    const rows = await listAccounts(gotruePages(url, key));
+    return {
+      ids: rows.map((r) => r.id),
+      emails: new Map(rows.flatMap((r) => (r.email ? [[r.id, r.email] as const] : []))),
+      source: `the Supabase Auth service at ${new URL(url).host}`,
+      why: "",
+    };
+  } catch (err) {
+    return { ...none, source: "", why: `the Auth service could not be read — ${(err as Error).message}` };
+  }
+}
+
+/**
+ * The reconciliation gap, **with the three conditions it holds under printed
+ * beside it** — or a line saying why it is not shown.
+ *
+ * `GET /api/v1/key` answers for the *current key*, over the *current UTC month*,
+ * *as of now*. It cannot answer for August, for an arbitrary Stripe period, or
+ * for a key that has been rotated. A gap printed under a report covering some
+ * other range would be a number that looks like a check and is not one — GPT
+ * Sol's condition on this stage, and the same failure mode as the first version
+ * of `reconcile()`, which compared one month's rows against an all-time figure.
+ */
+async function reconciliationLine(args: Args): Promise<void> {
+  const say = (label: string, ...lines: string[]): void => {
+    const [first, ...rest] = lines;
+    console.log(`  ${label.padEnd(20)}${first ?? ""}`);
+    for (const line of rest) console.log(`  ${" ".repeat(20)}${line}`);
+  };
+  const month = thisMonth();
+  const current = args.since === month.since && args.until === month.until;
+  if (!current) {
+    say(
+      "Reconciliation",
+      "omitted. OpenRouter's /api/v1/key answers for the CURRENT key over the",
+      "CURRENT UTC month AS OF NOW, and this report covers another range.",
+      "For the gap: npm run cost -- --owners --reconcile (no --month/--since).",
+    );
+    return;
+  }
+  if (!args.reconcile) {
+    say("Reconciliation", "not asked for. Add --reconcile (network, free).");
+    return;
+  }
+  const usage = await openRouterKeyUsage("--reconcile");
+  if (!usage) return;
+  const spend = await import("../src/store/ai-calls-spend-pg.js");
+  const tallies = await spend.credentialsInWindow(month.since, month.until);
+  const mine = tallies.find((t) => t.fingerprint === usage.fingerprint);
+  const others = tallies.filter((t) => t.fingerprint !== usage.fingerprint);
+  const ours = (mine?.creditsNanos ?? 0) / 1e9;
+  if (usage.credits === null) {
+    say("Reconciliation", `key ${usage.fingerprint} — OpenRouter reported no monthly usage figure.`);
+    return;
+  }
+  say(
+    "Reconciliation",
+    `key ${usage.fingerprint}, ${month.label} (UTC), as of now:`,
+    `ours $${ours.toFixed(6)} in credits over ${mine?.calls ?? 0} call(s)`,
+    `theirs $${usage.credits.toFixed(6)}   gap $${(usage.credits - ours).toFixed(6)} (theirs minus ours)`,
+    ...(others.length > 0
+      ? [`${others.reduce((n, o) => n + o.calls, 0)} call(s) this month were paid on another key.`]
+      : []),
+    "There is no stored baseline, so the gap also holds everything spent on",
+    "this key before the ledger existed, plus every CLI and eval run since.",
+    "Watch whether the gap MOVES, not whether it is zero.",
+  );
+}
+
 async function main(): Promise<void> {
   loadEnvLocal();
   const args = parseArgs(process.argv.slice(2));
+  if (args.owners) {
+    await ownersReport(args);
+    return;
+  }
   const { rows, unreadable } = await costStore.read(args.since, args.until);
 
   console.log(`AI spend — ${args.label}`);
