@@ -152,12 +152,22 @@ bill. The bill is one full-article Claude call to write the brief, plus one imag
 
 | | measured |
 |---|---|
-| image plate, text-only | ~$0.005–0.008 |
-| image plate, with one reference | $0.0132 |
-| the brief call | **not yet measured** — a full-article Sonnet call with a ~6,300-token answer |
+| image plate, text-only | $0.0075–0.008, 40–43 s |
+| image plate, with one reference image | $0.0132–0.0203, 42 s |
+| the brief call | **not yet priced**, but 75 s / 6,300 output tokens on one article and **141 s / 13,449 output tokens** on the other |
 
-Stage 2's eval harness must report the **total** per article, and stage 4's empty-state copy quotes
-that number and no other.
+**The brief call is the bill, not the pictures**, and that inverts the first draft's assumption.
+13,449 output tokens of Sonnet is roughly $0.20 on its own before the input side, so an article is
+plausibly **$0.25–0.35 all in — more than Sketch's $0.20, not a seventh of it.** Nothing goes in
+front of a reader until stage 2 has measured it through the ledger rather than estimated it here.
+
+If it lands there, the cheap levers, in order: the brief's answer is verbose (a 3,000-character
+`prompt` field plus 13 vignettes), so cap the vignette count and the prompt length before reaching
+for a cheaper tier. Note also that a reference image costs about 2,000 input image tokens, so the
+zoom plates are ~2.5× the overview's image cost — which is still small change next to the brief.
+
+Stage 2's eval harness reports the **total** per article, and stage 4's empty-state copy quotes that
+number and no other.
 
 ### Article figures are deferred, and Greg's version of it is not achievable
 
@@ -239,8 +249,24 @@ would pay the fidelity price without reliably getting fidelity. And a reference 
 and arrows drags the output back towards being a parchment-tinted box diagram, which is the one
 thing this mode must not be — we already have four pictures made of boxes.
 
-**This is a spike, not a settled call.** Stage 2 draws one article both ways and we look. If the
-SVG-as-reference version is better, it is a two-line change.
+**Settled by measurement, 2026-09-03**, and it was a spike rather than an argument. The same brief
+was drawn three times: once with the Sketch's rendered PNG as an `input_reference`, and twice without
+it, so run-to-run variance had a control.
+
+- **No structural gain.** All three preserved the sketch's topology identically — the two
+  convergences, the fork, the loop back to the top. The text brief already says what converges and
+  what forks, so the reference had nothing left to contribute.
+- **A stylistic loss, and precisely the predicted one.** The reference version pulled panels towards
+  the sketch's own cold blue-grey ground instead of the warm vellum, made the connectors two-toned
+  and wire-like rather than one gold ribbon, and squared the frames off with tick marks. That is the
+  parchment-textured flowchart this mode must not be — mild, but in the wrong direction.
+- **2.5× the price**: $0.0203 against $0.008, for about 2,000 input image tokens.
+
+So **do not pass the SVG**, with the control run proving the difference was not variance.
+
+This does **not** overturn passing the *overview plate* as a reference to the zoom plates — that is a
+style-continuity argument rather than a layout one, and it was measured working. It does mean a zoom
+plate costs about $0.020 rather than $0.008.
 
 ### Check the brief, not the picture
 
@@ -274,10 +300,19 @@ documented as the one to use "wherever a match is being read as a claim that the
 text", which is exactly this. Plus a **minimum length** (say 4 words and 20 characters), or "the"
 matches everything.
 
-The brief prompt must also forbid ellipses, square brackets and joined fragments: quote a contiguous
-run of the article's own words. The spike lost a good vignette to an ellipsis, which is the validator
-being right about a quote the model wrote wrong — a cheap own goal to close in the prompt rather than
-by loosening the matcher.
+**Two of the spike's three drops were the spike's own fault, and that is the useful finding.** It
+used a naive `String.includes`, so `brain's` failed against the article's `brain’s` and a plain
+`tie-breakers` failed against a curly-quoted one. `quote-match.ts` **already folds** curly quotes,
+all three dashes and the non-breaking space — deliberately with a table of same-length single
+characters rather than `NFKC`, so the offsets survive. Use the real matcher and those two drops do
+not happen. Do not write a second normaliser.
+
+The third drop is genuine and stays: the model elided an aside with an ellipsis. The fix belongs in
+the **prompt** — forbid ellipses, square brackets and joined fragments, and ask for a contiguous run
+of the article's own words. Not in the matcher: treating `...` as a wildcard would weaken exactly the
+claim `"spaced"` mode exists to make, that the model *copied* the text rather than approximated it.
+A quote is cheap for the model to re-pick; a matcher that accepts gaps is a matcher that accepts a
+sentence stitched out of two.
 
 ### The highest-leverage instruction
 
