@@ -651,9 +651,16 @@ Recorded because a negative result from a real sweep is worth as much as a findi
 next run should not re-spend agents here.
 
 - **The request path.** No wrong status codes, one error envelope, one body reader, one auth check at
-  the top of `handleApi`, all six SSE streams terminate with an explicit frame, no `console.log` in a
+  the top of `handleApi`, all ~~six~~ **seven** SSE streams terminate with an explicit frame, no `console.log` in a
   request path. Each of the four postmortem classes in this zone has a fix *and* a mechanical test
   that re-catches the class.
+  <br>**"Six" was wrong when it was written**, corrected 2026-09-03 by
+  [260903d](260903d-improve-the-codebase-second-sweep.md) § T1.6. Six go through the `sse()` helper
+  (`src/routes.ts:1344, 1614, 3417, 3664, 3799, 3917`); the seventh, `streamChat`, writes its SSE
+  headers by hand at `:2309` and so is invisible to a grep for the helper. The substance held — all
+  seven were re-traced and each sends a terminal frame or documents the deliberate no-op, and each
+  closes via `res.end()` in a `finally` — but the *method* did not: **counting the callers of a shared
+  helper counts everything except the instance that does it by hand**, which is the one worth finding.
 - **The pipeline and the AI layer.** One JSON-from-model parser, one price table, one token
   estimator, one model-id source, one gateway path with the one declared exception. `maxRetries: 0`
   and one bounded repair retry. The `id > start && id < end` string-comparison trap from

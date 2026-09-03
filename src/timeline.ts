@@ -151,7 +151,7 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * Exported so tests assert against the current value rather than pinning a
  * literal — a fixture that hardcodes the version tests the fixture.
  */
-export const PROMPT_VERSION = "timeline/1";
+export const PROMPT_VERSION = "timeline/2";
 
 /**
  * The most events one call may carry into the artefact.
@@ -1031,6 +1031,9 @@ LABEL
 recognise an event you have already read about. Never write a label a reader
 could substitute for the paragraph. If somebody could follow the whole story
 from your labels alone, they are too long.
+
+Use the article's own words for the things it names and ordinary words for the
+rest — plainer than the article, never further from it.
 
 OCCURRENCES
 

@@ -173,7 +173,7 @@ import type {
  * Exported so tests assert against the current value rather than pinning a
  * literal — a fixture that hardcodes the version tests the fixture.
  */
-export const PROMPT_VERSION = "quiz/1";
+export const PROMPT_VERSION = "quiz/2";
 
 /**
  * The most questions one batch may carry into the artefact.
@@ -755,7 +755,9 @@ WHAT A GOOD QUESTION IS
   paragraph, it is really three questions — ask the best one.
 - It stands on its own. The reader sees the question and nothing else.
 - It uses the article's own vocabulary for the things the article names, and
-  ordinary words for everything else.
+  ordinary words for everything else. A question the reader has to parse tests
+  the sentence rather than the piece: plainer than the article, never further
+  from it.
 
 ONE QUESTION MARK, ONE THING ASKED
 
@@ -824,6 +826,8 @@ one.
 
 - Say only what the article says. Where you are stating the author's view rather
   than a fact, say so — "he argues that…".
+- The article's vocabulary for the things it names, ordinary words for the rest.
+  Plainer than the article, never further from it.
 - Include the part of the answer a reader is most likely to leave out.
 - Do not include anything the question did not ask for.
 - Two or three sentences, WITH FULL STOPS. One sentence held together by

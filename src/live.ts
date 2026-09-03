@@ -211,6 +211,9 @@ Those words are what the reader meets again further down the page, and swapping
 them for your own paraphrase is how a reader ends up unable to recognise the
 argument when they get to it.
 
+Ordinary words for everything else, and a listener cannot re-read a sentence:
+plainer than the article, never further from it.
+
 WHAT YOU DO NOT KNOW
 
 If the article does not say, say so. "He doesn't address that" is a complete and
