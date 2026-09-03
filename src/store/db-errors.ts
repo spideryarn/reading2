@@ -307,7 +307,9 @@ function isTransient(chain: readonly unknown[]): boolean {
  * identifier-shaped name goes to the log, a sentence does not.
  */
 function classNameOf(err: unknown): string | undefined {
-  const name = (err as { name?: unknown }).name;
+  /* Optional, because `throw null` and `throw undefined` are legal and this
+     runs inside a `catch` — see `mayPassThrough`. */
+  const name = (err as { name?: unknown } | null | undefined)?.name;
   return typeof name === "string" && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(name) ? name : undefined;
 }
 
@@ -319,7 +321,8 @@ function classNameOf(err: unknown): string | undefined {
  * scrubbed error still worth reading: it points at the query that failed.
  */
 function framesOf(err: unknown): string | undefined {
-  const stack = (err as { stack?: unknown }).stack;
+  /* Optional, for the same reason as `classNameOf` above. */
+  const stack = (err as { stack?: unknown } | null | undefined)?.stack;
   if (typeof stack !== "string") return undefined;
   const at = stack.search(/^\s+at /m);
   return at === -1 ? undefined : stack.slice(at);
@@ -351,16 +354,62 @@ function framesOf(err: unknown): string | undefined {
  * tests/store-guard-idempotent.test.ts holds both.
  *
  * A symbol rather than `err.name === "StoreFailure"`, because `name` is writable
- * and a thrower could set it: this mark can only be put here.
+ * and a thrower could set it.
+ *
+ * ## `Symbol()` and not `Symbol.for()`, which is the difference between a mark
+ * and a password
+ *
+ * This said *"this mark can only be put here"* until 2026-09-03, while using the
+ * **global** symbol registry — where `Symbol.for("spideryarn.scrubbedDbError")`
+ * hands the identical symbol to any module in the process that asks. GPT Sol
+ * built an error carrying it and free text, and this file waved it through
+ * unread. A module-private symbol is what makes the sentence true, and it costs
+ * nothing: nothing outside this file ever needs to recognise the mark.
+ *
+ * That is the opposite call from `GUARDED` below, deliberately. `GUARDED` is a
+ * *brand tests ask about* and has to survive this module being loaded twice
+ * (two specifiers, a bundler, a re-export), so global is right there; and it is
+ * harmless, because the worst a forged `GUARDED` buys you is your own store
+ * going unwrapped. `SCRUBBED` is a *claim about a privacy boundary*, and a
+ * forged one buys you a way across it.
+ *
+ * The cost, said out loud: if this module ever were loaded twice, a scrubbed
+ * error crossing from one instance's guard into the other's would be scrubbed
+ * again rather than passed through — a second log line, and the errno downgrade
+ * `tests/store-guard-idempotent.test.ts` pins. The early return in
+ * `guardDbStore` still covers the double-wrapped case, and one process loading
+ * two copies of the store layer is a bigger problem than this. Unforgeable was
+ * the trade worth making.
  */
-const SCRUBBED = Symbol.for("spideryarn.scrubbedDbError");
+const SCRUBBED = Symbol("spideryarn.scrubbedDbError");
+
+/**
+ * **Is this an error this file made, that nothing has touched since?**
+ *
+ * Both halves are load-bearing, and each was a way through until 2026-09-03:
+ *
+ * - `Object.hasOwn` rather than `SCRUBBED in err`, because `in` walks the
+ *   prototype chain — so `Object.create(scrubbedError)` inherits the mark and
+ *   can put its own `message` over the top, no forgery required.
+ * - `Object.isFrozen`, because the mark alone says only *this was scrubbed
+ *   once*. A guarded outer store that caught an inner store's scrubbed error
+ *   and rewrote its `message` — or hung an enumerable field on it, which is
+ *   exactly how Drizzle's `params` reach a response body — would still be
+ *   carrying the mark. `scrubDbError` freezes what it builds, so the assertion
+ *   here is the one this file actually needs to make.
+ */
+function alreadyScrubbed(err: unknown): boolean {
+  return (
+    err !== null && typeof err === "object" && Object.hasOwn(err, SCRUBBED) && Object.isFrozen(err)
+  );
+}
 
 /** May this error go out as it is? See the header — it is an allowlist. */
 function mayPassThrough(err: unknown): boolean {
   /* Something this file already scrubbed, coming back through a second guard —
      see `SCRUBBED` above. It is safe by construction and its diagnostic has
      been written, so passing it keeps one failure to one log line. */
-  if (err !== null && typeof err === "object" && SCRUBBED in (err as object)) return true;
+  if (alreadyScrubbed(err)) return true;
   if (err instanceof ChatConflict) return true;
   /* The checkpoint store refusing its own arguments — a bad key, the wrong
      slug, a value that will not serialise. None of these reached the database,
@@ -373,7 +422,15 @@ function mayPassThrough(err: unknown): boolean {
      `checkProduct` in src/store/session.ts. Its message names a step and the
      artefact kinds it declared, both closed unions of ours. See the header. */
   if (err instanceof ProductRefused) return true;
-  return typeof (err as { status?: unknown }).status === "number";
+  /* **Optional, because `throw null` and `throw undefined` are legal**, and a
+     bare `.status` on either raised `TypeError: Cannot read properties of null
+     (reading 'status')` from inside the scrubber until 2026-09-03 — the same
+     shape of failure `sqlstateOf` documents above, and with the same result:
+     the classification, the `[db-*]` code and the diagnostic line all gone,
+     while a test asking only "is the sentinel absent" stays green because a
+     crash removes it perfectly. Found by GPT Sol; tests/db-error-scrub.test.ts
+     asserts the sentence. */
+  return typeof (err as { status?: unknown } | null | undefined)?.status === "number";
 }
 
 /**
@@ -399,7 +456,19 @@ function scrubDbError(where: string, err: unknown): unknown {
      `safeError`, a JSON response — can see it or carry it anywhere. */
   Object.defineProperty(scrubbed, SCRUBBED, { value: true, enumerable: false });
   const frames = framesOf(err);
-  if (frames) scrubbed.stack = `${scrubbed.name}: ${scrubbed.message}\n${frames}`;
+  /* `defineProperty` rather than `scrubbed.stack = …`, and it is not style.
+     V8 gives an `Error` an own *accessor* `stack`, and `Object.freeze` below
+     makes an accessor non-configurable while leaving its **setter working** —
+     so a plain assignment would leave `stack` the one field of a frozen error
+     somebody could still rewrite. Probed on node 26, 2026-09-03. Reading
+     `scrubbed.stack` first is what keeps the no-frames case (the scrubber's own
+     frames, whose message line is our constant) rather than dropping it. */
+  Object.defineProperty(scrubbed, "stack", {
+    value: frames ? `${scrubbed.name}: ${scrubbed.message}\n${frames}` : scrubbed.stack,
+    writable: false,
+    enumerable: false,
+    configurable: false,
+  });
   /* Only when it is a SQLSTATE. `err.code` on a `pg` connection failure can be
      `ENOENT` (a unix socket that is not there), and src/routes.ts reads exactly
      that value to answer 404 — so copying it blindly would turn "the database
@@ -426,7 +495,16 @@ function scrubDbError(where: string, err: unknown): unknown {
     "database call failed",
   );
 
-  return scrubbed;
+  /* **Last, and after everything is on it.** The mark above says "this file
+     made this"; the freeze is what lets `alreadyScrubbed` also say "and nothing
+     has changed it since", which is the claim the pass-through at the top of
+     `mayPassThrough` actually rests on. Nothing downstream mutates a store's
+     error — `safeError` (src/log.ts) and `sanitise` (src/monitoring-scrub.ts)
+     both copy — so the cost is only that a future caller which tried would get
+     a `TypeError` out of its own `catch` block. That is the loud failure, and
+     it is the one we want: the quiet version is a sentinel in a response body.
+     tests/store-guard-idempotent.test.ts. */
+  return Object.freeze(scrubbed);
 }
 
 /**
@@ -472,12 +550,34 @@ export function isGuardedStore(store: unknown): string | undefined {
  * the inner one carrying the real SQLSTATE, table and constraint, and an outer
  * one carrying none of them and reporting `errorType: "StoreFailure"` — a log
  * line that says the database failed and names our own wrapper as the thing
- * that failed. The caller-facing contract survived intact (the SQLSTATE is
- * preserved through both layers, so the 404/409 mapping in
- * docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md was never at
- * risk), which is exactly what made it survive: nothing went red, and the
- * damage was only to the diagnostics somebody would read while chasing
- * something else.
+ * that failed.
+ *
+ * **And the caller saw it too, which is the half we first got wrong.** The
+ * SQLSTATE does survive both layers — it is copied onto the scrubbed error as
+ * `code`, so the 404/409 mapping in
+ * docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md was never at risk
+ * — and that is what made this look cosmetic. An **errno** does not survive,
+ * and deliberately never did: `scrubDbError` copies `code` only when it is a
+ * SQLSTATE, because an `ENOENT` would otherwise become a 404. So a second
+ * scrub saw nothing transient left and turned `STORAGE_BUSY` ("wait a few
+ * seconds") into `STORAGE_FAILED` ("a bug; trying again will not help"), which
+ * src/jobs.ts persists as `bug` and which takes the Retry button off the
+ * reader's card. Measured by GPT Sol on the parent commit, 2026-09-03.
+ *
+ * **Two things stop it today, and they are not symmetric** — which is worth
+ * knowing before anybody "simplifies" one of them away. Measured by disabling
+ * each in turn against `tests/store-guard-idempotent.test.ts`, 2026-09-03:
+ *
+ * - The **`SCRUBBED` mark** on the error covers both shapes on its own. Take it
+ *   away and the two-different-guarded-stores test goes red; the early return
+ *   cannot see that shape, because it is an identity check on one object.
+ * - This **early return** covers only the same-object shape, so taking it away
+ *   leaves both errno tests green. What it uniquely buys is the object itself:
+ *   the caller keeps the very same store, so there is no second wrapper layer
+ *   and the inner seam's name survives on the mark. That is the one test that
+ *   goes red without it.
+ *
+ * So the mark is the load-bearing half and this is the narrower belt. Both stay.
  *
  * The docstring below the mark used to say *"so wrapping a wrapped store stays
  * harmless"*. It meant only that the wrapper's own `Object.entries` loop cannot
@@ -493,9 +593,12 @@ export function isGuardedStore(store: unknown): string | undefined {
  * `tests/store-guard-idempotent.test.ts`.
  */
 export function guardDbStore<T extends object>(what: string, store: T): T {
-  /* Already guarded — hand it straight back. See the header above: the second
-     wrapper does not change what the caller sees, only what the log says, and
-     what it says is wrong. */
+  /* Already guarded — hand it straight back. See the docstring above: a second
+     wrapper writes a second, degraded `database call failed` line, and it would
+     downgrade an errno-transient failure to a permanent one — `STORAGE_BUSY` to
+     `STORAGE_FAILED`, and the reader's Retry button with it. The `SCRUBBED`
+     mark stops that too, and stops it in the shape this cannot reach; what only
+     this can do is hand back the same object, so the inner seam's name lives. */
   if (isGuardedStore(store) !== undefined) return store;
 
   const guarded: Record<string, unknown> = {};
