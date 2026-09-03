@@ -1,9 +1,10 @@
 # Background PDF upload, so Add does not wait for the bytes
 
-**Status as of 2026-09-03: revised after GPT Sol's plan review, not built** — evidence:
-`src/web/UploadPicker.tsx` still holds the `File` in a ref and aborts on unmount; `uploadPdf` in
-`src/web/upload.ts` still resolves only after the PUT; `queueAnUpload` in `src/routes.ts` still
-enqueues without asking Storage whether the object is there.
+**Status as of 2026-09-03: built and green, not yet reviewed as code, not yet seen in a browser** —
+evidence: `src/web/uploadEngine.ts` exists and `tests/upload-engine.test.ts`,
+`tests/add-does-not-wait-for-the-upload.test.tsx` and
+`tests/an-upload-is-queued-only-once-its-bytes-arrive.test.ts` are green, as is
+`npm run typecheck`; the last two stages below are unticked.
 
 The review is at
 [260903j-…-review-sol.md](260903j-background-pdf-upload-so-add-does-not-wait-review-sol.md); its
@@ -310,97 +311,97 @@ three of eighteen for the reviewer because minting answered 500 in its sandbox. 
 Frontloaded, because everything else is unsafe without it and it stands on its own — it makes
 `POST /api/jobs {uploadId}` refuse a file that is not there, which is right today as well.
 
-- [ ] Failing tests first, in `tests/uploads-api.test.ts` or a sibling:
-  - [ ] `POST /api/jobs {uploadId}` with **no staging object** answers 409 with the *not arrived*
+- [x] Failing tests first, in `tests/uploads-api.test.ts` or a sibling:
+  - [x] `POST /api/jobs {uploadId}` with **no staging object** answers 409 with the *not arrived*
         reason, claims nothing, enqueues nothing, and reserves no slot.
-  - [ ] the same call **with** the object, and an **expired** grant, succeeds — the object is the
+  - [x] the same call **with** the object, and an **expired** grant, succeeds — the object is the
         readiness state and the expiry has nothing left to protect.
-  - [ ] an upload that already has a job is answered with that job **without** taking a slot (the
+  - [x] an upload that already has a job is answered with that job **without** taking a slot (the
         402 race: one slot left, an upload already queued).
-  - [ ] a cancelled/never-finished upload can never be turned into a job, however many times the
+  - [x] a cancelled/never-finished upload can never be turned into a job, however many times the
         address is reloaded.
-- [ ] `queueAnUpload`: `head` first; `resolveExistingUpload` split out and called before
+- [x] `queueAnUpload`: `head` first; `resolveExistingUpload` split out and called before
       `withIngestSlot` in the route; the grant-expiry refusal narrowed to *no object*.
-- [ ] `publicUpload` gains `arrived: boolean` from the same `head`, so `GET /api/uploads/:id` is what
+- [x] `publicUpload` gains `arrived: boolean` from the same `head`, so `GET /api/uploads/:id` is what
       a waiting page polls rather than re-POSTing a mutation on a loop.
-- [ ] New copy for the *not arrived yet* refusal — [copy.md](../project/copy.md), with its bracketed
+- [x] New copy for the *not arrived yet* refusal — [copy.md](../project/copy.md), with its bracketed
       code.
-- [ ] Green: the new tests, `npm test`, `npm run typecheck`.
+- [x] Green: the new tests, `npm test`, `npm run typecheck`.
 
 ### Stage: the failing client tests
 
-- [ ] `tests/upload-engine.test.ts` — no React. `createUploadEngine` with a posed grant endpoint, a
+- [x] `tests/upload-engine.test.ts` — no React. `createUploadEngine` with a posed grant endpoint, a
       posed `put`, and a posed `send`:
-  - [ ] `start(file)` resolves with the upload id **before** the PUT resolves
-  - [ ] progress is reported to subscribers as the PUT reports it
-  - [ ] `POST /api/jobs {uploadId}` fires when the PUT resolves, **with no subscriber mounted**
-  - [ ] a failure in **queueing** retries the POST only, never the PUT
-  - [ ] a failure in **sending** re-PUTs, and a duplicate at our own staging key is treated as *the
+  - [x] `start(file)` resolves with the upload id **before** the PUT resolves
+  - [x] progress is reported to subscribers as the PUT reports it
+  - [x] `POST /api/jobs {uploadId}` fires when the PUT resolves, **with no subscriber mounted**
+  - [x] a failure in **queueing** retries the POST only, never the PUT
+  - [x] a failure in **sending** re-PUTs, and a duplicate at our own staging key is treated as *the
         bytes landed* and goes on to queue
-  - [ ] `cancel()` aborts the PUT and posts nothing; the transfer is `cancelled`, not gone
-  - [ ] a second `start()` while one is in flight is refused, with a sentence
-  - [ ] the `article` outcome (retention has taken the job) is recorded as such, not as a job
-  - [ ] `stop()` on sign-out aborts the transfer and drops it; a POST that lands after it is fenced
+  - [x] `cancel()` aborts the PUT and posts nothing; the transfer is `cancelled`, not gone
+  - [x] a second `start()` while one is in flight is refused, with a sentence
+  - [x] the `article` outcome (retention has taken the job) is recorded as such, not as a job
+  - [x] `stop()` on sign-out aborts the transfer and drops it; a POST that lands after it is fenced
         and does not reach the next reader
-  - [ ] the queue POST reports through `jobEngine.actionSucceeded/actionFailed` with a captured
+  - [x] the queue POST reports through `jobEngine.actionSucceeded/actionFailed` with a captured
         epoch, and **never** calls `jobEngine.start`
-- [ ] `tests/add-does-not-wait-for-the-upload.test.tsx` — jsdom, the headline behaviour: choose a
+- [x] `tests/add-does-not-wait-for-the-upload.test.tsx` — jsdom, the headline behaviour: choose a
       file, press **Add**, assert the router has been sent to `/add/upload/<id>` while the posed PUT
       is still pending. Red before the work, green after.
-- [ ] `tests/upload-survives-leaving-the-shelf.test.tsx` — mount the add box, start a transfer,
+- [x] `tests/upload-survives-leaving-the-shelf.test.tsx` — mount the add box, start a transfer,
       unmount it, resolve the PUT, assert `/api/jobs` was still posted. This is the one that pins
       the deleted abort-on-unmount, so it must be red first for the right reason.
-- [ ] Run them and read the failures. A test that was never red proves nothing
+- [x] Run them and read the failures. A test that was never red proves nothing
       ([silent-success.md](../reusable/silent-success.md)).
 
 ### Stage: the upload engine
 
-- [ ] `src/web/upload.ts`: split the exports — `requestGrant(file, signal)` and
+- [x] `src/web/upload.ts`: split the exports — `requestGrant(file, signal)` and
       `putFile(grant, file, {onProgress, signal})` — with `put`'s thrown error carrying the real
       status. `uploadPdf` either goes or becomes the two of them in sequence. Transport behaviour
       unchanged; `tests/` for `realStatus` and `uploadFailure` must stay green untouched.
-- [ ] `src/web/uploadEngine.ts` — `createUploadEngine(deps)` and the singleton, modelled on
+- [x] `src/web/uploadEngine.ts` — `createUploadEngine(deps)` and the singleton, modelled on
       `jobEngine.ts`.
-  - [ ] One transfer at a time. State: `hashing` → `granting` → `sending` (bytes) → `queueing` →
+  - [x] One transfer at a time. State: `hashing` → `granting` → `sending` (bytes) → `queueing` →
         `queued { jobId }` | `article { slug }` | `failed { phase, reason, retryable }` |
         `cancelled`.
-  - [ ] Holds the `File`, the grant, the `AbortController`, and the reader it belongs to.
-  - [ ] `start(readerId)`, `stop()`, `send(file)`, `cancel()`, `retry()`, `forget()`, `subscribe`,
+  - [x] Holds the `File`, the grant, the `AbortController`, and the reader it belongs to.
+  - [x] `start(readerId)`, `stop()`, `send(file)`, `cancel()`, `retry()`, `forget()`, `subscribe`,
         `getSnapshot`, `reset()`.
-  - [ ] Snapshot referentially stable between changes — `experimental-store.ts` § *the snapshot must
+  - [x] Snapshot referentially stable between changes — `experimental-store.ts` § *the snapshot must
         be referentially stable* has the trap.
-  - [ ] `beforeunload` registered on entering `hashing` and removed on every terminal state.
-- [ ] `src/web/useUpload.ts` — the `useSyncExternalStore` wrapper, beside `useJobs.ts`.
-- [ ] `useJobSession` gains `uploadEngine.start(readerId)` / `stop()`.
-- [ ] Green: `tests/upload-engine.test.ts`, `npm run typecheck`.
+  - [x] `beforeunload` registered on entering `hashing` and removed on every terminal state.
+- [x] `src/web/useUpload.ts` — the `useSyncExternalStore` wrapper, beside `useJobs.ts`.
+- [x] `useJobSession` gains `uploadEngine.start(readerId)` / `stop()`.
+- [x] Green: `tests/upload-engine.test.ts`, `npm run typecheck`.
 
 ### Stage: the shelf commits and leaves
 
-- [ ] `UploadPicker.tsx`: keep `chosen`, `problem`, the drag counter and `take`; delete `sent`,
+- [x] `UploadPicker.tsx`: keep `chosen`, `problem`, the drag counter and `take`; delete `sent`,
       `sending`, `abort`, the `file` ref and the unmount abort. The progress row renders the engine's
       snapshot, so it is there whenever the reader comes back to the shelf.
-  - [ ] The filename in the progress row links to `/add/upload/<id>`.
-  - [ ] A drop still commits immediately, through the engine.
-  - [ ] The `x`: cancels a live transfer; calls `forget()` on a terminal one; forgets the chosen file
+  - [x] The filename in the progress row links to `/add/upload/<id>`.
+  - [x] A drop still commits immediately, through the engine.
+  - [x] The `x`: cancels a live transfer; calls `forget()` on a terminal one; forgets the chosen file
         when there is no transfer at all. One button, and every state it can be in has an answer.
-- [ ] `AddArticle.tsx`: `disabled={!slug && !chosen}`; a `lastTouched` of `"url" | "file"`; `submit`
+- [x] `AddArticle.tsx`: `disabled={!slug && !chosen}`; a `lastTouched` of `"url" | "file"`; `submit`
       acts on it; the label reads *Add* or *Add PDF*; *Send it* deleted.
-- [ ] Green: the two jsdom tests. `npm test`, `npm run typecheck`.
+- [x] Green: the two jsdom tests. `npm test`, `npm run typecheck`.
 
 ### Stage: the add page watches the transfer
 
-- [ ] `AddPage.tsx`, upload arm only: if the engine has a transfer for this id, defer to it entirely —
+- [x] `AddPage.tsx`, upload arm only: if the engine has a transfer for this id, defer to it entirely —
       render the filename, the progress bar, the sending sentence, a Stop, and the phase-specific
       *Try again*; take `started` from the engine's outcome.
-- [ ] If it does not — a reload, a second tab — POST, and on the *not arrived* 409 **wait**: poll
+- [x] If it does not — a reload, a second tab — POST, and on the *not arrived* 409 **wait**: poll
       `GET /api/uploads/:id` and post when `arrived`. Stop when the grant has expired with no object,
       and say so: that transfer is not coming back, choose the file again. Render `cancelled` as
       itself rather than polling at it.
-- [ ] Quota and content refusals from the queue POST render here, through `QuotaNotice`, with the
+- [x] Quota and content refusals from the queue POST render here, through `QuotaNotice`, with the
       existing `worthRetrying` rule deciding whether *Try again* appears at all.
-- [ ] New copy, in the module that owns each: the sending sentence, the still-arriving sentence, the
+- [x] New copy, in the module that owns each: the sending sentence, the still-arriving sentence, the
       second-file refusal. [copy.md](../project/copy.md).
-- [ ] Green: `npm test`, `npm run typecheck`, `npm run check`. `npm run lint` on the touched files.
+- [x] Green: `npm test`, `npm run typecheck`, `npm run check`. `npm run lint` on the touched files.
 
 ### Stage: see it work, and write it down
 
@@ -418,12 +419,12 @@ Frontloaded, because everything else is unsafe without it and it stands on its o
   6. press the `x` mid-transfer, then reload the address — nothing is ever queued;
   7. the console is clean throughout.
   - Tell it to kill its own dev-server PID, never `pkill -f vite`.
-- [ ] Rewrite [ingest-queue.md § Uploading a PDF](../project/ingest-queue.md#uploading-a-pdf): the
+- [x] Rewrite [ingest-queue.md § Uploading a PDF](../project/ingest-queue.md#uploading-a-pdf): the
       *"the upload is not the ingest, and they happen in different places"* paragraph is now wrong in
       its second half, the three-line request diagram needs the navigation moved, and the readiness
       gate is a fifth *thing that is not obvious*.
-- [ ] Add the engine to [web-client.md](../project/web-client.md) beside `jobEngine`.
-- [ ] Note the uncalled `sweepable` leak where it belongs — a line in ingest-queue.md, not a new doc.
+- [x] Add the engine to [web-client.md](../project/web-client.md) beside `jobEngine`.
+- [x] Note the uncalled `sweepable` leak where it belongs — a line in ingest-queue.md, not a new doc.
 - [ ] Stop and review with Greg.
 
 ### Stage: the pre-existing 409, if Greg wants it now
@@ -448,6 +449,38 @@ It matters more here only because the file being re-uploaded is, by construction
 - [ ] Work each finding, then `npm test`, `npm run typecheck`, `npm run check`.
 - [ ] Test consolidation pass in a subagent: four new test files is probably two too many.
 - [ ] Commit per stage; push to `dev`.
+
+## Watched red, and what the mutations found
+
+Every gate here was made to fail before it was trusted, one mutation at a time.
+
+| mutation | what went red |
+| --- | --- |
+| the `uploadHasArrived` call deleted from the route | 4 cases in `an-upload-is-queued-…`, each answering 202 and queueing a job over a file that was not there |
+| the gate moved **ahead** of `resolveExistingUpload` | 2 cases: a never-minted id answered 409 instead of 404, and a repeat claim whose object had been swept could not find its own ingest |
+| `resolveExistingUpload` deleted, so the repeat falls back inside `withIngestSlot` | `billing-admission`: *"the reload spent a slot of its own: expected `{taken: 2, inFlight: 1}` to deeply equal `{taken: 1, inFlight: 1}`"*. **`inFlight` 1, not 2** — the loser's reservation *is* released, so the leak is invisible to every count except the lifetime one, which is the count a free reader has three of |
+| the abort-on-unmount put back in `UploadPicker` | `add-does-not-wait-…`: the PUT rejected with an `AbortError` and `/api/jobs` was never posted |
+
+**Two bugs the tests found rather than the review.**
+
+- **The fence was a session generation, and a cancel did not move it.** Pressing Stop while the
+  grant request was still out left nothing to stop the grant: it arrived a second later, found the
+  fence unchanged, and started a 40 MB PUT for a transfer the reader had already cancelled — nothing
+  rendered it and nothing could stop it again. `fence` is now bumped by all four of `stop`, `send`,
+  `cancel` and `retry`.
+- **`npm run check`'s `committed` gate typechecks HEAD, not the working tree.** The first commit
+  split `upload.ts`'s exports without its caller, so HEAD did not compile for one commit even though
+  the tree did. Worth knowing: a stage boundary has to leave HEAD buildable, not just the tree.
+
+**Three tests already in the suite were queueing uploads whose bytes had never arrived** — three
+recovery cases in `uploads-api.test.ts` and one in `billing-admission.test.ts`. They land the object
+now. That they existed at all is the clearest evidence the gate was missing: the old code let a job
+be queued for a file that was never uploaded, and nothing minded.
+
+**One piece of the review's evidence does not carry.** `npx vitest run tests/uploads-api.test.ts`
+failed three of eighteen for the reviewer because minting answered 500 in its sandbox; the same file
+is 18/18 here. `VERCEL=1` also switches minting off (`recordsSurviveTheRequest`), which is the trap,
+and the new suite's `mint` helper now unsets it around its own call so no case has to remember.
 
 ## Appendix: the risks worth naming early
 
