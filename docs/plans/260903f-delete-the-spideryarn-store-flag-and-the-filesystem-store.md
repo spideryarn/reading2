@@ -16,12 +16,14 @@ on Greg's decision** — see stage T. That is the largest change to its shape si
 three later stages consume it**:
 
 ```
-A (store inventory) ✅ → B0 → T-B (factory) → T-C (lanes) → T-D (activation) → T-E (pollution)
+A (store inventory) ✅ → B0 ✅ (already landed) → T-B (factory) → T-C (lanes) → T-D (activation) → T-E (pollution)
   → C → B → D → E → F (hinge) → G → H → I
 ```
 
 **Stage A is done.** Both witnesses are built, the registry is checked in with 93 classified entries,
-and its guard has been watched failing four different ways. **B0 is next**, and it needs a quiet box.
+and its guard has been watched failing four different ways. **B0 turned out to be already done** —
+it landed on 2026-09-01 and the docstring that said otherwise was stale; see stage B0. **T-B is
+next.**
 
 The `pdf` spike is independent and can happen any time before E.
 **All of D′ is off the list: D′1 is landed, D′2 was scheduled twice, D′3 is cancelled.**
@@ -587,39 +589,41 @@ route families to 260903e's Stage C list rather than discovering them one at a t
 Acceptable because keys are content-addressed, but it is a stated limitation, not a thing a reader
 should find out.
 
-### B0 — take `RUN_LOCK` off the seed window, first, on its own
+### B0 — take `RUN_LOCK` off the seed window — **already done, and this plan was wrong about it**
 
-**Found at the start of the build, and the repo had already done the hard half.**
-[`tests/helpers/scratch-article.ts`](../../tests/helpers/scratch-article.ts) records its own
-measurement, 2026-09-01, 16 concurrent processes each seeding a **uniquely named** article:
+**Nothing to build. It landed on 2026-09-01 in `df7a7980`, two days before this plan was written.**
+`LoadOptions.serialise` defaults to `false`, and `withRunLock` has exactly one caller in the tree —
+[`load-article.ts`](../../tests/helpers/load-article.ts) § `withRunningJob`, gated on that flag. The
+four places that pass `true` are all legitimate and none of them is the seed path B multiplies:
+`store-parity` (×2) and `store-roundtrip`, which load a **fixed** slug; the suite that tests the
+option itself; and `scripts/db-seed-dev.ts`, which is a dev script rather than part of the run.
+`tests/helpers/scratch-article.ts` — the helper the ~48 converted suites use — never passes it.
 
-```
-with the lock     max seed 4.9–6.1s   (the last one waits for fifteen turns)
-without the lock  max seed 1.0–2.0s
-```
+**So the 16-process measurement this stage called for was not needed**, and running it would have
+measured a change that was already in the tree.
 
-`loadArticleIntoPg` takes `RUN_LOCK` around its load window, which serialises **every seed in the
-whole test run**. The one thing that genuinely needed it is fixed at the source: N clones of one
-corpus article share a `raw_sources` row keyed `(sha256, kind)`, and the old
-`select … for update` locked nothing over zero rows, so all but one clone lost its transaction to a
-duplicate key. `writeRawSource` is now conflict-tolerant and reads the row back
-([`artifacts-pg.ts`](../../src/store/artifacts-pg.ts), `tests/store-raw-source-race.test.ts`). The
-docstring's own conclusion: *"for these suites the lock really is pure queue. It is kept anyway for
-now, because removing it is a change to `loadArticleIntoPg`'s contract and belongs in one deliberate
-commit rather than as a side effect of converting a test file."*
+**Why we believed otherwise, which is the part worth keeping.** `scratch-article.ts`'s own docstring
+opened *"`loadArticleIntoPg` takes `RUN_LOCK` around its load window, which serialises every seed in
+the whole test run"* and closed *"It is kept anyway for now, because removing it is a change to
+`loadArticleIntoPg`'s contract and belongs in one deliberate commit."* Both sentences were false the
+moment they were written: `df7a7980` flipped the default **and** wrote that paragraph, updating its
+middle and leaving its top and tail describing the world before the flip.
 
-**This is that commit, and B is why it is now worth making.** B multiplies the number of suites that
-seed; doing it after B means paying the queue through the whole conversion and then re-measuring
-everything.
+It then stayed wrong for two days and was read as fact by this plan, by the brief that drew stage B0
+out of it, and by a review that did not challenge it. **The class is a comment that survives the
+change it describes** — the same shape as [silent-success](../reusable/silent-success.md), one level
+up: not a check that agrees with the bug, but *prose* that agrees with the code it used to describe.
+The tell was available cheaply — `grep -rn "serialise: true"` returns four lines and none of them is
+this file — and the lesson for the rest of this plan is to **grep the call sites before believing a
+docstring's account of them**, especially where the plan's next stage depends on the answer.
 
-**It is measured, not reasoned.** Re-run the 16-process concurrent-seed experiment before and after
-on a **quiet box** — a measurement taken at load 144 says nothing, and this box reached that on
-2026-09-03 with two suites running. Ten runs after, not one: the failure it used to have was a lost
-race, and a race that does not fire is indistinguishable from one that cannot.
+Fixed in the same commit as this note: the docstring now says what the code does, and records that
+it was wrong and for how long, so the next reader is not the fourth to be misled.
 
-**And it is the one change here that can hurt other agents**, since every worktree shares this
-helper and a flaky seed would surface as somebody else's unrelated red. If the measurement is not
-clean, leave the lock alone and say so — B is slower, not blocked.
+**What B0 changes for the stages after it: nothing.** B was already going to get the unserialised
+seed. The ~19–24s of serial demand that `load-article.ts` warns about is a description of what
+`serialise: true` *would* cost at B's scale, not a debt B has to pay.
+
 
 ### B — convert the ungated route suites (parallelisable)
 

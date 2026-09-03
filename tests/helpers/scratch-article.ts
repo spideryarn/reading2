@@ -37,11 +37,14 @@
  * that loader, so the zero-copy refusal, the raw-source check and the publish
  * guards all still run. There is no second path here to keep honest.
  *
- * ## The lock, and what it costs
+ * ## The lock, and why these seeds do not take it
  *
- * `loadArticleIntoPg` takes `RUN_LOCK` (./run-lock.ts) around its load window,
- * which serialises every seed in the whole test run. Measured 2026-09-01, 16
- * concurrent processes each seeding one *uniquely named* article:
+ * `loadArticleIntoPg` **can** take `RUN_LOCK` (./run-lock.ts) around its load
+ * window, and when it does it serialises that seed against every other suite
+ * holding the same key. **Nothing here asks it to**, and that is deliberate:
+ * `serialise` defaults to `false` (./load-article.ts § `LoadOptions.serialise`)
+ * and this file never passes it. Measured 2026-09-01, 16 concurrent processes
+ * each seeding one *uniquely named* article:
  *
  * ```
  * with the lock     max seed 4.9–6.1s   (the last one waits for fifteen turns)
@@ -65,11 +68,16 @@
  *
  * That is fixed at the source: the insert is conflict-tolerant and the row is
  * read back and compared (src/store/artifacts-pg.ts § `writeRawSource`,
- * tests/store-raw-source-race.test.ts). So the shared row is now genuinely safe
- * unserialised, and for these suites the lock really is pure queue. It is kept
- * anyway for now, because removing it is a change to `loadArticleIntoPg`'s
- * contract and belongs in one deliberate commit rather than as a side effect of
- * converting a test file.
+ * tests/store-raw-source-race.test.ts). So the shared row is genuinely safe
+ * unserialised, and these seeds run without the queue.
+ *
+ * **This paragraph used to end by saying the lock was "kept anyway for now".**
+ * It was not: the same commit that wrote the rest of it (`df7a7980`, 2026-09-01)
+ * flipped `serialise` to opt-in, and only the top and tail of the text were left
+ * describing the world before the flip. It stayed wrong for two days and was
+ * believed by a plan and by its reviewer —
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § B0.
  */
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
