@@ -105,8 +105,12 @@ import {
   type Guards,
   defaultConfigHome,
   defaultProposalCall,
+  type EnvPlan,
+  type EnvPlanDeps,
   EnvPolicyError,
   extractEnvKeyNames,
+  pushEnvPlan,
+  type SavedPolicy,
   KEY_CLASSES,
   makeProposalCall,
   MAX_NAMES,
@@ -153,6 +157,8 @@ function checklistInput(over: Partial<ChecklistInput> = {}): ChecklistInput {
     names: [],
     proposal: undefined,
     approved: undefined,
+    reviewed: undefined,
+    savedAt: undefined,
     preTick: "proposal",
     forbiddenNames: new Set(FORBIDDEN_NAMES),
     valueGuard: allLocal,
@@ -231,7 +237,7 @@ describe("no value reaches any sink", () => {
     // Sink 5: the file that gets written, through the real writer.
     const home = tempDir();
     const file = policyPath("gregdetre/hellozenno", home);
-    writePolicy(file, { repo: "gregdetre/hellozenno", approved: names }, new Date(0));
+    writePolicy(file, { repo: "gregdetre/hellozenno", approved: names, reviewed: names }, new Date(0));
     forbidden(readFileSync(file, "utf8"), "the saved policy");
     forbidden(JSON.stringify(readPolicy(file, "gregdetre/hellozenno")), "the policy read back");
 
@@ -247,7 +253,7 @@ describe("no value reaches any sink", () => {
     capture(() => extractEnvKeyNames(`${text}\n${"=".repeat(3)}${sentinels[0]}`));
     capture(() => buildProposalRequest([]));
     capture(() => buildProposalRequest(Array.from({ length: MAX_NAMES + 1 }, (_, i) => `K${i}`)));
-    capture(() => serialisePolicy({ repo: "gregdetre/hellozenno", approved: ["not a name"] }, new Date(0)));
+    capture(() => serialisePolicy({ repo: "gregdetre/hellozenno", approved: ["not a name"], reviewed: ["not a name"] }, new Date(0)));
     capture(() => policyPath("unknown", home));
     // The model's reply is malformed in the two ways a reply can be.
     expect(readProposalContent({ choices: [{ message: { content: "not json {" } }] }).ok).toBe(false);
@@ -784,7 +790,7 @@ describe("writePolicy", () => {
   it("writes 0600 into a 0700 directory and reads back what it wrote", () => {
     const home = tempDir();
     const file = policyPath(repo, home);
-    writePolicy(file, { repo, approved: ["BETA", "ALPHA"] }, when);
+    writePolicy(file, { repo, approved: ["BETA", "ALPHA"], reviewed: ["BETA", "ALPHA", "GAMMA"] }, when);
     expect(statSync(file).mode & 0o777).toBe(0o600);
     expect(statSync(path.dirname(file)).mode & 0o777).toBe(0o700);
     const got = readPolicy(file, repo);
@@ -792,6 +798,7 @@ describe("writePolicy", () => {
       kind: "policy",
       repo,
       approved: ["ALPHA", "BETA"],
+      reviewed: ["ALPHA", "BETA", "GAMMA"],
       savedAt: "2026-09-02T11:22:33.000Z",
     });
   });
@@ -802,7 +809,7 @@ describe("writePolicy", () => {
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, "repo = \"x\"\n");
     chmodSync(file, 0o644);
-    writePolicy(file, { repo, approved: ["ALPHA"] }, when);
+    writePolicy(file, { repo, approved: ["ALPHA"], reviewed: ["ALPHA"] }, when);
     expect(statSync(file).mode & 0o777).toBe(0o600);
   });
 
@@ -813,7 +820,7 @@ describe("writePolicy", () => {
     const elsewhere = path.join(home, "elsewhere.toml");
     writeFileSync(elsewhere, "");
     symlinkSync(elsewhere, file);
-    expect(() => writePolicy(file, { repo, approved: ["ALPHA"] }, when)).toThrow(/symbolic link/);
+    expect(() => writePolicy(file, { repo, approved: ["ALPHA"], reviewed: ["ALPHA"] }, when)).toThrow(/symbolic link/);
     expect(readFileSync(elsewhere, "utf8")).toBe("");
   });
 
@@ -821,7 +828,7 @@ describe("writePolicy", () => {
     const home = tempDir();
     const file = policyPath(repo, home);
     expect(() =>
-      writePolicy(file, { repo, approved: ["ALPHA"] }, when, {
+      writePolicy(file, { repo, approved: ["ALPHA"], reviewed: ["ALPHA"] }, when, {
         write: (tempFile) => writeFileSync(tempFile, "repo = \"someone/else\"\n", { mode: 0o600 }),
       }),
     ).toThrow(/does not contain what was just written/);
@@ -831,7 +838,7 @@ describe("writePolicy", () => {
     const home = tempDir();
     const file = policyPath(repo, home);
     expect(() =>
-      writePolicy(file, { repo, approved: ["ALPHA"] }, when, {
+      writePolicy(file, { repo, approved: ["ALPHA"], reviewed: ["ALPHA"] }, when, {
         write: (tempFile) => {
           writeFileSync(tempFile, "half", { mode: 0o600 });
           throw new Error("disk went away");
@@ -842,7 +849,7 @@ describe("writePolicy", () => {
   });
 
   it("refuses a name that is not a variable name", () => {
-    expect(() => serialisePolicy({ repo, approved: ["not a name"] }, when)).toThrow(EnvPolicyError);
+    expect(() => serialisePolicy({ repo, approved: ["not a name"], reviewed: ["not a name"] }, when)).toThrow(EnvPolicyError);
   });
 });
 
@@ -878,5 +885,382 @@ describe("readPolicy is strict", () => {
     expect(got.kind).toBe("error");
     if (got.kind !== "error") return;
     expect(got.why).toContain("gregdetre/other");
+  });
+
+  /**
+   * **A file with no `reviewed` list is one written before that list existed.**
+   *
+   * The migration is `reviewed = approved`, which is the only reading that
+   * cannot change an answer: everything in the old file was a yes.
+   */
+  it("reads a policy written before 'reviewed' existed as having decided its approvals", () => {
+    const file = write(
+      'repo = "gregdetre/hellozenno"\nsaved_at = 2026-09-02T00:00:00Z\napproved = ["ALPHA", "BETA"]\n',
+    );
+    expect(readPolicy(file, repo)).toEqual({
+      kind: "policy",
+      repo,
+      approved: ["ALPHA", "BETA"],
+      reviewed: ["ALPHA", "BETA"],
+      savedAt: "2026-09-02T00:00:00.000Z",
+    });
+  });
+
+  it("refuses a file that approves a name it does not record as decided", () => {
+    const file = write(
+      'repo = "gregdetre/hellozenno"\nsaved_at = 2026-09-02T00:00:00Z\napproved = ["ALPHA"]\nreviewed = ["BETA"]\n',
+    );
+    const got = readPolicy(file, repo);
+    expect(got.kind).toBe("error");
+    if (got.kind !== "error") return;
+    expect(got.why).toContain("ALPHA");
+  });
+
+  it("refuses a 'reviewed' list that is not a list of names", () => {
+    const file = write(
+      'repo = "gregdetre/hellozenno"\nsaved_at = 2026-09-02T00:00:00Z\napproved = []\nreviewed = ["not a name"]\n',
+    );
+    expect(readPolicy(file, repo).kind).toBe("error");
+  });
+});
+
+/**
+ * **What the policy remembers, and the half of it that used to be forgotten.**
+ *
+ * GPT Sol's Stage 4 finding 1: the file held approvals only, so "I looked at
+ * this key and said no" and "I have never seen this key" were the same state.
+ * Every run re-proposed every unticked key — a paid call for an answer already
+ * given — and a model that changed its mind could pre-tick a key somebody had
+ * deliberately refused.
+ *
+ * These four are the whole of the fix, one test each: the decision survives, it
+ * outranks a later model, the invariant is enforced at both ends, and an old
+ * file still reads (above).
+ */
+describe("a decision the reader has already made", () => {
+  const savedAt = "2026-09-02T11:22:33.000Z";
+  const names = ["LOCAL_PORT", "SESSION_SECRET"];
+  /* The model calls the rejected key safe. Under the bug, `preTick: "proposal"`
+     ticked it back on. */
+  const proposal = new Map<string, ProposedKey>([
+    ["LOCAL_PORT", { class: "local-dev-only", reason: "a port" }],
+    ["SESSION_SECRET", { class: "local-dev-only", reason: "looks harmless to me" }],
+  ]);
+
+  function rows(over: Partial<ChecklistInput> = {}): Map<string, ChecklistItem> {
+    const items = planChecklist(
+      checklistInput({
+        names,
+        proposal,
+        approved: new Set(["LOCAL_PORT"]),
+        reviewed: new Set(names),
+        savedAt,
+        ...over,
+      }),
+    );
+    return new Map(items.map((i) => [i.name, i]));
+  }
+
+  it("stays unticked next time, whatever today's model calls it", () => {
+    const row = rows().get("SESSION_SECRET");
+    expect(row?.checked).toBe(false);
+    expect(row?.description).toContain("you unticked this on 2026-09-02");
+    // And the model's flattering reason is not repeated next to it, because a
+    // "this is harmless" beside a decision to refuse reads as an invitation.
+    expect(row?.description).not.toContain("looks harmless");
+  });
+
+  it("stays ticked next time, even when today's model calls it a secret", () => {
+    const row = rows({
+      proposal: new Map([["LOCAL_PORT", { class: "production-or-signing-secret", reason: "signs things" }]]),
+    }).get("LOCAL_PORT");
+    expect(row?.checked).toBe(true);
+  });
+
+  it("leaves a key nobody has decided about to the proposal", () => {
+    const row = rows({ names: [...names, "NEW_KEY"], proposal: new Map([...proposal, ["NEW_KEY", { class: "local-dev-only", reason: "new" }]]) }).get("NEW_KEY");
+    expect(row?.checked).toBe(true);
+    expect(row?.description).toContain("not sent before");
+  });
+
+  it("is still refused by the hard guards, decision or no decision", () => {
+    const forbidden = FORBIDDEN_NAMES[0] ?? "";
+    const row = rows({
+      names: [...names, forbidden],
+      approved: new Set(["LOCAL_PORT", forbidden]),
+      reviewed: new Set([...names, forbidden]),
+    }).get(forbidden);
+    expect(row?.disabled).toBe(true);
+    expect(row?.checked).toBe(false);
+  });
+
+  it("will not be written down as approved without being written down as decided", () => {
+    expect(() =>
+      serialisePolicy({ repo: "gregdetre/hellozenno", approved: ["ALPHA"], reviewed: ["BETA"] }, new Date(0)),
+    ).toThrow(/ALPHA/);
+  });
+});
+
+// ------------------------------------------------------ part 5: the whole plan
+
+/**
+ * **`pushEnvPlan` is `push-env` minus the ssh**, and this is where the value-leak
+ * property is finally checked end to end.
+ *
+ * The old transport test asserted that `sk-or-`, `postgres://` and `hunter2` were
+ * absent from the wire — and none of the three was ever in its inputs, so it was
+ * three assertions about nothing (GPT Sol's Stage 4 finding 2). The test below
+ * puts a distinct sentinel in every VALUE of a real `.env.local`, runs the whole
+ * decision through a real `withLedger` and a stubbed transport, and asserts that
+ * the only place any of them comes out is the payload for the box.
+ *
+ * Watched going red by appending the value to the row description in
+ * `planChecklist`: it failed on the rows sink, the `say` sink and the prompt
+ * sink at once, and on nothing else — which is why they are all in one `it`.
+ */
+describe("pushEnvPlan", () => {
+  const slug = "gregdetre/hellozenno";
+  const FORBIDDEN = FORBIDDEN_NAMES[0] ?? "HETZNER_CLOUD_API_TOKEN";
+  /** Selectable: the first three. Blocked: the hosted database URL by its value,
+   *  and the infrastructure token by its name. */
+  const ELIGIBLE = ["LOCAL_PORT", "OPENAI_API_KEY", "DATABASE_URL"];
+  const ALL_NAMES = [...ELIGIBLE, "DATABASE_URL_PROD", FORBIDDEN];
+  const S = {
+    port: "SENTINEL_VALUE_alpha11",
+    key: "SENTINEL_VALUE_bravo22",
+    localDb: "SENTINEL_VALUE_charlie33",
+    prodDb: "SENTINEL_VALUE_delta44",
+    token: "SENTINEL_VALUE_echo55",
+  };
+  const ENV = [
+    `LOCAL_PORT=${S.port}`,
+    `OPENAI_API_KEY=${S.key}`,
+    `DATABASE_URL=postgres://u:${S.localDb}@127.0.0.1:5432/x`,
+    `DATABASE_URL_PROD=postgres://u:${S.prodDb}@db.example.com:5432/x`,
+    `${FORBIDDEN}=${S.token}`,
+    "",
+  ].join("\n");
+
+  type Run = {
+    plan: EnvPlan;
+    /** What each injected callback was handed, and everything printed. */
+    asked: string[][];
+    offered: ChecklistItem[][];
+    confirmed: string[][];
+    said: string[];
+    sent: { url: string; body: string }[];
+    printed: string;
+    rows: { job: string; model: string; outcome: string }[];
+  };
+
+  /**
+   * One whole plan, with the paid call wired the way the CLI wires it: the real
+   * `proposeEnvKeys` over the real gateway and a real `withLedger`, with only
+   * `fetch` stubbed. The model answers about every name it could have been sent,
+   * so `parseProposal`'s subset rule is satisfied whatever the plan asked for.
+   */
+  async function runPlan(over: {
+    text?: string;
+    saved?: SavedPolicy;
+    flags?: Partial<EnvPlanDeps["flags"]>;
+    choose?: (items: readonly ChecklistItem[]) => Promise<readonly string[]>;
+    confirm?: boolean;
+  } = {}): Promise<Run> {
+    const asked: string[][] = [];
+    const offered: ChecklistItem[][] = [];
+    const confirmed: string[][] = [];
+    const said: string[] = [];
+    const sent: { url: string; body: string }[] = [];
+    const printed: string[] = [];
+    const content = JSON.stringify({
+      keys: ALL_NAMES.map((name) => ({ name, class: "local-dev-only", reason: "a fixture said so" })),
+    });
+    const fetchStub = vi.fn(async (url: unknown, init: unknown) => {
+      const body = typeof init === "object" && init !== null && "body" in init ? String(init.body) : "";
+      sent.push({ url: String(url), body });
+      return new Response(
+        JSON.stringify({
+          id: "gen-fixture",
+          model: PROPOSAL_MODEL,
+          choices: [{ message: { content } }],
+          usage: { prompt_tokens: 120, completion_tokens: 40, total_tokens: 160 },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    const realFetch = globalThis.fetch;
+    /* The rows THIS run wrote. A test that runs the plan twice must not see the
+       first run's row in the second run's answer, which is how "the second run
+       asked no model" passed while it asked one. */
+    const rowsBefore = recordedRows().length;
+    const spies = (["log", "warn", "error"] as const).map((m) =>
+      vi.spyOn(console, m).mockImplementation((...a: unknown[]) => void printed.push(a.join(" "))),
+    );
+    globalThis.fetch = fetchStub as unknown as typeof fetch;
+    try {
+      const plan = await pushEnvPlan({
+        text: over.text ?? ENV,
+        local: "/tmp/fixture/.env.local",
+        slug,
+        saved: over.saved ?? { kind: "absent" },
+        flags: { propose: false, all: false, none: false, save: false, yes: false, ...over.flags },
+        propose: async (names) => {
+          asked.push([...names]);
+          let outcome: Proposal | undefined;
+          await withLedger("cli", async () => {
+            outcome = await proposeEnvKeys(names, { call: defaultProposalCall });
+          });
+          return outcome?.ok === true ? outcome.proposal : undefined;
+        },
+        choose: async (items) => {
+          offered.push([...items]);
+          return over.choose === undefined
+            ? items.filter((i) => i.checked).map((i) => i.name)
+            : over.choose(items);
+        },
+        confirm: async (names) => {
+          confirmed.push([...names]);
+          return over.confirm ?? true;
+        },
+        say: (line) => void said.push(line),
+      });
+      return {
+        plan,
+        asked,
+        offered,
+        confirmed,
+        said,
+        sent,
+        printed: printed.join("\n"),
+        rows: recordedRows().slice(rowsBefore),
+      };
+    } finally {
+      globalThis.fetch = realFetch;
+      for (const s of spies) s.mockRestore();
+    }
+  }
+
+  it("lets a value out into the payload for the box and into nothing else", async () => {
+    const run = await runPlan();
+    const policyFile = policyPath(slug, tempDir());
+    expect(run.plan.policyToSave).toBeDefined();
+    if (run.plan.policyToSave !== undefined) writePolicy(policyFile, run.plan.policyToSave, new Date(0));
+
+    /* Every sink a value would have to come out of to have escaped: the names
+       the paid call was given, the bytes that reached the provider, the ledger
+       row, the rows the prompt drew, the names the confirmation named, every
+       line printed on either stream, and the file left on disk. */
+    const sinks: [string, string][] = [
+      ["the names the model was asked about", JSON.stringify(run.asked)],
+      ["the request that reached the provider", JSON.stringify(run.sent)],
+      ["the ledger row", JSON.stringify(run.rows)],
+      ["the checklist rows", JSON.stringify(run.offered)],
+      ["the confirmation", JSON.stringify(run.confirmed)],
+      ["what the plan printed", run.said.join("\n")],
+      ["what anything else printed", run.printed],
+      ["the saved policy", readFileSync(policyFile, "utf8")],
+      ["the plan's own answer", JSON.stringify({ ...run.plan, payload: undefined })],
+    ];
+    for (const [where, haystack] of sinks) {
+      for (const sentinel of Object.values(S)) {
+        expect(haystack, `${where} leaked ${sentinel}`).not.toContain(sentinel);
+      }
+    }
+
+    /* And the anti-vacuous half: the three eligible values ARE in the payload,
+       so the sentinels above are strings this test really did put in. */
+    const payload = run.plan.payload?.text ?? "";
+    expect(payload).toContain(S.port);
+    expect(payload).toContain(S.key);
+    expect(payload).toContain(S.localDb);
+    /* The two blocked ones are nowhere, the payload included. */
+    expect(payload).not.toContain(S.prodDb);
+    expect(payload).not.toContain(S.token);
+    expect(run.plan.send).toEqual(ELIGIBLE);
+    expect(run.rows).toHaveLength(1);
+  });
+
+  it("asks the model about every name, once, and only names", async () => {
+    const run = await runPlan();
+    expect(run.asked).toEqual([ALL_NAMES]);
+    expect(run.sent).toHaveLength(1);
+    expect(run.sent[0]?.body).toContain("LOCAL_PORT");
+  });
+
+  it("greys out the two hard guards rather than offering them", async () => {
+    const run = await runPlan();
+    const rows = run.offered[0] ?? [];
+    expect(rows.filter((r) => r.disabled).map((r) => r.name)).toEqual([FORBIDDEN, "DATABASE_URL_PROD"].sort((a, b) => ALL_NAMES.indexOf(a) - ALL_NAMES.indexOf(b)));
+    expect(selectableNames(rows)).toEqual(ELIGIBLE);
+  });
+
+  it("sends nothing and saves nothing when the confirmation is declined", async () => {
+    const run = await runPlan({ confirm: false });
+    expect(run.plan.send).toEqual([]);
+    expect(run.plan.payload).toBeUndefined();
+    expect(run.plan.policyToSave).toBeUndefined();
+  });
+
+  /**
+   * **`--none --save` is a real answer, and the next run must believe it.**
+   *
+   * This is GPT Sol's finding 1 end to end: the first run records "no" for every
+   * eligible key, and the second must neither ask the model nor pre-tick
+   * anything. Under the bug the policy read `approved = []`, which is
+   * indistinguishable from a repo nobody has ever answered for.
+   */
+  it("remembers a --none --save, and then asks no model at all", async () => {
+    const first = await runPlan({ flags: { none: true, save: true } });
+    expect(first.plan.send).toEqual([]);
+    expect(first.plan.payload).toBeUndefined();
+    expect(first.plan.policyToSave).toEqual({ repo: slug, approved: [], reviewed: ELIGIBLE });
+
+    // Round-tripped through the file rather than passed in memory, because the
+    // file is what the next run actually reads.
+    const file = policyPath(slug, tempDir());
+    if (first.plan.policyToSave !== undefined) writePolicy(file, first.plan.policyToSave, new Date(0));
+    const saved = readPolicy(file, slug);
+    expect(saved.kind).toBe("policy");
+    if (saved.kind !== "policy") return;
+
+    const second = await runPlan({ saved });
+    expect(second.asked).toEqual([]);
+    expect(second.sent).toEqual([]);
+    expect(second.rows).toEqual([]);
+    expect(second.said.join("\n")).toContain("skipping the model");
+    const rows = second.offered[0] ?? [];
+    expect(rows.filter((r) => r.checked)).toEqual([]);
+    expect(rows.find((r) => r.name === "LOCAL_PORT")?.description).toContain("you unticked this on 1970-01-01");
+  });
+
+  it("asks anyway under --propose, saved policy or not", async () => {
+    const file = policyPath(slug, tempDir());
+    writePolicy(file, { repo: slug, approved: [], reviewed: ELIGIBLE }, new Date(0));
+    const saved = readPolicy(file, slug);
+    if (saved.kind !== "policy") throw new Error("the fixture policy did not read back");
+    const run = await runPlan({ saved, flags: { propose: true } });
+    expect(run.asked).toEqual([ALL_NAMES]);
+  });
+
+  it("keeps the answer for a key that has since left the .env.local", async () => {
+    const file = policyPath(slug, tempDir());
+    writePolicy(file, { repo: slug, approved: ["GONE"], reviewed: ["GONE", "LOCAL_PORT"] }, new Date(0));
+    const saved = readPolicy(file, slug);
+    if (saved.kind !== "policy") throw new Error("the fixture policy did not read back");
+    const run = await runPlan({ saved, flags: { all: true, yes: true } });
+    // GONE was on no checklist, so nobody decided anything about it today.
+    expect(run.plan.policyToSave?.approved).toContain("GONE");
+    expect(run.plan.policyToSave?.reviewed).toContain("GONE");
+    expect(run.plan.send).toEqual(ELIGIBLE);
+  });
+
+  it("refuses a file it would silently drop keys out of, before asking any model", async () => {
+    await expect(runPlan({ text: "LOCAL_PORT=1\nthis is not a key=value line\n" })).rejects.toThrow(
+      EnvPolicyError,
+    );
+  });
+
+  it("refuses a file with no keys in it at all", async () => {
+    await expect(runPlan({ text: "# nothing but a comment\n" })).rejects.toThrow(/nothing to send/);
   });
 });

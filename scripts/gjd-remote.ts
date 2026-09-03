@@ -24,28 +24,25 @@ import { fileURLToPath } from "node:url";
 import {
   type EnvAllowance,
   type EnvPayload,
-  FORBIDDEN_NAMES,
   SPIDERYARN_ALLOWANCE,
   assertPushableName,
   buildEnvPayload,
   diffKeys,
-  localityVerdict,
   parseEnv,
 } from "./gjd-remote-env.js";
 import {
-  type ChecklistItem,
+  type EnvPlan,
+  type EnvPlanTone,
+  type Policy,
   type Proposal,
   type ProposedKey,
   EnvPolicyError,
   PROPOSAL_MODEL,
-  applyGuards,
   defaultProposalCall,
-  extractEnvKeyNames,
-  planChecklist,
   policyPath,
   proposeEnvKeys,
+  pushEnvPlan,
   readPolicy,
-  selectableNames,
   writePolicy,
 } from "./gjd-remote-envpolicy.js";
 import {
@@ -2779,26 +2776,17 @@ function sendEnvPayload(target: Target, local: string, payload: EnvPayload): voi
     console.log(dim(`  ${payload.missing.length} expected keys absent locally: ${payload.missing.join(", ")}`));
   }
 
-  const stage = mkdtempSync(path.join(tmpdir(), "gjd-remote-env-"));
-  const staged = path.join(stage, ".env.local");
-  writeFileSync(staged, payload.text, { encoding: "utf8", mode: 0o600 });
-
-  const tmp = `${dir}/.env.local.push-${randomUUID()}`;
-  // Pre-create the temp file under umask 077. scp only applies a mode when it
-  // CREATES the file, so writing into an existing 0600 file leaves it 0600 —
-  // whereas chmod-after-scp leaves a window in which a world-readable copy of
-  // every credential is sitting in the repo. The chmod after the copy is belt
-  // and braces, not the mechanism.
-  ssh(`umask 077 && : > ${shq(tmp)}`);
-  const sent = spawnSync("scp", ["-q", ...SSH_OPTS, ...sshMasterOpts(), staged, `${HOST()}:${tmp}`], { encoding: "utf8" });
-  if (sent.status !== 0) {
-    ssh(`rm -f ${shq(tmp)}`, { check: false });
-    die(`scp failed: ${(sent.stderr || "").trim()}`);
+  // A THIRD copy of the selected credentials, and it is removed on every path
+  // out of here — GPT Sol's Stage 4 finding 3. `scp` needs a real file, so the
+  // copy is unavoidable; leaving it in /tmp until the next reboot is not. The
+  // `finally` removes the directory this call created and nothing else, by the
+  // name `mkdtempSync` returned.
+  const stage = mkdtempSync(path.join(tmpdir(), STAGE_PREFIX));
+  try {
+    stageAndSend(stage, payload, dir, dest);
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
   }
-  // One command: chmod, then rename over the destination. rename(2) within a
-  // directory is atomic, so a reader on the box sees the old file or the new
-  // one and never a half-written one.
-  ssh(`chmod 600 ${shq(tmp)} && mv -f ${shq(tmp)} ${shq(dest)}`);
 
   // BYTES first, meaning second. The readback used to go straight through the
   // parser, which is the one comparison that cannot see what the parser
@@ -2831,33 +2819,56 @@ function sendEnvPayload(target: Target, local: string, payload: EnvPayload): voi
   console.log(green(`✓ ${payload.pushed.size} keys, 0600 ${USER}, read back and verified`));
 }
 
+/** The prefix every staging directory this tool makes is named with, so that
+ *  `ls "$TMPDIR" | grep` after a push is a check somebody can actually run. */
+const STAGE_PREFIX = "gjd-remote-env-";
+
+/** Write the payload into `stage` and get it onto the box, atomically. Split out
+ *  only so that the removal of `stage` can be a `finally` around the whole of
+ *  it — including the `die` paths, which throw. */
+function stageAndSend(stage: string, payload: EnvPayload, dir: string, dest: string): void {
+  const staged = path.join(stage, ".env.local");
+  writeFileSync(staged, payload.text, { encoding: "utf8", mode: 0o600 });
+
+  const tmp = `${dir}/.env.local.push-${randomUUID()}`;
+  // Pre-create the temp file under umask 077. scp only applies a mode when it
+  // CREATES the file, so writing into an existing 0600 file leaves it 0600 —
+  // whereas chmod-after-scp leaves a window in which a world-readable copy of
+  // every credential is sitting in the repo. The chmod after the copy is belt
+  // and braces, not the mechanism.
+  ssh(`umask 077 && : > ${shq(tmp)}`);
+  const sent = spawnSync("scp", ["-q", ...SSH_OPTS, ...sshMasterOpts(), staged, `${HOST()}:${tmp}`], { encoding: "utf8" });
+  if (sent.status !== 0) {
+    ssh(`rm -f ${shq(tmp)}`, { check: false });
+    die(`scp failed: ${(sent.stderr || "").trim()}`);
+  }
+  // One command: chmod, then rename over the destination. rename(2) within a
+  // directory is atomic, so a reader on the box sees the old file or the new
+  // one and never a half-written one.
+  ssh(`chmod 600 ${shq(tmp)} && mv -f ${shq(tmp)} ${shq(dest)}`);
+}
+
 /**
- * **`push-env` for a repo with no written-down list: names, a proposal, a
- * checklist, and what you ticked remembered.**
+ * **`push-env` for a repo with no written-down list**, which is glue and nothing
+ * else: read the saved policy, hand `pushEnvPlan` the callbacks it cannot have —
+ * money, prompts, the terminal — and do what it says.
  *
- * The order below is the whole design, and each step is where it is for a
- * reason.
+ * The decisions all live in `pushEnvPlan` (scripts/gjd-remote-envpolicy.ts), and
+ * that is GPT Sol's Stage 4 finding 2 rather than tidiness. They used to be
+ * here, where `main()`-on-import makes them untestable, so the leak test could
+ * only reach the pure half — and the sinks that matter most, the ones a value
+ * would have to pass through a prompt or a `console.log` to reach, were exactly
+ * the ones it could not see.
  *
- * 1. **The names come out first**, and the file's text goes nowhere else except
- *    into `buildEnvPayload` at the very end. Everything between — the model
- *    call, the rows on screen, the confirmation, the saved policy — is typed
- *    against names (scripts/gjd-remote-envpolicy.ts).
- * 2. **A file that would lose keys is refused before the model is asked.** The
- *    same refusal the typed path makes, moved earlier: asking a paid classifier
- *    about a name list that is missing entries, then making somebody answer a
- *    checklist built from it, and only then refusing, spends money and time to
- *    arrive where we already were.
- * 3. **The saved policy is read before the model is asked**, because it decides
- *    whether to ask at all. An unreadable one is a refusal rather than an empty
- *    approval set: those two are indistinguishable downstream, and the second
- *    would present every key as new and then overwrite the file it could not
- *    read.
- * 4. **The guards are applied twice**, and neither time is the important one on
- *    its own: greyed out in the checklist so the reader can see them, and
- *    re-applied to whatever comes back, because a checkbox library's `disabled`
- *    is presentation and `--all` never went through the library at all.
- * 5. **The policy is written after the box is written**, so it records what
- *    actually travelled rather than what was hoped for.
+ * Two things stay here on purpose:
+ *
+ * - **Reading the policy**, because an unreadable file is a refusal rather than
+ *   an empty approval set: those two are indistinguishable downstream, and the
+ *   second would present every key as undecided and then overwrite the file it
+ *   could not read. `SavedPolicy` is the type that makes the confusion
+ *   impossible to express.
+ * - **The order of the two writes.** The box first, the policy second, so the
+ *   file records what actually travelled rather than what was hoped for.
  */
 async function pushEnvByChecklist(
   target: Target,
@@ -2866,96 +2877,67 @@ async function pushEnvByChecklist(
   text: string,
   opts: PushEnvOptions,
 ): Promise<void> {
-  const { names, problems } = extractEnvKeyNames(text);
   console.log(bold(`gjd-remote push-env ${slug}`));
-  console.log(dim(`  reading ${local} — ${names.length} key name(s), no values`));
-  if (problems.length) {
-    die(
-      `${local} is not a file I will push — I would silently drop keys out of it:\n` +
-        problems.map((p) => `  ${p}`).join("\n") +
-        `\n  Fix those lines and run this again. Nothing was sent, and no model was asked.` +
-        `\n  (Line numbers only — the contents of a broken line may well be the secret.)`,
-    );
-  }
-  if (names.length === 0) die(`${local} has no keys in it at all, so there is nothing to send.`);
-
   const file = policyFile(slug);
   const saved = readPolicy(file, slug);
   if (saved.kind === "error") {
     die(
       `${saved.why}\n` +
-        `  That file records which keys you approved for this repo, so a push cannot go\n` +
-        `  ahead without being able to read it. Fix it or delete it. Nothing was sent.`,
+        `  That file records which keys you decided about for this repo, so a push cannot\n` +
+        `  go ahead without being able to read it. Fix it or delete it. Nothing was sent.`,
     );
   }
-  const approved = saved.kind === "policy" ? new Set(saved.approved) : undefined;
   console.log(
     saved.kind === "policy"
-      ? dim(`  policy: ${file}  (${saved.approved.length} approved, saved ${saved.savedAt})`)
+      ? dim(
+          `  policy: ${file}  (${saved.approved.length} approved of ${saved.reviewed.length} decided, saved ${saved.savedAt})`,
+        )
       : dim(`  policy: none yet — would be ${file}`),
   );
 
-  // THE ONLY PLACE A VALUE IS LOOKED AT, and only a verdict comes back out.
-  // `localityVerdict` is the same call `buildEnvPayload` refuses on, so a row
-  // cannot be tickable here and rejected there, after the reader has answered.
-  const values = parseEnv(text);
-  const valueGuard = (name: string): "ok" | "not-local" => {
-    const value = values.get(name);
-    if (value === undefined) return "ok";
-    return localityVerdict(name, value) === "not-local" ? "not-local" : "ok";
-  };
-  // ONE object, handed to both the drawing and the checking, so the second
-  // application of the guards is the same rule and not a copy of it.
-  const guards = { forbiddenNames: new Set(FORBIDDEN_NAMES), valueGuard };
-  // A key that can never be sent can never be approved either, so it would stay
-  // "not sent before" for the life of the repo — and asking the model about it
-  // is a paid call, every push, for a row that is greyed out on arrival. Found
-  // live on 2026-09-02: the second run of this on gjdutils asked again about
-  // DATABASE_URL_PROD and HETZNER_CLOUD_API_TOKEN, which is every run forever.
-  const blocked = new Set(
-    names.filter((n) => guards.forbiddenNames.has(n) || guards.valueGuard(n) === "not-local"),
-  );
-
-  const proposal = await proposeOrSkip(names, approved, blocked, opts.propose);
-  const items = approvalWins(
-    planChecklist({
-      names,
-      proposal,
-      approved,
-      // Greg's call, 2026-09-02: the model's answer IS the starting state, with
-      // the reason on each row. The plan records GPT Sol's objection to that
-      // and that it was overruled — 260902h, "Open questions for Greg".
-      preTick: "proposal",
-      ...guards,
-    }),
-    approved,
-  );
-
-  const chosen = await chooseEnvKeys(items, opts);
-  const { send, refused } = applyGuards(chosen, items, guards);
-  for (const r of refused) console.log(red(`  ✗ ${r.name}`) + dim(`  ${r.why}`));
-
   const dest = `${target.dir}/.env.local`;
-  if (send.length === 0) {
-    console.log(yellow("  nothing selected, so nothing was written to the box."));
-    if (opts.save) savePolicy(file, slug, []);
-    else console.log(dim("  --save would record that as an empty policy; without it, nothing is remembered."));
-    return;
-  }
-
-  for (const line of wrapNames(send)) console.log(`    ${line}`);
-  if (!opts.yes) {
-    const ok = await confirmOrRefuse(`send these ${send.length} keys to ${HOST()}:${dest}?`, promptStreams(), {
-      instead: "gjd-remote push-env --all --yes sends every eligible key without asking",
+  let plan: EnvPlan;
+  try {
+    plan = await pushEnvPlan({
+      text,
+      local,
+      slug,
+      saved,
+      flags: { propose: opts.propose, all: opts.all, none: opts.none, save: opts.save, yes: opts.yes },
+      propose: askForProposal,
+      choose: (items) =>
+        checklistOrRefuse({
+          message: "which keys should go on the box?",
+          items: items.map((i) => ({
+            value: i.name,
+            label: i.name,
+            description: i.description,
+            checked: i.checked,
+            disabled: i.disabled,
+          })),
+          io: promptStreams(),
+          instead: "gjd-remote push-env --all (every eligible key), or --none --save to approve nothing",
+        }),
+      confirm: (names) =>
+        confirmOrRefuse(`send these ${names.length} keys to ${HOST()}:${dest}?`, promptStreams(), {
+          instead: "gjd-remote push-env --all --yes sends every eligible key without asking",
+        }),
+      say: sayPlanLine,
     });
-    if (!ok) {
-      console.log("nothing was sent.");
-      return;
-    }
+  } catch (err) {
+    if (err instanceof EnvPolicyError) die(err.message);
+    throw err;
   }
 
-  sendEnvPayload(target, local, buildEnvPayload(text, { names: send, source: `you approved for ${slug}` }));
-  savePolicy(file, slug, send);
+  if (plan.payload !== undefined) sendEnvPayload(target, local, plan.payload);
+  if (plan.policyToSave !== undefined) savePolicy(file, plan.policyToSave);
+}
+
+/** One line the plan asked for, coloured. Two spaces, because everything under
+ *  the `push-env` banner is indented and the plan should not have to know it. */
+function sayPlanLine(line: string, tone: EnvPlanTone): void {
+  const paint = tone === "dim" ? dim : tone === "warn" ? yellow : tone === "bad" ? red : (s: string) => s;
+  console.log(paint(`  ${line}`));
 }
 
 /** `policyPath`, with its refusal in the CLI's voice. It throws on a slug that
@@ -2975,10 +2957,12 @@ function policyFile(slug: string): string {
  * The keys are already on the box by the time this runs. Dying here would print
  * a red cross over a push that worked, and the reader would run it again.
  */
-function savePolicy(file: string, slug: string, approved: readonly string[]): void {
+function savePolicy(file: string, policy: Policy): void {
   try {
-    writePolicy(file, { repo: slug, approved }, new Date());
-    console.log(dim(`  approved keys recorded in ${file}`));
+    writePolicy(file, policy, new Date());
+    console.log(
+      dim(`  ${policy.approved.length} approved of ${policy.reviewed.length} decided, recorded in ${file}`),
+    );
   } catch (err) {
     const why = err instanceof Error ? err.message : String(err);
     console.log(yellow(`  the keys were sent, but the policy was not saved: ${why}`));
@@ -2986,17 +2970,11 @@ function savePolicy(file: string, slug: string, approved: readonly string[]): vo
 }
 
 /**
- * **Ask a cheap model to sort the names — or say why it was not asked.**
+ * **The paid call, and everything it needs that a pure module cannot have.**
  *
- * Not asked every time: a repo whose saved policy already covers every name in
- * the file has nothing new to classify, and a paid call per push is a paid call
- * for an answer nobody reads. `--propose` forces it, which is how you get a
- * fresh opinion after editing the policy by hand.
- *
- * **`blocked` is what makes "nothing new" reachable at all.** A hard-guarded key
- * can never be approved, so it is never in the saved policy, so a plain
- * "approved ∪ names" comparison would call it new on every run until the end of
- * time — and hellozenno's `.env.local` has one of those in it by construction.
+ * WHETHER to ask is not decided here — `pushEnvPlan` does that, and only calls
+ * this when there is something undecided to ask about (or `--propose`). This is
+ * the money and the printing.
  *
  * `loadEnvLocal()` reads THIS repo's `.env.local` for the OpenRouter key, off
  * the module's own location rather than the cwd — the tool root, never the repo
@@ -3007,24 +2985,10 @@ function savePolicy(file: string, slug: string, approved: readonly string[]): vo
  * `push-env` going down because a classifier was unavailable would be a nicety
  * taking the feature with it.
  */
-async function proposeOrSkip(
+async function askForProposal(
   names: readonly string[],
-  approved: Set<string> | undefined,
-  blocked: ReadonlySet<string>,
-  forced: boolean,
+  why: string,
 ): Promise<Map<string, ProposedKey> | undefined> {
-  const unseen = names.filter((n) => !blocked.has(n) && approved?.has(n) !== true);
-  const why = forced
-    ? "--propose"
-    : approved === undefined
-      ? "no saved policy for this repo yet"
-      : unseen.length > 0
-        ? `${unseen.length} key(s) this repo has not sent before`
-        : null;
-  if (why === null) {
-    console.log(dim("  no new keys since the saved policy — skipping the model"));
-    return undefined;
-  }
   // `PROPOSAL_MODEL`, not a model constant of this file's own choosing: the
   // request body is built in gjd-remote-envpolicy.ts, and a line here naming a
   // different model would be a lie printed with total confidence. It said
@@ -3033,14 +2997,9 @@ async function proposeOrSkip(
   console.log(dim(`  asking ${PROPOSAL_MODEL} about ${names.length} key NAMES (${why})`));
   loadEnvLocal();
   let outcome: Proposal | undefined;
-  try {
-    await withLedger("cli", async () => {
-      outcome = await proposeEnvKeys(names, { call: defaultProposalCall });
-    });
-  } catch (err) {
-    if (err instanceof EnvPolicyError) die(err.message);
-    throw err;
-  }
+  await withLedger("cli", async () => {
+    outcome = await proposeEnvKeys(names, { call: defaultProposalCall });
+  });
   // `outcome` is assigned inside the callback, so the compiler cannot see that
   // it happened; undefined here means the ledger returned without running it,
   // which would be a bug rather than a model failure — and either way the
@@ -3050,69 +3009,6 @@ async function proposeOrSkip(
     return undefined;
   }
   return outcome.proposal;
-}
-
-/**
- * **A key this repo has sent before stays ticked, even when today's model calls
- * it a secret.**
- *
- * Greg's ticks are the decision and the model is advice, so an approval already
- * given outranks a fresh opinion — otherwise a classifier that changed its mind
- * would quietly stop sending a key the box has been running on, and the push
- * would report success. The model's reason is still shown on the row, so the
- * disagreement is visible rather than resolved behind the reader's back.
- *
- * A DISABLED row is never touched: the two hard guards are not opinions.
- */
-function approvalWins(items: ChecklistItem[], approved: Set<string> | undefined): ChecklistItem[] {
-  if (approved === undefined) return items;
-  return items.map((item) =>
-    item.disabled || !approved.has(item.name) ? item : { ...item, checked: true },
-  );
-}
-
-/** The checklist, or the flag that stands in for it. `--all` means every
- *  SELECTABLE row — `selectableNames` rather than a map over the items, so
- *  "select all" and the guard cannot come to different conclusions. */
-async function chooseEnvKeys(items: ChecklistItem[], opts: PushEnvOptions): Promise<readonly string[]> {
-  if (opts.none) {
-    console.log(dim("  --none: nothing selected"));
-    return [];
-  }
-  if (opts.all) {
-    const all = selectableNames(items);
-    console.log(dim(`  --all: ${all.length} of ${items.length} rows are selectable`));
-    return all;
-  }
-  return checklistOrRefuse({
-    message: "which keys should go on the box?",
-    items: items.map((i) => ({
-      value: i.name,
-      label: i.name,
-      description: i.description,
-      checked: i.checked,
-      disabled: i.disabled,
-    })),
-    io: promptStreams(),
-    instead: "gjd-remote push-env --all (every eligible key), or --none --save to approve nothing",
-  });
-}
-
-/** Names across several lines rather than one very long one. Names only ever —
- *  this is the list printed above the final confirmation. */
-function wrapNames(names: readonly string[], width = 76): string[] {
-  const lines: string[] = [];
-  let line = "";
-  for (const name of names) {
-    if (line === "") line = name;
-    else if (line.length + 2 + name.length <= width) line += `, ${name}`;
-    else {
-      lines.push(`${line},`);
-      line = name;
-    }
-  }
-  if (line !== "") lines.push(line);
-  return lines;
 }
 
 // ---------------------------------------------------------------- clone
@@ -5033,12 +4929,13 @@ ${bold("THE BOX")}
                           remembers. See below.
       --file PATH           a different .env.local — the basename must be exactly that
       --dir DIR             a box path, which must be this repo's checkout
-          --propose         ask the model again, even when nothing is new
+          --propose         ask the model again, even when you have decided them all
           --all             skip the checklist: every key that is not hard-guarded
           --none            skip it the other way: no keys at all. Only useful with
-                            --save, which then records "nothing approved"
-          --save            with --none, write the empty policy. An ordinary push
-                            saves what it sent without being asked
+                            --save, which then records "no" for every eligible key
+          --save            with --none, write those answers down, so the next run
+                            asks no model. An ordinary push saves what it sent, and
+                            what you left unticked, without being asked
           --yes             skip the final confirmation. --all on its own still asks
   ssh [command]           a throwaway connection — no tmux, dies with the terminal
                           with a command, runs it and prints what it said
@@ -5056,16 +4953,20 @@ ${bold("WHAT push-env WILL AND WILL NOT SEND")}
   each name beside it. No prompt, no model, no remembered state — the list is the
   decision, and a key nobody has added to it stays on the laptop.
   ${bold("Every other repo:")} a checklist. The key NAMES are read out of that repo's
-  .env.local — never the values, which are not read into anything that is printed,
-  logged or sent — and a cheap model is asked to sort the names into local-only,
-  provider key, production secret, infrastructure-destroying, or unknown. Its
-  answer is the ${bold("starting state")} of the checklist, with its reason on each row;
-  you tick and untick, and what you send is written to
-  ${dim("~/.config/gjd-remote/repos/<owner>--<name>.toml")} so the next push starts from
-  what you approved rather than from a fresh guess. The model is asked when there
-  is no saved policy or the file has a key that has never been sent — otherwise it
-  is skipped and says so. ${dim("--propose")} asks anyway. ${dim("--all")} and ${dim("--none")} skip the
-  checklist; there is still a final "send these N keys?" unless you pass ${dim("--yes")}.
+  .env.local — ${bold("a value is never sent to the model and never written to the")}
+  ${bold("ledger")}, and never printed; the keys you tick are of course sent to the box —
+  and the capable model is asked to sort the names into local-only, provider key,
+  production secret, infrastructure-destroying, or unknown. It costs about two
+  cents and was chosen over a model eighteen times cheaper, which left a quarter
+  of each file unclassified and twice failed to name a token that can delete this
+  box. Its answer is the ${bold("starting state")} for a key you have not answered for
+  before, with its reason on each row. ${bold("Both your answers are remembered")}, in
+  ${dim("~/.config/gjd-remote/repos/<owner>--<name>.toml")}: a key you ticked starts
+  ticked, a key you ${bold("unticked stays unticked")} however a later model classifies it,
+  and no model is asked about a key you have already decided — so a second run
+  usually costs nothing and says so. ${dim("--propose")} asks anyway. ${dim("--all")} and ${dim("--none")}
+  skip the checklist, and ${dim("--none --save")} is how you record "none of these" as a
+  real answer. There is still a final "send these N keys?" unless you pass ${dim("--yes")}.
   Off a terminal, with none of those flags, it refuses rather than guessing.
   ${bold("That model call is Spideryarn's money, wherever you ran it from")}: the key, and the
   ledger the spend is written to, come from THIS repo's own configuration — the

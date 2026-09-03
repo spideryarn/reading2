@@ -381,7 +381,7 @@ The pre-ticking answer is above, and everything else in it was settled before it
   `chmod 0600`, readback. Red tests: existing `0644` file; a symlink at the path.
 - [x] Spideryarn keeps its typed allowlist. Docs + help.
 - [x] GPT Sol's Stage 3 findings 5, 6 and 8 (the env-policy half) — see the Log.
-- [ ] Sol review of Stage 4 itself.
+- [x] Sol review of Stage 4 itself, and its five findings folded in — see the Log.
 
 ### Stage 5 — hellozenno end to end, and provisioning
 
@@ -433,6 +433,52 @@ into its own repo · per-session worktrees on the box · a second Unix user.
 | New-format record | version-1 record without the repo field → `ls` rejects the listing; legacy row (no version, no repo) shows `(unknown)` |
 
 ## Log
+
+- 2026-09-02 — **GPT Sol's Stage 4 review: the policy now remembers a "no", and the decisions moved
+  where a test can reach them.** The review is
+  [260902h-…-stage4-review-sol.md](260902h-gjd-remote-works-from-whichever-repo-you-are-in-stage4-review-sol.md).
+  - **The blocker (finding 1): a rejected key was indistinguishable from an unseen one.** The policy
+    file gains `reviewed` beside `approved` — every name you have answered for, and the subset you
+    said yes to. `planChecklist` forces a reviewed row to its saved answer, so an untick survives a
+    model that later calls the key harmless, and `pushEnvPlan` asks the model only about names
+    nobody has decided. A file with no `reviewed` list reads as `reviewed = approved`, which is the
+    only migration that cannot change an answer. `approved ⊆ reviewed` is refused on read and on
+    write. `approvalWins` in the CLI is gone: it was the same rule applied to half the cases, and
+    two functions holding half a rule each is how they came apart.
+  - **Proved on the box**, against a throwaway `gregdetre/gjdutils` clone with a fake eight-key
+    `.env.local` (all of it removed afterwards — box clone, its env file, the laptop policy, the
+    local clone). Run 1, on a real pty: `LOG_LEVEL` unticked before confirming ⇒ four keys sent, and
+    the policy read `4 approved of 6 decided` with `LOG_LEVEL` in `reviewed` only. Run 2 printed
+    `no keys you have not decided on — skipping the model`, drew `LOG_LEVEL` unticked with
+    `you unticked this on 2026-09-02 — tick it to change your mind`, and made no paid call. On a
+    deleted policy, `push-env --none --save --yes </dev/null` wrote `approved = []` with all six
+    eligible names in `reviewed`; the run after it asked no model either. **Under the bug both of
+    those runs would have paid for a proposal and re-ticked what had just been refused.**
+  - **The vacuous leak test (finding 2) is replaced by a real one.** Its three sentinels were never
+    in its inputs, so their absence proved nothing. The decisions came out of
+    [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) — where `main()`-on-import makes anything
+    untestable — into `pushEnvPlan`, with the model call, the two prompts and the printing as
+    injected callbacks. One test now feeds a `.env.local` whose every value is a distinct sentinel
+    through a real `withLedger` and a stubbed transport, and asserts each one reaches **only** the
+    payload for the box: not the names the model was asked about, the request bytes, the ledger row,
+    the checklist rows, the confirmation, either stream, the saved policy, or the plan's own answer.
+    Watched red twice — the value appended to a row description reddened the rows, the prompt and
+    the printed line at once; put into the "reading …" line, only the printed sink.
+  - **Staged secrets are removed (finding 3).** `sendEnvPayload` copies the selected keys into a
+    `mkdtemp` directory for `scp`, and never removed it. It is a `try/finally` now, and the proof is
+    a before-and-after listing around a push that really sent six keys: no new directory. There are
+    23 older `gjd-remote-env-*` directories in the laptop's temp, from before the fix, each holding
+    a `.env.local` — left for Greg to clear.
+  - **Finding 4 got a truer name rather than a stronger test.** "does not fall back … when the
+    allowance is short" claimed to kill `allowance.names ?? ALLOWLIST`, and no test can:
+    `EnvAllowance.names` is `readonly string[]`, so nothing a caller passes makes the `??` take its
+    right branch. The type is the guarantee there. The test does kill every other way `ALLOWLIST`
+    could get into `buildEnvPayload`, and now says so.
+  - **The wording (finding 5).** The box doc and `--help` called Sonnet cheap; it is the capable
+    model, chosen knowing it costs eighteen times more, because the cheap one left a quarter of each
+    file `unknown` and twice missed a token that can delete the box. And "values are never read into
+    anything sent" was false — they are sent to the box, which is the point. Both now say values
+    never reach the **model** or the **ledger**.
 
 - 2026-09-02 — **GPT Sol's Stage 3 findings 1–4 are wired into the CLI, and all four were proved on
   the box** against `gregdetre/gjdutils`, cloned and removed again.

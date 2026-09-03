@@ -296,10 +296,20 @@ describe("an allowance other than Spideryarn's", () => {
     expect(got.problems).toEqual([]);
   });
 
-  it("does not fall back to Spideryarn's list when the allowance is a short one", () => {
-    // The mutation this kills: an `allowance.names ?? ALLOWLIST` anywhere in the
-    // chain. OPENROUTER_API_KEY is on Spideryarn's list and not on this one, so
-    // a fallback would send it.
+  /**
+   * **The mutation this kills is `ALLOWLIST` appearing anywhere in
+   * `buildEnvPayload`** — the loop reading it, the `Set` built from it, a
+   * concatenation with it. `OPENROUTER_API_KEY` is on Spideryarn's list and not
+   * on this allowance, so any of those sends it.
+   *
+   * It is NOT the `allowance.names ?? ALLOWLIST` its name used to claim, and
+   * that claim was wrong in a way worth writing down: `EnvAllowance.names` is
+   * `readonly string[]`, so there is no value a caller can pass that makes the
+   * `??` take its right-hand branch, and no test can ever redden it. The type
+   * is the guarantee there; this test is the guarantee for the rest. GPT Sol's
+   * Stage 4 finding 4, which asked for a stronger test and got a truer name.
+   */
+  it("sends only the names it was given, never this repo's allowlist", () => {
     const env = `${other}\nOPENROUTER_API_KEY=sk-or-fake`;
     const got = buildEnvPayload(env, { names: ["OPENAI_API_KEY"], source: "you approved" });
     expect([...got.pushed.keys()]).toEqual(["OPENAI_API_KEY"]);

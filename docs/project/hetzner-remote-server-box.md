@@ -188,15 +188,22 @@ it the way `push-env` does — same origin, not a symlink, a HEAD that resolves 
 **`push-env` takes one of two paths, and which one is decided by the slug.** Spideryarn's keys come
 off the reviewed allowlist in [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) — a list
 of key *names*, with the reason for each written beside it, and no prompt. Every other repo gets a
-checklist: the names are read out of that repo's `.env.local`, a cheap model sorts them (names only —
-a value never reaches a prompt, a log or a request body), its answer is the checklist's starting
-state, and what you send is remembered in `~/.config/gjd-remote/repos/`, so the next push starts from
-what you approved. Two guards cannot be ticked past on either path: the two names that can delete
+checklist: the names are read out of that repo's `.env.local`, the **capable** model sorts them, and
+its answer is the checklist's starting state for a key you have not answered for before. Names only —
+**a value is never sent to the model and never written to the ledger**, and the keys you tick are of
+course sent to the box, which is the whole point. The capable model was chosen over the cheap one
+knowing it costs eighteen times more, because the cheap one left a quarter of each file `unknown` and
+twice missed a token that can delete the box
+([260902b-env-key-proposal-spike.md](../research/260902b-env-key-proposal-spike.md)). **Both answers
+are remembered** in `~/.config/gjd-remote/repos/` — the file records every name you decided about and
+which of them you approved — so the next push starts from your answers, a key you unticked stays
+unticked whatever a later model thinks of it, and no model is asked about a key you have already
+decided. Two guards cannot be ticked past on either path: the two names that can delete
 infrastructure, and any value that is a database URL not pointing at a loopback host — by value, so a
 production database under a name nothing here has heard of is caught too.
-[`scripts/gjd-remote-envpolicy.ts`](../../scripts/gjd-remote-envpolicy.ts) holds the whole of it, and
-[260902b-env-key-proposal-spike.md](../research/260902b-env-key-proposal-spike.md) is what was
-learned from trying the model on real key names.
+[`scripts/gjd-remote-envpolicy.ts`](../../scripts/gjd-remote-envpolicy.ts) holds the whole of it,
+`pushEnvPlan` included — the CLI is glue, so that one test can put a sentinel value in at the top and
+check every sink it could come out of.
 
 **That model call is billed to Spideryarn wherever you ran it from.** The OpenRouter key and the
 ledger it is written to both come from *this* repo's configuration, resolved from the tool's own

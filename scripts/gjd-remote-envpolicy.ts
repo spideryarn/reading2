@@ -16,23 +16,38 @@
  *
  * Pure functions and plain filesystem reads, like its two neighbours: no ssh, no
  * prompting, no process spawning, so the rules that matter are testable without
- * a server or a terminal (tests/gjd-remote-envpolicy.test.ts). The CLI in
- * scripts/gjd-remote.ts does the asking and the sending.
+ * a server or a terminal (tests/gjd-remote-envpolicy.test.ts). `pushEnvPlan` at
+ * the bottom is the order those rules run in, and it reaches the model, the
+ * prompts and the terminal only through callbacks its caller supplies. The CLI
+ * in scripts/gjd-remote.ts supplies them, and does the sending.
  *
  * ## A value must not reach anything
  *
- * The one property this file is for. **No function here takes a value as an
- * argument** — `extractEnvKeyNames` is handed the file's text and returns names,
- * and everything downstream of it is typed against `string[]` of names. The
- * value guard is a *callback the CLI supplies*, so the comparison happens in the
- * caller and only its verdict (`"ok"` / `"not-local"`) crosses back.
+ * The one property this file is for. **Three functions take the file's bytes**
+ * — `extractEnvKeyNames`, `envGuards` and `pushEnvPlan`, which is built from the
+ * other two — and everything else here is typed against `string[]` of names.
+ * Those three are the whole of the trusted surface, and what each does with the
+ * bytes is one thing: names out of them, a verdict out of them, and the payload
+ * for the box out of them. `EnvPlan.payload` is the only value-bearing thing any
+ * of this returns.
+ *
+ * It used to be one function and a `valueGuard` callback the CLI supplied, so
+ * that no value crossed the seam at all. That was a nicer sentence and a worse
+ * test: the leak test could only reach the sinks on this side of the seam, and
+ * the CLI — which held the bytes, the prompts and the printing — had none. GPT
+ * Sol's Stage 4 finding 2. `pushEnvPlan` moved the decisions here so that ONE
+ * test can feed a sentinel value in at the top and check every sink it could
+ * come out of.
  *
  * The sinks that were checked, in one test rather than eight (GPT Sol's
  * review, finding 6): the returned names, the parse problems, the serialised
  * request body, the checklist rows, the saved policy file, and the message of
  * every error any of them can throw. Malformed input on both ends is exercised
  * too, because a new parser propagating its own exception is the plausible leak
- * and `JSON.parse` puts a prefix of its input into the `SyntaxError`.
+ * and `JSON.parse` puts a prefix of its input into the `SyntaxError`. The
+ * `pushEnvPlan` test adds the four that only exist once the decisions are here:
+ * the names handed to the paid call, everything `say` prints, the rows the
+ * checklist prompt is given, and the ledger row.
  *
  * `scanEnv` from [gjd-remote-env.ts](gjd-remote-env.ts) is reused rather than
  * re-written, for the reason that file already gives about having one parser:
@@ -87,7 +102,8 @@ import { parse as parseToml, TomlError } from "smol-toml";
 import { openRouterJson } from "../src/ai-call.js";
 import type { AiRequestBody, ChatJob, JsonCall } from "../src/ai-call.js";
 import { CAPABLE_MODEL_OPENROUTER } from "../src/models.js";
-import { scanEnv } from "./gjd-remote-env.js";
+import { buildEnvPayload, FORBIDDEN_NAMES, localityVerdict, scanEnv } from "./gjd-remote-env.js";
+import type { EnvPayload } from "./gjd-remote-env.js";
 import { isRepoValue, REPO_UNKNOWN } from "./gjd-remote-repo.js";
 
 /** Anything this file refuses to do, in the CLI's voice: first line lower-case,
@@ -505,6 +521,15 @@ export type ChecklistInput = Guards & {
   proposal: Map<string, ProposedKey> | undefined;
   /** What this repo's saved policy already approves. Absent ⇒ every key is new. */
   approved: Set<string> | undefined;
+  /** Every name the reader has already decided on, ticked or not — a superset of
+   *  `approved`. A name in here takes its state from the saved decision and the
+   *  model gets no say; a name outside it is undecided, and only then does the
+   *  proposal pre-tick anything. Absent ⇒ falls back to `approved`, which is what
+   *  a policy file written before `reviewed` existed reads as. */
+  reviewed: Set<string> | undefined;
+  /** When that policy was saved, ISO. Printed on a row the reader unticked, so
+   *  "you decided this" says when. Absent ⇒ the row says "before". */
+  savedAt: string | undefined;
   /** Which answer to Greg's open question we are running under. */
   preTick: "proposal" | "approved-only";
 };
@@ -517,35 +542,74 @@ const NOT_LOCAL_WHY =
 /**
  * **The rows, in file order.**
  *
- * The order of the checks is the behaviour: a disabled row is never checked,
- * whatever the proposal said and whatever the saved policy says, because
- * `disabled` is computed first and `checked` is `false` under it. Sol asked for
- * the guards to be visible *and* re-applied; `applyGuards` is the second half,
- * and it does not trust this one.
+ * The order of the checks is the behaviour, and it is three tiers deep:
+ *
+ * 1. **A disabled row is never checked**, whatever the proposal said and
+ *    whatever the saved policy says, because `disabled` is computed first and
+ *    `checked` is `false` under it. Sol asked for the guards to be visible *and*
+ *    re-applied; `applyGuards` is the second half, and it does not trust this one.
+ * 2. **A row the reader has already decided takes the saved answer**, ticked or
+ *    unticked, and the model gets no say in it. That is GPT Sol's Stage 4
+ *    finding 1: the policy used to hold approvals only, so a key somebody
+ *    deliberately unticked was indistinguishable from one they had never seen —
+ *    it was re-proposed on every run, and a later model that called it safe
+ *    would pre-tick it again. An approval outranking a fresh opinion is the
+ *    same rule read the other way round, and it used to live in a separate
+ *    `approvalWins` pass in scripts/gjd-remote.ts; both halves are here now,
+ *    because two functions applying half a rule each is how they came apart.
+ * 3. **Only an undecided row is pre-ticked from the proposal**, and only under
+ *    `preTick: "proposal"`.
  */
 export function planChecklist(input: ChecklistInput): ChecklistItem[] {
   const approved = input.approved ?? new Set<string>();
-  return input.names.map((name) => {
-    const isNew = !approved.has(name);
-    if (input.forbiddenNames.has(name)) {
-      return { name, checked: false, disabled: true, description: FORBIDDEN_WHY, new: isNew };
-    }
-    if (input.valueGuard(name) === "not-local") {
-      return { name, checked: false, disabled: true, description: NOT_LOCAL_WHY, new: isNew };
-    }
-    const proposed = input.proposal?.get(name);
-    const checked =
-      input.preTick === "approved-only"
-        ? approved.has(name)
-        : proposed !== undefined && SAFE_CLASSES.includes(proposed.class);
-    return { name, checked, disabled: false, description: describe(proposed, isNew), new: isNew };
-  });
+  /* A policy written before `reviewed` existed reads as "the approvals are the
+     decisions", which is the only migration that cannot un-approve anything. */
+  const reviewed = input.reviewed ?? approved;
+  return input.names.map((name) => planRow(name, input, approved, reviewed));
+}
+
+function planRow(
+  name: string,
+  input: ChecklistInput,
+  approved: ReadonlySet<string>,
+  reviewed: ReadonlySet<string>,
+): ChecklistItem {
+  const isNew = !approved.has(name);
+  if (input.forbiddenNames.has(name)) {
+    return { name, checked: false, disabled: true, description: FORBIDDEN_WHY, new: isNew };
+  }
+  if (input.valueGuard(name) === "not-local") {
+    return { name, checked: false, disabled: true, description: NOT_LOCAL_WHY, new: isNew };
+  }
+  const proposed = input.proposal?.get(name);
+  if (reviewed.has(name)) {
+    const yes = approved.has(name);
+    return {
+      name,
+      checked: yes,
+      disabled: false,
+      description: yes ? describe(proposed, false) : untickedWhy(input.savedAt),
+      new: isNew,
+    };
+  }
+  const checked =
+    input.preTick === "proposal" && proposed !== undefined && SAFE_CLASSES.includes(proposed.class);
+  return { name, checked, disabled: false, description: describe(proposed, true), new: isNew };
 }
 
 function describe(proposed: ProposedKey | undefined, isNew: boolean): string {
   const seen = isNew ? "not sent before" : "sent before";
   if (proposed === undefined) return `${seen} · no proposal for this key`;
   return `${seen} · ${proposed.class}: ${proposed.reason}`;
+}
+
+/** The row for a key the reader looked at and left unticked. It says who decided
+ *  rather than what a model thinks, because that is the whole point of
+ *  remembering it — and the model's reason is deliberately not repeated beside
+ *  it, so a classifier calling it safe cannot read as an invitation. */
+function untickedWhy(savedAt: string | undefined): string {
+  const when = savedAt === undefined ? "before" : `on ${savedAt.slice(0, 10)}`;
+  return `you unticked this ${when} — tick it to change your mind`;
 }
 
 /** What survived the guards, and what did not. Refusals are by name, with the
@@ -669,15 +733,28 @@ export function policyPath(slug: string, configHome: string = defaultConfigHome(
 
 /** A repo's saved answer, or why there is none. */
 export type PolicyRead =
-  | { kind: "policy"; repo: string; approved: string[]; savedAt: string }
+  | { kind: "policy"; repo: string; approved: string[]; reviewed: string[]; savedAt: string }
   | { kind: "absent" }
   | { kind: "error"; why: string };
 
-/** What gets written. `repo` is in the file so the filename is not the only
- *  thing saying which repo this is. */
-export type Policy = { repo: string; approved: readonly string[] };
+/** A policy that was read without failing: the saved one, or nothing saved yet.
+ *  `pushEnvPlan` takes this rather than `PolicyRead`, so an unreadable file
+ *  cannot be handed to it as "nothing approved" — the two are indistinguishable
+ *  downstream and one of them silently overwrites the file it could not read. */
+export type SavedPolicy = Exclude<PolicyRead, { kind: "error" }>;
 
-const POLICY_KEYS = ["repo", "approved", "saved_at"] as const;
+/**
+ * What gets written. `repo` is in the file so the filename is not the only thing
+ * saying which repo this is.
+ *
+ * **`reviewed` is every name the reader has decided about; `approved` is the
+ * subset they said yes to.** Two lists rather than one because a "no" has to
+ * survive too — GPT Sol's Stage 4 finding 1. `approved ⊆ reviewed` is an
+ * invariant, checked on the way in and on the way out.
+ */
+export type Policy = { repo: string; approved: readonly string[]; reviewed: readonly string[] };
+
+const POLICY_KEYS = ["repo", "approved", "reviewed", "saved_at"] as const;
 
 /** A `.env` key name, as the parser above would have produced. Anything else in
  *  an `approved` list is a hand-edit that would silently never match. */
@@ -694,6 +771,13 @@ const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
  * Unknown keys are an error by name, the same rule
  * scripts/gjd-remote-config.ts applies to `.gjd-remote/config.toml` and for the
  * same reason: a misspelt key that does nothing is silent success.
+ *
+ * **A file with no `reviewed` list is one written before that list existed, and
+ * it reads as `reviewed = approved`.** That is the only migration that cannot
+ * change an answer: every name in it was ticked, so treating the approvals as
+ * the decisions loses nothing, and every other name goes back to being
+ * undecided — which it was. `reviewed` present but missing a name that
+ * `approved` has is not a migration, it is a corrupt file, and it is an error.
  *
  * @param expectRepo the slug this file is supposed to be about. A mismatch is
  *   an error rather than a warning — it means the filename collided or the file
@@ -731,9 +815,20 @@ export function readPolicy(file: string, expectRepo: string): PolicyRead {
   if (repo !== expectRepo) {
     return { kind: "error", why: `${file} is the policy for ${repo}, not for ${expectRepo}` };
   }
-  const list = readApprovedList(file, table.approved);
+  const list = readNameList(file, table.approved, "approved");
   if (typeof list === "string") return { kind: "error", why: list };
   const approved = list;
+  /* Absent is the migration; present is checked. See the docblock. */
+  const reviewedList =
+    table.reviewed === undefined ? [...approved] : readNameList(file, table.reviewed, "reviewed");
+  if (typeof reviewedList === "string") return { kind: "error", why: reviewedList };
+  const undecided = approved.filter((n) => !reviewedList.includes(n));
+  if (undecided.length > 0) {
+    return {
+      kind: "error",
+      why: `${file} approves '${undecided[0]}' but does not list it as reviewed`,
+    };
+  }
   const savedAtRaw = table.saved_at;
   const savedAt =
     savedAtRaw instanceof Date
@@ -744,11 +839,12 @@ export function readPolicy(file: string, expectRepo: string): PolicyRead {
   if (savedAt === undefined) {
     return { kind: "error", why: `${file} has no 'saved_at' timestamp` };
   }
-  return { kind: "policy", repo, approved, savedAt };
+  return { kind: "policy", repo, approved, reviewed: reviewedList, savedAt };
 }
 
 /**
- * The `approved` array, validated — or the sentence saying why it is not one.
+ * One of the policy's name arrays, validated — or the sentence saying why it is
+ * not one.
  *
  * A `string` return means failure, which is the one shape that cannot be
  * confused with a list of names. Split out of `readPolicy` because that
@@ -757,41 +853,61 @@ export function readPolicy(file: string, expectRepo: string): PolicyRead {
  * skip.** Skipping would silently un-approve a key somebody had hand-edited,
  * and the next run would present it as new.
  */
-function readApprovedList(file: string, raw: unknown): string[] | string {
-  if (!Array.isArray(raw)) return `${file} has no 'approved' list`;
-  const approved: string[] = [];
+function readNameList(file: string, raw: unknown, key: "approved" | "reviewed"): string[] | string {
+  if (!Array.isArray(raw)) return `${file} has no '${key}' list`;
+  const names: string[] = [];
   for (const entry of raw as unknown[]) {
     if (typeof entry !== "string" || !ENV_NAME.test(entry)) {
-      return `${file} has an 'approved' entry that is not a variable name`;
+      return `${file} has an '${key}' entry that is not a variable name`;
     }
-    if (approved.includes(entry)) return `${file} approves '${entry}' twice`;
-    approved.push(entry);
+    if (names.includes(entry)) return `${file} lists '${entry}' twice under '${key}'`;
+    names.push(entry);
   }
-  return approved;
+  return names;
 }
 
 /** The bytes for a policy. Separate from the writing so the round trip can be
  *  checked without a filesystem, and so the readback below compares text this
  *  function produced rather than text the disk happened to hold. */
 export function serialisePolicy(policy: Policy, now: Date): string {
-  for (const name of policy.approved) {
+  for (const name of [...policy.approved, ...policy.reviewed]) {
     if (!ENV_NAME.test(name)) {
       throw new EnvPolicyError(`'${name}' is not a variable name and will not be written down`);
     }
   }
-  const sorted = [...new Set(policy.approved)].sort();
+  /* The invariant, refused rather than repaired. A policy that approves a name
+     it does not record as decided is one this file could not read back, and
+     "widen `reviewed` for them" would be this function inventing a decision
+     nobody made. */
+  const orphan = [...policy.approved].find((n) => !policy.reviewed.includes(n));
+  if (orphan !== undefined) {
+    throw new EnvPolicyError(
+      `'${orphan}' would be approved without being recorded as decided, so nothing was written.`,
+    );
+  }
+  const approved = [...new Set(policy.approved)].sort();
+  const reviewed = [...new Set(policy.reviewed)].sort();
   return [
-    `# Which .env.local keys you approved for ${policy.repo}, and nothing else.`,
+    `# Which .env.local keys you decided about for ${policy.repo}, and what you decided.`,
     "# Written by `gjd-remote push-env`. Key NAMES only — no value has ever been",
     "# read into this file, or into the model call that proposed them.",
+    "#",
+    "# approved  goes on the box, and starts ticked next time.",
+    "# reviewed  every name you have answered for. A name in here and not in",
+    "#           approved is one you unticked: it starts unticked next time, and",
+    "#           no model is asked about it again.",
     "",
     `repo = ${JSON.stringify(policy.repo)}`,
     `saved_at = ${now.toISOString()}`,
-    sorted.length === 0
-      ? "approved = []"
-      : `approved = [\n${sorted.map((n) => `  ${JSON.stringify(n)},`).join("\n")}\n]`,
+    tomlNames("approved", approved),
+    tomlNames("reviewed", reviewed),
     "",
   ].join("\n");
+}
+
+function tomlNames(key: string, names: readonly string[]): string {
+  if (names.length === 0) return `${key} = []`;
+  return `${key} = [\n${names.map((n) => `  ${JSON.stringify(n)},`).join("\n")}\n]`;
 }
 
 /** How the bytes reach the disk. Injectable only so the readback check can be
@@ -905,4 +1021,269 @@ function errnoCode(err: unknown): string | undefined {
   if (typeof err !== "object" || err === null || !("code" in err)) return undefined;
   const code = (err as { code?: unknown }).code;
   return typeof code === "string" ? code : undefined;
+}
+
+// ----------------------------------------------------- part 5: the whole plan
+
+/**
+ * **The two hard guards, built from the file's own bytes.**
+ *
+ * This is the one place a value is compared against anything, and only a verdict
+ * leaves the closure. `localityVerdict` is the SAME call `buildEnvPayload`
+ * refuses on (scripts/gjd-remote-env.ts), not a second spelling of it, so a row
+ * cannot be tickable here and rejected there after the reader has answered every
+ * question.
+ *
+ * A name the file does not define is `"ok"`: there is no value to judge, and
+ * `buildEnvPayload` reports it as missing rather than sending an empty one.
+ */
+export function envGuards(text: string): Guards {
+  const { values } = scanEnv(text);
+  return {
+    forbiddenNames: new Set(FORBIDDEN_NAMES),
+    valueGuard: (name) => {
+      const value = values.get(name);
+      if (value === undefined) return "ok";
+      return localityVerdict(name, value) === "not-local" ? "not-local" : "ok";
+    },
+  };
+}
+
+/** Names across several lines rather than one very long one. Names only ever —
+ *  this is the list printed above the final confirmation. */
+export function wrapNames(names: readonly string[], width = 76): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const name of names) {
+    if (line === "") line = name;
+    else if (line.length + 2 + name.length <= width) line += `, ${name}`;
+    else {
+      lines.push(`${line},`);
+      line = name;
+    }
+  }
+  if (line !== "") lines.push(line);
+  return lines;
+}
+
+/** How a line the plan wants printed should look. The plan does not import a
+ *  colour function; the CLI owns the terminal. */
+export type EnvPlanTone = "plain" | "dim" | "warn" | "bad";
+
+/** What `push-env` needs from the outside world, all of it injected. Every one
+ *  of these is a thing the CLI does — money, prompts, printing — and every one
+ *  of them is a sink the leak test can watch. */
+export type EnvPlanDeps = {
+  /** The laptop's `.env.local`, whole. The only value-bearing input. */
+  text: string;
+  /** Where it was read from. Printed, and named in refusals. */
+  local: string;
+  /** The repo it belongs to. Goes in the policy and in the payload's banner. */
+  slug: string;
+  /** The saved policy, already read. Never the `error` arm — see `SavedPolicy`. */
+  saved: SavedPolicy;
+  flags: { propose: boolean; all: boolean; none: boolean; save: boolean; yes: boolean };
+  /** The paid call. Given NAMES and the reason it is being made; answers with a
+   *  proposal, or `undefined` for "there is none, carry on without one". Called
+   *  at most once, and not at all when nothing is undecided. */
+  propose: (names: readonly string[], why: string) => Promise<Map<string, ProposedKey> | undefined>;
+  /** The checklist. Not called under `--all` or `--none`. */
+  choose: (items: readonly ChecklistItem[]) => Promise<readonly string[]>;
+  /** The last question. Not called under `--yes`. */
+  confirm: (names: readonly string[]) => Promise<boolean>;
+  /** Everything the reader sees, in order. Names and canned reasons only. */
+  say: (line: string, tone: EnvPlanTone) => void;
+};
+
+/**
+ * What to do, once everything has been asked. `payload` and `policyToSave` are
+ * separately absent because they are separately conditional: a declined
+ * confirmation writes neither, `--none --save` writes only the policy, and an
+ * ordinary push writes both — the box first, so the file records what actually
+ * travelled.
+ */
+export type EnvPlan = {
+  /** The names going to the box, in checklist order. Empty when none are. */
+  send: string[];
+  /** The bytes for the box. **The only value-bearing thing this returns.** */
+  payload: EnvPayload | undefined;
+  /** What to write to `~/.config/gjd-remote/repos/`, or nothing. */
+  policyToSave: Policy | undefined;
+};
+
+/**
+ * **`push-env` for a repo with no written-down list: names, a proposal, a
+ * checklist, and what you decided remembered.**
+ *
+ * The order below is the whole design, and each step is where it is for a
+ * reason.
+ *
+ * 1. **The names come out first**, and the file's text goes nowhere else except
+ *    into `buildEnvPayload` at the very end. Everything between — the model
+ *    call, the rows on screen, the confirmation, the saved policy — is typed
+ *    against names.
+ * 2. **A file that would lose keys is refused before the model is asked.** The
+ *    same refusal the typed path makes, moved earlier: asking a paid classifier
+ *    about a name list that is missing entries, then making somebody answer a
+ *    checklist built from it, and only then refusing, spends money and time to
+ *    arrive where we already were.
+ * 3. **The model is asked only about names nobody has decided on**, which is
+ *    what `reviewed` buys (GPT Sol's Stage 4 finding 1). A second run of a repo
+ *    where every eligible key has been ticked or unticked costs nothing and
+ *    asks nothing.
+ * 4. **The guards are applied twice**, and neither time is the important one on
+ *    its own: greyed out in the checklist so the reader can see them, and
+ *    re-applied to whatever comes back, because a checkbox library's `disabled`
+ *    is presentation and `--all` never went through the library at all.
+ * 5. **The policy is worked out from what travelled**, not from what was hoped
+ *    for, and the caller writes it after the box.
+ *
+ * Refusals are `EnvPolicyError`, in the CLI's voice, because there is nothing
+ * useful this can return when the file itself is unpushable.
+ */
+export async function pushEnvPlan(deps: EnvPlanDeps): Promise<EnvPlan> {
+  const { names, problems } = extractEnvKeyNames(deps.text);
+  deps.say(`reading ${deps.local} — ${names.length} key name(s), no values`, "dim");
+  if (problems.length > 0) {
+    throw new EnvPolicyError(
+      `${deps.local} is not a file I will push — I would silently drop keys out of it:\n` +
+        problems.map((p) => `  ${p}`).join("\n") +
+        `\n  Fix those lines and run this again. Nothing was sent, and no model was asked.` +
+        `\n  (Line numbers only — the contents of a broken line may well be the secret.)`,
+    );
+  }
+  if (names.length === 0) {
+    throw new EnvPolicyError(`${deps.local} has no keys in it at all, so there is nothing to send.`);
+  }
+
+  const saved = deps.saved.kind === "policy" ? deps.saved : undefined;
+  const approved = saved === undefined ? undefined : new Set(saved.approved);
+  const reviewed = saved === undefined ? undefined : new Set(saved.reviewed);
+
+  const guards = envGuards(deps.text);
+  /* A key that can never be sent can never be decided either, so it would stay
+     undecided for the life of the repo — and asking the model about it is a paid
+     call, every push, for a row that is greyed out on arrival. Found live on
+     2026-09-02: the second run of this on gjdutils asked again about
+     DATABASE_URL_PROD and HETZNER_CLOUD_API_TOKEN, which is every run forever. */
+  const blocked = new Set(
+    names.filter((n) => guards.forbiddenNames.has(n) || guards.valueGuard(n) === "not-local"),
+  );
+
+  const why = proposalReason(names, reviewed, blocked, deps.flags.propose);
+  let proposal: Map<string, ProposedKey> | undefined;
+  if (why === null) deps.say("no keys you have not decided on — skipping the model", "dim");
+  else proposal = await deps.propose(names, why);
+
+  const items = planChecklist({
+    names,
+    proposal,
+    approved,
+    reviewed,
+    savedAt: saved?.savedAt,
+    // Greg's call, 2026-09-02: for a key nobody has decided yet, the model's
+    // answer IS the starting state, with the reason on each row. The plan
+    // records GPT Sol's objection to that and that it was overruled —
+    // docs/plans/260902h-…, "Open questions for Greg".
+    preTick: "proposal",
+    ...guards,
+  });
+
+  const chosen = await chooseNames(items, deps);
+  const { send, refused } = applyGuards(chosen, items, guards);
+  for (const r of refused) deps.say(`✗ ${r.name}  ${r.why}`, "bad");
+  const decided = nextPolicyNames(items, send, saved);
+
+  if (send.length === 0) {
+    deps.say("nothing selected, so nothing was written to the box.", "warn");
+    if (!deps.flags.save) {
+      deps.say("--save would record those answers; without it, nothing is remembered.", "dim");
+      return { send: [], payload: undefined, policyToSave: undefined };
+    }
+    return { send: [], payload: undefined, policyToSave: { repo: deps.slug, ...decided } };
+  }
+
+  for (const line of wrapNames(send)) deps.say(`  ${line}`, "plain");
+  if (!deps.flags.yes && !(await deps.confirm(send))) {
+    deps.say("nothing was sent.", "plain");
+    return { send: [], payload: undefined, policyToSave: undefined };
+  }
+  return {
+    send,
+    payload: buildEnvPayload(deps.text, { names: send, source: `you approved for ${deps.slug}` }),
+    policyToSave: { repo: deps.slug, ...decided },
+  };
+}
+
+/** The checklist, or the flag that stands in for it. `--all` means every
+ *  SELECTABLE row — `selectableNames` rather than a map over the items, so
+ *  "select all" and the guard cannot come to different conclusions. */
+async function chooseNames(
+  items: readonly ChecklistItem[],
+  deps: EnvPlanDeps,
+): Promise<readonly string[]> {
+  if (deps.flags.none) {
+    deps.say("--none: nothing selected", "dim");
+    return [];
+  }
+  if (deps.flags.all) {
+    const all = selectableNames(items);
+    deps.say(`--all: ${all.length} of ${items.length} rows are selectable`, "dim");
+    return all;
+  }
+  return deps.choose(items);
+}
+
+/**
+ * **Whether to ask the model, and the line saying why.** `null` is "do not ask".
+ *
+ * Not asked every time: a repo where every eligible name has been ticked or
+ * unticked has nothing to classify, and a paid call per push is a paid call for
+ * an answer nobody reads. `--propose` forces it, which is how you get a fresh
+ * opinion after editing the policy by hand.
+ *
+ * It counts UNDECIDED names, not unapproved ones. Counting unapproved ones is
+ * finding 1 in one line: `--none --save` would then ask again on the very next
+ * run, about the exact keys the reader had just said no to.
+ */
+function proposalReason(
+  names: readonly string[],
+  reviewed: ReadonlySet<string> | undefined,
+  blocked: ReadonlySet<string>,
+  forced: boolean,
+): string | null {
+  if (forced) return "--propose";
+  if (reviewed === undefined) return "no saved policy for this repo yet";
+  const undecided = names.filter((n) => !blocked.has(n) && !reviewed.has(n));
+  return undecided.length > 0 ? `${undecided.length} key(s) you have not decided on` : null;
+}
+
+/**
+ * **What the policy should say afterwards.**
+ *
+ * `reviewed` grows and never shrinks; `approved` is replaced for the names on
+ * this checklist and left alone for the ones that were not.
+ *
+ * Two deliberate consequences:
+ *
+ * - **A key deleted from `.env.local` keeps its answer.** It was not on the
+ *   checklist, so the reader made no decision about it today, and dropping it
+ *   would mean that re-adding a key you had rejected re-proposed it as if it
+ *   were new. It costs a stale name in a list nothing iterates.
+ * - **A key that has since become ineligible loses its approval**, because it
+ *   IS on the checklist — greyed out — and can never be sent again. It stays in
+ *   `reviewed`, so it is not re-proposed either.
+ */
+function nextPolicyNames(
+  items: readonly ChecklistItem[],
+  send: readonly string[],
+  saved: { approved: readonly string[]; reviewed: readonly string[] } | undefined,
+): { approved: string[]; reviewed: string[] } {
+  const shown = new Set(items.map((i) => i.name));
+  const untouched = (saved?.approved ?? []).filter((n) => !shown.has(n));
+  const approved = [...new Set([...send, ...untouched])];
+  const reviewed = [
+    ...new Set([...(saved?.reviewed ?? []), ...selectableNames(items), ...approved]),
+  ];
+  return { approved, reviewed };
 }
