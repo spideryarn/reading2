@@ -50,7 +50,7 @@ import type { Block, BlockId, IllustratedResponse, Job, SketchResponse } from ".
 import { apiFetch, readJson } from "./lib/api.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
-import { useStepJob } from "./useStepJob.js";
+import { type StepFailure, useStepJob } from "./useStepJob.js";
 
 export type IllustratedStatus = "loading" | "ready" | "none" | "error";
 
@@ -91,7 +91,15 @@ export interface UseIllustrated {
   slug: string;
   error: string | null;
   job: Job | null;
-  failed: string | null;
+  /**
+   * The failure, with the two things a surface has to know about it.
+   *
+   * A bare `string | null` until 2026-09-03, when `StepFailure` grew `retryable`
+   * and `retry` so the band and the shelf card could not give two answers about
+   * one job — `useStepJob.ts` § `StepFailure`. This is passed straight to
+   * `JobProgress`, so following that type is what keeps them one answer here too.
+   */
+  failed: StepFailure | null;
   /** This tab can see the job on screen and cannot move it. `StepJob.stalled`. */
   stalled: boolean;
   /** The POST has gone and the queue has not seen it yet. `StepJob.starting`. */
