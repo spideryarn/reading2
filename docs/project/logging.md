@@ -689,7 +689,8 @@ about one of those. And a `SyntaxError` that reaches a `catch` is written down *
 The fix is one module, [`src/parse-json.ts`](../../src/parse-json.ts), used by every parse whose
 error can reach a log line. It throws a `MalformedJson` naming the artefact, keeps the byte offset
 (positional, useful, safe), and says which *shape* of failure it was — ran out part-way, never began
-as JSON at all, or broke at an offset — without a character of the content.
+as JSON at all, was a complete document with material after it, or broke at an offset — without a
+character of the content.
 
 Three things about it are load-bearing:
 
@@ -701,11 +702,14 @@ Three things about it are load-bearing:
   goes stale in a Node upgrade with nothing going red. Breaking at or past the last character is
   arithmetic, and it means the same thing whatever it was called.
 - **The stage files are the half that is easy to miss.** `src/hierarchy.ts`, `src/arc.ts`,
-  `src/glossary.ts`, `src/tweets.ts` and `src/summarise.ts` never call the logger — but a step that
+  `src/glossary.ts` and `src/tweets.ts` never call the logger — but a step that
   throws is logged by [`src/jobs.ts`](../../src/jobs.ts) with `errorFields`. Same lesson as the
   `mn.title` throw above: an error is a value that travels, and where it is thrown is not where it is
   written down. Both their model-response parses *and* their `blocks.json`/`tree.json` reads go
-  through the helper — and `blocks.json` **is** the article.
+  through the helper — and `blocks.json` **is** the article. A model's answer goes through
+  `parseJsonAnswer`, an artefact through `parseJsonFrom`; the difference is that an answer is not
+  *only* JSON, and assuming it was killed two paid steps on 2026-09-03
+  ([260903k](../plans/260903k-model-json-answer-extraction-in-the-shared-parse-seam.md)).
 
 **A developer debugging a bad model response loses those characters, and that was checked rather than
 waved through.** The stages write `tree.json`, `arc.json` and the rest *after* parsing succeeds, so a

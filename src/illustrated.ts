@@ -114,7 +114,7 @@ import {
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL } from "./models.js";
-import { parseJsonFrom, stripFence } from "./parse-json.js";
+import { parseJsonAnswer } from "./parse-json.js";
 import { hashProfile, profileSection } from "./profile.js";
 import type { Sketch, SketchItem, SketchScene } from "./sketch-scene.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
@@ -711,7 +711,7 @@ export interface IllustratedRun {
 }
 
 function parseJson(raw: string): unknown {
-  return parseJsonFrom<unknown>(stripFence(raw), "the model's answer");
+  return parseJsonAnswer<unknown>(raw, "the model's answer");
 }
 
 function dataUrl(bytes: Uint8Array, mediaType: string): string {
