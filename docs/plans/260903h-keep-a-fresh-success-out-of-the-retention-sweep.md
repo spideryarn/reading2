@@ -213,6 +213,40 @@ places: the contract in `src/store/jobs.ts` § `trimFinished`, `KEEP_FINISHED`'s
 - 2026-09-03: plan written, reviewed by GPT Sol — **not ready**, on the `created_at` clock. Revised
   to `finished_at`, the tie-break test's rewrite planned rather than forbidden, the trade against
   `0d42a484` stated, and the client-half reasoning corrected where it overclaimed.
+- **2026-09-03, done.** Stages 1 and 2 landed and are on `dev`; stage 3 is done bar the browser
+  check, which is below. Commits: `acf57b16` the drive loop, `f8b72549` the retention rule,
+  `9ac9f40c` the glossary review's findings, `b3b5e93b` the postmortem's corrected ranking.
+
+  **Evidence.** Both retention cases watched red on both adapters before the change. Three mutation
+  checks, because a case that has only ever been green proves nothing: the `id` key deleted from
+  both adapters (tie-break goes red), the interleave replaced by the old absolute preference (the
+  success case goes red at the smaller fixture), and the `running` arm deleted from
+  `liveJobHoldingADraftQuery` (the new 409 case goes red, and nothing else in that file notices —
+  which is why the hole existed). The drive loop measured at 76 advances in ten simulated minutes
+  before, one after. Typecheck, build, cycles, chain and `committed` clean; the 128 tests across the
+  six touched suites green after merging `origin/dev`.
+
+  **`npm test` on the merged tree: 4 failed, 10794 passed.** None of the four is this work.
+  `cold-start-report` and `store-shelf-reads` pass in isolation — shared-database contention.
+  `diagram-css` and `doc-links` fail reproducibly and both arrived in the merge: a hex literal in
+  the diagram CSS, and `260903f`'s link to `scripts/stage.ts`, which that doc itself says was
+  prototyped and never landed.
+
+  **The browser check was not done, and this is why.** The dev owner holds 48 terminal
+  non-successes; the bug needs 50. Below the line *Start again* refreshes the panel whether or not
+  this fix exists, so the check would have proved nothing — the precondition this plan insisted on.
+  Establishing it means writing rows to the local database every worktree on this box shares, which
+  is Greg's call rather than one to make while tidying up.
+
+  **What the work turned up, and was fixed here.** The parity suite's `endJob` called `claim` for
+  its effect and dropped the outcome, so contention surfaced three lines later as
+  `StaleAttemptError` — an error about a fence bug that had not happened. `claim` refuses on a
+  concurrency cap counted across the *whole* `jobs` table and on the `queue_state` singleton, so on
+  a box with nine worktrees sharing one Postgres this is a real event, roughly two runs in six while
+  the box was loaded. It now asserts through `expectClaimed`, which exists for exactly this. The
+  flakiness is unchanged; the error now names its cause. The real fix is a private test database —
+  `260903f` absorbs that plan.
+
 - 2026-09-03: second review — **not ready** again, but every finding arrived with its own fix and
   none of them changed the design. All seven applied: the guarantee qualified to `keep >= 2` with
   the `now()` caveat, case 2 written to Sol's exact spelling because a vaguer one passes either way,

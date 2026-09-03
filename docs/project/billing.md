@@ -102,17 +102,18 @@ values ('scholar', 'Spideryarn Scholar', 'For people who read for a living.', 50
         'spideryarn_scholar_monthly', 30);
 ```
 
-**A description should not restate the allowance.** `/profile` renders
-`ingests_per_period` structurally and the description beside it, so a description that repeats the
-number is a second copy that the one-`UPDATE` quota change above does not touch — raise the quota to
-50 and the sentence goes on saying 20. The two seeded rows predate this line and do repeat it, which
-is redundant rather than wrong; whoever next edits them should take the first sentence out.
+**A description must not restate the allowance.** `/profile` renders `ingests_per_period`
+structurally and puts the description beside it, so a description that opens by repeating the number
+is a second copy the one-`UPDATE` quota change above does not touch — raise the quota to 50 and the
+sentence goes on saying 20. The two seeded rows did repeat it, which read on screen as *"20 articles
+a month. 20 articles a month. Reading what you have already added is always free."* until a browser
+run caught it on 2026-09-03; `drizzle/20260903090000_…` took the first sentence back out.
 
 Then, for either:
 
 ```bash
-npx tsx scripts/stripe-setup.ts            # says what it would do
-npx tsx scripts/stripe-setup.ts --apply    # creates the Stripe objects, writes the id back
+npm run stripe:setup                     # says what it would do
+npm run stripe:setup -- --apply          # creates the Stripe objects, writes the id back
 ```
 
 **Changing an amount works the same way** — edit the row, run the script. Stripe prices are
@@ -680,9 +681,16 @@ four events in `HANDLED_EVENTS`, with its own permanent `whsec_…` revealed on 
 page. That secret is per-endpoint and unrelated to the API keys; it goes in the Vercel production
 environment.
 
-`npm run stripe:check` fails if nothing is listening at that URL, because a live account with no
-endpoint takes money and grants nothing — the one failure mode where every other check passes and
-the customer is simply not served.
+**Done on 2026-09-03**: endpoint `we_1UBXjMLv4piDbwcbrLUPudWD`, and both `STRIPE_SECRET_KEY` and
+`STRIPE_WEBHOOK_SECRET` set on Vercel Production. Until that day **neither was set there at all**,
+so live Checkout would have answered 503 however well the Stripe account was configured — the
+account and the deployment are two separate places to finish the job, and `stripe:check` only sees
+the first.
+
+`npm run stripe:check -- --prod` fails if nothing is listening at that URL, because a live account
+with no endpoint takes money and grants nothing — the one failure mode where every other check
+passes and the customer is simply not served. It checks Stripe's side; what it cannot see is whether
+the deployment holds the secrets, which is `vercel env ls production`.
 
 ## The three billing routes
 

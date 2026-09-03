@@ -34,6 +34,20 @@
        once the real factory replaces it. Listed so `npm run check` covers it
        rather than reporting it as a file no project checks. */
     "vitest.spike.config.ts",
+    /* Stage A's witness 2 in
+       docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md:
+       the instrumented run that produced tests/store-migration-witness.json.
+       **Kept rather than thrown away, because that JSON is a measurement with a
+       date on it and the tree keeps moving** — it recorded 588 test files and the
+       import walk saw 597 ninety minutes later. Whoever needs to re-take it needs
+       this. It is not wired into vitest.config.ts and `npm test` never loads it;
+       run it deliberately:
+
+         FSW_OUT=<path>.jsonl npx vitest run --config ./vitest.witness.config.ts
+
+       Deleted with the filesystem store in stage G, when there is nothing left to
+       instrument. */
+    "vitest.witness.config.ts",
     "drizzle.config.ts"
   ],
   "exclude": ["src/web"]

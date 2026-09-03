@@ -1,4 +1,24 @@
 {
+  "permissions": {
+    "deny": [
+      "mcp__vercel__buy_pro",
+      "mcp__vercel__buy_domain",
+      "mcp__vercel__buy_credits",
+      "mcp__vercel__buy_addon",
+      "mcp__vercel__use_vercel_cli",
+      "mcp__vercel__pause_project",
+      "mcp__vercel__update_project_deployment_protection",
+      "mcp__vercel__get_access_to_vercel_url"
+    ],
+    "ask": [
+      "mcp__vercel__deploy_to_vercel"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "supabase",
+    "vercel",
+    "sentry"
+  ],
   "hooks": {
     "PreToolUse": [
       {
@@ -25,24 +45,7 @@
   "worktree": {
     "baseRef": "head"
   },
-  "enabledMcpjsonServers": [
-    "supabase",
-    "vercel",
-    "sentry"
-  ],
-  "permissions": {
-    "deny": [
-      "mcp__vercel__buy_pro",
-      "mcp__vercel__buy_domain",
-      "mcp__vercel__buy_credits",
-      "mcp__vercel__buy_addon",
-      "mcp__vercel__use_vercel_cli",
-      "mcp__vercel__pause_project",
-      "mcp__vercel__update_project_deployment_protection",
-      "mcp__vercel__get_access_to_vercel_url"
-    ],
-    "ask": [
-      "mcp__vercel__deploy_to_vercel"
-    ]
+  "enabledPlugins": {
+    "stripe@claude-plugins-official": true
   }
 }
