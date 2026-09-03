@@ -215,6 +215,136 @@ export function by(
     .sort((a, b) => b.nanos - a.nanos);
 }
 
+/** One `(job, step)` that more than one collector ran. */
+interface DuplicateJobStep {
+  jobId: string;
+  stepName: string;
+  /** Distinct `run_id`s — one per collector, so one per execution of the step. */
+  runs: number;
+  calls: number;
+  /** What all of those runs cost together, all three pockets. */
+  nanos: number;
+}
+
+/**
+ * **Did any job step run more than once?** — the question nobody had ever asked
+ * the ledger.
+ *
+ * On 2026-08-30 one article's `hierarchy` step ran **eleven times at once**
+ * under a single job id, because a dev-server restart re-evaluated the modules
+ * holding the queue's locks while the step already in flight kept going.
+ * docs/postmortems/260902c-the-truncation-retry-cost-storm.md fixed the cause
+ * and then ranked *reading the ledger for duplicates at all* as its second
+ * remedy, in these words:
+ *
+ * > nobody had ever asked it, on 565 rows. The two big ones were found by eye
+ * > three days later; the six on `read` were never found at all until this.
+ *
+ * **Distinct `run_id`s, not rows.** A collector is opened once per execution
+ * and every call inside it carries that id, so one step legitimately writes
+ * several rows sharing a `run_id` — `hierarchy` makes three — and counting rows
+ * would report every ordinary step as a duplicate. What is not ordinary is two
+ * *collectors* under one `(job_id, step_name)`. See `AiCallRow.runId` in
+ * src/ai-spend.ts.
+ *
+ * **A pure fold over the rows the report already has**, deliberately, rather
+ * than a grouped query in the database. The incident happened in `files` mode,
+ * in the JSONL ledger, so a Postgres-only `GROUP BY` would not have fired on the
+ * one case this is being built for — and `main()` has already loaded the window
+ * into memory to draw every table below. One fold covers both stores because
+ * both answer `costStore.read()` in the same shape (src/store/ai-calls.ts picks
+ * which), and there is no second implementation to disagree with the first.
+ *
+ * ## Why this cannot become a wall of output
+ *
+ * It is **a line in a report somebody ran**, not an alert, so there is nothing
+ * to tune and nobody to wake — which is most of the answer. The rest: a healthy
+ * ledger prints nothing at all, because only groups above one run are returned;
+ * the universe is bounded by the distinct `(job, step)` pairs inside the range
+ * asked for, not by the row count; and `printDuplicateJobSteps` shows the worst few
+ * and counts the rest, so the pathological case — every step duplicated — is a
+ * short paragraph rather than a page.
+ *
+ * **What it deliberately does not try to tell apart** is a duplicate execution
+ * from an honest retry after a failure: `advance` really does run a step again
+ * when the last attempt was interrupted, and that is a second `run_id` too. Both
+ * are worth a human's eye and neither is worth a threshold, so the line reports
+ * the shape and says which it cannot distinguish.
+ *
+ * Exported for tests/ai-cost-cli.test.ts, like `by` above and for the same
+ * reason: what a number counts is not something a type can check.
+ */
+export function duplicateJobSteps(rows: readonly AiCallRow[]): DuplicateJobStep[] {
+  const groups = new Map<string, { jobId: string; stepName: string; runs: Set<string>; calls: AiCallRow[] }>();
+  for (const r of rows) {
+    /* A chat answer, a search, an eval, a CLI stage: not a job step, so there
+       is no "ran twice" to ask about. `scopeKind` as well as the two fields,
+       because it is the row's own word for what it was — a row carrying a job
+       id under some other scope is not a step the queue ran, and would be a
+       silent third meaning for this line. Skipped rather than grouped under a
+       shared `—` key, which would pile every unattributed call in the ledger
+       into one bogus group of hundreds of runs. */
+    if (r.scopeKind !== "job_step") continue;
+    if (!r.jobId || !r.stepName) continue;
+    /* NUL as the separator, because a job id or a step name containing the
+       separator would otherwise merge two groups into one. */
+    const key = `${r.jobId}\u0000${r.stepName}`;
+    const group = groups.get(key);
+    if (group) {
+      group.runs.add(r.runId);
+      group.calls.push(r);
+    } else {
+      groups.set(key, {
+        jobId: r.jobId,
+        stepName: r.stepName,
+        runs: new Set([r.runId]),
+        calls: [r],
+      });
+    }
+  }
+  return [...groups.values()]
+    .filter((g) => g.runs.size > 1)
+    .map((g) => {
+      const { credits, upstream, computed } = totalRows(g.calls);
+      return {
+        jobId: g.jobId,
+        stepName: g.stepName,
+        runs: g.runs.size,
+        calls: g.calls.length,
+        nanos: credits + upstream + computed,
+      };
+    })
+    /* Most runs first, and money as the tie-break: eleven runs of one step is
+       the shape that matters, and between two of the same shape the expensive
+       one is the one to look at. */
+    .sort((a, b) => b.runs - a.runs || b.nanos - a.nanos);
+}
+
+/** How many duplicated steps are listed before the rest are counted instead. */
+const MOST_DUPLICATES_SHOWN = 10;
+
+function printDuplicateJobSteps(rows: readonly AiCallRow[]): void {
+  const repeated = duplicateJobSteps(rows);
+  /* Nothing at all when there is nothing to say. A "0 steps ran twice" line
+     every time is how a reader learns to skip the one that is not zero. */
+  if (repeated.length === 0) return;
+  console.log(`\n${repeated.length} job step(s) ran more than once in this range:`);
+  for (const r of repeated.slice(0, MOST_DUPLICATES_SHOWN)) {
+    const step = `${r.jobId} · ${r.stepName}`;
+    console.log(
+      `  ${step.padEnd(44)}  ${String(r.runs).padStart(3)} runs  ${formatNanos(r.nanos).padStart(10)}  ${String(r.calls).padStart(5)} call(s)`,
+    );
+  }
+  if (repeated.length > MOST_DUPLICATES_SHOWN)
+    console.log(`  …and ${repeated.length - MOST_DUPLICATES_SHOWN} more.`);
+  note(
+    "A step that was interrupted and honestly retried looks exactly like this, so a two " +
+      "here is ordinary. A large number is not: on 2026-08-30 one hierarchy step ran eleven " +
+      "times at once under one job id, and every run was billed. " +
+      "docs/postmortems/260902c-the-truncation-retry-cost-storm.md.",
+  );
+}
+
 /**
  * One line of a breakdown — and **`unpriced` is not decoration**.
  *
@@ -986,6 +1116,15 @@ async function main(): Promise<void> {
     console.log(
       `\n${unreadable} line(s) of the ledger could not be read, and are in no total below.`,
     );
+
+  /* **Above the money, and above the early return.** Above the money because it
+     changes how every figure below should be read: a `By article` total that is
+     eleven times what it should be is not a story about that article. Above the
+     early return because everything else that must be said whatever the rows
+     look like is up here too — the unreadable count above, `unmetered()` and
+     `undeclared()` inside the branch — and a duplicate-run line that only
+     appears on some paths is one somebody will one day not see. */
+  printDuplicateJobSteps(rows);
 
   if (rows.length === 0) {
     console.log("\nNo calls recorded in this range.");
