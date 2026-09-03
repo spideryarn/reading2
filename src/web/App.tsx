@@ -375,7 +375,10 @@ export function App() {
     /* The fifth, and the least arguable of them: a price somebody has to sign
        up to read is the thing people complain about, and this is the page one
        person sends another. */
-    if (route.kind === "pricing") return <PricingPage />;
+    /* `readerId={null}` is what stops the page asking `/api/billing/usage` who
+       this is — a 401 on the one page a stranger is most likely to be sent, for
+       a line that is not about them. PricingPage.tsx § which plan. */
+    if (route.kind === "pricing") return <PricingPage readerId={null} />;
     /* **The sixth, since 2026-09-03, and the only one that is not a page
        somebody was sent.** A stranger at an address nobody minted is exactly
        the reader this gate's default fails: the pitch at `/asdf` is a plausible
@@ -490,7 +493,12 @@ function SignedIn({
     return (
       <>
         <HomeLogo />
-        <PricingPage />
+        {/* **`key`, for the same reason the shelf above has one.** A direct A→B
+            sign-in leaves the route alone, so without this React keeps the
+            instance and `useBilling`'s one effect never re-runs — B would read
+            A's tier and A's usage count. Keyed and identified, like `Library`.
+            GPT Sol's review of this change, 2026-09-03. */}
+        <PricingPage key={user.id} readerId={user.id} />
       </>
     );
   /* An address nobody minted, with the corner logo every other standalone page
