@@ -419,15 +419,25 @@ when("the admin feedback read on Postgres", () => {
    * false because it had written three. On a shared local database that is
    * simply untrue, and the test was asserting something about the machine rather
    * than about the store.
+   *
+   * **And measuring the count was still not enough — it wrote one row.** On the
+   * shared database the table always held several, so `n - 1` below was a
+   * sensible limit; on a private test database with an empty `feedback` table
+   * `n` is 1 and `n - 1` is **zero**, which the store legitimately clamps to one
+   * (`clamps a nonsensical limit`, above) and the length assertion fails. Two
+   * rows, so the boundary the case is named for is inside the store's range
+   * whatever the table started with. Found by running this suite against a
+   * factory-minted database, 2026-09-03; stage T-C.
    */
   it("says there are more only when it has seen one more", async () => {
+    await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: mintId() })));
     await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: mintId() })));
     const [{ n = 0 } = {}] = (
       await getDb().execute<{ n: number }>(
         sql`select count(*)::int as n from spideryarn.feedback`,
       )
     ).rows;
-    expect(n).toBeGreaterThan(0);
+    expect(n, "two rows were written, so a limit of n - 1 is a real page").toBeGreaterThan(1);
 
     /* Exactly as many as exist: nothing beyond the page, so no cursor. This is
        the boundary `reports.length === limit` gets wrong, and the whole reason
