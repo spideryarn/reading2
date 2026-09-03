@@ -40,7 +40,7 @@ matching before the article is even reached.
 | Cache | Who shares it | The rendering |
 |---|---|---|
 | **request path** | search, chat, explain — one entry *each*, per article. All three use an **explicit** breakpoint on the article; see the chat postmortem for why automatic mode is not an option here | `articleWithIds` |
-| **pipeline** | arc and tweets — one shared entry per article. **Not glossary; see below** | `articleText` |
+| **pipeline** | **three groups**, one shared entry each: `arc`+`tweets`, `glossary`+`quotes`, and `ideas`+`timeline`+`quiz`+`sketch`. Membership is effort **and** rendering together, read off [`STAGE_EFFORT`](../../src/models.ts) rather than kept in a second list here — **see below for why glossary is not with arc** | `articleText`, and `articleWithIds` for the third group |
 | **labels** | the parallel batches of one run | the outline, via `batchParts` |
 
 All three are OpenRouter's caches now, and were not always — see
@@ -52,12 +52,27 @@ within one ingest, or a top-up landing inside the 5-minute TTL of the pass befor
 opportunistic by nature, and the eval is what will say how often it actually happens.
 
 The labels row reads as the reliable one — its four batches run together by construction — and on the
-articles we have, it caches nothing at all. Its shared prefix is the system prompt plus the tree's
+small articles it caches nothing at all. Its shared prefix is the system prompt plus the tree's
 outline, and that comes to roughly **660 tokens** on the 141-block article and **950** on the
 360-block one: both under the 1,024-token floor below. So the breakpoint is accepted and does
-nothing, and it will start working on its own the day an article's outline is long enough. Until
-then `generateLabels` skips the warm-up that would otherwise pay a batch of latency to warm a cache
-that cannot exist, and reports `estimatedCacheable: false` beside the number of calls it made.
+nothing there, and `generateLabels` skips the warm-up that would otherwise pay a batch of latency to
+warm a cache that cannot exist, reporting `estimatedCacheable: false` beside the number of calls it
+made.
+
+**This paragraph used to end "it will start working on its own the day an article's outline is long
+enough". It has.** Measured on a 16,855-word, 186-block article, the labels prefix is **~1,107
+tokens** and clears the floor: three parallel batches each write it, a fourth call (a shortfall
+re-ask, issued after they return) reads 1,107 back
+([evals/results/cost-per-article-2026-09-03.md](../../evals/results/cost-per-article-2026-09-03.md)).
+Nothing changed in the code; the corpus grew. Worth keeping in mind as the prediction that came true
+quietly — no test went red and no line moved, which is the ordinary way a doc stops being accurate.
+
+That fan-out is also the one place here where **writing an entry nobody reads is the correct
+choice**: the three batches start together, and an entry is not readable until the first response
+begins streaming, so two of the three writes are known to be wasted before they are made. We pay
+them to keep the batches parallel. `evals/cost` § `checkBatchedDraw` therefore does not match writes
+to reads one-for-one — it asks only that *some* later call collected, which is the question that
+distinguishes a leak from a deliberate cost.
 
 Both fields, because the flag alone cannot carry it: `cacheReadTokens: 0` is also what a run of one
 fresh call reports, and what a fully resumed run reports, and neither of those is a fault. The pair
@@ -70,9 +85,8 @@ accepted: the worst case is a few cents and a batch of latency, and the alternat
 
 `arc`, `tweets` and `glossary` do emit byte-identical article text — that part of the design worked.
 They still cannot share a cache, because **`output_config.effort` is part of the cache key**, and
-`glossary` runs at `medium` while the other two run at `high`
-([src/glossary.ts:1060](../../src/glossary.ts), [src/arc.ts:253](../../src/arc.ts),
-[src/tweets.ts:402](../../src/tweets.ts)).
+the three stages are not all set to the same effort (`src/models.ts` § `STAGE_EFFORT`, which is
+the one place that says which runs at what).
 
 This is measured, not inferred — four calls with an identical 7,291-token cached block, varying only
 `effort`, in [../research/260826b-prompt-caching-anthropic.md](../research/260826b-prompt-caching-anthropic.md).
@@ -112,11 +126,12 @@ renderer was that fact.
 
 ### And on the normal path, the pipeline breakpoints lose money
 
-`DEFAULT_INGEST_STEPS` is `fetch, extract, blocks, hierarchy, arc`
-([src/pipeline.ts:102](../../src/pipeline.ts)) — `tweets`, `glossary` and `summary` are things a
-reader asks for later, by Greg's decision of 2026-08-25. So adding an article runs `arc` and nothing
-that could read what `arc` wrote, and a top-up minutes or days later has long missed the 5-minute
-TTL.
+`DEFAULT_INGEST_STEPS` is `fetch, extract, blocks, hierarchy, assets`
+([`src/pipeline.ts`](../../src/pipeline.ts)) — `arc` moved out of it on 2026-08-29
+([260829f](../plans/260829f-defer-arc-and-rename-hierarchy.md)), and `tweets`, `glossary` and
+`summary` were always things a reader asks for later, by Greg's decision of 2026-08-25. So an
+ordinary ingest now runs **no article stage at all**, and a top-up minutes or days later has long
+missed the 5-minute TTL.
 
 That is a 25% write premium paid on every ingest against a read that, on the normal path, never
 comes. On the constitution it is about **2.4¢ an article** — small, and reliably wasted.
@@ -125,15 +140,50 @@ The paragraph above already called this opportunistic. The correction GPT Sol su
 misses are not the unlucky case here, they are the *default* case, which is a different thing to
 write in a doc and a different thing to decide about.
 
-**So the breakpoint is now conditional.** A stage marks the article only when a later step *in the
-same job* is in its cache group — `sharesArticleCache` in [`src/pipeline.ts`](../../src/pipeline.ts),
+**So the breakpoint is conditional.** A stage marks the article only when **another step of the same
+job** is in its cache group — `cacheArticleForStep` in [`src/pipeline.ts`](../../src/pipeline.ts),
 set from `job.steps` in [`src/jobs.ts`](../../src/jobs.ts) and carried on `StepContext.cacheArticle`.
-An ordinary ingest therefore marks nothing, a job that asks for arc and tweets together marks the
-arc, and a `{ steps: ["glossary"] }` job on its own marks nothing, which is correct: there is no
-second call.
+An ordinary ingest therefore marks nothing, a job that asks for arc and tweets together marks **both**,
+and a `{ steps: ["glossary"] }` job on its own marks nothing, which is correct: there is no second
+call.
 
 The default is **off**. A cache write costs 1.25× and an unread prefix never earns it back, so the
 question a stage has to answer is not "could this be cached" but "is anyone coming".
+
+> **"Another step", not "a later step" — and for eight days this doc described an optimisation that
+> had never once worked.** The predicate asked only whether a *later* step of the job would read what
+> this one writes. That marks the stage that **writes** the entry and never the one that **reads** it,
+> because the reader is the last member of its group by construction. A request carrying no
+> `cache_control` performs no lookup however warm the entry is, so every batched pair paid the 1.25×
+> premium and collected nothing — the precise loss this whole section exists to prevent, reintroduced
+> by the commit that documented it as fixed.
+>
+> Found by measuring money, in `evals/cost`, and by nothing else: the job succeeded, the artefacts
+> were right, and `tests/article-cache-group.test.ts` asserted the broken behaviour as correct.
+> **Fixed 2026-09-03** and verified on a paid run — `arc` writes 25,428 tokens, `tweets` reads 25,428
+> back and its uncached input falls from 27,533 to 2,112, worth $0.0458 on that one pair (predicted
+> $0.045770, measured $0.045756).
+> [260903c](../postmortems/260903c-the-conditional-article-cache-breakpoint-marks-the-writer-but-never-the-reader.md)
+> is the whole story, including why the `status === "done"` filter the postmortem originally
+> recommended was dropped.
+
+**Where the predicate has to guess, it guesses yes**, and the arithmetic is the reason. A marker sent
+onto a cold prefix costs 0.25× of it; a marker withheld from a warm one costs 0.9×. Wrongly marking
+is 3.6× cheaper than wrongly withholding — which is also why *fixing* the bug above was worth 3.6×
+what deleting the optimisation would have saved (18.6% of a batched job against 5.2%).
+
+That asymmetry is an argument for marking unconditionally, the way every stage did before
+`24335207`, and **we are deliberately not taking it**, because the break-even is a rate nobody has
+measured. **Two rates, and they are not the same number** — GPT Sol caught this paragraph quoting
+one and proposing to measure the other:
+
+| you measure | break-even | why |
+|---|---:|---|
+| the **per-call warm-hit rate** — of all marked calls, the fraction that find a live prefix | 0.25 / (0.25 + 0.9) ≈ **21.7%** | each call either writes at 1.25× or reads at 0.1×, against 1.0× for never marking |
+| the **conversion rate** — of first presses, the fraction followed by a same-group second inside the TTL | 0.25 / 0.9 ≈ **27.8%** | the first press always pays the 0.25× premium; only the second collects the 0.9× saving |
+
+Measure whichever you will actually observe, and say which. Settling it by argument is exactly how
+this section got its last two entries.
 The request path gets three entries rather than one because the three differ *before* the article:
 search sends no tools, chat and explain send `openrouter:web_search`, and all three have their own
 system prompt. Unifying those to chase one shared entry would mean degrading three prompts to suit an

@@ -17,7 +17,9 @@
  *
  * docs/project/experimental-features.md. The store and the route are covered by
  * tests/store-reader-parity.test.ts and tests/routes.test.ts; this is the half
- * a reader touches.
+ * a reader touches. The client-side store the switch now reads — and what it
+ * does across a sign-in, a sign-out and an account switch — is
+ * tests/experimental-store.test.tsx.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -49,7 +51,36 @@ vi.mock("../src/web/lib/api.js", () => ({
   readJson: () => answer(),
 }));
 
+/**
+ * **The store's own auth listener**, so this file can be the SDK.
+ *
+ * Since 2026-09-03 the store subscribes to `onAuthStateChange` itself rather
+ * than being told by an effect in `App.tsx` — the effect ran a frame after its
+ * children had rendered, which on an account switch is one frame of the last
+ * reader's setting drawn for the next one. tests/experimental-store.test.tsx is
+ * where that lifecycle is covered; here it is only how a session gets posed.
+ */
+const authListeners: ((event: string, session: unknown) => void)[] = [];
+
+vi.mock("../src/web/lib/supabase.js", () => ({
+  supabase: {
+    auth: {
+      getSession: async () => ({ data: { session: null } }),
+      onAuthStateChange: (fn: (event: string, session: unknown) => void) => {
+        authListeners.push(fn);
+        return { data: { subscription: { unsubscribe() {} } } };
+      },
+    },
+  },
+}));
+
 const { SettingsSection } = await import("../src/web/SettingsSection.js");
+const { resetForTests, snapshot, subscribe } = await import("../src/web/experimental-store.js");
+
+/* The store starts listening on the first `subscribe()`, which in the app is
+   the first component mounting. Standing in for it here means a session can be
+   posed *before* anything renders, which `paint` below needs. */
+subscribe(() => {});
 
 let host: HTMLDivElement;
 let root: Root;
@@ -58,6 +89,18 @@ const box = (): HTMLInputElement => host.querySelector("input[type=checkbox]") a
 const said = (): string => host.textContent ?? "";
 
 function paint(): void {
+  /* **The session starts the load, not the mount.** Since 2026-09-03 the answer
+     lives in one module-level store and a component only subscribes to it
+     (src/web/experimental-store.ts), so a test that never says who is reading
+     gets a switch that is permanently un-loaded — which is correct, and is what
+     a signed-out reader sees.
+
+     Announced here rather than in `beforeEach` for a reason worth keeping: the
+     GET resolves on a microtask, and vitest awaits between hooks and the test
+     body. Announcing in `beforeEach` would let the answer land before the first
+     render, and "cannot be touched until the server has said what it is" would
+     pass without ever having been in the state it is about. */
+  for (const fn of authListeners) fn("SIGNED_IN", { user: { id: "reader-under-test" } });
   act(() => {
     root.render(createElement(SettingsSection));
   });
@@ -77,6 +120,10 @@ beforeEach(() => {
   headers = {};
   held = null;
   answer = () => Promise.resolve({ experimentalSince: null });
+  /* The store is a module singleton, so it keeps whatever the last test
+     announced. Without this, a test inherits the previous one's session and the
+     failure looks like a bug in the code rather than in the harness. */
+  resetForTests();
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -85,6 +132,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  resetForTests();
 });
 
 describe("the experimental-features switch", () => {
@@ -132,7 +180,7 @@ describe("the experimental-features switch", () => {
        whichever order they arrive. Ordering the *responses* cannot help — the
        damage is already stored. So the second click sends nothing, and the
        switch cannot end up showing the opposite of what is in the database.
-       useExperimental.ts § one write at a time. */
+       experimental-store.ts § one write at a time. */
     paint();
     await settle();
     held = [];
@@ -189,6 +237,45 @@ describe("the experimental-features switch", () => {
     await settle();
     expect(box().disabled).toBe(false);
     expect(said()).toContain("Off.");
+  });
+
+  it("takes Try again away while a save is in flight, rather than ignoring it", async () => {
+    /* **Both states at once is reachable**, and it is the one place the retry
+       button can be pressed for nothing: a failed load leaves `loadError` set,
+       and `set` is guarded by the store rather than by the `disabled`
+       attribute, so a keyboard or a label click still starts a save. `reload()`
+       refuses while a save is in flight — a read begun then carries the value
+       the row held before the `PATCH` and can land after it — so an enabled
+       button here would do nothing at all and say nothing about it.
+       docs/reusable/silent-success.md. */
+    answer = () => Promise.reject(new Error("offline"));
+    paint();
+    await settle();
+    const retry = () => host.querySelector("button.linky") as HTMLButtonElement;
+    expect(said()).toContain("Couldn't load");
+    expect(retry().disabled).toBe(false);
+
+    held = [];
+    answer = () => Promise.resolve({ experimentalSince: null });
+    act(() => {
+      /* The press a `disabled` checkbox does not stop. */
+      box().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      snapshot().set(true);
+    });
+    expect(patched).toEqual([{ experimental: true }]);
+    expect(retry().disabled).toBe(true);
+
+    /* And once the save lands the button is **gone**, not merely enabled
+       again: a successful save is a current answer from the server, so the load
+       failure is over and there is nothing left to retry. It used to survive —
+       `loaded` was set without clearing `loadError` — leaving the row
+       apologising for a read nothing was waiting on, beside the value it had
+       just been given. tests/experimental-store.test.tsx § a save that succeeds
+       after a load that failed. */
+    await act(async () => held?.[0]?.());
+    await settle();
+    expect(said()).not.toContain("Couldn't load");
+    expect(retry(), "nothing left to try again").toBe(null);
   });
 
   it("will not let an offline copy be written over", async () => {

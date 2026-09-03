@@ -15,7 +15,9 @@ reference docs, planning docs, captured conversations and shipped UI, plus this 
 and `docs/research/`. The single most valuable old-repo sources: `docs/reference/VISION_PRODUCT_STRATEGY.md`
 (Greg's own, marked "please don't edit"), `docs/marketing/250714a_conversation_product_marketing_strategy_development.md`
 (Greg thinking aloud with a marketing-persona AI), `docs/marketing/MARKETING_BRAND_MESSAGING_GUIDELINES.md`,
-`docs/marketing/TAGLINES.md`. In this repo: [vision.md](../project/vision.md),
+`docs/marketing/TAGLINES.md` — all four copied verbatim, with a guess at who wrote each, into
+[260902k-old-version-materials/](260902k-old-version-materials/README.md), since the old repo
+exists only on Greg's Mac. In this repo: [vision.md](../project/vision.md),
 [granularity-zoom.md](../project/granularity-zoom.md), [open-questions.md](../project/open-questions.md),
 [original-version/overview.md](../project/original-version/overview.md), the current
 [`LandingPage.tsx`](../../src/web/LandingPage.tsx), and the
@@ -93,7 +95,10 @@ reader": the point is what the reader comes away holding, not how much work is l
 
 The old app's architecture conversations coined the shortest version of the whole thing, and it is
 still the best two-word category description we have: **"You're not building an editor, you're
-building an augmented reader"** (2025-06-22).
+building an augmented reader"** (2025-06-22). **Not Greg's words, or not provably so:** the line
+sits inside an AI-written "Key Insights" summary of a captured conversation, unattributed, so it
+is a category to consider rather than a quote to put on the website — see
+[the old-version materials](260902k-old-version-materials/shipped-copy-and-product-framing.md).
 
 ## 3. The problem
 

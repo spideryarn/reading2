@@ -119,6 +119,32 @@ Two side notes from that table:
   articles we have". On `long-html` the prefix is ~1,107 and it clears the floor. The doc predicted
   it would start working on its own the day an article's outline got long enough. It has.
 
+## How much this actually cost, and where — which is less than the percentages suggest
+
+The waste is confined to jobs carrying **two members of one cache group**, and it is worth being
+exact about who emits that shape, because "18.6% of a batched job" reads like money leaving the
+account today and mostly it is not.
+
+- **The reading view never batches.** Every mode button enqueues exactly one step —
+  `steps: [step]` at [src/web/useStepJob.ts:385](../../src/web/useStepJob.ts) — so a reader pressing
+  "Find the terms" and then "Choose the quotes" makes two jobs, minutes apart, and misses the
+  5-minute TTL anyway.
+- **An ordinary ingest carries no article stage at all** since `arc` left `DEFAULT_INGEST_STEPS` on
+  2026-08-29.
+- **What does emit it:** `POST /api/jobs`, which takes whatever step list a client sends; the CLI;
+  and `evals/cost`, which is where it was found.
+
+So the money already lost to this is small, and the same sentence explains why nobody noticed. **The
+value of the fix is almost entirely forward-looking**, and that is not a hedge: the obvious next
+feature here is a "generate these three" affordance, or an ingest that carries two modes, and it
+would have shipped a 1.25× tax collecting nothing, invisibly, on the shape it was specifically
+designed to reward. The optimisation would have gone on looking like a saving while being a cost, for
+as long as the second reader stayed hypothetical.
+
+**Which is the real lesson about the measurement, not just the bug.** The eval priced a job shape
+production does not currently produce, and that is exactly why it found something: the cheap,
+common shapes had been argued about for a fortnight and the expensive rare one had never been run.
+
 ## The class it belongs to
 
 **A one-sided contract: the code that pays is not the code that collects, and only the paying side
@@ -180,29 +206,84 @@ This is the part worth sitting with.
 
 **It was found by measuring money and by nothing else.**
 
-## The fix that is right for the long term
+## The fix
 
-Recommended, **not implemented** — see the report accompanying this postmortem for the diff-level
-shape and the saving.
+**Implemented 2026-09-03**, and measured before it was believed.
 
-**Mark the article when any *other* member of this job's cache group is involved, not only a later
-one — and take the earlier ones from what actually ran.** Concretely, at
-[src/jobs.ts:528](../../src/jobs.ts):
+**Mark the article when any *other* member of this job's cache group is in the job — in either
+direction, position-blind.** `sharesArticleCache` stays the group predicate and is unchanged; what
+changed is the argument it gets, which is now built by a named function of its own,
+`cacheArticleForStep(steps, index)` in [src/pipeline.ts](../../src/pipeline.ts). The call site in
+[src/jobs.ts](../../src/jobs.ts) no longer contains a `slice(i + 1)` — no longer contains any
+argument-shaping at all, which is the point. The thing that was wrong for eight days was invisible
+because it was an inline expression at a call site nothing could test without a job, a store session
+and a claim.
 
-- **later** steps still in the plan ⇒ mark, because a write is coming that somebody will read
-  (today's behaviour, unchanged);
-- **earlier** steps of the same group whose `status` is `done` ⇒ mark, because the entry exists and
-  this call should ask for it.
+Filtering is by **position** rather than by name, so a job holding one step twice — a forced re-run
+queued behind a fresh one — still sees a genuine pair rather than a lone step.
 
-The `status` test matters and is free: `runStep` walks `job.steps` in order and mutates each entry in
-place, so by the time the reader builds its `StepContext` the earlier steps already say `done` (they
-ran) or `skipped` (their artefact was fresh and no call was made). Without that test, a job whose
-first mode was already done would mark a prefix nothing has written and pay the premium alone —
-re-creating the original bug pointing the other way.
+### What this postmortem originally recommended, and why it was wrong
 
-`sharesArticleCache` stays the group predicate; only its argument changes, plus a `status` filter on
-the earlier half. The reader's marker is not a second write: on a warm prefix it is a read at 0.1×
-that also refreshes the TTL for free.
+The first draft added a condition: mark for earlier steps of the group **only when their `status` is
+`done`**, reasoning that otherwise a job whose first mode was `skipped` would mark a prefix nothing
+had written. Fable was asked to arbitrate the design and argued it out, correctly:
+
+- **`done` does not mean a warm entry exists.** A job that stalls and resumes an hour later has
+  `done` earlier steps whose entries expired long ago. The marker is exactly as speculative with the
+  test as without it, so the test buys certainty it cannot deliver.
+- **What it really buys** is one avoided write premium in the narrow case "earlier group member was
+  `skipped`, none later" — about 1.3¢ on a 17,000-word article. **Per cache group, not per job**, a
+  correction from Sol: an all-mode job in which only one member of each of the three groups actually
+  runs wastes three premiums, about 3.9¢ here, scaling with length. Still not enough to buy the
+  filter, and Sol agreed — `skipped` no more proves the absence of a warm entry than `done` proves
+  the presence of one, and the 3.6× asymmetry is decisive either way.
+- **What it costs** is a load-bearing dependency on `runStep` mutating `job.steps` in place as it
+  walks. True today; silently broken by any reordering of the `StepContext` construction. That is the
+  kind of fact this postmortem exists to stop us leaning on.
+- **And the asymmetry points the other way.** A marker sent onto a cold prefix costs 0.25× of that
+  prefix; a marker withheld from a warm one costs 0.9×. Where the predicate must guess it should
+  guess *yes*, and the `status` filter made it guess no in order to save cents.
+
+Marking **unconditionally** — reverting `24335207` outright — is the option that asymmetry almost
+argues for, and it is deliberately not taken. It breaks even once a same-group call lands inside the
+TTL more than 0.25/(0.25 + 0.9) ≈ 22% of the time, and nobody has measured that rate. Deciding it by
+argument is the class of mistake this file is about.
+
+### Verified, on a paid run, before being believed
+
+Standing rule 5 below says a cache optimisation is unbuilt until a measured read exists, and all
+three previous instances of this class were argued rather than measured. So:
+
+**All three cache groups, because one pair proves the *structural* fix and not that the other two
+groups' prefixes actually match** — Sol's closing point, and it was right. Three paid jobs:
+
+| group | writer's `cacheWrite` | reader's `cacheRead`, **before** | reader's `cacheRead`, **after** |
+|---|---:|---:|---:|
+| `arc` → `tweets` | 25,428 | 0 | **25,428** |
+| `glossary` → `quotes` | 25,428 | 0 | **25,428** |
+| `ideas` → `timeline` | 27,234 | 0 | **27,234** |
+
+**Every read is exactly its group's write.** The reader's uncached input collapses to its own
+instruction suffix in each case — `tweets` 27,533 → 2,112, `quotes` 27,802 → 2,516, `timeline`
+30,194 → 3,074 — which is the independent confirmation that the prefixes were identical all along
+and only the marker was missing.
+
+```
+npm run eval:cost -- --against <slug> --steps arc,tweets      --batched-modes   # 07-37-36-kde669em
+npm run eval:cost -- --against <slug> --steps glossary,quotes --batched-modes   # 08-06-13-hqgwm8ep
+npm run eval:cost -- --against <slug> --steps ideas,timeline  --batched-modes   # 08-07-34-l88h0dje
+```
+
+**The saving is the reader's prefix at $1.80/MTok** — the gap between paying $2.00 for it and
+$0.20 — so $0.0458, $0.0458 and $0.0490: **$0.1406 across the three, exactly the figure predicted
+before any of it was run.** On the `arc,tweets` pair, where the suffix happened to be stable enough
+to subtract directly, predicted $0.045770 against measured $0.045756 — agreement to 0.03%.
+
+**What not to quote:** the `arc,tweets` job total moved $0.1572 → $0.1007, and that 36% is not the
+fix. Output tokens vary run to run — those two generations differed by 1,068 of them — and only the
+input side is attributable. `ideas,timeline` makes the point harder: its total went *up*, because
+`timeline` happened to spend 17,690 reasoning tokens that run. The cache saving was still collected
+in full underneath. **A cache fix must be measured on the input side or not at all.**
 
 **Delete rather than fix?** No — and the numbers say so rather than taste. Deleting the optimisation
 (never mark) saves only the write premium, `prefix × $0.50/MTok`: $0.0127, $0.0127 and $0.0136 on the
@@ -215,22 +296,55 @@ and the code was looking the wrong way down the corridor.
 
 Ranked by value per unit of effort.
 
-1. **An assertion that the two sides agree, in `tests/article-cache-group.test.ts`** — cheap, and it
-   is the one that fails today. For every ordered pair of same-group stages, *both* members of a
-   two-step job must get `cacheArticle: true`. Written against the `runStep` call site, not against
-   `sharesArticleCache` alone, so it sees the `slice(i + 1)`. Minutes to write, and it would have
-   gone red on `24335207`.
-2. **A batched-modes gate in `evals/cost`** — the eval already computes the number; it just does not
-   judge it. `checkColdDraw` returns `[]` for `phase: "batched"`. Give the batched phase its own
-   rule, the mirror of `modeDrawIsCold`: *in a job holding two members of one cache group, the second
-   member's `cacheRead` must be within 10% of the first member's `cacheWrite`* — fatal otherwise, and
-   `null` telemetry fatal as "unknown", exactly as the cold rule already does. This is the check that
-   makes the class visible rather than this instance, because it asks about money reaching its
-   destination rather than about a predicate's return value. Costs one eval run's money to exercise.
+1. ✅ **An assertion that the two sides agree** — **built, in two files, and the second is the one
+   that matters.**
+
+   `tests/article-cache-group.test.ts` now generates every ordered pair of same-group stages from the
+   tables and requires *both* members of a two-step job to get `true`. Watched going red against the
+   old predicate first: four failures, every one a reader. The two tests that pinned the bug are gone
+   — including the one whose comment said an earlier stage "has already been paid for" so caching now
+   "buys nobody anything", which is the bug stated in English and asserted.
+
+   **But that file could not have caught this**, and Sol proved it the blunt way on the built code:
+   reverting *only* `runStep` to the later-only call left all 154 focused tests green. The predicate
+   was never the broken part. So `tests/article-cache-call-site.test.ts` runs a real two-mode job
+   through the real walk with a recording registry and asserts what
+   `StepContext.cacheArticle` each step is **actually handed**. Against the old call site it reports
+   `[true, false]`; that is the test that would have gone red on `24335207`.
+
+   The lesson generalises past this bug: **a predicate extracted for testability is only tested where
+   it is called.** The `slice(i + 1)` lived at a call site needing a job, a store session and a claim
+   before it would run, which is exactly why nothing tested it and exactly why it was wrong.
+2. ✅ **A batched-modes gate in `evals/cost`** — **built**, as `checkBatchedDraw`, and it took two
+   goes to get the shape right. The rule is *the verdict comes from the ledger, never from the
+   predicate*: **every call that paid to write a cache entry must be followed, within its cache
+   group, by a call that reads about that many tokens.** An unclaimed write is a lost bet whether the
+   cause is a missing breakpoint, a diverged prefix or an expired TTL, which is why it should survive
+   the next mechanism. Run against the three real pre-fix result files it fires on all three, and it
+   passes the post-fix run.
+
+   **The first version drew its scope too wide and Sol broke it in two ways.** It searched the whole
+   draw for a claiming read, so one group's read absolved another group's lost write — arc writing
+   25,428 unread went unreported because `timeline` read what `ideas` wrote — and it had to forgive
+   the label fan-out by hand, which was unsafe in both directions (three parallel label writes with
+   no re-ask, the shape actually measured, drew three fatal findings). Both are gone for one reason:
+   membership now comes from `STAGE_EFFORT` and `ARTICLE_RENDERER`, so `hierarchy` is **out of
+   scope** rather than forgiven, and reads are consumed at most once each.
+
+   That means this postmortem's original claim — that a predicate-based check "would have passed on
+   the broken code" — was **too broad**, as Sol said. A check that recomputed each step's
+   `cacheArticle` decision would have passed; one that used the tables only to *identify a compatible
+   pair* and then demanded a read would have failed. The right line is narrower and worth stating
+   exactly: **take membership from the tables, take the verdict from the money.** Membership is a
+   symmetric question the pipeline has always answered correctly; direction is the one it got wrong.
+
+   Its last rule is the one no write can trigger: **a same-group pair that wrote and read nothing at
+   all is fatal.** That is what a regression switching `cacheArticle` off everywhere looks like, and
+   the write rule cannot see it, because it only ever asks about writes that happened.
 3. **A request-shape unit test per stage: a stage told `cacheArticle: true` must emit exactly one
-   `cache_control`, and told `false`, none.** Mechanical, free, deterministic, eight stages. It would
-   not have caught *this* bug (the flag was correctly plumbed; the flag was wrong), but it closes the
-   neighbouring hole where a stage forgets the field entirely, which is the accident
+   `cache_control`, and told `false`, none.** Mechanical, free, deterministic, eight stages. **Not
+   built.** It would not have caught *this* bug (the flag was correctly plumbed; the flag was wrong),
+   but it closes the neighbouring hole where a stage forgets the field entirely, which is the accident
    `tests/article-cache-group.test.ts` § "agrees with itself about which renderer" was written for.
 4. **Run `evals/prompt-caching.ts`'s own closing instruction, on a schedule.** It has told every
    reader for eight days exactly how to find this. The cheapest version is to stop printing the

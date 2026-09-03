@@ -31,6 +31,7 @@ import { FeaturesPage } from "./FeaturesPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
+import { useExperimental } from "./useExperimental.js";
 import { DesignPage } from "./DesignPage.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
@@ -182,7 +183,7 @@ import {
   sectionDepth,
   type Section,
 } from "./position.js";
-import { fitView, proseVisible } from "./layout.js";
+import { DEFAULT_ROOT_PX, fitView, proseVisible } from "./layout.js";
 import { navPlan, useArrowNav } from "./keynav.js";
 import { useSwipeNav } from "./swipe.js";
 import { useComments } from "./useComments.js";
@@ -292,6 +293,31 @@ export function App() {
    * the real one rather than a copy of it.
    */
   useJobSession(user?.id ?? null, session?.access_token ?? null);
+
+  /**
+   * **Nothing here tells the experimental-features store who is reading.** It
+   * used to, from an effect beside this one, and that was a frame too late: a
+   * passive effect runs after its children have rendered, so on an account
+   * switch every `Dock` on the page drew once from the previous account's
+   * snapshot. The store subscribes to `onAuthStateChange` itself now, in the
+   * same notification pass as `useSession` — src/web/experimental-store.ts
+   * § the store listens for it itself.
+   *
+   * **And nothing here wakes it, either.** The store starts listening on its
+   * first subscriber and asks the server for nobody until then. Since stage 2
+   * the subscribers are the four components that mount a `Dock` — `Reader`
+   * below, `Metadata`, `Tweets` and `VisitorDock` in PublicPages.tsx — each
+   * calling `useExperimental()` and handing the answer down as a prop, because
+   * the bar is told rather than going and getting it (Dock.tsx § experimental).
+   * A stranger still asks for nothing: the store issues no request for a
+   * signed-out reader, who is off because we decided.
+   *
+   * A keep-awake subscriber sat here briefly — `subscribe(() => {})`, ignoring
+   * what it heard — so that the switch was read once up front rather than when
+   * a page mounted. It bought a round trip's head start and existed mainly to
+   * keep a trace assertion true, which is the wrong way round. What replaced it
+   * is the real subscriber in `Reader`.
+   */
 
   /* **The callback is answered before the gate**, and it has to be: the reader
      arriving here is by definition not signed in yet, and sending them to the
@@ -1154,6 +1180,39 @@ function useWindowWidth(): number {
 }
 
 /**
+ * The root font size, in px, because one number in the layout is a measure of
+ * type rather than of screen.
+ *
+ * `PROSE_ALONE_MAX_REM` is the width of 65 characters plus two rem paddings, and
+ * a reader whose browser default is 20px has all three of those 25% wider than
+ * this file would otherwise assume. Everything else `fitView` works in is a real
+ * screen width and stays px — layout.ts § `FitInput.rootFontPx`.
+ *
+ * **Not read once at module scope.** Text-only zoom and a settings change both
+ * move it while the page is open, and the same `resize` that already re-measures
+ * the window is the cheapest thing that notices — browsers fire one for text
+ * zoom. Nothing notices a change made in another tab's settings until the next
+ * resize or reload, which is a smaller failure than pinning it at import time,
+ * when a stylesheet may not even have loaded.
+ */
+function useRootFontPx(): number {
+  const measure = () => {
+    const px = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+    /* A browser that answers `""` or `0` gets the default rather than a table
+       nought pixels wide — this is a multiplier, so a falsy answer is not a
+       small error, it is the whole column. */
+    return Number.isFinite(px) && px > 0 ? px : DEFAULT_ROOT_PX;
+  };
+  const [px, setPx] = useState(measure);
+  useEffect(() => {
+    const on = () => setPx(measure());
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  return px;
+}
+
+/**
  * Reading position, both ways: the URL scrolls the page, and the page writes the
  * URL once the reader stops moving. Returns the one function anything should use
  * to jump somewhere deliberately.
@@ -1358,6 +1417,22 @@ function Reader({
      the chip in the bar below it, neither of which is drawn for an owner.
      PublicChrome.tsx § SharedNotice for why it is two things and not one. */
   const sessionUnconfirmed = capability.kind === "visitor" && capability.sessionUnconfirmed;
+  /**
+   * **Whether this reader sees the modes that are still being built**, handed
+   * down to the bar rather than fetched by it.
+   *
+   * The page owns the fetches and the bar is told — Dock.tsx's own header says
+   * so, and `drawer`, `marked` and `signedIn` all already work that way. The
+   * store behind this hook is shared and session-bound, so the reading view,
+   * the metadata page and the tweets page cannot disagree for the length of a
+   * toggle (experimental-store.ts).
+   *
+   * **This is what makes a signed-in reader ask `GET /api/reader` on a reading
+   * view at all** — the store is lazy, and through stage 1 nothing on this page
+   * subscribed. tests/public-network-trace.test.tsx pins that at one, and pins a
+   * stranger's at zero.
+   */
+  const experimental = useExperimental();
   const geometry = useMemo(
     () => buildGeometry(article.tree, article.blocks),
     [article],
@@ -1374,6 +1449,7 @@ function Reader({
     [geometry, article.blocks],
   );
   const windowWidth = useWindowWidth();
+  const rootFontPx = useRootFontPx();
 
   // Gist columns are 0 … leafDepth-1. The leaf column is not user-toggled: it
   // only makes sense in outline mode, where it is the deepest rung of the table
@@ -1496,9 +1572,10 @@ function Reader({
         showText: proseOn,
         chosen: plainCols,
         modeBand: bandOpen,
+        rootFontPx,
         showSpine,
       }),
-    [windowWidth, gistDepths, geometry.leafDepth, proseOn, plainCols, bandOpen, showSpine],
+    [windowWidth, rootFontPx, gistDepths, geometry.leafDepth, proseOn, plainCols, bandOpen, showSpine],
   );
 
   /**
@@ -2210,7 +2287,13 @@ function Reader({
 
   return (
     <div
-      className={`reader spine-${fit.spine}`}
+      /* `text-alone` says the article is the only thing on the page, so the
+         stylesheet can centre the reading column and put the masthead over it
+         rather than leaving both against the left edge of a window neither
+         fills. It is `fit.alone` and nothing computed here on purpose — the
+         same fact under two definitions is how `proseVisible` came to exist.
+         layout.ts § `Fit.alone`, styles.css § plain, centred. */
+      className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}`}
       /* The wrapper must be as wide as its content for the sticky bars inside it
          to have anywhere to slide — a sticky element is clamped to its containing
          block, so one exactly its own width has a sticky range of zero and never
@@ -2227,6 +2310,10 @@ function Reader({
         {
           minWidth: fit.minWidth + horizontalInset(safeAreaInsets()),
           "--mode-w": `${fit.modeW}px`,
+          /* The table's own width, so the masthead can be as wide as the
+             reading column when it is centred over it (styles.css § plain,
+             centred) without a second copy of `PROSE_ALONE_MAX_REM` in CSS. */
+          "--table-w": `${fit.tableW}px`,
         } as CSSProperties
       }
     >
@@ -2873,6 +2960,9 @@ function Reader({
       <Dock
         slug={slug}
         view="article"
+        /* Which modes the bar draws at all — Dock.tsx § experimental, and the
+           hook call at the top of this component. */
+        experimental={experimental}
         mode={mode}
         onMode={(next) => {
           void setMode(next);

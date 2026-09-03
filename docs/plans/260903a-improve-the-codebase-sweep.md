@@ -687,6 +687,12 @@ enforced by a test), and it is blocked on the open question in
 [260826e](260826e-postgres-storage-implementation.md) about whether a published revision may be
 mutated. It is user-visible and has been open a while.
 
+**Correction, 2026-09-03: it turned out to be engineering, not a product decision.** The mutate-a-
+published-revision question was answered "yes, as one named exception" and the delete is built —
+see [260903e-glossary-delete-in-postgres.md](260903e-glossary-delete-in-postgres.md). The one product
+choice inside that work (refuse with 409 while a live job holds a draft, rather than queue behind it)
+was small enough to make directly rather than carry back to Greg first.
+
 ---
 
 # Stages
@@ -753,6 +759,9 @@ is *"this file above all, the seven entry points, anything in `docs/reusable/`"*
 2. **`DELETE /api/glossary/:slug`** — the "start again" button is a 501 on the deployed app, tracked
    and tested, blocked on whether a published revision may be mutated
    ([260826e](260826e-postgres-storage-implementation.md)). A product decision.
+   *(Correction, 2026-09-03: not deferred after all — built in
+   [260903e-glossary-delete-in-postgres.md](260903e-glossary-delete-in-postgres.md), which found the
+   question small enough to answer directly.)*
 3. **T3.2, `styles.css` at 12,830 lines.** The doc already calls this open; the sweep found no drift
    inside it. Not an engineering defect.
 

@@ -48,7 +48,7 @@ Legend: ✅ done · 🔵 in progress · 📐 designed, not built · ⬜ not star
 | 8 | Artefact manifest test — the guard against the next file | ✅ |
 | 9 | Comments — writes | ✅ |
 | 9b | Shelf state — archive, rename, opens — and library-wide search | ✅ **added 2026-08-26**, both adapters. See [260826k-library-shelf-actions-and-search.md](260826k-library-shelf-actions-and-search.md) |
-| 10 | Chat, searches, glossary lookups — writes | 🔵 **stores built and reviewed 2026-08-26; not yet wired into `src/routes.ts`.** All three adapters exist on both sides, with a scripted parity sequence and the two criticals from the design review applied — then [a second review of the built code](#what-the-review-found-in-the-built-step-10) found two more races and four tests that passed for bad reasons. Those are fixed. **The wiring was started 2026-08-26 evening and is uncommitted** — `src/routes.ts`, `src/store/index.ts`, `src/term-lookup.ts` and three new test files, with one unused-import typecheck error still in `routes.ts`. `deleteGlossary` stays 501 by construction. See [where this stopped](#where-this-stopped-2026-08-26-evening) |
+| 10 | Chat, searches, glossary lookups — writes | 🔵 **stores built and reviewed 2026-08-26; not yet wired into `src/routes.ts`.** All three adapters exist on both sides, with a scripted parity sequence and the two criticals from the design review applied — then [a second review of the built code](#what-the-review-found-in-the-built-step-10) found two more races and four tests that passed for bad reasons. Those are fixed. **The wiring was started 2026-08-26 evening and is uncommitted** — `src/routes.ts`, `src/store/index.ts`, `src/term-lookup.ts` and three new test files, with one unused-import typecheck error still in `routes.ts`. `deleteGlossary` stays 501 by construction. *(Correction, 2026-09-03: no longer true — built in [260903e-glossary-delete-in-postgres.md](260903e-glossary-delete-in-postgres.md).)* See [where this stopped](#where-this-stopped-2026-08-26-evening) |
 | 11 | Pipeline writes to draft revisions (+ carry-forward) | 🔵 **half B stages 1–4 built 2026-08-26** (`39b9892`, `fa3945c`): the artefact store, the file adapter, `produces` beside `outputs` with an agreement test, and `stepIsDone` taking a store — `has()` now **parses** rather than `stat`s, which closes the truncation hazard for the five steps that had no freshness check. Then [a review of the built code](#what-the-review-of-the-built-seam-found) found three criticals; **all three are fixed** (`8d751c1`, `b541557`) — see [what was fixed and the two choices inside it](#what-was-fixed-and-the-two-choices-inside-it). The store now records the *attempt* as well as the output, `blocks` checks that the HTML really carries its ids, and the store argument is required. **Half A (carry-forward and publication) was started 2026-08-26 evening and is uncommitted** — `drizzle/0010_job_owned_draft_and_fixture.sql` (generated and applied locally), `src/store/pg-revisions.ts`, `tests/store-revision-policy.test.ts`. See [where this stopped](#where-this-stopped-2026-08-26-evening) |
 | 12 | Jobs and claiming | ✅ **built 2026-08-27**, to the replacement design rather than the one below — **do not build what is below.** [260826q-job-queue-rethink.md](260826q-job-queue-rethink.md) swapped the autonomous queue for a **browser-driven advance endpoint** on Greg's *"whichever's easiest"*; [260827h-durable-queue-and-uploads.md § 8](260827h-durable-queue-and-uploads.md#8-the-wiring-built-2026-08-27) is what was built, and two code reviews of it ([built](260827m-durable-queue-code-review-sol.md), [fixes](260827n-durable-queue-fixes-review-sol.md)) both returned NO-SHIP and are folded in. Three of the four things the old design contributed survive: the attempt token, a job-owned draft (`openOrBeginJobDraft`) and the single-running-step rule (`jobs_only_one_running`). **The fourth — the fenced *output* write — does not, and is the main thing still open**: the fence covers the job row and the artefacts sit outside it. **Ingest still does not work on Vercel**, for that reason: see item 4 above and [260827j-transactional-stage-runner.md](260827j-transactional-stage-runner.md) |
 | 13 | Cutover: flip the default, delete the filesystem adapter | ⬜ Two decisions now made: the `example` fixture **goes in, marked as one** (a `fixture boolean` on `articles`, the directory staying on disk), and an unknown slug **404s** — the files side comes up to Postgres, not the reverse. Both in [260825f-postgres-migration.md § Open questions](260825f-postgres-migration.md#open-questions). The importer's reconciliation direction **reverses here**, and that is the reason this is a step rather than a flag flip |
@@ -109,7 +109,8 @@ documents, and several agents work this tree at once.
 2. **Wire step 10 into `src/routes.ts`**, and move `lookUpTerm` out of `src/api.ts`. The three stores
    exist, are reviewed twice and are still unreachable — which is the most dangerous state in this
    table, because the work looks done from the file list. `deleteGlossary` stays 501 until step 11
-   decides whether a published revision may be mutated.
+   decides whether a published revision may be mutated. *(Correction, 2026-09-03: step 11's decision
+   was "yes, for this one case" — see [260903e-glossary-delete-in-postgres.md](260903e-glossary-delete-in-postgres.md).)*
 3. **Step 11 half A** — `beginRevision` / `publishRevision` / `failRevision`, the CARRY / MINT /
    DERIVE split, and the carry-forward test that performs a **real re-extraction**. This is where the
    one schema migration lands (`draft_revision_id`, and the `fixture boolean` for step 13 may as well
@@ -501,6 +502,8 @@ Two things Sol did **not** find, both turned up while checking its work:
 `SPIDERYARN_STORE=postgres` serves all three from Postgres. After this step the file-backed writes
 left are the pipeline (step 11), jobs (step 12) — **and `deleteGlossary`, which stays 501**, so step 10
 is partial by construction and its progress state should say so rather than claiming a clean sweep.
+*(Correction, 2026-09-03: `deleteGlossary` no longer stays 501 — see
+[260903e-glossary-delete-in-postgres.md](260903e-glossary-delete-in-postgres.md).)*
 
 Designed 2026-08-26, then cross-reviewed by GPT Sol, **which found two critical faults**, one of them
 in a choice the design had made deliberately. See
@@ -723,6 +726,16 @@ It nulls `article_revisions.glossary` on the **current published revision**, and
 the open decision step 11 carries. Until then it stays 501 — which means **the glossary panel's "start
 over" does not work under `postgres`**, and that belongs in the progress table rather than being found.
 
+**Correction, 2026-09-03: step 11's question is the one that got answered, and this hole is closed.**
+`deleteGlossary` is built, and it is a deliberate, named exception to the same rule this section states
+— every other step mints a draft and publishes it, and the delete is the one thing that updates a
+published revision in place. It also refuses (409) while a live job holds a draft for the article, to
+close a race a plain in-place `UPDATE` would otherwise have. See
+[260903e-glossary-delete-in-postgres.md](260903e-glossary-delete-in-postgres.md), which found and fixed
+a second stale claim along the way: contrary to what this plan says elsewhere (§ "A new revision only
+when the text changes"), `toc`, `arc`, `tweets` and `glossary` do **not** write onto the published
+revision in one `UPDATE` — that changed with the D1b work, and only the glossary delete does now.
+
 ### Divergences to record rather than fix
 
 | | Files | Postgres |
@@ -840,7 +853,9 @@ the finish conditional on that attempt.
 2. ~~Is the `[]`-versus-404 divergence acceptable?~~ **Answered 2026-08-26: keep the 404, bring the
    files side up to it later.** See the divergence table above.
 3. **Should `deleteGlossary` be dragged into step 10 anyway?** The SQL is trivial; leaving it 501 is a
-   real hole for anyone testing `postgres` mode.
+   real hole for anyone testing `postgres` mode. *(Answered 2026-09-03, in step 11's own plan rather
+   than step 10's: no — it waited on the mutate-a-published-revision question, which is now settled.
+   See [260903e-glossary-delete-in-postgres.md](260903e-glossary-delete-in-postgres.md).)*
 
 ### What the review found in the built step 10
 
@@ -993,6 +1008,15 @@ overwrites a good article in place"* — and that is about the **text**. A revis
 regeneration would copy every `revision_blocks` row and every `raw_bytes` blob to add one JSONB
 value, and no reader could see the difference, because a single-column `UPDATE` is already atomic.
 The honest name for the property is **immutable in its text**.
+
+**Correction, 2026-09-03: this is not what got built.** The D1b work gave every job — `toc`, `arc`,
+`tweets`, `glossary`, `summary` included — a draft it publishes on success, the same as `fetch`,
+`extract` and `blocks`. Nothing wrote onto a published revision in place until the glossary delete,
+which does so as a single deliberate exception (`deleteGlossary`, this plan's step 11 question,
+answered in [260903e-glossary-delete-in-postgres.md](260903e-glossary-delete-in-postgres.md)). The
+reasoning above for why an in-place `UPDATE` is the right trade for a **single JSONB column** is what
+that plan reuses to justify the delete's own in-place `UPDATE` — it just doesn't hold for an ordinary
+run of these steps any more, which is why it was worth naming rather than silently dropping.
 
 #### The publication guard
 
