@@ -14,18 +14,21 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { ARMS, armByName } from "../evals/hierarchy-structure/arms.js";
+import { ARMS, armByName, CANDIDATES, FIELD_EFFORT, ZDR } from "../evals/hierarchy-structure/arms.js";
 import { CORPUS, defaultCorpus } from "../evals/hierarchy-structure/corpus.js";
 import { buildHeadingTree, PREAMBLE_TITLE } from "../src/heading-tree.js";
 import {
   assertCallAccounted,
   type CallStats,
+  chatBody,
   parseStructureResponse,
   renderHeadingList,
   renderSeedProposal,
   runModelArm,
 } from "../evals/hierarchy-structure/model-arms.js";
 import { compareTrees, scoreTree } from "../evals/hierarchy-structure/score.js";
+import { zdrVerdict } from "../evals/hierarchy-structure/verify-zdr.js";
+import { effortVerdict, type EffortRecord } from "../evals/hierarchy-structure/preflight.js";
 import type { Block, NodeId, Tree, TreeNode } from "../src/types.js";
 
 let blockCounter = 0;
@@ -472,6 +475,161 @@ describe("the arms registry", () => {
   });
 });
 
+/**
+ * **An effort the model does not have is served at the model's default, and
+ * says 200.** Six of the eight challengers have no `medium`; production runs
+ * `medium`; the obvious bake-off would therefore have priced maximum effort
+ * under a "medium" column with nothing in the response to give it away. This
+ * is the check that would have caught it, and it reads the same catalogue
+ * field the arm table quotes.
+ */
+describe("the challenger field", () => {
+  it("asks every candidate for an effort its own catalogue record lists", () => {
+    for (const c of CANDIDATES) {
+      expect(c.supportedEfforts, `${c.name}: no effort list, so no arm can hold effort equal`).not.toBeNull();
+      expect(c.supportedEfforts, `${c.name} does not support "${FIELD_EFFORT}"`).toContain(FIELD_EFFORT);
+      const arm = armByName(c.name);
+      if (arm.kind !== "one-call") throw new Error(`${c.name} changed kind`);
+      expect(arm.call.effort).toBe(FIELD_EFFORT);
+      expect(arm.call.model).toBe(c.model);
+    }
+  });
+
+  it("puts a Sonnet arm at the field's own effort, or the field compares to nothing", () => {
+    /* Every challenger differs from `incumbent` in model AND effort at once.
+       `smart-low` is the only arm that differs from them in model alone, so
+       without it in the run there is no like-for-like reading at all. */
+    const low = armByName("smart-low");
+    if (low.kind !== "one-call") throw new Error("smart-low changed kind");
+    expect(low.call.effort).toBe(FIELD_EFFORT);
+  });
+});
+
+/**
+ * **The routing constraint has to reach the wire, and nothing else can tell
+ * you whether it did.** OpenRouter answers 200 to a request with no `provider`
+ * key exactly as it answers one with a `provider` key it honoured, so a
+ * constraint dropped between the arm and the body is invisible from both ends
+ * — and the write-up would report zero-retention numbers over calls that asked
+ * for none. See docs/reusable/silent-success.md; this is that shape exactly.
+ */
+describe("chatBody", () => {
+  const req = { system: "sys", user: "usr", maxTokens: 1000 };
+
+  it("never sends max_completion_tokens, which makes the routing set empty", () => {
+    /* Measured 2026-09-03: `require_parameters: true` plus this parameter is a
+       404 on every candidate, because require_parameters means "only upstreams
+       that support everything sent" and none of them advertise this spelling.
+       Pinned rather than commented, because it reads as harmless. */
+    const body = chatBody({ ...req, call: { model: "x/y", effort: "low", provider: ZDR } });
+    expect("max_completion_tokens" in body).toBe(false);
+    expect(body.max_tokens).toBe(1000);
+  });
+
+  it("sends the arm's provider policy, and omits the key entirely when there is none", () => {
+    const withPolicy = chatBody({ ...req, call: { model: "x/y", effort: "low", provider: ZDR } });
+    expect(withPolicy.provider).toEqual({ zdr: true, require_parameters: true });
+
+    const without = chatBody({ ...req, call: { model: "x/y", effort: "low" } });
+    expect("provider" in without).toBe(false);
+  });
+
+  it("asks for zero retention on every candidate arm, and on neither incumbent arm", () => {
+    /* The incumbent-shaped arms are exempt on purpose: production's hierarchy
+       call sets no `zdr`, and an incumbent routed differently from production
+       is not the incumbent — the same rule that produced PRODUCTION_EFFORT.
+       `cheap-high` is exempt for a different and weaker reason: it is the
+       2026-09-03 run's arm, kept so those results stay readable, and it goes
+       to our own OpenAI key (BYOK), so its routing is not OpenRouter's to
+       constrain. It is not a candidate — it came last in every blind
+       judgment — and if it is ever revived as one it needs a policy. */
+    const exempt = new Set([
+      "incumbent",
+      "incumbent-repeat",
+      "headings-listed",
+      "headings-seeded",
+      "waves",
+      "cheap-high",
+    ]);
+    for (const arm of ARMS) {
+      if (arm.kind !== "one-call" || arm.call.model.startsWith("anthropic/") || exempt.has(arm.name)) continue;
+      /* `toMatchObject`, not `toEqual`: an arm may add to the policy — the
+         pinned DeepSeek arm carries `only` as well — but may never drop zero
+         retention or the parameter requirement, which is what this guards. */
+      expect(chatBody({ ...req, call: arm.call }).provider, `${arm.name} must ask for ZDR`).toMatchObject(ZDR);
+    }
+  });
+});
+
+/**
+ * The other half of the ZDR claim: `chatBody` proves the constraint was *sent*,
+ * this proves we can tell whether it was *honoured*. Every branch here is a way
+ * the run could be reported as zero-retention while not being it.
+ */
+/**
+ * The catalogue check that the arm-table test cannot be: `CANDIDATES` and
+ * `FIELD_EFFORT` are literals in one file, so comparing them proves only that
+ * somebody typed consistently. This rule is applied to what OpenRouter answers
+ * at run time, which is the only version that can have moved.
+ */
+describe("effortVerdict", () => {
+  const rec = (over: Partial<EffortRecord>): EffortRecord => ({
+    model: "z-ai/glm-5.3",
+    supportedEfforts: ["max", "high", "low"],
+    defaultEffort: "max",
+    mandatory: true,
+    ...over,
+  });
+
+  it("passes an effort the catalogue lists", () => {
+    expect(effortVerdict("glm", "z-ai/glm-5.3", "low", rec({}))).toBeNull();
+  });
+
+  it("refuses an effort the catalogue does not list, and says what will happen instead", () => {
+    /* The whole point: OpenRouter does not reject this, it remaps it — so the
+       message has to explain why a 200 would have been the wrong evidence. */
+    const why = effortVerdict("glm", "z-ai/glm-5.3", "medium", rec({}));
+    expect(why).toMatch(/does not list/);
+    expect(why).toMatch(/nearest/);
+  });
+
+  it("allows a model whose record publishes no ladder at all", () => {
+    /* Deliberate: plenty of reasoning models list no efforts, and banning them
+       on a missing field would exclude a class of candidate for no evidence.
+       What is refused is a ladder that exists and lacks the value we send. */
+    expect(effortVerdict("x", "a/b", "low", rec({ supportedEfforts: null }))).toBeNull();
+    expect(effortVerdict("x", "a/b", "low", rec({ supportedEfforts: [] }))).toBeNull();
+  });
+
+  it("refuses a model the catalogue has never heard of", () => {
+    expect(effortVerdict("typo", "a/typo", "low", undefined)).toMatch(/no record/);
+  });
+});
+
+describe("zdrVerdict", () => {
+  const listing = new Map([["z-ai/glm-5.3", new Set(["Fireworks", "Together"])]]);
+
+  it("passes only when the upstream that answered is on the model's own ZDR list", () => {
+    expect(zdrVerdict("z-ai/glm-5.3", "Fireworks", listing).ok).toBe(true);
+  });
+
+  it("fails when a provider outside the list served it", () => {
+    const v = zdrVerdict("z-ai/glm-5.3", "SomeoneElse", listing);
+    expect(v.ok).toBe(false);
+    expect(v.why).toMatch(/SomeoneElse/);
+  });
+
+  it("fails when the response named no upstream, rather than passing by default", () => {
+    /* The dangerous direction: a missing name is not evidence of compliance,
+       and treating it as one is how a run gets a ZDR label it never earned. */
+    expect(zdrVerdict("z-ai/glm-5.3", null, listing).ok).toBe(false);
+  });
+
+  it("fails when the model has no zero-retention endpoint at all", () => {
+    expect(zdrVerdict("some/model", "Fireworks", listing).ok).toBe(false);
+  });
+});
+
 describe("assertCallAccounted", () => {
   const stats = (over: Partial<CallStats>): CallStats => ({
     ms: 1000,
@@ -481,6 +639,7 @@ describe("assertCallAccounted", () => {
     generationId: "gen-abc",
     costUsd: 0.24,
     providerCostUsd: 0.24,
+    upstream: "Anthropic",
     ...over,
   });
 

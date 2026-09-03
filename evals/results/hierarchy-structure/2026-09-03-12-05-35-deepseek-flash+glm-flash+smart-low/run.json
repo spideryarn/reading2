@@ -1,0 +1,364 @@
+{
+  "startedAt": "2026-09-03T12:05:35.410Z",
+  "commit": "890d19f6489a7204141fa6c6dc3992bbb5429b5b",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "deepseek-flash",
+      "kind": "one-call",
+      "comparison": "bakeoff",
+      "call": {
+        "model": "deepseek/deepseek-v4-flash-0731",
+        "effort": "low",
+        "provider": {
+          "zdr": true,
+          "require_parameters": true
+        }
+      },
+      "seed": "none"
+    },
+    {
+      "name": "glm-flash",
+      "kind": "one-call",
+      "comparison": "bakeoff",
+      "call": {
+        "model": "z-ai/glm-5.3-flash",
+        "effort": "low",
+        "provider": {
+          "zdr": true,
+          "require_parameters": true
+        }
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-low",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    }
+  ],
+  "results": [
+    {
+      "arm": "deepseek-flash",
+      "comparison": "bakeoff",
+      "slug": "writes",
+      "run": 1,
+      "callOrder": 1,
+      "blocksSha256": {
+        "measured": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "manifest": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "writes",
+        "blocks": 19,
+        "bodyBlocks": 19,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 18
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            37,
+            243,
+            96,
+            114,
+            71
+          ],
+          "balanceCv": 0.6267669663289911
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 2.125,
+          "max": 5,
+          "within5to9": 0.125
+        },
+        "headings": {
+          "boundaries": 9,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.0625,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 18,
+            "words": 558
+          }
+        },
+        "titles": {
+          "count": 16,
+          "meanWords": 3.4375,
+          "within2to6": 1,
+          "copiedHeadings": 1,
+          "retention": 0.5666666666666668
+        },
+        "gists": {
+          "count": 16,
+          "coverage": 1,
+          "meanWords": 18.5625,
+          "multiSentence": 0,
+          "templateRepetition": 0.3125,
+          "retention": 0.6815814393939394
+        }
+      },
+      "calls": [
+        {
+          "ms": 307779,
+          "inputTokens": 1510,
+          "outputTokens": 8240,
+          "reasoningTokens": 7283,
+          "generationId": "gen-1788437135-rP4vxu4WjUO9dmNszGch",
+          "costUsd": 0.00219727396,
+          "providerCostUsd": 0.002197273,
+          "upstream": "DigitalOcean"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      },
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 4,
+        "l1Boundaries": 0.75,
+        "allBoundaries": 0.8181818181818182,
+        "boundaryDistance": {
+          "mean": 0.1,
+          "within1Block": 1
+        }
+      }
+    },
+    {
+      "arm": "glm-flash",
+      "comparison": "bakeoff",
+      "slug": "writes",
+      "run": 1,
+      "callOrder": 2,
+      "blocksSha256": {
+        "measured": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "manifest": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "writes",
+        "blocks": 19,
+        "bodyBlocks": 19,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 18
+        },
+        "parts": {
+          "count": 3,
+          "words": [
+            280,
+            96,
+            185
+          ],
+          "balanceCv": 0.40177003588337207
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 3,
+          "max": 7,
+          "within5to9": 0.1111111111111111
+        },
+        "headings": {
+          "boundaries": 4,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.1111111111111111,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 18,
+            "words": 558
+          }
+        },
+        "titles": {
+          "count": 9,
+          "meanWords": 3.111111111111111,
+          "within2to6": 1,
+          "copiedHeadings": 1,
+          "retention": 0.9375
+        },
+        "gists": {
+          "count": 9,
+          "coverage": 1,
+          "meanWords": 19.555555555555557,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.6887038887038888
+        }
+      },
+      "calls": [
+        {
+          "ms": 10787,
+          "inputTokens": 1507,
+          "outputTokens": 606,
+          "reasoningTokens": 38,
+          "generationId": "gen-1788437443-rby3rJU3cEVlUh0QwHKc",
+          "costUsd": 0.00052905,
+          "providerCostUsd": 0.00052905,
+          "upstream": "Parasail"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      },
+      "vsDisk": {
+        "partCountA": 3,
+        "partCountB": 4,
+        "l1Boundaries": 0.25,
+        "allBoundaries": 0.36363636363636365,
+        "boundaryDistance": {
+          "mean": 0.8,
+          "within1Block": 0.8
+        }
+      }
+    },
+    {
+      "arm": "smart-low",
+      "comparison": "isolated",
+      "slug": "writes",
+      "run": 1,
+      "callOrder": 3,
+      "blocksSha256": {
+        "measured": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "manifest": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "writes",
+        "blocks": 19,
+        "bodyBlocks": 19,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 18
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            221,
+            88,
+            133,
+            48,
+            71
+          ],
+          "balanceCv": 0.5446909011383075
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.631578947368421
+        },
+        "fanout": {
+          "mean": 2.8,
+          "max": 7,
+          "within5to9": 0.2
+        },
+        "headings": {
+          "boundaries": 6,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.1,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 18,
+            "words": 558
+          }
+        },
+        "titles": {
+          "count": 10,
+          "meanWords": 4,
+          "within2to6": 1,
+          "copiedHeadings": 1,
+          "retention": 0.7037037037037037
+        },
+        "gists": {
+          "count": 10,
+          "coverage": 1,
+          "meanWords": 15.3,
+          "multiSentence": 0,
+          "templateRepetition": 0.2,
+          "retention": 0.33775978923037747
+        }
+      },
+      "calls": [
+        {
+          "ms": 10157,
+          "inputTokens": 2151,
+          "outputTokens": 816,
+          "reasoningTokens": 0,
+          "generationId": "gen-1788437454-HVVSWaiJZMQVqeLrp9VN",
+          "costUsd": 0.012462,
+          "providerCostUsd": 0.012462,
+          "upstream": "Anthropic"
+        }
+      ],
+      "repaired": {
+        "ranges": 2,
+        "blocks": 1,
+        "largest": 1,
+        "where": [
+          "root > child 1 (gap, 1)",
+          "root > child 1 > child 1 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      },
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 4,
+        "l1Boundaries": 0.16666666666666666,
+        "allBoundaries": 0.4166666666666667,
+        "boundaryDistance": {
+          "mean": 0.6470588235294118,
+          "within1Block": 0.8235294117647058
+        }
+      }
+    }
+  ]
+}

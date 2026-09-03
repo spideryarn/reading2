@@ -91,6 +91,7 @@ import { CHAIN_MS, measureRow, stepTarget } from "./keynav.js";
 import { activeSectionIndex } from "./position.js";
 import { armActivation } from "./activation.js";
 import { SketchView } from "./SketchView.js";
+import { useSketchCaption } from "./useSketch.js";
 import { ILLUSTRATED_PRICE, ILLUSTRATED_WAIT, IllustratedView } from "./IllustratedView.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 
@@ -745,6 +746,18 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
   const wantsPoints = NEEDS_POINTS.has(kind);
   const projection = useProjection(slug, drawable && wantsPoints);
 
+  /* **The Sketch's own caption, for the Sketch chip's card** — one GET, no
+     model call, and the only fetch here with no `enabled` argument: there is no
+     purchase to gate, and gating it on the picture made the same chip give
+     different cards depending on which picture was up (useSketch.ts
+     § `useSketchCaption`). Not gated on `drawable` either, because a Sketch is
+     a model's drawing of the article and exists whether or not the tree is
+     usable.
+
+     `useSketchCaption`, never a second `useSketch`: that hook carries the
+     auto-runner, and a hover card must not be able to start a $0.20 draw. */
+  const sketchCaption = useSketchCaption(slug);
+
   /* The picture's second data source, assembled only when a picture wants it.
      `axis` and `hue` are in here because they change where a dot goes and which
      palette slot it takes — both are geometry, decided by the layout. */
@@ -1366,7 +1379,21 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
                    § keepSide has the measurement. */
                 keepSide
                 className="tip-soon"
-                content={<ControlTip head={ui.label} what={ui.blurb} how={ui.how} />}
+                /* **The Sketch chip's card says what was actually drawn**, when
+                   something has been. Every other line in these cards is the
+                   same words for every article; this one is the model's own
+                   caption for this piece, and it is the thing a reader deciding
+                   whether to press wants. It used to be an SVG `<title>` over
+                   the whole picture, which is where Greg met it as a nuisance —
+                   SketchView.tsx § no `<title>` here. */
+                content={
+                  <ControlTip
+                    head={ui.label}
+                    what={ui.blurb}
+                    drawn={k === "sketch" && sketchCaption ? `Drawn for this article: ${sketchCaption}` : undefined}
+                    how={ui.how}
+                  />
+                }
               >
                 {/* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern, and the same call Dock.tsx and SearchPanel.tsx already make — a real <input type="radio"> cannot carry an icon beside its label, and styling one to match means hiding the input and faking every state it already had */}
                 <button

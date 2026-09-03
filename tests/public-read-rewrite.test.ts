@@ -550,17 +550,22 @@ describe("the older legacy entrances, which must not fire under /read/", () => {
 
 describe("parseRoute and a malformed slug", () => {
   /**
-   * **`/read/Upper` is the shelf, not an error page.**
+   * **`/read/Upper` is the 404 page, not an error page.**
    *
    * It used to be an article route: the client asked the API for `Upper`, the
    * API refused it with the 400 it gives every malformed slug, and the reader
-   * saw a failure rather than the shelf. This function's own header says a
-   * mistyped path lands you on the shelf, and an address the server can never
-   * answer is a mistyped path.
+   * saw a failure. An address the server can never answer is a mistyped path,
+   * and since 2026-09-03 a mistyped path has a page of its own rather than
+   * landing quietly on the shelf — docs/plans/260903j-not-found-page.md.
+   *
+   * **The two sides agree here without consulting each other**, which is the
+   * property this case is really pinning: the edge rewrites `/read/:slug` to
+   * the serverless function, and `decidePublicPage` answers 400 for exactly
+   * these five.
    */
-  it("sends anything that is not a slug to the library", () => {
+  it("sends anything that is not a slug to the not-found page", () => {
     for (const bad of ["/read/Upper", "/read/has space", "/read/-leading", "/read/a_b", "/read/%20"]) {
-      expect(parseRoute(bad), bad).toEqual({ kind: "library" });
+      expect(parseRoute(bad), bad).toEqual({ kind: "not-found" });
     }
   });
 

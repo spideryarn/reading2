@@ -58,9 +58,30 @@ and a drawer left open across a navigation is not a place you were. That rule is
 it. The one place `?panel=` is put *back* is the bottom bar's Questions button off the reading view,
 where the navigation is for the drawer.
 
-Anything that is not one of those paths is the library, including nonsense — an unrecognised third
-segment as much as an unrecognised first one. There is no 404 page on purpose: a mistyped address
-lands you on the shelf, which is both a useful place to be and self-explanatory.
+### An address nobody minted
+
+An address that is not one the app mints — not `/`, not `/read/<slug>` and its two views, and not
+one of the standalone pages `parseRoute` names (`/login`, `/profile`, `/design`, `/privacy`,
+`/features`, `/pricing`, `/admin`, `/add/`, `/auth/callback`) — is the **404 page**. An unrecognised
+third segment as much as an unrecognised first one, so `/read/x/nonsense` and `/asdf` get the same
+answer. [`router.ts`](../../src/web/router.ts) is the list, and it is the only one;
+[`NotFoundPage.tsx`](../../src/web/NotFoundPage.tsx) is a heading, a sentence and a link home.
+
+**It was the shelf until 2026-09-03**, and this paragraph said so: *"There is no 404 page on
+purpose: a mistyped address lands you on the shelf, which is both a useful place to be and
+self-explanatory."* Greg went to `/asdf`, got the homepage and asked where the 404 was, which
+answers the second half. The shelf is useful and it is *silent*: a link that has rotted and a link
+that was never right both look exactly like a link that worked.
+[260903j-not-found-page.md](../plans/260903j-not-found-page.md) has the reversal, the addresses that
+still fall through to the shelf (the root in its three spellings, and `/add` with nothing after it),
+and why `/admin` for a non-administrator deliberately did not follow. `/add/<something that is not a
+URL>` is neither: it stays an add route, and the add page says what is wrong with the address the
+reader typed, which is a better answer than either of ours.
+
+**The status code is still 200** for everything but `/read/:slug`, which the edge already answers
+400 or 404 through the serverless function ([`src/public/page.ts`](../../src/public/page.ts)).
+`vercel.json` rewrites the rest to a static file, and a static file cannot choose a status; the plan
+says why we did not chase it.
 
 **A real path needs a server that knows it.** In development Vite's SPA fallback serves `index.html`
 for `/read/anything`, so nothing had to be configured. `npm run build` produces a single

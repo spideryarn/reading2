@@ -1,0 +1,26 @@
+{
+  "ranking": ["A", "F", "E", "B", "D", "C"],
+  "unusable": [],
+  "boundaryFaults": {
+    "A": [
+      "'Appendix' and 'It From Byte' are siblings opening on the identical block ('Powerful generative models like GPT-3 learn to imitate agents…') — the Appendix entry is an empty shell with no content of its own before its twin, so two adjacent tree entries name the same spot"
+    ],
+    "F": [
+      "Same degenerate pair as A: 'Appendix' and 'It From Byte' both open on the identical blockquote, so the boundary between them encloses nothing"
+    ],
+    "B": [
+      "Between 'Overview & Meta-Learning' and 'Scaling Laws & Blessings Of Scale', the single entry 'GPT-3's Capabilities' welds the article's Flexing GPT section to Baking The Cake — the latter's 'scaling still working' and anti-scaling-economics argument (blocks 12–14) is the opening move of the scaling case, not a capabilities demo"
+    ],
+    "D": [
+      "Between 'GPT-3 Overview' and 'Scaling', the entry titled 'Meta-Learning' actually spans three of the article's sections (Meta-Learning, Flexing GPT, Baking The Cake, blocks 3–15) — the AGI-cake debate and cost objections are not meta-learning, so the title misdescribes two-thirds of its span"
+    ],
+    "C": [
+      "'Appendix' is the final entry with nothing after it, so the article's real Backlinks / Similar Links / Bibliography sections (blocks 137–142) and all ~40 footnote blocks are silently welded onto the It From Byte agency essay"
+    ]
+  },
+  "missingCuts": [
+    "The footnote blocks (143 onward, ~40 list items after the Bibliography link at block 142) get no boundary in any tree — every tree lets them ride inside its last entry ('Bibliography', 'Links & References', or C's 'Appendix'), so the map ends before roughly a fifth of the blocks do"
+  ],
+  "titles": { "A": "names", "B": "generic", "C": "names", "D": "names", "E": "names", "F": "names" },
+  "gists": { "A": "claims", "B": "claims", "C": "none", "D": "claims", "E": "claims", "F": "claims" }
+}

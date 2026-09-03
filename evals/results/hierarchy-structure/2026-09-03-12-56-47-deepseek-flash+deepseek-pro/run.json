@@ -1,0 +1,480 @@
+{
+  "startedAt": "2026-09-03T12:56:47.502Z",
+  "commit": "890d19f6489a7204141fa6c6dc3992bbb5429b5b",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "deepseek-flash",
+      "kind": "one-call",
+      "comparison": "bakeoff",
+      "call": {
+        "model": "deepseek/deepseek-v4-flash-0731",
+        "effort": "low",
+        "provider": {
+          "zdr": true,
+          "require_parameters": true
+        }
+      },
+      "seed": "none"
+    },
+    {
+      "name": "deepseek-pro",
+      "kind": "one-call",
+      "comparison": "bakeoff",
+      "call": {
+        "model": "deepseek/deepseek-v4-pro-0813",
+        "effort": "low",
+        "provider": {
+          "zdr": true,
+          "require_parameters": true
+        }
+      },
+      "seed": "none"
+    }
+  ],
+  "expected": [
+    {
+      "arm": "deepseek-flash",
+      "slug": "gwern-scaling-long"
+    },
+    {
+      "arm": "deepseek-pro",
+      "slug": "gwern-scaling-long"
+    }
+  ],
+  "results": [
+    {
+      "arm": "deepseek-flash",
+      "comparison": "bakeoff",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 1,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "matchesManifest": true
+      },
+      "outcome": "threw",
+      "error": "chat wire returned no message content (823 completion tokens, 816 of them reasoning) — the upstream produced only reasoning and no answer",
+      "calls": [
+        {
+          "ms": 27089,
+          "inputTokens": 19047,
+          "outputTokens": 823,
+          "reasoningTokens": 816,
+          "generationId": "gen-1788440207-x90aDjqjZ8KEMbkAmY06",
+          "costUsd": 0.00170302426,
+          "providerCostUsd": null,
+          "upstream": "DigitalOcean"
+        }
+      ]
+    },
+    {
+      "arm": "deepseek-pro",
+      "comparison": "bakeoff",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 2,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 134
+        },
+        "parts": {
+          "count": 15,
+          "words": [
+            899,
+            166,
+            320,
+            659,
+            212,
+            1343,
+            189,
+            2511,
+            1553,
+            1692,
+            1,
+            3074,
+            5,
+            6,
+            7
+          ],
+          "balanceCv": 1.1318970978334224
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.7692307692307693
+        },
+        "fanout": {
+          "mean": 4.487804878048781,
+          "max": 16,
+          "within5to9": 0.3902439024390244
+        },
+        "headings": {
+          "boundaries": 34,
+          "boundariesOnHeadings": 0.7058823529411765,
+          "headingsCut": 1,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.5853658536585366,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 41,
+          "meanWords": 2.7804878048780486,
+          "within2to6": 0.8536585365853658,
+          "copiedHeadings": 24,
+          "retention": 0.7745098039215685
+        },
+        "gists": {
+          "count": 41,
+          "coverage": 1,
+          "meanWords": 15.341463414634147,
+          "multiSentence": 0,
+          "templateRepetition": 0.04878048780487805,
+          "retention": 0.6418871579560245
+        }
+      },
+      "calls": [
+        {
+          "ms": 184689,
+          "inputTokens": 19047,
+          "outputTokens": 13787,
+          "reasoningTokens": 11188,
+          "generationId": "gen-1788440234-dThyZEgSBqfOhrGwlwsC",
+          "costUsd": 0.07973856,
+          "providerCostUsd": null,
+          "upstream": "SiliconFlow"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      }
+    },
+    {
+      "arm": "deepseek-flash",
+      "comparison": "bakeoff",
+      "slug": "gwern-scaling-long",
+      "run": 2,
+      "callOrder": 3,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "matchesManifest": true
+      },
+      "outcome": "threw",
+      "error": "the structure-arm response is not valid JSON: it does not begin with { or [ — 12 characters, so this is probably not JSON at all",
+      "calls": [
+        {
+          "ms": 28321,
+          "inputTokens": 19047,
+          "outputTokens": 82,
+          "reasoningTokens": 79,
+          "generationId": "gen-1788440419-AM4Kd3wJKmf3NnuanC6l",
+          "costUsd": 0.000506292388,
+          "providerCostUsd": null,
+          "upstream": "DigitalOcean"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      }
+    },
+    {
+      "arm": "deepseek-pro",
+      "comparison": "bakeoff",
+      "slug": "gwern-scaling-long",
+      "run": 2,
+      "callOrder": 4,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 134
+        },
+        "parts": {
+          "count": 9,
+          "words": [
+            899,
+            486,
+            871,
+            1532,
+            2511,
+            3245,
+            1791,
+            1284,
+            18
+          ],
+          "balanceCv": 0.6755683420166314
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.986013986013986
+        },
+        "fanout": {
+          "mean": 4.7631578947368425,
+          "max": 15,
+          "within5to9": 0.3157894736842105
+        },
+        "headings": {
+          "boundaries": 28,
+          "boundariesOnHeadings": 0.8571428571428571,
+          "headingsCut": 1,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.631578947368421,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 38,
+          "meanWords": 3.0789473684210527,
+          "within2to6": 0.8421052631578947,
+          "copiedHeadings": 24,
+          "retention": 0.9392857142857143
+        },
+        "gists": {
+          "count": 38,
+          "coverage": 1,
+          "meanWords": 21.789473684210527,
+          "multiSentence": 0,
+          "templateRepetition": 0.34210526315789475,
+          "retention": 0.69636706376563
+        }
+      },
+      "calls": [
+        {
+          "ms": 228177,
+          "inputTokens": 19047,
+          "outputTokens": 15855,
+          "reasoningTokens": 13021,
+          "generationId": "gen-1788440448-FuKdNlZyhXQ0gMExpIIE",
+          "costUsd": 0.08792784,
+          "providerCostUsd": null,
+          "upstream": "Novita"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root",
+          "root > child 1",
+          "root > child 2",
+          "root > child 3",
+          "root > child 4",
+          "root > child 5 > child 1",
+          "root > child 5 > child 2",
+          "root > child 5 > child 3",
+          "root > child 5 > child 4",
+          "root > child 5 > child 5",
+          "root > child 6",
+          "root > child 7",
+          "root > child 8",
+          "root > child 9"
+        ]
+      }
+    },
+    {
+      "arm": "deepseek-flash",
+      "comparison": "bakeoff",
+      "slug": "gwern-scaling-long",
+      "run": 3,
+      "callOrder": 5,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "matchesManifest": true
+      },
+      "outcome": "threw",
+      "error": "chat wire returned no message content (398 completion tokens, 388 of them reasoning) — the upstream produced only reasoning and no answer",
+      "calls": [
+        {
+          "ms": 12298,
+          "inputTokens": 19047,
+          "outputTokens": 398,
+          "reasoningTokens": 388,
+          "generationId": "gen-1788440676-dE5O50tciRkW1rCzoE45",
+          "costUsd": 0.000585924388,
+          "providerCostUsd": null,
+          "upstream": "DigitalOcean"
+        }
+      ]
+    },
+    {
+      "arm": "deepseek-pro",
+      "comparison": "bakeoff",
+      "slug": "gwern-scaling-long",
+      "run": 3,
+      "callOrder": 6,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 134
+        },
+        "parts": {
+          "count": 14,
+          "words": [
+            899,
+            166,
+            320,
+            659,
+            212,
+            1343,
+            189,
+            2511,
+            1553,
+            1692,
+            3075,
+            5,
+            6,
+            7
+          ],
+          "balanceCv": 1.0628502335662835
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 3.9183673469387754,
+          "max": 15,
+          "within5to9": 0.2857142857142857
+        },
+        "headings": {
+          "boundaries": 33,
+          "boundariesOnHeadings": 0.696969696969697,
+          "headingsCut": 0.9583333333333334,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.6530612244897959,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 49,
+          "meanWords": 2.877551020408163,
+          "within2to6": 0.8163265306122449,
+          "copiedHeadings": 29,
+          "retention": 0.8066666666666666
+        },
+        "gists": {
+          "count": 49,
+          "coverage": 1,
+          "meanWords": 19.183673469387756,
+          "multiSentence": 0,
+          "templateRepetition": 0.16326530612244897,
+          "retention": 0.7357178235929738
+        }
+      },
+      "calls": [
+        {
+          "ms": 289404,
+          "inputTokens": 19047,
+          "outputTokens": 19762,
+          "reasoningTokens": 16500,
+          "generationId": "gen-1788440688-9MEzRjvR5YfakpkKYF5N",
+          "costUsd": 0.080894088,
+          "providerCostUsd": null,
+          "upstream": "Novita"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      }
+    }
+  ],
+  "effortCatalogue": [
+    {
+      "model": "deepseek/deepseek-v4-flash-0731",
+      "supportedEfforts": [
+        "max",
+        "high",
+        "low"
+      ],
+      "defaultEffort": "high",
+      "mandatory": false
+    },
+    {
+      "model": "deepseek/deepseek-v4-pro-0813",
+      "supportedEfforts": [
+        "max",
+        "high",
+        "low"
+      ],
+      "defaultEffort": "high",
+      "mandatory": false
+    }
+  ],
+  "completedAt": "2026-09-03T13:09:38.034Z"
+}

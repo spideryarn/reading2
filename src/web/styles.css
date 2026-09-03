@@ -3680,6 +3680,17 @@ td.text.has-hit[data-hues="8"] {
   color: var(--ink-faint);
   font-style: italic;
 }
+/* What the control drew for *this* article — the Sketch's own caption, in the
+   Sketch chip's card. The one line in these cards that is not the same words
+   for every reader, so it is quoted rather than blended into the description
+   above it: the rule says "and here is what came back", and it keeps its full
+   ink because it is the most specific thing in the card. `ControlTip`
+   § `drawn`. Specificity ladder as `.tip-soon-learned` above. */
+.tip-soon p.tip-soon-drawn {
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--rule);
+  color: var(--ink);
+}
 
 /* ---------------------------------------------------------------- /design --
    The design reference page. See DesignPage.tsx for what it is for.
@@ -13096,7 +13107,14 @@ table.only-prose thead { display: none; }
 
 .fb-field { display: flex; flex-direction: column; gap: 0.3rem; }
 .fb-label { font-size: 0.78rem; font-weight: 600; }
-.fb-hint { font-weight: 400; color: var(--ink-faint); }
+/* The three things we ask a bug report for, under the label and above the one
+   box — FeedbackDialog.tsx says why they are not hidden in the disclosure. */
+.fb-hint {
+  font-size: 0.76rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
 .fb-input {
   width: 100%;
   padding: 0.45rem 0.55rem;

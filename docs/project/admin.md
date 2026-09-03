@@ -36,6 +36,13 @@ The two courtesies are worth having and worth being honest about. The admin comp
 JavaScript bundle every signed-in reader downloads; hiding a link hides nothing. If the client half
 were deleted tomorrow the server would refuse exactly the same requests.
 
+**The shelf, and deliberately not the 404 page** that arrived on 2026-09-03 for every address nobody
+minted ([library.md](library.md#an-address-nobody-minted)). It is the same argument as *403, not
+404* below, applied to the client: `/admin` exists and its code is in everybody's bundle, so a page
+saying there is nothing at this address would be pretending about something anyone can see is there.
+`/admin/nonsense` *is* the 404 page, matching the server's own split — `/api/admin/anything` is a
+403 and `/api/administer` is a 404.
+
 **The gate guards the namespace rather than the route.** It sits above the route table, so an admin
 endpoint added later is behind it whether or not whoever adds it remembers — which is the only
 version of this that stays true. `tests/routes.test.ts` asks for `/api/admin/anything-at-all` and
