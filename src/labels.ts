@@ -54,7 +54,7 @@ import { hashBlocks, structureHash } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Block, NodeId, Tree, TreeNode } from "./types.js";
 
-const PROMPT_VERSION = "labels/1";
+const PROMPT_VERSION = "labels/2";
 
 /**
  * A batch that did not come back whole — worth one more try.
@@ -663,6 +663,9 @@ WRITE ONE LABEL PER NUMBERED PARAGRAPH.
   good — it is worse, because the reader is scanning for the word they read.
   If the paragraph says "technorati", your label says "technorati", not
   "technologists". If it says "confabulate", do not write "make things up".
+- Ordinary words for everything else. A label is read at a glance while the
+  reader is scrolling, so it has to land first time — plainer than the article,
+  never further from it.
 - A paragraph marked HEADING gets its heading text copied EXACTLY, and nothing
   else. No prefix, no "Heading:", no "Title:", no rewording, no punctuation you
   did not find there.

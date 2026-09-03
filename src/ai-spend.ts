@@ -307,10 +307,58 @@ export type CostSource = "provider" | "computed" | "none";
  * "no".
  */
 function normaliseByokUpstream(record: SpendRecord): Nanos | null {
-  if (record.isByok !== true) return null;
+  if (record.isByok !== true) {
+    warnIfPaidLooksFree(record);
+    return null;
+  }
   if (record.providerAccount !== "openrouter") return null;
   if (record.cost.source !== "provider") return null;
   return record.upstreamCostNanos;
+}
+
+/**
+ * **The one shape in which this narrowing can record a paid call as a free
+ * one**, said out loud in the log rather than left to be discovered in a total.
+ *
+ * The three conditions above are right and must not be loosened — `=== true`
+ * is what keeps "we were not told" from being read as "yes", and loosening it
+ * is how the doubled bill comes back. But they leave one gap: a provider that
+ * reports `cost: 0` **and** a real `upstream_inference_cost` **without** saying
+ * `is_byok`. `costSource` is then `provider` — a zero OpenRouter genuinely
+ * stated — the upstream figure is dropped here, and the row reads
+ * `credits_used_nanos = 0` with every `CHECK` satisfied. Money left, and the
+ * ledger says none did.
+ *
+ * That has never been observed on the chat wire, where an ordinary call reports
+ * `upstream == cost` and this is simply the double-count being removed. It is
+ * unobserved rather than impossible on the images wire, which is younger than
+ * this function and whose BYOK zero is the *normal* case rather than the
+ * exception — so the failure would look exactly like the feature working.
+ * `src/ai-call.ts`'s images seam, 2026-09-03.
+ *
+ * A warning rather than a repair, deliberately. Writing the figure anyway would
+ * violate the database `CHECK` and lose the row entirely; guessing `isByok`
+ * would put the double-count back. What the ledger cannot do is be quietly
+ * wrong about it — so it says so, once, with the numbers a person needs to go
+ * and look.
+ */
+function warnIfPaidLooksFree(record: SpendRecord): void {
+  if (record.providerAccount !== "openrouter") return;
+  if (record.cost.source !== "provider") return;
+  if (record.cost.costNanos !== 0) return;
+  if (record.upstreamCostNanos === null || record.upstreamCostNanos === 0) return;
+  /* No prompt, no answer, no article — src/log-redaction.ts. Only the job, the
+     wire and two numbers. */
+  log("model").warn(
+    {
+      job: record.job,
+      wire: record.wire,
+      upstreamCostNanos: record.upstreamCostNanos,
+      isByok: record.isByok,
+    },
+    "provider reported no credits and a non-zero upstream cost without is_byok; " +
+      "this call is recorded as free and is not",
+  );
 }
 
 /**

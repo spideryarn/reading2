@@ -405,6 +405,40 @@ opposite of what this section said before.
 `WORKTREE_SCHEMA` indirection can reach every hardcoded `spideryarn`; for stacks, starting one trimmed
 stack and watching it under load rather than reasoning from the idle numbers above.
 
+#### The cost is not slow tests. It is false ones — measured 2026-09-03
+
+The case for doing this has always been argued as flakiness: shared rows make timing-sensitive suites
+red under load, you re-run them alone, they pass, you lose twenty minutes. That is real and it is not
+the strongest argument.
+
+On a box carrying eleven worktrees, `tests/store-jobs-parity.test.ts` failed with
+`expected 'busy' to be 'claimed'` and **kept failing away from the full suite**. Counting the rows
+explained it:
+
+```
+select status, count(*) from spideryarn.jobs group by status
+  →  error 48 · done 4 · running 3 · cancelled 1 · queued 1
+```
+
+`running: 3`, and the job concurrency cap is three (`CONCURRENCY_ENV`,
+[`src/jobs.ts`](../../src/jobs.ts)). None of the three belonged to the worktree running the test. The
+cap is **deliberately global** — counted across every row, which is what makes the lease design
+correct in production — so the store answered `busy` correctly about a machine that other worktrees
+had filled.
+
+Three things follow, and they are why this is a stronger argument than flakiness:
+
+- **Re-running in isolation does not clear it.** Isolation clears a timeout. It clears this only if
+  the other worktrees happen to be idle, which a test run can neither arrange nor detect.
+- **The failure is plausible rather than obviously spurious.** `busy` is a real status with a real
+  meaning, so it reads as a genuine cap violation. The cost is not a re-run; it is an agent debugging
+  a concurrency bug that does not exist.
+- **It scales the wrong way** with the number of agents, which is the direction this repo is going.
+
+So the question to weigh is not "how much time do flaky suites cost" but **"how long before a shared
+global counter makes somebody believe a false thing about the code"** — which it already has.
+Reproduced by [260903d](../plans/260903d-improve-the-codebase-second-sweep.md) § T1.3.
+
 ## Ports and the ceiling
 
 **The design changed on 2026-09-01, after the reservation allocator was built and reviewed.** Greg

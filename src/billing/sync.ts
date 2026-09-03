@@ -55,13 +55,21 @@ export type SyncResult =
   /**
    * No `billing_accounts` row carries this customer id.
    *
-   * **Not an error, and not a success either.** It happens legitimately for a
-   * few seconds: Checkout completes, Stripe fires, and our own success callback
-   * has not yet written the mapping. The caller answers 5xx so Stripe retries,
-   * which is what closes that window. It also happens permanently for a customer
-   * created by hand in the dashboard, and Stripe gives up on those after a few
-   * days — which is the right outcome for an event about somebody who is not a
-   * reader here.
+   * **Not an error, and not a success either — and it should be rare.** An
+   * earlier version of this said it happens for a few seconds after Checkout
+   * completes, while our success callback catches up. That describes a design
+   * that is deliberately not built: `startCheckout` (./checkout.ts) commits the
+   * customer→owner mapping **before** a Checkout Session naming that customer
+   * exists, precisely so this branch is never the ordinary case. A browser
+   * return is not a delivery guarantee.
+   *
+   * What is left here is a customer created by hand in the dashboard, a
+   * `stripe trigger` fixture, or a real fault. The caller answers 5xx so Stripe
+   * retries; Stripe gives up after a few days, which is the right outcome for an
+   * event about somebody who is not a reader here.
+   *
+   * **`stripe listen` does not retry**, so in local testing this is one delivery
+   * lost rather than a window that closes itself.
    */
   | { readonly kind: "unmapped"; readonly customerId: string };
 

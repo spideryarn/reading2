@@ -47,6 +47,9 @@ const NOTHING: UserCounts = {
   searches: [],
   spend: new Map(),
   spendMonth: "2026-08",
+  ingests: [],
+  accounts: new Map(),
+  tiers: [],
 };
 
 describe("joining accounts to their counts", () => {
@@ -72,6 +75,17 @@ describe("joining accounts to their counts", () => {
         [BOB, { nanos: 30_000_000, calls: 30, unpricedCalls: 0 }],
       ]),
       spendMonth: "2026-08",
+      /* The billing three merge by owner id exactly as the six above do, so
+         they belong in the "nobody gets anybody else's numbers" test. Both are
+         on the free tier here — what each *plan* does with these numbers is
+         tests/billing-admin-plan.test.ts, and this one is only about whose row
+         they land on. */
+      ingests: [
+        { owner: ALICE, lifetime: 2, inPeriod: 0, inFlight: 0 },
+        { owner: BOB, lifetime: 1, inPeriod: 0, inFlight: 1 },
+      ],
+      accounts: new Map(),
+      tiers: [],
     });
 
     const alice = users.find((u) => u.id === ALICE);
@@ -80,11 +94,16 @@ describe("joining accounts to their counts", () => {
       articles: 3, archived: 1, opens: 40, uploads: 11, questions: 13, chats: 15, searches: 17,
       lastReadAt: "2026-08-25T09:00:00.000Z",
       spendNanos: 19_000_000, spendCalls: 19, spendUnpricedCalls: 2, spendMonth: "2026-08",
+      plan: "free", ingests: 2, ingestWindow: "lifetime",
     });
     expect(bob).toMatchObject({
       articles: 7, archived: 2, opens: 5, uploads: 22, questions: 24, chats: 26, searches: 28,
       lastReadAt: "2026-08-26T09:00:00.000Z",
       spendNanos: 30_000_000, spendCalls: 30, spendUnpricedCalls: 0, spendMonth: "2026-08",
+      /* 1 settled + 1 still in flight. A reservation nobody has settled is a
+         slot somebody is spending, which is what the wall counts — so the page
+         counts it too, or it would show a free slot the server would refuse. */
+      plan: "free", ingests: 2, ingestWindow: "lifetime",
     });
   });
 
@@ -102,6 +121,13 @@ describe("joining accounts to their counts", () => {
        rather than as `$0.0000`. A missing field here would have made those two
        states indistinguishable. */
     expect(alone).toMatchObject({ spendNanos: 0, spendCalls: 0, spendUnpricedCalls: 0 });
+    /* And the same rule for billing, where "no row" is the *ordinary* state
+       rather than an edge: a free reader has no `billing_accounts` row until
+       they check out or hit the wall, so an absent account and an absent ingest
+       tally have to read as the free tier with nothing spent — not as a missing
+       plan, which the column would draw as an empty cell. */
+    expect(alone).toMatchObject({ plan: "free", ingests: 0, ingestLimit: 3, ingestWindow: "lifetime" });
+    expect(alone?.planStatus).toBeUndefined();
     expect(alone?.spendMonth).toBe("2026-08");
     /* And the dates that genuinely have no answer stay *absent*, because
        `exactOptionalPropertyTypes` makes absent the only spelling of "no

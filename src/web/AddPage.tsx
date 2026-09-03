@@ -52,8 +52,9 @@ import { Link } from "./Link.js";
 import { JobCard } from "./AddArticle.js";
 import { normaliseUrl, slugFromUrl } from "../ingest.js";
 import { KEEP_A_TAB_OPEN } from "../job-state.js";
-import { DIRECT_ADD_SENT_TEXT_AWAY } from "../messages.js";
+import { DIRECT_ADD_SENT_TEXT_AWAY, worthRetrying } from "../messages.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
+import { QuotaNotice } from "./QuotaNotice.js";
 import { LIBRARY_HREF, navigate, readHref } from "./router.js";
 import type { Job } from "../types.js";
 import { useJobs } from "./useJobs.js";
@@ -118,7 +119,30 @@ export function AddPage({ source: origin }: { source: AddSource }) {
      the URL is the same one — so without something that changes, pressing Retry
      would do nothing at all. */
   const [attempt, setAttempt] = useState(0);
-  const [failed, setFailed] = useState(false);
+  /**
+   * Why the POST failed, kept where no poll can clear it.
+   *
+   * **It was a boolean and `queue.error` was rendered beside it, and that was
+   * the bug** — the same one the three artefact hooks met in August and the
+   * thread page met after them, found here in a browser on 2026-09-03. `error`
+   * is *engine* state shared with the poller, and `act`'s own `finally` starts
+   * the poll that clears it (see `lastFailure` in useJobs.ts), so the server's
+   * reason for refusing was replaced by the generic *"It didn't get as far as
+   * the queue"* before anybody could read it. On a free account at its quota
+   * that meant the refusal — and the link to `/profile` that the whole
+   * `QuotaNotice` change is for — never appeared at all.
+   *
+   * `queue.lastFailure()` is the durable record and is snapshotted *here*, right
+   * after the await, exactly as `useStepJob` does after the same discovery
+   * (`tests/refused-job-reason-survives.test.tsx`). Reading it at render would
+   * be reading a ref, which is the same race one layer along.
+   *
+   * **A wrapper object rather than `string | null`**, because `lastFailure()`
+   * can itself answer `null` — a failure nobody wrote a sentence for — and the
+   * two nulls mean opposite things. `null` here is "the POST has not failed".
+   */
+  const [failure, setFailure] = useState<{ reason: string | null } | null>(null);
+  const failed = failure !== null;
 
   // Through a ref, the same way `useJobs` holds `onFinished`. `queue.add` is a
   // fresh closure on every poll, so depending on it directly would re-run this
@@ -129,6 +153,10 @@ export function AddPage({ source: origin }: { source: AddSource }) {
   addRef.current = queue.add;
   const uploadRef = useRef(queue.addUpload);
   uploadRef.current = queue.addUpload;
+  /* Through a ref for the same reason the two above are: the effect must not
+     re-run when the hook hands back a fresh closure on every poll. */
+  const failureRef = useRef(queue.lastFailure);
+  failureRef.current = queue.lastFailure;
 
   useEffect(() => {
     /* Cleared rather than simply skipped. Going from a URL we would add to one
@@ -137,14 +165,14 @@ export function AddPage({ source: origin }: { source: AddSource }) {
        still able to navigate away when it finished. */
     if (!ok) {
       setStarted(null);
-      setFailed(false);
+      setFailure(null);
       return;
     }
     const want = `${attempt}\u0000${wanted}`;
     if (posted.current === want) return;
     posted.current = want;
     setStarted(null);
-    setFailed(false);
+    setFailure(null);
     /* On `uploadId` rather than on `origin.kind`, so the effect reads only
        plain strings it also depends on — and so the union narrows, which
        `origin.kind === "upload"` does not do for a field read inside a
@@ -158,12 +186,14 @@ export function AddPage({ source: origin }: { source: AddSource }) {
          on screen and then navigate to it. The ref is the current request's
          name, so comparing against it is the check. GPT Sol, 2026-08-26.
 
-         `null` means the POST itself failed, and `useJobs` has put the reason
-         in `queue.error`. Without that branch the page sat on "Queueing it…"
-         for ever, with the error above it and no way to try again. */
+         `null` means the POST itself failed. Without that branch the page sat
+         on "Queueing it…" for ever, with no way to try again. */
       if (posted.current !== want) return;
       if (!queued) {
-        setFailed(true);
+        /* **The reason is taken here and kept**, out of the durable
+           `lastFailure` rather than the shared `error` — see `failure` above for
+           the race, and `useStepJob` for the same fix on the thread page. */
+        setFailure({ reason: failureRef.current() });
         return;
       }
       /* **Nothing was queued, because there was nothing left to queue.** A
@@ -255,9 +285,22 @@ export function AddPage({ source: origin }: { source: AddSource }) {
         </p>
       )}
 
-      {queue.error && (
-        <p className="tw:mb-4 tw:text-sm tw:text-destructive">{queue.error}</p>
-      )}
+      {/* **This is where a 402 lands for a pasted URL.** The shelf's Add button
+          navigates here and the effect above posts, so the quota's refusal is
+          read on this page rather than on the shelf — which is why the link to
+          `/profile` has to be here too, and not only in the add box.
+          QuotaNotice.tsx.
+
+          `failure.reason` first and `queue.error` behind it: the first is the
+          durable record of *this* POST's refusal and the second is whatever the
+          engine is unhappy about right now, which is the right thing to show
+          when nothing was refused (a poll that cannot reach the server). Taking
+          them the other way round is the bug this pair was written to fix —
+          see `failure` above. */}
+      <QuotaNotice
+        message={failure?.reason ?? queue.error}
+        className="tw:mb-4 tw:text-sm tw:text-destructive"
+      />
 
       {/* From the first render until the poll brings the job back — the POST
           and one poll, usually a fraction of a second. Deliberately *not*
@@ -268,7 +311,17 @@ export function AddPage({ source: origin }: { source: AddSource }) {
         <p className="tw:text-sm tw:text-muted-foreground">Queueing it…</p>
       )}
 
-      {failed && (
+      {/* **Only when another go could come out differently.** `worthRetrying`
+          is the one place that decides, and it says no to a `blocked` message —
+          which every quota refusal is, because the count will be the same next
+          time. A *Try again* under a sentence that has just said trying again
+          will not help is a button that teaches the reader to distrust the
+          sentence, and it is the same rule `JobCard` follows for the Retry on a
+          failed step (src/job-failure.ts).
+
+          The generic line goes with it: when the refusal above says what
+          happened, "It didn't get as far as the queue" adds nothing. */}
+      {failed && worthRetrying(failure?.reason) && (
         <p className="tw:mb-0 tw:text-sm tw:text-muted-foreground">
           It didn't get as far as the queue.{" "}
           <button

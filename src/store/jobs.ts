@@ -105,6 +105,22 @@ export interface EnqueueTicket {
    * pastes of one URL minting two articles.
    */
   urlKey?: string;
+  /**
+   * **The quota slot this job will spend**, from `reserveIngest`
+   * (src/store/pg-billing.ts). Absent means the job spends none.
+   *
+   * On the **ticket** rather than on `Job`, deliberately. `Job` is serialised to
+   * the browser by `publicJob` (src/jobs.ts), and a ledger id is not the
+   * reader's business — putting it there would mean stripping it at that seam
+   * and carrying a Postgres-only, billing-only field through the filesystem
+   * adapter and the parity suite for nothing.
+   *
+   * The Postgres adapter writes it into the job's own INSERT — that atomicity is
+   * the whole provenance argument, src/db/schema.ts § `ingest_events`. The
+   * filesystem adapter keeps the ticket and never reads this: quota is a
+   * Postgres feature (docs/project/billing.md), and there is no second ledger.
+   */
+  ingestEventId?: string;
 }
 
 /**

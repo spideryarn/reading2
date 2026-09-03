@@ -5,9 +5,17 @@ the same family of questions. Who are you, what may you do, and what stops someb
 asking politely. The build is
 [260902i](../plans/260902i-stripe-payments-and-subscription-tiers.md).
 
-**Status: half built.** Tiers are database rows as of 2026-09-02; The Stripe side, the schema and the quota mechanism exist; the routes and
-the reader-facing surface do not. What is not built is marked *not built* below rather than
-described in the present tense.
+**Status: the quota is live, the paying works, and the button exists.** Tiers are database rows as of
+2026-09-02; a job's ending settles its slot at all seven places a job can end and adding an article
+takes one, so a free account is held to three lifetime ingests. As of 2026-09-03 there are checkout,
+portal and confirm routes, and the **whole round trip has been run for real** in Stripe test mode:
+card `4242…` through hosted Checkout → signed webhook → `syncSubscriptionFromStripe` (which had
+never executed until then) → an `active` row with the period Stripe reported → the same account
+admitting a fourth ingest where a free one is refused, and refusing the twenty-first with Stripe's
+own renewal date on it.
+
+The **reader-facing surface** landed the same day — see [What a reader sees](#what-a-reader-sees).
+What is not built is marked *not built* below rather than described in the present tense.
 
 ## What we sell, and the one promise
 
@@ -90,9 +98,15 @@ values ('reader', 'cad', 1400), ('researcher', 'cad', 7000);
 ```sql
 insert into spideryarn.billing_tiers
   (id, product_name, description, ingests_per_period, lookup_key, sort_order)
-values ('scholar', 'Spideryarn Scholar', '500 articles a month.', 500,
+values ('scholar', 'Spideryarn Scholar', 'For people who read for a living.', 500,
         'spideryarn_scholar_monthly', 30);
 ```
+
+**A description should not restate the allowance.** `/profile` renders
+`ingests_per_period` structurally and the description beside it, so a description that repeats the
+number is a second copy that the one-`UPDATE` quota change above does not touch — raise the quota to
+50 and the sentence goes on saying 20. The two seeded rows predate this line and do repeat it, which
+is redundant rather than wrong; whoever next edits them should take the first sentence out.
 
 Then, for either:
 
@@ -152,8 +166,77 @@ different EUR number — but it is a conversation with an accountant rather than
 > Public-readable articles, just not incur extra spend.
 
 So the quota sits on the one action that spends money — adding something new — and nowhere else.
-Every refusal message in [`src/messages.ts`](../../src/messages.ts) (`pay-free`, `pay-limit`) ends
-by saying so, because it is the thing a reader will actually be worried about.
+Every refusal message in [`src/messages.ts`](../../src/messages.ts) (`pay-free`, `pay-limit`,
+`pay-lapsed`) ends by saying so, because it is the thing a reader will actually be worried about.
+
+**A lapsed subscriber is blocked, and the third sentence exists so it does not read as a bug.** The
+free count is lifetime and *includes paid months*, so somebody who took forty articles on Reader and
+cancelled is past the free allowance permanently. Greg chose that on 2026-09-03 over tier-scoping
+the count or granting a fresh allowance on cancel — one rule, no new state, and nothing to farm by
+subscribing and cancelling. But "you have added all 3 articles a free account can add", to somebody
+looking at forty of them, reads as arithmetic going wrong, so `pay-lapsed` names the ended plan and
+resubscribing instead. It is chosen from the **billing row** — a subscription id beside a status the
+allowlist does not entitle — and not from `used > limit`, which is the same answer most of the time
+and a wrong one the day somebody lowers a tier's `ingests_per_period`.
+
+## What a reader sees
+
+Built 2026-09-03, and it is the half that had been missing: the refusal copy had been pointing at
+*"the Upgrade button on your profile page"* since the wall went up, and there was no such button.
+
+**`/profile` has a Plan section**, directly under Account — [`BillingSection.tsx`](../../src/web/BillingSection.tsx)
+over [`useBilling.ts`](../../src/web/useBilling.ts). It says which plan, how much of it is used, and
+what may be bought, and it has the two buttons that leave for Stripe. There is nothing else to it,
+because there is nothing else to build: Checkout and the Portal are hosted.
+
+**`GET /api/billing/usage`** is what it reads — [`src/billing/summary.ts`](../../src/billing/summary.ts),
+with the wire shape and the words in the pure [`src/billing-plan.ts`](../../src/billing-plan.ts).
+Three decisions worth knowing:
+
+- **A route of its own, not a field on `GET /api/reader`.** That route is fetched from every article
+  page by `useHasProfile`, so a billing field on it would put a `billing_accounts` read and an
+  `ingest_events` aggregate on the path of opening an article, for data only `/profile` draws.
+- **A GET, unlike the other three billing routes**, which are POSTs because each *creates a Stripe
+  object*. This creates nothing and touches no network.
+- **It never resyncs from Stripe.** Admission does, once, because it has to decide something. A read
+  of your own plan does not: a stored period that has run out comes back as *we could not confirm
+  your plan*, rather than as a guess between two wrong numbers.
+
+**`ReaderPlan` is a discriminated union and the `lapsed` arm has no `used` field.** That is the
+policy from *the quota* below made unbuildable rather than merely discouraged: a reader who took
+forty articles on Reader and cancelled must never be shown *"40 of 3 used"*, and the number is not
+on the wire for the page to print. `tests/billing-plan.test.ts` is the second half of it — that the
+words chosen do not reconstruct the ratio from the numbers that *are* there, and that they make the
+same three promises `pay-lapsed` makes.
+
+**The refusal carries a way out of itself.** `QuotaNotice`
+([`src/web/QuotaNotice.tsx`](../../src/web/QuotaNotice.tsx)) draws an ingest failure and puts a link
+to `/profile` beside it when — and only when — the message's code is one of the three in
+`QUOTA_CODES`. It is one component in four places (the shelf's add box, a job card's refused
+**Retry**, the `/add/` page a pasted URL navigates to, and the upload picker), because four
+renderings of one refusal would be four chances for three of them to stop offering the link.
+`pay-off`, `pay-down` and `pay-none` are `pay-` codes too and get no link: nobody buys their way out
+of a Stripe outage.
+
+**And it had to be told the refusal durably, which cost a bug to learn.** The first version rendered
+`queue.error` — engine state that the failed POST's *own* follow-up poll clears — so the 402 and the
+link vanished before anybody could read them, leaving the generic *"It didn't get as far as the
+queue"*. Every unit test in the change was green; a browser check on a real free account found it.
+Both surfaces now snapshot `queue.lastFailure()` right after the await, which is what
+[`src/web/useStepJob.ts`](../../src/web/useStepJob.ts) already did after the same discovery in
+August. `tests/refused-job-reason-survives.test.tsx` holds it, with the poll held so the frame
+before it can be asserted separately from the frame after.
+
+**What the browser may send is still only a tier id.** The Upgrade button posts `{ tierId }` and no
+currency at all — hosted Checkout picks by the customer's location, which is the whole reason a price
+carries three. The page shows all three amounts rather than guessing one from the locale.
+
+**Manage billing appears the moment somebody first presses Upgrade, not when they pay**, and that is
+the ordering guarantee showing through rather than a bug: the customer→owner mapping is committed
+*before* a Checkout Session exists, so an abandoned Checkout leaves a real mapped Stripe customer.
+The Portal then opens on no payment method and no invoices, which is the honest state of an account
+that started to subscribe and stopped. Seen in the browser on 2026-09-03 and written down because it
+looks wrong for as long as it takes to remember why the mapping comes first.
 
 ## We never touch a card
 
@@ -196,6 +279,47 @@ account. A plain "count, then decide" cannot: twenty requests all read zero and 
 **Nothing that opens its own transaction, and nothing that touches the network, may be called
 between the lock and the commit.** That is the rule a later change is most likely to break.
 
+### Which requests spend a slot, and why the wall is at the routes
+
+[`src/billing/admission.ts`](../../src/billing/admission.ts) holds the decision, and it lives at the
+routes rather than inside `enqueue()` — which is the tempting single choke point and the wrong one.
+`enqueue()` also serves **step re-runs on an article already on the shelf**, and by the time a
+request reaches it a re-run's job carries a URL too, filled in from the article's own metadata. Only
+the route still knows what was asked for.
+
+| | |
+|---|---|
+| `POST /api/jobs {url}` | reserves |
+| `POST /api/jobs {uploadId}` | reserves |
+| `POST /api/jobs/:id/retry`, when the old job carried a slot | reserves a **fresh** one |
+| `POST /api/jobs {slug, steps}` — a glossary, ideas, a quiz | free |
+| `POST /api/jobs/:id/retry` of a re-run | free |
+| `POST /api/uploads` | asks, reserves nothing — refuses at the door so nobody transfers 11 MB to be told no |
+
+**Retry is a second front door.** It never passes through the `POST /api/jobs` handler — straight to
+`retryJob` → `enqueue()` — so a check bolted onto that handler alone leaves a failed ingest
+retryable free, for ever. And it must ask `jobs.ingest_event_id` rather than `Job.url`, because a
+re-run recovers a URL too; that column is the only place the answer is written down.
+
+**Every path that reserves and produces no job gives the slot back**, and `withIngestSlot` does it
+by releasing on *every* path rather than by enumerating them: `releaseReservation`'s
+`not exists (select 1 from jobs where ingest_event_id = …)` is exactly the question — *did a job end
+up spending this?* — and it asks it of committed rows rather than of our idea of what happened. The
+enumerating version would have to be right about `enqueue`'s four outcomes and about a throw over an
+INSERT that committed and lost its reply.
+
+**The administrator is exempt, and takes no slot at all** — `isAdmin()`
+([`src/admin.ts`](../../src/admin.ts)), a comparison against two hardcoded uuids, so nothing a
+request carries can put anybody else in the list. Without it Greg is held to three lifetime articles
+on his own production instance, and comp subscriptions — the eventual mechanism — are a post-go-live
+stage. Nothing is reserved rather than reserved-and-forgiven, so an admin's jobs carry a null
+`ingest_event_id` like any re-run: **their ingests are legitimately absent from `ingest_events`**,
+which is worth knowing before reading that table as a record of everything ever added.
+
+**Known and accepted:** with one slot left, a double-click on Add reserves twice and the second is
+refused before deduplication would have collapsed it onto the first job. Fixing that means inserting
+the job before reserving, which is the bypass.
+
 ### Three things that look like improvements and are not
 
 - **Expiring an unsettled reservation.** An earlier draft gave them six hours. That is a bypass,
@@ -209,10 +333,70 @@ between the lock and the commit.** That is the rule a later change is most likel
   a crash in the gap leaves a runnable job nobody paid for; and two duplicate Adds that
   `enqueueOrGet` deduplicates into one job point two reservations at it. The link goes the other
   way and rides the job's own INSERT, which is atomic without needing a transaction.
-- **Releasing a slot from `/cancel`.** A Stop during the last step may still finish as `done`. A
-  release from outside that transition loses the race, and the publication then finds the
-  reservation released and charges nothing. Success and release both live in the transaction that
-  ends the job — [`src/store/pg-session.ts`](../../src/store/pg-session.ts) `settleIn`.
+- **Releasing a slot from `/cancel`, outside the transition that ends the job.** A Stop during the
+  last step may still finish as `done`. A release from outside loses the race, and the publication
+  then finds the reservation released and charges nothing. Every settlement rides the statement
+  that ends the job — see below.
+
+### A job ends at seven sites, and every one of them settles
+
+The plan first said "both branches of `settleIn`", which undercounts by five:
+
+| | |
+|---|---|
+| `settleIn`, `done` | **charged** |
+| `settleIn`, `error` / `cancelled` | released |
+| `settleIn`'s **release** that resolves to a cancellation — a Stop landed while the step ran, so `releaseStepIn` ended the job instead of queueing it. Inside `settleIn`, and not one of "both branches" | released |
+| `settleExpired` — the reader closed the tab and the lease lapsed | released |
+| `requestCancel`'s terminal branch — Stop on a queued job, or one whose claimant is provably gone | released |
+| `pgJobStore.finish` — the store's own ending | released |
+| `pgJobStore.releaseStep`, when its own `case when cancelling` ends the job | released |
+
+The first three are [`src/store/pg-session.ts`](../../src/store/pg-session.ts); the last four are
+[`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts), and each of those had to grow a transaction,
+because a bare `UPDATE` cannot carry a settlement with it. Miss `settleExpired` or `requestCancel`
+and pressing **Stop** costs a slot for ever.
+
+**The last two have no caller in `src/`** and were missing until GPT Sol counted the paths
+(2026-09-03). That made them a trap rather than a leak — but they are the advertised `JobStore` API,
+and `forget`/`trimFinished` delete terminal jobs, so a job ended through either of them and then
+forgotten leaves a reservation `in_flight` for ever with nothing left to say what it was spent on.
+They **release even for a `done`**, because that path moves the job row and publishes nothing: the
+only transition entitled to charge is the one that publishes in the same transaction.
+
+**The charge is strict and the releases are tolerant**, which is the one asymmetry to remember. A
+charge that matches no row throws and takes the publication back with it — publishing without
+charging is a free ingest, charging without publishing is a debit for an article nobody got. A
+release that matches no row is logged: a thrown ledger anomaly inside `requestCancel` turns the
+reader's Stop button into a 500.
+
+**Tolerant is not silent, and it used to be.** A release finds no row for four different reasons and
+only one of them is fine. *Already released* is ordinary and idempotent — debug, or nothing. *Already
+succeeded* is a contradiction: the job ended other than successfully and the slot is charged anyway,
+so somebody has been billed for an article they did not get. *The row is gone* means the ledger has
+lost a row a foreign key should have held. Both of those are **`error`-level**, with the ids, and
+neither throws. Until 2026-09-03 all four logged the same sentence at `warn`, and a test asserted
+that the charge silently survived — GPT Sol, finding 3.
+
+**A cancel racing a final publication settles exactly once**, and it is the job fence that does it,
+not the tolerance. The loser never reaches settlement: a `requestCancel` that lost matches no
+`ACTIVE` row and returns before it would settle, and a claimant that lost raises `StaleAttemptError`
+out of `finishIn`, above its own settlement. An earlier version of this paragraph said the loser's
+settlement "rolls back with the transition that lost", which was a plausible sentence about
+something that never happens — GPT Sol, 2026-09-03.
+
+That pair is not a race at all, in fact: which of them ends the job is decided by the **lease**
+rather than by arrival order, so there is nothing for two connections to contend over. The
+contentions that really are order-decided are two writers that can *both* end the job — two Stops on
+one queued job, and two `finish` calls on one live claim — and `tests/billing-settlement.test.ts`
+holds each of those with a third connection holding the job row while both queue behind it, then
+asserting that neither has answered before it lets go. A Stop against the **expiry sweep** is the
+third such pair and is deliberately not tested that way: `advanceJobWith` sweeps *unscoped*, so any
+dev server on the same database joins the race as a writer nobody asked for.
+`releaseReservation`'s own doc comment carries the one interleaving that is unreachable and why:
+only the request that reserved may release, and only after its enqueue has returned.
+
+`tests/billing-settlement.test.ts` holds all of it, against a real database.
 
 ### Known limit
 
@@ -294,11 +478,141 @@ Tests sign payloads offline with the SDK's own signer, and `api.stripe.com` is r
 [`tests/setup/provider-guard.ts`](../../tests/setup/provider-guard.ts) so no test can reach Stripe
 for real with the key sitting in `.env.local`.
 
+## The three billing routes
+
+All three are POSTs behind the gate, at exact paths, and all three live in
+[`src/billing/checkout.ts`](../../src/billing/checkout.ts) rather than in `src/routes.ts` — the
+order of operations below is the guarantee, and it is worth being readable in one place.
+
+| | |
+|---|---|
+| `POST /api/billing/checkout` `{ tierId, currency? }` | a hosted Checkout Session, or the Portal if they already have a subscription |
+| `POST /api/billing/portal` | a hosted Portal session — invoices, card, cancellation |
+| `POST /api/billing/confirm` `{ sessionId }` | the return path: prove the session is theirs, then sync |
+
+**POST rather than GET even for the two that only ask Stripe a question**, because all three
+*create* a Stripe object and a GET is something a browser prefetches, a crawler follows and a cache
+keeps.
+
+### The customer→owner mapping must exist before the Session does
+
+The webhook finds an owner by `billing_accounts.stripe_customer_id` and answers 503 when it cannot.
+So a Checkout Session capable of taking money must never exist before that row is committed —
+otherwise somebody pays and gets nothing until Stripe stops retrying, about three days later. The
+browser's return to `/profile` cannot close that window: a redirect is not a delivery guarantee, and
+the reader may close the tab. Hence, in this order:
+
+1. the owner, from the gate — never from the request body;
+2. `insert billing_accounts (owner_id) on conflict do nothing`, the same anchor admission uses;
+3. read it back. An existing customer is reused; a subscription that is **not over** redirects to
+   the Portal rather than selling a second one;
+4. `customers.create`, then `update … set stripe_customer_id = $cus where owner_id = $owner and
+   stripe_customer_id is null`. **Zero rows means a concurrent request won**: re-read, use the
+   winner's customer, abandon ours;
+5. *only now* `checkout.sessions.create({ customer, client_reference_id, … })`.
+
+**`customer` is always passed explicitly.** Letting Checkout's `customer_creation` mint one produces
+a customer that is unmapped by construction until a callback runs, which is the unreliable
+return-path design step 1 exists to rule out.
+
+**The conditional UPDATE is the whole concurrency story — there is no lock.** At `read committed` the
+second statement blocks on the first's row lock, then re-evaluates its predicate against the
+committed value and declines. The loser's Stripe customer is orphaned, which costs nothing and is
+invisible; `stripe_customer_id` is unique, so two owners can never share one however the race goes.
+Sol asked for serialisation here and Fable was right that it buys nothing *for the mapping*.
+
+**What the race can still cost, stated rather than glossed:** nothing spans the subscription check
+and `sessions.create`, so two concurrent requests can both see no subscription and both be handed a
+payable Session — two subscriptions and two invoices if both are completed. That is a risk this plan
+weighed and accepted (reusing an open Session needs stored session state and expiry handling). What
+catches it afterwards is `chooseSubscription`'s multiple-live anomaly, which logs at `error` and
+never picks quietly — **and that net has a hole**: it counts only *entitled* subscriptions as live,
+so an `active` beside an `unpaid` is two real invoices and no anomaly reported. If it is ever
+tightened, Stripe's own "limit customers to one subscription" Checkout setting is the cheapest first
+move, and nothing here configures or checks it. GPT Sol, 2026-09-03.
+
+### Over is a shorter list than unentitled
+
+Checkout refuses while a **non-terminal** subscription exists, and `TERMINAL_STATUSES`
+([`src/billing/tiers.ts`](../../src/billing/tiers.ts)) is `canceled` and `incomplete_expired` and
+nothing else. That is a different question from entitlement: `past_due` and `unpaid` are *not*
+entitled but are still subscriptions Stripe holds and may still collect on, so selling beside one
+charges the reader twice. A status we have never heard of counts as not terminal — the cost of being
+wrong that way is a reader sent to the Portal to look at what they have.
+
+### Two things that are deliberately not cached, and one that is
+
+`tierToSell` reads `readTiers()` — **uncached** — while admission reads the 30-second `allTiers()`.
+The asymmetry is the point. A stale *quota* for half a minute is harmless; a stale *sale* is not,
+because a Session minted from an old snapshot can sell a tier somebody has just retired or a price
+they have just replaced, and a Checkout Session stays payable for about a day, after which the
+subscription bills on the old price for as long as it lasts. `recordTierPrice` clears only the setup
+script's own process, so a running web instance never hears about the change at all. Checkout happens
+a handful of times a day; the extra pair of statements costs nothing. GPT Sol, 2026-09-03.
+
+### What a failure at Stripe looks like
+
+Three kinds, and flattening them was a real defect until 2026-09-03:
+
+| | |
+|---|---|
+| unset key, wrong mode, or a `livemode` that disagrees | **503**, `pay-off` — this deployment cannot take money at all |
+| a timeout, a rate limit, a 500 from Stripe | **502**, `pay-down` — the one `pay-` code that is `retry` |
+| a bug in our own code | **500** with its stack, so it is reported |
+
+Before that every Stripe SDK failure escaped untouched and the dispatcher put **Stripe's own
+sentence** in the response beside a 500 — breaking [copy.md](copy.md)'s *never the provider's words*
+and claiming our arithmetic was at fault when it was not. The confirm route had the mirror of it: it
+answered *no such checkout session* to any retrieval failure, blaming the identifier for an outage.
+Only a genuine 404 from Stripe means that now.
+
+### What the browser may decide, and what it may not
+
+The request names a **tier id**; `billing_tiers` says which Stripe price that sells. A price id from
+the request is **refused rather than ignored** — accepting one would let anybody check out against
+any price in the Stripe account, and silently dropping it would let them believe they had chosen.
+The same for `customer` and any spelling of an owner id.
+
+`/api/billing/confirm` takes only a Checkout Session id and proves it is this reader's before
+syncing: `client_reference_id` **and** the session's customer must both match the mapping already
+committed for the caller. Either alone would be enough for somebody who can influence the other.
+Every refusal is the same 404 with the same words, so the reply cannot be used to ask *did that
+person subscribe?*. It is a convenience, not the mechanism — the webhook is what makes a
+subscription real.
+
+### Where Stripe sends them back to
+
+`billingReturnOrigin()` builds the URLs server-side and **never from a request header**: a `Host` an
+attacker chooses would become the address a paying customer returns to. Production is decided first
+and reads no variable, so nothing in the environment can redirect a real customer.
+`SPIDERYARN_BASE_URL` is a local override for a worktree's dev server on 5274, 5275…
+([worktrees.md](worktrees.md)).
+
+## What `/admin/users` shows
+
+Two columns since 2026-09-03 — **Plan** and **Ingests** — beside the spend column, because "who is
+paying" and "who is expensive" are two halves of one question.
+
+**The plan is decided by `entitlementFromRow`**, the same function `reserveIngest` decides with under
+its lock. That reuse is the point: a row this page draws as *reader, 4 of 20* is a row the wall would
+admit, and one it draws as free is one refused at three. The status is shown **raw**, beside the
+plan rather than folded into it — `free` over `canceled` is a lapsed subscriber, and `reader` over
+`past_due` is the case somebody would otherwise "fix", since `past_due` is entitled on purpose.
+
+**The administrator's own row shows an em dash**, not a count. The exemption is total — no slot is
+reserved at all, so an administrator's ingests are legitimately absent from `ingest_events` — and the
+page decides it with `isAdmin`, which is already in the browser bundle beside the `admin` marker.
+
+The plan said this would be "one field on `AdminUser`, one column, one per-owner statement in
+`pg-admin.ts`". It is **four fields, two columns and three reads** (the ledger aggregate, every
+`billing_accounts` row, and the cached tier table), and the reasons are on `AdminUser` in
+[`src/admin.ts`](../../src/admin.ts): a plan with no usage figure does not answer the operational
+question, a usage figure with no limit has no scale, and the limit is a row somebody may raise at
+any time. See [admin.md](admin.md).
+
 ## Not built yet
 
-Admission wired into `POST /api/jobs`; settlement wired into `settleIn`; `syncSubscriptionFromStripe`
-and the webhook route itself; `POST /api/billing/checkout` and `/portal`; the `/profile` surface;
-admin columns; comp subscriptions for journalists and QA; go-live. The order is in
+Comp subscriptions for journalists and QA, and go-live. The order is in
 [the plan](../plans/260902i-stripe-payments-and-subscription-tiers.md#where-the-build-stands).
 
 ## Where the code is
@@ -310,5 +624,13 @@ admin columns; comp subscriptions for journalists and QA; go-live. The order is 
 | [`src/store/pg-tiers.ts`](../../src/store/pg-tiers.ts) | Reading `billing_tiers` and its prices, cached for thirty seconds because admission asks on every ingest. |
 | [`src/billing/subscription.ts`](../../src/billing/subscription.ts) | Reading a Stripe subscription into the fields entitlement needs, and refusing everything unrecognised. Pure. |
 | [`src/billing/webhook.ts`](../../src/billing/webhook.ts) | Verification. |
+| [`src/billing/checkout.ts`](../../src/billing/checkout.ts) | The three billing routes: the order that makes the mapping durable, the Portal redirect, and the proof that a Checkout Session belongs to the reader asking about it. |
 | [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts) | Reserve, settle, count. The lock. |
+| [`src/billing/admission.ts`](../../src/billing/admission.ts) | Which requests spend a slot, the refusal a reader sees, and the release. The only caller of `reserveIngest`. |
+| [`src/billing-plan.ts`](../../src/billing-plan.ts) | What `/profile` is told and what it says. Pure — no database, no network, no React, so the browser can have it. |
+| [`src/billing/summary.ts`](../../src/billing/summary.ts) | `GET /api/billing/usage`: the row, the tiers and the ledger, turned into a `ReaderPlan`. |
+| [`src/web/BillingSection.tsx`](../../src/web/BillingSection.tsx) · [`useBilling.ts`](../../src/web/useBilling.ts) | The Plan section on `/profile`, and the two redirects. |
+| [`src/web/QuotaNotice.tsx`](../../src/web/QuotaNotice.tsx) | An ingest failure with a link to `/profile` beside it, when the failure is the quota. |
+| [`src/store/pg-session.ts`](../../src/store/pg-session.ts) | Three of the seven sites a job ends at, and the only one that charges. |
+| [`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts) | The other four — `settleExpired`, `requestCancel`, `finish` and `releaseStep` — plus the job INSERT that writes `ingest_event_id`. |
 | [`src/db/schema.ts`](../../src/db/schema.ts) | `billing_tiers`, `billing_tier_prices`, `billing_accounts`, `ingest_events`, `jobs.ingest_event_id`. |

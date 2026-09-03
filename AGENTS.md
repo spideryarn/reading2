@@ -38,7 +38,8 @@ listed here; the names under each are files in `docs/project/`.
   `export.md` (one article's data, out)
 - **[reading-view-overview.md](docs/project/reading-view-overview.md)** — everything the reader
   sees: the spine, the prose, and the band the modes take turns in.
-  <br>↳ `web-client.md` (where the client code is) · `granularity-zoom.md` ·
+  <br>↳ `web-client.md` (where the client code is) · `new-mode.md` (the checklist) ·
+  `granularity-zoom.md` ·
   `column-context.md` (the gist column's fisheye) · `glossary.md` · `summaries.md` ·
   `ideas.md` (the propositions the piece assumes) ·
   `quotes.md` (the lines worth keeping) ·
@@ -237,10 +238,15 @@ nothing else has a copy of.
 - **Commit only your own files, by name, in one command:**
 
   ```
+  npm run check:staged-revert
   git add -- <any NEW files> && git commit -F <msg> -- <all your files>
   ```
 
-  That is the whole recipe, and it is one command so there is no gap for a peer to land in. The
+  The first line asks whether the shared index is quietly undoing somebody's commit — the guard
+  written after the day that cost six hours, and reachable until 2026-09-03 only by somebody who
+  already knew that story
+  ([version-control.md](docs/project/version-control.md#commit-your-own-files-by-name-in-one-command)).
+  The second is the whole recipe, and it is one command so there is no gap for a peer to land in. The
   trailing `--` pathspec commits those paths **from the working tree, ignoring the index**, so
   whatever anyone else has staged is neither committed nor disturbed. `git add` is only for files
   git does not know about yet — a pathspec cannot name an untracked file. Use `-F <file>`, not

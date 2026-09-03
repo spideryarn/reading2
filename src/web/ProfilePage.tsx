@@ -29,6 +29,11 @@
  * may not import a server module), and the recent list is `GET /api/library`,
  * which the shelf already fetches.
  *
+ * **The plan arrived on 2026-09-03**, and it is here because the quota's own
+ * refusal messages had been pointing at *"the Upgrade button on your profile
+ * page"* since the wall went up, with no such button anywhere. BillingSection.tsx
+ * has it, and docs/project/billing.md has what is behind it.
+ *
  * **Settings arrived on 2026-08-31**, and they are a different kind of thing
  * from the rest of this page: the profile box says what the model is told, and
  * a setting says what the app does. One switch so far — experimental features,
@@ -44,13 +49,14 @@
  * the original's homepage did not have either. This is a reading tool.
  */
 import { useEffect, useState } from "react";
-import { ArrowLeft, BookOpen, Cpu, SlidersHorizontal, TriangleAlert, User, UserCheck } from "lucide-react";
+import { ArrowLeft, BookOpen, Cpu, SlidersHorizontal, TriangleAlert, User, UserCheck, Wallet } from "lucide-react";
 import { MAX_PROFILE_CHARS, type LibraryEntry } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { PRIVACY_HREF, readHref } from "./router.js";
 import { AccountSection } from "./AccountSection.js";
+import { BillingSection } from "./BillingSection.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { SettingsSection } from "./SettingsSection.js";
 import { useProfile } from "./useProfile.js";
@@ -198,17 +204,33 @@ export function ProfilePage() {
       </Link>
 
       <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">Profile</h1>
-      {/* Two halves now, and the sentence says both: what the model is told,
-          and what you have switched on. It used to name only the first, which
-          was the whole page until Settings landed. */}
+      {/* Three things now, and the sentence names all three: what the model is
+          told, what your account may do, and what you have switched on. It used
+          to name only the first, which was the whole page until Settings landed;
+          the plan arrived on 2026-09-03. A sentence that keeps describing two of
+          three sections is the kind of small untruth that is nobody's job to
+          notice. */}
       <p className="tw:mt-2 tw:mb-0 tw:text-sm tw:text-muted-foreground">
-        What the model knows about who it is writing for, and what you have switched on.
+        What the model knows about who it is writing for, what your account may do, and what you
+        have switched on.
       </p>
 
       {/* ---------------------------------------------------------- account -- */}
       <Section icon={UserCheck} label="Account">
         <div className={`${CARD} tw:p-4`}>
           <AccountSection />
+        </div>
+      </Section>
+
+      {/* ---------------------------------------------------------- plan -- */}
+      {/* **Directly under the account, above everything else.** It is the other
+          half of "who am I here" — the address you signed in with, and what that
+          account may do — and it is the page the refusal copy sends people to
+          when the wall stops them (`ingestQuotaReached`, src/messages.ts), so it
+          must not be below three cards they have to scroll past. */}
+      <Section icon={Wallet} label="Plan">
+        <div className={`${CARD} tw:p-4`}>
+          <BillingSection />
         </div>
       </Section>
 

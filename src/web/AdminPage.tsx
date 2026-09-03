@@ -248,8 +248,20 @@ export function AdminUsersPage() {
         {users ? <SortChips table={table} order={ADMIN_CHIP_ORDER} /> : <span />}
         <div className="tw:flex tw:items-center tw:gap-3">
           {users && (
+            /* **Counted off `sorted`, which is the list the table is drawn
+               from** — not off `users`, the list the request returned.
+
+               Greg, 2026-09-03, of production: *"it says '2 accounts', but only
+               lists one! … the number of rows and the number in the text above
+               should match"*. No mechanism was found by which those two numbers
+               could differ, and this does not add one to look for: it removes
+               the second number, so a sentence about the table is counted off
+               the table. The assertion that the words and the `<tr>` agree
+               lives in tests/admin-page.test.tsx, which can see the DOM this
+               cannot — structure, not visibility.
+               docs/plans/260903c-admin-users-count-disagrees-with-rows.md. */
             <span className="tw:text-xs tw:text-muted-foreground">
-              {users.length === 1 ? "1 account" : `${users.length} accounts`}
+              {sorted.length === 1 ? "1 account" : `${sorted.length} accounts`}
             </span>
           )}
           <button

@@ -86,8 +86,14 @@ considered and refused. Search the plans for the thing you are about to propose,
 
 **Count every instance before you plan the fix.** Grep the whole tree for the *idiom*, not the sites
 a subagent showed you. Counts arrive low for a structural reason: each agent reads one slice, so it
-sees the copies inside its slice and none of the outermost ones. **A dedup that leaves a copy alive
-is worse than none: the next reader believes it is done.**
+sees the copies inside its slice and none of the outermost ones.
+
+**And a citation is not an instance.** The comments that say "same trick as X" are how you find the
+cluster, and they are not a census of it: X may be doing a different job, and the sites nobody
+cross-referenced are invisible to this method entirely. Grep for the idiom, then count what the grep
+returns.
+
+**A dedup that leaves a copy alive is worse than none: the next reader believes it is done.**
 
 A codebase grows by copying the nearest module of the same genre, comments included — and the copy
 reliably carries the *documented* half of a contract while silently dropping the undocumented half.

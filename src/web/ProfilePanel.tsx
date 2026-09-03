@@ -74,7 +74,7 @@ import {
 } from "@floating-ui/react";
 import { apiFetch, readJson } from "./lib/api.js";
 import { Link } from "./Link.js";
-import { carriedSearch, readHref } from "./router.js";
+import { PROFILE_HREF, carriedSearch, readHref } from "./router.js";
 
 /**
  * What `GET /api/reader?slug=` says about the reader.
@@ -256,7 +256,7 @@ function PanelBody({ slug, onLeave }: { slug: string; onLeave(): void }) {
         failed={load.state === "failed"}
         loading={load.state === "loading"}
         empty="You haven't said anything about yourself yet."
-        href="/profile"
+        href={PROFILE_HREF}
         onLeave={onLeave}
       />
       <Box

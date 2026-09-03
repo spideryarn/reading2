@@ -53,7 +53,7 @@
 import { isSpideryarnId } from "./ids.js";
 import type { BlockId } from "./types.js";
 
-export const SKETCH_VERSION = "sketch/1";
+export const SKETCH_VERSION = "sketch/2";
 
 /**
  * The canvas the model draws on, in its own units.
