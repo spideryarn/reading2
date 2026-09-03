@@ -168,7 +168,7 @@ import {
   sectionDepth,
   type Section,
 } from "./position.js";
-import { fitView, proseVisible } from "./layout.js";
+import { DEFAULT_ROOT_PX, fitView, proseVisible } from "./layout.js";
 import { navPlan, useArrowNav } from "./keynav.js";
 import { useSwipeNav } from "./swipe.js";
 import { useComments } from "./useComments.js";
@@ -1129,6 +1129,39 @@ function useWindowWidth(): number {
 }
 
 /**
+ * The root font size, in px, because one number in the layout is a measure of
+ * type rather than of screen.
+ *
+ * `PROSE_ALONE_MAX_REM` is the width of 65 characters plus two rem paddings, and
+ * a reader whose browser default is 20px has all three of those 25% wider than
+ * this file would otherwise assume. Everything else `fitView` works in is a real
+ * screen width and stays px — layout.ts § `FitInput.rootFontPx`.
+ *
+ * **Not read once at module scope.** Text-only zoom and a settings change both
+ * move it while the page is open, and the same `resize` that already re-measures
+ * the window is the cheapest thing that notices — browsers fire one for text
+ * zoom. Nothing notices a change made in another tab's settings until the next
+ * resize or reload, which is a smaller failure than pinning it at import time,
+ * when a stylesheet may not even have loaded.
+ */
+function useRootFontPx(): number {
+  const measure = () => {
+    const px = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+    /* A browser that answers `""` or `0` gets the default rather than a table
+       nought pixels wide — this is a multiplier, so a falsy answer is not a
+       small error, it is the whole column. */
+    return Number.isFinite(px) && px > 0 ? px : DEFAULT_ROOT_PX;
+  };
+  const [px, setPx] = useState(measure);
+  useEffect(() => {
+    const on = () => setPx(measure());
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  return px;
+}
+
+/**
  * Reading position, both ways: the URL scrolls the page, and the page writes the
  * URL once the reader stops moving. Returns the one function anything should use
  * to jump somewhere deliberately.
@@ -1349,6 +1382,7 @@ function Reader({
     [geometry, article.blocks],
   );
   const windowWidth = useWindowWidth();
+  const rootFontPx = useRootFontPx();
 
   // Gist columns are 0 … leafDepth-1. The leaf column is not user-toggled: it
   // only makes sense in outline mode, where it is the deepest rung of the table
@@ -1471,9 +1505,10 @@ function Reader({
         showText: proseOn,
         chosen: plainCols,
         modeBand: bandOpen,
+        rootFontPx,
         showSpine,
       }),
-    [windowWidth, gistDepths, geometry.leafDepth, proseOn, plainCols, bandOpen, showSpine],
+    [windowWidth, rootFontPx, gistDepths, geometry.leafDepth, proseOn, plainCols, bandOpen, showSpine],
   );
 
   /**
@@ -2155,7 +2190,13 @@ function Reader({
 
   return (
     <div
-      className={`reader spine-${fit.spine}`}
+      /* `text-alone` says the article is the only thing on the page, so the
+         stylesheet can centre the reading column and put the masthead over it
+         rather than leaving both against the left edge of a window neither
+         fills. It is `fit.alone` and nothing computed here on purpose — the
+         same fact under two definitions is how `proseVisible` came to exist.
+         layout.ts § `Fit.alone`, styles.css § plain, centred. */
+      className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}`}
       /* The wrapper must be as wide as its content for the sticky bars inside it
          to have anywhere to slide — a sticky element is clamped to its containing
          block, so one exactly its own width has a sticky range of zero and never
@@ -2172,6 +2213,10 @@ function Reader({
         {
           minWidth: fit.minWidth + horizontalInset(safeAreaInsets()),
           "--mode-w": `${fit.modeW}px`,
+          /* The table's own width, so the masthead can be as wide as the
+             reading column when it is centred over it (styles.css § plain,
+             centred) without a second copy of `PROSE_ALONE_MAX_REM` in CSS. */
+          "--table-w": `${fit.tableW}px`,
         } as CSSProperties
       }
     >

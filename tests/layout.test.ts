@@ -8,7 +8,13 @@
  * layout.ts, these fail and the doc needs editing too.
  */
 import { describe, expect, it } from "vitest";
-import { fitView, SPINE_W, type FitInput } from "../src/web/layout.js";
+import {
+  DEFAULT_ROOT_PX,
+  fitView,
+  PROSE_ALONE_MAX_REM,
+  SPINE_W,
+  type FitInput,
+} from "../src/web/layout.js";
 
 /** A normal three-deep tree: gists at 0/1/2, one leaf node per block at 3. */
 const article = { gistDepths: [0, 1, 2], leafDepth: 3 };
@@ -253,5 +259,74 @@ describe("hiding the spine", () => {
         prev = n;
       }
     }
+  });
+});
+
+describe("the article on its own stops at the measure", () => {
+  /* Plain — the default mode — empties the table by handing `fitView` an empty
+     `chosen`, so the reading column is the only column there is. It used to
+     take the whole window and put a 738px measure in the left of it; on a
+     1600px screen that is 850px of empty page down one side. Greg, 2026-09-03:
+     "In Plain mode, can you centre the text on the page?" — layout.ts §
+     PROSE_ALONE_MAX_REM, and styles.css § plain, centred for the auto margins that
+     divide what this leaves over. */
+  const alone = (windowWidth: number) => fit({ windowWidth, chosen: [] });
+
+  it("caps the lone reading column at PROSE_ALONE_MAX_REM", () => {
+    const f = alone(1600);
+    expect(f.columns).toEqual([]);
+    expect(f.widths).toEqual([800]); // 50rem at the 16px default
+    expect(f.tableW).toBe(PROSE_ALONE_MAX_REM * DEFAULT_ROOT_PX);
+    expect(f.alone).toBe(true);
+    // And there is room to centre it in: the table no longer fills the window.
+    expect(f.minWidth).toBeLessThan(1600);
+    expect(f.overflowing).toBe(false);
+  });
+
+  it("scales the cap with the root font size, because the measure does", () => {
+    /* The regression this pins, and it is `SPINE_W`'s lesson from the other
+       side: a px constant standing in for a rem-relative length is only right at
+       16px. A reader whose browser default is 20px has 65ch, `--reading-size`
+       and both of the cell's pads 25% wider — so a fixed 800 would have clipped
+       their measure to about 51ch, which is the one thing this cap must never
+       do. Found by GPT Sol reviewing the built code, 2026-09-03. */
+    expect(fit({ windowWidth: 1600, chosen: [], rootFontPx: 20 }).tableW).toBe(1000);
+    expect(fit({ windowWidth: 1600, chosen: [], rootFontPx: 12 }).tableW).toBe(600);
+    // And it is still a cap, not a width: a window narrower than it wins.
+    expect(fit({ windowWidth: 700, chosen: [], rootFontPx: 20 }).tableW).toBe(688);
+  });
+
+  it("leaves every narrower window exactly as it was", () => {
+    // 812 = PROSE_ALONE_MAX_REM + the spine, so the cap stops biting one pixel
+    // below it. Under that the column is still the whole window, which is what
+    // every phone gets and what the § gistsThatFit examples above assert.
+    expect(alone(812).tableW).toBe(800);
+    expect(alone(811).tableW).toBe(799);
+    expect(alone(390).tableW).toBe(378);
+  });
+
+  it("is not the same question as `only-prose`, which a band also answers yes to", () => {
+    // TableView drops the table head whenever the prose is the table's one
+    // column, and that includes every mode with a band open. `alone` is the
+    // narrower claim — nothing else on the page — because the band has already
+    // taken the room the centring would use. Fit.alone says why they are two.
+    const band = (windowWidth: number) =>
+      fitView({ ...article, showText: true, chosen: null, windowWidth, modeBand: true });
+    expect(band(1600).alone).toBe(false);
+    expect(band(390).alone).toBe(false);
+  });
+
+  it("says no whenever there is a gist column beside the prose", () => {
+    expect(fit({ windowWidth: 1600 }).alone).toBe(false);
+    expect(fit({ windowWidth: 760 }).alone).toBe(false);
+  });
+
+  it("leaves outline mode alone — its one column is nav labels, not prose", () => {
+    // `--reading-measure` is a claim about lines of an article. A column of
+    // one-line labels capped at 800px would just be a narrower list.
+    const f = fit({ windowWidth: 1600, showText: false, chosen: [] });
+    expect(f.columns).toEqual([3]);
+    expect(f.widths).toEqual([1600]);
+    expect(f.alone).toBe(false);
   });
 });
