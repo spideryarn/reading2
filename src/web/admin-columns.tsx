@@ -31,7 +31,7 @@
  * sorts at the low end rather than being banished with the unknowns.
  */
 
-import { type AdminUser, formatSpendNanos } from "../admin.js";
+import { type AdminUser, formatSpendNanos, isAdmin } from "../admin.js";
 import type { SortableColumn } from "./lib/DataTable.js";
 import { localeText, numberOrMissing } from "./lib/table-sort.js";
 import { exactly, timeAgo } from "./relative-time.js";
@@ -140,6 +140,45 @@ function Spend({ user }: { user: AdminUser }) {
 }
 
 /**
+ * The marker on the administrator's own row, and nobody else's.
+ *
+ * Greg, 2026-09-03: *"also indicate if a row is an admin user or not"*.
+ *
+ * **It asks `isAdmin`, which is the gate's own question** — the same id list
+ * `/api/admin/*` compares against in src/routes.ts, not a second opinion about
+ * who the administrator is. So the marker cannot drift from the thing it
+ * describes: an unmarked row is an account this page would refuse.
+ *
+ * Positive only: absence means "not an administrator", which is what an absent
+ * badge conventionally means, and a `—` on every other row would be noise on a
+ * page that is already eleven columns wide.
+ *
+ * Nothing new about anybody crosses the wire for it: the id is already in the
+ * row and the id list is already in the browser bundle. (`ADMIN_USER_IDS` holds
+ * two ids because there are two Supabase projects — a laptop's and
+ * production's — not because anybody has two accounts in one of them.)
+ */
+function AdminMarker({ id }: { id: string }) {
+  if (!isAdmin(id)) return null;
+  return (
+    /* **A tinted word, not a bordered pill**, and both halves of that were
+       measured rather than preferred. A border and `py` make the chip taller
+       than the line of text it sits in, which made the administrator's row 58px
+       against everybody else's 53px; and `uppercase` with letter-spacing made
+       it wider than this column gets on a narrow screen, so it hung over the
+       column's edge. Lower-case at the line's own height does neither, and it
+       matches the words beside it (`google`, `email unconfirmed`). Measured at
+       1280 and 390 on 2026-09-03. */
+    <span
+      title="Can reach the admin pages"
+      className="tw:shrink-0 tw:rounded tw:bg-highlight/15 tw:px-1.5 tw:text-highlight"
+    >
+      admin
+    </span>
+  );
+}
+
+/**
  * `now` is passed in rather than read here, so that every relative date on one
  * render agrees with every other and nothing in this file reads the clock.
  */
@@ -177,20 +216,43 @@ export function adminColumns(now: number): SortableColumn<AdminUser>[] {
       /* The address, and under it how they got in. `providers` comes straight
          from the Auth service's own record for the account
          (src/store/admin-accounts.ts), so it says `google` or `email` rather
-         than anything we inferred. */
-      cell: ({ row }) => (
-        <div className="tw:min-w-0">
-          <div className="tw:truncate tw:text-foreground" title={row.original.email}>
-            {row.original.email}
-          </div>
-          {row.original.providers.length > 0 && (
-            <div className="tw:truncate tw:text-xs tw:text-muted-foreground">
-              {row.original.providers.join(", ")}
-              {!row.original.emailConfirmedAt && " · email unconfirmed"}
+         than anything we inferred.
+
+         **The sub-line is no longer behind `providers.length > 0`.** It was,
+         and that hid "email unconfirmed" on exactly the account that most needs
+         a word under it: one with no linked provider at all. The gate is now
+         "has this line anything to say". Found while looking at something else
+         (docs/plans/260903c-admin-users-count-disagrees-with-rows.md) and fixed
+         on its own merits, not as an explanation of that. */
+      cell: ({ row }) => {
+        const under = [
+          ...(row.original.providers.length > 0 ? [row.original.providers.join(", ")] : []),
+          ...(row.original.emailConfirmedAt ? [] : ["email unconfirmed"]),
+        ];
+        const marked = isAdmin(row.original.id);
+        return (
+          /* **The marker goes under the address rather than beside it**, which
+             looks like the lesser arrangement and is the only one that works.
+             This is the fluid column (`w-full max-w-0` in lib/DataTable.tsx),
+             so on a narrow screen the table scrolls and this column collapses
+             to almost nothing — and a pill that will not shrink, on the same
+             line, then takes all of it: measured at 390px on 2026-09-03, the
+             administrator's own address was the one address on the page that
+             could not be read at all. Below, the worst it can do is make the
+             column as wide as the word. */
+          <div className="tw:min-w-0">
+            <div className="tw:truncate tw:text-foreground" title={row.original.email}>
+              {row.original.email}
             </div>
-          )}
-        </div>
-      ),
+            {(marked || under.length > 0) && (
+              <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-1.5 tw:text-xs tw:text-muted-foreground">
+                <AdminMarker id={row.original.id} />
+                {under.length > 0 && <span className="tw:truncate">{under.join(" · ")}</span>}
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       id: "signedUp",

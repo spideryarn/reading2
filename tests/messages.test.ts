@@ -63,10 +63,11 @@ const FROM_FACTORIES: ReaderFacingFailure[] = [
   saidNothing(null),
   saidNothing("content_filter"),
   saidNothing("length"),
-  /* Both branches: the free tier has no reset date and the paid tier does, and
-     they are different sentences with different codes. */
+  /* All three branches: the free tier has no reset date, the paid tier does, and
+     a lapsed subscriber gets neither sentence — three codes, three sentences. */
   ingestQuotaReached({ limit: 3 }),
   ingestQuotaReached({ limit: 100, resetAt: new Date("2026-10-01T00:00:00Z") }),
+  ingestQuotaReached({ limit: 3, lapsed: true }),
 ];
 
 const EVERY: ReaderFacingFailure[] = [...CONSTANTS, ...FROM_FACTORIES];
@@ -290,5 +291,35 @@ describe("naming what was written for your reader profile", () => {
     expect(sharingPersonalisedList(["glossary", "ideas", "sketch"])).toMatch(
       /^your glossary, your list of ideas and your sketch diagram —/,
     );
+  });
+});
+
+describe("the subscription allowance", () => {
+  /**
+   * **A lapsed subscriber is refused, and the sentence must not read as a bug.**
+   *
+   * The free count is lifetime and includes paid months, so somebody who took
+   * forty articles on a paid plan and cancelled is past the free allowance for
+   * good — Greg's decision, 2026-09-03, taken over tier-scoping the count. It is
+   * the copy that has to carry it: *"you have added all 3 articles a free
+   * account can add"*, to a reader looking at forty of them, reads as arithmetic
+   * going wrong rather than as a policy.
+   */
+  it("names the ended plan rather than counting past the free limit", () => {
+    const lapsed = ingestQuotaReached({ limit: 3, lapsed: true });
+    expect(lapsed.kind).toBe("blocked");
+    expect(lapsed.message).toMatch(/subscription has ended/i);
+    /* The way back, named where it is rather than as an instruction to go and
+       find it — the same rule the free sentence follows. */
+    expect(lapsed.message).toMatch(/resubscrib/i);
+    /* And the promise this product makes about money: reading is never gated. */
+    expect(lapsed.message).toMatch(/reading is never limited/);
+  });
+
+  it("keeps the ordinary free refusal for somebody who never subscribed", () => {
+    /* The discriminator is `lapsed` off the billing row, not `used > limit` — so
+       the plain refusal has to stay plain when the flag is absent. */
+    expect(ingestQuotaReached({ limit: 3 }).message).toMatch(/\[pay-free\]$/);
+    expect(ingestQuotaReached({ limit: 3, lapsed: true }).message).toMatch(/\[pay-lapsed\]$/);
   });
 });

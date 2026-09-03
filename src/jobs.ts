@@ -2131,6 +2131,21 @@ export interface EnqueueRequest {
    * unticked the box — and the artefacts record it as `profileHash: null`.
    */
   profile?: string;
+  /**
+   * **The quota slot this ingest is spending**, from `reserveIngest`.
+   *
+   * Carried through to the `EnqueueTicket` (src/store/jobs.ts) so that the
+   * Postgres adapter writes it in the job's **own INSERT** — the job and the
+   * slot it spends become true in one statement, which is the whole provenance
+   * argument. Not on `Job`, which is serialised to the browser.
+   *
+   * **Absent means this job spends no quota**, and most jobs do not: a step
+   * re-run on an article already on the shelf, CLI work, seeding, an
+   * administrator's ingest. It is set only by the three route call sites that go
+   * through src/billing/admission.ts, because only a route can tell a new ingest
+   * from a re-run.
+   */
+  ingestEventId?: string;
 }
 
 /**
@@ -2295,6 +2310,12 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       workKey,
       reservesName: allocation.kind === "minted",
       ...(source !== undefined && { urlKey: source }),
+      /* Inside the loop, so every attempt carries it: a `nameTaken` retry is the
+         same ingest under a different name and spends the same slot. Only one of
+         these attempts can create a job — `jobs_ingest_event_unique` is a partial
+         unique index on the column — and if none does, the caller releases it
+         (src/billing/admission.ts). */
+      ...(request.ingestEventId !== undefined && { ingestEventId: request.ingestEventId }),
     });
 
     /**
@@ -2834,7 +2855,20 @@ export async function cancelJob(id: string): Promise<Job | null> {
  * so the route keeps its one line and the rule stays in one place. Both messages
  * are made of words we chose and nothing else: they are written to the log.
  */
-export async function retryJob(id: string): Promise<Job | null> {
+export async function retryJob(
+  id: string,
+  /**
+   * The **fresh** slot this attempt spends, when the attempt it repeats spent
+   * one. Empty otherwise, and empty for a re-run.
+   *
+   * A retry is an ordinary admission: the failed attempt's slot was released
+   * when it failed, so a failure costs nothing and the eventual success costs
+   * exactly one. There is no lineage and no reactivating a released row. The
+   * route decides — src/billing/admission.ts — because deciding here would mean
+   * reading the old job's provenance twice, once to admit and once to copy.
+   */
+  slot: { ingestEventId?: string } = {},
+): Promise<Job | null> {
   /* Somebody else's is `null`, as a missing one is — and this one spends money,
      so it is the worst of the four to leave open. */
   const old = await store.get(id, currentOwnerId());
@@ -2860,6 +2894,7 @@ export async function retryJob(id: string): Promise<Job | null> {
     // Copied, unlike force. The steer is not a thing the first attempt used up
     // — a retry of a summary run that was steered is still that run.
     ...(old.profile ? { profile: old.profile } : {}),
+    ...slot,
   });
 }
 

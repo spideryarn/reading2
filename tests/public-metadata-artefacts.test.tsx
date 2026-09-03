@@ -173,10 +173,11 @@ describe("what a visitor is told has been built", () => {
  * in the third person. Found while fixing the tense on the owner's card,
  * 2026-09-03.
  *
- * `sharedLinkCarries` takes the audience for exactly this, and the two callers
- * are the two audiences. One sentence with a branch rather than two constants:
- * the same fact told twice in two places is the near-miss pair this repo has
- * been bitten by before — src/messages.ts § SHARING_BADGE.
+ * `SHARED_LINK_CARRIES` is now written to this page's reader and drawn nowhere
+ * else. The owner's card says the same thing as an itemised list and dropped the
+ * sentence, which is what leaves one audience and one wording with nothing to
+ * keep in step — src/messages.ts § SHARED_LINK_CARRIES, and § SHARING_BADGE for
+ * why the owner's side and the visitor's side of one fact are meant to differ.
  */
 describe("what a visitor is told a shared link carries", () => {
   it("does not describe the visitor's own comments as theirs", async () => {
