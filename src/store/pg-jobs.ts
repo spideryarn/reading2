@@ -646,7 +646,7 @@ async function settlingIfTerminal(transition: (tx: Tx) => Promise<Job>): Promise
       await settleReservation(tx, row?.ingestEventId ?? null, "released");
       return after;
     },
-    { isolationLevel: "read committed" },
+    READ_COMMITTED,
   );
 }
 
@@ -992,7 +992,7 @@ const rawPgJobStore: JobStore = {
         id: row.id,
         status: row.status as ExpirySettlement["status"],
       }));
-    }, { isolationLevel: "read committed" });
+    }, READ_COMMITTED);
   },
 
   async noteProgress(id: string, attempt: string, steps: JobStep[]): Promise<Job> {
@@ -1115,7 +1115,7 @@ const rawPgJobStore: JobStore = {
         await settleReservation(tx, row.ingestEventId, "released");
       }
       return toJob(row);
-    }, { isolationLevel: "read committed" });
+    }, READ_COMMITTED);
   },
 
   async forget(id: string, owner: OwnerId): Promise<boolean> {
