@@ -175,8 +175,15 @@ describe("what the browser builds from response.done", () => {
     delete usage.input_token_details;
     expect(responseReport(stripped, TIMES)).toBeNull();
 
-    /* And the proof that a zero-filled report would have been *accepted*, which
-       is why refusing to build one is the defence rather than the parser. */
+    /* And the proof of what happens if one is built anyway — by a future edit
+       here, or by anything else that can reach the endpoint. A zero-filled
+       report is still *accepted*: the turn happened and the totals are true, so
+       refusing the row would throw the evidence away. What it is not is
+       **priced**. Until 2026-09-03 it was, at exactly `$0`, and a twenty-cent
+       turn sat in the ledger as free with nothing red anywhere — GPT Sol's
+       finding. The defence is now in both places, which is the right number of
+       places for it: this file decides what a browser sends, and src/live.ts
+       decides what the ledger will claim. */
     const zeroFilled = {
       kind: "response",
       providerEventId: "resp_abc123",
@@ -199,7 +206,12 @@ describe("what the browser builds from response.done", () => {
       usage: parseRealtimeUsage(zeroFilled),
       receivedAt: new Date(FINISHED),
     });
-    expect(row.computedCostNanos).toBe(0);
+    expect(row.costSource).toBe("none");
+    expect(row.computedCostNanos).toBeNull();
+    /* The counts survive, so the row can be priced later from the totals or
+       taken to OpenAI — which is the whole reason it is kept. */
+    expect(row.reportedInputTokens).toBe(132);
+    expect(row.outputTokens).toBe(121);
   });
 
   it("treats an absent cache split as no cache, which can only overcharge us", () => {

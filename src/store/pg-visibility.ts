@@ -37,6 +37,7 @@ import { getDb } from "../db/client.js";
 import { articleVisibilityChanges, articles } from "../db/schema.js";
 import { currentOwnerId } from "../owner.js";
 import type { Visibility, VisibilityState, VisibilityStore } from "./contracts.js";
+import { READ_COMMITTED } from "./isolation.js";
 import { ownedSlug } from "./owned-slug.js";
 
 /**
@@ -125,6 +126,6 @@ export const pgVisibilityStore: VisibilityStore = {
       });
 
       return { visibility: to, publicAt: publicAt?.toISOString() ?? null };
-    });
+    }, READ_COMMITTED);
   },
 };

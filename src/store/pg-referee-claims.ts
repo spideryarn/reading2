@@ -48,14 +48,15 @@
 import { and, eq, lt } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { articles, refereeClaims } from "../db/schema.js";
+import { refereeClaims } from "../db/schema.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import type { Claim, ClaimsRun } from "../referee-claims.js";
 import { CLAIMS_TIMEOUT_MS } from "../referee-claims-run.js";
 import { CLAIMS_SWEPT } from "../referee-claims-store.js";
 import type { RefereeClaimsStore } from "./contracts.js";
-import { notFound, ownedSlug, requireSlug, sourceHashFor } from "./pg.js";
+import { READ_COMMITTED } from "./isolation.js";
+import { articleIdForOwned, lockArticleRow, sourceHashFor } from "./pg.js";
 
 const logger = log("store");
 
@@ -84,24 +85,6 @@ type Db = ReturnType<typeof getDb>;
  * it unfalsifiable instead.
  */
 export const CLAIMS_ORPHAN_GRACE_MS = CLAIMS_TIMEOUT_MS + 30_000;
-
-/** The article's uuid, or a tagged 404 — the same shape src/api.ts throws. */
-async function articleIdFor(slug: string, db: Db | Tx = getDb()): Promise<string> {
-  requireSlug(slug);
-  const rows = await db
-    .select({ id: articles.id })
-    .from(articles)
-    /* **`ownedSlug`, never `eq(articles.slug, …)`.** A referee reading somebody
-       else's paper is exactly the reader this predicate exists for: the slug is
-       globally unique, so the bare comparison finds a real article belonging to
-       somebody else and every method below would then read and write it. 404
-       rather than 403, because a 403 confirms the article exists. */
-    .where(ownedSlug(slug))
-    .limit(1);
-  const found = rows[0];
-  if (!found) throw notFound(slug);
-  return found.id;
-}
 
 /**
  * The stored row as the client sees it, or `null` when this paper has never been
@@ -138,18 +121,13 @@ async function runFor(articleId: string, db: Db | Tx = getDb()): Promise<ClaimsR
   return row ? toRun(row) : null;
 }
 
-/** Take the article row, so nothing else in this article writes until we commit. */
-async function lockArticle(tx: Tx, articleId: string): Promise<void> {
-  await tx.select({ id: articles.id }).from(articles).where(eq(articles.id, articleId)).for("update");
-}
-
 export const pgRefereeClaimsStore: RefereeClaimsStore = {
   async load(slug: string): Promise<ClaimsRun | null> {
-    return runFor(await articleIdFor(slug));
+    return runFor(await articleIdForOwned(slug));
   },
 
   async sourceHash(slug: string): Promise<string | undefined> {
-    return sourceHashFor(await articleIdFor(slug));
+    return sourceHashFor(await articleIdForOwned(slug));
   },
 
   async begin(
@@ -157,11 +135,11 @@ export const pgRefereeClaimsStore: RefereeClaimsStore = {
     now: () => string = () => new Date().toISOString(),
   ): Promise<ClaimsRun> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     const at = now();
 
     const run = await db.transaction(async (tx) => {
-      await lockArticle(tx, articleId);
+      await lockArticleRow(tx, articleId);
       /* Inside the lock, so the fingerprint and the row are written against one
          state of the article — pg-referee-criteria.ts § begin. */
       const sourceHash = await sourceHashFor(articleId, tx);
@@ -206,7 +184,7 @@ export const pgRefereeClaimsStore: RefereeClaimsStore = {
 
       // `written!`: an insert with `returning()` yields the row it wrote.
       return toRun(written!);
-    });
+    }, READ_COMMITTED);
 
     logger.info({ slug }, "claims run started");
     return run;
@@ -217,7 +195,7 @@ export const pgRefereeClaimsStore: RefereeClaimsStore = {
     patch: Pick<ClaimsRun, "status"> & Partial<ClaimsRun>,
   ): Promise<ClaimsRun | null> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
 
     /* **No attempt fence, and no `status = 'pending'` guard**, which is a
        deliberate parity choice rather than an omission. `RefereeClaimsStore` has
@@ -263,7 +241,7 @@ export const pgRefereeClaimsStore: RefereeClaimsStore = {
 
   async sweep(slug: string, live: boolean): Promise<ClaimsRun | null> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
 
     if (!live) {
       /* Two guards, and each one alone is a bug — the same pair pg-searches.ts §

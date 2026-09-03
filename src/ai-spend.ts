@@ -39,6 +39,52 @@ import type { AiJob, Wire } from "./models.js";
 import { currentOwnerId } from "./owner.js";
 
 /**
+ * **Where a call's dollar figure came from — one of three, and never two.**
+ *
+ * Three fields used to sit side by side on `SpendRecord`: `costNanos` (what
+ * OpenRouter charged), `computedCostNanos` (what we worked out for a call
+ * nobody can be asked about) and `priceVersion` (which price row did the
+ * working). Every combination was expressible and only three were legal, and
+ * the illegal ones do not fail loudly: `costSourceOf` picks `provider` when
+ * both figures are present, the projection copies the computed one across
+ * anyway, and Postgres then rejects the row under `ai_calls_one_cost_source`.
+ * A rejected insert is a call that lands in **no ledger at all**, because the
+ * sink logs the error and returns rather than throwing — so the money would
+ * disappear quietly. No gateway wrote that shape; the contract permitted it,
+ * which is one refactor away from the same thing. GPT Sol's code review,
+ * 2026-09-03, and the repo's own rule: make the wrong state something the
+ * compiler refuses.
+ *
+ * The three arms are the three arms of the CHECK, in the same order, so the
+ * type and the constraint can be read against each other:
+ * drizzle/0023_ai_calls_cost_provenance.sql.
+ *
+ * `priceVersion` lives *inside* the `computed` arm rather than beside it,
+ * because it is only meaningful there — a settled provider figure has no price
+ * row behind it, and `agrees()` in src/store/ai-calls-fs.ts refuses a row that
+ * carries one anyway.
+ */
+export type SpendProvenance =
+  /** OpenRouter settled it, in nano-dollars. */
+  | { source: "provider"; costNanos: Nanos }
+  /** Nobody could be asked, so we priced it ourselves from a table we own. */
+  | { source: "computed"; computedCostNanos: Nanos; priceVersion: string }
+  /** It happened and reported no money. Not free — *unknown*, and counted. */
+  | { source: "none" };
+
+/**
+ * The provider's figure when it arrived, and an honest `none` when it did not.
+ *
+ * Both gateways read a number that may or may not be there, so this is the
+ * conversion they both want, in one place rather than two `?:` expressions that
+ * could drift. **Never a zero for an absent figure** — a zero is a free call,
+ * and that is the understatement this whole ledger is arranged against.
+ */
+export function providerCost(nanos: Nanos | null): SpendProvenance {
+  return nanos === null ? { source: "none" } : { source: "provider", costNanos: nanos };
+}
+
+/**
  * One paid model call, as it actually happened.
  *
  * Everything the provider did not tell us is `null` rather than `0` — a zero
@@ -73,11 +119,15 @@ export interface SpendRecord {
    * `null` when the response did not say.
    */
   answeredBy: string | null;
-  /** OpenRouter's own figure, in nano-dollars. `null` when it did not arrive. */
-  costNanos: Nanos | null;
+  /**
+   * **Where this call's dollar figure came from, and there is exactly one of
+   * them.** See `SpendProvenance` above.
+   */
+  cost: SpendProvenance;
   /**
    * `cost_details.upstream_inference_cost`, in nano-dollars — **a different
-   * definition of money from `costNanos`, kept because under BYOK they diverge.**
+   * definition of money from the provider figure, kept because under BYOK they
+   * diverge.**
    *
    * `usage.cost` is what OpenRouter charged our credits. The upstream figure is
    * what the inference itself was worth. On an ordinary call they agree; on a
@@ -93,17 +143,6 @@ export interface SpendRecord {
    * reconciled, so the row has to say which.
    */
   providerAccount: ProviderAccount;
-  /**
-   * **Our own arithmetic**, for a call nobody can be asked about.
-   *
-   * Never set at the same time as `costNanos`: OpenRouter's figure is settled
-   * and ours is an estimate, and a row that carried both would invite somebody
-   * to pick. Only the declared bypasses fill this, from
-   * [`priceAnthropicCall`](pricing.ts).
-   */
-  computedCostNanos: Nanos | null;
-  /** `checked/effective-from` of the price row that did it. Null unless computed. */
-  priceVersion: string | null;
   /** `x-generation-id` — the key to `GET /api/v1/generation?id=…` later. */
   generationId: string | null;
   /** Which upstream answered: `"Anthropic"`, `"Claude Platform on AWS"`, … */
@@ -270,14 +309,8 @@ export type CostSource = "provider" | "computed" | "none";
 function normaliseByokUpstream(record: SpendRecord): Nanos | null {
   if (record.isByok !== true) return null;
   if (record.providerAccount !== "openrouter") return null;
-  if (costSourceOf(record) !== "provider") return null;
+  if (record.cost.source !== "provider") return null;
   return record.upstreamCostNanos;
-}
-
-function costSourceOf(record: SpendRecord): CostSource {
-  if (record.costNanos !== null) return "provider";
-  if (record.computedCostNanos !== null) return "computed";
-  return "none";
 }
 
 /**
@@ -866,7 +899,7 @@ export function recordSpend(record: SpendRecord, callId?: number | null): void {
         job: record.job,
         model: record.model,
         outcome: record.outcome,
-        costNanos: record.costNanos,
+        cost: record.cost,
         ms: record.ms,
       },
       "a model call finished after its collector had already reported",
@@ -923,13 +956,18 @@ function write(
     finishedAt: new Date(finishedAt).toISOString(),
     durationMs: record.ms,
     outcome: record.outcome,
-    creditsUsedNanos: record.costNanos,
+    /* **One arm of the union in, one legal combination out.** Spelled as a
+       ternary chain over `source` rather than as three independent field reads,
+       so that the row and the CHECK it is about to meet
+       (`ai_calls_one_cost_source`) cannot come apart: there is no path through
+       this that sets two of the three money fields. */
+    creditsUsedNanos: record.cost.source === "provider" ? record.cost.costNanos : null,
     byokUpstreamNanos: normaliseByokUpstream(record),
     isByok: record.isByok,
     providerAccount: record.providerAccount,
-    costSource: costSourceOf(record),
-    computedCostNanos: record.computedCostNanos,
-    priceVersion: record.priceVersion,
+    costSource: record.cost.source,
+    computedCostNanos: record.cost.source === "computed" ? record.cost.computedCostNanos : null,
+    priceVersion: record.cost.source === "computed" ? record.cost.priceVersion : null,
     reportedInputTokens: record.inputTokens,
     outputTokens: record.outputTokens,
     cacheReadTokens: record.cacheReadTokens,
@@ -1145,7 +1183,7 @@ export function totalSpend(calls: readonly SpendRecord[]): {
          figure read as **zero** rather than as unknown, which is the same
          understatement one level down. */
       if (c.upstreamCostNanos === null) unpriced += 1;
-      else nanos += c.upstreamCostNanos + (c.costNanos ?? 0);
+      else nanos += c.upstreamCostNanos + (c.cost.source === "provider" ? c.cost.costNanos : 0);
       continue;
     }
     /* **Our own arithmetic, for a declared bypass.** Second only to the BYOK
@@ -1157,15 +1195,15 @@ export function totalSpend(calls: readonly SpendRecord[]): {
        at the end of its own run said `$0.0000` about money it had just spent.
        GPT Sol found it: the command that made the spend was the one output that
        could not see it. */
-    if (c.computedCostNanos !== null) {
-      nanos += c.computedCostNanos;
+    if (c.cost.source === "computed") {
+      nanos += c.cost.computedCostNanos;
       continue;
     }
     /* Not BYOK: `cost` and `cost_details.upstream_inference_cost` are the same
        money — a live probe on 2026-08-27 had them equal to seven decimal places
        — so adding both would double it. */
-    if (c.costNanos === null) unpriced += 1;
-    else nanos += c.costNanos;
+    if (c.cost.source !== "provider") unpriced += 1;
+    else nanos += c.cost.costNanos;
   }
   return { nanos, unpriced };
 }

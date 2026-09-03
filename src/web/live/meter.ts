@@ -100,11 +100,31 @@ function whole(value: unknown): number | null {
 }
 
 /**
- * A count that is allowed to be missing, and reads as none when it is.
+ * A count that is allowed to be missing, and reads as none when it is —
+ * **and reads as none when it is present and malformed, too.**
  *
- * Used only where an absence cannot make the price *lower* — see the two cases
- * argued at `responseReport`. Everywhere else a missing count makes the whole
- * report unreportable, which is the honest answer.
+ * The second half is deliberate and was not what the name said until GPT Sol
+ * read it (2026-09-03), which is worth the paragraph: a coercion whose comment
+ * describes only half of what it does is how a value nobody chose ends up in a
+ * ledger. Both halves are safe here, and only here, because of *which two fields
+ * call this* — the argument is per-call-site and does not generalise:
+ *
+ * - **`cached_tokens` / `cached_tokens_details`.** A zero prices that input at
+ *   the FRESH rate, ten times the cached one, so the error is upward, against
+ *   us. Understatement is the silent direction; overstatement shows up the
+ *   moment anybody reconciles against OpenRouter or OpenAI.
+ * - **`image_tokens`.** A non-zero is refused by the server outright — there is
+ *   no image rate — and reading a malformed one as zero cannot mis-price
+ *   anything by itself. It also cannot hide: those tokens are still inside
+ *   `input_tokens`, so the modality splits no longer account for the total, and
+ *   `priceResponseRow` in src/live.ts marks the row unpriced rather than pricing
+ *   the part it understood.
+ *
+ * The alternative — treating a malformed present value as unreportable, like the
+ * fields above — was weighed and rejected: it trades a bounded overcharge for
+ * losing a whole turn's real cost, which is the direction this ledger is
+ * organised against. Everywhere else a missing count *does* make the whole
+ * report unreportable, which is the honest answer there.
  */
 function wholeOrNone(value: unknown): number {
   return value === undefined || value === null ? 0 : (whole(value) ?? 0);

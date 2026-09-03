@@ -622,7 +622,7 @@ describe("openRouterReader's transport retries", () => {
        here, and the bill would be a third of the truth. */
     expect(report.calls).toHaveLength(2);
     expect(report.calls.map((c) => c.outcome)).toEqual(["error", "ok"]);
-    expect(report.calls[0]?.costNanos).toBeNull();
-    expect(report.calls[1]?.costNanos).toBe(250_000);
+    expect(report.calls[0]?.cost).toEqual({ source: "none" });
+    expect(report.calls[1]?.cost).toEqual({ source: "provider", costNanos: 250_000 });
   }, 20_000);
 });

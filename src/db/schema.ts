@@ -2658,6 +2658,37 @@ export const aiCalls = spideryarn.table(
       "ai_calls_duration_known_off_realtime",
       sql`${t.durationMs} is not null or ${t.wire} = 'realtime'`,
     ),
+    /**
+     * **A cost is never negative.**
+     *
+     * Cheap, and it earns its place because of the direction the failure runs.
+     * A missing cost is loud — `cost_source: 'none'` is counted and printed by
+     * `npm run cost` as "short by an unknown amount". A *negative* one is
+     * silent and worse than missing: every reader of this table sums a column,
+     * so a negative row quietly pays for somebody else's, and the total stays
+     * plausible while being wrong in the direction that flatters a price.
+     *
+     * It is not hypothetical. `computed_cost_nanos` is the one figure this repo
+     * works out itself, by subtracting cached tokens from their modality total
+     * and multiplying by a rate — and on 2026-09-03 GPT Sol produced a browser
+     * report that made that subtraction go negative and wrote a row claiming
+     * minus $0.0032. `parseRealtimeUsage` in src/live.ts now refuses the report
+     * that caused it; this is the belt to that pair of braces, and it holds for
+     * arithmetic nobody has written yet.
+     *
+     * All three pockets, not only the computed one: `totalRows()` and the
+     * per-owner SQL add `COALESCE` of all three, so a negative in any of them
+     * has the same effect on the number Greg sets a price against. Neither
+     * provider figure has ever been negative — OpenRouter bills, it does not
+     * refund through this column — so this constrains nothing that happens
+     * today, which is exactly when a constraint is cheap to add.
+     */
+    check(
+      "ai_calls_costs_not_negative",
+      sql`(${t.creditsUsedNanos} is null or ${t.creditsUsedNanos} >= 0)
+          and (${t.byokUpstreamNanos} is null or ${t.byokUpstreamNanos} >= 0)
+          and (${t.computedCostNanos} is null or ${t.computedCostNanos} >= 0)`,
+    ),
   ],
 );
 

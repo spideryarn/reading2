@@ -435,6 +435,13 @@
       "when": 1788373408888,
       "tag": "20260902182328_feedback_url_replaces_route_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1788395683930,
+      "tag": "20260903003443_ai_calls_costs_not_negative",
+      "breakpoints": true
     }
   ]
 }

@@ -53,13 +53,14 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { articles, searchRuns } from "../db/schema.js";
+import { searchRuns } from "../db/schema.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import { MAX_RUNS, requireColour, withRun } from "../searches.js";
 import type { SearchHit, SearchRun } from "../types.js";
 import type { SearchStore, SweepOptions } from "./contracts.js";
-import { notFound, ownedSlug, requireSlug, sourceHashFor } from "./pg.js";
+import { READ_COMMITTED } from "./isolation.js";
+import { articleIdForOwned, lockArticleRow, sourceHashFor } from "./pg.js";
 
 const logger = log("store");
 
@@ -84,19 +85,6 @@ const SWEPT = "The server stopped before this search finished.";
 
 type Tx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
 type Db = ReturnType<typeof getDb>;
-
-/** The article's uuid, or a tagged 404 — the same shape src/api.ts throws. */
-async function articleIdFor(slug: string, db: Db | Tx = getDb()): Promise<string> {
-  requireSlug(slug);
-  const rows = await db
-    .select({ id: articles.id })
-    .from(articles)
-    .where(ownedSlug(slug))
-    .limit(1);
-  const found = rows[0];
-  if (!found) throw notFound(slug);
-  return found.id;
-}
 
 /** A row as the client sees it. Absent, not null — `exactOptionalPropertyTypes`. */
 function toRun(row: typeof searchRuns.$inferSelect): SearchRun {
@@ -132,18 +120,13 @@ async function runsFor(articleId: string, db: Db | Tx = getDb()): Promise<Search
   return rows.map(toRun);
 }
 
-/** Take the article row, so nothing else in this article writes until we commit. */
-async function lockArticle(tx: Tx, articleId: string): Promise<void> {
-  await tx.select({ id: articles.id }).from(articles).where(eq(articles.id, articleId)).for("update");
-}
-
 export const pgSearchStore: SearchStore = {
   async load(slug: string): Promise<SearchRun[]> {
-    return runsFor(await articleIdFor(slug));
+    return runsFor(await articleIdForOwned(slug));
   },
 
   async sourceHash(slug: string): Promise<string | undefined> {
-    return sourceHashFor(await articleIdFor(slug));
+    return sourceHashFor(await articleIdForOwned(slug));
   },
 
   async begin(
@@ -153,12 +136,12 @@ export const pgSearchStore: SearchStore = {
     now: () => string = () => new Date().toISOString(),
   ): Promise<{ run: SearchRun; attempt: string | undefined }> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     const at = now();
     const attempt = randomUUID();
 
     const run = await db.transaction(async (tx) => {
-      await lockArticle(tx, articleId);
+      await lockArticleRow(tx, articleId);
       /* Inside the lock, so the fingerprint and the row are written against one
          state of the article. Outside it, a re-extraction committing between
          the two reads would stamp a run with a hash of blocks the model was
@@ -276,7 +259,7 @@ export const pgSearchStore: SearchStore = {
 
       // `inserted!`: an insert with `returning()` yields the row it wrote.
       return toRun(inserted!);
-    });
+    }, READ_COMMITTED);
 
     logger.info({ slug, runId: run.id }, "search started");
     return { run, attempt };
@@ -289,7 +272,7 @@ export const pgSearchStore: SearchStore = {
     attempt?: string,
   ): Promise<SearchRun | undefined> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
 
     /* **Refused without an attempt, rather than falling back to identity.**
 
@@ -358,7 +341,7 @@ export const pgSearchStore: SearchStore = {
 
   async remove(slug: string, runId: string): Promise<SearchRun[]> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     await db
       .delete(searchRuns)
       .where(and(eq(searchRuns.articleId, articleId), eq(searchRuns.id, runId)));
@@ -377,7 +360,7 @@ export const pgSearchStore: SearchStore = {
        sees. GPT Sol's review, 2026-08-27. */
     requireColour(colour);
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     /* Unconditional on status, unlike every other write in this file. A colour
        is not part of the answer: recolouring a run that is still `pending`, or
        one that failed, is a perfectly ordinary thing for a reader to do to a
@@ -400,7 +383,7 @@ export const pgSearchStore: SearchStore = {
 
   async sweepPending(slug: string, opts: SweepOptions): Promise<SearchRun[]> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     const cutoff = new Date(Date.now() - opts.graceMs);
 
     /* Two guards, and each one alone is a bug.
