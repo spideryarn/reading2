@@ -111,7 +111,7 @@
    focus-follow, and the aliased type was that handler's parameter. The only
    keyboard listener left in this file is the drawer's Escape, which is on
    `window` and takes the DOM's own type. See `DockModes`. */
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useId, type ReactNode } from "react";
 import {
   AlignLeft,
   BookA,
@@ -119,6 +119,7 @@ import {
   Lightbulb,
   ChevronUp,
   Clock,
+  FlaskConical,
   Focus,
   LoaderCircle,
   Network,
@@ -130,6 +131,7 @@ import {
   MessagesSquare,
   Search,
   Speech,
+  TriangleAlert,
   X,
   Quote,
 } from "lucide-react";
@@ -141,30 +143,58 @@ import { MODE_LABEL } from "../title-text.js";
 import type { Comment } from "../types.js";
 import { armActivationForMode } from "./activation.js";
 import { useDockFit } from "./dock-fit.js";
+/* Type only: the bar is *handed* the switch, it does not subscribe to the store
+   — see the `experimental` prop. A type import cannot become a subscription. */
+import type { ExperimentalSetting } from "./experimental-store.js";
+/* The same two sentences the checkbox on /profile says, because there are two
+   controls for one setting now. experimental-copy.ts. */
+import {
+  EXPERIMENTAL_HOW,
+  EXPERIMENTAL_IS_OFF,
+  EXPERIMENTAL_NAME,
+  EXPERIMENTAL_WHAT,
+  experimentalIsOn,
+  experimentalOffline,
+} from "./experimental-copy.js";
 import { DEFAULT_MODE, type Mode, type Panel } from "./params.js";
 import { Link } from "./Link.js";
 import { type ArticleView, carriedSearch, readHref } from "./router.js";
-import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useSlow } from "./useSlow.js";
 import { InstallHint } from "./InstallHint.js";
 import { VisitorNotice } from "./PublicChrome.js";
 import { COMMENTS_GAP } from "./visitor.js";
 
 /**
- * **The narrow slice of the experimental-features switch this bar reads.**
+ * **The experimental-features switch, as the bar sees it.**
  *
- * `ExperimentalSetting` (experimental-store.ts) carries nine fields; the bar
- * needs one. A structural type rather than the whole interface, so a mount site
- * hands the hook's result straight over and the compiler still checks the only
- * field that is read.
+ * It was one field until 2026-09-03 — *is it on* — because all the bar did with
+ * the answer was filter `MODES_UI`. The bar now draws the switch itself, so it
+ * needs everything that decides how a control is drawn: whether there is a
+ * reader to draw it for, whether we have an answer yet, and each of the three
+ * ways the answer can be wrong. `since` is the only field of
+ * `ExperimentalSetting` left out, and it is left out because *when* you turned
+ * it on is a sentence and the bar is seventeen icons — `/profile` says it
+ * (SettingsSection.tsx).
  *
- * It widens in stage 3, when the switch itself becomes a button at the end of
- * the bar and the failure states have to be drawn rather than swallowed.
+ * **Derived from the store's interface rather than restated.** Nine documented
+ * fields copied into this file would be a second copy that nothing keeps in
+ * step, which is the mistake CLAUDE.md § One source of truth names. Naming them
+ * means a renamed field breaks this line, loudly, instead of drifting.
+ *
+ * **`Pick`, not `Omit`** — the two are the same set today and will not stay
+ * that way. `Omit<…, "since">` makes every field the store grows in future
+ * automatically part of the bar's required contract, so a field added for
+ * `/profile` would start failing four mount sites that have no use for it. This
+ * list is what the bar actually reads. (GPT Sol, reviewing stage 3.)
+ *
+ * A structural type either way, so a mount site hands the hook's result straight
+ * over and the compiler checks the fields that are read.
  */
-export interface DockExperimental {
-  /** Whether this reader asked to see the modes that are still being built. */
-  on: boolean;
-}
+export type DockExperimental = Pick<
+  ExperimentalSetting,
+  "on" | "signedIn" | "loaded" | "stale" | "saving" | "error" | "loadError" | "set" | "reload"
+>;
 
 interface Props {
   /**
@@ -191,6 +221,12 @@ interface Props {
   /**
    * **Whether this reader sees the modes that are still being built** — and
    * therefore how many buttons the bar draws at all. `visibleModes` is the rule.
+   *
+   * Since 2026-09-03 it also decides **whether the bar draws the switch itself**,
+   * and how: `toggleVariant` below turns these fields into the one appearance
+   * the button wears. `experimental.signedIn`, not the `signedIn` prop, answers
+   * *is there a reader to draw it for* — see that prop for why the two spellings
+   * are not interchangeable.
    *
    * **Required, and the bar is told rather than going and getting it.** The
    * store behind `useExperimental()` is shared, so a hook call in here would be
@@ -239,6 +275,20 @@ interface Props {
   /**
    * Whether this reader has an account — read **only** by the visitor drawer's
    * call to action. reader-capability.ts § signedIn.
+   *
+   * **Not the prop the experimental switch keys on**, and the difference is not
+   * pedantry. This one is optional visitor-copy input: `Metadata.tsx` and
+   * `Tweets.tsx` mount the bar without it, so a control drawn on `signedIn`
+   * would vanish the moment an owner pressed Metadata — present on one page of
+   * their own article and gone on the next. `experimental.signedIn` comes from
+   * the store, which knows the session, so it has one answer on every page.
+   * (GPT Sol, finding 2; Fable reached the same conclusion independently.)
+   *
+   * So the file now carries two spellings of *is somebody signed in*, as it
+   * already carries two of *is this a visitor* (`visitor` and `drawer.visitor`).
+   * The question each answers: this one is **what to say to a reader who has no
+   * account**; `experimental.signedIn` is **whether there is an account to save
+   * a setting to**.
    */
   signedIn?: boolean | undefined;
   /**
@@ -657,12 +707,103 @@ function modeInSearch(search: string): Mode | undefined {
 }
 
 /**
+ * **The one appearance the bar's own switch wears**, or `null` when it is not
+ * drawn at all.
+ *
+ * Six of them, and they are exclusive on purpose: one state, one look, so
+ * `fitSignature` can carry *which* button is drawn rather than merely that there
+ * is one. GPT Sol, reviewing stage 2: keying the fit on presence alone leaves
+ * the bar mis-measured when the warning marker appears, because the marker is a
+ * second icon and the row got wider without the signature moving.
+ *
+ * **The order is the precedence, and `saving` is first.** `SettingsSection.tsx`
+ * reports a failed load above a save in flight, which is right for a line of
+ * prose: it is telling you what happened. This is a button, and the only
+ * question it has to answer is *may I take a press* — so a write in flight wins
+ * over everything, because pressing during one is the race the store's
+ * one-write-at-a-time rule exists to prevent, and because it is about to resolve
+ * the rest anyway.
+ *
+ * **`!loaded` is last, and cannot be first.** A failed load leaves `loaded`
+ * false, and so does an offline copy (experimental-store.ts) — so a `!loaded`
+ * test at the top would swallow both, and the reader would get a permanently
+ * disabled button with no way to ask again. That is the mistake this ordering
+ * is written down to prevent.
+ *
+ * Exported for tests/dock-experimental-switch.test.tsx, which holds the table.
+ */
+export type ExperimentalVariant =
+  /** A write is in flight. Disabled — and every other state is about to change. */
+  | "saving"
+  /** The load failed. Enabled, marked, and a press asks again rather than toggling. */
+  | "load-failed"
+  /** The save failed. The value has already sprung back; the button says so. */
+  | "save-failed"
+  /** What we last knew, from the offline cache. Disabled, and it says why. */
+  | "stale"
+  /** No answer yet. Disabled — a switch drawn from a default is a value nobody chose. */
+  | "waiting"
+  /** A switch, working. */
+  | "ready";
+
+/**
+ * **What pressing the switch does**, which is three different things and not
+ * two.
+ *
+ * This is the record `aria-pressed` keys on, and that is the point of it rather
+ * than a tidiness. The APG rule — written down in this repo already, at
+ * `DictationStrip.tsx` § *The button is an action, not a toggle* — is that a
+ * control may have a **moving accessible name** or a **fixed name plus
+ * `aria-pressed`**, and never both. So `aria-pressed` is drawn exactly where
+ * pressing toggles something, and a `retry` press is honestly an action rather
+ * than a toggle.
+ *
+ * **`stale` is `retry`, and getting that wrong was a real dead end.** It was
+ * `nothing`: a reader whose page loaded from the offline cache got a disabled
+ * switch, and nothing ever asked again — `offline.ts` listens for *going*
+ * offline and not for coming back, so the button stayed dead through every
+ * navigation until a full page reload or an account change. GPT Sol reproduced
+ * it with a one-off test: pressing a stale switch called `reload` zero times.
+ * The store has offered `reload()` for a failed **or offline** load all along.
+ */
+const PRESS = {
+  saving: "nothing",
+  waiting: "nothing",
+  "load-failed": "retry",
+  stale: "retry",
+  "save-failed": "toggle",
+  ready: "toggle",
+} as const satisfies Record<ExperimentalVariant, "toggle" | "retry" | "nothing">;
+
+export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
+  // eslint-disable-next-line no-console
+  console.log("TMP_DEBUG toggleVariant input", JSON.stringify(e));
+  /* Nobody to save it for. Not a disabled button either: a signed-out reader is
+     forcibly off by decision, and a control they cannot use is an advertisement
+     for an account, which is not what the bottom bar is for. */
+  if (!e.signedIn) return null;
+  if (e.saving) return "saving";
+  if (e.loadError !== null) return "load-failed";
+  if (e.error !== null) return "save-failed";
+  if (e.stale) return "stale";
+  if (!e.loaded) return "waiting";
+  return "ready";
+}
+
+/**
  * What the bar has in it, as one string, so `useDockFit` re-measures when the
  * row's width could have changed and not on every render of the page it sits on.
  *
- * The three things that vary: the modes are one segment on the reading view and
+ * The four things that vary: the modes are one segment on the reading view and
  * loose links elsewhere; Comments is a drawer trigger here and a link
- * elsewhere; and its count grows a digit.
+ * elsewhere; its count grows a digit; and the bar's own experimental switch is
+ * absent, or drawn in one of six appearances.
+ *
+ * **The switch goes in by variant, not by presence.** `null` for a signed-out
+ * reader and one word otherwise, because the six do not draw the same width: a
+ * failed load and a failed save each add a warning triangle beside the flask.
+ * A signature that only said *there is a toggle* would leave the row overflowing
+ * for as long as the marker was up. GPT Sol, reviewing stage 2.
  *
  * **The modes go in by name, not by count.** It was `MODES_UI.length` until
  * 2026-09-03, when five modes went behind the experimental switch: the bar
@@ -691,10 +832,12 @@ export function fitSignature(
   onMode: Props["onMode"],
   drawer: Props["drawer"],
   own: { comments: Comment[] } | null,
+  variant: ExperimentalVariant | null,
 ): string {
   const shape = mode !== undefined && onMode ? "seg" : "links";
   const modes = visible.map((m) => m.mode).join(",");
-  return `${modes}|${shape}|${drawer ? "drawer" : "link"}|${own ? own.comments.length : ""}`;
+  const count = own ? own.comments.length : "";
+  return `${modes}|${shape}|${drawer ? "drawer" : "link"}|${count}|${variant ?? "none"}`;
 }
 
 export function Dock({
@@ -750,6 +893,12 @@ export function Dock({
    */
   const visible = visibleModes(experimental.on, mode ?? modeInSearch(search));
 
+  /* Computed once, above the fit measurement, because the same answer decides
+     two things: whether the row is one button wider, and what that button
+     looks like. Two calls could not disagree, but one call is one fewer place
+     for the next change to only half-land. */
+  const toggle = toggleVariant(experimental);
+
   /* **How much of itself the bar spells out is measured, not guessed** — the
      row is asked whether it overflows and drops labels until it does not. It
      was a `max-width: 1100px` media query until 2026-09-02, and that number was
@@ -758,7 +907,9 @@ export function Dock({
      running off the right-hand end. dock-fit.ts, and Greg's ask: *"more
      automatic/dynamic (so that we don't have to keep tweaking some
      constant)"*. */
-  const { ref: dockRef, fitClass } = useDockFit(fitSignature(visible, mode, onMode, drawer, own));
+  const { ref: dockRef, fitClass } = useDockFit(
+    fitSignature(visible, mode, onMode, drawer, own, toggle),
+  );
 
   /**
    * Escape closes the drawer, and the drawer wins.
@@ -972,6 +1123,24 @@ export function Dock({
           label="Metadata"
           title="Where this article came from, what shape it is, and what the pipeline wrote"
         />
+
+        {/* **The switch itself, last, and only for somebody who has an account
+            to save it to.** Greg, 2026-09-03:
+
+            > And also show a button at the end of the bar to enable
+            > "Experimental Features" for logged-in users with tooltip to
+            > explain what this does.
+
+            A toggle rather than a link to `/profile`: one press, where the
+            effect is — the five modes it reveals are three inches to the left
+            of it. `/profile` keeps the checkbox, and keeps the one thing this
+            cannot say, which is when you turned it on.
+
+            After Metadata because it is not about this article at all. It is
+            the only button in the bar that is about the app. */}
+        {toggle !== null && (
+          <DockExperimentalSwitch setting={experimental} variant={toggle} />
+        )}
 
         {/* **The trailing gutter, and the ladder's font-metric probe.** It is a
             child rather than the bar's `padding-right` because the fit
@@ -1317,7 +1486,7 @@ function DockLink({
     >
       <Icon size={15} />
       {/* Same class the modes segment gives its label, so § the bar's fit ladder
-          can drop all sixteen of the bar's labels with one rule rather than with
+          can drop all seventeen of the bar's labels with one rule rather than with
           one rule and a bare-element selector that would break the moment
           somebody wrapped the text. The name is still announced: the explicit
           `aria-label` above is the accessible name on both of these, and the
@@ -1369,7 +1538,7 @@ function DockTab({
     >
       <Icon size={15} />
       {/* Same class the modes segment gives its label, so § the bar's fit ladder
-          can drop all sixteen of the bar's labels with one rule rather than with
+          can drop all seventeen of the bar's labels with one rule rather than with
           one rule and a bare-element selector that would break the moment
           somebody wrapped the text. The name is still announced: the explicit
           `aria-label` above is the accessible name on both of these, and the
@@ -1382,6 +1551,197 @@ function DockTab({
     </button>
   );
 }
+
+/**
+ * **The experimental-features switch, at the end of the bar.**
+ *
+ * The bar's fourth kind of button, and it is its own component for the reason
+ * the other three are: what a button *is* decides which ARIA state it carries,
+ * and a flag on `DockTab` would have been one component claiming to be two
+ * things. `DockLink` navigates and says `aria-current`; `DockTab` opens a
+ * drawer and says `aria-expanded`; `DockModes` is a radiogroup and says
+ * `aria-checked`. This one is a **toggle** and says `aria-pressed` — not
+ * `aria-checked`, which would put it in the modes' set, and it is not one of
+ * the modes: it decides how many of them there are.
+ *
+ * ## Four things it must not do, and the fifth it must
+ *
+ * **It must not move the setting before we have an answer.** A switch drawn
+ * from a default lets a reader send *off* over an *on* nobody had read yet — a
+ * setting silently reset by looking at the page it lives on. `waiting` and
+ * `saving` are inert for that reason.
+ *
+ * **It must not swallow a failure.** A dead or lying switch is worse than no
+ * switch, and the store exposes `loadError`, `error` and `stale` precisely so a
+ * control can draw them. `toggleVariant` is the whole rule; `SWITCH_STATE` is
+ * what each one says out loud.
+ *
+ * **It must not be a dead end.** Every state a reader can land in has a press
+ * that does something, or is about to resolve on its own. `stale` was the one
+ * that failed this: inert, over a cached answer, with nothing anywhere that
+ * asks again when the network comes back. `PRESS` is the fix and the reasoning.
+ *
+ * **A failure must not be visible only on hover.** The tooltip is the long
+ * explanation, never the message: a broken switch draws a warning triangle
+ * beside the flask, and the same sentence is in the button's `sr-only`
+ * description. NN/G's rule, and the same one the `marked` prop above is written
+ * around.
+ *
+ * **And the inert states must still be hoverable**, which is why this uses
+ * `aria-disabled` and a guarded handler rather than the `disabled` attribute. A
+ * `disabled` button fires no pointer events in Chrome and takes no focus, so
+ * the tooltip explaining *why it will not move* would be unreachable in exactly
+ * the states that need explaining. styles.css § `.dock-btn.soon` was written
+ * for this argument and this is its first user.
+ *
+ * Greg asked for it mid-run, 2026-09-03: *"show a button at the end of the bar
+ * to enable 'Experimental Features' for logged-in users with tooltip to explain
+ * what this does."* docs/plans/260903c-… § stage 3.
+ */
+function DockExperimentalSwitch({
+  setting,
+  variant,
+}: {
+  setting: DockExperimental;
+  variant: ExperimentalVariant;
+}) {
+  const press = PRESS[variant];
+  /* The two states with something wrong to show. Kept as one name because three
+     things key on it: the marker, the on-state, and `aria-invalid`. */
+  const broken = variant === "load-failed" || variant === "save-failed";
+  const state = SWITCH_STATE[variant](setting.on);
+  /* The state sentence is *described by* rather than named — see `aria-label`
+     below for the APG rule that forces the split, and `PRESS` for why. */
+  const stateId = useId();
+  return (
+    <Tooltip
+      placement="top"
+      className="tip-soon"
+      content={
+        <ControlTip
+          head={EXPERIMENTAL_NAME}
+          state={state}
+          what={EXPERIMENTAL_WHAT}
+          how={EXPERIMENTAL_HOW}
+        />
+      }
+    >
+      <button
+        type="button"
+        /* `dock-experimental` styles nothing. It is how a test and a browser
+           pass find this one button among seventeen that are all `dock-btn` —
+           the alternative is matching on the label, which is copy and is allowed
+           to change. `dock-mode` next door is the same idea doing real work for
+           the fit ladder.
+
+           **Not painted as on while something is wrong.** A failed load has told
+           us nothing, and a failed save has already sprung the value back — in
+           both cases the highlighted "on" frame would be the button asserting a
+           state we do not have. `soon` is the dim that goes with
+           `aria-disabled`. */
+        className={`dock-btn dock-experimental${setting.on && !broken ? " on" : ""}${press === "nothing" ? " soon" : ""}`}
+        /* **Only where a press actually toggles.** Two reasons, and they land on
+           the same three variants. It is a *toggle button* only where pressing
+           it moves the setting — in `load-failed` and `stale` the press asks the
+           server again, which is an action. And where there is no answer at all
+           (`waiting`) or the read failed, `aria-pressed={false}` would be the
+           button telling a screen reader the setting is off, which is the
+           silent-default mistake in its most direct form.
+           docs/reusable/silent-success.md; `PRESS` above. */
+        aria-pressed={press === "toggle" ? setting.on : undefined}
+        /* **A supplement, and known to be one.** `aria-invalid` is not among the
+           states ARIA lists as supported on `role="button"` — it belongs to the
+           input-ish roles — so how much of it survives to a screen reader is not
+           something to rely on. It is here because it costs nothing and some
+           tooling reads it; the thing that actually carries the failure is the
+           description below, plus the triangle a sighted reader can see. If it
+           were the only carrier this would be the silent-success shape. */
+        aria-invalid={variant === "save-failed" ? true : undefined}
+        aria-disabled={press === "nothing" || undefined}
+        /* **The name is fixed and the state is a description, never both in the
+           name.** The APG allows a moving accessible name *or* a fixed one with
+           the state in `aria-pressed`, and not both at once — a name that reads
+           "Experimental features — On…" beside `aria-pressed="true"` announces
+           the state twice and changes the control's identity as it moves. This
+           repo had already learnt it: DictationStrip.tsx § *The button is an
+           action, not a toggle*. It was both here for one round; GPT Sol caught
+           it. Explicit rather than computed from the text, for the reason
+           `DockLink` gives — § the bar's fit ladder hides the visible label. */
+        aria-label={EXPERIMENTAL_NAME}
+        aria-describedby={stateId}
+        onClick={() => {
+          /* `aria-disabled` does not stop a click the way `disabled` does, so
+             the refusal has to be here. It is not silent: the tooltip and the
+             description both say what it is waiting for, which is the trade that
+             buys the tooltip back. */
+          if (press === "nothing") return;
+          /* **The press means different things**, and `PRESS` is where that
+             lives. With no answer to toggle — a failed read, or a copy out of
+             the offline cache — asking again is the useful act; with one, the
+             useful act is moving it. */
+          if (press === "retry") setting.reload();
+          else setting.set(!setting.on);
+        }}
+      >
+        {/* **The state, for a screen reader, in the one place that does not
+            fight `aria-pressed`.** Not the name (see above), not the tooltip
+            alone (unreachable by touch and by keyboard), and not the visible
+            label (dropped by § the bar's fit ladder at narrow widths). Inside
+            the button and `sr-only`; the explicit `aria-label` means it
+            contributes nothing to the name. */}
+        <span id={stateId} className="sr-only">
+          {state}
+        </span>
+        <FlaskConical size={15} />
+        {/* Not `always`: this is the last button in the row and the least
+            urgent thing in it, so it is among the first labels the ladder
+            should be free to drop. Plain's word is the one that stays. */}
+        <span className="dock-btn-label">Experimental</span>
+        {/* Visible, and one of three carriers — see the header. `aria-hidden`
+            because the sentence it stands for is already in the description. */}
+        {broken && (
+          <TriangleAlert className="tw:text-highlight" size={12} aria-hidden="true" />
+        )}
+      </button>
+    </Tooltip>
+  );
+}
+
+/**
+ * **What the switch is doing right now**, one sentence per appearance.
+ *
+ * It is read twice for every button: into the accessible name, and into the
+ * tooltip. That is the point — `aria-label` is what a screen reader gets and
+ * the tooltip is what a sighted reader gets, and a control that can be broken
+ * must say the same thing to both. A state carried only by the dimming would
+ * be a state half the readers cannot perceive.
+ *
+ * `on` is a parameter because two of the six sentences need it: what an offline
+ * copy says, and what a working switch says. The other four do not read it.
+ */
+const SWITCH_STATE: Record<ExperimentalVariant, (on: boolean) => string> = {
+  saving: () => "Saving…",
+  /* Says what to do, because there is something to do. The press is a retry, not
+     a toggle — see the handler. */
+  "load-failed": () => "Couldn't load this setting. Press to try again.",
+  /* The store has already put the value back where it was, so the button is not
+     lying about its position; what it must not do is let that pass quietly.
+     experimental-store.ts § set. */
+  "save-failed": () => "Not saved. Press to try again.",
+  /* **A copy, and a way out of it.** The value itself is not one to move —
+     another device may have changed it since — but the reader has to be able to
+     ask again, because nothing else will: `offline.ts` listens for going offline
+     and not for coming back. See `PRESS`, where `stale` is a retry.
+
+     The sentence itself is the profile page's, from experimental-copy.ts rather
+     than retyped: two controls for one setting must not tell a reader two
+     stories. */
+  stale: (on) => `${experimentalOffline(on)} Press to check again.`,
+  waiting: () => "Loading…",
+  /* `null` for the date — *when* you turned it on is the one thing `/profile`
+     can say and a button in a row of seventeen icons cannot. */
+  ready: (on) => (on ? experimentalIsOn(null) : EXPERIMENTAL_IS_OFF),
+};
 
 /**
  * The wait before the questions, and nothing at all if the wait is short.

@@ -132,9 +132,9 @@ That is eleven of the thirteen; `plain` and `hierarchy` are the two that open no
   about this tab goes first* — and why assigning `document.title` announces nothing.
 - **[reader-profile.md](reader-profile.md)** — two boxes and one string telling the model who is
   reading, where it rides in a prompt, and the microphone that looked broken twice and was not.
-- **[experimental-features.md](experimental-features.md)** — the switch on the same page for
-  features that are not finished. Off by default, nothing behind it yet, and the rule that hiding a
-  feature never breaks a link to it.
+- **[experimental-features.md](experimental-features.md)** — the switch for features that are not
+  finished, on this page and at the end of the bottom bar. Off by default, five modes behind it, and
+  the rule that hiding a feature never breaks a link to it.
 - **[dictation.md](dictation.md)** — talking into a text box: why it transcribes twice, the one
   microphone a page is allowed, and the three lines that give any box a button.
 - **[live-conversation.md](live-conversation.md)** — talking to the article out loud, in the middle

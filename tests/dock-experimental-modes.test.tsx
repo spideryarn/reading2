@@ -40,7 +40,11 @@ import { MODE_LABEL } from "../src/title-text.js";
 import type { PublicArtefacts } from "../src/types.js";
 import { Dock, fitSignature, visibleModes } from "../src/web/Dock.js";
 import { markedModes } from "../src/web/visitor.js";
-import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
+import {
+  EXPERIMENTAL_OFF,
+  EXPERIMENTAL_ON,
+  EXPERIMENTAL_SIGNED_OUT,
+} from "./helpers/experimental-fixtures.js";
 
 /** The five, by name, so a sixth cannot be added without this file saying so. */
 const BEHIND_THE_SWITCH: readonly Mode[] = ["quotes", "timeline", "referee", "diagram", "remember"];
@@ -133,19 +137,39 @@ describe("how many buttons the bar draws", () => {
   });
 
   /**
-   * The signed-out reader Greg was looking at. Their answer is `off` because we
-   * decided it, not because a 401 was caught as a load failure — the store is
-   * where that reasoning lives; this is the half of it that shows on screen.
+   * The signed-out reader Greg was looking at, **as far as this file can see
+   * them**: the bar is handed the answer, so what is checked here is that being
+   * told *signed out, off* draws eight buttons.
+   *
+   * It does not exercise a session, and the name used to imply it did (GPT Sol,
+   * reviewing stage 2). That a signed-out session produces this answer *because
+   * we decided it* rather than because a 401 was caught as a load failure is
+   * tests/experimental-store.test.tsx's, and that the reading view asks for
+   * nothing on their behalf is tests/public-network-trace.test.tsx's.
    */
-  it("eight for a signed-out visitor, who is off by decision", () => {
-    reading({ experimental: EXPERIMENTAL_OFF, visitor: true, marked: markedModes(NOTHING_SHARED) });
+  it("eight when the bar is told the reader is signed out and off", () => {
+    reading({
+      experimental: EXPERIMENTAL_SIGNED_OUT,
+      visitor: true,
+      marked: markedModes(NOTHING_SHARED),
+    });
     expect(radioModes()).toHaveLength(8);
     expect(radioModes()).not.toContain(MODE_LABEL.timeline);
   });
 });
 
-describe("the mode in the URL is drawn whatever the switch says", () => {
-  it("?mode=timeline draws Timeline, checked, with the switch off", () => {
+describe("the mode the bar is in is drawn whatever the switch says", () => {
+  /**
+   * **The reading view takes the mode as a prop, so that is what this passes.**
+   * It was named for `?mode=timeline` and passed `mode: "timeline"` — the same
+   * fact one step further along, since `App.tsx` is what turns the parameter
+   * into the prop (params.ts § modeParam). GPT Sol, reviewing stage 2: the name
+   * claimed a state the test does not enter.
+   *
+   * The URL half is real and is tested where it happens — the loose-link arm
+   * below reads `?mode=` itself, because off the reading view there is no prop.
+   */
+  it("a reading view in Timeline draws it, checked, with the switch off", () => {
     reading({ mode: "timeline", experimental: EXPERIMENTAL_OFF });
     expect(radioModes()).toContain(MODE_LABEL.timeline);
     expect(radioModes()).toHaveLength(9);
@@ -193,30 +217,23 @@ describe("the mode in the URL is drawn whatever the switch says", () => {
  */
 describe("the fit signature", () => {
   const noop = () => {};
+  /* The sixth argument is the bar's own switch, and `null` is "not drawn". What
+     it contributes has its own file — tests/dock-experimental-switch.test.tsx §
+     the fit signature — because it is about the toggle, not about the modes. */
+  const sig = (on: boolean, current: Mode) =>
+    fitSignature(visibleModes(on, current), current, noop, undefined, null, null);
 
   it("changes when the visible identities change at a constant count", () => {
-    const quotes = fitSignature(visibleModes(false, "quotes"), "quotes", noop, undefined, null);
-    const remember = fitSignature(
-      visibleModes(false, "remember"),
-      "remember",
-      noop,
-      undefined,
-      null,
-    );
     expect(visibleModes(false, "quotes")).toHaveLength(visibleModes(false, "remember").length);
-    expect(quotes).not.toBe(remember);
+    expect(sig(false, "quotes")).not.toBe(sig(false, "remember"));
   });
 
   it("changes when the switch does", () => {
-    expect(fitSignature(visibleModes(false, "plain"), "plain", noop, undefined, null)).not.toBe(
-      fitSignature(visibleModes(true, "plain"), "plain", noop, undefined, null),
-    );
+    expect(sig(false, "plain")).not.toBe(sig(true, "plain"));
   });
 
   it("is the same string for the same bar", () => {
-    expect(fitSignature(visibleModes(false, "plain"), "plain", noop, undefined, null)).toBe(
-      fitSignature(visibleModes(false, "plain"), "plain", noop, undefined, null),
-    );
+    expect(sig(false, "plain")).toBe(sig(false, "plain"));
   });
 });
 
@@ -247,16 +264,29 @@ const EVERYTHING_SHARED: PublicArtefacts = {
  */
 describe("marked × experimental, in both arms", () => {
   const readers = [
-    { name: "an owner", marked: undefined, visitor: undefined },
+    { name: "an owner", marked: undefined, visitor: undefined, signedIn: undefined },
     {
       name: "a visitor with nothing shared",
       marked: markedModes(NOTHING_SHARED),
       visitor: true,
+      signedIn: undefined,
     },
     {
       name: "a visitor with every artefact shared",
       marked: markedModes(EVERYTHING_SHARED),
       visitor: true,
+      signedIn: undefined,
+    },
+    /* **The signed-in non-owner, which the matrix promised and did not have**
+       (GPT Sol, reviewing stage 2). `signedIn` changes no mode's visibility
+       today — the switch keys on `experimental.signedIn`, which is a different
+       question, and that is the point of including it: the row is here so that
+       the day the two are confused, this is where it shows. */
+    {
+      name: "a signed-in visitor on somebody else's article",
+      marked: markedModes(EVERYTHING_SHARED),
+      visitor: true,
+      signedIn: true,
     },
   ];
   const switches = [
@@ -276,6 +306,7 @@ describe("marked × experimental, in both arms", () => {
             experimental: flip.experimental,
             marked: reader.marked,
             visitor: reader.visitor,
+            signedIn: reader.signedIn,
           });
           expect(radioModes().length, what).toBeGreaterThan(0);
           expect(checked(), what).toEqual([MODE_LABEL[mode]]);
@@ -289,6 +320,7 @@ describe("marked × experimental, in both arms", () => {
             experimental: flip.experimental,
             marked: reader.marked,
             visitor: reader.visitor,
+            signedIn: reader.signedIn,
           });
           expect(linkModes().length, what).toBeGreaterThan(0);
           expect(linkModes(), what).toContain(MODE_LABEL[mode]);

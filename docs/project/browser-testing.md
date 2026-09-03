@@ -38,6 +38,21 @@ assumes 5273 gets a refused connection or — worse — *somebody else's* dev se
 page that looks exactly right and is running different code. Read the port off the line Vite prints
 and pass it on to anything you dispatch.
 
+**And the port you were given can change hands while you work.** A dev server killed by memory
+pressure — a full `npm test` on a loaded box will do it — frees its port, and the next peer's Vite
+walks up and takes it. Your automation goes on signing in and answering, from another worktree's
+code. **Ask the server for the file, not the page:**
+
+```bash
+curl -s http://localhost:5276/src/web/Dock.tsx | grep -c dock-experimental
+```
+
+Vite serves your source transformed, so a string only your branch contains answers *is this my
+tree* outright. `ss -ltnp | grep 527` names the owning pid and `pgrep -af vite` says which
+worktree's `node_modules` launched it. Cheap, and it turned two hours of hunting a phantom
+regression into one command on 2026-09-03 —
+[worktrees.md § Ports and the ceiling](worktrees.md#ports-and-the-ceiling).
+
 ### There is no `file://` shortcut — serve it
 
 **The Chrome extension refuses `file://` URLs.** `navigate` comes back with an error rather than a

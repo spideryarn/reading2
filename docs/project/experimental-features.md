@@ -1,6 +1,8 @@
 # Experimental features
 
-One switch on [/profile](reader-profile.md), off by default. Greg, 2026-08-31:
+One setting, off by default, with **two controls**: a checkbox on
+[/profile](reader-profile.md) and a button at the end of the
+[bottom bar](reading-view-overview.md). Greg, 2026-08-31:
 
 > The idea is that when this is off, it shows just the features that are most valuable/polished
 > (which is what we want for most users). When on, it includes extra features that might be still
@@ -52,6 +54,7 @@ generated answer. Whatever the reader made while it was on is still there when i
 | Wire | `experimentalSince` on `GET`/`PATCH /api/reader`; `PATCH` takes `{ experimental: boolean }`, **one field per request** |
 | Client | [`experimental-store.ts`](../../src/web/experimental-store.ts) — one module-level store for the whole client, session-bound, read through [`useExperimental`](../../src/web/useExperimental.ts). **All the reasoning lives there**: three states rather than two, one write at a time, the races an account switch opens, and why anonymous asks for nothing |
 | Read by | the row in [`SettingsSection.tsx`](../../src/web/SettingsSection.tsx), and the four pages that mount a `Dock` — they call the hook and hand the answer to the bar as a prop ([`Dock.tsx`](../../src/web/Dock.tsx) § experimental) |
+| Copy | [`experimental-copy.ts`](../../src/web/experimental-copy.ts) — the two sentences and the name, shared by both controls. **Not `src/messages.ts`**, which is the reader-facing *failure* copy and says so in its first line |
 
 **A date, not a boolean**, and [sql.md](sql.md#a-nullable-timestamp-says-more-than-a-boolean) has the
 general form of that argument: `null` is off, a timestamp is on-since-then, the same storage carries
@@ -75,6 +78,56 @@ disabled until the server answers, while a save is in flight, and when what is o
 the offline cache. Each of those is a state where a press would write a value nobody chose:
 [`useExperimental`](../../src/web/useExperimental.ts) has the reasoning, and GPT Sol's review
 (2026-08-31, in `docs/plans/`) is where two of the three came from.
+
+## The two controls
+
+Since 2026-09-03 the setting can be moved from either end of the app. They read one store, so they
+cannot disagree; they say the same two sentences, from
+[`experimental-copy.ts`](../../src/web/experimental-copy.ts), so they cannot tell a reader two
+stories about what they turned on. Greg asked for the second one mid-run:
+
+> And also show a button at the end of the bar to enable "Experimental Features" for logged-in users
+> with tooltip to explain what this does.
+
+| | The checkbox on `/profile` | The button in the bar |
+|---|---|---|
+| Where | [`SettingsSection.tsx`](../../src/web/SettingsSection.tsx) | [`Dock.tsx`](../../src/web/Dock.tsx) § `DockExperimentalSwitch`, last in the row |
+| Who sees it | anybody on their own profile | **signed-in readers only** — there is no account to save it to otherwise, and a control a stranger cannot use is an advertisement for an account |
+| Also says | *when* it was turned on | nothing else; the bar is seventeen icons |
+| Inert by | `disabled` | `aria-disabled`, so the tooltip explaining *why* is still reachable — a `disabled` button fires no hover and takes no focus, which fails in exactly the states that need explaining |
+
+**A toggle, not a link to `/profile`**: one press, where the effect is — the five modes it reveals
+are three inches to the left of it.
+
+**It is not one of the modes**, and says so: `aria-pressed`, outside the `role="radiogroup"`. It is
+the only button in the bar that is about the app rather than about the article, which is why it is
+last.
+
+**The failure states are drawn, not swallowed.** A dead or lying switch is worse than no switch, so
+`toggleVariant` ([`Dock.tsx`](../../src/web/Dock.tsx)) turns the store's fields into exactly one of
+six appearances — working, waiting, saving, showing an offline copy, a load that failed, a save that
+failed. The two broken ones draw a warning triangle beside the flask, because a failure visible only
+on hover is a failure most readers never see. The table is
+`tests/dock-experimental-switch.test.tsx`.
+
+**No state is a dead end**, and one was. `stale` — the offline copy — used to be inert on both
+controls, with `/profile` saying *"Reconnect to change it"* beside a disabled checkbox. Nothing
+anywhere asks the server again when the network returns: [`offline.ts`](../../src/web/offline.ts)
+listens for *going* offline only. So both now offer a **check again**, which asks for a fresh value
+without touching the cached one — another device may have moved it since. (GPT Sol, reviewing stage
+3, who reproduced it.)
+
+**A fixed name and `aria-pressed`, never a moving name and both.** The APG allows one or the other,
+and the state therefore rides in an `sr-only` description rather than in the button's name — the
+same rule, and the same mistake, as
+[`DictationStrip.tsx`](../../src/web/DictationStrip.tsx) § *The button is an action, not a toggle*.
+`aria-pressed` is drawn only where a press toggles: in *load failed* and *offline copy* the press
+asks again, which is an action.
+
+**`experimental.signedIn`, never `Dock`'s `signedIn` prop.** That one is optional visitor-copy input
+that `Metadata.tsx` and `Tweets.tsx` do not pass, so a switch keyed on it would vanish the moment an
+owner pressed Metadata. The store knows the session, so the answer is the same on every page. (GPT
+Sol; Fable reached it independently.)
 
 ## Putting a feature behind it
 

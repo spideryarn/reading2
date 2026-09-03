@@ -460,6 +460,22 @@ Half of this is worse than none, because each half hides the other's failure:
    So the fallback stays and the *silence* goes: a `spideryarn-port-warning` plugin says so after
    `listening`, where the port is known rather than asked for. Verified both ways — loud on 5310,
    silent on 5290. `strictPort` belongs here once the whole port system is wired, not before.
+
+   **The fallback has a second failure, and it costs hours: a port you were given can change hands
+   under you.** A dev server killed by memory pressure — a full `npm test` on a loaded box will do
+   it — leaves its port free, and the next peer's Vite walks up and takes it. Your browser automation
+   goes on signing in, loading the article and answering, from *another worktree's code*. On
+   2026-09-03 that read as a feature I had just built having vanished, and nothing about it looked
+   like an environment problem. **Ask the server for the file, not the page:**
+
+   ```bash
+   curl -s http://localhost:5276/src/web/Dock.tsx | grep -c dock-experimental
+   ```
+
+   Vite serves your source transformed, so a string only your branch contains is a direct answer to
+   *is this my tree*. `ss -ltnp | grep 527` names the owning pid, and `pgrep -af vite` shows which
+   worktree's `node_modules` it was launched from. Worth doing at the start of any browser pass and
+   again after anything heavy has run.
 2. ~~An **atomic port lease**~~ — **done as a persistent reservation, and nothing reads it yet.**
    [`scripts/worktree-port.ts`](../../scripts/worktree-port.ts), 27 tests. Not a hash: at ten worktrees
    in a 30-wide range that collides ~99.96% of the time. Not a scan-then-pick, whose failure is subtler

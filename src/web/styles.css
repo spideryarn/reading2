@@ -3324,11 +3324,17 @@ td.text.has-hit[data-hues="8"] {
   box-shadow: inset 0 2px 0 var(--highlight);
 }
 
-/* Not built yet. Dimmed and inert, but still focusable and still hoverable —
-   the tooltip IS the content, so a button the pointer slides off would have
-   nothing to say. `aria-disabled` rather than `disabled` for the same reason:
-   `disabled` would take it out of the tab order and stop it firing the hover
-   events the tooltip needs. */
+/* **Dimmed and inert, but still focusable and still hoverable** — the tooltip
+   IS the content, so a button the pointer slides off would have nothing to say.
+   `aria-disabled` rather than `disabled` for the same reason: `disabled` would
+   take it out of the tab order and stop it firing the hover events the tooltip
+   needs, which is worst in exactly the case that needs explaining.
+
+   Written for buttons that were not built yet, and unused by anything for
+   weeks. Its first real user is the bar's experimental switch while it is
+   saving or waiting for its first answer — Dock.tsx §
+   `DockExperimentalSwitch`, whose comment repeats this argument because it is
+   the thing a reader of that file will want to argue with. */
 .dock-btn.soon {
   color: var(--ink-faintest, var(--ink-faint));
   opacity: 0.5;

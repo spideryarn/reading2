@@ -353,6 +353,107 @@ to `/profile`: one press, where the effect is.
 pressing it changes the number of mode buttons, and one per failure row above. Plus a real browser,
 signed in. Docs for the new control land in this stage.
 
+#### What landed
+
+`DockExperimentalSwitch` in [`Dock.tsx`](../../src/web/Dock.tsx), last in the row, with
+`toggleVariant` as the rule and `SWITCH_STATE` as what each appearance says.
+`tests/dock-experimental-switch.test.tsx` is the table.
+
+Four things went differently from the plan above, and each is a correction to it rather than a
+shortcut:
+
+- **The tooltip sentence is not in `src/messages.ts`.** The plan said it should be, "like every other
+  sentence a reader sees" — but that file's own first line says it is what the reader is told **when
+  something goes wrong**, and `FailureKind` decides what they should do about it. A description of a
+  working control does not belong there. It went to a new
+  [`experimental-copy.ts`](../../src/web/experimental-copy.ts), which `SettingsSection.tsx` now reads
+  too: two controls for one setting must not tell a reader two stories, and until this stage the two
+  sentences existed only inside the profile page's component.
+- **`aria-disabled`, not `disabled`.** The plan's table said *disabled* for three of the states. A
+  `disabled` button in Chrome fires no pointer events and takes no focus, so the tooltip explaining
+  *why it will not move* is unreachable in exactly the states that need explaining — the failure
+  would have been invisible on a working laptop, where none of those states occur. `styles.css §
+  .dock-btn.soon` had already made this argument for buttons that were "not built yet" and had no
+  user; this is its first.
+- **Six appearances, not four.** The plan's four rows collapse *saving* into *not loaded* and leave
+  *working* implicit. Six exclusive variants is what lets `fitSignature` carry which button is drawn
+  — Sol's stage-2 note — rather than a boolean plus a handful of independent flags.
+- **`aria-pressed` is dropped in two states, not set to `false`.** With no answer read, or a read
+  that failed, there is no value to report, and `aria-pressed={false}` would be the button telling a
+  screen reader the setting is off. That is the silent default in its most direct form, and it is
+  invisible to anybody testing with their eyes. In `load-failed` the control is honestly not a toggle
+  at all: the press retries the read.
+
+**Every assertion was checked by mutation**, because a test of six failure states that has never been
+red is six states nobody has visited ([silent-success.md](../reusable/silent-success.md)). Five
+mutations, all caught: `aria-pressed={setting.on}` unconditionally (2 red), dropping the inert guard
+in the handler (3), making the press always toggle (1), keying the fit signature on *presence* rather
+than variant — Sol's exact stage-2 warning — (1), and keying the switch on `Dock`'s `signedIn` prop
+rather than the store's (10).
+
+Also done here, from Sol's stage-2 *shoulds*: two test names that claimed states the tests do not
+enter were corrected rather than the tests reshaped (the bar is handed its answer; a session is
+`experimental-store.test.tsx`'s subject, and `?mode=` is `App.tsx`'s), and the matrix gained the
+signed-in non-owner it advertised.
+
+#### What the review then found, and it found the two things that mattered
+
+Five mutations of my own, all caught — and Sol found a **sixth that survived them all**: changing
+`state={state}` to `state={undefined}` on the tooltip left every one of the twenty-six tests green
+while deleting the entire justification for `aria-disabled`. The card is now opened for real, with
+`referee-tooltips.test.tsx`'s hover mechanics, and its three paragraphs read.
+
+Two must-fixes, both real, both checked before believing them:
+
+- **`stale` was a dead end.** It was inert, and nothing anywhere asks the server again when the
+  network returns — [`offline.ts`](../../src/web/offline.ts) listens for *going* offline and not for
+  coming back, which I read rather than took on trust. So a reader whose page loaded from the cache
+  had a permanently disabled switch until a full page reload. Sol reproduced it: a press called
+  `reload` zero times. It is now a **retry** — the cached value still must not be moved, because
+  another device may have changed it. The same hole was in `/profile`'s offline line, which said
+  *"Reconnect to change it"* beside a disabled checkbox and offered nothing to press; **that is fixed
+  too**, and it is older than this stage. The shared sentence lost its dead call to action.
+- **The button had a moving accessible name *and* `aria-pressed`.** The APG allows one or the other,
+  and this repo had already written the rule down — `DictationStrip.tsx` § *The button is an action,
+  not a toggle*, where exactly this was fixed once before. The name is now fixed at "Experimental
+  features" and the state is an `sr-only` description. Which also sharpened `aria-pressed`: it is
+  drawn where a press **toggles**, and `stale` and `load-failed` are actions rather than toggles.
+  `PRESS` is that three-way answer in one place.
+
+And one *should*, taken: `DockExperimental` is `Pick`, not `Omit`. The two name the same nine fields
+today; `Omit` would have made every field the store grows in future automatically part of the bar's
+required contract.
+
+**Browser, signed in, all six checks passed.** The switch is present on the reading view, the
+metadata page and the tweets page — that last pair being the case the whole `experimental.signedIn`
+decision exists for. Pressed: 8 mode buttons became 13, `aria-pressed` flipped, the button went
+briefly inert while saving, and the value survived a reload. The accessible name stayed exactly
+"Experimental features" in every state; the `sr-only` description resolved to the right sentence and
+measured **1px wide**, so it costs the row nothing. The tooltip's three paragraphs came back in
+order — state, what it does, what it does not promise. Enter toggles it and the focus ring shows.
+
+The fit ladder, re-measured at seventeen buttons: rung 0 spells out **all seventeen labels** down to
+1550px, rung 1 holds to 1100, rung 2 covers 900 and 700 with no overflow, and at 500px the bar
+scrolls rather than clipping, which is the floor doing its job. "Plain" keeps its word at every
+width. The cost of the new button, stated plainly: the fully-labelled row wants about a hundred
+pixels more than it did, so a 1440px laptop now sits one rung lower than before.
+
+**Two hours of that were spent measuring the wrong tree**, and it is worth writing down because
+nothing about it looked wrong. This worktree's dev server died under the load of a full test run;
+another worktree's vite took the port; and the probe went on signing in, loading the article and
+answering — with sixteen buttons and no switch, which reads exactly like a regression I had just
+introduced. What settled it was asking the server for the file rather than the page:
+`curl localhost:<port>/src/web/Dock.tsx | grep -c dock-experimental` returned 0 there and 4 here. In
+a tree where several agents share one Supabase and walk up the same port range, **a dev server that
+answers is not evidence that it is yours.** The same trap explains an earlier "900/900, no overflow"
+reading: a 150ms settle after a resize is not enough for a `ResizeObserver` plus three forced
+reflows on a loaded box, and the short wait reported an overflow that a 1200ms wait does not see.
+
+One thing the browser pass turned up that is **not this work's**: a React
+*"Cannot update a component (`App`) while rendering a different component (`SignedIn`)"* warning
+fires on every sign-in, before the bar is touched at all. Reproduced in isolation, pre-existing, and
+worth its own look.
+
 ## What this plan accepts
 
 **A flash, once per session.** A reader with the switch on sees eight mode buttons and then thirteen,

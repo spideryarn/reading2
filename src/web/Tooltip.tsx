@@ -282,11 +282,30 @@ export function Tooltip({
  * where the answer comes from, what it costs, or what the control does *not*
  * promise. The first they could have guessed; the second is why the card is
  * worth a hover.
+ *
+ * `state` is the exception to *what it is, then how it works*: where the control
+ * is a switch that can be mid-flight or broken, what it is doing **right now**
+ * goes above the description, because a reader who opened the card because the
+ * button would not move should not have to read two paragraphs first. The bar's
+ * experimental switch is the only caller (Dock.tsx § the switch itself), and it
+ * is never the only carrier — the button draws a warning marker, and the same
+ * sentence is in an `sr-only` span it points `aria-describedby` at.
  */
-export function ControlTip({ head, what, how }: { head: string; what: string; how: string }) {
+export function ControlTip({
+  head,
+  state,
+  what,
+  how,
+}: {
+  head: string;
+  state?: string | undefined;
+  what: string;
+  how: string;
+}) {
   return (
     <>
       <div className="tip-soon-head">{head}</div>
+      {state && <p>{state}</p>}
       <p>{what}</p>
       <p className="tip-soon-how">{how}</p>
     </>

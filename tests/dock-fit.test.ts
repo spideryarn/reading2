@@ -26,7 +26,17 @@
  * The needs are the real ones, measured in Chrome against the dev server at
  * thirteen modes and sixteen buttons (see dock-fit.ts § the rungs). They are
  * illustrative rather than pinned — a new mode moves all three, which is the
- * point of the change these tests cover.
+ * point of the change these tests cover. Nothing here compares a rendered bar
+ * against them; they are the shape of the problem, not a fixture.
+ *
+ * **The bar for a signed-in reader is one button wider than they describe**
+ * since the experimental switch joined it on 2026-09-03, and the ladder was
+ * re-measured in Chrome rather than the numbers scaled: rung 0 spells out all
+ * seventeen labels down to 1550px and gives way by 1500; rung 1 holds to 1100;
+ * rung 2 covers 900 and 700 with no overflow; and at 500px the bar scrolls,
+ * which is the floor doing its job rather than a failure. So the first number
+ * above is now roughly a hundred pixels light, and a reader on a 1440px laptop
+ * sits one rung lower than they used to.
  *
  * ## What this file cannot see, and what stands in for it
  *
