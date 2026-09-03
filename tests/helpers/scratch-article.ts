@@ -72,12 +72,23 @@
  * unserialised, and these seeds run without the queue.
  *
  * **This paragraph used to end by saying the lock was "kept anyway for now".**
- * It was not: the same commit that wrote the rest of it (`df7a7980`, 2026-09-01)
- * flipped `serialise` to opt-in, and only the top and tail of the text were left
- * describing the world before the flip. It stayed wrong for two days and was
- * believed by a plan and by its reviewer —
+ * It was not, and the three-commit sequence is the interesting part — all on
+ * 2026-09-01:
+ *
+ * - `9671fcfa` (13:20) wrote the paragraph. **It was true when written.**
+ * - `df7a7980` (14:45) flipped `serialise` to opt-in in `./load-article.ts` and
+ *   did not touch this file. The paragraph became false here, and nothing said
+ *   so.
+ * - `e3ef75fd` (15:13) **edited this very paragraph** — adding the `raw_sources`
+ *   narrative above — and left its top and tail describing the world before the
+ *   flip.
+ *
+ * So it was not merely un-updated: it was revised, twice, by people looking
+ * straight at it. It then stayed wrong for two days and was believed by a plan,
+ * by the brief drawn out of it, and by that plan's reviewer —
  * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
- * § B0.
+ * § B0, which also got this attribution wrong on the first attempt and blamed
+ * `df7a7980` for prose it never touched.
  */
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
