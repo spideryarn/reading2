@@ -367,6 +367,25 @@ export async function createComment(
  *
  * Emptied by a restart, which is the point: nothing was in flight before this
  * process started, so every `pending` row it finds is abandoned.
+ *
+ * **That is true of a restart and not of a reload, and the difference is not
+ * academic here.** Saving any server module makes Vite re-evaluate all of them
+ * inside the *same* process without cancelling the request in flight
+ * ([src/process-state.ts](process-state.ts)), so this set comes back empty while
+ * an answer is still being written — and the guard below, which is the only
+ * thing stopping a second paid model call on a comment that already has one,
+ * stops holding. The line below that says *"a property of having one process,
+ * not a shrug"* is the assumption at issue: one process can hold two copies of
+ * this module.
+ *
+ * **Not fixed here, deliberately.** This is the filesystem store, reached only
+ * when `SPIDERYARN_STORE` is not `postgres` (`guarded`, src/store/index.ts), and
+ * [260831b](../docs/plans/260831b-finish-the-database-move.md) Stage 4 deletes
+ * this module outright. The Postgres store never had the problem: it cannot use
+ * a set at all, as the paragraph above says, so it stamps
+ * `COMMENT_ANSWER_LEASE_MS` on the row. Recorded rather than patched so that
+ * whoever works on this file before it goes knows the fence has a hole in dev.
+ * docs/plans/260903d-improve-the-codebase-second-sweep.md § T2.1.
  */
 const begun = new Set<string>();
 

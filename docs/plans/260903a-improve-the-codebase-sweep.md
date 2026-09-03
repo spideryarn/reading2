@@ -657,10 +657,14 @@ next run should not re-spend agents here.
   <br>**"Six" was wrong when it was written**, corrected 2026-09-03 by
   [260903d](260903d-improve-the-codebase-second-sweep.md) § T1.6. Six go through the `sse()` helper
   (`src/routes.ts:1344, 1614, 3417, 3664, 3799, 3917`); the seventh, `streamChat`, writes its SSE
-  headers by hand at `:2309` and so is invisible to a grep for the helper. The substance held — all
-  seven were re-traced and each sends a terminal frame or documents the deliberate no-op, and each
-  closes via `res.end()` in a `finally` — but the *method* did not: **counting the callers of a shared
-  helper counts everything except the instance that does it by hand**, which is the one worth finding.
+  headers by hand at `:2309` and so is invisible to a grep for the helper.
+  **"Terminate with an explicit frame" was also too strong**, and the correction's first draft
+  repeated it: search and both referee streams deliberately omit the terminal frame on some paths
+  (`src/routes.ts:3452, 3698, 3832`), which is a documented no-op case rather than an oversight. What
+  is true of all seven is that each closes via `res.end()` in a `finally`. The *method* is the
+  lesson: **counting the callers of a shared helper counts everything except the instance that does
+  it by hand**, which is the one worth finding — and `sse()`'s own comment (`:947`) is stale in the
+  same direction, still saying only chat and comments use it when six callers do.
 - **The pipeline and the AI layer.** One JSON-from-model parser, one price table, one token
   estimator, one model-id source, one gateway path with the one declared exception. `maxRetries: 0`
   and one bounded repair retry. The `id > start && id < end` string-comparison trap from

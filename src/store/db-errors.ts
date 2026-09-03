@@ -56,10 +56,14 @@
  *    article, a 501 from `notMigrated`. Translating those would tell a reader
  *    who mistyped a slug that the app is broken.
  * 2. **`ChatConflict`.** src/routes.ts answers 409 on `instanceof`, so eating it
- *    would turn a stale second tab into a server fault. Nothing routed through
- *    the guard throws one yet — the Postgres chat store is not wired into
- *    src/store/index.ts — and it is handled here anyway, because the day it is
- *    wired is not the day anybody will remember this paragraph.
+ *    would turn a stale second tab into a server fault. This used to add "nothing
+ *    routed through the guard throws one yet — the Postgres chat store is not
+ *    wired into src/store/index.ts", and went on to say that the day it was
+ *    wired would not be the day anybody remembered this paragraph. Both halves
+ *    turned out to be right: it is wired (`chatStore`, src/store/index.ts), it
+ *    does throw (`ChatConflict`, src/store/pg-chat.ts), and the sentence saying
+ *    otherwise survived until 2026-09-03. Handling it in advance is what made
+ *    that harmless.
  * 3. **`StaleAttemptError`.** The same shape, found the same way — GPT Sol's
  *    review, 2026-08-27, of the change that put `pgJobStore` behind this guard.
  *    `advanceJob` in src/jobs.ts asks `err instanceof StaleAttemptError` to

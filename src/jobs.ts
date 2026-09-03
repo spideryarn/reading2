@@ -1469,6 +1469,24 @@ export async function advanceJobWith(
    * It settles the job rather than taking it over — see the header — so the
    * reader sees a job that stopped and a Retry button, not a job that silently
    * restarted somewhere else.
+   *
+   * **And it is deliberately not scoped to `owner`, which is in scope on the
+   * line above and would look like a free improvement.** `settleExpired` takes
+   * an optional owner and `listJobs` passes one, so the asymmetry reads like an
+   * oversight. It is the opposite. The concurrency cap is *global* — "how many
+   * jobs may run at once, anywhere", counted inside `claim`'s `queue_state`
+   * lock (`CONCURRENCY_ENV` above) — and this is the **only** door that reaches
+   * the job of an owner who is not coming back. Scope it, and a reader whose
+   * claimant died leaves a `running` row holding one of the three global slots
+   * for ever, because the only thing that would settle it is a request that
+   * owner will never make again. `listJobs` may scope its call for an unrelated
+   * reason: a read-only page load should not end somebody else's job.
+   *
+   * The cost of the global sweep is real and is not being waved away — it is
+   * counted at `listJobs` below, which is also where the two doors are compared.
+   * Written down after the 2026-09-03 sweep proposed the scoping fix, and GPT
+   * Sol confirmed independently that it is unsafe.
+   * docs/plans/260903d-improve-the-codebase-second-sweep.md § T1.3.
    */
   /* **The outcomes, and this line is the only account of them there is.** The
      claimant that held these jobs is gone and logged nothing on its way out, so
