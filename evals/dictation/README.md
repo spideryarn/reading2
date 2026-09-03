@@ -1,6 +1,6 @@
 # Which transcriber, does telling it the words help, and which words?
 
-Three benchmarks, checked in because GPT Sol's review of
+Five benchmarks, checked in because GPT Sol's review of
 [the first plan](../../docs/plans/260827x-dictation-two-pass.md) asked for it: the numbers in these
 documents chose the model and then chose the vocabulary, and a number nobody can re-run is a number
 nobody can argue with.
@@ -9,11 +9,51 @@ nobody can argue with.
 node  evals/dictation/bench-transcribers.mjs         # 16 models, OpenRouter's transcription endpoint
 node  evals/dictation/bench-vocabulary.mjs           # Gemini chat, with a vocabulary prompt and without
 npm run eval:dictation-vocab                         # which sources, and how much is too much
+npm run eval:dictation-gate                          # which candidates can serve our request at all
+npm run eval:dictation-models                        # and which of those transcribes best
 node  evals/dictation/make-clips.mjs                 # regenerate the ten clips (needs say + ffmpeg)
 ```
 
-All three read `OPENROUTER_API_KEY` out of `.env.local`. The first two cost a few cents; the third
-cost **$0.1833** at five runs (`RUNS=5`, 650 calls), and defaults to two.
+All of them read `OPENROUTER_API_KEY` out of `.env.local`. The first two cost a few cents; the
+vocabulary one cost **$0.1833** at five runs (`RUNS=5`, 650 calls) and defaults to two; the gate is
+a minute and pennies; the model bake-off cost **$0.1283** at three runs (210 calls) on 2026-09-03,
+and defaults to three.
+
+## Run the gate before the bake-off
+
+`gate-models.ts` is the cheap half of a model comparison, and the reason it is separate is that a
+candidate which cannot be *routed* looks exactly like a candidate having a bad hour. Dictation sends
+`provider: { zdr: true, require_parameters: true }` plus a strict `json_schema` plus webm/opus audio
+(`AI_JOB_ROUTE` in [`src/ai-call.ts`](../../src/ai-call.ts)), and each of those four can leave a
+model with no endpoint. `require_parameters` in particular turns "this upstream does not do
+structured outputs" into a 404, which the harness would otherwise retry five times and record as
+lost. Finding that out in the gate costs a minute; finding it out in the bake-off costs an hour.
+
+It is also where the answer to "should we use OpenAI?" actually lives — see
+[260903i](../../docs/plans/260903i-which-model-transcribes-dictation.md). Both `openai/gpt-audio`
+models 404 under `zdr`, and 400 on webm even without it.
+
+## The bake-off, and its noise floor
+
+`bench-models.ts` holds the vocabulary at the shipped composition and varies the model — the mirror
+of `bench-vocabulary-sources.ts`. Every arm goes through `transcribeWith` with a `model` option, so
+the request is the app's; before that option existed the other benchmark's `MODEL` was a *label* and
+the call went to `DICTATION_MODEL` regardless, which is a results file that can name one model and
+have measured another.
+
+**The incumbent is in the table twice, byte for byte.** The gap between those two rows is the only
+thing here that says anything about its own precision — 0.2 points of word error and 0.9 of recall
+in the 2026-09-03 run — and nothing smaller than it is a finding. One replicate pair is a sample of
+the noise, not a bound on it.
+
+It also checks `answeredBy` and prints a mismatch loudly. `zdr` routing means OpenRouter is picking
+an upstream under a constraint, so an arm named after the slug we *sent* can be scoring a fallback.
+
+## Scoring is one file
+
+`score.ts`: the normaliser, the word-level Levenshtein, the hard-term matcher, the invented-terms
+detector and its self-test. Both benchmarks import it, so their word error rates are the same
+measurement rather than two definitions that agree until they don't.
 
 ## The third one is the interesting one
 
@@ -129,6 +169,9 @@ Say plainly what that supports:
 - **Latency, roughly.** And only roughly: the run that produced the first plan's table had
   `gemini-3.1-flash-lite` at a 2.4s median, and a re-run two hours later on the same machine gave
   8.8s with a 3.5–16.9s spread. Same code, same clip. Order of magnitude, not a measurement.
+  `bench-models.ts` reports p90 and the maximum as well as the median for exactly that reason — a
+  median is the call that felt fine — but all three come from one sitting on one network, so a
+  *difference* between arms measured in the same run is worth more than any of the numbers.
 
 And what it does not support, whatever the table says:
 

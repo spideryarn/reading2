@@ -198,6 +198,38 @@ export const DECLARATIONS: readonly Declaration[] = [
     metered: false,
     why: "Not a bypass at all — it calls `transcribeWith`, which goes through the seam and is metered. It simply never opens a collector, so every call warns \"no spend collector open\" and the row is dropped. One `withLedger(\"eval\", …)` fixes it, in a file another agent was actively writing on the day this was found.",
   },
+  /* **The two halves of the 2026-09-03 model bake-off**, and the same story as
+     `dictation-bench-vocabulary-sources` above: both call `transcribeWith`, so
+     every call goes through the seam and is metered — they simply never open a
+     collector, so each one warns "no spend collector open" and its row is
+     dropped. The fix for all three is one `withLedger("eval", …)` each, and it
+     is deliberately not being done here: the sibling's entry has said so since
+     2026-08-28, and doing it for two files and not the third would leave the
+     directory half-converted with nothing saying which half. Worth doing as one
+     small job across the three, under the `eval` kind rather than `dictation`,
+     so a few hundred eval calls do not land in the product's cost report. */
+  {
+    id: "dictation-gate-models",
+    kind: "unscoped",
+    since: "2026-09-03",
+    account: "openrouter",
+    file: "evals/dictation/gate-models.ts",
+    job: "dictation",
+    wire: "chat",
+    metered: false,
+    why: "Asks which candidate models can serve the production request at all — `zdr`, `require_parameters`, the JSON schema, webm — before the bake-off spends an hour finding out. Calls `transcribeWith`, so it is through the seam and metered; it opens no collector. docs/plans/260903i-which-model-transcribes-dictation.md.",
+  },
+  {
+    id: "dictation-bench-models",
+    kind: "unscoped",
+    since: "2026-09-03",
+    account: "openrouter",
+    file: "evals/dictation/bench-models.ts",
+    job: "dictation",
+    wire: "chat",
+    metered: false,
+    why: "The bake-off that kept `gemini-3.1-flash-lite`: holds the shipped vocabulary fixed and varies the model, through `transcribeWith`'s `model` option. Through the seam and metered, no collector opened. docs/plans/260903i-which-model-transcribes-dictation.md.",
+  },
   {
     id: "dictation-bench-vocabulary",
     kind: "bypass",
