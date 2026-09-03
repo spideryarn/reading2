@@ -2314,7 +2314,24 @@ function Reader({
          fills. It is `fit.alone` and nothing computed here on purpose — the
          same fact under two definitions is how `proseVisible` came to exist.
          layout.ts § `Fit.alone`, styles.css § plain, centred. */
-      className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}`}
+      /* `band-covers` is the same idea and exists for a sharper reason: it is
+         the *stylesheet's* only way to know that the mode band has no room
+         beside the prose and is lying over it instead. That crossover is
+         `MODE_MIN + PROSE_MIN` against the window **minus the rail**, so it
+         moves with `?spine=0` — and a media query cannot see a query
+         parameter. It was one for six days (`@media (max-width: 843px)`), and
+         from 832 to 843 with the rail off the two disagreed: layout.ts
+         squeezed the table to make room for a band the stylesheet had already
+         thrown over the article.
+
+         So the fact is written here, from the one number that computes it,
+         beside the `--mode-w` it is derived from. `fit.modeW === 0` is also
+         true when no band is open at all, which is why every rule keyed off
+         this class also names `.mode-band` — styles.css § a band with no room,
+         tests/spine-width.test.ts. */
+      className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}${
+        fit.modeW === 0 ? " band-covers" : ""
+      }`}
       /* The wrapper must be as wide as its content for the sticky bars inside it
          to have anywhere to slide — a sticky element is clamped to its containing
          block, so one exactly its own width has a sticky range of zero and never

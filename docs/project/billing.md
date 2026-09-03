@@ -724,6 +724,13 @@ a hole: it counts only *entitled* subscriptions, so an `active` beside an `unpai
 invoices and nothing logged. Counting over non-terminal statuses instead, from the raw Stripe list
 before unreadable shapes are filtered out, is the fix if this is ever picked back up.
 
+**And the reader would be left on the wrong one of the two.** `newest()` picks by *latest period
+start*, not by largest allowance, so somebody who completed a Researcher page and then a Reader page
+pays for both and is metered at Reader's 20. Deliberate as a tie-break — it is a stable rule that
+reads the data rather than trusting Stripe's list order — but it means the accident's cost lands on
+the customer rather than on us, which is the wrong way round. Picking the highest-allowance live
+tier would be the kinder rule. GPT Sol, 2026-09-03.
+
 ## The webhook
 
 `POST /api/webhooks/stripe`, an **exact** pre-auth path — not a namespace, so sibling paths stay
@@ -746,6 +753,15 @@ unavailable. It is the one route nobody is signed in to and the one that grants 
 Tests sign payloads offline with the SDK's own signer, and `api.stripe.com` is refused by
 [`tests/setup/provider-guard.ts`](../../tests/setup/provider-guard.ts) so no test can reach Stripe
 for real with the key sitting in `.env.local`.
+
+**No invoice event is one of the four, and there is one worth adding.** Entitlement reads
+`subscription.status`, and Stripe leaves a subscription **`active` when an invoice cannot be
+finalised** — an automatic-tax or customer-location failure being the likely cause here, since
+Managed Payments computes tax on every renewal. Nothing is collected and nothing is refused: the
+reader keeps their allowance on a renewal we were never paid for, and the only signal is
+`invoice.finalization_failed`, which we ignore. Not seen in the wild, and the cost is bounded by one
+month of one subscription — but it is the one invoice event whose absence changes what somebody gets
+for free. GPT Sol, 2026-09-03.
 
 ### Pointing Stripe at it
 
@@ -926,9 +942,44 @@ any time. See [admin.md](admin.md).
 - **Grandfathered subscribers keep paying and lose their allowance** — the warning under
   [Adding a tier or a currency](#adding-a-tier-or-a-currency). Nobody is grandfathered yet, so this
   is a trap rather than a live fault, and changing a price is what springs it.
+- **Reader → Researcher**, below, which is a dead end rather than a rough edge.
 
 The order is in
 [the plan](../plans/260902i-stripe-payments-and-subscription-tiers.md#where-the-build-stands).
+
+### A paying Reader cannot become a Researcher
+
+> [!WARNING]
+> **The one upgrade that makes us more money is the one there is no way to perform.** Found by GPT
+> Sol on 2026-09-03 and then confirmed against the live Portal configuration, which is the half that
+> matters — the code alone does not say what Stripe is configured to allow.
+
+The loop closes on itself in three steps:
+
+1. A Reader subscriber presses **Upgrade to Researcher** on `/profile`.
+2. `startCheckout` ([`src/billing/checkout.ts`](../../src/billing/checkout.ts)) sees
+   `hasOpenSubscription` and deliberately returns the **Portal** instead of a Checkout page — right,
+   given Managed Payments forbids creating a second subscription outside Checkout.
+3. The live Portal configuration `bpc_1UBY0iLv4piDbwcb5ypEUfFO` reads
+   **`subscription_update: { enabled: false, default_allowed_updates: [] }`**. There is no *Switch
+   plan* button on the page they land on.
+
+So the only route from Reader to Researcher is to cancel, wait out the paid period, and subscribe
+again — losing a month, and asking somebody who wants to pay us five times more to first stop paying
+us anything.
+
+`ensurePortalConfiguration` never sets `subscription_update`, and it **does not reconcile features on
+a configuration that already exists**, so editing the script alone will not fix the live account. Two
+things then have to be decided rather than defaulted, because Stripe's defaults are wrong for us:
+`proration_behavior` (`none` would give away Researcher for the rest of the month) and
+`billing_cycle_anchor` (`unchanged` keeps the dates, which is what makes existing usage count towards
+the new 150 rather than resetting).
+
+**`stripe:check` did not catch this**, and that is the more useful lesson: it verifies cancellation,
+invoices and card updates, and never asks whether a plan switch is possible. A check that has never
+seen the thing it is meant to protect fail is
+[not evidence](../reusable/silent-success.md); this one passed cleanly on live day with the upgrade
+path shut.
 
 ## Where the code is
 

@@ -167,7 +167,7 @@ line. That works for any write-then-read pair in the repo and it is the reusable
 cache as the thing that makes a re-run free. Neither says what happens if an entry is unreadable —
 and a design note that describes only the happy path reads exactly like one that has considered both.
 
-### One more instance, found and deliberately not fixed
+### One more instance, found and deliberately not fixed — **fixed 2026-09-03**
 
 `keepTheOriginal` in the same file (`src/pdf-read.ts`) decides whether the PDF's provenance has
 already been recorded like this:
@@ -178,11 +178,38 @@ if (await readFile(path.join(opts.dataDir, "raw.json"), "utf-8").catch(() => nul
 
 Any non-empty bytes count as "done". A half-written `raw.json` therefore skips writing `raw.pdf` and
 the manifest both — and `readRaw` in [`src/fetch.ts`](../../src/fetch.ts), which *is* tolerant,
-answers `null` for it, which the callers are told to read as "assume HTML". So the same crash that
+answers `null` for it, which the callers are told to read as "assume HTML" *(true when this was
+written; that fallback was removed on 2026-08-31 — `readRaw`'s header in `src/fetch.ts` has the
+story. The consequence is now narrower and still permanent: `articleMetadata` can no longer say where
+the document came from)*. So the same crash that
 wedged the chunk cache would, one line later, lose a PDF's provenance quietly instead of loudly.
 Both writes there are plain `writeFile` too. Left alone on purpose: it is a different artefact with
 other agents working near it, and it is a silent wrong rather than a permanent trap. It is the
 clearest evidence available that the rule above wants to be a rule and not a fix.
+
+**And it stayed unfixed for six days, in this file, with this paragraph pointing straight at it** —
+which is why it became the emblematic item of
+[260903e](../plans/260903e-sweep-recorded-rather-than-fixed-defects.md), the sweep of defects this
+tree recorded rather than fixed. *A written-down defect with an unchanged default is a defect with a
+paper trail, not a mitigation.*
+
+The guard is now `alreadyKept` in [`src/pdf-read.ts`](../../src/pdf-read.ts): it parses, and it asks
+`whyUnusable("raw", …)` — the one-field shape check both artefact stores already apply
+([`src/store/artifacts.ts`](../../src/store/artifacts.ts) § `SHAPE`) — so a file that will not parse
+and a `{}` that will are both *absent*, and the next run records the PDF properly. Two tests in
+[`tests/stage2c-raw-bytes.test.ts`](../../tests/stage2c-raw-bytes.test.ts) § the block for
+`keepTheOriginal`, watched red first: a `raw.json` truncated by hand produced the same
+`SyntaxError` quoted at the top of this file, and a `{"kind":"pdf"}` produced `expected undefined to
+be 'raw.pdf'`. The legitimate skip is asserted in both directions — a complete manifest still
+short-circuits, and the second document's bytes never reach the bucket — because a fix that stopped
+skipping altogether would pass every corrupt-file test in this file.
+
+Not done, and still true: **both writes are plain `writeFile`**, so a killed run still leaves a
+half-written `raw.json`. It is no longer permanent — the tolerant read discards it and rewrites from
+bytes already in memory, buying nothing back — which is the reason it was left alone here rather
+than a fourth copy of `writeAtomic` being added to a file that no longer has one. Recommendation 1
+above, the single shared reader, remains unbuilt on purpose: GPT Sol scoped 260903e to this one call
+site, and a shared reader is new machinery that wants its own proposal.
 
 ## See also
 

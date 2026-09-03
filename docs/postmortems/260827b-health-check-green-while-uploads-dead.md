@@ -280,6 +280,9 @@ Four things it still does not reach:
    reads it by name (the SDK takes it from the environment itself). Both are currently harmless. So
    was the service key, for fifteen hours. A test that walks `src/` for `process.env.` reads and
    asserts every one appears in `EXPECTED` would close this, and is the cheapest of the four.
+   *Checked 2026-09-03: `ANTHROPIC_API_KEY` left `EXPECTED` on 2026-08-31 — by hand, which is the
+   point — and `SPIDERYARN_OWNER_ID` is still read by `src/owner.ts` and still absent from it. **The
+   test is still not built.***
 2. **It only sees the API function's runtime environment.** `VITE_SUPABASE_URL` and
    `VITE_SUPABASE_PUBLISHABLE_KEY` are compiled into the browser bundle at build time — and missing
    them produced a blank site on the same day, a different failure of the same class. They are in
@@ -287,6 +290,12 @@ Four things it still does not reach:
    setting*, not what the running bundle was built with, so **absent is conclusive and present is
    not**. Add them and never redeploy and it goes green over a blank page. A runtime endpoint cannot
    check a build-time input; only a build-stamped sentinel can, and that is not built.
+   **Correction, 2026-09-03: it was built nine hours after this sentence was written, and better
+   than a sentinel.** `missingClientEnv` in [`scripts/build-stamp.ts`](../../scripts/build-stamp.ts),
+   called from `vite.config.ts`'s `buildStart`, **fails the Vercel build** when either name is unset
+   — so there is no bundle to check afterwards, and nothing has to be read back. Landed the same day
+   in `3b22e5b7`; `tests/build-stamp.test.ts` § `missingClientEnv` covers the whitespace case too.
+   The health check's weakness above is unchanged and no longer matters for these two names.
 3. **A filled slot is not a correct value.** A truncated key, or the right key for the wrong
    project, passes. So does a missing `sources` bucket, documented in the paragraph immediately
    beside the one this bug is about.
@@ -314,6 +323,10 @@ Four things it still does not reach:
 - **Compare the two lists by machine.** `.env.prod` exists precisely as "a record of what production
   needs" and is read by nothing. Diffing its names against `vercel env ls production` is what found
   this, done by hand, a day late. It belongs next to `check-production-gate.sh`.
+  *Checked 2026-09-03: **still not built.** "Read by nothing" has since stopped being true in the
+  narrow sense — `scripts/deploy.ts`, `deploy-checks.ts`, `check-owner-identity.ts` and
+  `check-remote-auth.sh` all lift credentials out of it — but nothing compares its **names** against
+  the platform's, which is the check this bullet asks for.*
 - **Never let a checker read another checker's summary boolean.** `grep '"ok":true'` inherits every
   blind spot of the thing producing that boolean, and inherits them invisibly. Assert on the
   underlying facts as well — no required name `false` in the `env` block — or the outer check adds

@@ -66,18 +66,21 @@ export function OutlinePanel({
    * Whether the band is covering the article rather than sitting beside it,
    * **measured rather than derived from a width.**
    *
-   * `proseBeside` comes from `fit.modeW > 0`, and GPT Sol found that it is
-   * exact only while the spine is on: the stylesheet makes every band
-   * full-screen with a literal `@media (max-width: 843px)`, while `fitMode`
-   * compares against `windowWidth - spineWidth`. With `?spine=0` those
-   * disagree from 832px to 843px, and in that window the panel would draw
-   * paragraph rows over a hidden article.
+   * `proseBeside` comes from `fit.modeW > 0`, and GPT Sol found on 2026-08-28
+   * that it was exact only while the spine is on: the stylesheet made every
+   * band full-screen with a literal `@media (max-width: 843px)`, while
+   * `fitMode` compares against `windowWidth - spineWidth`. With `?spine=0`
+   * those disagreed from 832px to 843px, and in that window the panel would
+   * draw paragraph rows over a hidden article.
    *
-   * Rather than copy the breakpoint into a third place — where it would go
-   * stale the next time the rail's width changes, which happened *today* —
-   * this asks the rendered band: if it spans the viewport, nothing is beside
-   * it. Immune to the constant moving, to the spine being toggled, and to the
-   * two rules disagreeing again.
+   * **That disagreement was fixed at the source on 2026-09-03** — the
+   * stylesheet keys off `.band-covers`, written by App.tsx from the same
+   * `fit.modeW`, so the two halves cannot part again (styles.css § a band with
+   * no room, tests/spine-width.test.ts). This measurement stays anyway, and not
+   * out of inertia: rather than copy any breakpoint into a third place, it asks
+   * the rendered band whether it spans the viewport, which is immune to the
+   * constant moving, to the spine being toggled, and to whatever the next
+   * full-screen rule turns out to be keyed on.
    */
   const [covers, setCovers] = useState(false);
   const beside = proseBeside && !covers;

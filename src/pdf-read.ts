@@ -57,6 +57,7 @@ import { loadEnvLocal } from "./env.js";
 import type { RawManifest } from "./fetch.js";
 import { stageFailure } from "./job-failure.js";
 import { log } from "./log.js";
+import { whyUnusable } from "./store/artifacts.js";
 import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js";
 import { nullCheckpointStore, type CheckpointStore } from "./store/checkpoints.js";
 import { PDF_READER_MODEL } from "./models.js";
@@ -1505,7 +1506,9 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
  * both halves of it — so the only caller left is the command line, and it is
  * where the call now lives. The guard survives, because re-running the command
  * on a slug that a real fetch produced should not replace that fetch's final
- * URL, content type and redirect chain with what a local file can know.
+ * URL, content type and redirect chain with what a local file can know — and it
+ * asks that question by reading the manifest rather than by weighing the file,
+ * which is `alreadyKept` below.
  *
  * **It stores the object as well as writing the files, and did not until now.**
  * `storeRawSource` is what puts the bytes under their own hash and what
@@ -1530,7 +1533,7 @@ export async function keepTheOriginal(
      test that cannot see the store cannot tell that apart from success. */
   store?: RawSourceStore,
 ): Promise<void> {
-  if (await readFile(path.join(opts.dataDir, "raw.json"), "utf-8").catch(() => null)) return;
+  if (await alreadyKept(opts.dataDir)) return;
   const stored = await storeRawSource(opts.bytes, "pdf", store ?? blobStore());
   await mkdir(opts.dataDir, { recursive: true });
   await writeFile(path.join(opts.dataDir, "raw.pdf"), opts.bytes);
@@ -1554,6 +1557,64 @@ export async function keepTheOriginal(
     `${JSON.stringify(manifest, null, 2)}\n`,
     "utf-8",
   );
+}
+
+/**
+ * **Is there already a manifest here worth keeping?** — and a file that does
+ * not parse into one is not, however many bytes it has.
+ *
+ * This asked `readFile(…).catch(() => null)` and believed anything non-empty
+ * until 2026-09-03, which made a crash permanent. `writeFile` truncates before
+ * it writes, so a process killed inside `keepTheOriginal` leaves a `raw.json`
+ * that exists and is half a manifest; the old check saw a truthy string, took
+ * the early return, and neither the object nor the manifest was ever written.
+ * Nothing rewrites that file — the guard kept seeing one — and `readRaw` in
+ * src/fetch.ts is tolerant, so it answers `null` for ever after.
+ *
+ * **What that costs, stated no higher than it is.** An earlier draft of this
+ * comment said the callers read that `null` as *assume HTML*; they did until
+ * 2026-08-31 and `readRaw`'s own header says so, which makes repeating it here
+ * exactly the mistake this fix is part of a sweep for. What is actually lost is
+ * **provenance across re-runs**: the object never reaches the bucket, and
+ * `articleMetadata` in src/api.ts — the surviving caller — can no longer say
+ * where the document came from. The current invocation still extracts, because
+ * it holds the bytes in memory. GPT Sol caught the overstatement in review.
+ * Named and left alone on purpose in
+ * docs/postmortems/260828e-pdf-chunk-cache-corrupt-entry.md § One more
+ * instance, six days before it was fixed.
+ *
+ * **Parsing is not enough on its own**, which is why this asks `whyUnusable`
+ * rather than only `JSON.parse`: `{}` parses perfectly and is not a manifest,
+ * and a check that accepted it would skip on a file no later stage can use.
+ * That is the same one-field test both artefact stores already apply to a
+ * `raw` (src/store/artifacts.ts § SHAPE) — the most tolerant test that still
+ * means something, and shared rather than re-guessed here so the two cannot
+ * come to disagree about what a manifest is.
+ *
+ * **Absent is the safe answer**, and it is safe in a way the old one was not:
+ * the cost of getting it wrong is re-writing files this function was about to
+ * write anyway, from bytes already in memory. Nothing is re-bought — unlike
+ * `usableChunkReading` above, where a miss is a paid model call.
+ *
+ * The discard is logged, because it is the only surviving trace that an
+ * earlier run was killed halfway through writing this file.
+ */
+async function alreadyKept(dataDir: string): Promise<boolean> {
+  const text = await readFile(path.join(dataDir, "raw.json"), "utf-8").catch(() => null);
+  if (text === null) return false;
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    log("pipeline").warn({ dataDir }, "raw.json does not parse; recording the PDF again");
+    return false;
+  }
+  const unusable = whyUnusable("raw", value);
+  if (unusable) {
+    log("pipeline").warn({ dataDir, unusable }, "raw.json is not a manifest; recording the PDF again");
+    return false;
+  }
+  return true;
 }
 
 /** The check for one chunk's reading, with the two things only this stage knows: the context page and the bibliography. */

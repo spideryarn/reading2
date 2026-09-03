@@ -522,7 +522,19 @@ export function toQuestions(
        middle — which is a selection rule and a new set of decisions about what
        to sacrifice. "Simplest version first": it waits for something to show it
        is needed. What would show it is `dropped.overCap` being non-zero on a
-       run that also failed on bands. */
+       run that also failed on bands — and **that number is now in the band
+       gate's own diagnostic**, `buildQuiz` below, which is the only line
+       written when this fires. It was not until 2026-09-03: the trigger this
+       comment names was absent from the one place it could fire, so the
+       deferral had a sentence and no signal.
+
+       **What that number is worth knowing about.** It counts the elements after
+       the break — the ones this loop never examines — so it is a hint and not a
+       finding. A non-zero count is consistent with this bug and equally
+       consistent with the model appending junk, a duplicate, or a thirteenth
+       `medium`: none of those cost us anything. Read it as "how much of the
+       answer went unread", and if you want to know whether a usable question
+       was in there, look at the raw answer. */
     if (out.length === MAX_QUESTIONS) {
       dropped.overCap += Math.max(0, raws.length - i - 1);
       break;
@@ -643,17 +655,55 @@ export function buildQuiz(
   const gap = missingEndsInReaderWords(missing);
   if (gap !== null) {
     /* **The diagnostic is what the reader's sentence deliberately withholds**:
-       the counts, the bands as names, and the pointer to the thing to change if
-       this keeps happening. All of it goes to the log and to Sentry, and none
-       of it to the card. */
-    throw stageFailure(
-      quizBandsNotSpread(fresh.length, gap),
-      `quiz band spread: ${fresh.length} of ${parsed.questions.length} survived, missing ` +
+       the counts, the bands as names, the over-cap tally, and the pointer to
+       the thing to change if this keeps happening. All of it goes to the log
+       and to Sentry, and none of it to the card.
+
+       **`overCap` is here because it is the one number that could point at
+       *us*.** `toQuestions` above defers a known bug — the cap truncates in the
+       model's arrival order, so a batch whose only `hard` question came back
+       thirteenth loses it and lands here — and this throw is the run on which
+       that would show. Until 2026-09-03 the number was absent from the only
+       place it could ever fire, which made the deferral unobservable.
+
+       **It is reported as what it counts and nothing more: array elements the
+       loop never reached.** They may be malformed, duplicate, unanchored, or
+       simply another `medium`; nothing looked at them, so a non-zero count is
+       not evidence that a usable question was thrown away, and the first draft
+       of this sentence said it was (GPT Sol,
+       docs/plans/260903e-stage1-review-sol.md § 1 — twelve good questions plus
+       one malformed tail item gives `overCap: 1` and cost us nothing). Proving
+       the stronger claim would mean validating the tail we deliberately did not
+       validate. The honest number is still the useful one: "13 came back, 12
+       were looked at" is what a developer needs to decide where to look.
+
+       **The other five drop counters are deliberately not here.** They already
+       have a home — the zero-survivors throw above reports all of them, which
+       is the failure where "what did the validator refuse" is the whole
+       question. Here it is not: this gate only fires with `SPREAD_FROM` or more
+       survivors, so plenty got through, and the one thing that changes what to
+       do about it is whether a *valid* question was thrown away by our cap or
+       the model simply never wrote one. Five more numbers would bury that.
+
+       **`{ authored }`, so it actually arrives.** As free text this string was
+       withheld from Sentry by `authored` in src/monitoring-scrub.ts, so the
+       paragraph above claiming it reached Sentry was wrong for as long as it
+       stood — and the log is the channel nobody tails. Every character here is
+       ours: integers, and band names off the `SPREAD_ENDS` constant rather than
+       out of the model's answer. src/job-failure.ts § `{ authored }`. **Do not
+       interpolate a question, a quote or a provider's words into this string**
+       — that is what the claim forbids. */
+    throw stageFailure(quizBandsNotSpread(fresh.length, gap), {
+      authored:
+        `quiz band spread: ${fresh.length} of ${parsed.questions.length} survived, missing ` +
         `${missing.join(" and ")} (easy ${countBand(fresh, "easy")}, medium ` +
-        `${countBand(fresh, "medium")}, hard ${countBand(fresh, "hard")}). If this keeps ` +
-        "landing here, the prompt's spread rule is the thing to change — src/quiz.ts § the " +
-        "generation prompt.",
-    );
+        `${countBand(fresh, "medium")}, hard ${countBand(fresh, "hard")}), ` +
+        `${d.overCap} of them never examined, the cap having stopped the loop first. ` +
+        "Unexamined is not rejected — malformed, duplicate, unanchored and wrong-band all " +
+        "look the same from here — so that number says how much of the answer went unread, " +
+        "not that a usable question was lost. If this keeps landing here, the " +
+        "prompt's spread rule is the thing to change — src/quiz.ts § the generation prompt.",
+    });
   }
 
   return {

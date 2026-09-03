@@ -354,6 +354,28 @@ describe("the guard, without a database", () => {
     expect(failure.message).toBe(STORAGE_BUSY.message);
   });
 
+  it("classifies a store that threw nothing at all", async () => {
+    /* `throw null` and `throw undefined` are legal JavaScript, and a `catch`
+       that guards a privacy boundary has to survive both. Until 2026-09-03 the
+       first thing in `mayPassThrough` to touch them — `err.status` — raised
+       `TypeError: Cannot read properties of null (reading 'status')` from
+       inside the scrubber, and that is the same shape of failure as the
+       `sqlstateOf` crash the two tests above were written for: the sentinel is
+       gone because *nothing* survived, and the classification, the `[db-*]`
+       code and the diagnostic line went with it. Found by GPT Sol, 2026-09-03.
+
+       `STORAGE_FAILED` rather than `STORAGE_BUSY` on purpose: there is no
+       errno and no SQLSTATE to say otherwise, and the safe direction for an
+       unclassifiable failure is the one that does not offer a Retry button. */
+    for (const nothing of [null, undefined]) {
+      const failure = await failureFrom(nothing);
+
+      expect(failure.name).toBe("StoreFailure");
+      expect(failure.message).toBe(STORAGE_FAILED.message);
+      expect(kindOfMessage(failure.message)).not.toBeNull();
+    }
+  });
+
   it("keeps the frames and drops the line that carries the message", async () => {
     /* What makes the scrub affordable. The message is gone; the stack still
        says which file and line threw, which is most of what a bug in a store

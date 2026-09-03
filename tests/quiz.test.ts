@@ -42,8 +42,9 @@ import {
 import { GRADE_WORDS, gradeWords, QUIZ_MARK_SYSTEM } from "../src/quiz-mark.js";
 import { readerFailureOf } from "../src/job-failure.js";
 import { kindOfMessage, worthRetrying } from "../src/messages.js";
+import { sanitise } from "../src/monitoring-scrub.js";
 import { CAPABLE_MODEL } from "../src/models.js";
-import type { Block, QuizBand, QuizQuestion } from "../src/types.js";
+import type { Block, QuizBand, QuizDropped, QuizQuestion } from "../src/types.js";
 
 const block = (id: string, text: string): Block => ({
   id,
@@ -303,7 +304,7 @@ describe("both ends of the band scale", () => {
   const refused = (
     bands: readonly string[],
     quote = "does not make anything actually wet",
-  ): { reader: string; diagnostic: string } => {
+  ): { reader: string; diagnostic: string; err: unknown } => {
     const questions = bands.map((band, i) => ({
       question: `Question number ${i}?`,
       referenceAnswer: "Because the article says so.",
@@ -320,6 +321,13 @@ describe("both ends of the band scale", () => {
       return {
         reader: readerFailureOf(err, STEP_LABEL).message,
         diagnostic: (err as Error).message,
+        /* **The thrown object, not just its text.** The monitoring case below
+           has to hand `sanitise` what `captureFailure` would actually hand it.
+           Rebuilding an `Error` from `diagnostic` passes today — `sanitise`
+           reads only `.message` — and would keep passing if it ever stopped
+           doing so, which is a test asserting a path production does not
+           run. */
+        err,
       };
     }
     throw new Error("the batch was supposed to be refused");
@@ -345,6 +353,33 @@ describe("both ends of the band scale", () => {
   /** `n` bands: `band` once, then medium. */
   const oneEndOnlyBands = (band: string, n: number): string[] =>
     Array.from({ length: n }, (_, i) => (i === 0 ? band : "medium"));
+
+  /** Those bands as questions the validator will accept, in the given order. */
+  const askable = (bands: readonly string[]): unknown[] =>
+    bands.map((band, i) => ({
+      question: `Question number ${i}?`,
+      referenceAnswer: "Because the article says so.",
+      band,
+      value: 3,
+      evidence: [{ blockId: "spya-aaaaaa", quote: "does not make anything actually wet" }],
+    }));
+
+  /**
+   * The refusal from a raw list, **with the counters the run itself filled in**
+   * — `refused` above starts from bands and throws its `dropped` away, and the
+   * over-cap cases below are about a number only the real loop can produce.
+   */
+  const refusedRaw = (
+    questions: readonly unknown[],
+  ): { diagnostic: string; err: unknown; dropped: QuizDropped } => {
+    const dropped = emptyDropped();
+    try {
+      buildQuiz({ questions }, { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped });
+    } catch (err) {
+      return { diagnostic: (err as Error).message, err, dropped };
+    }
+    throw new Error("the batch was supposed to be refused");
+  };
 
   it("names the end that is missing, and counts what survived rather than what was sent", () => {
     /* The count is the one GPT Sol reproduced and the reason this test grew a
@@ -446,6 +481,86 @@ describe("both ends of the band scale", () => {
     expect(diagnostic).toContain("src/quiz.ts");
     /* And they really are two strings, not one string read twice. */
     expect(diagnostic).not.toBe(reader);
+  });
+
+  /**
+   * **The deferred cap bug's trigger, in the one line that fires when it does.**
+   *
+   * `toQuestions` defers a real defect — the `MAX_QUESTIONS` cap truncates in
+   * the model's arrival order, so a batch whose only `hard` question came back
+   * last loses it and is then refused here for missing an end the model
+   * supplied. `dropped.overCap` is the number that makes a run worth a look,
+   * and until 2026-09-03 it appeared nowhere in this diagnostic, so the one
+   * line written when the gate fires said nothing about the cap at all.
+   *
+   * **The count arrives through the real truncation, not injected.** The first
+   * version of this test wrote `overCap: 4` straight into the counters, so it
+   * pinned the formatting and could not see what the number *means* — which is
+   * how a false causal sentence ("a non-zero over-cap count is the deferred bug
+   * manufacturing this failure") got past it and had to be caught by review
+   * instead (docs/plans/260903e-stage1-review-sol.md § 1). A number the test
+   * hands to the code under test proves nothing about the number the code
+   * computes.
+   *
+   * **This is not a test that pins the defect.** It asserts the *signal*, not
+   * the behaviour: fixing the cap would leave it green, because a fixed cap
+   * still reports how many items it never reached.
+   */
+  it("counts the unexamined tail by actually overflowing the cap", () => {
+    /* Sixteen valid questions, one easy and the rest medium. Twelve survive,
+       the loop never reaches the last four, and no `hard` question exists
+       anywhere in the batch — so the gate refuses it, and `overCap` is 4
+       because the cap really truncated rather than because the test said so. */
+    const { diagnostic, dropped, err } = refusedRaw(
+      askable(oneEndOnlyBands("easy", MAX_QUESTIONS + 4)),
+    );
+    expect(dropped.overCap, "the cap itself has to produce the number").toBe(4);
+    expect(diagnostic).toContain(`${MAX_QUESTIONS} of ${MAX_QUESTIONS + 4} survived`);
+    expect(diagnostic).toContain("4 of them never examined");
+    /* And the reader is told none of it — the seam, from this side, for the
+       field this test added. */
+    expect(readerFailureOf(err, STEP_LABEL).message).not.toContain("cap");
+  });
+
+  /**
+   * **What the over-cap number is not.** It counts array elements the loop
+   * never reached, and those may be malformed, duplicate, unanchored or simply
+   * the wrong band. GPT Sol's reproduction is the case below: twelve good
+   * questions and a thirteenth that is not a question at all. `overCap` is 1,
+   * `malformed` is 0 — because nothing looked at it — and a diagnostic that
+   * reads that 1 as "our cap threw away the hard one" is asserting something no
+   * counter here checked.
+   */
+  it("does not claim the cap cost us a question when the tail was junk", () => {
+    const questions: unknown[] = askable(oneEndOnlyBands("easy", MAX_QUESTIONS));
+    questions.push({ band: "hard" });
+    const { diagnostic, dropped } = refusedRaw(questions);
+
+    expect(dropped.overCap).toBe(1);
+    expect(dropped.malformed, "the tail item was never examined, so nothing judged it").toBe(0);
+    expect(diagnostic).toContain("1 of them never examined");
+    /* The false sentence, in the shapes it could come back in. Nothing here may
+       say the cap cost us anything, or that the number points at the deferred
+       bug rather than at the model. */
+    expect(diagnostic).not.toMatch(/manufactur|deferred|thing to fix|discarded|thrown away/);
+  });
+
+  /**
+   * **The diagnostic reaches Sentry, which is the only channel with a reader.**
+   *
+   * `authored` in src/monitoring-scrub.ts withholds a step's free text, and
+   * this diagnostic was free text until 2026-09-03 — so the comment at the
+   * throw site saying it went "to the log and to Sentry" was half wrong, and
+   * the half that was true is the channel nobody tails
+   * (docs/project/sentry-error-monitoring.md § Nothing alerts). `{ authored }`
+   * is the sanctioned remedy and this is what proves it took: withheld is
+   * false, and the sentence arrives whole.
+   */
+  it("does not have its arithmetic withheld from monitoring", () => {
+    const { err } = refused(oneEndOnlyBands("easy", 9));
+    const seen = sanitise(err);
+    expect(seen.withheld, "the band-spread diagnostic was withheld from Sentry").toBe(false);
+    expect(seen.error.message).toContain("easy 1, medium 8, hard 0");
   });
 
   /**

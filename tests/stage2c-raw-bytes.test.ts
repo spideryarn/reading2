@@ -34,7 +34,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -615,6 +615,74 @@ describe("npm run pdf keeps the original where the reader can reach it", () => {
     ) as RawManifest;
     expect(manifest.url).toBe("https://example.test/a.pdf");
     expect(manifest.storedSha256).toBe(sha(first));
+    /* The skip is a skip all the way down: the second document's bytes never
+       reach the bucket either. Without this the "corrupt is absent" cases below
+       could be satisfied by a function that had simply stopped skipping. */
+    expect(await keeper.head(canonicalKey(sha(second), "pdf"))).toBeNull();
+  });
+
+  /**
+   * **A half-written `raw.json` is not a record of anything, and was treated as
+   * one.** `keepTheOriginal`'s guard read the file with `readFile(…).catch(() => null)`
+   * and believed any non-empty bytes — so a process killed between `writeFile`
+   * truncating `raw.json` and finishing it left a file that exists, does not
+   * parse, and stops the manifest and the object from ever being written. The
+   * key never changes, so no later run recovers: `readRaw` in src/fetch.ts
+   * answers `null` for the same file, which callers read as "assume HTML", and
+   * the PDF's provenance is gone quietly. Named and deliberately left in
+   * docs/postmortems/260828e-pdf-chunk-cache-corrupt-entry.md § One more
+   * instance, six days before this was fixed.
+   *
+   * The damage is done by hand rather than by staging a crash — truncate the
+   * file to half its length and the state a `SIGKILL` leaves is on disk in one
+   * line, which is the reusable move from that postmortem.
+   */
+  it("treats a half-written raw.json as absent rather than as done", async () => {
+    const dir = path.join(root, "half-written");
+    const bytes = new TextEncoder().encode("%PDF-1.7\nthe run that was killed");
+    const keeper = fsBlobs(path.join(root, "half-written-blobs"));
+    await mkdir(dir, { recursive: true });
+    const whole = `${JSON.stringify(
+      { kind: "pdf", file: "raw.pdf", origin: "upload", contentType: "application/pdf" },
+      null,
+      2,
+    )}\n`;
+    await writeFile(path.join(dir, "raw.json"), whole.slice(0, Math.floor(whole.length / 2)), "utf8");
+
+    await keepTheOriginal({ bytes, dataDir: dir }, sha(bytes), keeper);
+
+    const manifest = JSON.parse(
+      await readFile(path.join(dir, "raw.json"), "utf8"),
+    ) as RawManifest;
+    expect(manifest.storedSha256).toBe(sha(bytes));
+    /* And the object landed, which is the half a rewritten manifest cannot
+       prove — the same control as the first case in this block. */
+    expect(await keeper.head(canonicalKey(sha(bytes), "pdf"))).not.toBeNull();
+    expect(await readRawBytes(manifest, { store: keeper })).toEqual(bytes);
+  });
+
+  /**
+   * The other half of the same rule, and the one a `JSON.parse` in a `try`
+   * would still get wrong: valid JSON that is not a manifest. `{}` parses, so a
+   * parse-only check calls it done and skips — but nothing downstream can use
+   * it, which is the shape `whyUnusable("raw", …)` already decides for both
+   * artefact stores.
+   */
+  it("treats a raw.json that parses but is not a manifest as absent", async () => {
+    const dir = path.join(root, "not-a-manifest");
+    const bytes = new TextEncoder().encode("%PDF-1.7\nwritten by something older");
+    const keeper = fsBlobs(path.join(root, "not-a-manifest-blobs"));
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "raw.json"), '{"kind":"pdf"}\n', "utf8");
+
+    await keepTheOriginal({ bytes, dataDir: dir }, sha(bytes), keeper);
+
+    const manifest = JSON.parse(
+      await readFile(path.join(dir, "raw.json"), "utf8"),
+    ) as RawManifest;
+    expect(manifest.file).toBe("raw.pdf");
+    expect(manifest.storedSha256).toBe(sha(bytes));
+    expect(await readRawBytes(manifest, { store: keeper })).toEqual(bytes);
   });
 });
 

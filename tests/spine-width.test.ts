@@ -2,13 +2,17 @@
  * **The rail's width, on both sides of a boundary the compiler cannot cross.**
  *
  * `SPINE_W` in layout.ts and `--spine-w` in styles.css are the same number
- * written twice, and three `@media` queries are *derived* from it by hand —
- * `GIST_MIN + PROSE_MIN + SPINE_W - 1` and `MODE_MIN + PROSE_MIN + SPINE_W - 1`
- * — because a media query cannot read a custom property and `@custom-media` is
- * not shipped anywhere. A fourth copy of the first sum lives in `scroll.ts` as
- * a `matchMedia` string.
+ * written twice, and two `@media` queries are *derived* from it by hand —
+ * both of them `GIST_MIN + PROSE_MIN + SPINE_W - 1` — because a media query
+ * cannot read a custom property and `@custom-media` is not shipped anywhere. A
+ * third copy of that sum lives in `scroll.ts` as a `matchMedia` string.
  *
- * So there are six places one number lives, no tool checks any of them against
+ * **There was a fourth, `MODE_MIN + PROSE_MIN + SPINE_W - 1`, and it is gone
+ * rather than checked** — the last describe in this file says why, and stands
+ * where it was. A number the stylesheet cannot get right in both spine states
+ * is not one to keep in step; it is one to stop writing down.
+ *
+ * So there are five places one number lives, no tool checks any of them against
  * the others, and **the failure is silent in the direction that matters**. Move
  * `SPINE_W` and leave the stylesheet behind and there is a band of window widths
  * where `fitView` offers a gist column the stylesheet has already decided there
@@ -46,7 +50,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { GIST_MIN, MODE_MIN, PROSE_MIN, SPINE_W } from "../src/web/layout.js";
+import { GIST_MIN, MODE_MIN, PROSE_MIN, SPINE_W, fitView } from "../src/web/layout.js";
 
 const CSS_PATH = new URL("../src/web/styles.css", import.meta.url);
 const SCROLL_PATH = new URL("../src/web/scroll.ts", import.meta.url);
@@ -151,12 +155,17 @@ describe("--spine-w in styles.css is SPINE_W in layout.ts", () => {
 });
 
 describe("the derived breakpoints are the sums they say they are", () => {
-  it("has all three markers, each followed directly by its query", () => {
+  it("has both markers, each followed directly by its query", () => {
     /* Pinned, so that deleting a marker is a failure rather than a way to make
-       this file stop asking. Three: § a narrow window, § a band with no room,
-       and § a small device. */
+       this file stop asking. Two: § a narrow window and § a small device.
+
+       **It was three until 2026-09-03**, and losing one is the fix rather than a
+       regression: § a band with no room was `@media (max-width: 843px)`, a
+       derivation the stylesheet could not get right because the sum it derives
+       moves with `?spine=0`. It keys off `.band-covers` now — see the last
+       describe in this file, which is what stops the query coming back. */
     const found = markers();
-    expect(found.length).toBe(3);
+    expect(found.length).toBe(2);
     for (const m of found) expect(m.widths.length).toBe(1);
   });
 
@@ -169,17 +178,19 @@ describe("the derived breakpoints are the sums they say they are", () => {
     }
   });
 
-  it("covers both of the two distinct sums", () => {
-    /* A marker check passes vacuously if every marker happens to be the same
-       sum — so the *pair* is asserted, not just the individual queries. These
-       are the two crossovers the two comments in styles.css describe: the last
-       width at which a gist column fits beside the prose, and the last width at
-       which the mode band fits beside it. */
+  it("is the gist crossover, and only that one", () => {
+    /* Both remaining markers are the same sum — the last width at which a gist
+       column fits beside the prose — so this asserts the *set*, which is the
+       half a per-marker check cannot see.
+
+       **The mode crossover is deliberately absent**, and asserting that is the
+       point of the equality rather than a side effect: `MODE_MIN + PROSE_MIN +
+       SPINE_W - 1` is not a width the stylesheet is allowed to know, because it
+       is only that number while the rail is on. Somebody re-deriving it here
+       fails this line and the agreement check below. */
     const sums = new Set(markers().map((m) => evaluate(m.expr)));
-    expect([...sums].sort((a, b) => a - b)).toEqual([
-      GIST_MIN + PROSE_MIN + SPINE_W - 1,
-      MODE_MIN + PROSE_MIN + SPINE_W - 1,
-    ]);
+    expect([...sums]).toEqual([GIST_MIN + PROSE_MIN + SPINE_W - 1]);
+    expect(sums.has(MODE_MIN + PROSE_MIN + SPINE_W - 1)).toBe(false);
   });
 });
 
@@ -213,5 +224,134 @@ describe("scroll.ts's SMALL_DEVICE is the same query as § a small device", () =
        GPT Sol, 2026-08-28. */
     const uses = cssCode.split(`@media ${literal} {`).length - 1;
     expect(uses, `styles.css should use "@media ${literal} {" exactly once`).toBe(1);
+  });
+});
+
+/* ------------------------------------------------------------------------
+ * The band that covers the article: a fact, not a width
+ * ---------------------------------------------------------------------- */
+
+/**
+ * **The one query in this file that could not be right, and why it is gone.**
+ *
+ * `fitMode` compares `MODE_MIN + PROSE_MIN` against the window *minus the rail*,
+ * so the width at which the band stops fitting beside the prose is 844 with the
+ * rail on and 832 with `?spine=0`. A media query cannot see `?spine=0`, so the
+ * `@media (max-width: 843px)` that used to widen the band disagreed with
+ * `fitMode` across **832–843 with the rail off**: layout.ts handed the band
+ * 288–299px and squeezed the table to make room, while the stylesheet widened
+ * that same band to the whole window and laid it over the article. Measured by
+ * GPT Sol, 2026-08-28, and left in place with a comment for six days.
+ *
+ * The fix is not a fourth hand-copied breakpoint — that would be a *fifth* copy
+ * of a number this file exists because there are already too many of. It is to
+ * stop the stylesheet deriving a fact it cannot see: `App.tsx` writes
+ * `--mode-w` from `fit.modeW`, so it writes `band-covers` from the same value,
+ * and the covering rules key off the class.
+ *
+ * ## What these checks can and cannot see
+ *
+ * They read text, like the rest of this file. `coversRule()` finds the rule that
+ * makes the band full-screen and reports what gates it; the agreement check
+ * below then models the stylesheet's decision from that gate. While the rule is
+ * class-keyed the model is the class's own definition, so the loop cannot fail —
+ * and that is the point: it goes red the moment a `max-width` comes back and
+ * disagrees with `fitMode` in either spine state, which is exactly the drift
+ * that was there. What it cannot see is whether the browser applies the class;
+ * that is a browser pass (docs/project/browser-testing.md).
+ */
+const FULL_WIDTH_BAND = "width: calc(100vw - var(--spine-w) - var(--safe-left) - var(--safe-right));";
+
+/**
+ * The at-rule preludes enclosing `index`, innermost first, plus the rule's own
+ * selector at position 0.
+ *
+ * Walks backwards counting braces rather than parsing: an unmatched `{` seen
+ * from inside is an enclosing block, and the text back to the previous `}`,
+ * `{` or `;` is its prelude.
+ */
+function enclosing(source: string, index: number): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  for (let i = index; i >= 0; i--) {
+    const ch = source[i];
+    if (ch === "}") depth++;
+    else if (ch === "{") {
+      if (depth > 0) {
+        depth--;
+        continue;
+      }
+      let j = i - 1;
+      while (j >= 0 && source[j] !== "}" && source[j] !== "{" && source[j] !== ";") j--;
+      out.push(source.slice(j + 1, i).trim());
+    }
+  }
+  return out;
+}
+
+function coversRule(): { selector: string; gates: string[] } {
+  const idx = cssCode.indexOf(FULL_WIDTH_BAND);
+  expect(idx, `no rule in styles.css declares ${FULL_WIDTH_BAND}`).toBeGreaterThan(-1);
+  expect(
+    cssCode.indexOf(FULL_WIDTH_BAND, idx + 1),
+    "more than one rule widens the band to the window; this check no longer knows which is which",
+  ).toBe(-1);
+  const chain = enclosing(cssCode, idx);
+  return { selector: chain[0] ?? "", gates: chain.slice(1) };
+}
+
+/** The class App.tsx puts on `.reader` when the band has no room beside the prose. */
+const COVERS_CLASS = "band-covers";
+
+const bandFit = (windowWidth: number, spineOff: boolean) =>
+  fitView({
+    windowWidth,
+    gistDepths: [0, 1],
+    leafDepth: 2,
+    showText: true,
+    chosen: null,
+    modeBand: true,
+    showSpine: spineOff ? false : null,
+  });
+
+describe("the band covers the article on a fact, not on a width", () => {
+  it("the full-screen rule is not gated on a window width", () => {
+    const { gates } = coversRule();
+    const width = gates.find((g) => /^@media/.test(g) && /max-width/.test(g));
+    expect(
+      width,
+      `styles.css widens the band inside ${width} — a width the stylesheet cannot make conditional on ?spine=0`,
+    ).toBeUndefined();
+  });
+
+  it("keys off the class instead", () => {
+    const { selector } = coversRule();
+    expect(selector).toContain(`.${COVERS_CLASS}`);
+  });
+
+  it("App.tsx writes that class from fit.modeW, beside --mode-w", () => {
+    /* The two must come from the same number or the stylesheet is guessing
+       again — with the guess hidden in a component rather than in a query. */
+    const app = readFileSync(new URL("../src/web/App.tsx", import.meta.url), "utf8");
+    expect(app).toContain(`"--mode-w": \`\${fit.modeW}px\``);
+    expect(app).toMatch(new RegExp(`fit\\.modeW === 0[^\\n]*\\n?[^\\n]*${COVERS_CLASS}`));
+  });
+
+  it("agrees with fitMode across 800–880, rail on and rail off", () => {
+    /* 832 and 844 are the two crossovers; the band between them is where the
+       old query was wrong. Both spine states, because that is the whole bug. */
+    const { gates } = coversRule();
+    const gate = gates.find((g) => /^@media/.test(g) && /max-width/.test(g));
+    const limit = gate ? Number(gate.match(/max-width:\s*(\d+)px/)![1]) : null;
+
+    for (const spineOff of [false, true]) {
+      for (let w = 800; w <= 880; w++) {
+        const js = bandFit(w, spineOff).modeW === 0;
+        // The stylesheet's own decision: a width while it is gated on one, and
+        // otherwise the class, which is `js` by construction.
+        const css = limit === null ? js : w <= limit;
+        expect(css, `at ${w}px with the rail ${spineOff ? "off" : "on"}`).toBe(js);
+      }
+    }
   });
 });
