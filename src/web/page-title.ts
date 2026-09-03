@@ -165,6 +165,8 @@ export type TitleSpec =
   | { kind: "privacy" }
   /** What the thing does, with pictures — FeaturesPage.tsx. */
   | { kind: "features" }
+  /** What it costs — PricingPage.tsx. */
+  | { kind: "pricing" }
   /** The administrator's pages. `page` is which one — see router.ts. */
   | { kind: "admin"; page: AdminPage }
   /**
@@ -244,6 +246,9 @@ function segments(spec: TitleSpec): string[] {
 
     case "features":
       return ["Features", APP_NAME];
+
+    case "pricing":
+      return ["Pricing", APP_NAME];
 
     /* Most specific part first, like every other page: "Users · Admin ·
        Spideryarn" rather than the other way round, so the tab is legible when

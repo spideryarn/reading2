@@ -88,7 +88,14 @@ import type { ReactNode } from "react";
 
 import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
-import { FEATURES_HREF, LIBRARY_HREF, PRIVACY_HREF, useRoute, type Route } from "./router.js";
+import {
+  FEATURES_HREF,
+  LIBRARY_HREF,
+  PRICING_HREF,
+  PRIVACY_HREF,
+  useRoute,
+  type Route,
+} from "./router.js";
 
 /**
  * **The three pages this row can link to**, and therefore the only three
@@ -104,7 +111,7 @@ import { FEATURES_HREF, LIBRARY_HREF, PRIVACY_HREF, useRoute, type Route } from 
  * that member, which `LINKS` below then refuses to satisfy. A hand-written
  * union would go on compiling and stop matching anything at run time.
  */
-type FooterPage = Extract<Route["kind"], "library" | "features" | "privacy">;
+type FooterPage = Extract<Route["kind"], "library" | "features" | "privacy" | "pricing">;
 
 /**
  * The row, in order, each tagged with the route it *is* so it can drop itself.
@@ -116,6 +123,9 @@ type FooterPage = Extract<Route["kind"], "library" | "features" | "privacy">;
 const LINKS: readonly { href: string; label: string; here: FooterPage }[] = [
   { href: LIBRARY_HREF, label: "Home", here: "library" },
   { href: FEATURES_HREF, label: "Features", here: "features" },
+  /* Added 2026-09-03 with `/pricing`, and this array is the whole edit — which
+     is the claim the header makes, now tested by something other than itself. */
+  { href: PRICING_HREF, label: "Pricing", here: "pricing" },
   { href: PRIVACY_HREF, label: "Privacy", here: "privacy" },
 ];
 

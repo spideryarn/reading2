@@ -77,6 +77,7 @@ function footerAt(pathname: string, here?: "library" | "features" | "privacy"): 
 
 const HOME = "Home → /";
 const FEATURES = "Features → /features";
+const PRICING = "Pricing → /pricing";
 const PRIVACY = "Privacy → /privacy";
 const MAIL = `${CONTACT_EMAIL} → mailto:${CONTACT_EMAIL}`;
 
@@ -84,26 +85,26 @@ describe("the site footer", () => {
   it("carries the whole row on a page that is not one of its own", () => {
     // The control: if this ever stops holding, every "is missing" assertion
     // below would pass over a footer that rendered nothing at all.
-    expect(footerAt("/profile")).toEqual([HOME, FEATURES, PRIVACY, MAIL]);
+    expect(footerAt("/profile")).toEqual([HOME, FEATURES, PRICING, PRIVACY, MAIL]);
   });
 
   it("drops Home on the shelf, which is also the landing page", () => {
-    expect(footerAt("/")).toEqual([FEATURES, PRIVACY, MAIL]);
+    expect(footerAt("/")).toEqual([FEATURES, PRICING, PRIVACY, MAIL]);
   });
 
   it("drops Features on the features page", () => {
-    expect(footerAt("/features")).toEqual([HOME, PRIVACY, MAIL]);
+    expect(footerAt("/features")).toEqual([HOME, PRICING, PRIVACY, MAIL]);
   });
 
   it("drops Privacy on the privacy page", () => {
-    expect(footerAt("/privacy")).toEqual([HOME, FEATURES, MAIL]);
+    expect(footerAt("/privacy")).toEqual([HOME, FEATURES, PRICING, MAIL]);
   });
 
   it("keeps the contact address on every one of them", () => {
     // Said separately from the four above because it is a different rule with a
     // different reason: the address is the only thing in the row that is not a
     // page, and the only thing a reader who is stuck can actually use.
-    for (const at of ["/", "/features", "/privacy", "/profile"]) {
+    for (const at of ["/", "/features", "/pricing", "/privacy", "/profile"]) {
       expect(footerAt(at)).toContain(MAIL);
     }
   });
@@ -121,7 +122,7 @@ describe("the site footer", () => {
    * ways, which is precisely the distinction `here` was added to make.
    */
   it("believes the page over the address when the caller says which it is", () => {
-    expect(footerAt("/profile", "library")).toEqual([FEATURES, PRIVACY, MAIL]);
+    expect(footerAt("/profile", "library")).toEqual([FEATURES, PRICING, PRIVACY, MAIL]);
   });
 
   it("takes a sentence of its own above the links", () => {
@@ -169,11 +170,15 @@ describe("the pages that mount it", () => {
       .sort(),
   );
 
-  it("is exactly the six pages that have a bottom, once each", () => {
+  it("is exactly the seven pages that have a bottom, once each", () => {
     expect(Object.fromEntries(mounts)).toEqual({
       "FeaturesPage.tsx": 1,
       "LandingPage.tsx": 1,
       "Library.tsx": 1,
+      /* `/pricing`, since 2026-09-03. Its first draft hand-wrote the row by
+         copying the features page, which is the duplication this component was
+         extracted to stop — and this assertion is what caught it. */
+      "PricingPage.tsx": 1,
       "PrivacyPage.tsx": 1,
       "ProfilePage.tsx": 1,
       "SignInPage.tsx": 1,
