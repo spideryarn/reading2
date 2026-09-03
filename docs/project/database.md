@@ -260,6 +260,11 @@ npm run db:seed-owner   # the auth.users rows: the row-owner, and the account yo
 npm run db:export -- --out /tmp/rollback   # Postgres → data/<slug>/, the rollback
 ```
 
+**`db:export` says which database it read**, on a `Target:` line before the first `✓`, because the
+one thing a rollback must not get wrong is which database it is a rollback of — until 2026-09-03 it
+took `.env.local`'s over the one on the command line, and see § `DATABASE_URL=… npm run db:migrate`
+below for how that goes.
+
 **`db:export` needs the bucket as well as the database.** A revision row holds a *reference* to its
 source document rather than the document, so `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are as
 required as `DATABASE_URL`, and all three must name the same Supabase project. Set them and the
@@ -988,24 +993,29 @@ succeeded, with nothing changed but the clock.
 
 ### `DATABASE_URL=… npm run db:migrate` does not do what it looks like
 
-**It migrates the laptop's container and prints `✓ migrations applied`.** `.env.local` deliberately
-beats the shell — [`src/env.ts`](../../src/env.ts), and the reason is good — so a `DATABASE_URL` set
-on the command line is *replaced* by the local one before `db-migrate.ts` ever reads it. There is a
-one-line warning on stderr, above the output you are actually watching.
+**It used to migrate the laptop's container and print `✓ migrations applied`**, on 2026-08-27,
+while the remote it named stayed four migrations behind. `.env.local` deliberately beats the shell —
+[`src/env.ts`](../../src/env.ts), and the reason is good — so a `DATABASE_URL` given on the command
+line was *replaced* by the local one before `db-migrate.ts` ever read it, with one line of warning
+on stderr above the output you were actually watching.
 
-So the remote URL has to be set **after** `loadEnvLocal()` runs, not before it. Either export it in
-a process that has no `.env.local` to read, or wrap it:
+**A command whose target is an argument now resolves it explicitly**, with
+`resolveTargetUrl({ shellWins: true })` — [`src/env.ts`](../../src/env.ts), where the exception is
+made beside the rule it excepts, and where the list of which scripts choose which way is kept,
+along with why `db:seed-dev` and `db:reown` deliberately keep letting the file win. `db:migrate`,
+`db:check` and `db:export` are three of the shell-wins ones, so `DATABASE_URL=<remote> npm run
+db:export -- --out /tmp/rollback` does now export the remote.
 
-```ts
-import { loadEnvLocal } from "../src/env.js";
-loadEnvLocal();                                   // let the file win first
-process.env.DATABASE_URL = process.env.REMOTE_DATABASE_URL!;   // then override it
-await import("../scripts/db-migrate.ts");
-```
+**Do not reach for the old wrapper** — a script that set `process.env.DATABASE_URL` after
+`loadEnvLocal()` and then imported one of these. It reads the environment as it was *before* any of
+our code ran, so a shell that also exports `DATABASE_URL` beats the assignment and the wrapper
+quietly does nothing. Put the URL on the command line.
 
-The same trap catches `npm run db:export` and anything else pointed at the remote from this
-directory. It is [silent-success.md](../reusable/silent-success.md) exactly: the check you would
-naturally run — "did it say it worked?" — shares its assumption with the code.
+**What is left of the trap is any command that has not been given that resolution**, and the way to
+tell is the same either way: **read the `Target:` line rather than the success line.** A command
+that prints no `Target:` line has resolved nothing and is going wherever `.env.local` points. It is
+[silent-success.md](../reusable/silent-success.md) exactly: the check you would naturally run — "did
+it say it worked?" — shares its assumption with the code.
 
 ### Step three: let the app see what the migrations made
 

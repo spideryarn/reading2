@@ -104,11 +104,11 @@ describe("test and live cannot cross", () => {
     expect(expectedLivemode()).toBe(true);
   });
 
-  it("refuses a TEST key on the production deployment", () => {
+  it("refuses a TEST key on the production deployment", async () => {
     setEnv({ STRIPE_SECRET_KEY: TEST_KEY, VERCEL_ENV: "production" });
     expect(stripeConfigProblem()).toMatch(/test-mode key on the production deployment/);
     expect(stripeConfigured()).toBe(false);
-    expect(() => stripeClient()).toThrow(/test-mode key on the production deployment/);
+    await expect(stripeClient()).rejects.toThrow(/test-mode key on the production deployment/);
   });
 
   it("refuses a LIVE key anywhere else, preview included", () => {
@@ -153,14 +153,14 @@ describe("assertLivemode", () => {
 });
 
 describe("the client and the price", () => {
-  it("builds a client on the pinned version, and memoises per key", () => {
+  it("builds a client on the pinned version, and memoises per key", async () => {
     setEnv({ STRIPE_SECRET_KEY: TEST_KEY });
-    const first = stripeClient();
-    expect(stripeClient()).toBe(first);
+    const first = await stripeClient();
+    expect(await stripeClient()).toBe(first);
     /* A different key must not hand back the previous client — a test that
        swaps the key would otherwise be talking to the old one. */
     setEnv({ STRIPE_SECRET_KEY: `${TEST_KEY}2` });
-    expect(stripeClient()).not.toBe(first);
+    expect(await stripeClient()).not.toBe(first);
   });
 
   /* **There is no price lookup here any more.** Price ids live on

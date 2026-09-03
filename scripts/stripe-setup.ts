@@ -195,7 +195,7 @@ async function syncProductWords(
   apply: boolean,
   steps: Step[],
 ): Promise<void> {
-  const stripe = stripeClient();
+  const stripe = await stripeClient();
   const full = typeof product === "string" ? await stripe.products.retrieve(product) : product;
   if ("deleted" in full && full.deleted) return;
   const live = full as Stripe.Product;
@@ -222,7 +222,7 @@ async function syncProductWords(
 
 /** Create, find or replace one tier's product and price, and record the id. */
 export async function ensureTier(tier: TierRow, apply: boolean): Promise<Step[]> {
-  const stripe = stripeClient();
+  const stripe = await stripeClient();
   const steps: Step[] = [];
 
   if (Object.keys(tier.amounts).length === 0) {
@@ -357,8 +357,11 @@ export interface StripePortalSetup {
  */
 export async function ensurePortalConfiguration(
   apply: boolean,
-  stripe: StripePortalSetup = stripeClient(),
+  /* Not a default parameter any more: `stripeClient()` is async, because the
+     SDK is loaded inside it (src/billing/stripe.ts). A default cannot await. */
+  injected?: StripePortalSetup,
 ): Promise<Step[]> {
+  const stripe = injected ?? (await stripeClient());
   const existing = await stripe.billingPortal.configurations.list({ is_default: true, limit: 1 });
   const found = existing.data[0];
   if (found) return [{ what: "portal", detail: `default configuration already exists — ${found.id}` }];
@@ -408,7 +411,7 @@ async function main(): Promise<void> {
 
   /* The account, before anything is created in it. `stripeConfigProblem` checks
      the key's mode; this checks whose account it opens. src/billing/stripe.ts. */
-  const account = await stripeClient().accounts.retrieveCurrent();
+  const account = await (await stripeClient()).accounts.retrieveCurrent();
   const wrongAccount = accountProblem(account.id);
   if (wrongAccount && expectedLivemode()) throw new Error(wrongAccount);
   console.log(`  Account: ${account.id}${wrongAccount ? ` — ⚠ ${wrongAccount}` : ""}`);

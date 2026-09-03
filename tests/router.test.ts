@@ -23,6 +23,7 @@ import {
   carriedSearch,
   PRIVACY_HREF,
   FEATURES_HREF,
+  PRICING_HREF,
   parseRoute,
   readHref,
 } from "../src/web/router.js";
@@ -187,6 +188,26 @@ describe("the features route", () => {
      stranger following the landing page's link is rewritten to the shelf. */
   it("is left alone by settleAddress", () => {
     expect(settleAddress("/features", "", "")).toBeNull();
+  });
+});
+
+describe("the pricing route", () => {
+  it("parses, with and without a trailing slash, and from its own constant", () => {
+    expect(parseRoute("/pricing")).toEqual({ kind: "pricing" });
+    expect(parseRoute("/pricing/")).toEqual({ kind: "pricing" });
+    expect(parseRoute(PRICING_HREF)).toEqual({ kind: "pricing" });
+  });
+
+  it("is not a prefix: an address under it is nobody's", () => {
+    expect(parseRoute("/pricing/reader")).toEqual({ kind: "library" });
+  });
+
+  /* A static page must survive the boot-time address settling untouched, or a
+     stranger following the landing page's link is rewritten to the shelf — and
+     this is the one somebody sends somebody else, so it is the link most likely
+     to be followed cold. */
+  it("is left alone by settleAddress", () => {
+    expect(settleAddress("/pricing", "", "")).toBeNull();
   });
 });
 

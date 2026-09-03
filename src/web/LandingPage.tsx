@@ -42,15 +42,19 @@
  * between the principles and the prices; "Who it's for" went below the pictures,
  * because a stranger asks whether it is for them after seeing what it is.
  *
- * ## Beta, and the honest strip
+ * ## Beta, and the strip that is gone
  *
  * Greg, 2026-09-02: *"we should write the copy as if we're in Beta and taking
- * payments."* And, asked what the live page says while sign-up is still an
- * invite list and Stripe is still being built: **beta copy, honest strip**. The
- * strip is now one line under the buttons rather than a box, and the primary
- * call to action IS the mailto, because there is nothing else honest for it to
- * be. `BetaLine` below, plus `OpensShortly` under the plans (Plans.tsx). Delete
- * both the day sign-up opens.
+ * payments."* While sign-up was still an invite list and Stripe was still being
+ * built, the page carried an honest strip alongside that copy — one line under
+ * the buttons saying sign-up had not opened, and the primary call to action was
+ * a mailto because there was nothing else honest for it to be.
+ *
+ * **Stripe went live on 2026-09-03 and sign-up is open to anyone**, so Greg had
+ * both deleted: `BetaLine` here and `OpensShortly` under the plans (Plans.tsx)
+ * are gone, and the primary button now goes to the sign-in panel at the foot of
+ * this page. The copy above it did not have to change, which was the point of
+ * writing it as if we were already here.
  *
  * ## The lead shot changed
  *
@@ -63,11 +67,10 @@
  * Styled with the `site-*` classes at the foot of styles.css and `tw:` utilities
  * for nudges — SiteBits.tsx's header says which does what.
  */
-import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { Plans } from "./Plans.js";
-import { FEATURES_HREF } from "./router.js";
+import { FEATURES_HREF, PRICING_HREF } from "./router.js";
 import { SHOTS } from "./shots.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { SignInControls } from "./SignInControls.js";
@@ -82,24 +85,6 @@ import {
   SiteNav,
   Tile,
 } from "./SiteBits.js";
-
-/** The subject line that lets the one inbox filter these. */
-const WAITLIST_SUBJECT = encodeURIComponent("Tell me when Spideryarn Reading sign-up opens");
-const WAITLIST_MAILTO = `mailto:${CONTACT_EMAIL}?subject=${WAITLIST_SUBJECT}`;
-
-/**
- * The line a stranger has to read: the product is in beta and sign-up is not
- * open yet. Delete this component, and its one use, the day it opens.
- */
-function BetaLine() {
-  return (
-    <p className="tw:mt-5 tw:text-sm tw:text-ink-faint">
-      {/* [tissue] */}
-      Spideryarn Reading is in beta — sign-up opens shortly, and the button above opens your mail
-      app so we can tell you the day it does.
-    </p>
-  );
-}
 
 export function LandingPage() {
   useDocumentTitle(pageTitle({ kind: "landing" }));
@@ -129,12 +114,12 @@ export function LandingPage() {
           </p>
 
           <div className="tw:mt-8 tw:flex tw:flex-wrap tw:items-center tw:gap-3">
-            {/* [tissue] The primary action is the mailto until sign-up opens;
-                there is nothing else honest for it to be. */}
-            <PrimaryCta href={WAITLIST_MAILTO}>Tell me when it opens</PrimaryCta>
-            <GhostCta href={FEATURES_HREF}>See everything it does</GhostCta>
+            {/* [tissue] Sign-up is open, so the primary action is the panel at
+                the foot of this page — a plain `<a>` to a fragment on the page
+                it is already on, which is why it does not need `Link`. */}
+            <PrimaryCta href="#sign-in">Start reading</PrimaryCta>
+            <GhostCta href={PRICING_HREF}>Plans and pricing</GhostCta>
           </div>
-          <BetaLine />
 
           {/* The one picture above the fold. It arrives tilted and straightens
               as you scroll into it — a screenshot of a reading product held at
@@ -183,7 +168,7 @@ export function LandingPage() {
         <Showcase
           shot={SHOTS.meaning}
           eyebrow="Search by meaning"
-          title="Find what a passage says, not what it says exactly."
+          title="Find by concepts and meaning, rather than exact match"
           offset
         >
           Type in basically anything — a word, a phrase, a description — and it highlights the areas
@@ -319,6 +304,17 @@ export function LandingPage() {
         <H2 eyebrow="Plans">Simple, and reading is never gated.</H2>
         <div className="site-reveal">
           <Plans />
+          {/* [tissue] The same three rows are on `/pricing`, which exists to be
+              an address you can send somebody rather than a page with more on
+              it. Same shape as the features link above. */}
+          <p className="tw:mt-6 tw:text-sm">
+            <Link
+              href={PRICING_HREF}
+              className="tw:text-highlight tw:no-underline tw:hover:underline"
+            >
+              Pricing, and what a month’s allowance means →
+            </Link>
+          </p>
         </div>
 
         {/* ---------------------------------------------------------- sign in --
@@ -330,7 +326,10 @@ export function LandingPage() {
           className="site-panel tw:mt-24 tw:scroll-mt-20 tw:p-6 tw:sm:p-8"
         >
           <p className="tw:mb-5 tw:text-sm">
-            {/* [tissue] */}Already have an account? Sign in — your shelf is where you left it.
+            {/* [tissue] Both halves, since sign-up opened on 2026-09-03: the
+                same controls create an account and return to one. */}
+            Start with three articles free. Already have an account? Sign in — your shelf is where
+            you left it.
           </p>
           <SignInControls />
         </section>

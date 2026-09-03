@@ -346,7 +346,29 @@ when("the Postgres comment sweep", () => {
     /* The token is optional in the interface because the filesystem store has
        none. A caller that simply forgot to carry it must not get identity-only
        writes back in silence — `pgSearchStore.finish` refuses for the same
-       reason, and this is the assertion that the refusal is real. */
+       reason, and this is the assertion that the refusal is real.
+     *
+     * ## Asserted by its wording again, and the round trip is the point
+     *
+     * For a few hours on 2026-09-03 this asserted the *generic* sentence. Both
+     * refusals were plain `Error`s — no `status`, no place on
+     * `mayPassThrough`'s class list — so once `pgCommentStore` was guarded at
+     * its own export the sentence naming which rule was broken was replaced by
+     * the generic one on the way out. **That had been true of every request
+     * production served since 2026-08-26**, and this file could not see it,
+     * because it imported the raw object
+     * (docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md).
+     *
+     * The open question then was whether these two deserved a `status` of their
+     * own the way `CommentIdTaken` does, which is a reader-facing copy decision.
+     * They now have one: `MissingAttempt` (src/store/contracts.ts) and the
+     * `must end an answer` refusal beside it both carry `500`, which is
+     * src/store/db-errors.ts § *"Adding another closed class: don't. Give it a
+     * `status` instead."* So the naming sentence survives the guard, and this
+     * asserts it.
+     *
+     * The consequence assertions below stay regardless, and are the half no
+     * wording stands in for. */
     const attempt = await nowPending("spya-swp223");
     await expect(
       pgCommentStore.patch(SLUG, "spya-swp223", { status: "done", answer: "x" }),
@@ -355,6 +377,12 @@ when("the Postgres comment sweep", () => {
     await expect(
       pgCommentStore.patch(SLUG, "spya-swp223", { answer: "x" }, attempt),
     ).rejects.toThrow(/must end an answer/);
+    /* The harm the two refusals exist to prevent, which no wording stands in
+       for: neither write reached the row. It is still pending, still fenced,
+       and carries none of the answer either call tried to put on it. */
+    const row = (await pgCommentStore.load(SLUG)).find((c) => c.id === "spya-swp223");
+    expect(row?.status).toBe("pending");
+    expect(row?.answer).toBeUndefined();
   });
 
   /**

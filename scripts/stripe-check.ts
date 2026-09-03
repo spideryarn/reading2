@@ -257,7 +257,7 @@ async function main(): Promise<void> {
 
   const problem = stripeConfigProblem();
   if (problem) throw new Error(problem);
-  const stripe = stripeClient();
+  const stripe = await stripeClient();
 
   const checks: Check[] = [...(await checkAccount(stripe))];
   const tiers = offerableTiers(await readTiers());

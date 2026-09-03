@@ -28,6 +28,7 @@ import { AdminFeedbackPage, AdminHome, AdminUsersPage } from "./AdminPage.js";
 import { LandingPage } from "./LandingPage.js";
 import { PrivacyPage } from "./PrivacyPage.js";
 import { FeaturesPage } from "./FeaturesPage.js";
+import { PricingPage } from "./PricingPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
@@ -370,6 +371,10 @@ export function App() {
        landing page's "everything it does" link has to land somewhere a
        stranger can read. */
     if (route.kind === "features") return <FeaturesPage />;
+    /* The fifth, and the least arguable of them: a price somebody has to sign
+       up to read is the thing people complain about, and this is the page one
+       person sends another. */
+    if (route.kind === "pricing") return <PricingPage />;
     if (route.kind !== "read") return <LandingPage />;
     return <ArticlePage slug={route.slug} view={route.view} readerId={null} />;
   }
@@ -418,7 +423,16 @@ function SignedIn({
   // The shelf is home, so it gets no way-home logo — a link to the page you are
   // already on is a dead control, and Library.tsx names the app in its own
   // `<h1>` anyway. Everywhere else, the corner. See HomeLogo.tsx.
-  if (route.kind === "library") return <Library />;
+  /* **`key`, and it is the account switch rather than a hint to React.** A
+     direct A→B sign-in keeps this element in the same place in the tree, so
+     without a key React reuses the instance and `useShelf`'s state — the shelf,
+     the Undo strip's title, an open rename — survives into the new reader's
+     first commit. The hook clears all of it, but a passive effect runs *after*
+     that commit, so there is a frame with A's articles under B's session. The
+     key removes the frame by removing the instance. GPT Sol's review of
+     docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md
+     § Stage 5, 2026-09-03. */
+  if (route.kind === "library") return <Library key={user.id} readerId={user.id} />;
   // The corner logo, because this is not home and the reader may have arrived
   // straight here from a bookmarklet with no shelf behind them.
   if (route.kind === "add")
@@ -462,6 +476,13 @@ function SignedIn({
         <FeaturesPage />
       </>
     );
+  if (route.kind === "pricing")
+    return (
+      <>
+        <HomeLogo />
+        <PricingPage />
+      </>
+    );
   // Not under /read/, and so not inside `ArticlePage`'s shared shell: this page
   // has no article behind it. docs/project/reader-profile.md.
   if (route.kind === "profile")
@@ -481,7 +502,7 @@ function SignedIn({
      on `/api/admin/`, and it would refuse a hand-written `fetch` from this page
      just the same. src/admin.ts § the two halves. */
   if (route.kind === "admin") {
-    if (!isAdmin(user.id)) return <Library />;
+    if (!isAdmin(user.id)) return <Library key={user.id} readerId={user.id} />;
     return (
       <>
         <HomeLogo />
@@ -2293,7 +2314,24 @@ function Reader({
          fills. It is `fit.alone` and nothing computed here on purpose — the
          same fact under two definitions is how `proseVisible` came to exist.
          layout.ts § `Fit.alone`, styles.css § plain, centred. */
-      className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}`}
+      /* `band-covers` is the same idea and exists for a sharper reason: it is
+         the *stylesheet's* only way to know that the mode band has no room
+         beside the prose and is lying over it instead. That crossover is
+         `MODE_MIN + PROSE_MIN` against the window **minus the rail**, so it
+         moves with `?spine=0` — and a media query cannot see a query
+         parameter. It was one for six days (`@media (max-width: 843px)`), and
+         from 832 to 843 with the rail off the two disagreed: layout.ts
+         squeezed the table to make room for a band the stylesheet had already
+         thrown over the article.
+
+         So the fact is written here, from the one number that computes it,
+         beside the `--mode-w` it is derived from. `fit.modeW === 0` is also
+         true when no band is open at all, which is why every rule keyed off
+         this class also names `.mode-band` — styles.css § a band with no room,
+         tests/spine-width.test.ts. */
+      className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}${
+        fit.modeW === 0 ? " band-covers" : ""
+      }`}
       /* The wrapper must be as wide as its content for the sticky bars inside it
          to have anywhere to slide — a sticky element is clamped to its containing
          block, so one exactly its own width has a sticky range of zero and never

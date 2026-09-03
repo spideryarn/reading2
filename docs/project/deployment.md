@@ -442,6 +442,38 @@ that compiles the client.
 This is the same shape as [linting.md](linting.md): TypeScript 7 removed the API
 ESLint needed, and it removed the one Vercel's builder needs too.
 
+### Everything that bundle imports at module scope is paid for by every request
+
+`api/index.js` answers a request by `await import`ing the whole 3.5 MB
+`api-dist/vercel.js`, and the server's own clock — every `GET /api/library 200
+10ms` line you have ever read — starts **after** that. So a static import in any
+of the ~200 modules that bundle reaches is initialised before the shelf's query
+runs, whether or not the request could ever use it.
+
+Measure it with `npm run build && npx tsx scripts/bench-cold-start.ts`, which
+refuses rather than shrugs on a stale or missing bundle and prints the box's load
+average beside the numbers. In production the two `component: "health"` lines
+`cold start: module import` and `cold start: first request` report the same thing
+once per instance ([`src/cold-start.ts`](../../src/cold-start.ts)); both exist
+because moving work *inside* the handler improves the first number and not the
+second.
+
+Three packages are therefore reached only when something needs them, and the
+seams are documented where they live: **jsdom** through
+[`src/jsdom-lazy.ts`](../../src/jsdom-lazy.ts) (a synchronous `createRequire`,
+because `splitIntoBlocks` and `sanitizeHtml` are synchronous and would otherwise
+have to become async everywhere), **pdf-lib** inside `cutPages`, and the
+**Stripe SDK** inside `stripeClient()`. That was ~940 ms off a ~2,400 ms module
+import on a quiet box, measured paired against the previous build.
+`tests/cold-start-lazy-imports.test.ts` fails if any of them goes back to module
+scope, and `tests/pdf-bundle-trace.test.ts` asks the real Vercel tracer whether
+they still *ship* — which is the half that is an outage if it is wrong.
+
+**drizzle and Sentry stay at module scope on purpose.** The shelf's own query
+goes through drizzle, and error reporting has to be up before the code that might
+fail; they are the floor under this, not the next target.
+docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md § Stage 4.
+
 ## Who can reach it
 
 **Anybody with the address can read the app right now.** That is a deliberate

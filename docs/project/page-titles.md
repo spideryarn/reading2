@@ -253,8 +253,16 @@ right text at the right moment; only VoiceOver and NVDA can tell you it was spok
 
 ## Where the title is set
 
-Eleven call sites across ten files, one line each, all of the form
-`useDocumentTitle(pageTitle({…}))`:
+One line each, all of the form `useDocumentTitle(pageTitle({…}))`. For the current list, ask:
+
+```bash
+grep -rln "useDocumentTitle(pageTitle" src/web/
+```
+
+**This used to say "eleven call sites across ten files", and by 2026-09-03 there were twenty across
+fifteen** — the admin pages, privacy, features, the public-article pages and pricing had all arrived
+without it. A count of something that grows is a second copy of a fact the code already holds, and
+it goes wrong by waiting. The table below is the ones worth a note, not an inventory:
 
 | File | Page |
 |---|---|
@@ -266,6 +274,7 @@ Eleven call sites across ten files, one line each, all of the form
 | [`AddPage.tsx`](../../src/web/AddPage.tsx) | both `/add/` routes |
 | [`ProfilePage.tsx`](../../src/web/ProfilePage.tsx) | `/profile` |
 | [`DesignPage.tsx`](../../src/web/DesignPage.tsx) | `/design` |
+| [`PricingPage.tsx`](../../src/web/PricingPage.tsx) | `/pricing` |
 | [`LandingPage.tsx`](../../src/web/LandingPage.tsx) | what a signed-out reader gets instead of wherever they were heading |
 | [`SignInPage.tsx`](../../src/web/SignInPage.tsx) | `/login` |
 | [`AuthCallback.tsx`](../../src/web/AuthCallback.tsx) | `/auth/callback` |

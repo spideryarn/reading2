@@ -50,9 +50,9 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  *
  * A one-line "the date at the top is the version" is what a policy this size
  * can honestly promise: there is no changelog, no diff view and nobody to email
- * about a wording change during an alpha. Bump it when you change the words.
+ * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "2 September 2026";
+const LAST_UPDATED = "3 September 2026";
 
 /** A heading and its paragraphs. Seven of them; nothing else on the page. */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -115,8 +115,8 @@ export function PrivacyPage() {
         The short version: we keep your account, the articles you add and everything you write about
         them, so that we can show it back to you. To make the summaries, answers and diagrams, we
         send the article and your questions to AI providers. We don’t sell any of it, we don’t show
-        ads, and nobody trains a model on it. Spideryarn is alpha software run by one person — assume
-        we can see what’s in it.
+        ads, and nobody trains a model on it. Spideryarn is beta software run by one person — assume we
+        can see what’s in it.
       </p>
 
       <Section title="Who we are">
@@ -353,7 +353,7 @@ export function PrivacyPage() {
         <p>
           Same for the account. There is no “delete my account” button yet; email us and we delete
           your shelf, your notes, your conversations and everything the models made for you. During
-          the alpha we do this by hand, and we’ll get to it within a month.
+          the beta we do this by hand, and we’ll get to it within a month.
         </p>
         <p>
           Three kinds of thing outlive an erasure, and it is worth saying which. We keep the
@@ -399,7 +399,7 @@ export function PrivacyPage() {
           >
             {CONTACT_EMAIL}
           </a>{" "}
-          — during the alpha we do it by hand rather than with a button, and we’ll get to it within a
+          — during the beta we do it by hand rather than with a button, and we’ll get to it within a
           month. If you think we’ve handled your data badly, you can complain to the{" "}
           <a
             href="https://ico.org.uk/make-a-complaint/"
@@ -425,11 +425,11 @@ export function PrivacyPage() {
           liability, and it is worth being clear-eyed that they are not much
           protection on their own: there is no terms page and nothing anybody
           agrees to. What they cover is what would actually happen — somebody
-          putting medical records into an alpha, somebody adding an article they
+          putting medical records into a beta, somebody adding an article they
           have no right to. docs/project/privacy.md § What protects us. */}
       <Section title="Some things to be clear about">
         <p>
-          <strong className="tw:text-foreground">This is alpha software.</strong> It changes weekly,
+          <strong className="tw:text-foreground">This is beta software.</strong> It changes weekly,
           it will sometimes break, and we may have to reset data while the design is still moving.
           Please don’t put anything genuinely sensitive into it — health records, financial details,
           passwords, other people’s private documents.

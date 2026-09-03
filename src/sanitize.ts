@@ -30,7 +30,9 @@
  */
 
 import createDOMPurify from "dompurify";
-import { JSDOM } from "jsdom";
+/* jsdom on first use rather than at module scope — src/jsdom-lazy.ts says why.
+   Both exports below stay synchronous. */
+import { jsdom } from "./jsdom-lazy.js";
 import {
   ARTICLE_CONFIG,
   RISKY_ROOT_ATTR,
@@ -55,11 +57,29 @@ import {
  * path is the one everybody else uses and the one that gets the scrutiny, and a
  * reading app has no business spending its safety margin to skip one parse of a
  * 78KB document.
+ *
+ * **Built on the first sanitise, not at module evaluation.**
+ *
+ * It was a module-scope `const` until 2026-09-03, which meant that merely
+ * *importing* this file — which `store/public-reader.ts` does, so every request
+ * to the bundled API did — constructed a jsdom window and a DOMPurify bound to
+ * it. The instance is still one per process and still built exactly once; the
+ * only change is when. See src/jsdom-lazy.ts for the cold start this is part of.
  */
-const purify = createDOMPurify(
-  new JSDOM("").window as unknown as Window & typeof globalThis,
-);
-installArticlePolicy(purify);
+let purifier: ReturnType<typeof createDOMPurify> | null = null;
+
+function purify(): ReturnType<typeof createDOMPurify> {
+  if (purifier) return purifier;
+  const built = createDOMPurify(
+    new (jsdom().JSDOM)("").window as unknown as Window & typeof globalThis,
+  );
+  installArticlePolicy(built);
+  /* Assigned only after the policy is on it. A throw from `installArticlePolicy`
+     would otherwise leave a *usable* sanitiser with no policy memoised here, and
+     every later call would quietly get the unconfigured one. */
+  purifier = built;
+  return built;
+}
 
 /**
  * Replace an element's contents with a sanitised copy of them.
@@ -82,7 +102,7 @@ export function sanitizeInPlace(root: Element): void {
 
 /** The same policy applied to a fragment of HTML text. */
 export function sanitizeHtml(html: string): string {
-  return purify.sanitize(html, { ...ARTICLE_CONFIG });
+  return purify().sanitize(html, { ...ARTICLE_CONFIG });
 }
 
 /**

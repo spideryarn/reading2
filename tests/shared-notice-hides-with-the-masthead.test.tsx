@@ -41,8 +41,17 @@ import { SharedNotice } from "../src/web/PublicChrome.js";
 
 const CSS = readFileSync(path.join(process.cwd(), "src/web/styles.css"), "utf8");
 
-/** The rule the whole thing hangs off, verbatim. */
-const HIDES_MASTHEAD = ".reader:has(.mode-band) .masthead { display: none; }";
+/**
+ * The rule the whole thing hangs off, verbatim.
+ *
+ * **`.band-covers` since 2026-09-03.** These two rules used to sit inside
+ * `@media (max-width: 843px)`, a width the stylesheet could not get right in
+ * both spine states; `App.tsx` writes the fact as a class on `.reader` now and
+ * these key off that (styles.css § a band with no room). Nothing about the
+ * pairing changed, which is what this file is really about.
+ */
+const HIDES_MASTHEAD = ".reader.band-covers:has(.mode-band) .masthead { display: none; }";
+const HIDES_NOTICE = ".reader.band-covers:has(.mode-band) .shared-notice { display: none; }";
 
 describe("a visitor's notice, in the strip the band takes over", () => {
   it("carries the class the stylesheet reaches it by", () => {
@@ -60,15 +69,31 @@ describe("a visitor's notice, in the strip the band takes over", () => {
     expect(html).toContain("shared this article with you");
   });
 
-  it("is hidden by the same rule, in the same block, as the masthead", () => {
-    /* Same `@media` block, which is the invariant — a rule sitting at top level
-       would hide the notice at every width, including the reading view where it
-       is the entire point. Sliced from the masthead rule to the end of its
-       block rather than searched for globally. */
+  it("is hidden under the same condition, beside the masthead's rule", () => {
+    /* Two halves, and the second is the invariant that matters:
+
+       - the notice's rule follows the masthead's, close enough to be read as
+         one decision rather than found by grep;
+       - and it carries `.band-covers`, so it is conditional. An unguarded
+         `.shared-notice { display: none }` would hide the notice at every
+         width, including the reading view where it is the entire point — which
+         is what the `@media` block this pair used to live in was buying. */
     const at = CSS.indexOf(HIDES_MASTHEAD);
     expect(at, "the masthead rule this one is paired with has moved or changed").toBeGreaterThan(-1);
-    const blockEnd = CSS.indexOf("\n}", at);
-    const rest = CSS.slice(at, blockEnd);
-    expect(rest).toContain(".reader:has(.mode-band) .shared-notice { display: none; }");
+    const near = CSS.indexOf(HIDES_NOTICE, at);
+    expect(near, "the notice's rule is not below the masthead's any more").toBeGreaterThan(-1);
+    expect(
+      near - at,
+      "the two rules have drifted apart; they are one decision and should read as one",
+    ).toBeLessThan(2000);
+    /* And nothing hides it unconditionally. Read from the stylesheet with its
+       comments stripped, because this file and styles.css are both full of
+       prose quoting rules that no longer exist. */
+    const code = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+    const hides = [...code.matchAll(/^.*\.shared-notice\s*\{[^}]*display:\s*none/gm)].map((m) =>
+      m[0].trim(),
+    );
+    expect(hides.length, "expected exactly one rule to hide the notice").toBe(1);
+    expect(hides[0]).toContain(".band-covers");
   });
 });

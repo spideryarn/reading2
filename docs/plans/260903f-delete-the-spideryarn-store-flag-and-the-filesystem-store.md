@@ -16,14 +16,16 @@ on Greg's decision** — see stage T. That is the largest change to its shape si
 three later stages consume it**:
 
 ```
-A (store inventory) ✅ → B0 → T-B (factory) → T-C (lanes) → T-D (activation) → T-E (pollution)
+A (store inventory) ✅ → B0 ✅ (already landed) → T-B (factory) → T-C (lanes) → T-D (activation) → T-E (pollution)
   → C → B → D → E → F (hinge) → G → H → I
 ```
 
 **Stage A is done.** Both witnesses are built, the registry is checked in with 93 classified entries,
-and its guard has been watched failing four different ways. **B0 is next**, and it needs a quiet box.
+and its guard has been watched failing four different ways. **B0 turned out to be already done** —
+it landed on 2026-09-01 and the docstring that said otherwise was stale; see stage B0. **T-B is
+next.**
 
-The `pdf` spike is independent and can happen any time before E.
+The `pdf` spike **is done** (2026-09-03) and moved stage E — see § `pdf`.
 **All of D′ is off the list: D′1 is landed, D′2 was scheduled twice, D′3 is cancelled.**
 
 **Three corrections to our own draft of this order, two from review and one from the tree moving:**
@@ -73,6 +75,20 @@ our own re-derivation went stale within the day.** Numbers taken in the primary 
 morning of 2026-09-03 were wrong by the afternoon because this worktree merged 31 commits:
 `fs.ts` went 574 → 576, `createFsArtifactStore` gained `illustrated-step-registration.test.ts`, and
 every line number in `jobs.ts` and `pipeline.ts` drifted by ~90.
+
+**Third data point, 2026-09-03 afternoon.** A fact-check was dispatched over this whole document off
+the back of stage B0's finding, and re-derived the load-bearing numbers again. Every one had moved
+*again*, in one day: the registry 92 → **94**; witness `ranAndTouchedNothing` 499 → **498**; the
+candidates script 1,160 → **1,194** first-party files and 192 → **196** executable; flag mentions
+81 → **88**; `pgReady` call sites 82 → **87**; `.insert(articles)` 28 → **29**. Note that the "92,
+not 93" correction *was already stale in the commit that made it* — `59f01c9d` added two registry
+entries and the corrected number in the same change.
+
+**The rule this settles: no count in this document is an input to a stage.** Where a stage needs a
+number, it re-runs the command; where a check needs a list, it holds the list rather than a length
+(`tests/store-guarded.test.ts` § *Written out, not counted*, which had to learn this the hard way —
+its comment said "eighteen" over an array of twenty-one). Counts here are for judging size, and for
+nothing else.
 
 **So: this document carries no line numbers for moving files, and every count below is a
 *measurement with a date on it*, not a fact.** Stage A exists to turn them into a checked-in
@@ -587,39 +603,57 @@ route families to 260903e's Stage C list rather than discovering them one at a t
 Acceptable because keys are content-addressed, but it is a stated limitation, not a thing a reader
 should find out.
 
-### B0 — take `RUN_LOCK` off the seed window, first, on its own
+### B0 — take `RUN_LOCK` off the seed window — **already done, and this plan was wrong about it**
 
-**Found at the start of the build, and the repo had already done the hard half.**
-[`tests/helpers/scratch-article.ts`](../../tests/helpers/scratch-article.ts) records its own
-measurement, 2026-09-01, 16 concurrent processes each seeding a **uniquely named** article:
+**Nothing to build. It landed on 2026-09-01 in `df7a7980`, two days before this plan was written.**
+`LoadOptions.serialise` defaults to `false`, and `withRunLock` has exactly one caller in the tree —
+[`load-article.ts`](../../tests/helpers/load-article.ts) § `withRunningJob`, gated on that flag. The
+four places that pass `true` are all legitimate and none of them is the seed path B multiplies:
+`store-parity` (×2) and `store-roundtrip`, which load a **fixed** slug; the suite that tests the
+option itself; and `scripts/db-seed-dev.ts`, which is a dev script rather than part of the run.
+`tests/helpers/scratch-article.ts` — the helper the ~48 converted suites use — never passes it.
 
-```
-with the lock     max seed 4.9–6.1s   (the last one waits for fifteen turns)
-without the lock  max seed 1.0–2.0s
-```
+**So the 16-process measurement this stage called for was not needed**, and running it would have
+measured a change that was already in the tree.
 
-`loadArticleIntoPg` takes `RUN_LOCK` around its load window, which serialises **every seed in the
-whole test run**. The one thing that genuinely needed it is fixed at the source: N clones of one
-corpus article share a `raw_sources` row keyed `(sha256, kind)`, and the old
-`select … for update` locked nothing over zero rows, so all but one clone lost its transaction to a
-duplicate key. `writeRawSource` is now conflict-tolerant and reads the row back
-([`artifacts-pg.ts`](../../src/store/artifacts-pg.ts), `tests/store-raw-source-race.test.ts`). The
-docstring's own conclusion: *"for these suites the lock really is pure queue. It is kept anyway for
-now, because removing it is a change to `loadArticleIntoPg`'s contract and belongs in one deliberate
-commit rather than as a side effect of converting a test file."*
+**Why we believed otherwise, which is the part worth keeping.** `scratch-article.ts`'s own docstring
+opened *"`loadArticleIntoPg` takes `RUN_LOCK` around its load window, which serialises every seed in
+the whole test run"* and closed *"It is kept anyway for now, because removing it is a change to
+`loadArticleIntoPg`'s contract and belongs in one deliberate commit."*
 
-**This is that commit, and B is why it is now worth making.** B multiplies the number of suites that
-seed; doing it after B means paying the queue through the whole conversion and then re-measuring
-everything.
+**The sequence, all on 2026-09-01, and the middle step is the one that matters:**
 
-**It is measured, not reasoned.** Re-run the 16-process concurrent-seed experiment before and after
-on a **quiet box** — a measurement taken at load 144 says nothing, and this box reached that on
-2026-09-03 with two suites running. Ten runs after, not one: the failure it used to have was a lost
-race, and a race that does not fire is indistinguishable from one that cannot.
+| | |
+|---|---|
+| `9671fcfa` 13:20 | wrote the paragraph. **True when written.** |
+| `df7a7980` 14:45 | flipped `serialise` to opt-in in `load-article.ts`, **and did not touch this file**. The paragraph became false, silently. |
+| `e3ef75fd` 15:13 | **edited that very paragraph**, adding the `raw_sources` narrative, and left its top and tail describing the world before the flip. |
 
-**And it is the one change here that can hurt other agents**, since every worktree shares this
-helper and a flaky seed would surface as somebody else's unrelated red. If the measurement is not
-clean, leave the lock alone and say so — B is slower, not blocked.
+So it was not merely un-updated. It was revised half an hour after being falsified, by someone
+reading it closely enough to rewrite its middle, and the two false sentences survived because
+nothing connects a comment to the code it describes.
+
+It then stayed wrong for two days and was read as fact by this plan, by the brief that drew stage B0
+out of it, and by a review that did not challenge it. **The class is a comment that survives the
+change it describes** — the same shape as [silent-success](../reusable/silent-success.md), one level
+up: not a check that agrees with the bug, but *prose* that agrees with the code it used to describe.
+The tell was available cheaply — `grep -rn "serialise: true"` returns four lines and none of them is
+this file — and the lesson for the rest of this plan is to **grep the call sites before believing a
+docstring's account of them**, especially where the plan's next stage depends on the answer.
+
+**This section got the attribution wrong on its first attempt**, blaming `df7a7980` for prose it
+never touched — a `--stat` on that commit lists eight files and `scratch-article.ts` is not among
+them. Caught by the fact-check dispatched off the back of this very finding, which is the argument
+for dispatching it: the correction to a stale-prose bug was itself stale prose within the hour.
+
+
+Fixed in the same commit as this note: the docstring now says what the code does, and records that
+it was wrong and for how long, so the next reader is not the fourth to be misled.
+
+**What B0 changes for the stages after it: nothing.** B was already going to get the unserialised
+seed. The ~19–24s of serial demand that `load-article.ts` warns about is a description of what
+`serialise: true` *would* cost at B's scale, not a debt B has to pay.
+
 
 ### B — convert the ungated route suites (parallelisable)
 
@@ -1020,9 +1054,79 @@ article". **Rename rather than alias**: an alias is a second name to keep in ste
 `npm run fetch` failing loudly with *"Missing script"* is better than it quietly doing something
 else. Per CLAUDE.md's rename rule, sweep the whole repo for the old name.
 
-**`pdf` takes a local file path**, minting an upload record and enqueuing
+#### `pdf` — spiked 2026-09-03, and it is not a stage CLI at all
+
+**The draft said:** *"`pdf` takes a local file path, minting an upload record and enqueuing
 `{ upload, steps: ["extract"] }` — the same full-ingest shape, entered through an upload instead of
-a URL.
+a URL."* **Four of those clauses are wrong.** The spike ran the whole thing end to end against the
+local database and Supabase Storage — a 1-page PDF ingested to a published revision in 20.1s for
+$0.0142 — so what follows is measured, not read.
+
+**1. `steps: ["extract"]` fails immediately, and `fetch,extract` fails *after paying*.**
+`extract` is not the step that acquires an upload; `fetch` is (`acquireUpload`,
+[`pipeline.ts`](../../src/pipeline.ts)). Measured: `No fetched document for "…" — run the fetch step
+first`, job `error` in 0.16s, leaving an article row and a failed revision behind. With
+`--steps=fetch,extract`, `extract` made its paid model call ($0.0006, 8.3s) and *then* the commit
+threw `PublishRefused: … it has no blocks; it has no tree` — the transcription thrown away with the
+draft. **This is the argument the plan already makes for turning `fetch` into `ingest`, and it
+applies verbatim here.** The plan contradicted itself. The only shape that works is the default
+ingest: `fetch, extract, blocks, hierarchy, assets`.
+
+**2. Mint is two of five steps, not the whole thing.** The CLI must copy `queueAnUpload`'s order —
+mint, **put the bytes**, **claim**, enqueue, **`noteSlug`**. `settleUpload(…, "verified")` runs only
+`if (record.status === "claimed")` ([`pipeline.ts`](../../src/pipeline.ts)), so skipping the claim
+leaves the record `pending` for ever with no slug. **The article is fine and the record silently is
+not** — which is why the spike's first two runs looked like successes.
+
+**3. It needs no grant issuer** — a simplification, measured both ways. Signed grants exist so a
+*browser* can write; a CLI already holds the service key and can
+`blobStore().putIfAbsent(stagingKey(id), …)` directly. Identical result, 0.05s.
+
+**4. `--force` is meaningless for `pdf`.** `enqueue` gives every upload
+`{kind: "minted", slug: slugWithShortId(…)}` unconditionally, so two runs of one file are two
+articles — Greg's own decision, in [`jobs.ts`](../../src/jobs.ts). So `pdf` is a **second** exception
+to *"every command but `fetch` refuses if the reader has no article under that slug"*, and the
+contract above should say so.
+
+**And the finding that outranks all four: `npm run pdf` is the PDF extraction-quality tool, not a
+stage runner.** Today it prints the pages, the chunk plan, and `report(checked)` — the per-chunk
+recall table from [`pdf-score.ts`](../../src/pdf-score.ts) — then the title, the records, mean recall
+over N pages, token counts and retries. **That is where the numbers in `evals/pdf/README.md` came
+from.** The queue path surfaces none of it: the job's entire `detail` for extract is the title.
+Replacing this command with a queue ingest **silently retires the PDF quality tooling**, which is
+not a thing the plan noticed it was proposing.
+
+**Decision: split the name in two, rather than convert it.** The ingest entry point is a new name;
+the quality tool keeps its behaviour under an eval name (`npm run eval:pdf-read`), pointed at
+`output/`. Its file writes are `output/<slug>.html` and `data/<slug>/meta.json` **for a human to
+look at, not store artefacts**, so stage G does not force this and the tool can keep writing them.
+This is a technical fork rather than a product one, so it goes to Sol with the stage rather than to
+Greg — but it is recorded here because "we quietly deleted the PDF eval tooling" is exactly the kind
+of thing a plan should not let happen by omission.
+
+**Two more things the stage inherits:**
+
+- **`blobStore()` falls back to `fsBlobs()` when either Supabase credential is missing**
+  ([`blobs.ts`](../../src/store/blobs.ts)), rather than refusing the way `postgresBlobStore()` does.
+  After stage F removes the flag, `npm run pdf` on a machine with no Supabase would happily write
+  bytes under `data/_blobs/`. **The CLI should ask `postgresBlobStore("npm run pdf")` for its
+  store.** Flagged as a code read, *not* measured — `.env.local` is applied over `process.env`, so
+  the spike could not unset the key to prove it. Worth proving in stage F.
+- **A second test file the plan did not name.**
+  [`stage2c-raw-bytes.test.ts`](../../tests/stage2c-raw-bytes.test.ts) has a describe block *"npm run
+  pdf keeps the original where the reader can reach it"*, and `keepTheOriginal`
+  ([`pdf-read.ts`](../../src/pdf-read.ts)) **has no caller but `main()` and that test** — delete
+  `main()` and it becomes exported dead code with a green test describing a command that no longer
+  exists. `paid-cli-ledger.test.ts` also names `src/pdf-read.ts` in eight places, including an AST
+  gate and negative controls that mutate the source, so it is more than the one-line rewrite the
+  plan implied.
+
+**The measured plumbing cost: ~0.2s**, all of it. Mint 0.05s, PUT 0.04s, claim 0.01s, enqueue 0.01s,
+fetch step 0.12–0.16s. Process wall was 5.0s, of which ~4.5s is module import — which also settles
+the `blocks` spike's *"startup roughly doubles"* note as **a load artefact**: 47s was a box at load
+100. **`pdf` is 3–5 hours of the day and a half, under an hour of it plumbing** — and that estimate
+holds only if the split above is settled before anyone starts.
+
 
 **`npm run labels` is retired**, per the same review. There is no `labels` step and adding one is a
 pipeline redesign to preserve a debugging command: `hierarchy.md` is explicit that hierarchy
