@@ -229,3 +229,25 @@ The natural check and the bug shared the same assumption, twice over:
 The measurement that would have settled both is the same one either way: **ask the far side.**
 `select id, allowed_mime_types from storage.buckets`, and `select name, metadata->>'mimetype' from
 storage.objects` — or read the container's own request log, which had the answer the entire time.
+
+### The check was built, and it could not be aimed at the thing that mattered
+
+Added 2026-09-03, after the same class recurred on production —
+[260903f](260903f-the-bucket-allowlist-drifted-again-on-production.md).
+
+`bucketDrift` and `check-buckets.ts` were built the day after this bug, and both halves were watched
+saying yes (above). They still did not catch the next instance, for two reasons worth separating:
+
+- **Nothing ran it.** It appeared in no `package.json` script and in no gate; step 2 of the fix above
+  names `scripts/deploy.ts` as one of three callers and that caller was never written. A check that
+  runs when somebody remembers is a check that runs after the incident.
+- **It could not reach production.** The invocation this repo documented —
+  `SUPABASE_URL=<remote> … npx tsx scripts/check-buckets.ts` — talks to the *local* container on any
+  machine with a `.env.local`, because `loadEnvLocal()` lets the file beat the shell
+  ([`src/env.ts`](../../src/env.ts)). It printed `✓ every declared bucket matches the running
+  project` and exited 0. So the check written to catch a class of silent success was itself an
+  instance of it, and anybody who ran it to ask the question was answered about the wrong project.
+
+Both are fixed: `--prod` reads `.env.prod` through the shared `readEnvProd`, every mode prints the
+project it reached above its verdict, `--apply` repairs, and `npm run deploy` refuses on drift
+before it touches the schema.

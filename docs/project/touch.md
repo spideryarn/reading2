@@ -82,6 +82,15 @@ no hover has to let the first press mean *show me* or the reader commits blind.
   a finger opened** — the panel follows its anchor for a pointer, which is right, but a finger is
   not resting on the words and the card would ride to the edge of the screen and stay there.
 
+  **None of it worked between 2026-08-27 and 2026-09-03**, and the reason is the one trap on this
+  page worth carrying to any other listener: **a lift fires the hover events too.** A touch pointer
+  does not hover, so the spec destroys it at `pointerup` and fires `pointerout` and then
+  `pointerleave` at every ancestor being left, `document` among them — so the hook's *mouse-left-the-
+  window* listener heard every tap and closed the card 220ms after it opened, on every touch device,
+  in every mode. Guarding it is one line, the same line `pointerover` has had since the day the touch
+  path was built. What is worth reading is why 24 synthetic-event tests were green throughout:
+  [260903g-the-touch-card-closed-itself-on-every-tap.md](../postmortems/260903g-the-touch-card-closed-itself-on-every-tap.md).
+
 ## Why the prose is untouched
 
 This is the load-bearing decision, and it came out of the research rather than out of caution.

@@ -51,7 +51,7 @@ import { appendSupplement, splitBlocks } from "./supplement.js";
 import { assertTreeSound, sameHeading } from "./tree-invariants.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Tree, TreeNode, NodeId } from "./types.js";
-import { parseJsonFrom, stripFence } from "./parse-json.js";
+import { parseJsonAnswer, parseJsonFrom } from "./parse-json.js";
 import { withLedger } from "./cli-ledger.js";
 
 /* Bumped to 2 when the nav labels moved out to src/labels.ts: this prompt no
@@ -413,14 +413,16 @@ export function checkCoverage(
 }
 
 /**
- * Read the model's answer, fence and all.
+ * Read the model's answer, fence, preamble, sign-off and all.
  *
- * `stripFence` then `parseJsonFrom`, never a bare `JSON.parse` — src/parse-json.ts
- * § `stripFence` has the reasoning, and this file is where it was learned the
- * hard way.
+ * `parseJsonAnswer`, never a bare `JSON.parse` — src/parse-json.ts has the
+ * reasoning, and this file is where it was learned the hard way twice: once for
+ * the leak, and again on 2026-09-03, when a model put 8,138 characters after a
+ * complete tree and the step died where `stripFence` plus `parseJsonFrom` used
+ * to be. That is what `parseJsonAnswer` exists for.
  */
 function parseJson(raw: string): { root: ModelNode } {
-  return parseJsonFrom(stripFence(raw), "the table-of-contents response");
+  return parseJsonAnswer(raw, "the table-of-contents response");
 }
 
 /**

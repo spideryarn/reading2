@@ -21,7 +21,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useHoverCard } from "../src/web/useHoverCard.js";
+import { HOVER_DELAY, useHoverCard } from "../src/web/useHoverCard.js";
 
 /* Floating UI's `autoUpdate` observes the reference element, and jsdom has no
    ResizeObserver at all — without this the hook throws on the first open and
@@ -41,12 +41,21 @@ class FakeResizeObserver {
  */
 function pointer(
   type: string,
-  target: Element,
-  { x = 10, y = 10, pointerType = "touch", id = 1, isPrimary = true, at = 0 } = {},
+  target: Element | Document,
+  {
+    x = 10,
+    y = 10,
+    pointerType = "touch",
+    id = 1,
+    isPrimary = true,
+    at = 0,
+    bubbles = true,
+    cancelable = true,
+  } = {},
 ): MouseEvent {
   const event = new MouseEvent(type, {
-    bubbles: true,
-    cancelable: true,
+    bubbles,
+    cancelable,
     clientX: x,
     clientY: y,
   });
@@ -61,17 +70,57 @@ function pointer(
 }
 
 /**
- * The whole gesture, in the order iOS emits it: the pointer pair, then the
- * compatibility mouse events, then the click.
+ * **What the browser does the instant a non-hovering pointer leaves the glass**,
+ * and the two events this file did not know about until 2026-09-03.
  *
- * `mouseup` before `click` is the part that matters — it is where TableView
- * opens a chat thread and reads a selection, so a swallower that only knew
- * about `click` would arrive one event late.
+ * A touch pointer cannot hover, so the spec destroys it at `pointerup` — and
+ * destroying it fires `pointerout` at the target and `pointerleave` at every
+ * ancestor being left, `document` among them.
+ * [Pointer Events § the pointerup event](https://www.w3.org/TR/pointerevents/#the-pointerup-event).
+ *
+ * Which means the document-level `pointerleave` listener — the one whose only
+ * intended customer is a *mouse* leaving the window — hears from every tap.
+ * Leaving these two out of `tap` below is what let this file stay green through
+ * a card that closed itself 220ms after every touch.
+ *
+ * `pointerleave` is dispatched at `document` and does not bubble, because both
+ * are true of the real one: it reaches a document listener by being fired *at*
+ * the document, not by rising to it. Not cancelable, for the same reason —
+ * nothing here reads that, and a helper that lies about it is how the next
+ * wrong belief gets in.
+ */
+function lift(target: Element, at = { x: 10, y: 10 }): void {
+  pointer("pointerout", target, at);
+  pointer("pointerleave", document, { ...at, bubbles: false, cancelable: false });
+}
+
+/**
+ * **The sequence this hook's own listeners see**, which is a smaller claim than
+ * the one this docstring used to make.
+ *
+ * It said "the whole gesture, in the order iOS emits it". It was neither: it
+ * omitted the two leaving events entirely — the omission this file's blindness
+ * was made of — and no iPad was ever consulted. What the order below rests on is
+ * a Chrome trace measured on this box under touch emulation, in which
+ * `pointerout`/`pointerleave` land 0.4ms after `pointerup`. Where the
+ * compatibility `mouseup` and `click` fall *relative to those two* was not
+ * measured and does not matter here: the swallower is bounded by a deadline and
+ * a place rather than by event order.
+ *
+ * `pointerover` leads, because a finger fires that too — and `over` ignoring it
+ * is the guard whose absent twin caused all this, so the harness should exercise
+ * it rather than assume it.
+ *
+ * `mouseup` before `click` is the part that does matter — it is where TableView
+ * opens a chat thread and reads a selection, so a swallower that only knew about
+ * `click` would arrive one event late.
  */
 function tap(target: Element, at = { x: 10, y: 10 }): MouseEvent {
   act(() => {
+    pointer("pointerover", target, at);
     pointer("pointerdown", target, at);
     pointer("pointerup", target, at);
+    lift(target, at);
   });
   let click!: MouseEvent;
   act(() => {
@@ -199,6 +248,113 @@ describe("a tap reveals, then commits", () => {
     expect(card()).toBe("beta");
     expect(committed).toEqual([]);
   });
+});
+
+/**
+ * **The card has to still be there a moment later**, which every test above
+ * asks about the wrong instant.
+ *
+ * They assert synchronously, and the close this file was blind to is a *timer*
+ * — so a card that opened and then shut itself 220ms afterwards passed all of
+ * them. In a browser that is the whole bug: the card flashed for about a fifth
+ * of a second and the second tap had nothing left to commit against, on every
+ * touch device, in every mode. Measured on this box, 2026-09-03, before the
+ * fix: `pointerup` at 6246.4ms, `pointerleave` at 6246.9, card shown 6262.9,
+ * card hidden 6497.8.
+ *
+ * So these two are the same two gestures the block above makes, asked after the
+ * delay has run rather than before it. Fake timers are installed only here: the
+ * point is the passage of time, and the rest of the file is about the events.
+ */
+describe("and the card is still there after the close delay", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Long enough that any close the lift armed has fired. `HOVER_DELAY.close` is 220. */
+  const settle = () => {
+    act(() => {
+      vi.advanceTimersByTime(HOVER_DELAY.close * 2);
+    });
+  };
+
+  it("does not close itself when the finger leaves the glass", () => {
+    tap(mark("alpha"));
+    expect(card()).toBe("alpha");
+    settle();
+    expect(card()).toBe("alpha");
+  });
+
+  it("commits on a second tap made after the reader has had time to read it", () => {
+    tap(mark("alpha"));
+    settle();
+    tap(mark("alpha"));
+    expect(committed).toEqual([{ id: "alpha" }]);
+  });
+
+  /**
+   * **And the listener still does its own job**, which the two above do not
+   * ask and which is the half a touch guard can quietly delete.
+   *
+   * `pointerleave` at the document is how a card closes when the pointer leaves
+   * the *window*: that fires no `pointerover` on anything, so `over` never hears
+   * about it and this listener is the only thing standing between the reader and
+   * a card left up over a page they have moved away from.
+   *
+   * GPT Sol's review of this fix, 2026-09-03, named the three mutations that
+   * were green without these — delete the listener, make `leave` return
+   * unconditionally, or narrow the guard to mouse and lose pen. Each of them now
+   * has a test, which is the difference between fixing a bug and protecting the
+   * behaviour it was hiding inside.
+   *
+   * Both pointer types, because the guard is phrased as "not touch" rather than
+   * "is mouse", and a pen is the reason that distinction is not pedantry.
+   */
+  for (const pointerType of ["mouse", "pen"] as const) {
+    /** The pointer leaving the window: `pointerleave` at the document, nothing else. */
+    const exit = () => {
+      act(() => {
+        pointer("pointerleave", document, { pointerType, bubbles: false, cancelable: false });
+      });
+    };
+
+    /** What a `${pointerType}` resting on the words does — `over`, then the 320ms wait. */
+    const rest = (el: Element) => {
+      act(() => {
+        pointer("pointerover", el, { pointerType });
+      });
+      act(() => {
+        vi.advanceTimersByTime(HOVER_DELAY.open);
+      });
+    };
+
+    it(`closes an open card when a ${pointerType} leaves the window`, () => {
+      rest(mark("alpha"));
+      expect(card()).toBe("alpha");
+      exit();
+      // Still there: leaving arms the same close delay hovering off the words does.
+      expect(card()).toBe("alpha");
+      settle();
+      expect(card()).toBe(null);
+    });
+
+    it(`cancels a pending open when a ${pointerType} leaves the window`, () => {
+      act(() => {
+        pointer("pointerover", mark("alpha"), { pointerType });
+      });
+      // Mid-delay: nothing on screen yet, and a timer armed for 320ms.
+      act(() => {
+        vi.advanceTimersByTime(HOVER_DELAY.open / 2);
+      });
+      expect(card()).toBe(null);
+      exit();
+      settle();
+      expect(card()).toBe(null);
+    });
+  }
 });
 
 describe("what a tap must not disturb", () => {

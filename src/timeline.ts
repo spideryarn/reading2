@@ -121,7 +121,7 @@ import {
 } from "./source-hash.js";
 import { findQuote } from "./quote-match.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
-import { parseJsonFrom, readJsonOrNull, stripFence } from "./parse-json.js";
+import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
 import { articleWithIds } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import {
@@ -1143,13 +1143,15 @@ ${skeleton}`;
 }
 
 /**
- * Read the model's answer, fence and all.
+ * Read the model's answer, fence, preamble, sign-off and all.
  *
- * `stripFence` then `parseJsonFrom`, never a bare `JSON.parse` —
- * src/parse-json.ts § `stripFence` has the reasoning.
+ * `parseJsonAnswer`, never a bare `JSON.parse` — src/parse-json.ts has the
+ * reasoning. This is one of the two stages that proved on 2026-09-03 why it is
+ * not enough to strip a fence: a model put its preamble before the fence, so
+ * there was no fence at the start to strip, and the step died.
  */
 function parseJson(raw: string): { events?: unknown } {
-  return parseJsonFrom<{ events?: unknown }>(stripFence(raw), "the model's answer");
+  return parseJsonAnswer<{ events?: unknown }>(raw, "the model's answer");
 }
 
 /**
