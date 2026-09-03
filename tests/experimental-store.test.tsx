@@ -699,3 +699,36 @@ describe("a save from the account that has left", () => {
     probe.stop();
   });
 });
+
+describe("a save that succeeds after a load that failed", () => {
+  /**
+   * **The answer arrived, so stop saying it did not.**
+   *
+   * A failed load leaves `loadError` set, and the settings row draws it as
+   * "Couldn't load this setting — …" with a *Try again* beside it. A save that
+   * then succeeds is a current answer from the server — `loaded` already said
+   * so — but `loadError` used to survive it, so the row went on apologising for
+   * a read nothing was waiting on, next to the value it had just been given.
+   *
+   * A sentence about a failure that no longer describes anything on screen is
+   * the same defect as a switch that lies about its state, one layer out.
+   * Older than this store; carried over from the hook it replaced.
+   */
+  it("stops reporting the load failure", async () => {
+    const probe = drive();
+    answer = () => Promise.reject(new Error("the network went away"));
+    announce("reader-1");
+    await settle();
+    expect(probe.now().loadError).toBe("the network went away");
+    expect(probe.now().loaded).toBe(false);
+
+    answer = () => Promise.resolve({ experimentalSince: DATE_A });
+    act(() => probe.now().set(true));
+    await settle();
+
+    expect(probe.now().on).toBe(true);
+    expect(probe.now().loaded).toBe(true);
+    expect(probe.now().loadError, "the load failure is over").toBe(null);
+    probe.stop();
+  });
+});

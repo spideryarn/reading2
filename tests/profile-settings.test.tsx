@@ -75,7 +75,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 }));
 
 const { SettingsSection } = await import("../src/web/SettingsSection.js");
-const { resetForTests, subscribe } = await import("../src/web/experimental-store.js");
+const { resetForTests, snapshot, subscribe } = await import("../src/web/experimental-store.js");
 
 /* The store starts listening on the first `subscribe()`, which in the app is
    the first component mounting. Standing in for it here means a session can be
@@ -237,6 +237,45 @@ describe("the experimental-features switch", () => {
     await settle();
     expect(box().disabled).toBe(false);
     expect(said()).toContain("Off.");
+  });
+
+  it("takes Try again away while a save is in flight, rather than ignoring it", async () => {
+    /* **Both states at once is reachable**, and it is the one place the retry
+       button can be pressed for nothing: a failed load leaves `loadError` set,
+       and `set` is guarded by the store rather than by the `disabled`
+       attribute, so a keyboard or a label click still starts a save. `reload()`
+       refuses while a save is in flight — a read begun then carries the value
+       the row held before the `PATCH` and can land after it — so an enabled
+       button here would do nothing at all and say nothing about it.
+       docs/reusable/silent-success.md. */
+    answer = () => Promise.reject(new Error("offline"));
+    paint();
+    await settle();
+    const retry = () => host.querySelector("button.linky") as HTMLButtonElement;
+    expect(said()).toContain("Couldn't load");
+    expect(retry().disabled).toBe(false);
+
+    held = [];
+    answer = () => Promise.resolve({ experimentalSince: null });
+    act(() => {
+      /* The press a `disabled` checkbox does not stop. */
+      box().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      snapshot().set(true);
+    });
+    expect(patched).toEqual([{ experimental: true }]);
+    expect(retry().disabled).toBe(true);
+
+    /* And once the save lands the button is **gone**, not merely enabled
+       again: a successful save is a current answer from the server, so the load
+       failure is over and there is nothing left to retry. It used to survive —
+       `loaded` was set without clearing `loadError` — leaving the row
+       apologising for a read nothing was waiting on, beside the value it had
+       just been given. tests/experimental-store.test.tsx § a save that succeeds
+       after a load that failed. */
+    await act(async () => held?.[0]?.());
+    await settle();
+    expect(said()).not.toContain("Couldn't load");
+    expect(retry(), "nothing left to try again").toBe(null);
   });
 
   it("will not let an offline copy be written over", async () => {

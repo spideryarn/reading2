@@ -103,7 +103,21 @@ export function SettingsSection() {
              GPT Sol, 2026-08-31. */
           <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
             <TriangleAlert size={12} /> Couldn't load this setting — {experimental.loadError}{" "}
-            <button type="button" className="linky" onClick={experimental.reload}>
+            {/* **Not while a save is in flight**, because `reload()` refuses
+                then — a read started mid-save carries the value the row held
+                before the `PATCH` and can land after it
+                (experimental-store.ts § reload). A button that silently does
+                nothing is worse than one that is visibly unavailable, and the
+                save is about to deliver the answer anyway.
+                Both states at once is reachable: a failed load leaves
+                `loadError` set, and the switch is still pressable by keyboard
+                or label. docs/reusable/silent-success.md. */}
+            <button
+              type="button"
+              className="linky"
+              disabled={experimental.saving}
+              onClick={experimental.reload}
+            >
               Try again
             </button>
           </span>

@@ -49,8 +49,13 @@
  * Never torn down because the last component unmounting is not the reader
  * leaving: the next mount must not have to re-ask.
  *
- * Who subscribes first is `App.tsx`, with an effect whose only job is to keep
- * the store awake for the session — see the comment there.
+ * **Nothing subscribes merely to wake it.** Through stage 1 the only subscriber
+ * is the settings row on `/profile`, so a reading view reads the switch not at
+ * all — the same as before this file existed. A keep-awake subscriber sat in
+ * `App.tsx` briefly to buy the answer a round trip's head start, and was removed
+ * because it existed mainly to keep a trace assertion true; `App.tsx` subscribes
+ * for real in stage 2, when it calls `useExperimental()` to hand the answer to
+ * `Dock`.
  *
  * `known` becomes true on the first event Supabase delivers. It emits
  * `INITIAL_SESSION` exactly once per subscriber, with a null session when
@@ -515,8 +520,16 @@ function set(next: boolean): void {
         on: since !== null,
         /* A successful write is a current answer, whatever the load was: this
            is the path that rescues a reader whose page loaded offline and then
-           reconnected. */
+           reconnected.
+           **And it clears the load failure, which is the whole point of
+           "whatever the load was".** Without this the row goes on saying
+           "Couldn't load this setting" beside an answer we have just been given
+           by the server, with a "Try again" for a read nothing is waiting on —
+           a sentence about a failure that no longer describes anything on
+           screen. Older than this store and carried over from the hook; found
+           while writing the `Try again` guard in SettingsSection.tsx. */
         loaded: true,
+        loadError: null,
         stale: false,
       });
     })

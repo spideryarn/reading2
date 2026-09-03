@@ -180,6 +180,29 @@ fetch was issued**. Written first and watched red against today's hook, which is
 reports a load error. `tests/profile-settings.test.tsx` keeps passing — it mounts the real hook, so
 it must now pose a signed-in session, and that edit is part of this stage.
 
+**Landed** as `cce68912`. What changed against the plan above, and why:
+
+- **The store listens for the session itself**, rather than being told by `announceSession` from an
+  effect in `App.tsx`. Sol's review of the built code: a passive effect runs *after* its children
+  have rendered and committed, so an account switch drew one frame from the previous account's
+  snapshot — which after stage 2 is A's experimental modes on B's screen. The store now subscribes to
+  `onAuthStateChange` in the same notification pass as `useSession`, lazily on the first
+  `subscribe()`. Verified against the installed SDK that a late subscriber still receives
+  `INITIAL_SESSION` (`GoTrueClient.js:3638`, `_emitInitialSession(id)` per listener) — otherwise the
+  store would have sat at `known: false` for ever, which looks exactly like working.
+- **Three more races**, each found by review rather than by running it, and each now with a test seen
+  red first: a `PATCH` that commits while an older `GET` is in flight; a `reload()` started mid-save
+  doing the same through another door; and — the worst — an old epoch's `PATCH` retried under the new
+  account's token, because `apiFetch` refreshes and retries a 401 with the *then-current* session, so
+  A's `{ experimental: true }` could land on B's row with nothing on screen to say so. Every request
+  now carries an `AbortSignal` that a session change aborts.
+- **The store is lazy and stays lazy.** It asks the server only once something subscribes, so through
+  stage 1 a reading view reads the switch not at all — the same as before it existed. A keep-awake
+  subscriber in `App.tsx` that existed only to keep a trace assertion true was removed rather than
+  kept; **stage 2 gets a real subscriber** when `App.tsx` calls `useExperimental()` to hand the answer
+  to `Dock`, and `tests/public-network-trace.test.tsx` moves from zero to one there.
+- One test edit the plan assigned to stage 2 belonged here: the trace file's parity assertion.
+
 ### Stage 2 — five modes go behind the switch
 
 - **Every** `MODES_UI` row in [`Dock.tsx`](../../src/web/Dock.tsx) gains a required
