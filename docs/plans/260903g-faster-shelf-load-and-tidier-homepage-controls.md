@@ -170,6 +170,77 @@ that module initialisation is the thing to look at.
 
 Done when: the harness runs, its numbers are in this file, and both log lines exist.
 
+#### What landed, 2026-09-03
+
+**[`scripts/bench-cold-start.ts`](../../scripts/bench-cold-start.ts)**, modelled on
+[`bench-shelf-reads.ts`](../../scripts/bench-shelf-reads.ts) and refusing the same way. One **fresh
+child process per measurement**, because a module can only be imported once per process and the
+second reading is microseconds — which reads exactly like "we made it fast". It throws on a missing
+bundle, a bundle smaller than 100 kB, a bundle **older than anything under `src/`**, a child that
+died or was signalled, a child that printed no reading, a reading that will not parse, and any
+reading under `MIN_PLAUSIBLE_MS`. And it checks the *outcome* of the fresh-process discipline rather
+than restating it: every reading's pid distinct, and none of them the harness's own.
+
+**Read the load line before the table.** This box is shared, and it was at a load average of 108–136
+across 16 cores while these ran — eight times oversubscribed. So the harness now prints the load and
+marks a contended run, and the numbers below are **upper bounds**: Sol's ~2.61 s for the same bundle
+on a quiet machine is about 3.5× faster, and the *ordering* is what survives every run.
+
+| import | ms (median of 3) | RSS |
+|---|---|---|
+| **`api-dist/vercel.js` (the whole bundle)** | **9,364** | 247 MB |
+| `drizzle-orm/node-postgres` | 1,953 | 281 MB |
+| `drizzle-orm/pg-core` | 1,873 | 253 MB |
+| `jsdom` | 1,650 | 153 MB |
+| `@sentry/node-core/light` | 896 | 84 MB |
+| `pdf-lib` | 885 | 67 MB |
+| `stripe` | 456 | 78 MB |
+| `undici` | 387 | 76 MB |
+| `@anthropic-ai/sdk` | 240 | 64 MB |
+| `mdast-util-from-markdown` | 192 | 62 MB |
+| `@supabase/supabase-js` | 100 | 56 MB |
+| `pg` | 66 | 56 MB |
+| `fflate`, `@mozilla/readability`, `p-queue`, `dompurify` | under 55 each | |
+
+Not additive — the bundle's figure already contains every row below it. **Two things in there were
+not on the list Stage 4 was written against**, and finding them is what the harness is for:
+**`drizzle-orm/pg-core` is a second cost beside `node-postgres`** (so "the drizzle import" is two
+imports, not one), and **`@sentry/node-core/light` outranks Stripe**. Stage 4's shortlist should be
+drizzle ×2, jsdom, Sentry, pdf-lib — in that order — rather than the jsdom-first assumption above.
+
+**The instrument, and the seam.** `api/index.js` cannot import [`src/log.ts`](../../src/log.ts) — it
+is plain JavaScript outside the compiled bundle on purpose, and the logger is on the far side of the
+very import being measured. So it takes `performance.now()` either side and hands the numbers across
+to [`src/cold-start.ts`](../../src/cold-start.ts), re-exported by
+[`src/vercel.ts`](../../src/vercel.ts) as `reportBundleImport` / `reportFirstRequest`. **The
+measuring happens outside the logged world; the logging happens inside it.**
+
+`api/index.js` calls both **unconditionally, on every request**, and `src/cold-start.ts` drops all
+but the first. One decision, in one place, that a test can reach — a flag in `api/index.js` too
+would be the same rule written twice, with the copy nothing can import being the copy nothing
+checks. Both lines go out under the **`health`** component, whose own comment in `src/log.ts` says it
+is for the things reporting on the *deployment* rather than the application; a sixteenth component
+for two lines an instance would be a filter nobody would build.
+
+```
+{"component":"health","phase":"moduleImport","ms":8844,"msg":"cold start: module import"}
+{"component":"health","phase":"firstRequest","ms":8999,"msg":"cold start: first request"}
+```
+
+Those two are real, from driving the actual `api/index.js` against the actual `api-dist/vercel.js`
+three times: **exactly two lines for three requests**, and the gap between them says the
+`/api/health` work itself was ~155 ms of an ~9 s invocation. That is the shape Sol's second-number
+argument predicted, and it is why there are two — an import moved inside the handler would shrink
+`moduleImport` and leave `firstRequest` exactly where it is.
+
+**Tested, and each guard watched go red on its own.** `tests/bench-cold-start.test.ts` (16) and
+`tests/cold-start-report.test.ts` (5). Five mutation controls, each reverted after: the `ms` floor
+removed → the two floor cases fail and nothing else; the duplicate-pid check removed → one case; the
+staleness check removed → one case; each of the two once-per-instance guards removed → *"expected
+[ …(3) ] to have a length of 1 but got 3"*, which names the thing it is about. The staleness guard
+was also run against the real tree, where it refused with *"api-dist/vercel.js is stale:
+src/cold-start.ts is newer than it"*.
+
 ### Stage 2 — the offline envelope, and its postmortem
 
 Independent of everything else, small, and a real bug — so it lands early rather than waiting behind
@@ -336,7 +407,8 @@ cannot overwrite it — plus unmount, a change of reader, and the chosen 401/5xx
 ## Status
 
 Stage 0 (diagnose) — **done**, reviewed by Fable and GPT Sol, rewritten on Sol's six findings.
-Stage 1 next.
+Stage 1 (measure) — **done**, 2026-09-03; the harness, its numbers and the two log lines are in
+§ Stage 1 above. Stage 4 has its shortlist, and it is not the one Stage 4 was written against.
 
 Baseline for comparison, `npm test` on this worktree before any change — **5 files / 6 tests red** of
 586 files / 10,506 tests, and these are the five, so that a sixth is mine:
