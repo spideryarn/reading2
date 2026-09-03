@@ -38,6 +38,7 @@ import {
   KEEP_A_TAB_OPEN,
 } from "../job-state.js";
 import { ADDING_SENDS_TEXT_AWAY } from "../messages.js";
+import { QuotaNotice } from "./QuotaNotice.js";
 import { addHref, navigate } from "./router.js";
 import { UploadPicker } from "./UploadPicker.js";
 import { useNow } from "./useNow.js";
@@ -286,9 +287,15 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
         {ADDING_SENDS_TEXT_AWAY}
       </p>
 
-      {queue.error && (
-        <p className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-destructive">{queue.error}</p>
-      )}
+      {/* **The reason, and something to press.** A quota refusal gets a link to
+          `/profile` beside it — the sentence has been naming an Upgrade button
+          since the wall went up, and this is the first version of this box where
+          that button exists. Everything else renders as it always did.
+          QuotaNotice.tsx. */}
+      <QuotaNotice
+        message={queue.error}
+        className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-destructive"
+      />
 
       {current.length > 0 && <JobList jobs={current} queue={queue} onHide={hide} />}
 
@@ -435,6 +442,33 @@ export function JobCard({
      about something that has already stopped — and the engine drops the count
      at the same moment, so this is belt and braces about a race of one poll. */
   const stalled = busy && driverStalled(queue.driverFailures, job.id);
+
+  /**
+   * **Why Retry was refused**, kept where the next poll cannot clear it.
+   *
+   * `POST /api/jobs/:id/retry` is a second front door for the quota — it goes
+   * straight to `retryJob` → `enqueue()` and reserves a fresh slot when the
+   * attempt it repeats spent one (docs/project/billing.md § *Which requests
+   * spend a slot*) — so a reader at their ceiling can be refused **here**, on a
+   * card, and not only on the add page.
+   *
+   * Snapshotted out of `queue.lastFailure()` right after the await rather than
+   * read off `queue.error` at render, because `error` is engine state that the
+   * action's own follow-up poll clears: the same race that hid this refusal on
+   * AddPage.tsx until the browser check on 2026-09-03, and on the thread page
+   * before that (`tests/refused-job-reason-survives.test.tsx`).
+   *
+   * Cleared when the button is pressed again, and by the job id changing —
+   * `JobList` keys on it, so a card that becomes a different job is a different
+   * component and starts with nothing.
+   */
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const retry = async () => {
+    setRefusal(null);
+    await queue.retry(job.id);
+    setRefusal(queue.lastFailure());
+  };
+
   return (
     <div className="tw:rounded-md tw:border tw:border-border tw:bg-background tw:p-3">
       <div className="tw:mb-2 tw:flex tw:items-baseline tw:gap-2">
@@ -480,7 +514,7 @@ export function JobCard({
                 variant="ghost"
                 size="sm"
                 title="Run it again, skipping the stages that already worked"
-                onClick={() => void queue.retry(job.id)}
+                onClick={() => void retry()}
               >
                 <RotateCw size={13} /> Retry
               </Button>
@@ -532,6 +566,13 @@ export function JobCard({
       {stalled && (
         <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">{DRIVER_STALLED}</p>
       )}
+
+      {/* **Why Retry was refused, with a way out of it if the reason is the
+          quota.** On the card rather than in the box above, because it is about
+          this job: the shelf's own line is engine state shared with the poller,
+          and two cards refused for different reasons would both point at it.
+          See `refusal` above. */}
+      <QuotaNotice message={refusal} className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-destructive" />
     </div>
   );
 }

@@ -89,7 +89,7 @@ decided — nothing is waiting on Greg. The first stage is built (✅); the buil
 section survive it being updated — an earlier dated heading broke `billing.md`'s link on the first
 edit, which is what `tests/doc-links.test.ts` is for.*
 
-**Verdict: the machinery is finished; the surface is not.** Settlement and admission were built on
+**Verdict: the machinery is finished, and so is the surface.** Settlement and admission were built on
 2026-09-03, and the checkout, portal and confirm routes followed the same day. **The round trip has
 been run for real**, which is the thing this plan had been deferring since the first stage: a
 test-mode Checkout paid with `4242…` through the hosted page, the webhook verified and forwarded by
@@ -97,7 +97,10 @@ test-mode Checkout paid with `4242…` through the hosted page, the webhook veri
 time**, writing `sub_1UBQh9…` / `price_1UBHo5…` / `active` and a period of 2026-09-03 → 2026-10-03
 read off the subscription **item**. The same account then admitted an ingest where three successes
 would have stopped a free one, and refused the twenty-first with Stripe's own renewal date on it.
-What remains is `/profile` and the admin columns.
+
+`/profile`, the refusal's upgrade link and the two admin columns landed the same evening — see the
+*Checkout, portal and the reader-facing UI* and *Admin visibility* stages. What remains is Greg's
+review, the Portal-configuration check, comp subscriptions and go-live.
 
 **188 billing tests across 11 files**, re-run together on 2026-09-03 before the commit rather than
 taken from three separate agents' reports, and `npm run typecheck` clean over all 1,102 files.
@@ -889,23 +892,132 @@ pointing at the wrong code.
   `TERMINAL_STATUSES` is `canceled` and `incomplete_expired`; `past_due` and `unpaid` are *not*
   entitled but are still subscriptions Stripe holds and may still collect on, so selling beside one
   charges the reader twice.
-- [ ] `/profile`: current plan, usage this period ("N of 100"), Upgrade / Manage-billing buttons.
-- [ ] The at-quota refusal in the ingest UI surfaces the upgrade path.
+- [x] `/profile`: current plan, usage this period, Upgrade / Manage-billing buttons. Built
+  2026-09-03 — [`BillingSection.tsx`](../../src/web/BillingSection.tsx) over
+  [`useBilling.ts`](../../src/web/useBilling.ts), reading a new `GET /api/billing/usage`
+  ([`src/billing/summary.ts`](../../src/billing/summary.ts)) whose wire shape and words are in the
+  pure [`src/billing-plan.ts`](../../src/billing-plan.ts). See below for what the shape decides.
+- [x] The at-quota refusal in the ingest UI surfaces the upgrade path.
+  [`QuotaNotice.tsx`](../../src/web/QuotaNotice.tsx), on three surfaces.
 - [ ] Confirm the API-created Portal configuration covers the full self-serve set: invoice/
   billing history, payment-method update, cancel at period end.
-- [ ] Browser check via a Sonnet subagent ([browser-control.md](../project/browser-control.md)):
-  free account hits the wall at 3; checkout round-trip in test mode with card `4242…`; portal
-  round-trip (history, payment method, cancel); cancelled sub reverts to free limits without
-  touching existing articles.
+- [x] Browser check via a Sonnet subagent ([browser-control.md](../project/browser-control.md)),
+  2026-09-03 — Playwright against system Chrome on the box. **It found a real bug that every unit
+  test in the change had missed**, which is the thing worth keeping from it: see below. Also
+  confirmed *"Free — 3 of 3 articles used"*, both tier cards with all three currencies, a real
+  test-mode `checkout.stripe.com` page naming *Spideryarn Reader* at €9.00/month, a real
+  `billing.stripe.com` Portal, and *"Administrator — no limit"* with no count on the seeded admin.
+  **The seeded dev account is an admin and so quota-exempt**, so a throwaway non-admin reader had to
+  be made on the local stack to see the wall at all, and was deleted afterwards — worth knowing
+  before the next person tries to check this.
+- [ ] Not checked in a browser: paying with `4242…` end to end, and a cancelled subscription
+  reverting to free limits. The card page was reached and read, not filled in.
 - [ ] Stop & review with Greg.
+
+#### The bug the browser found, and why nothing else could
+
+`/add/<url>` rendered `queue.error` for a failed POST. That is **engine state shared with the
+poller**, and `act`'s own `finally` starts the poll that clears it — so the quota's 402, and the
+link to `/profile` that this whole stage exists to provide, were replaced by the generic *"It didn't
+get as far as the queue"* before a reader could see them. The refusal names an Upgrade button and
+the page meant to hand them that button showed nothing.
+
+**This repo had already met it three times** — the three artefact hooks in August, then the thread
+page — and `tests/refused-job-reason-survives.test.tsx` exists for exactly it, with a header
+predicting that *"the way this breaks is by somebody reintroducing a private `queue.error` read"*.
+The add page was the fifth copy and nobody had gone back for it. The fix is `queue.lastFailure()`,
+snapshotted right after the await, and it is now on the add page and on a job card's refused Retry
+(which is the quota's second front door). Three cases were added to that file, each watched red.
+
+**The general shape, since this is the second time this plan has recorded one:** *"wire X into the
+place that does Y" is a claim about how many places do Y* — the settlement stage learnt it about job
+endings, and the surface stage has just learnt it about failure rendering. And the narrower lesson:
+a unit test that renders a failure is testing a frame; only a test that holds the poll, or a browser,
+is testing what a person sees.
+
+#### Reviewed as built, 2026-09-03
+
+GPT Sol on the surface ([prompt](260902i-profile-surface-code-review-prompt.md),
+[review](260902i-profile-surface-code-review-sol.md)) — verdict *"I would not ship this
+unchanged"*, five substantive findings and five overclaiming comments. Four of the five were real
+and are fixed:
+
+- **The offer card advertised the allowance out of the tier's *description*.** I had removed the
+  structured `ingestsPerPeriod` from it an hour earlier because it read the number twice on the
+  seeded rows — and that made this document's own *"raising a quota is one `UPDATE`"* into a lie:
+  raise it to 50 and the wall grants 50 while `/profile` goes on saying the 20 still sitting in the
+  sentence. The number is structured again; billing.md's *add a tier* recipe now says a description
+  must not restate it. **The lesson is the shape**: I removed a duplicate and kept the wrong copy —
+  the one that is prose and drifts, rather than the one that is a column and cannot.
+- **The Checkout return said *"your subscription is set up"* on any successful confirm.**
+  `confirmCheckout` proves only that the Session is this reader's and returns whatever the sync
+  found — `null`, `incomplete`, anything — so one's own abandoned Session, pasted back into the
+  address bar, produced a congratulation. It now says we asked Stripe and leaves the claim to the
+  plan card, which has just been re-read.
+- **Upgrade was offered where it could only open the Portal.** The page hid the tier cards for
+  `paid` only; `startCheckout` refuses while *any non-terminal* subscription exists, which also
+  catches `unpaid`, `incomplete` and a live subscription whose dates we cannot read. The server now
+  answers it as `canCheckout`, decided by the same `isTerminalStatus` the checkout route uses.
+- **A stale subscription's admin cell showed a lifetime count against a monthly limit**, unlabelled.
+  `ingestWindow` has a third value now and the cell says so.
+
+Two were **not** changed, and the reasoning is recorded where it belongs rather than left as a
+silent overrule:
+
+- **`/admin/users` really does draw `40 / 3` for a lapsed account**, which Sol called a P1 breach of
+  the rule above. Greg's rule is about **what a reader is told about themselves**; this page is the
+  administrator reading a support email, and forty against three is exactly the fact that makes it
+  make sense. Written out on `Ingests` in admin-columns.tsx.
+- **The admin period count and the billing row are two concurrent statements**, so a webhook rolling
+  a period between them could mislabel a count. True, and the window is milliseconds on a read-only
+  page reloaded by hand. Documented on `planFacts` rather than fixed.
+
+All five overclaiming comments were real and are corrected — including one this stage *made* false:
+`POST /api/billing/checkout`'s docstring said the browser uses the reply's `kind` to explain an
+Upgrade that became a Portal, and the client this stage wrote ignores it.
+
+#### What the `/profile` surface decided, and the two things worth keeping
+
+**The usage endpoint is a route of its own, not a field on `GET /api/reader`.** That route was the
+obvious host and is the wrong one: `useHasProfile` fetches it from every article page, so a billing
+field would put a `billing_accounts` read and an `ingest_events` aggregate on the path of *opening
+an article*, for data only `/profile` draws. It is also the one billing route that is a **GET** —
+the other three are POSTs because each creates a Stripe object, and this creates nothing.
+
+**The lapsed rendering is enforced by the type, not by a comment.** Greg's decision meant the page
+must never print *"40 of 3 used"*, and the obvious implementation is a `free` arm with a flag and a
+note asking the next person not to print the number. Instead `lapsed` is its own arm of `ReaderPlan`
+**with no `used` field**, so the forbidden shape is not on the wire for the page to render. The test
+(`tests/billing-plan.test.ts`) covers the half a type cannot: that the words chosen do not
+reconstruct the ratio from the numbers that *are* there, and that they make the same three promises
+`pay-lapsed` makes.
+
+**Two things found by building it, both small and both the same shape** — a second copy of one fact:
+
+- The offer card read `{ingestsPerPeriod} articles a month. {description}`, which on the real rows
+  renders *"20 articles a month. 20 articles a month. …"*: the allowance is already the first
+  sentence of every description, because that is what this doc's own *add a tier* recipe writes. The
+  doubling was the visible symptom of a structured copy sitting beside the prose.
+- `src/billing-plan.ts` is flat rather than `src/billing/plan.ts` because
+  `tests/client-imports.test.ts` only lets the browser import a shared module directly under `src/`
+  — a good rule, since the rest of `src/billing/` builds Stripe clients and opens transactions.
 
 ### Stage: Admin visibility + docs
 
-- [ ] `/admin/users`: plan, status, ingests this period — one field on `AdminUser`, one column,
-  one per-owner statement in `pg-admin.ts`.
-- [ ] New evergreen doc `docs/project/billing.md` (owner: proposed under
-  [security-map.md](../project/security-map.md), beside admin.md — **confirm owner with Greg**);
-  update auth.md / deployment.md / architecture.md cross-links; `tests/doc-links.test.ts` green.
+- [x] `/admin/users`: plan, status, ingests this period. **The estimate was wrong and it is worth
+  recording:** the plan said "one field on `AdminUser`, one column, one per-owner statement in
+  `pg-admin.ts`", and it is **four fields, two columns and three reads**. A plan with no usage
+  figure does not answer the operational question; a usage figure with no limit has no scale; and
+  the limit is a database row somebody may raise at any time, so it cannot be a constant in the
+  browser. The reads are the ledger aggregate, every `billing_accounts` row, and the (cached) tier
+  table — because **which window to count over depends on the entitlement**, and the entitlement is
+  decided by `entitlementFromRow`, the same function the wall decides with. Asking SQL instead would
+  have been a second implementation of that rule, in a string, free to disagree quietly.
+  Nine things now wait on a pool of five ([admin.md](../project/admin.md#where-the-numbers-come-from)).
+- [x] New evergreen doc `docs/project/billing.md`, under
+  [security-map.md](../project/security-map.md) beside admin.md; `tests/doc-links.test.ts` green.
+  Updated with *What a reader sees* and *What `/admin/users` shows*, and admin.md with
+  *The plan and ingest columns*.
 - [ ] Final health check: `npm test`, `npm run typecheck`, `npm run check`, lint on touched
   files.
 - [ ] Test consolidation pass (subagent).
@@ -957,8 +1069,15 @@ Greg, 2026-09-02:
   *mechanisms*, because a plan-stage reviewer with no repository in front of it cannot know that
   `enqueueOrGet` is not a transaction. A second review from something that reads the code is not
   the same review again.
-- [ ] After implementation: second Sol review of the code diff — weighted higher than this one
-  (a plan review cannot find the bug that doesn't exist yet).
+- ✅ After implementation: second Sol review of the code diff — weighted higher than this one
+  (a plan review cannot find the bug that doesn't exist yet). Three rounds now, one per stage:
+  [settlement](260902i-settlement-code-review-sol.md), [checkout](260902i-checkout-code-review-sol.md),
+  [the surface](260902i-profile-surface-code-review-sol.md).
+  **A note for whoever sends the next one**: the prompt goes to `codex` as a single argv string, and
+  Linux caps one of those at 128 KB — a prompt over that dies with `spawn E2BIG` and
+  `scripts/run-codex.ts` exits **0** having written no answer file, which is exactly the shape
+  [silent-success.md](../reusable/silent-success.md) is about. Check the answer file exists, not the
+  exit code.
 
 ## Appendix
 

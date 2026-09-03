@@ -181,6 +181,12 @@ still a fact about the account rather than about their reading: what their model
 a stated month, with no article, model or job named. See
 [The spend column](#the-spend-column-and-the-two-things-that-keep-it-honest).
 
+**The plan is the same kind of thing**, added 2026-09-03: which tier the account is entitled to, the
+raw Stripe subscription status beside it, and how many ingests of the allowance are gone. A tier id
+and a subscription status are facts about the account in exactly the way "how many articles" is, and
+neither names anything anybody read. See
+[The plan and ingest columns](#the-plan-and-ingest-columns).
+
 How many articles somebody has is a fact about their account. *Which* articles they are is their
 reading, and it does not leave their session. That line is the one paragraph to re-read before
 adding a column, and it is written into
@@ -362,11 +368,18 @@ means "email *or* phone was confirmed", and the page prints "email unconfirmed" 
 address, so the wrong one labels a phone-confirmed account the opposite of the truth. Sol found that
 in the query; it is pinned again against the API.
 
-The counts are **six grouped aggregates, run together and joined by a `Map`** — one per table, not
-one per user. A fixed six statements however many accounts there are, issued alongside the account
+The counts are **seven grouped aggregates, run together and joined by a `Map`** — one per table, not
+one per user. A fixed seven statements however many accounts there are, issued alongside the account
 listing rather than after it, and the join is a pure function (`mergeUsers`) so the arithmetic can
 be tested with two owners and no database. The sixth is money, and it came with the spend column
-below.
+below; the seventh is the ingest ledger, and it came with the plan columns, along with two reads
+that are not aggregates — every `billing_accounts` row, and the tier table (cached, so usually not a
+query at all).
+
+**Nine things now wait on a pool of five** ([`src/db/client.ts`](../../src/db/client.ts)), which is
+still one round trip's worth of latency rather than several, on a page one person opens a few times
+a day. But it is the point at which "add another aggregate" stops being free: the next column should
+read something already here rather than making it ten.
 
 **One grep guards the exception.** `tests/owner-isolation.test.ts` asserts that no file under
 `src/store/` except `pg-admin.ts` writes `groupBy(….ownerId)` — the shape of a question asked
@@ -491,6 +504,45 @@ Two more choices worth knowing:
 The wider version of the same numbers — by category, with a median/p95/max spread across every
 account — is `npm run cost -- --owners`:
 [ai-gateway.md § The pricing report](ai-gateway.md#the-pricing-report-per-owner-by-category-with-the-spread).
+
+## The plan and ingest columns
+
+Added 2026-09-03 beside spend, because "who is paying" and "who is expensive" are two halves of one
+question. **Plan** is the tier id or `free`, with Stripe's own status underneath; **Ingests** is
+`4 / 20` against the allowance. [billing.md](billing.md) is where the quota itself is explained.
+
+Three things keep them honest, and each is a way the column could have been quietly wrong:
+
+- **Entitlement is decided by `entitlementFromRow`** — the same function `reserveIngest` decides
+  with under its lock, not a second reading of the same columns. So a row this page draws as
+  *reader, 4 of 20* is a row the wall would admit, and one it draws as free is one refused at three.
+  The case that proves it matters is `past_due`, which is **entitled on purpose**: an admin page
+  with its own opinion would show that account as free and send somebody to fix a thing that is
+  working as designed.
+- **The window is named on every cell**, as the spend column's period is, because the two allowances
+  are measured over different spans — a paid one over the Stripe billing period, the free one over
+  the account's lifetime. A column of `4 / 20` and `2 / 3` is two different questions in one list
+  unless each cell says which it is answering. A subscription whose stored period has run out shows
+  the **lifetime** count with the tier's limit, because there is no current period to count inside;
+  the raw status beside it is the tell.
+- **The administrator's own row draws an em dash**, not a count. The exemption is total — no slot is
+  reserved at all, so an administrator's ingests are legitimately absent from `ingest_events`, and
+  any figure would be a count of something that was never counted. The page asks `isAdmin`, which is
+  the gate's own question and is already in the browser bundle for the `admin` marker.
+
+**The status is shown raw** rather than translated into a word of ours, for the reason
+`billing_accounts.status` is `text`: entitlement is decided by an allowlist, and a status Stripe adds
+next year should show itself here rather than be flattened into whichever of ours it least resembles.
+`free` over `canceled` is a lapsed subscriber, which is exactly what somebody holding a support email
+needs to see.
+
+It cost more than the plan expected — four fields on `AdminUser`, two columns, and three reads rather
+than one statement. The reasons are on `AdminUser` in [`src/admin.ts`](../../src/admin.ts); the short
+version is that a plan with no usage figure does not answer the operational question, a usage figure
+with no limit has no scale, and the limit is a database row somebody may raise at any time.
+[`tests/billing-admin-plan.test.ts`](../../tests/billing-admin-plan.test.ts) holds the arithmetic
+without a database; the aggregate itself is checked against a real one in
+[`tests/billing-usage-route.test.ts`](../../tests/billing-usage-route.test.ts).
 
 ## The page itself
 
