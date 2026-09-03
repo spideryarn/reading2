@@ -173,6 +173,45 @@ The comment at `src/jobs.ts:1478-1485` explains *that* the sweep is unscoped and
 does not say why it cannot be scoped**, so the next agent to read it does the obvious thing. One
 sentence closes that.
 
+### The shared database does not only make tests slow. It makes them *wrong*, and I reproduced it
+
+**Evidence: reproduced**, and this is the sharpest thing in the plan.
+
+Closing the run, `store-jobs-parity` failed twice with `expected 'busy' to be 'claimed'` — *"refuses a
+claim that would put the machine over its cap"* and *"frees the running slot once a claimant has
+stopped answering"* — and kept failing when re-run away from the full suite. Not a timeout. So I
+counted the rows:
+
+```
+select status, count(*) from spideryarn.jobs group by status
+  →  error 48 · done 4 · running 3 · cancelled 1 · queued 1
+```
+
+**`running: 3`, and the cap is three** (`CONCURRENCY_ENV`, *"Three, asked and answered"*). None of
+those three jobs was mine. The test asked for a claim, the store counted every `running` row in the
+one database this box shares between eleven worktrees, found the machine at its global cap, and
+answered `busy`. **The store was right. The test was right. The answer was wrong**, because "the
+machine" means something different to the code than it does to the person running one worktree's
+suite.
+
+That is a **different and worse failure than flakiness**, and the previous sweep's write-up
+([260903a](260903a-improve-the-codebase-sweep.md)) undersold it as a timing cost:
+
+- **Re-running in isolation does not clear it.** It clears a timeout. It clears this only if the
+  other worktrees happen to be idle, which is not something a run can arrange or detect.
+- **It is silent and plausible.** `busy` is a real status with a real meaning, so the failure reads
+  as a genuine cap violation rather than as contamination. An agent could spend an hour "fixing" a
+  concurrency bug that is not there.
+- **It gets worse with more agents**, which is the direction this repo is going.
+
+**And it is the same fact as T1.3.** The cap is deliberately global — that is why the advance-door
+sweep must not be owner-scoped. The property that makes the design correct in production is exactly
+the property that makes the test suite uninhabitable when eleven worktrees share one database.
+**That is the argument for schema-per-worktree, and it is much stronger than "the suite is flaky"** —
+it is the first evidence anyone has that the shared database produces *false test results* rather
+than merely slow ones. It belongs in [worktrees.md](../project/worktrees.md) § the schema-per-worktree
+write-up, where the decision will eventually be made.
+
 **This is the sweep's answer to the previous run's "one infrastructural win".**
 [260903a](260903a-improve-the-codebase-sweep.md) ended asking for a way to stop worktrees sharing a
 database. The answer, after reading rather than assuming: **the cheap version is a regression, and
