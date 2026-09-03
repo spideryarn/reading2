@@ -1,10 +1,11 @@
 # Background PDF upload, so Add does not wait for the bytes
 
-**Status as of 2026-09-03: built and green, not yet reviewed as code, not yet seen in a browser** —
-evidence: `src/web/uploadEngine.ts` exists and `tests/upload-engine.test.ts`,
-`tests/add-does-not-wait-for-the-upload.test.tsx` and
-`tests/an-upload-is-queued-only-once-its-bytes-arrive.test.ts` are green, as is
-`npm run typecheck`; the last two stages below are unticked.
+**Status as of 2026-09-03: built, reviewed twice, and seen working in a browser** — evidence:
+four test files green (`upload-engine`, `add-page-watches-the-transfer`,
+`add-does-not-wait-for-the-upload`, `an-upload-is-queued-only-once-its-bytes-arrive`),
+`npm run typecheck` clean, and all ten browser checks below pass against the local stack with a
+throttled uplink. Both GPT Sol rounds returned **not ready** and both were right; § *What the code
+review changed* is what came of the second. Not yet pushed to production.
 
 The review is at
 [260903j-…-review-sol.md](260903j-background-pdf-upload-so-add-does-not-wait-review-sol.md); its
@@ -405,7 +406,7 @@ Frontloaded, because everything else is unsafe without it and it stands on its o
 
 ### Stage: see it work, and write it down
 
-- [ ] Browser check in a **Sonnet subagent** ([browser-control.md](../project/browser-control.md)
+- [x] Browser check in a **Sonnet subagent** ([browser-control.md](../project/browser-control.md)
       then [browser-testing.md](../project/browser-testing.md)), against the local server with
       `SPIDERYARN_STORE=postgres`. Throttle the connection so the transfer is slow enough to act
       during. Success criteria, in order:
@@ -425,7 +426,7 @@ Frontloaded, because everything else is unsafe without it and it stands on its o
       gate is a fifth *thing that is not obvious*.
 - [x] Add the engine to [web-client.md](../project/web-client.md) beside `jobEngine`.
 - [x] Note the uncalled `sweepable` leak where it belongs — a line in ingest-queue.md, not a new doc.
-- [ ] Stop and review with Greg.
+- [x] Stop and review with Greg.
 
 ### Stage: the pre-existing 409, if Greg wants it now
 
@@ -441,12 +442,12 @@ It matters more here only because the file being re-uploaded is, by construction
 
 ### Stage: review and land
 
-- [ ] GPT Sol review of the built code, with the scoped diff attached, weighted higher than this
+- [x] GPT Sol review of the built code, with the scoped diff attached, weighted higher than this
       plan-stage review ([codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md)). Tell it
       the previous findings are at `260903j-…-review-sol.md`, that their fixes are unreviewed code
       written by someone else, and to spend the run on what has changed. Check the exit code *and*
       the answer file.
-- [ ] Work each finding, then `npm test`, `npm run typecheck`, `npm run check`.
+- [x] Work each finding, then `npm test`, `npm run typecheck`, `npm run check`.
 - [ ] Test consolidation pass in a subagent: four new test files is probably two too many.
 - [ ] Commit per stage; push to `dev`.
 
@@ -481,6 +482,66 @@ be queued for a file that was never uploaded, and nothing minded.
 failed three of eighteen for the reviewer because minting answered 500 in its sandbox; the same file
 is 18/18 here. `VERCEL=1` also switches minting off (`recordsSurviveTheRequest`), which is the trap,
 and the new suite's `mint` helper now unsets it around its own call so no case has to remember.
+
+## What the code review changed
+
+The second round is at
+[260903j-…-review2-sol.md](260903j-background-pdf-upload-so-add-does-not-wait-review2-sol.md),
+against the scoped diff. Verdict: **not ready**, two landing blockers. Both are closed, and so are
+five of the other findings.
+
+| finding | verdict | what changed |
+| --- | --- | --- |
+| 1 · quota refusal had no reachable retry | **blocker, confirmed** | a `queueing` failure always offers Try again, overriding `worthRetrying` — which calls every quota code `blocked`, right everywhere else and exactly wrong for the one button a reader presses *after* upgrading |
+| 2 · Stop was not a terminal state | **blocker, confirmed, three ways** | refused during `queueing`; `DELETE /api/uploads/:id` makes it durable (`pending → expired`); the abort controller now covers hashing and granting |
+| 3 · the disclosure was false in four states | **confirmed** | `textHasGone` asks *has this been queued*, not *has the transfer stopped* |
+| 4 · overlapping polls, and prose matching | **confirmed** | the interval closes synchronously on the first actionable result; the wait triggers on the `[up-wait]` code |
+| 5 · no resume of a 401'd queue phase | **confirmed** | `uploadEngine.resume()`, beside `jobEngine.resume()` in `useJobSession` |
+| 6 · Stop did not reach the grant request | **confirmed** | one `AbortController`, created on the first line of `send` |
+| 7 · present bytes still lost to an expired grant | **confirmed, and the plan had ticked a test that did not exist** | `claim({ arrived })` through both adapters, plus the test |
+
+**The test audit was the most useful part of it**, and it was right about all six:
+
+- the late-success fence case tested nothing — `stop()` aborts, so the posed PUT rejected first and
+  the later `resolve()` was a no-op. It now holds the *queue* request open instead, which is real
+  work landing after a sign-out;
+- the `jobEngine.start` assertion was vacuous, against a counter nothing incremented. What actually
+  holds that line is that `UploadEngineDeps.jobs` has no `start` on it, so the case asserts the
+  seam's shape;
+- the queue mock could not be held open, which is why nothing could reach `queueing` to press Stop
+  in it — which is where finding 2 was hiding;
+- `AddPage` had no tests at all. `tests/add-page-watches-the-transfer.test.tsx` is new and covers
+  the tense, Stop, and the retries.
+
+**And one existing test changed because the behaviour it pinned genuinely moved.**
+`tests/direct-add-says-the-text-has-gone.test.tsx` posed a *failing* `addUpload` and asserted the
+past tense — fine when the sentence was the same on every render, wrong now that it follows the
+outcome. The disclosure is still made in both cases; only its tense moves, and there is a case for
+each direction.
+
+**Deliberately not done, and Greg's to schedule:** the pre-existing unrecoverable 409 (`enqueue`
+throwing between `claimUpload` and `noteSlug`). Sol confirmed from `origin/dev` that it is
+pre-existing and that the readiness `head`, running *before* the claim, does not widen the
+claim→enqueue window. The stage for it is below.
+
+## Seen working in a browser
+
+Local stack, `SPIDERYARN_STORE=postgres`, an 11.6 MB PDF over a CDP-throttled 2 Mbps uplink
+(~46 seconds), 2026-09-03. All ten checks pass.
+
+The two that were worth the whole exercise:
+
+- **reload `/add/upload/<id>` mid-transfer** — the reloaded tab says the file is still arriving and
+  the *original* tab's transfer is untouched; a second tab on the same address gets `409` then
+  `202`, and exactly one job results;
+- **Stop, then reload the address** — the page says *"That file never finished arriving"* and stops.
+  Before the durable cancel it settled into *"still on its way"* and polled for the two hours of the
+  grant, about a transfer that had been cancelled a second earlier. **That one was found here and
+  not by either review.**
+
+The console carries three refusals and they are all the design working: `409 [up-wait]` while bytes
+are arriving, `410 [up-gone]` on a cancelled upload, and 404s on advances for jobs the test's own
+cleanup had removed. Nothing else 4xx'd.
 
 ## Appendix: the risks worth naming early
 
