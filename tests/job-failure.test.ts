@@ -22,8 +22,18 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { partsOf } from "../src/arc.js";
 import { JobCard } from "../src/web/AddArticle.js";
-import { failureKindOf, jobWorthRetrying } from "../src/job-failure.js";
-import { providerHttpFailure } from "../src/messages.js";
+import {
+  failureKindOf,
+  jobWorthRetrying,
+  readerFailureOf,
+  stageFailure,
+} from "../src/job-failure.js";
+import {
+  canRetry,
+  MODEL_REFUSED,
+  providerHttpFailure,
+} from "../src/messages.js";
+import { sanitise } from "../src/monitoring-scrub.js";
 import { STEPS, type StepContext } from "../src/pipeline.js";
 import { createFsArtifactStore, fsArtifacts } from "../src/store/artifacts-fs.js";
 import { storeRawSource } from "../src/store/blobs.js";
@@ -296,8 +306,175 @@ describe("the failures a retry cannot change", () => {
       );
       expect((err as Error).message).toMatch(/Readability/);
       expect(failureKindOf(err)).toBe("blocked");
+      /* And the reader is not shown that sentence. It says "Readability", which
+         is a library they have never heard of — one of the failures still on
+         the generic fallback, deliberately, and this is where that is recorded
+         rather than in a plan nobody will re-read. */
+      expect(readerFailureOf(err, "Extracting the article").message).not.toMatch(/Readability/);
     } finally {
       await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+/**
+ * **The seam itself**, one layer below tests/step-failure-seam.test.ts.
+ *
+ * That file drives a real job and asserts what is persisted. This one asks the
+ * function directly, because two of its properties have no visible symptom when
+ * they go wrong: the fallback being *total* over `FailureKind`, and a declared
+ * sentence being shape-checked before it is published rather than trusted.
+ *
+ * src/job-failure.ts § Two strings, not one.
+ */
+describe("which sentence the reader gets", () => {
+  const STEP = "Writing the questions";
+
+  it("keeps the diagnostic off the reader's half and on the error", () => {
+    const err = stageFailure(MODEL_REFUSED, "stop_reason=refusal, 41.2s, src/quiz.ts:530");
+    /* The two really are two. A split that quietly assigned one string to both
+       would satisfy every `not.toContain` written about the other. */
+    expect((err as Error).message).toContain("stop_reason=refusal, 41.2s, src/quiz.ts:530");
+    expect(readerFailureOf(err, STEP)).toEqual(MODEL_REFUSED);
+    expect(readerFailureOf(err, STEP).message).not.toContain("src/quiz.ts");
+  });
+
+  /**
+   * **The diagnostic does not buy its way past monitoring.**
+   *
+   * For six hours on 2026-09-03 `stageFailure` appended the reader sentence's
+   * bracketed code to the diagnostic, so that `authored` in
+   * src/monitoring-scrub.ts would forward it to Sentry. The reasoning was that
+   * a code makes a message quotable. What a code actually does there is
+   * *certify that we wrote every word*, and `sanitise` forwards a certified
+   * message verbatim — so appending one let any text a step happened to put in
+   * an exception buy that certificate. Which is the leak
+   * `monitoring-scrub.ts` exists to stop, opened while closing a smaller one.
+   * GPT Sol found it.
+   *
+   * So this drives the real `sanitise` rather than asserting on a string. A
+   * test of `kindOfMessage` would have passed the whole time the hole was open;
+   * only the function that makes the decision can say whether the decision is
+   * right.
+   */
+  it("does not let a step's own words buy their way into Sentry", () => {
+    const sentinel = "ARTICLE_SENTINEL: a sentence lifted out of the reader's article";
+    const err = stageFailure(MODEL_REFUSED, sentinel);
+
+    const scrubbed = sanitise(err);
+    expect(scrubbed.withheld, "the diagnostic was forwarded to Sentry").toBe(true);
+    expect(scrubbed.error.message).not.toContain("ARTICLE_SENTINEL");
+    /* The event still arrives and still points at a line of code — which is
+       what makes the withholding affordable. src/job-failure.ts § The log, and
+       not Sentry. */
+    expect(scrubbed.error.name).toBe(err.name);
+    expect(scrubbed.error.stack).toBeTruthy();
+  });
+
+  it("still sends a message it really did author", () => {
+    /* The positive control, and it is what makes the assertion above mean
+       something: `withheld` is not simply always true. A declared failure with
+       no separate diagnostic keeps its own coded sentence on `Error.message`,
+       and that one is ours. */
+    const scrubbed = sanitise(stageFailure(MODEL_REFUSED));
+    expect(scrubbed.withheld).toBe(false);
+    expect(scrubbed.error.message).toBe(MODEL_REFUSED.message);
+  });
+
+  /**
+   * **The two forms of `detail` differ, and the difference is the whole point.**
+   *
+   * Identical text, one passed as free text and one claimed with `{ authored }`
+   * — one is withheld and one travels. Asserted side by side and in one test
+   * on purpose: the plain form looks redundant next to the authored one, and
+   * the obvious tidy-up is to collapse them, which quietly hands every step's
+   * free text the certificate again. That is the six-hour hole above, reopened
+   * by somebody reading this file and finding it repetitive.
+   *
+   * `{ authored }` is a claim about provenance, not a formatting preference.
+   * What earns it at the two real call sites is that every character is ours:
+   * a fixed sentence, and a status the SDK handed over as a number. What must
+   * never take it is an interpolation of anything from outside.
+   */
+  it("sends the same words when the throw site claims it wrote them", () => {
+    const words = "the model answered with stop_reason: refusal";
+
+    const free = sanitise(stageFailure(MODEL_REFUSED, words));
+    expect(free.withheld, "free text reached Sentry").toBe(true);
+    expect(free.error.message).not.toContain(words);
+
+    const claimed = sanitise(stageFailure(MODEL_REFUSED, { authored: words }));
+    expect(claimed.withheld, "an authored diagnostic was withheld").toBe(false);
+    expect(claimed.error.message).toContain(words);
+    /* And the code is on it, which is what `authored` reads and what
+       tests/stop-details.test.ts pins on the log line to tell a refusal apart
+       from a stage that never reached a model. */
+    expect(claimed.error.message).toContain("[ai-model-refused]");
+  });
+
+  it("does not stamp a code on a diagnostic that carries one of its own", () => {
+    /* The other half of the same mistake, and the reason this case is worth
+       keeping rather than deleting with the append: a diagnostic ending in
+       `[db-busy]` under a `blocked` reader failure would tell `kindOfMessage`
+       *retry*. `failureKindOf` reads the field first, so nothing on screen
+       turns on it — but the diagnostic must not be edited on its way to the
+       log either way, and this pins that it is passed through untouched. */
+    const err = stageFailure(MODEL_REFUSED, "went wrong [db-busy]");
+    expect((err as Error).message).toBe("went wrong [db-busy]");
+    expect(failureKindOf(err), "the field decides, not the borrowed code").toBe("blocked");
+  });
+
+  it("falls back to the reader's own sentence when there is no extra detail", () => {
+    /* Safe, unlike falling back to an arbitrary `Error.message`: we wrote it. */
+    expect(stageFailure(MODEL_REFUSED).message).toBe(MODEL_REFUSED.message);
+  });
+
+  it("gives an undeclared failure a generic sentence naming the step", () => {
+    const err = new Error('wanted 2 "hard", got 1 — src/quiz.ts § bandQuota');
+    const reader = readerFailureOf(err, STEP);
+    expect(reader.message).toContain(STEP);
+    expect(reader.message).not.toContain("src/quiz.ts");
+    expect(reader.kind, "nobody said, so the retry stays offered").toBe("retry");
+  });
+
+  it("uses the kind the throw site declared, even with no sentence", () => {
+    /* `stageFailure(kind, detail)` is the older form and most of the pipeline
+       still uses it: no reader sentence, but a real claim about retrying. The
+       generic copy has to follow that claim rather than default to retry, or a
+       reader is told to try again under a failure stored as `ours`. */
+    const err = stageFailure("ours", 'No source URL for "a-slug".');
+    const reader = readerFailureOf(err, STEP);
+    expect(reader.kind).toBe("ours");
+    expect(canRetry(reader.kind)).toBe(false);
+    expect(reader.message).not.toContain("a-slug");
+  });
+
+  it("has its own sentence for each of the four kinds", () => {
+    /* The fallback is a total map over `FailureKind`, so a fifth kind is a type
+       error at `STEP_GAVE_UP` in src/messages.ts rather than a silent
+       fall-through. What this asserts is the part the types cannot: that all
+       four actually say something, and four different things. */
+    const said = (["retry", "ours", "bug", "blocked"] as const).map(
+      (kind) => readerFailureOf(stageFailure(kind, "detail"), STEP).message,
+    );
+    expect(new Set(said).size).toBe(4);
+    for (const message of said) expect(message).toContain(STEP);
+  });
+
+  it("does not publish a malformed declaration", () => {
+    /* `readerFailure` is read off a thrown value, so it is outside the type
+       system in the way `KNOWN_KINDS` above describes. Trusting a half-built
+       one would put `undefined` on a reader's screen. */
+    for (const bad of [
+      { kind: "retry" },
+      { kind: "retry", message: "" },
+      { kind: "sideways", message: "Something." },
+      "not an object",
+    ]) {
+      const err = Object.assign(new Error("raw diagnostic"), { readerFailure: bad });
+      const reader = readerFailureOf(err, STEP);
+      expect(reader.message, JSON.stringify(bad)).toContain(STEP);
+      expect(reader.message).not.toContain("raw diagnostic");
     }
   });
 });

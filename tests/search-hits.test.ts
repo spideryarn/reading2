@@ -23,8 +23,7 @@ import {
   MIN_FIND_CHARS,
   orderFound,
   keepAbove,
-  countAbove,
-  confNote,
+  applyConf,
   resolveHits,
   type Found,
 } from "../src/web/search-hits.js";
@@ -667,10 +666,17 @@ describe("the prioritised threshold", () => {
     whole: false,
   });
 
-  it("keeps what clears the bar and drops what does not", () => {
+  it("keeps what survives the bar and drops what does not", () => {
     const rows = [row(1, 80), row(2, 50), row(3, 20)];
     expect(keepAbove(rows, 50).map((f) => f.index)).toEqual([1, 2]);
-    expect(countAbove(rows, 50)).toBe(2);
+    /* One pass, and the panel's `N of M` and its foot line both come out of it.
+       Asserted as an identity between the parts rather than as two separate
+       numbers: **a count that disagrees with the list under it** is the failure
+       the shared threshold module exists to make impossible. */
+    const out = applyConf(rows, 50);
+    expect(out.visible).toEqual(keepAbove(rows, 50));
+    expect(out.hiddenCount).toBe(1);
+    expect(out.visible.length + out.hiddenCount).toBe(rows.length);
   });
 
   it("keeps a model hit whose stored confidence is missing", () => {
@@ -691,6 +697,12 @@ describe("the prioritised threshold", () => {
     const words = [row(1, null), row(2, null)];
     expect(keepAbove(words, 100).map((f) => f.index)).toEqual([1, 2]);
     expect(keepAbove(words, 0)).toHaveLength(2);
+    /* And they are counted as unscored survivors rather than as hits that
+       cleared the bar, so the foot line under a words search says nothing is
+       hidden rather than claiming a judgment was made. */
+    const out = applyConf(words, 100);
+    expect(out.hiddenCount).toBe(0);
+    expect(out.unscoredCount).toBe(2);
   });
 
   it("is inclusive at the bar, so the printed number means what it says", () => {
@@ -699,15 +711,18 @@ describe("the prioritised threshold", () => {
     expect(keepAbove([row(1, 50)], 50)).toHaveLength(1);
   });
 
-  it("says out loud when it has hidden everything, or nothing", () => {
+  it("says out loud how many it has hidden, in the panel's own noun", () => {
+    /* Search prints the same foot line the other two thresholds now do —
+       `hiddenNote` in threshold.ts, with "passage" as the noun. The wording is
+       covered verbatim in tests/threshold.test.ts; what matters here is that
+       the number handed to it is this list's hidden count. */
     const rows = [row(1, 80), row(2, 20)];
-    expect(confNote(rows, 90)).toMatch(/Nothing clears/);
-    expect(confNote(rows, 0)).toMatch(/none are hidden/);
-    // And says nothing when it is doing its job, so the note is a warning
-    // rather than a running commentary.
-    expect(confNote(rows, 50)).toBeNull();
-    // An empty result set is the search's problem to explain, not the bar's.
-    expect(confNote([], 50)).toBeNull();
+    expect(applyConf(rows, 90).hiddenCount).toBe(2);
+    expect(applyConf(rows, 0).hiddenCount).toBe(0);
+    expect(applyConf(rows, 50).hiddenCount).toBe(1);
+    // An empty result set is the search's problem to explain, not the bar's —
+    // and the panel does not draw a slider over one.
+    expect(applyConf([], 50).hiddenCount).toBe(0);
   });
 });
 

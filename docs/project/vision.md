@@ -10,8 +10,26 @@ The brief, in Greg's words (2026-08-24):
 > **help the user get what they need from it, help them read efficiently, but deeply, help them
 > internalize and interrogate.**
 
-Everything else in these docs is downstream of that sentence. When a design decision is genuinely
-close, the tiebreak is: which option leaves more of the thinking with the reader?
+Everything else in these docs is downstream of that sentence. The principle behind it, and the
+tiebreak when a design decision is genuinely close, is in notes Greg dictated before 2026-09-03
+([the full notes](../research/260902k-greg-notes-the-edge-between-ease-and-difficulty.md)):
+
+> it's always going to be tempting to move towards automation. And that's always going to be easier
+> for the human, easier indeed for the product designer, and tempting. I guess we want to hold some
+> kind of line. … The best one I have in my mind is: **what will help the human to best form their
+> own rich updated internal representations?**
+>
+> you can go to the gym or you can buy a forklift truck to lift the weights. But if you buy the
+> forklift truck that lifts the weights, then you atrophy. … if I had 1 guiding hunch, it's that we
+> want to be at a kind of edge between ease and difficulty where things are difficult enough that
+> they have to work, but not so difficult that they give up or fail. … our goal is to make things
+> easier where we can, but not too easy.
+
+So the tiebreak is: **which option will best help the reader form their own rich, updated internal
+representation** — digest, understand, learn, notice, integrate, critique? The tiebreak used to
+read "which option leaves more of the thinking with the reader?", and Greg replaced it on
+2026-09-03: the point is not how much work is left to the reader but what the reader comes away
+holding.
 
 ## The problem with AI reading tools
 
@@ -153,11 +171,27 @@ these, each to be judged against the principles above:
 - **Argument view** — claims, the support offered for each, and the moves the author doesn't make.
   <br>*Distinct from Ideas above, and the line is worth keeping: a claim is what the author asserts
   and defends **here**; an idea is a tool you could carry away and use on a different piece.*
-- **Confusion signal** — the reader marks a passage as unclear; the highest-value input we can get.
+- **Confusion signal** — the reader marks a passage as unclear; the highest-value input we can get,
+  because it sits exactly on the boundary between what they already know and what they need help
+  with. The glossary is the same instrument in passive form — *"the glossary needs to be visible at
+  all times … because the user's interactions with it provide us with really valuable information"*
+  (Greg, [notes](../research/260902k-greg-notes-the-edge-between-ease-and-difficulty.md)).
 - **Notes and highlights** anchored to block ids, surviving re-extraction — which is precisely why
   those ids are random rather than sequential
   ([block-ids.md](block-ids.md#why-random-and-not-sequential)).
 - **Recall** — a few durable questions generated from what the reader actually dwelt on.
+- **A model of the reader** — where they are and what they know, built passively where possible
+  (time on a paragraph, what they select, what they open in the glossary) and only crudely from the
+  profile boxes ([reader-profile.md](reader-profile.md)). Every mode above becomes a consumer of it.
+- **A difficulty map** — which paragraphs are hard before we know anything about the reader, as a
+  data structure other modes read from rather than a mode of its own. Distinct from the original
+  app's document-level difficulty badge, which was a verdict with no consumer
+  ([borrow-list.md](original-version/borrow-list.md)).
+- **And, eventually, not six modes** — *"a rich augmented interface for reading a text that
+  dynamically combines across these modes"*: a tutor that says as you scroll, *"I had a feeling you
+  might struggle with this."* The band the modes take turns in
+  ([reading-view-overview.md](reading-view-overview.md)) is the simpler-first version of this, not
+  the end state.
 
 ## Under this doc
 

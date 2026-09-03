@@ -232,6 +232,12 @@ const READS = [
      `CITED_FINGERPRINT_COLUMNS`, like `ideas` and `sketch`, because it sends
      `articleWithIds` and so its `sourceHash` covers the `URL:` line. */
   "quiz",
+  /* Added 2026-09-03 with the `illustrated` stage. **The only projection that
+     takes another artefact's column**: its `sourceHash` is a hash of the
+     `sketch`, so that column is in the selection alongside its own — and the
+     cited fingerprint set besides, because this read also reports the Sketch's
+     own staleness. src/store/pg.ts § `REVISION_PROJECTIONS.illustrated`. */
+  "illustrated",
   /* Added 2026-08-31 with `pgArticleReader.loadSource`. The only read that
      takes bytes, which is why it is a projection of its own rather than columns
      bolted onto `article` — src/store/pg.ts § `rawSource`. */

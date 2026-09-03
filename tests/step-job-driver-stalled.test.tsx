@@ -56,6 +56,7 @@ vi.mock("../src/web/useJobs.js", () => ({
 }));
 
 const { useStepJob } = await import("../src/web/useStepJob.js");
+type StepFailure = NonNullable<ReturnType<typeof useStepJob>["failed"]>;
 
 const OWNER = "00000000-0000-4000-8000-00000000c0de" as Job["ownerId"];
 
@@ -75,7 +76,7 @@ function sketching(over: Partial<Job> = {}): Job {
 let host: HTMLDivElement;
 let root: Root;
 /** What the hook answered on the last render. */
-let seen: { stalled: boolean; job: Job | null; failed: string | null } | null = null;
+let seen: { stalled: boolean; job: Job | null; failed: StepFailure | null } | null = null;
 /** The last hook value, so a test can press the button. */
 let press: (() => Promise<void>) | null = null;
 
@@ -170,7 +171,7 @@ it("says nothing about transport when the press failed and nothing is running", 
   await act(async () => {
     await press?.();
   });
-  expect(seen?.failed, "the refusal's own words are what the reader gets").toBe(
+  expect(seen?.failed?.message, "the refusal's own words are what the reader gets").toBe(
     "The request did not reach the server.",
   );
   expect(seen?.stalled).toBe(false);

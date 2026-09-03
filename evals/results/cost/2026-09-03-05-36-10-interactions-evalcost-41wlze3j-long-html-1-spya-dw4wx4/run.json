@@ -1,0 +1,76 @@
+{
+  "startedAt": "2026-09-03T05:36:10.208Z",
+  "slug": "evalcost-41wlze3j-long-html-1-spya-dw4wx4",
+  "store": "postgres",
+  "databaseTarget": "postgresql://postgres:***@127.0.0.1:54362/postgres",
+  "evalOwnerId": "00000000-0000-4000-8000-000000000002",
+  "environmentOwnerId": "f4d08b58-5573-4811-9887-e26c114fb324",
+  "node": "v26.8.1",
+  "article": {
+    "blocks": 186,
+    "words": 16855
+  },
+  "notes": [
+    "Per-interaction costs and per-article costs must never be added together. An article is paid for once; an interaction is paid for every time somebody presses something.",
+    "`expected` says whether the round was meant to be cold or warm; `cache` says what it was, read off the calls. A read counts as pre-existing when no earlier call in the round wrote a cache — so chat's tool loop reading its own first call is still a cold round. A round that was not what it was labelled is a finding about the measurement, not a price, and no cold/warm ratio is taken from it.",
+    "Every call here is made under scopeKind `eval` and ownerId EVAL_OWNER_ID, so none of it lands in `npm run cost`'s Product bucket (scripts/ai-cost.ts defines Product as scopeKind !== \"eval\") and every row resolves to the eval owner's article rather than to a null article_id under the environment owner.",
+    "`referee-claims` and `embeddings` are ARTICLE costs measured here only because they are not pipeline steps and so cannot be draws in run.ts. `referee-mirror` is NOT one of them — it stores nothing and is re-paid on every press and every reload, which makes it a repeated reader cost. It was classified the other way until 2026-09-03.",
+    "`referee-candidates` runs two turns that do different work — the fit brief, then the names — so both numbers are real and their ratio means nothing. It is the most expensive turn in the app by design: 12k output tokens and up to 30 web search results.",
+    "Unpriced calls are unknown, not zero: a total carrying them is short by an unknown amount."
+  ],
+  "taskNotes": {
+    "chat": "One chat turn through `converse`, with the production tool loop on. Round 2 carries round 1's turn as history, which is what makes it warm — the article message is byte-identical for the life of a conversation (tests/article-prompt.test.ts) and the breakpoint sits after it."
+  },
+  "rounds": [
+    {
+      "task": "chat",
+      "round": 1,
+      "expected": "cold",
+      "cache": {
+        "kind": "cold",
+        "readWithinRound": 0
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 133458500,
+      "unpriced": 0,
+      "tokens": {
+        "input": 43091,
+        "output": 2575,
+        "cacheRead": 0,
+        "cacheWrite": 43053,
+        "reasoning": 1112
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 52055,
+      "detail": "4128 chars, 0 tool event(s)"
+    },
+    {
+      "task": "chat",
+      "round": 2,
+      "expected": "warm",
+      "cache": {
+        "kind": "warm",
+        "read": 43053
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 23230600,
+      "unpriced": 0,
+      "tokens": {
+        "input": 44418,
+        "output": 1189,
+        "cacheRead": 43053,
+        "cacheWrite": 0,
+        "reasoning": 508
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 14675,
+      "detail": "2116 chars, 0 tool event(s)"
+    }
+  ]
+}

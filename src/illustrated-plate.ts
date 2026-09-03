@@ -8,6 +8,31 @@
  * an illuminated page. This file is the brief's schema and its reader. It knows
  * nothing about drawing and nothing about the network.
  *
+ * ## Two readers, because there are two trust levels
+ *
+ * **`readModelBrief` reads what a model just said. `readStoredIllustrated`
+ * reads what came off our own disk or down our own wire.** They are not the
+ * same question and one function answering both was the sharpest finding of the
+ * 2026-09-03 review:
+ *
+ * > A fresh brief can include storage-owned fields … That permits a
+ * > prompt-injected brief to claim an existing content-addressed blob or
+ * > manufacture an impossible image-plus-failure state.
+ * >
+ * > — GPT Sol, 2026-09-03
+ *
+ * `image.sha256` addresses a blob in a content-addressed store shared by every
+ * article, so a model that may name one may name **somebody else's picture**.
+ * A model may not, here, at all: a brief carrying `image` or `failed` loses the
+ * whole plate. `IllustratedImage` is written by us from bytes we received
+ * (src/illustrated-image.ts) and `failed` is one of our own sentences, so both
+ * are ours to read back and neither is ever the model's to write.
+ *
+ * The type says the same thing in the other direction: `IllustratedPlate` is a
+ * **union**, so "has a picture and also failed" is not a state that can be
+ * constructed — use `plateDrawn` and `plateFailed` rather than assigning either
+ * field.
+ *
  * ## What is checked here, and — more importantly — what is not
  *
  * Sketch's design move is *don't check the picture, check the numbers that made
@@ -33,13 +58,37 @@
  *     handed to a *second* model, so an instruction inside a stranger's web
  *     page can travel through a field we generated into an image prompt. Length
  *     and character class are capped here, where the check is testable, rather
- *     than at the call site (plan § Two hazards).
+ *     than at the call site (plan § Two hazards). It bounds the payload; it
+ *     does not make the field trustworthy — src/illustrated.ts § What an
+ *     article's author can still make the picture do.
  *
  * The count is the point. `report.faults` rising means the prompt has started
  * drifting off the article, and a validator that quietly repaired things would
  * report a clean run on a model that had stopped following the schema —
- * docs/reusable/silent-success.md. So: **drop, never repair**, exactly as
- * `readSketch` does.
+ * docs/reusable/silent-success.md. So: **drop, never repair**, and where
+ * something genuinely is repaired rather than dropped (a title, an overlong
+ * `failed` sentence) the repair gets a fault of its own.
+ *
+ * ## The floors
+ *
+ * **A plate with no surviving vignette is not drawn** — from a model. The whole
+ * claim of this mode is that the picture is anchored in the article, and a
+ * plate whose every anchor was dropped is a picture of nothing that costs money
+ * to find out. A *stored* plate in that state is kept and faulted instead: the
+ * money is already spent and the bytes exist, and block ids can move under an
+ * artefact (see the browser note below), so dropping it would delete a picture
+ * a reader paid for over a re-extraction. **An empty plate set is a fault
+ * either way.**
+ *
+ * ## Order is the Sketch's, never the model's
+ *
+ * Plates come back in the order `opts.sceneIds` gives, which is the Sketch's.
+ * A model that lists the zoom scene first would otherwise make *it* the style
+ * reference every later plate is drawn against (src/illustrated.ts § the
+ * overview is the hand), which is a silent reordering of the whole run. Scene
+ * membership, uniqueness and absence are all decided here rather than by the
+ * caller afterwards, so that `report` is reconcilable against the artefact it
+ * is a report of.
  *
  * ## The one gap, stated rather than papered over
  *
@@ -73,9 +122,11 @@
  * `sketch-scene.ts` is on it. **The browser revalidates on arrival**: what
  * comes back from the artefact may have been written by an older schema or
  * against an article whose block ids have since moved, and the panel must drop
- * what it cannot vouch for before showing a reader a quote and a jump.
+ * what it cannot vouch for before showing a reader a quote and a jump. It calls
+ * `readStoredIllustrated`, never `readModelBrief`.
  */
 import { findQuote } from "./quote-match.js";
+import type { Sketch, SketchScene } from "./sketch-scene.js";
 import type { BlockId } from "./types.js";
 
 export const ILLUSTRATED_VERSION = "illustrated/1";
@@ -89,15 +140,52 @@ export const ILLUSTRATED_VERSION = "illustrated/1";
 export const MAX_PLATES = 4;
 
 /**
+ * **Which scenes get a plate** — the overview and then the zoom scenes in the
+ * order the Sketch lists them, capped at `MAX_PLATES`.
+ *
+ * The cap is a constant so that "overview only" is one character away, which is
+ * how the plan defers it rather than arguing about it.
+ *
+ * It lives here rather than in src/illustrated.ts, where it started, because
+ * `sceneIds` made it the *reader's* question: every caller of a reader has to
+ * answer it, and one of them (`--check` in evals/illustrated/run.ts) must do so
+ * without dragging the stage, the SDK and the gateway in behind it. The
+ * `Sketch` import is type-only, so this file still imports nothing at runtime
+ * but `quote-match.js`.
+ */
+export function platedScenes(sketch: Sketch): SketchScene[] {
+  return sketch.scenes.slice(0, MAX_PLATES);
+}
+
+/**
+ * **How much of a brief is even looked at**, which is a different question from
+ * how much is drawn.
+ *
+ * Parsing happens before any slice to `MAX_PLATES`, and it walks every vignette
+ * of every plate calling `findQuote` on each — so a stored artefact claiming ten
+ * thousand plates would spend a browser's afternoon proving they were all
+ * unusable. Four times the drawing cap, so a model writing one plate too many
+ * is still visible as a fault rather than silently truncated, and forty
+ * vignettes against the 8–14 the prompt asks for.
+ */
+export const MAX_PLATES_READ = 16;
+export const MAX_VIGNETTES = 40;
+
+/**
  * The shortest thing that may count as a quote — **both of these, not either**.
  *
  * Four words and twenty characters. Without a floor, `"the"` matches every
  * block in the article and the anchor stops meaning anything: a vignette could
  * name any block at all and pass. Words alone would let `"a b c d"` through;
  * characters alone would let one long compound word through.
+ *
+ * The ceiling is the prompt's own "4 to 20 words", enforced rather than asked
+ * for. Measured against the 2026-09-03 runs the model never went over 19, so it
+ * costs nothing today and stops a "quote" that is really a paragraph.
  */
 export const MIN_QUOTE_WORDS = 4;
 export const MIN_QUOTE_CHARS = 20;
+export const MAX_QUOTE_WORDS = 20;
 
 /**
  * Caps on the model's free text, in characters.
@@ -115,6 +203,23 @@ export const MAX_STYLE_CHARS = 600;
 export const MAX_TITLE_CHARS = 200;
 /** A sketch node id, which the model copies from the scene. */
 export const MAX_NODE_CHARS = 80;
+/** Our own sentence saying why a plate has no picture. Not exported: one file
+    writes it (`plateFailed`) and the same file reads it back. */
+const MAX_FAILED_CHARS = 200;
+
+/**
+ * **Bounds on the stored image record**, which is ours rather than a model's
+ * and is still checked.
+ *
+ * Deliberately a second, looser statement of the caps in src/ai-call.ts
+ * § `MAX_IMAGE_BYTES`, and not an import of them: this file is on the client
+ * allowlist and may import nothing but `types.js` and `quote-match.js`. They do
+ * not have to agree to the byte — the seam's are what a live provider may
+ * return, these are what a *stored* record may claim — so keep them in the same
+ * order of magnitude and do not try to share them.
+ */
+const MAX_IMAGE_EDGE = 8192;
+const MAX_IMAGE_BYTES = 32 * 1024 * 1024;
 
 export interface IllustratedVignette {
   /** The sketch node this depicts, when it depicts one. */
@@ -127,18 +232,29 @@ export interface IllustratedVignette {
   depicts: string;
 }
 
-export interface IllustratedPlate {
+/** Everything about a plate the brief model writes, before anybody draws it. */
+export interface IllustratedPlateBrief {
   /** The Sketch scene this plate is of. `scenes[0]`'s id is the overview. */
   sceneId: string;
   title: string;
   /** The composition prompt that was sent to the image model. Shown to the reader. */
   prompt: string;
   vignettes: IllustratedVignette[];
-  /** Absent when this plate's image call failed — the artefact still lists the plate. */
-  image?: IllustratedImage;
-  /** Why there is no image, in the words a person would use. */
-  failed?: string;
 }
+
+/**
+ * **A plate in exactly one of its three states**, and the union is the point.
+ *
+ * Not drawn yet (a fresh brief), drawn, or failed. Before this was a union both
+ * fields were optional and independent, so `{ image, failed }` was a value the
+ * compiler was happy with — a state no run can produce and every reader would
+ * have to decide about. Build the drawn and failed states with `plateDrawn` and
+ * `plateFailed`; the fields cannot be assigned.
+ */
+export type IllustratedPlate =
+  | (IllustratedPlateBrief & { image?: undefined; failed?: undefined })
+  | (IllustratedPlateBrief & { image: IllustratedImage; failed?: undefined })
+  | (IllustratedPlateBrief & { image?: undefined; failed: string });
 
 /**
  * Where a plate's bytes are, never the bytes themselves.
@@ -154,6 +270,24 @@ export interface IllustratedImage {
   bytes: number;
   width: number;
   height: number;
+}
+
+/** The same plate, now with the picture that was drawn for it. */
+export function plateDrawn(plate: IllustratedPlate, image: IllustratedImage): IllustratedPlate {
+  const { sceneId, title, prompt, vignettes } = plate;
+  return { sceneId, title, prompt, vignettes, image };
+}
+
+/**
+ * The same plate, with our sentence about why there is no picture.
+ *
+ * Capped here rather than at the reader, so what goes into the artefact is
+ * already inside the bound a re-read enforces.
+ */
+export function plateFailed(plate: IllustratedPlate, why: string): IllustratedPlate {
+  const { sceneId, title, prompt, vignettes } = plate;
+  const failed = why.trim().slice(0, MAX_FAILED_CHARS) || "the plate could not be drawn";
+  return { sceneId, title, prompt, vignettes, failed };
 }
 
 export interface Illustrated {
@@ -216,12 +350,30 @@ export interface IllustratedReadOptions {
    * (`flow`); nothing here does.
    */
   blockText: ReadonlyMap<BlockId, string>;
+  /**
+   * **The scenes that may have a plate, in the Sketch's order** — normally
+   * `platedScenes(sketch).map((s) => s.id)`.
+   *
+   * Required rather than optional, and required by both readers, because it is
+   * the answer to three questions that were previously the caller's and were
+   * therefore answered after the fact or not at all: which plates exist, in what
+   * order they are drawn, and which scene the model forgot. A reader given the
+   * wrong list drops everything, which is loud; a reader given no list trusts
+   * the model's own ordering, which is silent.
+   */
+  sceneIds: readonly string[];
 }
+
+/** Whose words these are. See the header: the two are not the same question. */
+type Trust = "model" | "stored";
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+
+/** Absent, in the two spellings JSON has for it. */
+const missing = (v: unknown): boolean => v === undefined || v === null;
 
 /**
  * Characters that may not appear in anything a model wrote here.
@@ -234,10 +386,14 @@ const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
  * than what is stored and other than what the image model was sent. That is a
  * spoof rather than a typo, and the field is shown to a reader *and* forwarded
  * to a second model.
+ *
+ * `U+061C` ARABIC LETTER MARK is in the list on its own because it sits outside
+ * every range above and does the same job as `U+200F`; it passed until the
+ * 2026-09-03 review looked for it.
  */
 const FORBIDDEN =
   // biome-ignore lint/suspicious/noControlCharactersInRegex: refusing them is the point
-  /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF]/;
+  /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u061C\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF]/;
 
 /** How many words a string has, for the quote floor. */
 function words(s: string): number {
@@ -288,6 +444,9 @@ function readVignette(
         `under the ${MIN_QUOTE_WORDS}-word, ${MIN_QUOTE_CHARS}-character floor`,
     );
   }
+  if (words(quote.ok) > MAX_QUOTE_WORDS) {
+    return drop(`quote is ${words(quote.ok)} words, over the ${MAX_QUOTE_WORDS} the prompt asks for`);
+  }
 
   /* **In that block's own text, not in the article.** An article-wide search
      accepts a quote lifted from somewhere the vignette does not claim to be
@@ -302,28 +461,57 @@ function readVignette(
   if ("bad" in depicts) return drop(depicts.bad);
 
   const vignette: IllustratedVignette = { block, quote: quote.ok, depicts: depicts.ok };
-  const node = bounded(raw.node, MAX_NODE_CHARS, "node");
-  if ("ok" in node) vignette.node = node.ok;
+  /* `node` is optional, so absence is fine and *rubbish* is not: a vignette
+     carrying eighty characters of junk where a scene node id belongs is a
+     vignette the model was not writing carefully. Dropping it is the same rule
+     the rest of this file follows rather than a special case. */
+  if (!missing(raw.node)) {
+    const node = bounded(raw.node, MAX_NODE_CHARS, "node");
+    if ("bad" in node) return drop(node.bad);
+    vignette.node = node.ok;
+  }
   return vignette;
 }
 
 /**
- * **Read the brief a model sent and hand back only what can be vouched for.**
+ * **Read the brief a model just sent**, and hand back only what can be vouched
+ * for.
  *
  * Never throws on a malformed brief and never repairs one into something
- * plausible: a vignette survives intact or it is dropped and counted. Runs on
- * the server before the artefact is written **and** in the browser when it
- * arrives — see the header for why both.
- *
- * `raw` is either the model's answer (`{ style, plates }`) or a stored
- * `Illustrated` artefact, which is the same shape with `image`/`failed` on the
- * plates. Both go through here, so a `--render` of a saved brief takes the same
- * road a fresh one does.
+ * plausible: a vignette survives intact or it is dropped and counted. A plate
+ * claiming an `image` or a `failed` goes entirely — a model has no business
+ * naming either, and `sha256` names a blob belonging to any article at all.
  */
-export function readIllustrated(
+export function readModelBrief(
   raw: unknown,
   opts: IllustratedReadOptions,
 ): { illustrated: Illustrated; report: IllustratedReport } {
+  return read(raw, opts, "model");
+}
+
+/**
+ * **Read an artefact of ours** — off the database, off disk, or off the wire in
+ * the browser.
+ *
+ * The same checks, minus the two that only make sense against fresh model
+ * output: `image` and `failed` are read back rather than refused, and a plate
+ * whose every vignette has stopped matching (block ids move under an artefact
+ * when an article is re-extracted) is kept and faulted rather than dropped,
+ * because the picture was paid for and exists.
+ */
+export function readStoredIllustrated(
+  raw: unknown,
+  opts: IllustratedReadOptions,
+): { illustrated: Illustrated; report: IllustratedReport } {
+  return read(raw, opts, "stored");
+}
+
+function read(
+  raw: unknown,
+  opts: IllustratedReadOptions,
+  trust: Trust,
+): { illustrated: Illustrated; report: IllustratedReport } {
+  const faults: IllustratedFault[] = [];
   if (!isObj(raw)) {
     return {
       illustrated: { version: ILLUSTRATED_VERSION, style: "", plates: [] },
@@ -337,22 +525,39 @@ export function readIllustrated(
     };
   }
 
-  const faults: IllustratedFault[] = [];
   const style = bounded(raw.style, MAX_STYLE_CHARS, "style");
   if ("bad" in style) faults.push({ where: "root", what: style.bad });
 
-  const rawPlates = Array.isArray(raw.plates) ? raw.plates : [];
-  const plates: IllustratedPlate[] = [];
-  const seen = new Set<string>();
-  let written = 0;
+  let rawPlates: unknown[] = [];
+  if (Array.isArray(raw.plates)) rawPlates = raw.plates;
+  else if (!missing(raw.plates)) faults.push({ where: "root", what: "plates is not a list" });
 
-  for (const [i, rp] of rawPlates.entries()) {
-    const read = readPlate(rp, opts, seen, faults, `plate[${i}]`);
-    written += read.written;
-    if (read.plate) {
-      seen.add(read.plate.sceneId);
-      plates.push(read.plate);
-    }
+  const looked = rawPlates.slice(0, MAX_PLATES_READ);
+  if (rawPlates.length > looked.length) {
+    faults.push({
+      where: "root",
+      what: `${rawPlates.length - looked.length} plate(s) past the ${MAX_PLATES_READ} cap were not read`,
+    });
+  }
+
+  const byScene = new Map<string, IllustratedPlate>();
+  let written = 0;
+  for (const [i, rp] of looked.entries()) {
+    const r = readPlate(rp, opts, byScene, faults, `plate[${i}]`, trust);
+    written += r.written;
+    if (r.plate) byScene.set(r.plate.sceneId, r.plate);
+  }
+
+  /* **The Sketch's order, not the model's**, and the absences are faults rather
+     than a shorter list nobody notices. See the header. */
+  const plates: IllustratedPlate[] = [];
+  for (const sceneId of opts.sceneIds) {
+    const plate = byScene.get(sceneId);
+    if (plate) plates.push(plate);
+    else faults.push({ where: sceneId, what: "no plate for this scene" });
+  }
+  if (plates.length === 0) {
+    faults.push({ where: "root", what: "no plate survived — there is nothing to draw" });
   }
 
   const illustrated: Illustrated = {
@@ -373,6 +578,9 @@ export function readIllustrated(
     report: {
       faults,
       written,
+      /* Counted off the plates that came back, so the report can be reconciled
+         against the artefact it is a report of rather than describing a list
+         that no longer exists. */
       kept: plates.reduce((n, p) => n + p.vignettes.length, 0),
       platesWritten: rawPlates.length,
       platesKept: plates.length,
@@ -391,9 +599,10 @@ export function readIllustrated(
 function readPlate(
   raw: unknown,
   opts: IllustratedReadOptions,
-  seen: ReadonlySet<string>,
+  seen: ReadonlyMap<string, IllustratedPlate>,
   faults: IllustratedFault[],
   where: string,
+  trust: Trust,
 ): { plate: IllustratedPlate | null; written: number } {
   const drop = (what: string): { plate: null; written: number } => {
     faults.push({ where, what });
@@ -403,6 +612,12 @@ function readPlate(
 
   const sceneId = str(raw.sceneId);
   if (!sceneId) return drop("no sceneId — nothing says which scene this is of");
+  /* A plate for a scene the Sketch has not got is a picture of nothing, and
+     drawing it would spend money to find that out. Decided here rather than by
+     the caller afterwards, so that what the report counts is what came back. */
+  if (!opts.sceneIds.includes(sceneId)) {
+    return drop(`no scene in the Sketch has the id "${sceneId}" — not drawn`);
+  }
   /* Two plates of one scene is not a second picture, it is an ambiguous one:
      the panel's scene row addresses a plate by its scene id, so the reader
      would reach whichever the lookup happened to find. The second goes. */
@@ -411,30 +626,140 @@ function readPlate(
   const prompt = bounded(raw.prompt, MAX_PROMPT_CHARS, "prompt");
   if ("bad" in prompt) return drop(`${prompt.bad} — nothing to draw, so the plate goes`);
 
-  const rawVignettes = Array.isArray(raw.vignettes) ? raw.vignettes : [];
-  const vignettes: IllustratedVignette[] = [];
-  for (const [j, rv] of rawVignettes.entries()) {
-    const v = readVignette(rv, opts, faults, `${where}.vignettes[${j}]`);
-    if (v) vignettes.push(v);
+  /* **The trust boundary, in four lines.** `image` names a blob in a store
+     shared by every article and `failed` is one of our own sentences; a model
+     that could write either could claim somebody else's picture or invent a
+     state no run produces. See the header. */
+  if (trust === "model" && (!missing(raw.image) || !missing(raw.failed))) {
+    return drop("a brief may not name an image or a failure — the whole plate is dropped");
   }
 
-  const title = bounded(raw.title, MAX_TITLE_CHARS, "title");
-  const plate: IllustratedPlate = {
+  const { vignettes, written } = readVignettes(raw.vignettes, opts, faults, where);
+
+  const brief: IllustratedPlateBrief = {
     sceneId,
-    title: "ok" in title ? title.ok : "",
+    title: readTitle(raw.title, faults, where, trust),
     prompt: prompt.ok,
     vignettes,
   };
-  /* Carried through when the input is a stored artefact rather than a fresh
-     answer, so a re-read of what is on disk is the same object it was. Both are
-     model-adjacent in one direction only — `image` is written by us from the
-     bytes we received, `failed` is one of our own sentences — so neither is
-     capped as untrusted text. */
-  const image = readImage(raw.image);
-  if (image) plate.image = image;
-  const failed = str(raw.failed);
-  if (failed) plate.failed = failed.slice(0, MAX_TITLE_CHARS);
-  return { plate, written: rawVignettes.length };
+
+  if (vignettes.length === 0) {
+    /* **The anchor floor.** From a model, a plate nothing in the article
+       anchors is not worth drawing — this mode's whole claim is that the
+       picture comes from the piece. From storage it is kept: the money is spent
+       and the bytes exist, and the likeliest cause is an article re-extraction
+       moving the block ids under a perfectly good picture. */
+    if (trust === "model") return drop("no vignette survived — nothing anchors this plate");
+    faults.push({ where, what: "no vignette survived — the picture has no rows under it" });
+  }
+
+  const plate = trust === "model" ? brief : withStoredOutcome(brief, raw, faults, where);
+  return { plate, written };
+}
+
+/**
+ * The vignettes of one plate: parsed, capped, de-duplicated, and counted for
+ * the report **as the model wrote them** rather than as they survived.
+ */
+function readVignettes(
+  raw: unknown,
+  opts: IllustratedReadOptions,
+  faults: IllustratedFault[],
+  where: string,
+): { vignettes: IllustratedVignette[]; written: number } {
+  let all: unknown[] = [];
+  if (Array.isArray(raw)) all = raw;
+  else if (!missing(raw)) faults.push({ where, what: "vignettes is not a list" });
+  const looked = all.slice(0, MAX_VIGNETTES);
+  if (all.length > looked.length) {
+    faults.push({
+      where,
+      what: `${all.length - looked.length} vignette(s) past the ${MAX_VIGNETTES} cap were not read`,
+    });
+  }
+
+  const vignettes: IllustratedVignette[] = [];
+  const already = new Set<string>();
+  for (const [j, rv] of looked.entries()) {
+    const at = `${where}.vignettes[${j}]`;
+    const v = readVignette(rv, opts, faults, at);
+    if (!v) continue;
+    /* The same thing drawn twice is one row in the reader's list twice, and one
+       instruction to the illustrator twice. Cheap to drop, and it is evidence
+       the model lost its place. */
+    const key = `${v.block} ${v.quote} ${v.depicts}`;
+    if (already.has(key)) {
+      faults.push({ where: at, what: "the same vignette again — dropped" });
+      continue;
+    }
+    already.add(key);
+    vignettes.push(v);
+  }
+
+  return { vignettes, written: all.length };
+}
+
+/**
+ * **The half of a stored plate a model never writes**: the picture, or the
+ * sentence saying why there is not one.
+ *
+ * `image` is written from bytes we received (src/illustrated-image.ts) and
+ * `failed` is one of our own sentences, so both are read back rather than
+ * refused. Both at once is a state no run produces, so it is a corrupt record —
+ * and the picture claim is the dangerous half, so that is the half that goes.
+ */
+function withStoredOutcome(
+  brief: IllustratedPlateBrief,
+  raw: Record<string, unknown>,
+  faults: IllustratedFault[],
+  where: string,
+): IllustratedPlate {
+  const said = str(raw.failed);
+  const failed = said.slice(0, MAX_FAILED_CHARS);
+  const image = missing(raw.image) ? null : readImage(raw.image);
+  if (!missing(raw.image) && !image) {
+    faults.push({ where, what: "the image record is not one — the plate is shown as undrawn" });
+  }
+  if (said.length > MAX_FAILED_CHARS) {
+    faults.push({
+      where,
+      what: `the failure sentence was over the ${MAX_FAILED_CHARS} cap and was cut`,
+    });
+  }
+  if (image && failed) {
+    faults.push({ where, what: "a picture and a failure on one plate — the picture is dropped" });
+    return { ...brief, failed };
+  }
+  if (image) return { ...brief, image };
+  if (failed) return { ...brief, failed };
+  return brief;
+}
+
+/**
+ * The plate's name in the reader's scene row, or `""` — **and the `""` is
+ * reported.**
+ *
+ * A title is decoration rather than a claim, so losing one does not cost the
+ * plate. It is still a repair, and a repair nothing counts is how a model that
+ * has stopped following the schema reports a clean run. An artefact of ours
+ * carrying `""` is one we wrote that way and is not faulted again.
+ */
+function readTitle(
+  raw: unknown,
+  faults: IllustratedFault[],
+  where: string,
+  trust: Trust,
+): string {
+  if (missing(raw) || str(raw) === "") {
+    if (trust === "model") faults.push({ where, what: "no title — the plate is nameless" });
+    return "";
+  }
+  const title = bounded(raw, MAX_TITLE_CHARS, "title");
+  if ("bad" in title) {
+    faults.push({ where, what: `${title.bad} — dropped, the plate is nameless` });
+    return "";
+  }
+  return title.ok;
 }
 
 /** How many vignettes a plate claimed, even when the plate itself is rubbish. */
@@ -442,22 +767,28 @@ function countVignettes(raw: unknown): number {
   return isObj(raw) && Array.isArray(raw.vignettes) ? raw.vignettes.length : 0;
 }
 
-/** A stored plate's image record, or `null` if it is not one. */
+/**
+ * A stored plate's image record, or `null` if it is not one.
+ *
+ * The numbers are bounded as well as positive. They are ours, so this is not
+ * about a hostile provider; it is about a record that has been through a
+ * database column, a JSON round trip and possibly an older schema, and about
+ * `width`/`height` being what the panel reserves space with. A fractional or
+ * twenty-thousand-pixel claim is a broken record whichever way it got that way.
+ */
 function readImage(raw: unknown): IllustratedImage | null {
   if (!isObj(raw)) return null;
   const sha256 = str(raw.sha256);
-  const nums = ["bytes", "width", "height"] as const;
   if (!/^[0-9a-f]{64}$/.test(sha256) || raw.ext !== "jpeg") return null;
-  for (const k of nums) {
-    if (typeof raw[k] !== "number" || !Number.isFinite(raw[k]) || raw[k] <= 0) return null;
+  const nums: Record<"bytes" | "width" | "height", number> = { bytes: 0, width: 0, height: 0 };
+  for (const k of ["bytes", "width", "height"] as const) {
+    const v = raw[k];
+    if (typeof v !== "number" || !Number.isSafeInteger(v) || v <= 0) return null;
+    nums[k] = v;
   }
-  return {
-    sha256,
-    ext: "jpeg",
-    bytes: raw.bytes as number,
-    width: raw.width as number,
-    height: raw.height as number,
-  };
+  if (nums.bytes > MAX_IMAGE_BYTES) return null;
+  if (nums.width > MAX_IMAGE_EDGE || nums.height > MAX_IMAGE_EDGE) return null;
+  return { sha256, ext: "jpeg", bytes: nums.bytes, width: nums.width, height: nums.height };
 }
 
 /**

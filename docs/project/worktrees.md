@@ -405,11 +405,16 @@ opposite of what this section said before.
 `WORKTREE_SCHEMA` indirection can reach every hardcoded `spideryarn`; for stacks, starting one trimmed
 stack and watching it under load rather than reasoning from the idle numbers above.
 
-#### The cost is not slow tests. It is false ones — measured 2026-09-03
+#### The run lock does not reach far enough — measured 2026-09-03
 
-The case for doing this has always been argued as flakiness: shared rows make timing-sensitive suites
-red under load, you re-run them alone, they pass, you lose twenty minutes. That is real and it is not
-the strongest argument.
+**Read [testing.md § the run lock](testing.md) first; most of this ground is already covered there.**
+Contention between concurrent test *files* was measured on 2026-08-30 (23–50 failures per run with
+the lock neutralised, 0 with it taken), it produces exactly the `expected 'busy' to be 'claimed'`
+shape, and `takeRunLock` is the fix. None of that is new here, and an earlier draft of this section
+claimed it was.
+
+What is new is a case the lock cannot cover, and testing.md predicts it in one line: *"a lock only
+excludes the holders that agree to take it, and a dev server mid-ingest never will."*
 
 On a box carrying eleven worktrees, `tests/store-jobs-parity.test.ts` failed with
 `expected 'busy' to be 'claimed'` and **kept failing away from the full suite**. Counting the rows
@@ -426,7 +431,13 @@ cap is **deliberately global** — counted across every row, which is what makes
 correct in production — so the store answered `busy` correctly about a machine that other worktrees
 had filled.
 
-Three things follow, and they are why this is a stronger argument than flakiness:
+**That suite takes the run lock** (`takeRunLockAndSetUp`, `tests/store-jobs-parity.test.ts:178`), so
+this is not the 2026-08-30 case wearing a new hat. The lock serialises the holders that take it. It
+cannot exclude a dev server mid-ingest, and it cannot remove rows an earlier crashed or killed run
+left sitting at `running` — and either is enough to fill a **global** counter that every worktree
+reads. So the residue, not the concurrency, is what got through.
+
+Three things follow, and they are why this is a sharper argument than flakiness:
 
 - **Re-running in isolation does not clear it.** Isolation clears a timeout. It clears this only if
   the other worktrees happen to be idle, which a test run can neither arrange nor detect.
@@ -437,6 +448,13 @@ Three things follow, and they are why this is a stronger argument than flakiness
 
 So the question to weigh is not "how much time do flaky suites cost" but **"how long before a shared
 global counter makes somebody believe a false thing about the code"** — which it already has.
+
+**And there is a cheaper thing to try first, which is why this is evidence and not yet a
+recommendation:** if the residue is the problem rather than live concurrency, then sweeping orphaned
+`running` rows at the start of a test run may buy most of what a schema per worktree would, for
+almost nothing. Nobody has measured how often those rows are left, or by what. That measurement is
+the honest next step — the same conclusion this section reaches above, arrived at from a different
+direction.
 Reproduced by [260903d](../plans/260903d-improve-the-codebase-second-sweep.md) § T1.3.
 
 ## Ports and the ceiling
