@@ -1,0 +1,287 @@
+# Fix the quiz build's band-spread cliff, and the answers it forgets
+
+Greg filed a bug report from production on 2026-09-03 (feedback `spya-z6daky`, kind *problem*, on
+`/read/nagel-bat?mode=remember&remember=quiz`). The report's own text is lost — see § The report we
+could not read — so this plan is built from the Vercel logs of the same session, which are
+unambiguous.
+
+Then, while this plan was being written, Greg found a second one:
+
+> I had answered one of the questions, and was on Question 2. Then I switched away from the article
+> and came back, and it seems to have forgotten my answer to Question 1!
+>
+> — Greg, 2026-09-03
+
+Both are in Quiz mode ([quiz.md](../project/quiz.md), the half of
+[remember-mode.md](../project/remember-mode.md) where the article asks). They are unrelated
+mechanically, so they are separate stages.
+
+## What happened, from the logs
+
+Production, deployment `dpl_419KZguSZEeMgEvHLUrCz2Z78Dga`, all times UTC:
+
+| time | event |
+|---|---|
+| 02:48:11 | `GET /api/quiz/nagel-bat` → **404**, no quiz yet |
+| 02:48:14 | quiz build job `spya-hu6m2e` queued, `steps: ["quiz"]`, `forced: ["quiz"]` |
+| 02:48:51 | **job failed** after 36.2s and $0.0613 of model spend |
+| 02:48:55 | `GET /api/quiz/nagel-bat` → 404 again |
+| 02:48:58 | Greg pressed the button again — job `spya-xt5kmm` |
+| 02:49:40 | succeeded: 11 questions, easy 3 / medium 4 / hard 4, 40.7s, $0.0675 |
+| 02:53:15 | Greg filed the report |
+| 02:54:13 | `POST /api/quiz/nagel-bat/mark` → 200, an answer marked |
+
+The failure:
+
+> The batch does not use both ends of the band scale, so the reader would meet 9 questions in an
+> order that means nothing. wanted 2 "hard", got 1. A batch of this size has to carry both ends —
+> src/quiz.ts § bandQuota. Run it again; if it keeps landing here, the prompt's spread rule is the
+> thing to change.
+
+## The three defects behind that one line
+
+**1. The gate is stricter than its own error message claims, and rejection is disproportionate.**
+[`bandQuota`](../../src/quiz.ts) is `min(3, floor(kept / 4))`, measured against what survived
+validation, and [`quotaShortfall`](../../src/quiz.ts) throws if either end is short
+(`src/quiz.ts:530-539`). At 9 survivors it wants 2 hard; the model produced 1.
+
+Note the gap between the code and its own error message. The sentence says *"does not use both ends
+of the band scale"* and *"has to carry both ends"* — that is a **floor of one**. The code demands a
+**proportion**. The prose is the intent; the arithmetic is not. Sol's review put the essential point
+better than the plan's first draft did: the rejected batch **still satisfies the ordering's real
+invariant** — it carries both ends — and rejecting it discards a paid 36-second call. The
+consequence is out of proportion to the defect.
+
+What the ordering actually does, checked rather than assumed: questions are sorted once by band,
+then value, then document position (`src/quiz.ts:453`), and the panel preserves that stored order
+(`src/web/QuizPanel.tsx:18`). So the worst a floor-of-one batch produces is nine easy questions
+followed by one hard — an abrupt progression, but a real one. (The `rank=prioritised` and
+`order=prioritised` in Greg's URL are Quotes and Search respectively; Quiz consumes neither.)
+
+There is a threshold smell too, reproduced by Sol running the exported functions directly:
+
+```
+7 questions, one hard: []
+9 questions, one hard: [{ band: "hard", want: 2, have: 1 }]
+```
+
+Adding two valid non-hard questions to a passing seven-question batch makes it fail. That is
+supporting evidence rather than proof — sample-size rules legitimately have thresholds — and **the
+plan's first draft overstated it as plain non-monotonicity, which is false.** Batches of three or
+fewer are deliberately exempt (`bandQuota(3) === 0`, `tests/quiz.test.ts:166`), so three medium
+questions pass and a fourth medium fails. Any rule keeping that exemption — and it should, since
+demanding a spread from a four-question article is an instruction to pad — is monotonic only among
+batches of four or more. That narrower claim is the true one.
+
+The prompt (`src/quiz.ts:720-735`) disagrees with both: it demands a flat 3 of each in a full batch,
+and tells the model that a failing batch means *"the article is asked again"*, which is false —
+nothing retries.
+
+Introduced by `5253ee32` (1 Sep 2026, stage 1 of
+[260831al](260831al-review-quiz-sub-mode.md)) with `min(3, floor(n/4))` in its first line, and never
+changed. Diagnosis put the failure rate at roughly 10–25% — 1 in 4 of the recorded generations.
+
+**It is not true that this was never cross-family reviewed**, as the plan's first draft claimed. The
+prior review *recommended* a band quota
+([260831al review:135](260831al-review-quiz-sub-mode-review-sol.md)) and the implementation had a
+full-file review afterwards. What went unchallenged was the specific `min(3, floor(n/4))` boundary —
+which is a more interesting failure than "nobody looked", and the postmortem should say so.
+
+**2. Nothing retries, at any layer.** Not the generator, the step, the job runner, the SDK
+(`maxRetries: 0`), the queue, or the client. [`src/labels.ts`](../../src/labels.ts) is the one stage
+that does retry a short batch and quiz did not copy it; both the plan and the introducing commit
+said a generic retry belonged in `src/jobs.ts`, and it was never built.
+
+And there is no retry *affordance*: [`JobProgress.tsx`](../../src/web/JobProgress.tsx) draws its
+ordinary run button again after a failure and never consults `retryable`, unlike the shelf's job
+card (`AddArticle.tsx:477-486`). Greg recovered by guessing.
+
+**3. The developer's sentence is what the reader reads.** The path has no sanitiser on it:
+
+```
+src/quiz.ts:530  throw new Error(…)
+  → src/jobs.ts:696   const message = (err as Error).message
+  → src/jobs.ts:740   job.error = message
+  → src/store/pg-jobs.ts:140   persisted and read back unchanged
+  → src/web/useStepJob.ts:372  return mine.error ?? "The job failed."
+  → src/web/JobProgress.tsx:230  rendered, in red, under the run button
+```
+
+So a reader was shown a source-file reference and an instruction addressed to whoever tunes the
+prompt. That breaks rules 1 and 3 of [copy.md](../project/copy.md) — no bracketed code, names a file
+they cannot open, and says nothing they can act on.
+
+### This is the third time, and the class has a name
+
+This is not a wording slip. [`src/messages.ts:600-620`](../../src/messages.ts) records that **six**
+pipeline stages leaked provider prose to the screen through this exact seam, closed on 2026-08-26,
+with the lesson stated as *"grep the genre, not the list"*
+([260826m](260826m-simplification-audit.md)). [copy.md:238-253](../project/copy.md) records
+`truncatedMessage` in [`src/token-budget.ts`](../../src/token-budget.ts) as the same shape,
+deliberately *"recorded rather than fixed"*, because **the same string has two audiences** and
+splitting it was judged bigger than a reword.
+
+The band-spread message is the third instance, and it was written *after* both were documented. A
+seam that has produced eight leaks is not going to stop producing them because a ninth author reads
+a doc. **Stage 2 splits the audiences at the seam** so the next author cannot make this mistake by
+default — which is what [engineering-manager.md](../reusable/engineering-manager.md) bug-mode means
+by rearchitecting so the class cannot recur.
+
+The machinery already exists and was built for exactly this: `ReaderFacingFailure` and its
+constants in [`src/messages.ts`](../../src/messages.ts), and
+[`stageFailure(kind, message)`](../../src/job-failure.ts).
+
+## The simpler option this passes over
+
+**Retry once inside the step, and change nothing else.** It is one `if`, it keeps the proportional
+guarantee, and it would have saved Greg's session. Rejected as the *primary* fix because it treats a
+1-in-4 failure as weather: it pays a second $0.06 call and another 40 seconds to satisfy a rule that
+is measuring the wrong thing, and the non-monotonicity stays — a batch that fails twice still fails,
+and a reader with a short article still meets a cliff that a shorter article would not have. Fix the
+rule first; retry stops being the load-bearing part.
+
+**Not doing:** trimming surplus questions until the quota is satisfiable. It works and it is
+deterministic, but it throws away questions we have already paid for in order to satisfy a rule we
+are about to admit is wrong.
+
+## Stages
+
+Each ends with the suite green and the tree safe to commit.
+
+### Stage 1 — make the gate mean what its sentence says
+
+- **The gate becomes presence at each end**, not a proportion: at least one `easy` and one `hard`.
+- **Delete the numeric abstraction rather than retune it.** Sol's best structural suggestion:
+  replace `bandQuota` / `quotaShortfall`'s `want`/`have` arithmetic with
+  `missingBandEnds(questions): QuizBand[]`. A helper that returns *which ends are missing* cannot
+  quietly grow back into a proportional quota while still sounding like a presence check. The
+  numeric representation is precisely what let the prose and the arithmetic diverge, so removing it
+  is the fix for the class, not just for the value.
+- **Keep the short-batch exemption** — batches too short to carry both ends are asked for nothing,
+  as today (`bandQuota(3) === 0`). Demanding a spread from a four-question article is an instruction
+  to pad, which `260831al` decided against on purpose. State the boundary explicitly in the code.
+- Keep measuring against survivors — that part was right.
+- **The prompt keeps asking for three of each.** Sol is right that lowering the ask to one would
+  turn the emergency floor into the normal distribution. The prompt states a target; the gate
+  enforces a floor; the two are allowed to differ as long as the prompt does not call the target a
+  condition. Fix only the false consequence: drop *"is thrown away whole and the article is asked
+  again"*, which describes a retry that does not exist.
+- **No `PROMPT_VERSION` bump.** The contract is "changes what a *question* is" (`src/quiz.ts:152`),
+  and the requested distribution is unchanged — only a false statement about what happens on
+  failure is removed. Bumping would mark every existing quiz `outdated` and invite a paid rebuild of
+  each, for a wording fix. Worth stating because it is the kind of call that gets made silently.
+- The spread we *wanted* stays in the log line, which already carries `easy`/`medium`/`hard` counts,
+  so drift in the model's spread stays visible without being fatal. Count, don't gate — the choice
+  this same feature already made for the marking prompt's banned words.
+- **Failing tests first**, table-driven per Sol: for every gated size, a batch with exactly one easy
+  and one hard has no shortfall; for every gated size, a batch missing either end fails; and the
+  short-batch boundary explicitly. Plus the reported case — 9 questions, 1 hard — red before, green
+  after.
+
+Done: `npm test`, `npm run typecheck`, `npm run check` green; the new tests red before, green after.
+
+### Stage 2 — split the two audiences at the seam
+
+- A step's failure carries **two strings**: the developer one on `Error.message` (log and Sentry,
+  keeping the band arithmetic and the file reference) and a reader one that `src/jobs.ts` copies
+  onto `step.error` / `job.error` (`src/jobs.ts:696`, `:730`, `:740` — all three).
+- Built on `ReaderFacingFailure` + `stageFailure`, not a new mechanism. A declared step failure
+  carries a whole `ReaderFacingFailure`, keeping `kind` and reader message together, which is what
+  that type is already for (`src/messages.ts:61`).
+- Add the band-spread reader message, with a bracketed code, saying what the reader can do.
+- **The fallback is option (a): everything undeclared gets safe generic copy.** Sol's reasoning,
+  which I accept: losing useful detail on unmigrated bands is temporary and recoverable, publishing
+  an unaudited internal or upstream string is neither, and the diagnostic still reaches the log and
+  Sentry — only the *persisted reader copy* changes.
+  - An **allowlist was rejected**: one new throw inside an "approved" step leaks immediately.
+  - **Type-level enforcement is not actually available.** TypeScript has no checked throws, so
+    `PipelineStep.run()`'s signature cannot constrain what is thrown (`src/pipeline.ts:662`). A
+    `Result` return could, but unexpected exceptions would still need the generic fallback, and
+    migrating every step is disproportionate. Worth writing down so the next person does not spend
+    an afternoon rediscovering it.
+  - The generic fallback is a **total map keyed by `failureKindOf(err)`**, unknown mapping to retry
+    per the existing compatibility rule (`src/job-failure.ts:105`) — so a reader is not told to try
+    again under a failure stored as `ours` or `bug`.
+  - **Migrate shared error constructors first** — `anthropicCallFailed` and `truncationFailure` —
+    rather than whole steps. One change there preserves good copy across many bands at once.
+  - **"Developer-facing" still means safe to log.** Do not restore the Anthropic SDK body to
+    `Error.message`; it can echo article prose and its removal is deliberate
+    (`src/anthropic-call.ts:12`).
+- **`useStepJob` keeps a typed terminal failure** — `{ message, retryable }` — instead of reducing
+  to a string at `src/web/useStepJob.ts:369`. Making retryability a **required** prop on
+  `JobProgress` turns "wire up the other seven bands" into a list the compiler produces, which is
+  the difference between fixing the seam and fixing this band.
+- Give `JobProgress` the retry affordance the shelf card already has (`AddArticle.tsx:477-486`).
+- Pass `starting` through `useQuiz` → `QuizPanel` (`IdeasPanel.tsx:156` already does), so the button
+  is not re-armed between the press and the first poll.
+- **Failing test first**, and it inspects the **persisted `job.error` and `step.error`**, not only
+  rendered HTML — `JobProgress` and the shelf deliberately render different fields, so a DOM-only
+  test would pass while the leak survived in the other. Plus a positive control: a declared reader
+  message survives intact and its `kind` controls retryability.
+
+Done: as stage 1, plus the leak test red before the change.
+
+### Stage 3 — the answer the quiz forgot: its own plan
+
+**Not a regression. Attempts were never stored**, by an explicit decision in
+[260831al:58-60](260831al-review-quiz-sub-mode.md):
+
+> **Attempts are not stored** in v1. Answer, read the reply, move on; a reload starts the quiz
+> fresh. The questions persist because they are an artefact. No new table, no per-reader progress
+> model — that is the thing to design after using it, not before.
+
+The code and the docs agree with each other perfectly; what they disagree with is the reader's
+expectation. Greg answered a question, saw a tick, and reasonably took the tick to mean something.
+Proven three ways: no `quiz_attempts` table in `src/db/schema.ts` or the live database, no
+`src/store/pg-quiz.ts` among nineteen stores, and `markOneAnswer` (`src/routes.ts:1538-1655`) whose
+own docstring says *"**Nothing is stored.**"* The `attemptId` in the Vercel log is `randomUUID()`
+minted per request for one telemetry line (`src/routes.ts:1628`) — it identifies nothing that
+outlives the request. `QuizResponse` (`src/types.ts:2923-2929`) has three fields and none is reader
+data, so there is nothing for a client to hydrate from even in principle.
+
+Four ordinary gestures each discard everything, because `QuizSubBand` is *conditionally rendered*
+(`src/web/App.tsx:3386`) and the state is plain `useState` (`src/web/useQuiz.ts:196-202`): toggling
+Recall↔Quiz, changing `?mode=`, going to the library, or reloading.
+
+**Greg's decision, 2026-09-03: a `quiz_attempts` table in Postgres** — asked and answered rather
+than assumed, because it reverses a stated product decision and adds a schema. Chosen over browser
+storage so answers follow the reader rather than the browser.
+
+**This stage gets its own plan doc**, on Sol's recommendation and rightly: persistence is a storage
+and identity *design*, not a fix, and it must not delay stages 1–2, which are live production
+defects. Stages 1 and 2 land and are pushed before it starts. Two things that plan has to settle
+before it writes a migration:
+
+- `article_revisions.quiz` is **one JSONB column, overwritten on every forced rebuild**
+  (`drizzle/0046_quiz.sql:60`). So despite `260831al`'s phrase *"point at an immutable batch"*, old
+  batches are destroyed — an attempt row either snapshots the question text or accepts being
+  orphaned. Probably the latter; `QuizPanel.tsx:160-166` already clears on a new batch.
+- It drags in the per-reader progress model `260831al` deferred. That is the design conversation,
+  and it is the reason this is a plan rather than a patch.
+
+Done: a failing test that answers question 1, remounts, and expects the answer still there.
+
+### Stage 4 — the postmortem, and the prevention it recommends
+
+`docs/postmortems/` — the real cause, the class named outright, `5253ee32` as the introducing
+commit, and what would have caught the whole class, ranked by ease and value. The prevention becomes
+work in this run rather than a filing.
+
+Docs to update in the same stages: [quiz.md](../project/quiz.md),
+[copy.md](../project/copy.md) (§ "recorded rather than fixed" stops being true).
+
+## The report we could not read
+
+The 523 characters Greg wrote are in the production `feedback` table and reachable from nowhere
+else. The Sentry mirror **silently failed for this report**:
+
+```
+02:53:21  "feedback report handed to sentry"          id=spya-z6daky rows=1
+02:53:21  "feedback report was not acknowledged by sentry"   id=spya-z6daky status=null
+```
+
+The test report filed 11 hours earlier reached Sentry fine, so this is not a configuration problem.
+That is a defect in [feedback.md](../project/feedback.md)'s mirror and is **out of scope here** —
+raised separately — but it is why this plan is built from logs rather than from the reader's words.
+The mirror is best-effort by design and cannot fail the request; being best-effort and being
+silently broken are different things.
