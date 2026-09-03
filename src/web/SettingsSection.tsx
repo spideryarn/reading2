@@ -9,10 +9,12 @@
  * > that might be still under development or not ready for production.
  *
  * What may go behind it, and the rule that a hidden feature stays reachable by
- * its own URL, are in docs/project/experimental-features.md. **Nothing is
- * behind it yet**, deliberately: the switch and the decision about which
- * features are not ready are two separate pieces of work, and doing them in one
- * move means neither gets argued properly.
+ * its own URL, are in docs/project/experimental-features.md. **Five of the
+ * thirteen reading modes are behind it since 2026-09-03** — Quotes, Timeline,
+ * Referee, Diagram and Remember, drawn by the bottom bar only for a reader who
+ * turned this on (Dock.tsx § visibleModes). That doc's table says why each is
+ * not ready. This checkbox is the only place the switch can be moved today; a
+ * toggle in the bar itself is stage 3 of that plan and is not built.
  *
  * ## A checkbox, and the tooltip beside it rather than around it
  *

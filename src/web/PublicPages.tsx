@@ -29,6 +29,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { SharedNotice, VisitorNotice } from "./PublicChrome.js";
 import { markedModes, notBuiltGap, NOUN, type VisitorGap } from "./visitor.js";
 import { ThreadCounts, ThreadPosts } from "./Tweets.js";
+import { useExperimental } from "./useExperimental.js";
 
 /**
  * The link out to the publisher, or nothing.
@@ -382,10 +383,18 @@ function VisitorDock({
   available: PublicArtefacts;
   signedIn: boolean;
 }) {
+  /* **The switch, for a reader who almost certainly does not have one.** A
+     signed-out visitor is forcibly off and the store issues no request for
+     them, so this subscription costs a stranger nothing — which is the point of
+     the store rather than a side effect (experimental-store.ts). A signed-in
+     reader looking at somebody else's article gets their own answer here, the
+     same one the reading view uses. */
+  const experimental = useExperimental();
   return (
     <Dock
       slug={slug}
       view={view}
+      experimental={experimental}
       marked={markedModes(available)}
       signedIn={signedIn}
       /* These pages mount no drawer, so the bar cannot infer footing from its

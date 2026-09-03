@@ -88,6 +88,20 @@
  * with no row there is a typecheck error, not a button nobody notices is
  * missing (`ModesMissingFromDock`). Anything else goes after them.
  *
+ * ## And a second rule, which is *whether* a button is drawn at all
+ *
+ * Since 2026-09-03 the order is not the only question a `MODES_UI` row answers.
+ * Five of the thirteen — Quotes, Timeline, Referee, Diagram and Remember — are
+ * behind the experimental-features switch, so the bar draws the rows that are
+ * not experimental **plus whichever mode the reader is in**. Every row carries a
+ * required `experimental: boolean`, so mode fourteen cannot be added without
+ * somebody deciding which side of that line it is on.
+ *
+ * The rule itself, and why the current mode is retained rather than dropped, is
+ * `visibleModes` below. The manual is
+ * docs/project/experimental-features.md; the checklist is
+ * docs/project/new-mode.md.
+ *
  * `Thread` became `Tweets` in the same breath, matching the page's own name
  * (Tweets.tsx, `/read/<slug>/tweets`) and the route the button already pointed
  * at. The label was the only place the old word survived.
@@ -136,6 +150,22 @@ import { InstallHint } from "./InstallHint.js";
 import { VisitorNotice } from "./PublicChrome.js";
 import { COMMENTS_GAP } from "./visitor.js";
 
+/**
+ * **The narrow slice of the experimental-features switch this bar reads.**
+ *
+ * `ExperimentalSetting` (experimental-store.ts) carries nine fields; the bar
+ * needs one. A structural type rather than the whole interface, so a mount site
+ * hands the hook's result straight over and the compiler still checks the only
+ * field that is read.
+ *
+ * It widens in stage 3, when the switch itself becomes a button at the end of
+ * the bar and the failure states have to be drawn rather than swallowed.
+ */
+export interface DockExperimental {
+  /** Whether this reader asked to see the modes that are still being built. */
+  on: boolean;
+}
+
 interface Props {
   /**
    * The slug from the *path*, not `article.meta.slug`.
@@ -158,6 +188,27 @@ interface Props {
    */
   mode?: Mode;
   onMode?(next: Mode): void;
+  /**
+   * **Whether this reader sees the modes that are still being built** — and
+   * therefore how many buttons the bar draws at all. `visibleModes` is the rule.
+   *
+   * **Required, and the bar is told rather than going and getting it.** The
+   * store behind `useExperimental()` is shared, so a hook call in here would be
+   * safe; it would still be the wrong shape. This file's own header says the
+   * page owns the fetches and the bar is handed what it needs — `drawer` is a
+   * prop precisely so a visit to the metadata page does not buy a drawer nobody
+   * opened — and `signedIn`, `visitor` and `marked` are all passed in the same
+   * way. A subscription here would be the first thing in this file to go
+   * looking. Fable arbitrated the fork; the reasoning and its cost are in
+   * docs/plans/260903c-… § `Dock` is told the answer.
+   *
+   * The cost, named there and real: four mount sites can each hand-roll
+   * `{ on: true }`, so the compiler checks that *a* value arrived and not that it
+   * came from the hook. Required-ness is what makes the omission loud instead of
+   * silent — see the read of `experimental.on` below, which must never become
+   * `experimental?.on`.
+   */
+  experimental: DockExperimental;
   /**
    * The drawer, on the one page that has one.
    *
@@ -326,6 +377,19 @@ interface ModeUi {
    */
   blurb: string;
   /**
+   * **Is this mode still being built?** If so it is drawn only for a reader who
+   * turned the experimental-features switch on — or who is in it right now.
+   * docs/project/experimental-features.md is the operating manual, and
+   * `visibleModes` below is the rule.
+   *
+   * **Required on every row, and not an optional flag on five.**
+   * `ModesMissingFromDock` proves each mode has a row; only a required field
+   * proves each row *made the decision*, and docs/project/new-mode.md says the
+   * author must make it. An optional flag would quietly enrol mode fourteen
+   * among the polished ones. (GPT Sol, finding 8.)
+   */
+  experimental: boolean;
+  /**
    * **Keep the word when every other button loses one.**
    *
    * The labels are dropped as soon as the row stops fitting, and again when
@@ -367,12 +431,14 @@ const MODES_UI = [
      while a band is open. docs/plans/plain-mode-and-the-way-out.md. */
   {
     mode: "plain",
+    experimental: false,
     icon: AlignLeft,
     blurb: "Just the article — no columns, no panel",
     keepLabel: true,
   },
   {
     mode: "hierarchy",
+    experimental: false,
     icon: ListTree,
     blurb: "The article's own shape, one column per level of detail",
   },
@@ -383,18 +449,21 @@ const MODES_UI = [
      at the near end. docs/plans/260828aw-outline-mode.md. */
   {
     mode: "outline",
+    experimental: false,
     icon: Focus,
     blurb:
       "The whole document in one list, with more detail on the part you are reading and less on the rest",
   },
   {
     mode: "summary",
+    experimental: false,
     icon: Layers,
     blurb:
       "The article, its parts and its sections, a sentence on each — as deep into the piece as you ask",
   },
   {
     mode: "glossary",
+    experimental: false,
     icon: BookA,
     blurb: "The terms this piece uses in a non-obvious way, defined from the piece itself",
   },
@@ -405,6 +474,7 @@ const MODES_UI = [
      reasoning rather than on the end. */
   {
     mode: "ideas",
+    experimental: false,
     icon: Lightbulb,
     blurb: "The propositions this piece needs you to hold — the ones it assumes, and the ones it adds",
   },
@@ -416,6 +486,7 @@ const MODES_UI = [
      the end. docs/project/quotes.md. */
   {
     mode: "quotes",
+    experimental: true,
     icon: Quote,
     blurb: "The lines worth keeping — the piece's own sentences, chosen and checked against it",
   },
@@ -429,6 +500,7 @@ const MODES_UI = [
      docs/plans/260831i-timeline-mode.md § 3. */
   {
     mode: "timeline",
+    experimental: true,
     icon: Clock,
     blurb: "When the piece says these things happened, in order — and how sure it actually is",
   },
@@ -445,6 +517,7 @@ const MODES_UI = [
      annotate.ts where somebody adding a fifth kind of mark will meet it. */
   {
     mode: "search",
+    experimental: false,
     icon: Search,
     blurb: "Find a passage by the words it uses, or by what it says",
   },
@@ -466,6 +539,7 @@ const MODES_UI = [
      mode is actually for. docs/project/icons.md. */
   {
     mode: "referee",
+    experimental: true,
     icon: ClipboardCheck,
     blurb: "Reviewing this for somebody? Your criteria, its claims, and a second look at your own notes",
   },
@@ -474,11 +548,13 @@ const MODES_UI = [
      Summary makes — the article restated — with a picture instead of prose. */
   {
     mode: "diagram",
+    experimental: true,
     icon: Network,
     blurb: "The article's shape as a picture: as an outline, as a graph, or as paragraphs placed by meaning",
   },
   {
     mode: "chat",
+    experimental: false,
     icon: MessagesSquare,
     blurb: "Ask about this article — answers point back at the paragraphs they came from",
   },
@@ -500,6 +576,7 @@ const MODES_UI = [
      docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
   {
     mode: "remember",
+    experimental: true,
     icon: Speech,
     blurb: "Say what you took from this and find out where it holds up — not saved notes or flashcards",
   },
@@ -532,14 +609,69 @@ export type ModesMissingFromDock<
 > = T;
 
 /**
+ * **Which of the thirteen the bar actually draws.** Two rules, and the second
+ * is the one that is easy to lose.
+ *
+ * 1. Every row that is not experimental.
+ * 2. **Plus whatever mode the reader is in**, experimental or not.
+ *
+ * The second is not politeness. The mode segment is a `role="radiogroup"` and
+ * exactly one button must be checked, so `?mode=timeline` with the switch off
+ * and no Timeline button would leave a group announcing *one of these* with
+ * none of them on — and the reader stranded in a mode with no way back that the
+ * bar could show them. It holds on the loose-link arm too (metadata and tweets),
+ * which is where a first draft of the plan stopped short: `carriedSearch`
+ * strips only `?panel=`, so `?mode=` is still in the string those links are
+ * built from, and the bar there can read it back. GPT Sol, finding 9.
+ *
+ * It follows that turning the switch **off** while in an experimental mode
+ * leaves the reader where they are, with their button still drawn. The
+ * operating manual allows falling back to the default mode instead; staying put
+ * is less surprising and costs nothing.
+ *
+ * **Hidden means hidden from the controls, not unreachable** — `MODES`, the URL
+ * parser, `MODE_LABEL`, `POLICY` and the band branch in App.tsx all stay total
+ * at thirteen, which is what makes that sentence true.
+ * docs/project/experimental-features.md.
+ *
+ * Exported for tests/dock-experimental-modes.test.tsx, which is the only way to
+ * ask this question without a DOM.
+ */
+export function visibleModes(on: boolean, current: Mode | undefined): readonly ModeUi[] {
+  return MODES_UI.filter((m) => !m.experimental || on || m.mode === current);
+}
+
+/**
+ * The mode named in a carried query string, if it names one this bar has a row
+ * for.
+ *
+ * Off the reading view there is no `mode` prop — the band is elsewhere — so this
+ * is how the loose-link arm knows which mode the reader came from. Matched
+ * against `MODES_UI` rather than against `MODES` so that an unrecognised word in
+ * the URL simply draws nothing extra, the same way `modeParam` falls back to the
+ * default rather than throwing (params.ts § modeParam).
+ */
+function modeInSearch(search: string): Mode | undefined {
+  const named = new URLSearchParams(search).get("mode");
+  return MODES_UI.find((m) => m.mode === named)?.mode;
+}
+
+/**
  * What the bar has in it, as one string, so `useDockFit` re-measures when the
  * row's width could have changed and not on every render of the page it sits on.
  *
  * The three things that vary: the modes are one segment on the reading view and
- * thirteen loose links elsewhere; Comments is a drawer trigger here and a link
- * elsewhere; and its count grows a digit. `MODES_UI.length` cannot change
- * without a reload — it is in here because it is the term that keeps growing,
- * and this is the line a fourteenth mode would want somebody to have read.
+ * loose links elsewhere; Comments is a drawer trigger here and a link
+ * elsewhere; and its count grows a digit.
+ *
+ * **The modes go in by name, not by count.** It was `MODES_UI.length` until
+ * 2026-09-03, when five modes went behind the experimental switch: the bar
+ * retains whichever experimental mode the reader is in, so `?mode=quotes`
+ * becoming `?mode=remember` leaves the count at nine and changes the row's
+ * width, because those two words are not the same width. A signature that
+ * counted would not re-run the fit, leaving the bar overflowing after a move to
+ * a wider label or its labels dropped with room to spare after a narrower one.
+ * GPT Sol, finding 4.
  *
  * **If a change makes the row wider without changing this string, add it here.**
  * There is no backstop for content: the `ResizeObserver` in dock-fit.ts watches
@@ -549,19 +681,33 @@ export type ModesMissingFromDock<
  * nobody can press.
  *
  * Its own function rather than four ternaries in `Dock`, which is already at
- * Biome's cognitive-complexity ceiling.
+ * Biome's cognitive-complexity ceiling. Exported for
+ * tests/dock-experimental-modes.test.tsx, which is where the identities-not-count
+ * rule is held; nothing else imports it.
  */
-function fitSignature(
+export function fitSignature(
+  visible: readonly ModeUi[],
   mode: Mode | undefined,
   onMode: Props["onMode"],
   drawer: Props["drawer"],
   own: { comments: Comment[] } | null,
 ): string {
   const shape = mode !== undefined && onMode ? "seg" : "links";
-  return `${MODES_UI.length}|${shape}|${drawer ? "drawer" : "link"}|${own ? own.comments.length : ""}`;
+  const modes = visible.map((m) => m.mode).join(",");
+  return `${modes}|${shape}|${drawer ? "drawer" : "link"}|${own ? own.comments.length : ""}`;
 }
 
-export function Dock({ slug, view, mode, onMode, marked, signedIn, visitor, drawer }: Props) {
+export function Dock({
+  slug,
+  view,
+  mode,
+  onMode,
+  marked,
+  signedIn,
+  visitor,
+  drawer,
+  experimental,
+}: Props) {
   const panel = drawer?.panel ?? null;
   const open = panel !== null;
   /* Narrowed once, so the four reads below are the compiler checking one fact
@@ -572,16 +718,6 @@ export function Dock({ slug, view, mode, onMode, marked, signedIn, visitor, draw
      view already passes it that way. */
   const isVisitor = visitor === true || drawer?.visitor === true;
   const pending = own?.comments.filter((c) => c.status === "pending").length ?? 0;
-
-  /* **How much of itself the bar spells out is measured, not guessed** — the
-     row is asked whether it overflows and drops labels until it does not. It
-     was a `max-width: 1100px` media query until 2026-09-02, and that number was
-     measured when there were six modes; at thirteen the labelled row wants
-     1416px, so every window between 1101 and 1416 was showing its labels and
-     running off the right-hand end. dock-fit.ts, and Greg's ask: *"more
-     automatic/dynamic (so that we don't have to keep tweaking some
-     constant)"*. */
-  const { ref: dockRef, fitClass } = useDockFit(fitSignature(mode, onMode, drawer, own));
 
   /**
    * The view state the bar's links carry across, so leaving the article to look
@@ -595,8 +731,34 @@ export function Dock({ slug, view, mode, onMode, marked, signedIn, visitor, draw
    * somewhere that is not, this needs to become a real subscription.
    *
    * `?panel=` is dropped on the way — see `carriedSearch` in router.ts.
+   *
+   * **Above the fit measurement since 2026-09-03**, because which buttons the
+   * bar draws now depends on it: off the reading view there is no `mode` prop,
+   * and this is where the mode the reader came from is written down.
    */
   const search = carriedSearch(location.search);
+
+  /**
+   * Which mode the bar is *about*, in either arm: the prop on the reading view,
+   * and the carried `?mode=` on the metadata and tweets pages.
+   *
+   * **`experimental.on`, never `experimental?.on`.** A mount site that forgot
+   * the prop must throw here rather than quietly answering "show everything" —
+   * `tests/dock-fit.test.ts` casts `Dock as any`, so optional chaining would
+   * make exactly that mistake silent, and silent to strangers. Fable named this
+   * as the cost of the prop being a prop; a plain read is what buys it back.
+   */
+  const visible = visibleModes(experimental.on, mode ?? modeInSearch(search));
+
+  /* **How much of itself the bar spells out is measured, not guessed** — the
+     row is asked whether it overflows and drops labels until it does not. It
+     was a `max-width: 1100px` media query until 2026-09-02, and that number was
+     measured when there were six modes; at thirteen the labelled row wants
+     1416px, so every window between 1101 and 1416 was showing its labels and
+     running off the right-hand end. dock-fit.ts, and Greg's ask: *"more
+     automatic/dynamic (so that we don't have to keep tweaking some
+     constant)"*. */
+  const { ref: dockRef, fitClass } = useDockFit(fitSignature(visible, mode, onMode, drawer, own));
 
   /**
    * Escape closes the drawer, and the drawer wins.
@@ -710,9 +872,9 @@ export function Dock({ slug, view, mode, onMode, marked, signedIn, visitor, draw
             See DockModes below. Off the reading view there is no band to switch,
             so the same five degrade to links back to it. */}
         {mode !== undefined && onMode ? (
-          <DockModes slug={slug} mode={mode} onMode={onMode} marked={marked} />
+          <DockModes slug={slug} modes={visible} mode={mode} onMode={onMode} marked={marked} />
         ) : (
-          MODES_UI.map((m) => (
+          visible.map((m) => (
             <DockLink
               key={m.mode}
               href={readHref(slug, withMode(search, m.mode), "article")}
@@ -971,12 +1133,20 @@ const MARKED = "tw:opacity-55";
 
 function DockModes({
   slug,
+  modes,
   mode,
   onMode,
   marked,
 }: {
   /** The article a press is about, for the activation token. */
   slug: string;
+  /**
+   * The rows to draw, already filtered — `visibleModes` above, which is where
+   * the two rules live. Handed in rather than read from `MODES_UI` here so that
+   * the segment and the loose links cannot disagree about what is in the bar,
+   * and so that `fitSignature` is measuring the same set that is drawn.
+   */
+  modes: readonly ModeUi[];
   mode: Mode;
   onMode(next: Mode): void;
   marked?: ReadonlyMap<Mode, string> | undefined;
@@ -1022,7 +1192,7 @@ function DockModes({
   return (
     <div className="dock-modes" role="radiogroup" aria-label="What the middle column shows">
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-        {MODES_UI.map((m) => (
+        {modes.map((m) => (
           <Tooltip
             key={m.mode}
             placement="top"

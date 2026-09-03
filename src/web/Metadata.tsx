@@ -192,6 +192,7 @@ import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
+import { useExperimental } from "./useExperimental.js";
 import { apiFetch, failure, readJson, statusOf } from "./lib/api.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
 import { ProfileBox } from "./ProfileBox.js";
@@ -312,6 +313,11 @@ export function Metadata({
      Greg, 2026-08-27. One hook, one editor, one request shape, shared with the
      masthead and with the shelf: TitleEditor.tsx. */
   const rename = useArticleRename(slug, onRenamed);
+
+  /* **The bar is told which modes this reader sees; it does not go and get it.**
+     One shared store behind the hook, so this page and the reading view cannot
+     disagree for the length of a toggle. Dock.tsx § experimental. */
+  const experimental = useExperimental();
 
   /**
    * Which stages have run, and how many questions have been asked. Not in the
@@ -896,7 +902,7 @@ export function Metadata({
       {/* No `drawer` prop, and that is the whole reason the Questions button on
           this page is a link back to the article rather than a drawer trigger.
           See Dock.tsx. */}
-      <Dock slug={slug} view="metadata" />
+      <Dock slug={slug} view="metadata" experimental={experimental} />
     </>
   );
 }

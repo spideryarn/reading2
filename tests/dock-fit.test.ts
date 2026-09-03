@@ -47,7 +47,9 @@ import path from "node:path";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { Dock } from "../src/web/Dock.js";
+import { Dock, visibleModes } from "../src/web/Dock.js";
+import { MODES } from "../src/modes.js";
+import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 import { chooseDockFit, DOCK_FIT_CLASSES } from "../src/web/dock-fit.js";
 
 /** What the row needs at each rung, in px. Rung 0 spells every label out. */
@@ -307,9 +309,27 @@ describe("Dock gives the ladder something to work with", () => {
     host.remove();
   });
 
+  /**
+   * **`experimental` is passed, and the cast is why that matters.** `Dock as any`
+   * means the compiler is not asking for props here, so a bar that read
+   * `experimental?.on` would silently draw every mode rather than throwing —
+   * which is exactly the mistake the required prop exists to make loud. It reads
+   * `experimental.on`, so a call that forgot this line fails here with a
+   * `TypeError` instead of passing while showing unfinished modes to strangers.
+   * tests/dock-experimental-modes.test.tsx holds that directly.
+   */
   function render(props: Record<string, unknown>): void {
-    // biome-ignore lint/suspicious/noExplicitAny: the shapes differ by which props are present, which is the thing under test
-    act(() => root.render(createElement(Dock as any, { slug: "x", view: "article", ...props })));
+    act(() =>
+      root.render(
+        // biome-ignore lint/suspicious/noExplicitAny: the shapes differ by which props are present, which is the thing under test
+        createElement(Dock as any, {
+          slug: "x",
+          view: "article",
+          experimental: EXPERIMENTAL_OFF,
+          ...props,
+        }),
+      ),
+    );
   }
 
   it("the reading view: one segment, and Plain keeps its word", () => {
@@ -325,12 +345,56 @@ describe("Dock gives the ladder something to work with", () => {
    * until GPT Sol's review: without `dock-mode` rung 1 does nothing here, and
    * without the `always` label Plain lost its word on the page you are most
    * likely to be looking for the way back from.
+   *
+   * **The count is the visible set, not "more than ten".** Five modes went
+   * behind the experimental switch on 2026-09-03, so a default reader's bar has
+   * eight loose links and the old `> 10` was a statement about a bar nobody
+   * sees. Asserted against `visibleModes` rather than against `8`, so the
+   * number moves with the rule instead of pinning today's count — the point
+   * here is that the ladder has links to act on, and that count is not this
+   * file's subject. tests/dock-experimental-modes.test.tsx owns the eight.
    */
   it("the metadata page: loose links that say they are modes", () => {
     render({ view: "metadata" });
     expect(host.querySelector(".dock-modes")).toBeNull();
-    expect(host.querySelectorAll(".dock-mode").length).toBeGreaterThan(10);
+    expect(host.querySelectorAll(".dock-mode")).toHaveLength(
+      visibleModes(false, undefined).length,
+    );
+    expect(host.querySelectorAll(".dock-mode").length).toBeGreaterThan(1);
     expect(host.querySelector(".dock-tail")).not.toBeNull();
     expect(host.querySelector(".dock-btn-label.always")?.textContent).toBe("Plain");
+  });
+
+  /**
+   * And the whole thirteen still fit through the same wiring, because that is
+   * the row `NEED` above was measured against — a reader with the switch on
+   * gets the widest bar this app draws, and it is the one the ladder has to
+   * cope with.
+   */
+  it("the reading view with the switch on: every mode, one segment", () => {
+    render({ mode: "plain", onMode: () => {}, experimental: EXPERIMENTAL_ON });
+    expect(host.querySelectorAll('.dock-modes [role="radio"]')).toHaveLength(
+      visibleModes(true, undefined).length,
+    );
+  });
+
+  /**
+   * **And the loose arm too, which is the half that was left untested.**
+   *
+   * The metadata assertion above is measured against `visibleModes`, which is
+   * the function the component itself calls — so it holds however the filter
+   * behaves, and a loose arm that ignored the switch entirely would pass it.
+   * GPT Sol's review of stage 2 named the surviving mutation: *"make the loose
+   * arm always filter as Experimental off while leaving the radiogroup
+   * correct"*.
+   *
+   * So this one counts against `MODES`, which is the vocabulary rather than the
+   * rule — an independent number the filter cannot move. It is the only
+   * assertion in this file that would notice the two arms disagreeing.
+   */
+  it("the metadata page with the switch on: every mode, as loose links", () => {
+    render({ view: "metadata", experimental: EXPERIMENTAL_ON });
+    expect(host.querySelector(".dock-modes")).toBeNull();
+    expect(host.querySelectorAll(".dock-mode")).toHaveLength(MODES.length);
   });
 });

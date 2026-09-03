@@ -76,6 +76,9 @@ import type { PublicArticle, PublicTweets } from "../src/public-types.js";
 /* The vocabulary itself, so the sweeps below cannot fall behind it — src/modes.ts
    imports nothing, which is why the server can read it too. */
 import { DEFAULT_MODE, MODES, type Mode } from "../src/modes.js";
+/* The word on each button, so a press can be aimed at a named mode without a
+   second copy of the mode-to-label mapping here. src/title-text.ts. */
+import { MODE_LABEL } from "../src/title-text.js";
 
 /** Who `useSession` says is here. Re-posed by each test before it renders. */
 const session: { user: { id: string; email: string } | null } = { user: null };
@@ -367,6 +370,18 @@ let owned: () => Response;
 let notBuilt: string | null = null;
 
 /**
+ * **What `GET /api/reader` says about the experimental switch**, for the tests
+ * that need all thirteen mode buttons on screen.
+ *
+ * `null` is off, which is what every case here gets unless it says otherwise —
+ * and what a **stranger** gets whatever this holds, because the store issues no
+ * request at all for a signed-out reader (src/web/experimental-store.ts). A date
+ * is on-since-then; the wire carries the date and the client derives the
+ * boolean, one field, never both.
+ */
+let experimentalSince: string | null = null;
+
+/**
  * What the public article endpoint serves — `ARTICLE` unless a case says
  * otherwise, and reset in `beforeEach` so one test cannot leak into the next.
  */
@@ -401,6 +416,12 @@ function json(body: unknown, status = 200): Response {
 function reply(url: string, method: string): Response {
   if (url === `/api/public/article/${SLUG}`) return publicArticle();
   if (url === `/api/article/${SLUG}`) return owned();
+  /* The reader's own row, answered properly rather than with the `{}` below: a
+     response that does not mention `experimentalSince` is an **error** in the
+     client, not an "off" (experimental-features.md), so `{}` would leave the
+     store in `loadError` and every case here reading the same `on: false` for
+     the wrong reason — docs/reusable/silent-success.md, one layer out. */
+  if (url === "/api/reader") return json({ experimentalSince });
   if (method === "POST") return new Response(null, { status: 204 });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
   if (url.startsWith("/api/chat/")) return json({ threads: [] });
@@ -422,6 +443,13 @@ function reply(url: string, method: string): Response {
    5-second default and the other four were reported as failures of the code.
    `vi.mock` is hoisted above this, so the mocks are already in place. */
 const { App } = await import("../src/web/App.js");
+
+/* **Dynamic, for the same reason `App` is** — and here it is not only speed.
+   `experimental-store.ts` imports `lib/api.ts`, which subscribes to
+   `onAuthStateChange` at module load; a static import at the top of this file
+   would run that before `authListeners` above had been initialised, and the
+   whole suite would fail to load rather than fail a test. */
+const { resetForTests: resetExperimental } = await import("../src/web/experimental-store.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -449,6 +477,15 @@ beforeEach(() => {
   session.user = null;
   served = ARTICLE;
   notBuilt = null;
+  experimentalSince = null;
+  /* **The switch's store is a module singleton**, so it keeps the last test's
+     session the way it keeps a session between page views — which is the point
+     of it, and a trap here: an event is not news (`sessionIs` returns early when
+     the id has not changed), so a test posing the same reader as the one before
+     would inherit that reader's answer and never re-ask. Reset first, and the
+     `SIGNED_IN` that `open()` fires is then real news.
+     src/web/experimental-store.ts § Forget everything. */
+  resetExperimental();
   /* Reads `served` at call time, so a case may still swap the payload without
      also having to restate how the route answers. */
   publicArticle = () => json(served);
@@ -1125,6 +1162,23 @@ describe("a signed-out browser on a shared document", () => {
    * button's label, because the label is a product word (`MODES_UI` in
    * src/web/Dock.tsx) and matching it to a mode id here would be a third copy
    * of that mapping.
+   *
+   * ## Two passes since 2026-09-03, and the count is not weakened
+   *
+   * Five modes are behind the experimental-features switch, and a signed-out
+   * reader is **forcibly off** — there is no answer this test could pose that
+   * would put Quotes in a stranger's bar, because the store issues no request
+   * for them at all. So the sweep runs twice rather than shrinking:
+   *
+   *  1. the bar as a stranger finds it — the modes that are not behind the
+   *     switch, pressed in turn;
+   *  2. each remaining mode at **its own address**, because the bar retains
+   *     whichever mode the URL names, so `?mode=timeline` really does draw a
+   *     Timeline button for a reader who followed a shared link into it.
+   *
+   * The union is still compared with `MODES`, in both directions, which is the
+   * invariant the pre-gate version held. Dropping the second pass would have
+   * quietly stopped pressing five of the thirteen.
    */
   it("stays inside the public namespace when the modes are pressed", async () => {
     await open();
@@ -1158,6 +1212,44 @@ describe("a signed-out browser on a shared document", () => {
       expect(MODES, `pressing ${label} selected ${mode}`).toContain(mode);
       pressed.push(mode);
       expectBandFor(mode as Mode, `after pressing ${label}`);
+    }
+
+    /* **The bar drew what a default reader sees, and not one button more.** The
+       five behind the switch are absent from a stranger's bar by construction;
+       this is the assertion that they really were, so the second pass below is
+       testing something rather than repeating the first. */
+    expect(pressed.length, "a stranger's bar is the non-experimental modes").toBeLessThan(
+      MODES.length,
+    );
+
+    /* **The second pass: the hidden five, each at the address that reaches it.**
+       Pressing a button that is already checked is a real reader action — it is
+       what the empty state's "try again" amounts to — and it runs the same
+       `armActivationForMode` + `onMode` path the first pass exercises, which is
+       the branch a POST would hide in. */
+    for (const mode of MODES) {
+      if (pressed.includes(mode)) continue;
+      await remount();
+      await open(`?mode=${mode}`);
+      trace.length = 0;
+
+      const button = modeRadios().find((b) => b.getAttribute("aria-label") === MODE_LABEL[mode]);
+      /* **The radiogroup is never left with nothing checked.** Without the
+         retain rule this is `undefined` and the group announces one-of-these
+         with none of them on. */
+      expect(button, `${mode} must keep its button when the URL names it`).toBeDefined();
+      expect(button?.getAttribute("aria-checked"), `${mode} must be the checked one`).toBe("true");
+      /* And the band is on screen: hidden means hidden from the controls, not
+         unreachable — docs/project/experimental-features.md, rule two. */
+      expectBandFor(mode, `arriving at ${mode} with the switch off`);
+
+      await act(async () => (button as HTMLButtonElement).click());
+      await settle();
+      expect(outsidePublic(), `after pressing ${mode}`).toEqual([]);
+      expect(trace.filter((r) => r.method !== "GET"), `after pressing ${mode}`).toEqual([]);
+      expect(button?.getAttribute("aria-checked"), `${mode} stays checked`).toBe("true");
+      expectBandFor(mode, `after pressing ${mode}`);
+      pressed.push(mode);
     }
 
     /* **The bar and the vocabulary are the same set**, in both directions: a
@@ -1443,26 +1535,30 @@ describe("a signed-in reader who does not own it", () => {
     ).toHaveLength(1);
 
     /**
-     * **And the experimental-features switch is asked for by nobody, yet.**
+     * **The third thing a signed-in reader asks: their own experimental switch.**
      *
      * The switch lives in one store bound to the session since 2026-09-03
      * (src/web/experimental-store.ts), and the store asks the server only once
-     * something subscribes to it. Through stage 1 the only subscriber is the
-     * settings row on `/profile`, so a reading view reads the switch **not at
-     * all** — the same as before the store existed, which is stage 1's whole
-     * contract: nothing changes on screen and nothing changes on the wire.
+     * something subscribes to it. Through stage 1 nothing on these three pages
+     * did. Since stage 2 each of them mounts a `Dock`, and the bar is **told**
+     * which modes to draw rather than going and getting it — so the page calls
+     * `useExperimental()` and the store makes one request per session, on
+     * whichever of the three views the reader lands on first.
      *
-     * **Stage 2 is when this becomes one**, for a signed-in reader wherever
-     * they are, because `App.tsx` will call `useExperimental()` to hand the
-     * answer to `Dock`. Change the number here when that lands, and keep the
-     * zero below whatever happens.
+     * **Exactly one**, not "at least one": the whole reason for a shared store
+     * rather than a hook per component is that the three Docks replacing one
+     * another as a reader moves around an article must not each fetch, and must
+     * not disagree for the length of a toggle. A per-component hook passes
+     * everything else in this file and fails this line.
      *
-     * That zero is the load-bearing half. `GET /api/reader` is behind the auth
-     * gate, so the old per-component hook got its "off" out of a 401 it caught
-     * as a load error — the right answer for the wrong reason, and the day a
-     * feature went behind the switch it would have turned on for strangers with
-     * nothing to say so. docs/reusable/silent-success.md. A stranger asking for
-     * it *not at all* is the point of the store rather than a side effect of it.
+     * That zero above is the load-bearing half, and it is unchanged.
+     * `GET /api/reader` is behind the auth gate, so the old per-component hook
+     * got its "off" out of a 401 it caught as a load error — the right answer
+     * for the wrong reason, and the day a feature went behind the switch it
+     * would have turned on for strangers with nothing to say so.
+     * docs/reusable/silent-success.md. A stranger asking for it *not at all* is
+     * the point of the store rather than a side effect of it, and it is what
+     * makes the eight-button bar Greg asked for true by construction.
      */
     const readerSetting = "GET /api/reader";
     expect(
@@ -1471,8 +1567,8 @@ describe("a signed-in reader who does not own it", () => {
     ).toHaveLength(0);
     expect(
       withAnAccount.filter((l) => l === readerSetting),
-      "nobody has subscribed to the switch on a reading view yet — stage 2 makes this one",
-    ).toHaveLength(0);
+      "one read of the switch for the session, not one per Dock",
+    ).toHaveLength(1);
 
     expect(
       withAnAccount.filter((l) => l !== probe && l !== sessionPoll && l !== readerSetting),
@@ -1555,13 +1651,18 @@ describe("a signed-in reader who does not own it", () => {
   it("stays inside the public namespace when the modes are pressed", async () => {
     session.user = { id: "somebody-else", email: "else@example.com" };
     owned = () => json({ error: "not yours" }, 404);
+    /* **The switch on, so this sweep still presses all thirteen.** Five modes
+       went behind it on 2026-09-03, and this reader is the only one in the file
+       who *can* turn it on — a stranger is forcibly off. That makes this the
+       exhaustive press sweep, and the signed-out one above reaches the hidden
+       five by their URLs instead. Neither count was weakened. */
+    experimentalSince = "2026-09-01T00:00:00.000Z";
     await open();
-    /* Clears the two requests a signed-in reader legitimately makes that a
-       stranger does not — the owned probe and the job engine's one
-       reconciliation. Pinned as *exactly* those two by the parity test above,
-       which also pins the experimental-features switch at zero until stage 2
-       subscribes to it; here they are simply out of the way before anything is
-       pressed. */
+    /* Clears the three requests a signed-in reader legitimately makes that a
+       stranger does not — the owned probe, the job engine's one reconciliation,
+       and one read of their experimental-features switch. Pinned as *exactly*
+       those three by the parity test above; here they are simply out of the way
+       before anything is pressed. */
     trace.length = 0;
 
     const buttons = modeRadios();

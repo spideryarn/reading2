@@ -251,6 +251,69 @@ feature behind it* loses the "before the first gate" paragraph, which this work 
 
 *Plus a real browser*, signed out, on a shared article.
 
+**Built.** What changed against the plan above, and why:
+
+- **The signed-out press sweep could not "turn experimental on", because nothing can.** The plan's
+  table said `tests/public-network-trace.test.tsx` should turn the switch on to keep sweeping all
+  thirteen. That works for the *signed-in* sweep in the second describe — the fixture's
+  `GET /api/reader` now answers `{ experimentalSince }` and that reader gets thirteen buttons — and
+  is impossible for the first, whose whole subject is a stranger and whose store issues no request
+  at all for one. So the signed-out sweep runs **twice**: the buttons a stranger's bar draws, and
+  then each remaining mode at its own `?mode=` address, where the retain rule guarantees its button.
+  The union is still compared with `MODES` in both directions, so nothing was weakened; the second
+  pass is also where *the band for a hidden mode still renders* is asserted end to end.
+- **The store had to be reset between tests in that file.** It is a module singleton and
+  `sessionIs` returns early when the user id has not changed — correctly, since an auth event is not
+  news — so a test posing the same reader as the one before inherited that reader's answer and never
+  re-asked. `resetForTests()` in `beforeEach`, imported dynamically for the same reason `App` is:
+  `experimental-store.ts` pulls in `lib/api.ts`, which subscribes at module load, and a static
+  import at the top of that file runs it before `authListeners` exists.
+- **`fitSignature` and `visibleModes` are exported** so the identities-not-count rule can be tested
+  without a DOM. `withMode` and `ModesMissingFromDock` are already exported from that file for
+  test-and-survival reasons, so this is the house style rather than a new seam.
+- **`tests/dock-fit.test.ts`'s "more than ten loose links" became the visible set**, asserted against
+  `visibleModes(false, undefined).length` rather than against `8`, so the number moves with the rule
+  instead of pinning today's count in a file whose subject is the fit ladder.
+- **Two source comments were saying the old thing** and were fixed with the behaviour:
+  `App.tsx`'s note that "stage 2 gets a real subscriber here" (it is in `Reader`, not `App`), and
+  `SettingsSection.tsx`'s "Nothing is behind it yet".
+- **The docs proposal is
+  [260903c-experimental-features-doc-proposal.md](260903c-experimental-features-doc-proposal.md)** —
+  five changes to the operating manual, before and after, applied and awaiting Greg's review.
+- **Not done here:** the real browser pass.
+
+**Landed.** Verified in real Chrome against `fowler-phrenology` on the local stack, all six cases:
+signed out **8 buttons**; `?mode=timeline` signed out **9**, with exactly one `aria-checked`; signed
+in off **8**; signed in on **13**; the metadata page **8**, and **9** arriving from `?mode=timeline`;
+and `dock-fit` stepping to rung 1 at 900px with no horizontal overflow and back to rung 0 at 1400px.
+(The thirteen-button bar stays on rung 1 at 1400px, which is correct — `dock-fit.ts` measured the
+full thirteen-label row at 1416px.)
+
+What changed against the plan above:
+
+- **A weakened invariant, caught by Sol and confirmed by mutation.** `tests/dock-fit.test.ts` had
+  lowered its loose-arm count from `> 10` to eight *and* asserted it against `visibleModes(false, …)`
+  — the function the component itself calls, so it held however the filter behaved. Sol's surviving
+  mutation was "make the loose arm always filter as Experimental off while leaving the radiogroup
+  correct". Reproduced: it passes every other Dock test. The new
+  *the metadata page with the switch on* counts against `MODES` instead — the vocabulary rather than
+  the rule — and is the only assertion in the tree that notices the two arms disagreeing.
+- **Four false claims in the rewritten docs**, three found by Sol and one by me. The table of reasons
+  was written to justify a decision Greg had already made, and the rows nobody could source were the
+  ones that invented deficiencies: Referee's sub-modes are all built (it is behind the switch for its
+  *audience*), Quotes' verification is finished and deliberately narrow, and Diagram has four
+  pictures rather than three. `reading-view-overview.md` had then restored the false umbrella —
+  "why each of the five is not ready yet" — over the top of the corrected table. **Every row was
+  re-checked against the doc it cites.**
+- Three reference errors in the manual, one of them older than this work: the migration is
+  `0037_experimental_features_and_callout_blocks.sql`, not the `0032` the doc had always named; the
+  "still reachable" example used `?mode=outline`, which is default-visible and so demonstrates
+  nothing; and a cross-reference to "the second rule" became the third when the anonymous rule was
+  inserted above it.
+
+Left for stage 3, on Sol's advice: `fitSignature` must carry **which toggle variant is drawn**, not
+merely that a toggle exists — the warning marker and the disabled state change the row's width.
+
 ### Stage 3 — the switch, in the bar
 
 A button at the end of the bar, after Metadata, **for signed-in readers only**. A toggle, not a link

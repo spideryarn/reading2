@@ -20,6 +20,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Comment } from "../src/types.js";
 import { Dock } from "../src/web/Dock.js";
+import { EXPERIMENTAL_OFF } from "./helpers/experimental-fixtures.js";
 import { SLOW_AFTER_MS } from "../src/web/useSlow.js";
 import { vi } from "vitest";
 
@@ -64,6 +65,10 @@ function paint(comments: Comment[], loaded: boolean, loadFailed = false): void {
       createElement(Dock, {
         slug: "a-piece",
         view: "article" as const,
+        /* Off, which is what most readers have. Nothing here is about the
+           modes — the drawer is the subject — but the bar cannot be drawn
+           without an answer, and this is the ordinary one. */
+        experimental: EXPERIMENTAL_OFF,
         drawer: {
           comments,
           loaded,

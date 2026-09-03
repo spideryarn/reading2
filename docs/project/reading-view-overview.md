@@ -56,6 +56,16 @@ of compression, down the page for position and across for detail. Read that firs
 
 ### The modes in the band
 
+**Five of the thirteen are behind the experimental-features switch** and are drawn only for a reader
+who asked for them — Quotes, Timeline, Referee, Diagram and Remember. The other eight (Plain,
+Hierarchy, Outline, Summary, Glossary, Ideas, Search, Chat) are what everybody sees, a signed-out
+visitor included. Hidden means hidden from the bar, not unreachable: `?mode=timeline` still works,
+and the bar retains whichever mode the URL names so the reader keeps their way back.
+[experimental-features.md](experimental-features.md) is the switch, and it gives a reason per mode —
+mostly unfinished work, but **Referee is behind it for its audience rather than its readiness**: all
+four of its sub-modes are built, and it is for somebody asked to peer-review the piece, which most
+readers never are.
+
 - **[260828aw-outline-mode.md](../plans/260828aw-outline-mode.md)** — the whole document as one
   nested list, deep where you are reading and shallow everywhere else. The plan is the reference:
   there is no `outline.md` yet, and it shares the tree with
