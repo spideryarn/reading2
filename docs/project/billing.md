@@ -680,9 +680,16 @@ four events in `HANDLED_EVENTS`, with its own permanent `whsec_…` revealed on 
 page. That secret is per-endpoint and unrelated to the API keys; it goes in the Vercel production
 environment.
 
-`npm run stripe:check` fails if nothing is listening at that URL, because a live account with no
-endpoint takes money and grants nothing — the one failure mode where every other check passes and
-the customer is simply not served.
+**Done on 2026-09-03**: endpoint `we_1UBXjMLv4piDbwcbrLUPudWD`, and both `STRIPE_SECRET_KEY` and
+`STRIPE_WEBHOOK_SECRET` set on Vercel Production. Until that day **neither was set there at all**,
+so live Checkout would have answered 503 however well the Stripe account was configured — the
+account and the deployment are two separate places to finish the job, and `stripe:check` only sees
+the first.
+
+`npm run stripe:check -- --prod` fails if nothing is listening at that URL, because a live account
+with no endpoint takes money and grants nothing — the one failure mode where every other check
+passes and the customer is simply not served. It checks Stripe's side; what it cannot see is whether
+the deployment holds the secrets, which is `vercel env ls production`.
 
 ## The three billing routes
 

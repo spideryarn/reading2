@@ -292,7 +292,7 @@ describe("no Postgres store is selected without a guard", () => {
    */
   it("and it really did find the guarded exports", async () => {
     const guarded = await guardedAtExport();
-    /* **Seventeen, written out.** It was two until 2026-09-03 — the two stores
+    /* **Eighteen, written out.** It was two until 2026-09-03 — the two stores
        from the accident above — while db-errors.ts and docs/project/database.md
        both said *every* Postgres store was wrapped at its export. The other
        fifteen were wrapped at the selection in src/store/index.ts instead, so
@@ -310,6 +310,7 @@ describe("no Postgres store is selected without a guard", () => {
       "pgCommentStore",
       "pgFeedbackStore",
       "pgGlossaryLookupStore",
+      "pgGlossaryStore",
       "pgJobStore",
       "pgLibrarySearch",
       "pgReaderStore",
@@ -322,6 +323,59 @@ describe("no Postgres store is selected without a guard", () => {
       "pgUploadStore",
       "pgVisibilityStore",
     ]);
+  });
+
+  /**
+   * **The hole the list above cannot see, and it was open within an hour.**
+   *
+   * An exact list catches a store that *stops* being guarded — its name has to
+   * be deleted, where a reviewer sees it. It cannot catch a store that **never
+   * was**, because a new adapter simply is not in the list and the assertion
+   * goes on passing. That is a guard agreeing with the bug.
+   *
+   * It is not hypothetical. `pgGlossaryStore` (src/store/pg-glossary.ts) landed
+   * on `dev` from another worktree on 2026-09-03, minutes after the fifteen were
+   * moved, wrapped at its *selection* in src/store/index.ts and not at its
+   * export — the exact arrangement docs/project/database.md had just stopped
+   * describing. Everything above stayed green.
+   *
+   * So this asks the question from the other end: **every `export const pgX`
+   * under `src/store/` is guarded at its export, or is one of two exceptions
+   * that says here why.** Discovery is by shape rather than by list, so a
+   * sixteenth adapter joins the check by being written.
+   */
+  it("so every exported Postgres store is guarded at its export, or declared here", async () => {
+    /* The two that are deliberately not, each for a reason in its own file. */
+    const EXCEPTIONS = new Map([
+      [
+        "pgCostStore",
+        "guarded in the leaf src/store/ai-calls.ts, which is where the ledger is selected — " +
+          "index.ts cannot see it without closing an import cycle",
+      ],
+      [
+        "pgPublicReader",
+        "scrubs its own, deliberately and more narrowly, because its import graph is closed " +
+          "and walked by tests/public-imports.test.ts",
+      ],
+    ]);
+
+    const guarded = await guardedAtExport();
+    const exported: string[] = [];
+    for (const file of await sourcesUnder(root)) {
+      const code = strip(await readFile(file, "utf8"));
+      for (const m of code.matchAll(/export\s+const\s+(pg[A-Z][\w$]*)/g)) {
+        if (m[1]) exported.push(m[1]);
+      }
+    }
+
+    /* The control. A regex that found nothing would leave `unguarded` empty and
+       vouch for every store in the repo — the same failure this whole file is
+       about. Twenty exported adapters as of 2026-09-03; the floor is deliberately
+       loose, because the exact number is the thing that keeps changing. */
+    expect(exported.length).toBeGreaterThan(15);
+
+    const unguarded = exported.filter((n) => !guarded.has(n) && !EXCEPTIONS.has(n)).sort();
+    expect(unguarded).toEqual([]);
   });
 });
 
