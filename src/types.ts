@@ -1436,6 +1436,26 @@ export interface LibraryEntry {
 }
 
 /**
+ * The whole body of `GET /api/library` — **the envelope, named once.**
+ *
+ * `LibraryEntry` above has always crossed the server/client seam from this
+ * file; the envelope around it did not, and was instead hand-copied inline at
+ * five call sites. One of those copies said something different — the offline
+ * shelf filter was written against a bare array — and because nothing typed
+ * either side, it returned the shelf unfiltered for a fortnight without a
+ * single complaint from the compiler or the suite.
+ * docs/postmortems/260903e-offline-shelf-filter-never-ran.md.
+ *
+ * So: the route annotates what it sends with this, and a test fixture standing
+ * in for that body declares itself with this. Not every consumer reads through
+ * it yet — a body coming back off IndexedDB is `unknown` and no type can fix
+ * that — but the shape now has one place to be wrong in.
+ */
+export interface LibraryResponse {
+  articles: LibraryEntry[];
+}
+
+/**
  * Which half of the shelf to list — `listArticles`.
  *
  * A parameter rather than a second function, so both halves are built by the

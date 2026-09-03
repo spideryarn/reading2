@@ -71,6 +71,7 @@ import { CAPABLE_MODEL } from "../src/models.js";
 import { articleFingerprint, hashBlocks } from "../src/source-hash.js";
 import { PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "../src/tweets.js";
 import { pgArticleReader } from "../src/store/pg.js";
+import { pgGlossaryStore } from "../src/store/pg-glossary.js";
 import {
   beginRevision,
   publishRevision,
@@ -634,13 +635,18 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
 
   it("leaves a glossary the reader deleted deleted", async () => {
     const db = getDb();
-    /* Standing in for `deleteGlossary`, which has no Postgres implementation
-       yet (src/store/index.ts § notMigrated) — the state it produces is a NULL
-       column on the published revision, which is what this writes. */
-    await db
-      .update(articleRevisions)
-      .set({ glossary: null })
-      .where(eq(articleRevisions.id, secondRevision));
+    /* **The real thing since 2026-09-03**, rather than a hand-written NULL
+       standing in for it: `deleteGlossary` has a Postgres implementation now
+       (src/store/pg-glossary.ts), and it nulls the column on whatever revision
+       the article is currently serving — which is `secondRevision`, published
+       above. Calling it means this test cannot go on describing a delete the
+       app no longer performs.
+
+       `{ deleted: true }` is the fixture's own sanity check: `false` would mean
+       the column was already null and the carry assertion below proved nothing.
+       docs/plans/260903e-glossary-delete-in-postgres.md. */
+    expect(await pgGlossaryStore.deleteGlossary(SLUG)).toEqual({ deleted: true });
+    expect((await revisionRow(secondRevision))?.glossary).toBeNull();
 
     const begun = await beginRevision({ slug: SLUG });
     const draft = await revisionRow(begun.revisionId);
