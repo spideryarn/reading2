@@ -89,6 +89,20 @@ export function numberOrMissing<T>(): SortingFn<T> {
 }
 
 /**
+ * An ISO date string, accessor-ready for `numberOrMissing`.
+ *
+ * Parsed to a number, or `undefined` for absent and unparseable alike — the
+ * rule `numberOrMissing` requires: a missing value must be `undefined`, never
+ * `NaN`, which compares false in both directions and sorts as a value that
+ * silently never moves.
+ */
+export function at(iso: string | undefined): number | undefined {
+  if (!iso) return undefined;
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? undefined : t;
+}
+
+/**
  * Which way round a column goes when the reader first picks it.
  *
  * This is TanStack's `sortDescFirst`, said in our own vocabulary because two

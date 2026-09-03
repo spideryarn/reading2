@@ -150,8 +150,10 @@ const BOB: AdminUser = {
 const GREG: AdminUser = { ...ALICE, id: ADMIN_USER_ID_LOCAL, email: ADMIN_EMAIL_LOCAL };
 /* Its own uuid, not the one `admin.test.ts` gives `SOMEBODY_ELSE`. Sharing it
    made `tests/fixture-ids.test.ts` red the moment this constant arrived — two
-   suites naming one row race on a box that runs them side by side. */
-const OTHER_ACCOUNT = "9a1f4c2e-7b3d-4a58-9e12-0c6d8f5ab21e";
+   suites naming one row race on a box that runs them side by side. Two of us
+   found that independently and picked different replacements; this is the one
+   that reached `dev` first. */
+const OTHER_ACCOUNT = "3f7b19d4-6c28-4e51-8a03-b5d7e2914c6f";
 
 const jsonOk = (body: unknown) =>
   new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });

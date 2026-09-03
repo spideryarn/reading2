@@ -438,9 +438,14 @@ describe("the call itself", () => {
        the string. */
     const route = AI_JOB_ROUTE[PROPOSAL_JOB];
     expect(route.path).toBe("/v1/chat/completions");
-    expect(route.provider.order).toBeUndefined();
-    expect(route.provider.only).toBeUndefined();
-    expect(route.provider.require_parameters).toBe(true);
+    /* `provider` went nullable on 2026-09-03 so the images route could send no
+       `provider` key at all. Assert it is there before reaching through `?.`,
+       or the two `toBeUndefined`s below would pass on a `null` by agreeing that
+       nothing is nothing. */
+    expect(route.provider).not.toBeNull();
+    expect(route.provider?.order).toBeUndefined();
+    expect(route.provider?.only).toBeUndefined();
+    expect(route.provider?.require_parameters).toBe(true);
     // The real call is this and nothing else; the test above proves the binding.
     expect(typeof defaultProposalCall).toBe("function");
   });

@@ -3860,9 +3860,15 @@ export const billingAccounts = spideryarn.table(
  *
  * ## The three timestamps, and why they are not one status column
  *
- * **Written in the future tense on purpose: none of this is wired up yet.** The
- * functions exist in `src/store/pg-billing.ts` and nothing calls them, so what
- * follows is the contract they are built to, not something the app does today.
+ * **This was written in the future tense, and the future arrived on 2026-09-03.**
+ * It read "none of this is wired up yet … nothing calls them", which was true
+ * when the columns landed and false a few hours later: `reserveIngest` is
+ * reached from `POST /api/jobs` via `withIngestSlot`
+ * ([src/billing/admission.ts](../billing/admission.ts)), and settlement runs
+ * from `settleIn` ([src/store/pg-session.ts](../store/pg-session.ts)) and from
+ * three places in [pg-jobs.ts](../store/pg-jobs.ts). `pg-billing.ts`'s own
+ * header said "it is wired up" while this said the opposite. So what follows is
+ * the contract **and** what the app does.
  *
  * `reserved_at` is set at admission, inside the transaction holding the owner's
  * `billing_accounts` lock — that write is what makes a second concurrent

@@ -22,7 +22,9 @@
  *
  * ## The two accessor rules, borrowed rather than reinvented
  *
- * They are the same two the shelf's columns carry, and for the same reasons:
+ * They are the same two the shelf's columns carry, and for the same reasons —
+ * and `at()`, the date parser both files sort by, is no longer two copies of
+ * the rules but one import, from `lib/table-sort.js`:
  *
  * **A missing value must be `undefined`**, never `null` and never `NaN` —
  * `numberOrMissing` sorts missing low and `sinkLast` in the page moves them to
@@ -35,15 +37,8 @@
 
 import { type AdminUser, formatSpendNanos, isAdmin } from "../admin.js";
 import type { SortableColumn } from "./lib/DataTable.js";
-import { localeText, numberOrMissing } from "./lib/table-sort.js";
+import { at, localeText, numberOrMissing } from "./lib/table-sort.js";
 import { exactly, timeAgo } from "./relative-time.js";
-
-/** Parsed to a number, or `undefined` for absent and unparseable alike. */
-function at(iso: string | undefined): number | undefined {
-  if (!iso) return undefined;
-  const t = Date.parse(iso);
-  return Number.isNaN(t) ? undefined : t;
-}
 
 /**
  * The default sort: **who signed up most recently, first.**

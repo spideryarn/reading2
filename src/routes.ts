@@ -309,6 +309,7 @@ import {
   type UploadRecord,
 } from "./upload-records.js";
 import { errorFields, log, since } from "./log.js";
+import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
 import { isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
@@ -952,8 +953,16 @@ export function heartbeat(
 /**
  * Server-sent events on a response that is otherwise a plain Node one.
  *
- * Shared by chat and by comments, which are the only two things in this app a
- * reader waits on. Extracted from `streamChat`, where every line of it was
+ * Shared by chat and by comments, which were the only two things in this app a
+ * reader waited on when this was extracted. **Six callers now** — add
+ * meaning-search, quiz marking, both referee runs and the mirror — so "the only
+ * two" stopped being true without anyone noticing, which is the ordinary way a
+ * count in prose goes wrong. Corrected 2026-09-03; if you add a seventh, this
+ * sentence is the one to fix. Note that `streamChat` writes its own SSE headers
+ * rather than coming through here, so a grep for callers of this function
+ * undercounts the streams in this file by one.
+ *
+ * Extracted from `streamChat`, where every line of it was
  * already written — see the note on `res.on("close")` there for the one trap it
  * carries.
  */
@@ -1745,7 +1754,39 @@ interface Live {
   attempt: string;
 }
 
-const streaming = new Map<string, Live>();
+/**
+ * **Two jobs, and only one of them has a durable half.**
+ *
+ * The one that is easy to see: `liveMessages` turns this into the `keep` set for
+ * `ChatStore.sweepPending`, and `SweepOptions` (src/store/contracts.ts) is
+ * explicit that `keep` alone is a cross-process bug and that something durable
+ * must speak for every other process. That half is fine, and it is why a sweep
+ * of this file's registries can wrongly conclude this one is safe.
+ *
+ * The one that has nothing behind it: **this map is also where each live
+ * stream's `AbortController` and `done` promise live**, and there is no second
+ * copy of those anywhere. `settleThread` aborts superseded streams through it,
+ * and the stop route finds the stream to abort through it. So on a module
+ * re-evaluation — same process, second copy, request still running — a reader
+ * pressing **Stop** reaches an empty map, is told `{ stopped: false }`, and the
+ * paid model call keeps running and keeps being billed. A retry or an edit
+ * likewise supersedes nothing and writes over a row a live stream still holds.
+ *
+ * Found by GPT Sol reviewing docs/plans/260903d-improve-the-codebase-second-sweep.md,
+ * which had checked the `keep` role, found it protected, and called the whole
+ * registry clean. **Checking the role a comment names is not checking the
+ * object** — see that plan's § T2.1.
+ *
+ * Preserving it is the right shape rather than a workaround: the old copy's
+ * `AbortController` still aborts the real call and its `done` still settles,
+ * because a re-evaluation replaces the module and not the running request
+ * ([src/process-state.ts](process-state.ts)).
+ */
+const streaming = processSingleton<Map<string, Live>>(
+  "routes.streaming",
+  "2026-09-03-live",
+  () => new Map(),
+);
 
 /**
  * One turn at a time per conversation, across deciding *and* writing it.
@@ -1772,12 +1813,31 @@ const streaming = new Map<string, Live>();
  * Per process, like everything else here. Two servers on one `data/` directory
  * remains the unfixed problem in docs/plans/260826a-chat-mode.md § What is still open.
  *
+ * **"Per process" is what this has to mean, and a plain module-scope `Map` did
+ * not deliver it.** Saving any server module makes Vite re-evaluate every one of
+ * them *inside the same process*, without cancelling the request in flight — so
+ * for the length of that request there were two maps, and a turn arriving
+ * through the second copy did not wait for the one running in the first.
+ * Reproduced in tests/turn-order-across-reload.test.ts, which was red before
+ * this line and is the only reason it is here. `processSingleton` is the
+ * one-process answer ([src/process-state.ts](process-state.ts)); the
+ * two-*servers* problem above is a different one and is still open.
+ *
+ * This is a narrower hole than it sounds, and worth saying so rather than
+ * letting the next reader assume the cost storm: the lock is released before the
+ * model is called, so what could interleave is a settle and a write, not an
+ * eight-minute answer.
+ *
  * Exported for its tests and for nothing else. The wiring — that every write in
  * `streamChat` and the thread DELETE go through it — is checked by reading;
  * what tests/turn-order.test.ts checks is that the thing they go through
  * actually excludes, actually keeps its order, and actually survives a throw.
  */
-const turnOrder = new Map<string, Promise<void>>();
+const turnOrder = processSingleton<Map<string, Promise<void>>>(
+  "routes.turnOrder",
+  "2026-09-03-map",
+  () => new Map(),
+);
 
 export async function inTurnOrder<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const before = turnOrder.get(key) ?? Promise.resolve();

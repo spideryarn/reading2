@@ -62,9 +62,22 @@ drift.
 integer on a real article, the model never left 2–4 across 24 questions, and `value` never went
 below 3. A scale whose ends are never used is not a scale: four distinct sums across a dozen
 questions leaves most of the list in arbitrary order, and one run had a five-way tie. Bands plus a
-quota (`bandQuota` — three at each end once there are twelve questions, none at three or fewer)
-force the model to commit. The measurements are in
+spread rule force the model to commit. The measurements are in
 [the plan § Quotas](../plans/260831al-review-quiz-sub-mode.md).
+
+**The spread rule is presence at each end, not a proportion.** A batch of four or more must carry at
+least one `easy` and one `hard`, measured against what survived validation; a shorter batch is asked
+for nothing, because demanding a spread from a three-question article is an instruction to pad. The
+prompt asks for three of each end of a full twelve, and that difference is deliberate: the prompt
+states a target, the gate enforces a floor, and asking the model for one of each would make the floor
+the normal distribution. **The prompt does not mention the floor**, for the same reason — publishing
+the lower number invites the model to aim at it. [`missingBandEnds`](../../src/quiz.ts) is where it
+lives; the prompt should state what a good batch looks like and describe our machinery not at all,
+which is what went wrong when it promised a retry that never existed.
+
+It was a proportion — `min(3, floor(n / 4))` — until a production build failed on 2026-09-03 having
+paid for nine good questions carrying one `hard`, and the number is gone rather than retuned:
+[260903c](../plans/260903c-fix-quiz-build-band-spread-failure-and-lost-quiz-answers.md).
 
 ## A reference answer is not an answer key
 

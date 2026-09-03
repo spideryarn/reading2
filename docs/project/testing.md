@@ -318,10 +318,25 @@ seconds is the convention here (`tests/pdf-read.test.ts`, `tests/store-export-fa
 Being generous costs nothing except when something really is stuck; being tight costs whoever is
 unlucky.
 
-Most of the child-process suites here do not do this yet — `tests/db-tls.test.ts`,
-`tests/lockfile.test.ts` and `tests/no-undeclared-spend.test.ts` among them. They are fine on an idle
+Most of the child-process suites here do not do this yet — `tests/db-tls.test.ts` and
+`tests/no-undeclared-spend.test.ts` among them, though both shell out to `openssl` and `git` rather
+than to `tsx`, so they start in milliseconds and the exposure is smaller. They are fine on an idle
 machine and are the first things to go red on a busy one, which is exactly when you are least able to
 tell a real failure from a slow one.
+
+**`tests/lockfile.test.ts` is not one of them, and used to be named here as though it were.** It has
+had `SPAWN_TIMEOUT = 60_000` since `96c7661e` — added at 12:03 on 2026-08-28, five hours *before*
+`3ed5741e` wrote the sentence above listing it as an offender, in the very commit whose subject is
+*"Five seconds is not a timeout for a test that starts tsx, it is a load test"*. Corrected 2026-09-03.
+The lesson is not about this file: a paragraph that names offenders is a list that goes stale
+silently, because fixing one is never the same edit as un-naming it.
+
+**And the paragraph's own prediction came true on 2026-09-03.** A `npm run check` run on a box
+carrying eleven worktrees came back with seven failures. Six were 5-second timeouts in suites that
+pass in isolation; the seventh was a real regression that a guard had caught. Telling them apart cost
+a second full pass, and the expensive half was not the re-run — it was that the noise and the signal
+were indistinguishable until it finished.
+[260903d](../plans/260903d-improve-the-codebase-second-sweep.md) § T1.2.
 
 ## A green run here proves less than it looks like
 

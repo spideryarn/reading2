@@ -331,9 +331,13 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
    * cannot be stale: nothing but `enqueueOrGet`'s own INSERT ever writes this
    * column.
    *
-   * `null` is the ordinary answer and means the job spends no quota — CLI work,
-   * a step re-run, seeding, and every job today, because nothing calls
-   * `reserveIngest` yet. `settleReservation` does nothing with it.
+   * `null` means the job spends no quota — CLI work, a step re-run, seeding.
+   * `settleReservation` does nothing with it.
+   *
+   * It stopped being the *ordinary* answer on 2026-09-03: this comment used to
+   * end "and every job today, because nothing calls `reserveIngest` yet", and a
+   * job enqueued through `POST /api/jobs` now arrives carrying one
+   * ([src/billing/admission.ts](../billing/admission.ts)).
    */
   const reservationOf = async (tx: Tx, jobId: string): Promise<string | null> => {
     const [row] = await tx

@@ -251,8 +251,7 @@ export function usageSql(ownerId: string, entitlement: Entitlement) {
  * through. Wrong in the expensive direction, and silent. GPT Sol, 2026-09-02.
  */
 function usageOf(result: unknown): Usage {
-  const rows = (result as { rows?: unknown }).rows;
-  const row = Array.isArray(rows) ? rows[0] : undefined;
+  const row = rowsOf(result)[0];
   if (!row || typeof row !== "object") {
     throw new Error("the ingest usage query returned no row, which an aggregate cannot do");
   }
@@ -562,8 +561,7 @@ export async function releaseReservation(reservationId: string): Promise<boolean
          select 1 from spideryarn.jobs where ingest_event_id = ${reservationId}::uuid
        )
     returning id`);
-  const rows = (result as { rows?: unknown[] }).rows;
-  return Array.isArray(rows) && rows.length === 1;
+  return rowsOf(result).length === 1;
 }
 
 /**
