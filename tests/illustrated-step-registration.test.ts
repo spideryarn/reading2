@@ -33,6 +33,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { readArticle } from "../src/article-input.js";
 import { isBodyEvidence } from "../src/block-policy.js";
 import { inputFingerprint as illustratedFingerprint } from "../src/illustrated.js";
+import { hashProfile } from "../src/profile.js";
+import { inputFingerprint as sketchFingerprint } from "../src/sketch.js";
 import type { Illustrated } from "../src/illustrated-plate.js";
 import { STEPS, stepIsDone } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
@@ -144,11 +146,20 @@ function ctxFor(): StepContext {
  * about a different stage. `caption` on the second scene so that the two are
  * not byte-identical.
  */
+/**
+ * **`sourceHash` is the real one, over the fixture article's own blocks and
+ * tree.** The step refuses a *stale* Sketch as well as an absent one, so a
+ * placeholder here would make every case in this file refuse for a reason that
+ * has nothing to do with what it is asking.
+ */
+let SKETCH_HASH = "";
+
 function sketchFixture(title = "Two arguments, one conclusion"): Sketch {
   return {
     version: "sketch/1",
     generator: "stub",
     slug: SLUG,
+    sourceHash: SKETCH_HASH,
     title,
     caption: "What the piece argues, in two moves.",
     profileHash: null,
@@ -256,6 +267,8 @@ beforeAll(async () => {
     dir: path.join(root, "data", slug),
     htmlFile: path.join(root, "output", `${slug}.html`),
   }));
+  const article = await readArticle(SLUG, store);
+  SKETCH_HASH = sketchFingerprint(article.blocks, article.tree, article.meta ?? null);
 }, 30_000);
 
 afterAll(async () => {
@@ -292,6 +305,49 @@ describe("the step refuses rather than illustrating the wrong argument", () => {
       /Draw the Sketch first/,
     );
     expect(briefCalls).toBe(0);
+  });
+
+  it("refuses a Sketch the article has moved underneath", async () => {
+    /* **Refused rather than painted, and the reason is the reader's money.**
+       `loadIllustrated` reports `stale` when the Sketch is stale as well as
+       when the plates are, so a picture painted from a superseded scene is born
+       stale: $0.30 and three minutes for something the panel labels out of date
+       the moment it lands. */
+    await writeSketch({ ...sketchFixture(), sourceHash: "a-hash-of-some-other-article" });
+    await script();
+    await expect(STEPS.illustrated.run(ctxFor(), store, nullCheckpointStore())).rejects.toThrow(
+      /out of date/,
+    );
+    expect(briefCalls, "the refusal must come before the brief call").toBe(0);
+  });
+
+  it("refuses a Sketch drawn for a different reader profile", async () => {
+    /* **Without this the panel loops.** The picture inherits the Sketch's
+       `profileHash`, the route answers `profileChanged: true` against the
+       reader's current profile, the panel offers to paint again, and the next
+       paint inherits the same hash and reports the same thing — one press of a
+       $0.30 button per circuit, for ever. */
+    await writeSketch({ ...sketchFixture(), profileHash: hashProfile("somebody else") });
+    await script();
+    const ctx = { ...ctxFor(), profile: "I am a different reader" };
+    await expect(STEPS.illustrated.run(ctx, store, nullCheckpointStore())).rejects.toThrow(
+      /different reader profile/,
+    );
+    expect(briefCalls).toBe(0);
+  });
+
+  it("does not refuse a Sketch drawn deliberately without a profile", async () => {
+    /* The negative control for the case above, and it is the three-state rule
+       rather than an equality: `null` means *written deliberately without a
+       profile*, which is not a mismatch with anything. Refusing it would make
+       every unprofiled Sketch unpaintable by a reader who has a profile — which
+       is most of them. src/profile.ts § `profileIsStale`. */
+    await writeSketch(sketchFixture());
+    await script();
+    const ctx = { ...ctxFor(), profile: "I am a reader with a profile" };
+    await expect(
+      STEPS.illustrated.run(ctx, store, nullCheckpointStore()),
+    ).resolves.toBeTruthy();
   });
 
   it("does not enqueue a Sketch behind the reader's back", async () => {

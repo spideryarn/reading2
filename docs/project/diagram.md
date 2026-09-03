@@ -1780,11 +1780,23 @@ failure a future model silently ignoring `output_format` would cause.
 consequences worth knowing before touching either.
 
 **It refuses rather than pulls.** `useStepJob` posts `steps: [step]` and pipeline
-order does not put a prerequisite in front of it, so a run with no current Sketch
-fails with *"There is no sketch of … to illustrate. Draw the Sketch first"* —
-before the brief call, so nothing is spent finding out. Not
+order does not put a prerequisite in front of it, so a run whose Sketch is
+**absent, stale, or drawn for a different reader profile** fails with a sentence
+ending *"Draw the Sketch first — it is the chip one to the left"* — always before
+the brief call, so nothing is spent finding out. Not
 `enqueue(["sketch", "illustrated"])`, which turns one press into a hidden $0.20
 charge and a three-minute wait that nothing warned about.
+
+Stale and wrong-profile are refused for reasons of their own. A picture painted
+from a stale Sketch is **born stale**, because the panel's `stale` covers the
+Sketch's staleness too — $0.30 for something labelled out of date the moment it
+lands. And a Sketch drawn for somebody else's profile would loop: the picture
+inherits its `profileHash`, the route answers `profileChanged`, the panel offers
+to paint again, and the next paint inherits the same hash. All three checks are
+in `run` and none is in `stamp`, which is the difference between *would we paint
+this again* and *may we paint it now*: a finished illustration whose Sketch has
+since drifted stays done, so nothing re-runs on its own and the sentence only
+appears when somebody asked.
 
 **Its freshness is about the Sketch, not the article** —
 [`inputFingerprint`](../../src/illustrated.ts). A forced Sketch redraw changes

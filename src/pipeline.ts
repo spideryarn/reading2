@@ -81,6 +81,7 @@ import {
   PROMPT_VERSION as ILLUSTRATED_PROMPT_VERSION,
 } from "./illustrated.js";
 import { storePlateImage } from "./illustrated-image.js";
+import { isStale as sketchIsStale } from "./sketch.js";
 import { type IllustratedPlate, plateDrawn, plateFailed } from "./illustrated-plate.js";
 import type { Sketch } from "./sketch-scene.js";
 import {
@@ -93,7 +94,7 @@ import type { CheckpointStore } from "./store/checkpoints.js";
 import { log } from "./log.js";
 import { ARTICLE_RENDERER, type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
 import { articleFingerprint, hashBlocks } from "./source-hash.js";
-import { hashProfile } from "./profile.js";
+import { hashProfile, profileIsStale } from "./profile.js";
 import { type RejectReason, looksLikePdf, MAX_UPLOAD_BYTES, rejectionFailure, stagingKey } from "./source.js";
 import { readUpload, rejectUpload, settleUpload } from "./upload-records.js";
 import { fsLocations } from "./store/artifacts-fs.js";
@@ -2869,19 +2870,65 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     },
     async run(ctx, store) {
       const sketch = await store.read(ctx.slug, "sketch", "sketch");
+      /* **`ours` on every one of these, and the sentence names the chip rather
+         than the step**, because it is read by somebody looking at a band and
+         not at a pipeline. `ours` rather than `retry`: a retry skips the steps
+         that finished, so it would find the identical Sketch and fail
+         identically — offering the button would be a lie. */
+      const refuse = (why: string): never => {
+        throw stageFailure("ours", `${why} Draw the Sketch first — it is the chip one to the left — and then press this one again.`);
+      };
       if (!usableSketch(sketch)) {
-        /* **`ours`, and the sentence names the chip rather than the step.**
-           This is read by somebody looking at a band, not at a pipeline. */
-        throw stageFailure(
-          "ours",
-          `There is no sketch of "${ctx.slug}" to illustrate. Draw the Sketch first — ` +
-            "it is the chip one to the left — and then press this one again.",
-        );
+        refuse(`There is no sketch of "${ctx.slug}" to illustrate.`);
+        throw new Error("unreachable");
       }
+
+      const article = await readArticle(ctx.slug, store);
+      /* **A stale Sketch is refused rather than painted, and the reason is the
+         reader's money.** `loadIllustrated` reports `stale` when the Sketch has
+         gone stale as well as when the plates have (src/store/pg.ts), so a
+         picture painted from a superseded scene is **born stale**: $0.30 and
+         three minutes for something the panel labels out of date the moment it
+         lands. This is the whole of what the plan means by refusing rather than
+         quietly illustrating an argument the reader is not looking at.
+
+         It is checked here and NOT in `stamp`, which is the difference between
+         *would we paint this again* and *may we paint it now*. A finished
+         illustration whose Sketch has since drifted stays `done`, so nothing
+         re-runs on its own and this sentence only ever appears when somebody
+         actually asked. Both stores agree, because `stamp` is untouched. */
+      if (sketchIsStale(sketch, article.blocks, article.tree, article.meta ?? null)) {
+        refuse("The sketch of this article is out of date — the article has moved underneath it.");
+      }
+      /* **And a Sketch drawn for somebody else's profile.** Without this the
+         panel loops: the picture inherits the Sketch's `profileHash`, the route
+         answers `profileChanged: true` against the reader's current profile,
+         the panel offers to paint again, and the next paint inherits the same
+         hash and reports the same thing — one press of a $0.30 button per
+         circuit, for ever. `profileIsStale` is the three-state rule
+         (src/profile.ts): an artefact written deliberately without a profile,
+         and a reader who has since cleared theirs, are both *not* a mismatch. */
+      if (profileIsStale(sketch.profileHash, ctx.profile ? hashProfile(ctx.profile) : null)) {
+        refuse("The sketch of this article was drawn for a different reader profile.");
+      }
+
       const run = await generateIllustrated({
-        article: await readArticle(ctx.slug, store),
+        article,
         sketch,
-        /* **The Sketch's profile, not the reader's.** See `stamp` above. */
+        /* **`null`, and not `ctx.profile`, and the honest reading is that the
+           personalisation is already in the scene.** The Sketch was drawn for a
+           profile; this stage paints that scene, so the picture inherits the
+           personalisation transitively and the artefact records whose it was —
+           `profileHash`, set from the Sketch a few lines down and compared by
+           `stamp` above.
+
+           Handing the *brief* prompt `ctx.profile` as well was considered and
+           not done: the stamp has to name one profile, and two sources for it
+           (the reader's now, the Sketch's then) is a field that means different
+           things on different runs. If the register a brief chooses should
+           depend on the reader as well as on the scene, that is a product
+           decision with a stamp question attached, not a parameter to add
+           here. Plan § Profile, and who may see it. */
         profile: null,
         onProgress: ctx.report,
         signal: ctx.signal,
