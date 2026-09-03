@@ -237,10 +237,15 @@ nothing else has a copy of.
 - **Commit only your own files, by name, in one command:**
 
   ```
+  npm run check:staged-revert
   git add -- <any NEW files> && git commit -F <msg> -- <all your files>
   ```
 
-  That is the whole recipe, and it is one command so there is no gap for a peer to land in. The
+  The first line asks whether the shared index is quietly undoing somebody's commit — the guard
+  written after the day that cost six hours, and reachable until 2026-09-03 only by somebody who
+  already knew that story
+  ([version-control.md](docs/project/version-control.md#commit-your-own-files-by-name-in-one-command)).
+  The second is the whole recipe, and it is one command so there is no gap for a peer to land in. The
   trailing `--` pathspec commits those paths **from the working tree, ignoring the index**, so
   whatever anyone else has staged is neither committed nor disturbed. `git add` is only for files
   git does not know about yet — a pathspec cannot name an untracked file. Use `-F <file>`, not
