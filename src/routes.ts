@@ -436,8 +436,10 @@ const MAX_FEEDBACK_BODY_BYTES =
   Math.ceil(MAX_FEEDBACK_SCREENSHOT_BYTES / 3) * 4 +
   3 * MAX_FEEDBACK_ANSWER_CHARS * 6 +
   MAX_FEEDBACK_DIAGNOSTICS_JSON_BYTES +
-  /* The id, the route kind, the slug, the build stamp, the two booleans, every
-     key, and the braces and commas around all of it. */
+  /* The id, the URL, the slug, the build stamp, the two booleans, every key,
+     and the braces and commas around all of it. The URL replaced the route kind
+     on 2026-09-02 and is capped at `MAX_FEEDBACK_URL_CHARS` (2048), which the
+     4KB below still covers. */
   4 * 1024;
 
 function send(res: ServerResponse, status: number, body: unknown): void {
@@ -5396,15 +5398,26 @@ function requestVercelId(req: IncomingMessage): string | null {
 }
 
 /**
- * **Where the reader was**, as three checked fields and never an address.
+ * **Where the reader was**, as three checked fields — and the first of them is
+ * the whole address.
  *
- * This app's URLs carry `?q=` and `?find=`, which are reader-typed search text,
- * and `/add/<a whole third-party URL>`, which may carry a token — so the raw
- * location may not leave the browser at all, and these are the part of it that
- * may: a name from a list we wrote, a slug that goes through the same `isSlug`
- * every other route uses, and a build stamp in a closed character set.
+ * It was `route_kind`, a closed vocabulary, and never an address, until Greg
+ * reversed that on 2026-09-02: *"I think it's fine (and even advantageous) to
+ * store the url with the Feedback - if that means we can get rid of the
+ * route_kind and simplify things"*. What the vocabulary cost was a migration per
+ * page and a 500 whenever its four hand-mirrored copies drifted.
+ *
+ * **The reason it was closed has not gone away**, which is why `isWebUrl` and
+ * the length cap below are not ceremony: this app's URLs carry `?q=` and
+ * `?find=`, which are reader-typed search text, and `/add/<a whole third-party
+ * URL>`, which may carry a token. The reader is told the whole address goes —
+ * docs/project/privacy.md § What a bug report carries, and the hover card on
+ * the button itself (src/web/FeedbackButton.tsx) — which is what makes storing
+ * it a decision rather than a leak. Note that this comment went on claiming the
+ * opposite for a day after the code stopped doing it, and it was a cross-family
+ * review that noticed rather than anybody reading the function under it.
  * docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md § Always —
- * where they were.
+ * where they were, and docs/project/feedback.md.
  */
 function feedbackWhere(sent: Record<string, unknown>): {
   url: string | null;

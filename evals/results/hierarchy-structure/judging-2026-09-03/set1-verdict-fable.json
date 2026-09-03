@@ -1,0 +1,29 @@
+{
+  "ranking": ["D", "E", "B", "A", "C"],
+  "unusable": ["C"],
+  "boundaryFaults": {
+    "A": [
+      "'Prospects and Critiquing the Critics' — no boundary between Prospects (blocks 68-79, the arms-race/conviction argument) and Critiquing The Critics (blocks 80-94, the track-record-of-experts argument); the article treats these as separate sections and they are separate arguments",
+      "'Blessings of Scale and the Scaling Hypothesis' — welds Blessings Of Scale (empirical observations, blocks 23-34) to Scaling Hypothesis (the thesis itself, blocks 35-37) with no cut at block 35 where the article puts one"
+    ],
+    "B": [
+      "'Agency And Simulation' | 'Turing Machines And Agency' — this cut lands at block 124 ('Can we go even broader?'), one block past an h5 heading five levels deep, splitting the appendix's single 'what can induce agency emergence?' argument mid-thought: Cellular Automatons stays on one side, Turing Machine goes to the other, and Ambient Agency (block 132, a different topic) is swallowed by the Turing node",
+      "'GPT-3 Overview' | 'Scaling Laws And Hypothesis' — the first node silently contains three real sections (Meta-Learning, Flexing GPT, Baking The Cake) and the second contains three more (Scaling, Blessings Of Scale, Scaling Hypothesis), while an h5 subsection elsewhere gets its own top-level node; the granularity is inverted"
+    ],
+    "C": [
+      "'Scaling Hypothesis' | 'Appendix' — everything from block 36 to block 94 sits under the single title 'Scaling Hypothesis': Why Does Pretraining Work? (38), Prospects (68), and Critiquing The Critics (80) — a third of the article, three distinct arguments, all invisible and mislabelled",
+      "'Scaling' | 'Scaling Hypothesis' — the Scaling node welds Scaling (15) to Blessings Of Scale (23) and then cuts at block 36, one block after the actual Scaling Hypothesis heading at 35"
+    ],
+    "D": [
+      "'Appendix' — its span runs from block 95 to the end, welding the It From Byte essay (an actual argument about emergent agency) to Backlinks/Similar Links/Bibliography (blocks 137-183, pure reference matter); the gist admits the weld ('alongside site backlinks and references') but the reader still cannot jump to the essay's end"
+    ],
+    "E": [
+      "'Appendix' — same weld as D: the agency essay (95-136) and the closing reference apparatus (137-183) share one node, and with no gist there is nothing to warn the reader that half this node is a bibliography"
+    ]
+  },
+  "missingCuts": [
+    "A cut at Backlinks (block 137) in the full-granularity trees: only B and C separate the appendix essay from the backlinks/bibliography reference matter, and both pay for it with coarse welds elsewhere; no tree gives both the article's real section boundaries and a boundary between argument and apparatus"
+  ],
+  "titles": { "A": "names", "B": "names", "C": "generic", "D": "names", "E": "names" },
+  "gists": { "A": "claims", "B": "claims", "C": "topic-labels", "D": "claims", "E": "none" }
+}
