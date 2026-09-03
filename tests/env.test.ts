@@ -23,7 +23,7 @@
  * `applyEnvFile` is exported from src/env.ts and used by both.
  */
 import { describe, expect, it } from "vitest";
-import { applyEnvFile, chooseTargetUrl } from "../src/env.js";
+import { applyEnvFile, chooseTargetUrl, parseEnvFile } from "../src/env.js";
 
 const FILE = `
 # a comment
@@ -154,5 +154,75 @@ describe("which database a script targets", () => {
     expect(chooseTargetUrl(true, shell, alreadyLoaded)).toBe(
       "postgres://named-on-the-command-line",
     );
+  });
+});
+
+/**
+ * `parseEnvFile` — one parser for `.env.local` and `.env.prod`.
+ *
+ * Extracted out of `applyEnvFile` on 2026-09-03, when `.env.prod` acquired a
+ * second reader. Until then `scripts/check-owner-identity.ts` matched
+ * `^NAME=(.*)$` per name against the same file: a second parser, and a weaker
+ * one. Both files are hand-edited, so the spellings the weak one missed are
+ * spellings that can appear tomorrow — and two readers disagreeing about what
+ * production is would be found out by pointing something at the wrong one.
+ */
+describe("reading an env file", () => {
+  it("takes the value off a line, quotes and all", () => {
+    expect(parseEnvFile('A=plain\nB="double"\nC=\'single\'\n')).toEqual({
+      A: "plain",
+      B: "double",
+      C: "single",
+    });
+  });
+
+  it("handles the two spellings the old per-name regex missed", () => {
+    /* `export FOO=…`, which is what a file also meant to be `source`d looks
+       like, and a single-quoted value. The old reader returned `undefined` for
+       the first and kept the quotes on the second — which as a Stripe key is a
+       key with literal apostrophes round it. */
+    expect(parseEnvFile("export STRIPE_SECRET_KEY='sk_live_x'\n")).toEqual({
+      STRIPE_SECRET_KEY: "sk_live_x",
+    });
+  });
+
+  it("ignores comments, including one that names a variable", () => {
+    expect(parseEnvFile("# DATABASE_URL=commented-out\nDATABASE_URL=real\n")).toEqual({
+      DATABASE_URL: "real",
+    });
+  });
+
+  it("lets a later line win, as `source` would", () => {
+    expect(parseEnvFile("A=first\nA=second\n")).toEqual({ A: "second" });
+  });
+
+  it("lets a later line win **through `applyEnvFile`**, which is where it changed", () => {
+    /* The seam that matters, and the one a `parseEnvFile`-only test would miss.
+       The old loop made the FIRST line win, and not on purpose: having assigned
+       it, the next iteration saw `current !== inherited[name]`, read that as
+       "this process set it itself", and skipped — the shell-precedence rule
+       silently deciding precedence *inside* the file. Measured both ways before
+       the change was kept. GPT Sol caught that the extraction was described as
+       a pure refactor and was not. */
+    const env: Record<string, string | undefined> = {};
+    applyEnvFile("A=first\nA=second\n", env, {});
+    expect(env.A).toBe("second");
+  });
+
+  it("still lets the file's last line win over an inherited value", () => {
+    /* The two rules compose in the order you would hope: the file beats the
+       shell, and within the file the last line beats the earlier one. */
+    const inherited = { A: "from-the-shell" };
+    const env: Record<string, string | undefined> = { ...inherited };
+    expect(applyEnvFile("A=first\nA=second\n", env, inherited)).toEqual(["A"]);
+    expect(env.A).toBe("second");
+  });
+
+  it("keeps an empty value rather than dropping the name", () => {
+    /* `STRIPE_SECRET_KEY=` is what a half-finished paste leaves behind, and the
+       caller's guard is what decides it is useless — scripts/stripe-target.ts.
+       Dropping it here would have that guard say "absent" about a line
+       somebody can see in the file. */
+    expect(parseEnvFile("A=\n")).toEqual({ A: "" });
   });
 });

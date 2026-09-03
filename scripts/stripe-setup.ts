@@ -1,8 +1,14 @@
 /**
  * Make Stripe match what the database says we sell.
  *
- *     npx tsx scripts/stripe-setup.ts            # say what it would do
- *     npx tsx scripts/stripe-setup.ts --apply    # do it
+ *     npm run stripe:setup                     # say what it would do
+ *     npm run stripe:setup -- --apply          # do it
+ *     npm run stripe:setup -- --prod --apply   # do it to LIVE
+ *
+ * `--prod` takes the account and the database from `.env.prod` together, rather
+ * than either being named on the command line — scripts/stripe-target.ts says
+ * why that is not a preference. Every run prints the database it is pointed at
+ * before it does anything.
  *
  * **The database is the source of truth and Stripe follows it.** Edit a row in
  * `billing_tiers` (or insert one, with its prices in `billing_tier_prices`),
@@ -37,14 +43,16 @@ import type Stripe from "stripe";
 
 import {
   STRIPE_API_VERSION,
+  accountProblem,
   expectedLivemode,
   stripeClient,
   stripeConfigProblem,
 } from "../src/billing/stripe.js";
 import type { TierRow } from "../src/billing/tiers.js";
-import { loadEnvLocal } from "../src/env.js";
 import { isMain } from "../src/is-main.js";
 import { readTiers, recordTierPrice } from "../src/store/pg-tiers.js";
+
+import { aimAtTarget, refuseUnknownArgs, targetLine } from "./stripe-target.js";
 
 /** Marks the objects this script owns, so a hand-made one is never adopted. */
 const managed = (tier: TierRow) => ({
@@ -383,13 +391,28 @@ export async function ensurePortalConfiguration(
 }
 
 async function main(): Promise<void> {
-  loadEnvLocal();
+  refuseUnknownArgs(process.argv, ["--apply", "--prod"]);
   const apply = process.argv.includes("--apply");
+  /* Before anything reads the environment — it decides which Stripe account and
+     which database everything below reaches. scripts/stripe-target.ts. */
+  aimAtTarget(process.argv.includes("--prod"));
+
+  /* **Before `stripeConfigProblem()`**, so the target is on screen even when
+     the run is about to fail. A line you only get on the good path is a line
+     that is missing exactly when you are trying to work out what went wrong. */
+  console.log(`\nStripe setup — ${expectedLivemode() ? "LIVE" : "test"} mode, API ${STRIPE_API_VERSION}`);
+  console.log(`  ${targetLine()}`);
 
   const problem = stripeConfigProblem();
   if (problem) throw new Error(problem);
 
-  console.log(`\nStripe setup — ${expectedLivemode() ? "LIVE" : "test"} mode, API ${STRIPE_API_VERSION}`);
+  /* The account, before anything is created in it. `stripeConfigProblem` checks
+     the key's mode; this checks whose account it opens. src/billing/stripe.ts. */
+  const account = await stripeClient().accounts.retrieveCurrent();
+  const wrongAccount = accountProblem(account.id);
+  if (wrongAccount && expectedLivemode()) throw new Error(wrongAccount);
+  console.log(`  Account: ${account.id}${wrongAccount ? ` — ⚠ ${wrongAccount}` : ""}`);
+
   console.log(apply ? "  applying\n" : "  dry run; pass --apply to make changes\n");
 
   /* Uncached: this script is the thing that changes tiers, so reading a
