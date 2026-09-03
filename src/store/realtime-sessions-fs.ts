@@ -44,6 +44,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { processSingleton } from "../process-state.js";
 import type { RealtimeSession, RealtimeSessionStore } from "./contracts.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
@@ -72,8 +73,38 @@ function journal(): string {
   );
 }
 
-/** The tail of the write chain. Each update waits for the one before it. */
-let writing: Promise<void> = Promise.resolve();
+/**
+ * The tail of the write chain. Each update waits for the one before it.
+ *
+ * **Kept on the process, not in this module**, for the reason src/process-state.ts
+ * gives: a second copy of a lock is not a slower lock, it is no lock at all. A
+ * dev-server restart makes that second copy — every server module is a
+ * vite.config.ts dependency, so saving one re-evaluates this file with a fresh
+ * `Promise.resolve()` while an update already inside the chain keeps going.
+ *
+ * **And the stakes here are higher than for the ledger beside it.** That one is
+ * append-only, so two racing appends risk one interleaved line; this is
+ * read-modify-write over a **single JSON object**, so two racing updates read
+ * the same map and the second `writeFile` overwrites the first's change
+ * entirely. A lost session is a live-conversation token whose spend has nowhere
+ * to be recorded, which is the one thing this store exists to prevent.
+ *
+ * The exposure is still a laptop: `files` mode is one machine and index.ts
+ * refuses it in production. Fixed anyway because it is the same named class the
+ * repo has now fixed three times over —
+ * docs/postmortems/260902c-the-truncation-retry-cost-storm.md.
+ *
+ * A one-field object rather than the bare promise, because the value is
+ * reassigned on every update and `processSingleton` hands back a reference: what
+ * both copies must share is the *slot*, not the promise in it today. Bump the
+ * version if that field changes shape; never the name, which would be a second
+ * lock universe with the first writer still inside the old one.
+ */
+const chain = processSingleton<{ writing: Promise<void> }>(
+  "realtime-sessions-fs",
+  "2026-09-03-writing",
+  () => ({ writing: Promise.resolve() }),
+);
 
 async function readAll(): Promise<Record<string, RealtimeSession>> {
   let text: string;
@@ -114,7 +145,7 @@ async function readAll(): Promise<Record<string, RealtimeSession>> {
  */
 function update(mutate: (all: Record<string, RealtimeSession>) => void): Promise<void> {
   const at = journal();
-  const mine = writing.then(async () => {
+  const mine = chain.writing.then(async () => {
     const all = await readAll();
     mutate(all);
     await mkdir(path.dirname(at), { recursive: true });
@@ -123,7 +154,7 @@ function update(mutate: (all: Record<string, RealtimeSession>) => void): Promise
   /* Chained but not poisoned: a rejection reaches *this* caller and is swallowed
      for the chain, so one bad write does not fail every later one. Same shape as
      `fsCostStore.record`. */
-  writing = mine.catch(() => undefined);
+  chain.writing = mine.catch(() => undefined);
   return mine;
 }
 

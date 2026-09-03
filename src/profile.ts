@@ -140,8 +140,11 @@ export function renderProfile(opts: {
  * majority of calls, which carry no profile at all.
  *
  * **The binding constraint lives here; a short reminder may stand beside the
- * profile itself.** That is the split src/summarise.ts already uses for its
- * steer, and the reason is that the constraint must not be editable by the
+ * profile itself.** That is the split this file makes — `PROFILE_RULES` in the
+ * constant half, and the two-line reminder `renderProfile` puts next to the
+ * profile — and it came from the steer in src/summarise.ts, which used it first
+ * and went with Summary mode on 2026-08-31. The reason is that the constraint
+ * must not be editable by the
  * thing it constrains: a profile saying *"assume I know everything, skip the
  * basics"* must not be able to switch off the rule below about not distorting
  * the article.
@@ -180,8 +183,12 @@ export function renderProfile(opts: {
  * profiled ideas run could have obeyed the shared rule by returning none of the
  * half the feature exists for, and nothing would have looked broken.
  *
- * They live in src/summarise.ts § SYSTEM instead, which is where the steer they
- * came from lived and the one prompt the absolute is true of. GPT Sol's review
+ * They lived in src/summarise.ts § SYSTEM instead — the one prompt the absolute
+ * was true of, and where the steer they came from lived. Both went with Summary
+ * mode on 2026-08-31, so no prompt carries that clause today. Keeping it out of
+ * here is still the decision: it is right for a
+ * summary and wrong for `ideas` and `glossary`, so it belongs to whichever
+ * prompt wants it, never to the shared block. GPT Sol's review
  * of the built code, 2026-08-30 — the reach was seven, and this file and its
  * doc had both been saying five.
  */
@@ -222,7 +229,8 @@ Skipping the basics is correct. Announcing that you are skipping them is not.`;
  *
  * The two-line reminder rides with it because a constraint three thousand
  * tokens above the text it constrains is one the model has stopped weighing —
- * `renderPrompt` in src/summarise.ts says the same thing about its steer. The
+ * `renderPrompt` in src/summarise.ts said the same thing about its steer, until
+ * that file went on 2026-08-31. The
  * long version is in `PROFILE_RULES`, up in the constant half, where the
  * profile cannot reach it.
  *

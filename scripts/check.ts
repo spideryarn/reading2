@@ -2,7 +2,7 @@
  * Run everything that can be checked without a human, in one command.
  *
  *   npm run check
- *   npm run check -- --fast     # skip the production build (the slow one)
+ *   npm run check -- --fast     # skip the client build (the slow one)
  *   npm run check -- --offline  # no database needed, and NOT the real gate
  *
  * The point of this file is the **gate/advisory split**, which is the only
@@ -74,19 +74,38 @@ const STEPS: Step[] = [
     argv: ["run", "--silent", "typecheck"],
   },
   {
+    /**
+     * Typechecking does not prove Vite can resolve, bundle and parse the CSS.
+     * Those failures only ever showed up in a deploy before this was here.
+     *
+     * **Above the test gate, and that ordering is load-bearing.**
+     * `tests/pdf-bundle-trace.test.ts` inspects `api-dist/vercel.js` and fails
+     * — deliberately loudly rather than skipping, which is the right call —
+     * when it is not there. With the test gate above this one, `npm run check`
+     * was red on a clean checkout for everybody who had not happened to run the
+     * API build by hand. That is the exact failure this file's header sets out
+     * to avoid: a check that always fails is a check nobody runs.
+     *
+     * `npm run build` is both passes as of 2026-09-03 (`build:client` then
+     * `build:api`, the same recipe `vercel.json` runs), so running it here is
+     * all this needs. The API pass costs about 400 ms.
+     *
+     * **`--fast` narrows this step to `build:api` rather than skipping it** —
+     * see the loop below for why.
+     */
+    name: "build",
+    gate: true,
+    argv: ["run", "--silent", "build"],
+  },
+  {
     // Under REQUIRE_POSTGRES=1 unless --offline — see the header. Without it a
     // green tick here covers a quarter of the suite not having run.
+    //
+    // Below `build`, for the reason written on it.
     name: "test",
     gate: true,
     argv: ["run", "--silent", "test"],
     ...(OFFLINE ? {} : { env: { REQUIRE_POSTGRES: "1" } }),
-  },
-  {
-    // Typechecking does not prove Vite can resolve, bundle and parse the CSS.
-    // Those failures only ever showed up in a deploy before this was here.
-    name: "build",
-    gate: true,
-    argv: ["run", "--silent", "build"],
   },
   {
     // Import cycles. Zero of them today, across four independent tools, so
@@ -126,36 +145,35 @@ const STEPS: Step[] = [
     argv: ["run", "--silent", "db:chain"],
   },
 
-  // ---- advisories: real findings, deliberately not blocking --------------
   {
     /**
      * **Does the repository compile — as opposed to your copy of it?**
      *
      * `typecheck` above reads the working tree; the build reads what is in git,
      * and they differ by exactly the files you have not committed. So a lane
-     * can be green here while `HEAD` does not compile, which has now happened
-     * three times: 2026-08-28 (16 errors across four files), `113ce17` the day
-     * after, to the person who had just written that up, and 2026-08-31, when
-     * `src/blocks.ts` sat in `HEAD` importing an untracked `src/reserved.ts`
-     * while a dozen sessions all typechecked clean.
+     * can be green here while `HEAD` does not compile, which had happened three
+     * times before this existed: 2026-08-28 (16 errors across four files),
+     * `113ce17` the day after, to the person who had just written that up, and
+     * 2026-08-31, when `src/blocks.ts` sat in `HEAD` importing an untracked
+     * `src/reserved.ts` while a dozen sessions all typechecked clean.
      *
-     * **Advisory rather than a gate, and only because of this file's own
-     * rule:** a check earns promotion on the day its findings reach zero, and
-     * `HEAD` has five errors as this lands. That rule exists so nobody learns
-     * to ignore the exit code, and it applies here even though the findings are
-     * a live breakage rather than a backlog.
+     * **A gate since 2026-09-03**, on this file's own rule and its own written
+     * promise: it landed as an advisory because `HEAD` had five errors that
+     * day, with the note that *"the day `npm run typecheck:committed` is green,
+     * `gate: false` becomes `gate: true` and this paragraph goes."* It was green
+     * that day and nobody had flipped it — found by the sweep in
+     * docs/plans/260903a-improve-the-codebase-sweep.md, which is the argument
+     * for writing the exit condition down rather than the argument against.
      *
-     * **So promote it.** Unlike lint and knip, this one's backlog is somebody's
-     * afternoon rather than a policy: it is three half-landed changes whose
-     * missing files are sitting untracked in somebody's tree. The day
-     * `npm run typecheck:committed` is green, `gate: false` becomes `gate: true`
-     * and this paragraph goes.
+     * If this ever goes red, the fix is somebody's untracked file, not this
+     * check: run `npm run typecheck:committed` and it names the missing import.
      */
     name: "committed",
-    gate: false,
+    gate: true,
     argv: ["run", "--silent", "typecheck:committed"],
-    note: "HEAD does not compile — promote this to a gate the day it is green (scripts/typecheck-committed.ts)",
   },
+
+  // ---- advisories: real findings, deliberately not blocking --------------
   {
     name: "lint",
     gate: false,
@@ -187,17 +205,33 @@ const STEPS: Step[] = [
 const results: { step: Step; code: number; findings?: number }[] = [];
 
 for (const step of STEPS) {
-  if (FAST && step.name === "build") {
-    console.log(`\n── ${step.name} (skipped: --fast)`);
-    continue;
-  }
+  /**
+   * **`--fast` drops the client build, not the API one**, and the difference is
+   * the whole reason this is not a `continue`.
+   *
+   * The client build is the slow half; `build:api` is about 400 ms. But the
+   * test gate below reads `api-dist/vercel.js`
+   * (tests/pdf-bundle-trace.test.ts), so skipping the build outright made
+   * `--fast` permanently red — a mode nobody can use is the same bug as a gate
+   * nobody can pass, one flag along.
+   *
+   * `build:api` compiles `dist/index.html` into the function, so on a tree that
+   * has never had a client build it fails — loudly, naming the fix, from
+   * scripts/client-shell.ts: *"Run `npm run build` before the API build."* That
+   * is the right answer for `--fast` on a clean checkout: it is a shortcut for
+   * a tree you have already built once, and it says so instead of failing
+   * somewhere else.
+   */
+  const argv = FAST && step.name === "build" ? ["run", "--silent", "build:api"] : step.argv;
+  const fast = argv !== step.argv ? " (--fast: API build only)" : "";
+
   const requiring = step.env?.REQUIRE_POSTGRES === "1" ? " REQUIRE_POSTGRES=1" : "";
-  console.log(`\n── ${step.name} ${step.gate ? "(gate)" : "(advisory)"}${requiring}`);
+  console.log(`\n── ${step.name} ${step.gate ? "(gate)" : "(advisory)"}${requiring}${fast}`);
 
   const env = { ...process.env, ...step.env };
 
   if (!step.count) {
-    const run = spawnSync("npm", step.argv, { cwd: ROOT, stdio: "inherit", env });
+    const run = spawnSync("npm", argv, { cwd: ROOT, stdio: "inherit", env });
     // A signal (or a missing binary) leaves status null. Treat that as a
     // failure rather than letting `null` fall through as a falsy success.
     results.push({ step, code: run.status ?? 1 });
@@ -206,7 +240,7 @@ for (const step of STEPS) {
 
   // Counted steps have to be captured to be counted, so echo the output
   // ourselves rather than inheriting the stream.
-  const run = spawnSync("npm", step.argv, { cwd: ROOT, encoding: "utf8", env });
+  const run = spawnSync("npm", argv, { cwd: ROOT, encoding: "utf8", env });
   const output = `${run.stdout ?? ""}${run.stderr ?? ""}`;
   process.stdout.write(output);
   results.push({ step, code: run.status ?? 1, findings: step.count(output) });

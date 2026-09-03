@@ -23,7 +23,7 @@
  * `applyEnvFile` is exported from src/env.ts and used by both.
  */
 import { describe, expect, it } from "vitest";
-import { applyEnvFile } from "../src/env.js";
+import { applyEnvFile, chooseTargetUrl } from "../src/env.js";
 
 const FILE = `
 # a comment
@@ -89,5 +89,70 @@ describe("where a variable's value comes from", () => {
     const env: Record<string, string | undefined> = { OPENROUTER_API_KEY: "from-the-shell" };
     applyEnvFile(FILE, env, inherited);
     expect(env.OPENROUTER_API_KEY).toBe("from-the-file");
+  });
+});
+
+/**
+ * **Which database a `db:*` script is about to touch** — src/env.ts §
+ * `resolveTargetUrl`.
+ *
+ * Six scripts read `DATABASE_URL` and, until 2026-09-03, split into two camps
+ * that had never been written down as a choice: four captured the shell's value
+ * before `loadEnvLocal()` could bury it, and two did not. The rule is now one
+ * required argument, so the seventh script has to decide rather than inherit
+ * whichever sibling it was copied from.
+ *
+ * Driven through `chooseTargetUrl` rather than `resolveTargetUrl` for the same
+ * reason `applyEnvFile` is above it: the wrapper reads the real snapshot taken
+ * at module load and the real `process.env`, so a test through it would be a
+ * test of this machine.
+ */
+describe("which database a script targets", () => {
+  const shell = { DATABASE_URL: "postgres://named-on-the-command-line" };
+  const afterLoad = { DATABASE_URL: "postgres://from-env-local" };
+
+  it("lets the shell win where the target is an argument", () => {
+    /* db:migrate, db:check, db:corpus-readiness, db:repair-migration-ledger.
+       The accident this rule exists for: on 2026-08-27 `.env.local` buried a
+       `DATABASE_URL=…` meant for the remote, the remote check saw 127.0.0.1,
+       and the migrator applied the migrations to the laptop while printing
+       `✓ migrations applied`. */
+    expect(chooseTargetUrl(true, shell, afterLoad)).toBe("postgres://named-on-the-command-line");
+  });
+
+  it("lets the file win where there is no remote mode to name", () => {
+    /* db:seed-dev and db:reown. Neither has an --allow-remote, and both settle
+       identity against `supabase status` rather than the connection string, so
+       the shell winning would change nothing but the failure message — at the
+       cost of reopening the ~/.zshrc case the precedence rule above exists to
+       close. */
+    expect(chooseTargetUrl(false, shell, afterLoad)).toBe("postgres://from-env-local");
+  });
+
+  it("falls through to the file when the shell exported nothing", () => {
+    /* `??` and not `||`, and not a bare read: resolving to undefined here would
+       make a script print "DATABASE_URL is not set" beside a perfectly good
+       one, which is the ordinary case on every laptop. */
+    expect(chooseTargetUrl(true, {}, afterLoad)).toBe("postgres://from-env-local");
+  });
+
+  it("is undefined when nothing anywhere sets it, under either rule", () => {
+    /* The scripts each print their own message for this; what matters is that
+       neither rule invents a value. */
+    expect(chooseTargetUrl(true, {}, {})).toBeUndefined();
+    expect(chooseTargetUrl(false, {}, {})).toBeUndefined();
+  });
+
+  it("does not read the shell's value out of the post-load environment", () => {
+    /* **The ordering trap, gone rather than documented.** The four copies this
+       replaced each depended on running their capture above `loadEnvLocal()`;
+       an import reordered above them turned shell-wins into file-wins with
+       nothing to show for it. Here the shell's value comes from the snapshot
+       taken before any of our code ran, so a caller that has *already* loaded
+       `.env.local` gets the same answer as one that has not. */
+    const alreadyLoaded = { DATABASE_URL: "postgres://from-env-local" };
+    expect(chooseTargetUrl(true, shell, alreadyLoaded)).toBe(
+      "postgres://named-on-the-command-line",
+    );
   });
 });

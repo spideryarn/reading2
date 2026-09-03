@@ -151,6 +151,25 @@ export const atParam = parseAsBlockId.withOptions({
 });
 
 /**
+ * The current `?at=`, read straight from `location` rather than subscribed to.
+ *
+ * A few components need this value at render time without paying for a second
+ * subscription: `?at=` is already tracked by `useReadingPosition` further up
+ * the tree, so whichever ancestor holds that subscription re-renders whenever
+ * `?at=` changes, and every descendant's render sees a current
+ * `location.search` for free. Calling this here is the same "read, never
+ * written, not a subscription" trick as `carriedSearch(location.search)` in
+ * Dock.tsx, just for a single parameter instead of the whole query string.
+ *
+ * Deliberately not run through `parseAsBlockId`: the callers that used to
+ * inline this read never validated it either, and folding validation in here
+ * would be a second change riding on a dedup.
+ */
+export function currentAt(): string | null {
+  return new URLSearchParams(location.search).get("at");
+}
+
+/**
  * Which explanation dialog is open — see docs/project/comments.md.
  *
  * A comment id is a block id by construction (both come from `mintId`), so the

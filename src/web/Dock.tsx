@@ -601,11 +601,13 @@ export function Dock({ slug, view, mode, onMode, marked, signedIn, visitor, draw
   /**
    * Escape closes the drawer, and the drawer wins.
    *
-   * CommentDialog also listens for Escape on `window`, and both would otherwise
-   * fire on one press — closing a dialog the reader could not even see under
-   * the dim. Capture phase runs before any bubble-phase listener, so listening
-   * here is what makes "the drawer wins" a fact rather than a question of which
-   * component mounted first.
+   * CommentDialog also listens for Escape on `window`, via `useEscapeToClose`,
+   * and both would otherwise fire on one press — closing a dialog the reader
+   * could not even see under the dim. Capture phase runs before any
+   * bubble-phase listener, so listening here is what makes "the drawer wins" a
+   * fact rather than a question of which component mounted first. This effect
+   * deliberately does NOT use `useEscapeToClose` itself — see that hook's own
+   * comment for why folding this in would break the race.
    *
    * `stopImmediatePropagation`, not `stopPropagation`. The two are identical
    * for a real key press, which targets an element and therefore has a

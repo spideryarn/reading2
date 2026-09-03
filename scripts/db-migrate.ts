@@ -34,7 +34,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool, type PoolClient } from "pg";
 
 import { isLocalDatabaseUrl, sslDecisionFor, withoutPassword } from "../src/db/ssl.js";
-import { loadEnvLocal } from "../src/env.js";
+import { loadEnvLocal, resolveTargetUrl } from "../src/env.js";
 import {
   hashMigrationFiles,
   MIGRATION_LOCK_KEY,
@@ -65,14 +65,17 @@ import { HISTORICAL, readSnapshots, snapshotProblems } from "./migration-snapsho
  * to move it reported success — docs/reusable/silent-success.md, and the whole
  * failure it describes: the check shared an assumption with the code.
  *
- * Read here rather than fixed in src/env.ts because the precedence rule there
- * is right for every other caller. This is the one place the shell means it.
+ * `resolveTargetUrl` in src/env.ts is where that exception is made — beside
+ * the rule it excepts, and reading the snapshot `loadEnvLocal` took before any
+ * of our code ran, so it no longer matters whether this line comes above or
+ * below the load. It used to: the whole fix was a `const fromShell` that had to
+ * stay above it, and four scripts each kept their own copy of that ordering.
  */
-const fromShell = process.env.DATABASE_URL;
-
+/* Kept explicit even though `resolveTargetUrl` calls it too: this script reads
+   other variables out of `.env.local` as well, and the load being visible here
+   is what says so. It memoises, so the second call costs nothing. */
 loadEnvLocal();
-
-const url = fromShell ?? process.env.DATABASE_URL;
+const url = resolveTargetUrl({ shellWins: true });
 if (!url) {
   console.error(
     "DATABASE_URL is not set.\n" +

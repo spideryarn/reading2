@@ -67,7 +67,8 @@
  *
  * The fix is five lines in `src/`, not here: those constants become
  * `dataRoot()` (src/store/data-root.ts), which is where the same bug in
- * src/store/artifacts-fs.ts and src/store/import.ts was already fixed — and
+ * src/store/artifacts-fs.ts and src/store/import.ts (deleted 2026-09-01) was
+ * already fixed — and
  * which would also close the deployment half of it, since two levels above a
  * bundled `api-dist/vercel.js` is `/var`. Out of scope for the sub-stage that
  * wrote this note (2026-09-01);

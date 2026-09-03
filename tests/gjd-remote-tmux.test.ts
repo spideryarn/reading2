@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 import {
   AGENTS_FAIL,
   AGENTS_OK,
+  META,
   ROW_COUNT,
   SESSION_FIELDS,
   SESSION_SENTINEL,
@@ -29,6 +30,7 @@ import {
   parseAgents,
   parseSessionLine,
   parseSessions,
+  sessionRepo,
   sessionState,
 } from "../scripts/gjd-remote-tmux.js";
 
@@ -54,6 +56,12 @@ const row = (
     proc: string;
     name: string;
     title: string;
+    /** The four metadata fields. `dir` is given in the clear and encoded here,
+     *  the way the remote script encodes it. */
+    v: string;
+    kind: string;
+    repo: string;
+    dir: string;
   }> = {},
 ) =>
   [
@@ -66,7 +74,24 @@ const row = (
     o.proc ?? "claude",
     b64(o.name ?? "fix-the-toc"),
     b64(o.title ?? "Fix the ToC ordering"),
+    o.v ?? "1",
+    o.kind ?? "claude",
+    o.repo ?? "gregdetre/reading2",
+    b64(o.dir ?? "/home/greg/code/spideryarn2"),
   ].join("|");
+
+/**
+ * The session a well-formed line makes, or null.
+ *
+ * `parseSessionLine` tells two failures apart — a line that is not a record at
+ * all, and a record whose metadata contradicts itself — and most of the tests
+ * below are about the first, where "null" is the whole of what they want to
+ * say.
+ */
+const parsed = (line: string): Session | null => {
+  const r = parseSessionLine(line);
+  return r.ok ? r.session : null;
+};
 
 /**
  * What the box really printed on 2026-09-01, tmux 3.4, claude 2.1.251, verbatim
@@ -85,17 +110,17 @@ const AGENTS_JSON = JSON.stringify([
 
 const REAL = reply(
   [
-    "$36|1788194293|1|1|0|3c67234f-2da6-4208-8473-9b5ee58be82a|claude|ZGF0YWJhc2UtbW92ZS1jb21wbGV0aW9u|RGF0YWJhc2UgbW92ZSBjb21wbGV0aW9u",
-    "$81|1788259262|1|1|0|49348111-df07-44ac-a204-f2e168f46de5|claude|Z2pkLXJlbW90ZS1scy1zdGF0dXMtaW5kaWNhdG9ycw==|Z2pkLXJlbW90ZSBscyBzdGF0dXMgaW5kaWNhdG9ycw==",
-    "$78|1788259066|0|1|1|7d9a25bf-ef51-425f-9ec5-65ada264eb4c|wait:13335|cnVuLWdpdC1jb21taXQtY2hhbmdlcy1tZC10aGVuLXB1bGw=|",
-    "$77|1788246895|1|1|0|70852e00-cc1b-4218-9106-4f7b17eb6e34|claude|d29ya3RyZWVzLW1pZ3JhdGlvbi1oaXN0b3J5|V29ya3RyZWVzIG1pZ3JhdGlvbiBoaXN0b3J5",
+    "$36|1788194293|1|1|0|3c67234f-2da6-4208-8473-9b5ee58be82a|claude|ZGF0YWJhc2UtbW92ZS1jb21wbGV0aW9u|RGF0YWJhc2UgbW92ZSBjb21wbGV0aW9u||||",
+    "$81|1788259262|1|1|0|49348111-df07-44ac-a204-f2e168f46de5|claude|Z2pkLXJlbW90ZS1scy1zdGF0dXMtaW5kaWNhdG9ycw==|Z2pkLXJlbW90ZSBscyBzdGF0dXMgaW5kaWNhdG9ycw==||||",
+    "$78|1788259066|0|1|1|7d9a25bf-ef51-425f-9ec5-65ada264eb4c|wait:13335|cnVuLWdpdC1jb21taXQtY2hhbmdlcy1tZC10aGVuLXB1bGw=|||||",
+    "$77|1788246895|1|1|0|70852e00-cc1b-4218-9106-4f7b17eb6e34|claude|d29ya3RyZWVzLW1pZ3JhdGlvbi1oaXN0b3J5|V29ya3RyZWVzIG1pZ3JhdGlvbiBoaXN0b3J5||||",
   ],
   [`${AGENTS_OK} ${Buffer.from(AGENTS_JSON, "utf8").toString("base64")}`],
 );
 
 describe("parseSessionLine", () => {
   it("reads a well-formed record", () => {
-    const s = parseSessionLine(row({ win: "2", prov: "1" }));
+    const s = parsed(row({ win: "2", prov: "1" }));
     expect(s).not.toBeNull();
     expect(s?.name).toBe("fix-the-toc");
     expect(s?.created.getTime()).toBe(1788190336 * 1000);
@@ -106,7 +131,7 @@ describe("parseSessionLine", () => {
   });
 
   it("counts an attached session as attached", () => {
-    expect(parseSessionLine(row({ att: "1" }))?.attached).toBe(true);
+    expect(parsed(row({ att: "1" }))?.attached).toBe(true);
   });
 
   /**
@@ -116,15 +141,15 @@ describe("parseSessionLine", () => {
    * `"" !== "0"` is true, so every session read as attached.
    */
   it("refuses a record tmux left empty, rather than dating it to 1970", () => {
-    expect(parseSessionLine("$4||||||||")).toBeNull();
-    expect(parseSessionLine(row({ created: "" }))).toBeNull();
-    expect(parseSessionLine(row({ att: "" }))).toBeNull();
-    expect(parseSessionLine(row({ win: "" }))).toBeNull();
+    expect(parsed("$4||||||||")).toBeNull();
+    expect(parsed(row({ created: "" }))).toBeNull();
+    expect(parsed(row({ att: "" }))).toBeNull();
+    expect(parsed(row({ win: "" }))).toBeNull();
   });
 
   it("refuses a created stamp that is not a positive integer", () => {
     for (const created of ["0", "-5", "not-a-number", "17e9", "1788190336.5"]) {
-      expect(parseSessionLine(row({ created })), created).toBeNull();
+      expect(parsed(row({ created })), created).toBeNull();
     }
   });
 
@@ -136,26 +161,27 @@ describe("parseSessionLine", () => {
    * under whoever named it.
    */
   it("refuses a record with the wrong number of fields", () => {
-    expect(parseSessionLine("$4|1788190336|0|1")).toBeNull();
-    expect(parseSessionLine(`${row()}|extra`)).toBeNull();
-    expect(parseSessionLine("")).toBeNull();
+    expect(parsed("$4|1788190336|0|1")).toBeNull();
+    expect(parsed(`${row()}|extra`)).toBeNull();
+    expect(parsed("")).toBeNull();
   });
 
   it("refuses junk in the provisional slot instead of reading it as settled", () => {
     for (const prov of ["", "garbage", "2", "true"]) {
-      expect(parseSessionLine(row({ prov })), prov).toBeNull();
+      expect(parsed(row({ prov })), prov).toBeNull();
     }
   });
 
   it("refuses anything that is not a tmux session id in the first field", () => {
     for (const sid of ["", "4", "$", "$4x", "name"]) {
-      expect(parseSessionLine(row({ sid })), sid).toBeNull();
+      expect(parsed(row({ sid })), sid).toBeNull();
     }
   });
 
   it("refuses a name or title that is not valid base64", () => {
-    expect(parseSessionLine(`$4|1788190336|0|1|0|${UUID}|claude|not base64!|${b64("t")}`)).toBeNull();
-    expect(parseSessionLine(`$4|1788190336|0|1|0|${UUID}|claude|${b64("n")}|not base64!`)).toBeNull();
+    const meta = `1|claude|gregdetre/reading2|${b64("/home/greg/code/spideryarn2")}`;
+    expect(parsed(`$4|1788190336|0|1|0|${UUID}|claude|not base64!|${b64("t")}|${meta}`)).toBeNull();
+    expect(parsed(`$4|1788190336|0|1|0|${UUID}|claude|${b64("n")}|not base64!|${meta}`)).toBeNull();
   });
 
   /**
@@ -164,19 +190,19 @@ describe("parseSessionLine", () => {
    * and the record must survive one rather than mis-splitting.
    */
   it("keeps a name or title containing the field separator", () => {
-    const s = parseSessionLine(row({ name: "weird|name", title: "Rename foo|bar and ship it" }));
+    const s = parsed(row({ name: "weird|name", title: "Rename foo|bar and ship it" }));
     expect(s?.name).toBe("weird|name");
     expect(s?.title).toBe("Rename foo|bar and ship it");
   });
 
   it("treats a missing title as no title, not as a broken record", () => {
-    const s = parseSessionLine(row({ title: "" }));
+    const s = parsed(row({ title: "" }));
     expect(s?.title).toBe("");
     expect(s?.name).toBe("fix-the-toc");
   });
 
   it("refuses a record with no name", () => {
-    expect(parseSessionLine(row({ name: "" }))).toBeNull();
+    expect(parsed(row({ name: "" }))).toBeNull();
   });
 
   /**
@@ -190,17 +216,17 @@ describe("parseSessionLine", () => {
    * box. `sessionState` reports that row as unknown instead.
    */
   it("takes an empty claude id as no Claude, and keeps a mangled one rather than losing the row", () => {
-    expect(parseSessionLine(row({ id: "" }))?.claudeId).toBeNull();
-    expect(parseSessionLine(row({ id: UUID }))?.claudeId).toBe(UUID);
+    expect(parsed(row({ id: "" }))?.claudeId).toBeNull();
+    expect(parsed(row({ id: UUID }))?.claudeId).toBe(UUID);
     for (const id of [UUID.slice(0, 20), UUID.toUpperCase(), `${UUID}x`, "not-a-uuid"]) {
-      expect(parseSessionLine(row({ id })), id).not.toBeNull();
+      expect(parsed(row({ id })), id).not.toBeNull();
     }
   });
 
   /** A `|` in it is a different matter: it shifts the record, and the field
    *  count catches it — the same guard every other field relies on. */
   it("still refuses an id carrying the field separator", () => {
-    expect(parseSessionLine(row({ id: "a|b" }))).toBeNull();
+    expect(parsed(row({ id: "a|b" }))).toBeNull();
   });
 
   /**
@@ -210,14 +236,14 @@ describe("parseSessionLine", () => {
    * claude" about a session with a Claude in it.
    */
   it("reads the process probe, and refuses a token it was not written for", () => {
-    expect(parseSessionLine(row({ proc: "claude" }))?.proc).toEqual({ kind: "claude" });
-    expect(parseSessionLine(row({ proc: "none" }))?.proc).toEqual({ kind: "none" });
-    expect(parseSessionLine(row({ proc: "?" }))?.proc).toEqual({ kind: "unknown" });
-    expect(parseSessionLine(row({ proc: "wait:13335" }))?.proc).toEqual({ kind: "wait", secondsLeft: 13335 });
+    expect(parsed(row({ proc: "claude" }))?.proc).toEqual({ kind: "claude" });
+    expect(parsed(row({ proc: "none" }))?.proc).toEqual({ kind: "none" });
+    expect(parsed(row({ proc: "?" }))?.proc).toEqual({ kind: "unknown" });
+    expect(parsed(row({ proc: "wait:13335" }))?.proc).toEqual({ kind: "wait", secondsLeft: 13335 });
     // 0 and negatives never leave the box — the script drops them — so seeing
     // one means the record did not come from the script this was written for.
     for (const proc of ["", "wait", "wait:", "wait:0", "wait:-1", "wait:1.5", "wait:2h", "sleeping", "CLAUDE"]) {
-      expect(parseSessionLine(row({ proc })), proc).toBeNull();
+      expect(parsed(row({ proc })), proc).toBeNull();
     }
   });
 
@@ -228,9 +254,9 @@ describe("parseSessionLine", () => {
    * plausible-looking column that is not a number.
    */
   it("refuses a number too big to be a number", () => {
-    expect(parseSessionLine(row({ created: "9".repeat(400) }))).toBeNull();
-    expect(parseSessionLine(row({ win: "9".repeat(400) }))).toBeNull();
-    expect(parseSessionLine(row({ proc: `wait:${"9".repeat(400)}` }))).toBeNull();
+    expect(parsed(row({ created: "9".repeat(400) }))).toBeNull();
+    expect(parsed(row({ win: "9".repeat(400) }))).toBeNull();
+    expect(parsed(row({ proc: `wait:${"9".repeat(400)}` }))).toBeNull();
   });
 });
 
@@ -336,6 +362,7 @@ describe("sessionState", () => {
     provisional: false,
     claudeId: UUID,
     proc: { kind: "claude" },
+    meta: { version: 1, kind: "claude", repo: "gregdetre/reading2", dir: "/home/greg/code/spideryarn2" },
     ...o,
   });
   const agents = (status: string) => new Map([[UUID, status]]);
@@ -809,9 +836,17 @@ describe("buildSessionScript", () => {
   });
 
   /** show-environment takes a target-session, and a session id is unambiguous there. */
-  it("reads the two variables we pinned into the session environment, by id", () => {
-    expect(script).toContain('tmux show-environment -t "$sid" CLAUDE_SESSION_ID');
-    expect(script).toContain('tmux show-environment -t "$sid" GJD_PROVISIONAL');
+  it("reads the variables we pinned into the session environment, by id", () => {
+    for (const v of ["CLAUDE_SESSION_ID", "GJD_PROVISIONAL", ...Object.values(META)]) {
+      expect(script, v).toContain(`tmux show-environment -t "$sid" ${v}`);
+    }
+  });
+
+  /** The checkout path is free text the way the name and the title are — a
+   *  directory may contain the field separator — so it travels base64 too. */
+  it("encodes the checkout path, and leaves the constrained fields readable", () => {
+    expect(script).toContain('"$(printf \'%s\' "$mdir" | base64 -w0)"');
+    expect(script).toContain('"$mver" "$mkind" "$mrepo"');
   });
 });
 
@@ -922,5 +957,182 @@ describe("bindingsVerdict", () => {
   /** An empty reply is the shape every other bug in this file wore. */
   it("fails closed on silence", () => {
     expect(bindingsVerdict("").ok).toBe(false);
+  });
+});
+
+/**
+ * The four variables a session carries about WHICH REPO it is for.
+ *
+ * `gjd-remote` used to know one repo, so `ls` could say which directory a
+ * session was in and nothing else needed saying. Now a session can be for any
+ * repo on the box, and the REPO column has to come from somewhere.
+ *
+ * IT CANNOT COME FROM `pane_current_path`: a shell that has `cd`'d elsewhere,
+ * or a session started with `--dir ~`, would then be attributed to whatever
+ * repo happens to be under the cursor. So the launcher pins the answer into the
+ * tmux environment and the listing reads it back.
+ *
+ * THE VERSION IS THE WHOLE POINT (GPT Sol, finding 8 of the plan review). Every
+ * session on the box — including the ones started before this existed — is
+ * rendered by the NEW listing script, so an empty `GJD_REPO` is ambiguous: it is
+ * either a session that predates the change, or a new session that lost its
+ * metadata. Those two must not look alike, because the first is a row to
+ * display as `(unknown)` and the second is a listing to refuse.
+ */
+describe("session metadata", () => {
+  /** What a session started before any of this existed looks like today: the
+   *  same record as everyone else's, with four empty fields on the end. */
+  const legacy = (o: Partial<{ name: string; id: string }> = {}) =>
+    row({ v: "", kind: "", repo: "", dir: "", ...o });
+
+  /** The session, or the refusal as an error — for the cases that are about
+   *  what a good record says rather than about how a bad one fails. */
+  const ok = (line: string) => {
+    const r = parseSessionLine(line);
+    if (!r.ok) throw new Error(`expected a session, got: ${r.why ?? "not a record"}`);
+    return r.session;
+  };
+
+  it("reads the four variables a new session carries", () => {
+    expect(ok(row()).meta).toEqual({
+      version: 1,
+      kind: "claude",
+      repo: "gregdetre/reading2",
+      dir: "/home/greg/code/spideryarn2",
+    });
+  });
+
+  it("takes a session with none of them as one that predates them", () => {
+    expect(ok(legacy()).meta).toEqual({ version: "legacy" });
+  });
+
+  it("accepts all three kinds, so a setup job need not masquerade as a shell", () => {
+    for (const kind of ["claude", "shell", "setup"]) {
+      expect(ok(row({ kind })).meta).toMatchObject({ kind });
+    }
+  });
+
+  /**
+   * A repo is `owner/name`, lower-cased, or the literal `unknown` for a session
+   * started against an arbitrary `--dir`. Anything else did not come from the
+   * launcher, and guessing at it is how the wrong repo ends up on screen.
+   */
+  it("refuses a repo that is not a slug, and accepts the literal unknown", () => {
+    expect(ok(row({ repo: "unknown" })).meta).toMatchObject({ repo: "unknown" });
+    for (const repo of ["", "reading2", "gregdetre/", "/reading2", "GregDetre/Reading2", "a/b/c", ".."]) {
+      const r = parseSessionLine(row({ repo }));
+      expect(r.ok, repo).toBe(false);
+      if (!r.ok) expect(r.why, repo).toContain("GJD_REPO");
+    }
+  });
+
+  it("refuses a kind it was not written for", () => {
+    for (const kind of ["", "job", "CLAUDE", "setup2"]) {
+      const r = parseSessionLine(row({ kind }));
+      expect(r.ok, kind).toBe(false);
+      if (!r.ok) expect(r.why, kind).toContain("GJD_KIND");
+    }
+  });
+
+  it("refuses a directory that is not an absolute path", () => {
+    for (const dir of ["", "code/spideryarn2", "~/code", "./x"]) {
+      const r = parseSessionLine(row({ dir }));
+      expect(r.ok, dir).toBe(false);
+      if (!r.ok) expect(r.why, dir).toContain("GJD_REMOTE_DIR");
+    }
+  });
+
+  /** Paths may contain the field separator, so the directory travels base64. */
+  it("keeps a directory containing the field separator", () => {
+    expect(ok(row({ dir: "/home/greg/code/a|b" })).meta).toMatchObject({ dir: "/home/greg/code/a|b" });
+  });
+
+  /**
+   * The half-migrated record. No version but a repo means the launcher wrote
+   * some of the metadata and not the rest, which is not a legacy session and
+   * must not be displayed as one.
+   */
+  it("refuses a record with no version that carries metadata anyway", () => {
+    const r = parseSessionLine(row({ v: "", kind: "", repo: "gregdetre/reading2", dir: "" }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.why).toContain("GJD_METADATA_VERSION");
+  });
+
+  it("refuses a version it has never heard of, naming it", () => {
+    for (const v of ["2", "0", "1.0", "one"]) {
+      const r = parseSessionLine(row({ v }));
+      expect(r.ok, v).toBe(false);
+      if (!r.ok) expect(r.why, v).toContain(v);
+    }
+  });
+
+  /** The message has to say WHICH session, or there is nothing to go and look at. */
+  it("names the session in the refusal", () => {
+    const r = parseSessionLine(row({ name: "database-move", repo: "" }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.why).toContain("database-move");
+  });
+
+  describe("a listing that mixes the two", () => {
+    it("reads a legacy session and a new one side by side", () => {
+      const { sessions, failure, unreadable } = parseSessions(
+        reply([legacy({ name: "older", id: UUID }), row({ name: "newer" })]),
+      );
+      expect(failure).toBeNull();
+      expect(unreadable).toEqual([]);
+      expect(sessions.map((s) => s.meta.version)).toEqual(["legacy", 1]);
+    });
+
+    /**
+     * THE ONE THIS EXISTS FOR. One good row and one that lost its repo is not a
+     * listing with a gap in it — it is a listing this laptop cannot trust, the
+     * same way a short row count is. A degraded row would put `(unknown)` next
+     * to a session that has a perfectly good repo the box simply failed to
+     * report.
+     */
+    it("refuses the whole listing when one new session is malformed", () => {
+      const { sessions, failure } = parseSessions(
+        reply([legacy({ name: "older", id: UUID }), row({ name: "newer", repo: "" })]),
+      );
+      expect(sessions).toEqual([]);
+      expect(failure).toContain("newer");
+      expect(failure).toContain("GJD_REPO");
+    });
+
+    it("refuses the whole listing for a version it does not know", () => {
+      const { sessions, failure } = parseSessions(reply([row({ name: "newer", v: "2" })]));
+      expect(sessions).toEqual([]);
+      expect(failure).toContain("2");
+    });
+  });
+
+  /**
+   * What the REPO column shows. Both unknowns read the same on screen — a
+   * session from before this existed, and one started against an arbitrary
+   * directory — because neither can be attributed to a repo, and inventing a
+   * distinction the reader cannot act on is worse than one honest word.
+   */
+  describe("the REPO column", () => {
+    it("shows the slug for a session that has one", () => {
+      expect(sessionRepo(ok(row()))).toEqual({ text: "gregdetre/reading2", known: true });
+    });
+
+    it("shows (unknown) for a legacy session, and says it is not known", () => {
+      expect(sessionRepo(ok(legacy()))).toEqual({ text: "(unknown)", known: false });
+    });
+
+    it("shows (unknown) for a session started against an arbitrary directory", () => {
+      expect(sessionRepo(ok(row({ repo: "unknown" })))).toEqual({ text: "(unknown)", known: false });
+    });
+  });
+
+  /**
+   * A setup job has no Claude in it, so it lands where `new-shell` lands. Said
+   * out loud here because the STATE column is the one place a setup job could
+   * be mistaken for something a person is meant to attach to.
+   */
+  it("reports a setup session's state as a shell, the same as new-shell", () => {
+    const s = ok(row({ kind: "setup", id: "" }));
+    expect(sessionState(s, new Map()).kind).toBe("shell");
   });
 });

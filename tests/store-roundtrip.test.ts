@@ -639,9 +639,13 @@ when("a round trip through Postgres", () => {
      * `raw.json` is stage 1's manifest — the kind, the two URLs, the content
      * type, the encoding, the byte count and the hash (src/fetch.ts). Nothing
      * else records any of it, so an export without it is a source document
-     * whose provenance is gone: `src/store/import.ts` falls back to *"no
-     * manifest means assume HTML"*, which is right for an article old enough to
-     * predate manifests and wrong for one we exported ten seconds ago.
+     * whose provenance is gone: `loadSource` (src/api.ts) reads the manifest
+     * first and answers `null` without it, so the document we exported ten
+     * seconds ago comes back as *this article kept no source* — a 404 on *view
+     * the original* for a file that is sitting right there. (Until 2026-09-01
+     * `src/store/import.ts` was the reader that mattered here, and it went the
+     * other way, falling back to *"no manifest means assume HTML"*. Different
+     * wrong answer, same missing fact.)
      *
      * Its own test rather than a line in `ARTEFACTS`, because a manifest that
      * comes back with a *different* `file` field than the file actually written

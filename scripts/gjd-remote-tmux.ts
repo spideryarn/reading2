@@ -6,6 +6,8 @@
  * for the two bugs that made it worth separating.
  */
 
+import { REPO_UNKNOWN, isRepoValue } from "./gjd-remote-repo.js";
+
 export type Session = {
   name: string;
   created: Date;
@@ -31,7 +33,60 @@ export type Session = {
   claudeId: string | null;
   /** What the box can see running inside this session. See `SessionProc`. */
   proc: SessionProc;
+  /** Which repo this session is for, and how much of that we are allowed to
+   *  believe. See `SessionMeta`. */
+  meta: SessionMeta;
 };
+
+/**
+ * The four variables the launcher pins into a session's tmux environment so
+ * `ls` can say WHICH REPO a session is for.
+ *
+ * They are exported as names rather than spelled again at each end, because a
+ * second copy of a variable name is a copy that stops matching the day somebody
+ * renames the first — the same reason `ROW_COUNT` is a constant.
+ */
+export const META = {
+  version: "GJD_METADATA_VERSION",
+  kind: "GJD_KIND",
+  repo: "GJD_REPO",
+  dir: "GJD_REMOTE_DIR",
+} as const;
+
+/** The only metadata version this reader was written against. */
+export const METADATA_VERSION = "1";
+
+/**
+ * What was started in the session, as the launcher knew it — not as the process
+ * table guesses it.
+ *
+ * `setup` is here so a setup job does not have to masquerade as a shell (GPT
+ * Sol, finding 8). It carries no Claude, so `sessionState` reports it exactly
+ * as it reports `new-shell`; the kind is what lets a later version say more.
+ */
+export type SessionKind = "claude" | "shell" | "setup";
+
+const SESSION_KINDS: readonly SessionKind[] = ["claude", "shell", "setup"];
+
+/**
+ * Which repo a session is for, or an admission that it cannot be known.
+ *
+ * A DISCRIMINATED UNION RATHER THAN THREE OPTIONAL FIELDS, and that is the
+ * whole of GPT Sol's finding 8. Every session on the box is rendered by the
+ * current listing script, so an empty `GJD_REPO` on its own is ambiguous: it is
+ * either a session started before any of this existed, or a new session that
+ * lost its metadata on the way. The first is a row to show as `(unknown)`; the
+ * second is a listing to refuse. Without the version they are the same bytes.
+ *
+ * So `legacy` means *all four variables were absent* — nothing else does — and
+ * version 1 means all four were present AND valid. A record that is neither is
+ * not a degraded row: it fails the whole listing, the way a short row count
+ * does, because a caller that is handed a partial list reasons from its
+ * absences.
+ */
+export type SessionMeta =
+  | { version: "legacy" }
+  | { version: 1; kind: SessionKind; repo: string; dir: string };
 
 /**
  * What is actually running in the session's pane, asked of the process table
@@ -149,9 +204,23 @@ export const AGENTS_FAIL = "GJDAGENTSFAIL";
 export const ROW_COUNT = "GJDROWS";
 
 /**
- * The remote script: list the sessions, then for each one add the two variables
- * we pinned into its tmux environment at launch, its name, and the latest title
+ * The remote script: list the sessions, then for each one add the variables we
+ * pinned into its tmux environment at launch, its name, and the latest title
  * Claude has given the conversation.
+ *
+ * SIX `show-environment` CALLS PER SESSION, and the four newest are the repo
+ * metadata (`META`). They are four more round trips to the local tmux server
+ * per row — a few milliseconds each, against the ~1.85s the whole script takes
+ * on a box with a dozen sessions — and they are separate calls rather than one
+ * dump of the session environment because a variable read by name cannot be
+ * mis-attributed to the wrong row by a parse. `pane_current_path` would have
+ * cost nothing at all and is not an option: a shell that has `cd`'d elsewhere,
+ * or a session started with `--dir ~`, would be attributed to whatever repo is
+ * under the cursor.
+ *
+ * A variable tmux has never been given prints nothing here, and that is what
+ * every session started before this existed looks like — see `SessionMeta`,
+ * where the four empties become `legacy` and anything in between fails.
  *
  * TWO THINGS HERE ARE LOAD-BEARING.
  *
@@ -294,6 +363,10 @@ export function buildSessionScript(opts: { agents: boolean } = { agents: false }
       id=$(tmux show-environment -t "$sid" CLAUDE_SESSION_ID 2>/dev/null | cut -d= -f2-)
       prov=$(tmux show-environment -t "$sid" GJD_PROVISIONAL 2>/dev/null | cut -d= -f2-)
       case "$prov" in 0|1) ;; *) prov=1 ;; esac
+      mver=$(tmux show-environment -t "$sid" ${META.version} 2>/dev/null | cut -d= -f2-)
+      mkind=$(tmux show-environment -t "$sid" ${META.kind} 2>/dev/null | cut -d= -f2-)
+      mrepo=$(tmux show-environment -t "$sid" ${META.repo} 2>/dev/null | cut -d= -f2-)
+      mdir=$(tmux show-environment -t "$sid" ${META.dir} 2>/dev/null | cut -d= -f2-)
       mine=$(printf '%s\\n' "$panes" | awk -v s="$sid" '$1==s { print $2 }')
       if [ -z "$snap" ] || [ -z "$mine" ]; then
         proc='?'
@@ -316,8 +389,9 @@ export function buildSessionScript(opts: { agents: boolean } = { agents: false }
         f=$(ls -1 "$HOME"/.claude/projects/*/"$id".jsonl 2>/dev/null | head -1)
         [ -n "$f" ] && title=$(grep -o '"aiTitle":"[^"]*"' "$f" 2>/dev/null | tail -1 | cut -d'"' -f4)
       fi
-      printf '%s|%s|%s|%s|%s|%s|%s|%s|%s\\n' "$sid" "$created" "$attached" "$windows" "$prov" \\
-        "$id" "$proc" "$(printf '%s' "$name" | base64 -w0)" "$(printf '%s' "$title" | base64 -w0)"
+      printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n' "$sid" "$created" "$attached" "$windows" "$prov" \\
+        "$id" "$proc" "$(printf '%s' "$name" | base64 -w0)" "$(printf '%s' "$title" | base64 -w0)" \\
+        "$mver" "$mkind" "$mrepo" "$(printf '%s' "$mdir" | base64 -w0)"
     done
     echo ${SESSION_SENTINEL}`;
 }
@@ -414,7 +488,22 @@ function decode(b64: string): string | null {
 }
 
 /**
- * One line into a Session, or null if it is not exactly the record we asked for.
+ * What one line of the reply turned out to be.
+ *
+ * THREE OUTCOMES, NOT TWO, because the two failures are answered differently.
+ * `why: null` is "this is not the record this function was written against" —
+ * junk, a truncation, a field tmux left empty — and it goes into `unreadable`,
+ * which the caller reports with the raw line. `why: string` is a record that
+ * read perfectly and said something wrong, and it fails the whole listing with
+ * a sentence naming the session and the variable.
+ */
+export type ParsedSessionLine = { ok: true; session: Session } | { ok: false; why: string | null };
+
+/** Shared, because there are ten of them and they say nothing but "no". */
+const NOT_A_RECORD: ParsedSessionLine = { ok: false, why: null };
+
+/**
+ * One line into a Session, or a refusal that says how badly.
  *
  * STRICT, and every clause here is a bug that reached the box. The first
  * version coerced whatever arrived: `Number("")` is 0, so a missing timestamp
@@ -428,29 +517,35 @@ function decode(b64: string): string | null {
  * under its owner. GPT Sol found both. So: the field count is exact, and every
  * field must be one of the values it is allowed to be.
  */
-export function parseSessionLine(line: string): Session | null {
+export function parseSessionLine(line: string): ParsedSessionLine {
   const parts = line.split("|");
-  // Exactly nine: id, created, attached, windows, provisional, claude id, wait
-  // remaining, name, title. Not "at least nine" — a tenth field means the record
-  // is not the one this function was written against, and guessing which is
-  // which is how the last two bugs happened. Neither free-text field can
-  // contribute a separator, because both arrive base64-encoded.
-  if (parts.length !== 9) return null;
-  const [sid, created, attached, windows, prov, claudeId, procField, nameB64, titleB64] = parts as [
-    string,
-    string,
-    string,
-    string,
-    string,
-    string,
-    string,
-    string,
-    string,
-  ];
+  // Exactly thirteen: id, created, attached, windows, provisional, claude id,
+  // wait remaining, name, title, and the four metadata fields. Not "at least
+  // thirteen" — a fourteenth field means the record is not the one this function
+  // was written against, and guessing which is which is how the last two bugs
+  // happened. No free-text field can contribute a separator: the name, the title
+  // and the directory all arrive base64-encoded.
+  if (parts.length !== 13) return NOT_A_RECORD;
+  const [sid, created, attached, windows, prov, claudeId, procField, nameB64, titleB64, mv, mk, mr, mdB64] =
+    parts as [
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+    ];
 
   // tmux's own session handle: a dollar and digits. Nobody is shown it, but if
   // it is not that shape then the record did not come from tmux.
-  if (!/^\$\d+$/.test(sid)) return null;
+  if (!/^\$\d+$/.test(sid)) return NOT_A_RECORD;
 
   // A tmux timestamp is seconds since the epoch and is never 0 for a live
   // session. Number("") is 0 and Number(undefined) is NaN — both must fail here
@@ -458,21 +553,21 @@ export function parseSessionLine(line: string): Session | null {
   // Digits only, checked as a STRING before it is a number: `Number("17e9")`
   // is a perfectly good integer and tmux has never emitted one, so accepting it
   // means accepting something that did not come from tmux.
-  if (!bounded(created)) return null;
+  if (!bounded(created)) return NOT_A_RECORD;
   const stamp = Number(created);
   // Bounded is not enough on its own: this is multiplied by 1000, and a value
   // that is a safe integer in seconds need not be one in milliseconds. Sol
   // passed 1000000000000000 through the first version and got a Date whose
   // getTime() is NaN, which the AGE column rendered as `NaNd`. The check is on
   // the thing actually constructed.
-  if (!Number.isFinite(new Date(stamp * 1000).getTime())) return null;
+  if (!Number.isFinite(new Date(stamp * 1000).getTime())) return NOT_A_RECORD;
 
-  if (attached !== "0" && attached !== "1") return null;
+  if (attached !== "0" && attached !== "1") return NOT_A_RECORD;
   // Junk here used to become `false`, and this flag decides whether `ls` may
   // rename a session out from under whoever named it.
-  if (prov !== "0" && prov !== "1") return null;
+  if (prov !== "0" && prov !== "1") return NOT_A_RECORD;
 
-  if (!bounded(windows)) return null;
+  if (!bounded(windows)) return NOT_A_RECORD;
   const windowCount = Number(windows);
 
   // NOT CHECKED FOR BEING A UUID, and that is deliberate. Everything else in
@@ -485,24 +580,95 @@ export function parseSessionLine(line: string): Session | null {
   // saying `unknown`. (A `|` inside it still fails, on the field count above.)
 
   const proc = parseProc(procField);
-  if (proc === null) return null;
+  if (proc === null) return NOT_A_RECORD;
 
   const name = decode(nameB64);
   const title = decode(titleB64);
-  if (name === null || title === null || name === "") return null;
+  if (name === null || title === null || name === "") return NOT_A_RECORD;
+
+  // The name is decoded first so a refusal can say WHICH session to go and look
+  // at. A metadata failure is not "a line we could not read" — the line read
+  // perfectly, and what it said was wrong.
+  const meta = parseMeta({ version: mv, kind: mk, repo: mr, dirB64: mdB64 }, name);
+  if (!meta.ok) return meta;
 
   return {
-    name,
-    created: new Date(stamp * 1000),
-    attached: attached === "1",
-    windows: windowCount,
-    // A session that has never run Claude legitimately has no title, so an
-    // empty one is information rather than damage.
-    title: title.trim(),
-    provisional: prov === "1",
-    claudeId: claudeId === "" ? null : claudeId,
-    proc,
+    ok: true,
+    session: {
+      name,
+      created: new Date(stamp * 1000),
+      attached: attached === "1",
+      windows: windowCount,
+      // A session that has never run Claude legitimately has no title, so an
+      // empty one is information rather than damage.
+      title: title.trim(),
+      provisional: prov === "1",
+      claudeId: claudeId === "" ? null : claudeId,
+      proc,
+      meta: meta.meta,
+    },
   };
+}
+
+/**
+ * The four metadata fields into a `SessionMeta`, or a sentence saying which
+ * session and which variable made it impossible.
+ *
+ * FAILS THE LISTING, NOT THE ROW. Every other refusal in this file drops the
+ * line into `unreadable`, which the caller already treats as fatal — but it
+ * carries the raw record and no reason, and "GJD_REPO on `newer` is empty" is
+ * the difference between a fix and a mystery. So metadata gets a message.
+ *
+ * The legacy arm is deliberately narrow: all four absent, and nothing else.
+ * Half the metadata means the launcher wrote some of it and lost the rest, and
+ * a partially-written record displayed as a pre-metadata one is the exact
+ * confusion the version was added to prevent.
+ */
+function parseMeta(
+  f: { version: string; kind: string; repo: string; dirB64: string },
+  name: string,
+): { ok: true; meta: SessionMeta } | { ok: false; why: string } {
+  const bad = (why: string) => ({ ok: false as const, why: `session '${name}' ${why}` });
+
+  if (f.version === "") {
+    if (f.kind === "" && f.repo === "" && f.dirB64 === "") return { ok: true, meta: { version: "legacy" } };
+    return bad(`carries session metadata but no ${META.version}, so it is neither an old session nor a new one`);
+  }
+  if (f.version !== METADATA_VERSION) {
+    return bad(`says ${META.version}=${f.version}, and this gjd-remote only knows version ${METADATA_VERSION}`);
+  }
+
+  const kind = SESSION_KINDS.find((k) => k === f.kind);
+  if (kind === undefined) return bad(`has ${META.kind}='${f.kind}', which is not one of ${SESSION_KINDS.join(", ")}`);
+
+  if (!isRepoValue(f.repo)) {
+    return bad(`has ${META.repo}='${f.repo}', which is neither an owner/name slug nor '${REPO_UNKNOWN}'`);
+  }
+
+  const dir = decode(f.dirB64);
+  if (dir === null) return bad(`has a ${META.dir} this laptop could not decode`);
+  // Absolute, because it is the box's own path and everything downstream joins
+  // onto it. A relative one would resolve against whatever the reader's cwd
+  // happens to be, which is a different machine.
+  if (!dir.startsWith("/") || dir.length > 4096) {
+    return bad(`has ${META.dir}='${dir}', which is not an absolute path on the box`);
+  }
+
+  return { ok: true, meta: { version: 1, kind, repo: f.repo, dir } };
+}
+
+/**
+ * What the REPO column shows, and whether it is a real answer.
+ *
+ * `known: false` is the caller's cue to dim the cell — the same treatment a
+ * session with no title gets. Both unknowns render as one word: a session from
+ * before the metadata existed, and a session started against an arbitrary
+ * `--dir`, cannot be attributed to a repo, and a distinction the reader cannot
+ * act on is worth less than one honest word.
+ */
+export function sessionRepo(s: Session): { text: string; known: boolean } {
+  if (s.meta.version === "legacy" || s.meta.repo === REPO_UNKNOWN) return { text: "(unknown)", known: false };
+  return { text: s.meta.repo, known: true };
 }
 
 /**
@@ -770,9 +936,19 @@ export function parseSessions(out: string): {
   const unreadable: string[] = [];
   for (const line of body) {
     if (control.includes(line)) continue;
-    const s = parseSessionLine(line);
-    if (s) sessions.push(s);
-    else unreadable.push(line);
+    const parsed = parseSessionLine(line);
+    if (parsed.ok) {
+      sessions.push(parsed.session);
+      continue;
+    }
+    // A record whose METADATA is wrong fails the listing here and now, rather
+    // than joining the unreadable pile. It is not a line that failed to arrive
+    // — it arrived intact and contradicted itself — and the caller can only act
+    // on that if it is told which session and which variable. GPT Sol, finding
+    // 8: a silently-degraded row would put `(unknown)` against a session whose
+    // repo the box knows perfectly well.
+    if (parsed.why !== null) return bad(parsed.why);
+    unreadable.push(line);
   }
 
   // The count tmux gave against the count that arrived. This is the guard that

@@ -311,8 +311,10 @@ export function Masthead({ article, slug, onRenamed }: Props) {
  * That was the first version's inference and it is false, which GPT Sol found by
  * reading the two paths that produce an owner's `Meta` rather than the one that
  * produces most of them. A missing `meta.json` is **explicitly tolerated**
- * (src/api.ts), and `src/store/import.ts` will take a revision whose metadata and
- * manifest both lack a URL. Either gives an owner a perfectly ordinary web
+ * (src/api.ts), and a revision may be published with no URL at all —
+ * `requested_url` and `final_url` are both nullable (src/db/schema.ts), which is
+ * what `src/store/import.ts` relied on before it was deleted on 2026-09-01 and
+ * what publication relies on still. Either gives an owner a perfectly ordinary web
  * article with no address, and the mark would have told them they had uploaded
  * it — a claim about something they did, made out of a gap in our own files.
  *
@@ -337,9 +339,9 @@ function OriginMark({
    * `null` is a visitor, for the reason in the header. `"upload"` is a PDF, and
    * is the only case with an actual explanation. `"unrecorded"` is an owner's
    * article that is *not* a PDF and still has no address, which is a real state
-   * — src/api.ts tolerates a missing `meta.json` on purpose, and
-   * src/store/import.ts accepts a revision with no URL in either the metadata
-   * or the manifest. It gets its own words rather than borrowing the upload's,
+   * — src/api.ts tolerates a missing `meta.json` on purpose, and a revision may
+   * be published with neither `requested_url` nor `final_url`
+   * (src/db/schema.ts). It gets its own words rather than borrowing the upload's,
    * because "you uploaded this" is a claim about what the reader did.
    */
   origin: "upload" | "unrecorded" | null;

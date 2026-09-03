@@ -103,7 +103,7 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 
-import { loadEnvLocal } from "../src/env.js";
+import { loadEnvLocal, resolveTargetUrl } from "../src/env.js";
 import { isLocalDatabaseUrl, withoutPassword } from "../src/db/ssl.js";
 import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { DEV_OWNER_ID } from "../src/owner.js";
@@ -139,7 +139,13 @@ if (!UUID.test(from)) die(`--from is not a uuid: ${from}`);
 if (!UUID.test(to)) die(`--to is not a uuid: ${to}`);
 if (from === to) die("--from and --to are the same owner; there is nothing to move");
 
-const url = process.env.DATABASE_URL;
+/* **`shellWins: false`, and it is a choice rather than an inheritance.** Same
+   reasoning as scripts/db-seed-dev.ts: no remote mode, no `--allow-remote`, and
+   the identity settled against `supabase status` below rather than against the
+   connection string — so the shell winning would change nothing but the failure
+   message, at the cost of reopening the profile-export case. src/env.ts §
+   `resolveTargetUrl` holds both camps and why. */
+const url = resolveTargetUrl({ shellWins: false });
 if (!url) die("DATABASE_URL is not set — is .env.local present?");
 
 /* **Before anything else, and before connecting.** See the header: a shell

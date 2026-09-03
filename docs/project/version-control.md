@@ -241,8 +241,18 @@ fires on real textual conflicts only, not on every push.
 ### Commit your own files, by name, in one command
 
 ```bash
+npm run check:staged-revert      # is the index quietly undoing somebody's commit?
 git add -- <any NEW files> && git commit -F <msg> -- <all your files>
 ```
+
+**The first line is [`scripts/check-staged-revert.ts`](../../scripts/check-staged-revert.ts)**, and
+it is here because for a long time it was nowhere. It was written as the answer to the six hours of
+phantom reverts [below](#the-cause-was-the-recipes-own-last-line-not-a-stray-command-2026-08-29) —
+*"the fix is not a firmer comment — it is `scripts/check-staged-revert.ts` run before every commit,
+by everyone"* — and then lived only in that sentence, two thirds of the way down this page, with no
+npm script, no git hook and no mention in the recipe anybody actually reads. A guard reachable only
+by someone who already knows the incident is a guard for nobody. It got its `npm` name and this line
+on 2026-09-03; the hook is still not installed, and until it is, this line is the whole mechanism.
 
 **The `--` at the end is the load-bearing part**, and the recipe did not have it until 2026-08-26,
 when it produced exactly the accident it exists to prevent. A pathspec on `git commit` bypasses the

@@ -160,8 +160,9 @@ export function readClientShell(distDir: string, apiCommit: string): ClientShell
   if (!sameCommit(clientCommit, apiCommit)) {
     throw new Error(
       `Client shell is not from this build: ${stampPath} says commit "${clientCommit || "(missing)"}" ` +
-        `and this API build says "${apiCommit}". Run \`npm run build\` first — the API build compiles ` +
-        "dist/index.html into the function, so a stale one ships a stale page with no other symptom. " +
+        `and this API build says "${apiCommit}". Re-run \`npm run build\`, which does both passes in ` +
+        "order — the API build compiles dist/index.html into the function, so a stale one ships a " +
+        "stale page with no other symptom. " +
         '(Note that "unknown" never matches, including itself.)',
     );
   }
@@ -196,7 +197,8 @@ function read(file: string, what: string): Buffer {
     return readFileSync(file);
   } catch (err) {
     throw new Error(
-      `Cannot read ${what} at ${file}: ${(err as Error).message}. Run \`npm run build\` before the API build.`,
+      `Cannot read ${what} at ${file}: ${(err as Error).message}. Run \`npm run build\`, which builds ` +
+        "the client and then this. (`build:api` on its own needs a `dist/` that already exists.)",
     );
   }
 }

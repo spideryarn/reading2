@@ -56,6 +56,7 @@ import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { type Mark, NO_MARK, PlaceOnCriterion } from "./PlaceOnCriterion.js";
 import { parseRoute } from "./router.js";
 import { useDictationField } from "./useDictationField.js";
+import { useEscapeToClose } from "./useEscapeToClose.js";
 
 interface Props {
   /** The passage, and the block it sits in. Always a selection, never a bare block. */
@@ -148,14 +149,7 @@ export function AnnotateDialog({ anchor, placing, onSave, onCancel }: Props) {
     box.current?.focus();
   }, []);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      onCancel();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  useEscapeToClose(onCancel);
 
   const save = () => {
     /* **Not while a transcription is still on its way.** `readOnly` stops

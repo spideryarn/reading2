@@ -34,7 +34,9 @@
  *   by re-extraction, which is the exact failure the identity split exists to
  *   prevent.
  *
- * Then teach `src/store/import.ts` and `src/store/export.ts` about it, add it to
+ * Then teach `SITES` in `src/store/artifacts-pg.ts` — which is where
+ * `src/store/import.ts` used to be named, until it was deleted on 2026-09-01 —
+ * and `src/store/export.ts` about it, add it to
  * `ROUNDTRIP_JSON_ARTEFACTS` in tests/helpers/roundtrip-artefacts.ts, and put an
  * example of it in the committed corpus.
  *
