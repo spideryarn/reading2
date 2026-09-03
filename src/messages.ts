@@ -352,8 +352,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      docs/project/feedback.md. */
   "fb-send": "retry",
   "fb-store": "ours",
-  /* The subscription allowance, `pay-`. All three are registered rather than
-     left to fall through, and the two `blocked` ones are the reason: an
+  /* The subscription allowance, `pay-`. All six are registered rather than
+     left to fall through, and the four `blocked` ones are the reason: an
      unrecognised code means *offer another go*, so "you have used all three of
      your free articles" would have arrived with a Retry button beside it —
      pressing it does not move the count, and a button that cannot work is the
@@ -362,7 +362,16 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      docs/project/billing.md. */
   "pay-free": "blocked",
   "pay-limit": "blocked",
+  "pay-lapsed": "blocked",
   "pay-off": "ours",
+  /* Pressing *Manage billing* with nothing to manage. `blocked` for the same
+     reason as the three above: another press gives the same answer, so a Retry
+     button beside it would be a button that cannot work. */
+  "pay-none": "blocked",
+  /* Stripe had a bad minute. The one `pay-` code where another go is exactly
+     the right thing to offer — see `BILLING_UNREACHABLE`, and note it is a
+     different situation from `pay-off`, which is a deployment with no Stripe. */
+  "pay-down": "retry",
 };
 
 
@@ -1495,19 +1504,56 @@ export const SHARING_ON = "Anyone with the link can read this, without signing i
  */
 export const SHARING_BADGE = "Shared";
 
-/** What a visitor gets, in one line, on the card rather than behind a hover. */
-/* **"and whatever the model has written about it" was added 2026-09-02**, and
-   it is a correction rather than a flourish. Since slice 1b a shared link has
-   carried the glossary, the ideas, the quotes and the tweet thread, and this
-   sentence still named only the article and its tree — true, and true by
-   omission of the four things an owner would most want to have been told. On
-   the owner's card it now sits directly above the itemised list
-   (src/web/shared-inventory.ts), where the omission was visible. */
-export const SHARING_WHAT_VISITORS_SEE =
-  "A visitor sees the article, its table of contents, every zoom level, and the reading aids " +
-  "written for it — the summaries, the glossary, the ideas, the quotes. They never see your " +
-  "comments, your conversations, your searches or your notes, and nothing they do costs a model " +
-  "call.";
+/**
+ * **What a shared link carries, in one line, for the visitor** — the reader of
+ * the page a shared link actually reaches.
+ *
+ * *"and whatever the model has written about it" was added 2026-09-02*, and it
+ * is a correction rather than a flourish. Since slice 1b a shared link has
+ * carried the glossary, the ideas, the quotes and the tweet thread, and this
+ * sentence still named only the article and its tree — true, and true by
+ * omission of the four things an owner would most want to have been told.
+ *
+ * ## It used to be drawn on the owner's card as well, and both problems with
+ * ## that had one cause: it was written for two audiences and fitted neither
+ *
+ * **It appeared on a *private* article's card**, in the present indicative,
+ * directly under *"Only you can read this."* — two paragraphs contradicting
+ * each other on a skim, on the one control in this app where a state that looks
+ * wrong is worth most. Greg, 2026-09-03: *"That's a fair description of what
+ * would be true IF it was Public-readable. But it's not."*
+ *
+ * **And on the shared card it was redundant**, sitting immediately above the
+ * itemised list that says the same thing better: `SHARED_HEADING` and the two
+ * below it, swept from the modes by
+ * [shared-inventory.ts](web/shared-inventory.ts) so it cannot fall behind them,
+ * with `NOT_SHARED_NOTE` as the one-line summary. The same list is what the
+ * confirmation box answers *"what would publishing do?"* with, so the box does
+ * not get the sentence either. One fact, on that card, once.
+ *
+ * **What was lost with it, stated rather than glossed:** *"nothing they do
+ * costs a model call"*, which the inventory only implies by listing Chat,
+ * Search, Remember and Referee as owner-only. It is said outright to the person
+ * who meets it — `visitorSentence` (web/visitor.ts) — and no longer to the
+ * owner. Worth a line back if an owner ever asks whether a link can spend their
+ * money.
+ *
+ * ## Why the visitor's copy is the one that survived
+ *
+ * Because it is the audience with no list to read. And the sentence it was
+ * given was the owner's: *"They never see **your** comments, **your**
+ * conversations"*, on a page whose reader has none, describing themselves in
+ * the third person. The owner's side and the visitor's side of one fact are
+ * meant to be **different sentences** — `SHARING_BADGE` above says why, and
+ * `VIEW_ONLY` is the other half of it — and the way that goes wrong is two
+ * constants drifting a few words apart, as the dock's tooltip did against the
+ * band's ([visitor.ts § markedModes](web/visitor.ts)). One audience, one
+ * sentence, nothing to keep in step.
+ */
+export const SHARED_LINK_CARRIES =
+  "A shared link carries the article, its table of contents, every zoom level, and the reading " +
+  "aids written for it — the summaries, the glossary, the ideas, the quotes. It never carries the " +
+  "comments, conversations, searches or notes of whoever added it.";
 
 /**
  * **The honest limit, and we are the only ones saying it.**
@@ -2168,7 +2214,17 @@ export const FEEDBACK_NOT_AVAILABLE: ReaderFacingFailure = {
  * the thing `kind` is actually consulted for — should we offer another go —
  * gives the same answer either way.
  *
- * **Both sentences end by saying reading is unaffected**, which is the one thing
+ * **The third sentence is for somebody whose plan has ended**, and it exists
+ * because the other two would lie to them. The free count is lifetime and
+ * includes paid months, so a reader who took forty articles on Reader and
+ * cancelled is past the free allowance permanently — that is the policy Greg
+ * chose on 2026-09-03, over tier-scoping the count or granting a fresh
+ * allowance on cancel. What it must not do is *read* as a policy failure:
+ * "you have added all 3 articles a free account can add", to somebody who has
+ * added forty, looks like arithmetic going wrong. So the ended plan is named,
+ * resubscribing is the way back, and the numbers stay out of it.
+ *
+ * **All three sentences end by saying reading is unaffected**, which is the one thing
  * a reader will actually be worried about and the one promise this product makes
  * about money (Greg, 2026-09-02: *"if a user has hit their quota, they should
  * still be able to read their existing and Public-readable articles"*). Neither
@@ -2185,9 +2241,27 @@ export function ingestQuotaReached(quota: {
   limit: number;
   /** When the allowance resets. Absent for the free tier, whose limit is lifetime. */
   resetAt?: Date;
+  /**
+   * This account had a subscription and no longer has an entitled one.
+   *
+   * From the billing row rather than from the numbers — `Refused.lapsed` in
+   * src/store/pg-billing.ts.
+   */
+  lapsed?: boolean;
 }): ReaderFacingFailure {
   const kept =
     "Everything you have already added stays exactly where it is — reading is never limited.";
+
+  if (quota.lapsed) {
+    return {
+      kind: "blocked",
+      message:
+        `Your subscription has ended, so this account is back to the free allowance of ` +
+        `${quota.limit} articles — and those are already spent. Trying again will not help; ` +
+        `resubscribing from the Upgrade button on your profile page is what adds more. ${kept} ` +
+        "[pay-lapsed]",
+    };
+  }
 
   if (!quota.resetAt) {
     return {
@@ -2233,4 +2307,48 @@ export const BILLING_NOT_AVAILABLE: ReaderFacingFailure = {
     "Subscriptions are not set up on this copy of the app, so there is nothing to buy here just " +
     "now. Trying again will not help — it needs somebody to configure it. Nothing you have is " +
     "affected, and reading carries on as normal. [pay-off]",
+};
+
+/**
+ * Stripe itself refused or could not be reached.
+ *
+ * **Different from `BILLING_NOT_AVAILABLE`, and the difference is what the
+ * reader should do.** That one is a deployment with no Stripe configured, which
+ * no amount of trying will change. This one is a bad minute at Stripe — a
+ * timeout, a rate limit, a 500 from their side — so `retry` is honest and a
+ * Retry button beside it can work.
+ *
+ * It exists because without it every Stripe SDK failure left this app answering
+ * **500 with Stripe's own sentence in it** (GPT Sol, 2026-09-03). That breaks two
+ * rules at once: copy.md's *never show the provider's words*, and the one about
+ * a status meaning what it says — a failure at Stripe is not a fault in this
+ * server's arithmetic.
+ */
+export const BILLING_UNREACHABLE: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "We could not reach Stripe just now, so there is nothing to send you to yet. Nothing has " +
+    "been charged and nothing has changed. Try again in a minute. [pay-down]",
+};
+
+/**
+ * They asked for the billing portal and have never subscribed.
+ *
+ * `blocked` rather than `bug`: nothing is broken and the reader has not done
+ * anything wrong — there is simply no billing history to manage, because the
+ * Stripe customer that would hold one is created by the *first* checkout.
+ *
+ * **It has to say out loud that asking again gives the same answer**, and that
+ * is a rule rather than a flourish: `tests/messages.test.ts` fails a `blocked`
+ * message that does not. The first draft of this one did not, and the test
+ * caught it. It names the way forward, as the `pay-` messages do, and it ends
+ * where they all end: nothing about reading changes.
+ */
+export const NOTHING_TO_MANAGE: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "There is no billing to manage on this account yet — billing details only exist once you " +
+    "have subscribed at least once, so asking again will give the same answer. The Upgrade " +
+    "button on your profile page is where that starts. Everything you have already added stays " +
+    "exactly where it is, and reading is never limited. [pay-none]",
 };

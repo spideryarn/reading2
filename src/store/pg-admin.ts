@@ -171,10 +171,18 @@ export function mergeUsers(people: AccountRow[], counts: UserCounts): AdminUser[
   const spend = counts.spend;
 
   return people
-    /* An account with no address cannot sign in here at all — the gate refuses
-       it by name, `[auth-noemail]` in src/auth.ts — so it owns nothing and has
-       nothing to show. Dropped rather than drawn as a blank row, and this
-       comment is why that is not hiding anything. */
+    /* An account with no address cannot sign in here — the gate refuses it by
+       name, `[auth-noemail]` in src/auth.ts — and this table is led by the
+       address, so such a row would be a blank first column rather than a fact.
+       Dropped for that reason and no other.
+
+       **Not because it owns nothing.** That is what this comment used to say
+       and it does not follow: the project is shared with an older app, so an
+       account this app will not admit may still belong to a person and have
+       rows against its id, and they are dropped here silently. GPT Sol,
+       2026-09-03. Left as it is, because what to show for an account nobody can
+       sign in as is a product question rather than a bug —
+       docs/plans/260903c-admin-users-count-disagrees-with-rows.md § Reviews. */
     .filter((p): p is AccountRow & { email: string } => typeof p.email === "string" && p.email !== "")
     .map((p): AdminUser => {
       const mine = shelf.get(p.id);

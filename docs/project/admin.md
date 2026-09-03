@@ -171,8 +171,10 @@ report, so a field added to a report does not reach this page until somebody dec
 and `tests/admin-feedback-store.test.ts` pins the exact set of keys that comes back.
 
 The metadata is exact and worth listing rather than gesturing at: the account **id**, the **email
-address**, and the **providers** GoTrue records for it (`google`, `email`). Everything else on the
-page is a number or a date.
+address**, the **providers** GoTrue records for it (`google`, `email`), whether that address is
+**confirmed**, and — since 2026-09-03 — whether the account **can reach these pages**, which is
+`isAdmin(id)` computed in the browser from the id already in the row rather than anything new from
+the server. Everything else on the page is a number or a date.
 
 **Money is the one thing on the page that is not a count of the reader's own things**, and it is
 still a fact about the account rather than about their reading: what their model calls cost us, over
@@ -512,6 +514,34 @@ There are two date columns and they are not the same question: a session lasts w
 sign-in is not evidence anybody has read anything**. `Last read` is the most recent open across
 their own articles.
 
+### The count above the table counts the table
+
+Greg, 2026-09-03, of production:
+
+> it says "2 accounts", but only lists one! … whatever the answer is, the number of rows and the
+> number in the text above should match! And also indicate if a row is an admin user or not.
+
+So the number is now counted off `sorted` — the list the table is drawn from — rather than off the
+list the request returned. There is no second number left to disagree with it.
+
+**No mechanism was found by which the old page could print a number larger than its rows.** The
+investigation is in [260903c](../plans/260903c-admin-users-count-disagrees-with-rows.md): a real
+browser eight times over, React measured to render every row even on a duplicate or missing key,
+TanStack's row models read rather than assumed, production's own bundle fetched and found to hold
+this same logic, and a cross-family review sent looking for a path and finding none. **No root cause
+is claimed**, and the report has not been explained.
+
+Two things follow from that. `sorted.length` is what is handed to the renderer and not what the DOM
+holds, so the invariant is asserted a step further out as well — a test reads the number back out of
+the rendered words and compares it with the `<tr>` count. That covers structure, not visibility;
+nothing here can see a row that renders and cannot be seen. And the administrator's own row now
+carries an `admin` marker, which is the other half of what Greg asked for: it is `isAdmin`, the
+gate's own question, so an unmarked row is an account this page would refuse.
+
+Fixed on the way, on its own merits: the line under an address no longer hides `email unconfirmed`
+when no provider is recorded — it used to sit behind `providers.length > 0`, which hid it on exactly
+the account with least else to say.
+
 ## How it is checked
 
 Five suites, and the split is deliberate — no one of them could catch what the others catch.
@@ -547,7 +577,18 @@ automation reported a resize it did not perform. Written down rather than assume
 That pass also photographed *"6 accounts"* above five rows — during a spell when another agent's
 hot-reloads were breaking the page mid-render. The honest answer to a screenshot is a test, so
 there is now one: six accounts, one of them with no sortable date, must draw six distinct rows. It
-passes, so the page was right and the picture was a casualty of the reload.
+passes, so the page was right and the picture was blamed on the reload.
+
+**That conclusion was too comfortable, and it was worth exactly one week.** On 2026-09-03 Greg saw
+the same shape on production, where nothing hot-reloads. The re-investigation
+([260903c](../plans/260903c-admin-users-count-disagrees-with-rows.md)) still found no way for the
+page to draw fewer rows than it counts — this time by measuring React, TanStack and the deployed
+bundle rather than by trusting a passing test — and the count now comes off the list the table is
+built from, which removes the divergence a *source* reading could have. It does not make the
+symptom impossible: a CSS problem, a transient render or anything else visual could still put a
+number over a table that does not look like it. The lesson is the smaller one: *"the test passes, so
+the screenshot was wrong"* explains a screenshot away rather than explaining it, and the same
+picture came back.
 
 ## What it cannot do, and what is not built
 
@@ -561,8 +602,11 @@ passes, so the page was right and the picture was a casualty of the reload.
 - **Soft-deleted accounts are filtered out**, on `auth.users.deleted_at`. The row survives a
   deletion in Supabase's schema; a deleted user in a list of users is wrong in the direction nobody
   checks.
-- **Accounts with no email address are filtered out.** They cannot sign in here at all — the gate
-  refuses them by name, `[auth-noemail]` — so they own nothing and have nothing to show.
+- **Accounts with no email address are filtered out.** They cannot sign in here — the gate refuses
+  them by name, `[auth-noemail]` — and a row whose first column is blank is a blank line rather than
+  a fact, on a table led by the address. **It does not follow that they own nothing**: this is a
+  Supabase project shared with an older app, so such an account may belong to a person and have rows
+  against its id, and this page would not count them. GPT Sol, 2026-09-03.
 
 ## See also
 
