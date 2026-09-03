@@ -762,3 +762,12 @@ into its own repo · per-session worktrees on the box · a second Unix user.
   `.gjd-remote/` and the https submodule URL are committed there but not pushed, and the box clones
   from GitHub), and say yes to `gjd-remote provision` for `python3-venv` — a change to the box, per
   [hetzner-remote-server-box.md § A change to the box is a change to a file](../project/hetzner-remote-server-box.md#a-change-to-the-box-is-a-change-to-a-file).
+- 2026-09-03 — **Stages 1–4 landed on `dev`** (`1a57a8a`, merging 51 trunk commits cleanly), after
+  GPT Sol's landing review's one blocker was fixed: the saved policy now carries `reviewed` beside
+  `approved`, so an unticked key stays unticked. Typecheck clean, 667 tests green across the
+  fourteen files this work owns. **The `~/bin/gjd-remote` shim runs the primary checkout**, which
+  needs `git pull` and `npm ci` (two new dev dependencies) before it is the new tool. Stage 5 still
+  waits on hellozenno's `main` being pushed and on `gjd-remote provision`. Also: `push-env` runs
+  from before today left 23 staged `.env.local` copies under `$TMPDIR/gjd-remote-env-*` (15 from
+  2026-08-31 with real local-dev credentials, 8 from today's throwaway runs with fake values) — the
+  bug is fixed; the leftovers are Greg's to delete.
