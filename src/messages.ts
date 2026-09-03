@@ -1725,6 +1725,59 @@ export function readersOwnWork(plural: string): string {
 export const NOT_SHARED =
   "This document isn't shared. If somebody sent you the link, ask them to turn sharing on for it.";
 
+/* ── An address that is nobody's ───────────────────────────────────────────── */
+
+/**
+ * **The heading of the 404 page** — src/web/NotFoundPage.tsx.
+ *
+ * *"There's nothing at this address"* and not *"Page not found"*: the reader is
+ * not looking for a page, they are looking at an address bar with something
+ * wrong in it, and the address is the thing they can act on. It also happens to
+ * be true of the two cases the words have to cover at once — a link that was
+ * never right, and one that used to be.
+ *
+ * Until 2026-09-03 there was no such page: every unrecognised address rendered
+ * the shelf, which is a plausible page at an address that means nothing, so a
+ * stale link failed without ever saying it had. docs/plans/260903j-not-found-page.md.
+ */
+export const NOT_FOUND_HEADING = "There's nothing at this address";
+
+/**
+ * **It does not guess which of the two happened**, and that is the whole of the
+ * wording.
+ *
+ * We cannot tell a typo from a link that has rotted — the router sees the same
+ * unmatched string either way — and the two want different things from the
+ * reader. So the sentence offers both and commits to neither, in that order,
+ * because a mistyped address is much the commoner of them.
+ *
+ * **And it says nothing about an article.** `/read/<a slug that is not even
+ * well-formed>` lands here, so a sentence mentioning documents would be
+ * claiming something about an address we never looked up. A *valid* slug that
+ * is not the reader's does not reach this page at all — it stays a `read`
+ * route, and the server's answer draws `NOT_SHARED`, which is the sentence
+ * written for that case.
+ *
+ * **"Address", not "link".** Greg reached this by typing `/asdf` into the
+ * address bar, which is not a link at all; the word has to cover both ways of
+ * getting here. GPT Sol's review, 2026-09-03.
+ */
+export const NOT_FOUND =
+  "The address may be mistyped, or it may point at something that has since moved.";
+
+/** The way out, signed in. `/`, which is the shelf for a reader who has one. */
+export const NOT_FOUND_TO_SHELF = "Go to your shelf";
+
+/**
+ * The way out for a stranger — **the same address, a different word for it.**
+ *
+ * `/` is the landing page when nobody is signed in and the shelf when somebody
+ * is (src/web/App.tsx), so the link never has to decide where home is; only
+ * what to call it. Offering *"your shelf"* to somebody with no account would be
+ * a promise the click cannot keep.
+ */
+export const NOT_FOUND_TO_HOME = "Go to the home page";
+
 /* ── Sharing a document, for the owner ─────────────────────────────────────── */
 
 /** The switch, off. */

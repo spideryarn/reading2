@@ -63,8 +63,9 @@ describe("parseRoute", () => {
 
   /**
    * **An address the server could never answer is a mistyped address**, and a
-   * mistyped address lands on the shelf — which is what this file's own opening
-   * paragraph says the degradation is for.
+   * mistyped address is `not-found` — which is what this file's own opening
+   * paragraph says the degradation is for. It landed on the shelf until
+   * 2026-09-03; the premise did not change, the destination did.
    *
    * Before the guard, `/read/Upper` became an article route: the client asked
    * for it, the API refused it with the 400 it gives every malformed slug, and
@@ -75,10 +76,10 @@ describe("parseRoute", () => {
    * a leading punctuation mark too), and a slug past the 60-character cap — the
    * one an alphabet-only check would wave straight through.
    */
-  it("sends an address that is not a slug to the library instead of rendering an error", () => {
-    expect(parseRoute("/read/Upper")).toEqual({ kind: "library" });
-    expect(parseRoute("/read/-leading")).toEqual({ kind: "library" });
-    expect(parseRoute(`/read/${"a".repeat(61)}`)).toEqual({ kind: "library" });
+  it("sends an address that is not a slug to the not-found page instead of rendering an error", () => {
+    expect(parseRoute("/read/Upper")).toEqual({ kind: "not-found" });
+    expect(parseRoute("/read/-leading")).toEqual({ kind: "not-found" });
+    expect(parseRoute(`/read/${"a".repeat(61)}`)).toEqual({ kind: "not-found" });
     /* And the control: one character shorter is a slug, and still reads. If the
        cap moved, the case above would pass for the wrong reason. */
     expect(parseRoute(`/read/${"a".repeat(60)}`)).toEqual({
@@ -109,20 +110,55 @@ describe("parseRoute", () => {
     });
   });
 
-  it("falls back to the library for anything else", () => {
-    for (const path of ["/", "/read", "/read/", "/read/a/b", "/nonsense", ""]) {
+  /**
+   * **The reversal, and the two exceptions to it** —
+   * docs/plans/260903j-not-found-page.md.
+   *
+   * Every path in the first list was `library` until 2026-09-03, which is what
+   * Greg met at `/asdf`: a plausible page at an address that means nothing, so
+   * a link that had rotted looked exactly like one that worked.
+   *
+   * `/read` and `/read/` are in it deliberately. They are a prefix of ours with
+   * nothing after it, and the temptation is to read that as "the articles" and
+   * send it to the shelf — but the shelf is `/`, nothing in the app links to
+   * `/read`, and an exception costs a rule that has to be remembered. It is an
+   * address nobody minted, like the rest.
+   */
+  it("sends anything else to the not-found page", () => {
+    for (const path of ["/read", "/read/", "/read/a/b", "/nonsense", "/asdf"]) {
+      expect(parseRoute(path), path).toEqual({ kind: "not-found" });
+    }
+  });
+
+  /**
+   * **The root is the shelf, and it needs saying because it stopped being free.**
+   *
+   * `/` was the fall-through's freeloader: it had no branch of its own, and the
+   * moment the fall-through became `not-found` the homepage would have become a
+   * 404 with nothing in the diff to suggest it. `""` is what a caller passes
+   * when it has no address at all, and means the same thing.
+   *
+   * **`/index.html` is the third spelling**, and it is the one that would have
+   * gone quietly: nothing in the app links to it and the manifest starts at
+   * `/`, so no test would have missed it — but it is the file this whole app
+   * *is*, served under its own name by Vite and by every static host, and an
+   * app that 404s its own entry point is a bug report nobody should have to
+   * file. GPT Sol's review, 2026-09-03.
+   */
+  it("keeps all three spellings of the root on the shelf", () => {
+    for (const path of ["/", "", "/index.html"]) {
       expect(parseRoute(path), path).toEqual({ kind: "library" });
     }
   });
 
-  it("sends an unknown view to the library rather than a blank article page", () => {
+  it("sends an unknown view to the not-found page rather than a blank article page", () => {
     for (const path of ["/read/example/nonsense", "/read/example/metadata/x"]) {
-      expect(parseRoute(path), path).toEqual({ kind: "library" });
+      expect(parseRoute(path), path).toEqual({ kind: "not-found" });
     }
   });
 
   it("survives a malformed escape rather than throwing out of the render", () => {
-    expect(parseRoute("/read/%E0%A4%A")).toEqual({ kind: "library" });
+    expect(parseRoute("/read/%E0%A4%A")).toEqual({ kind: "not-found" });
   });
 });
 
@@ -149,9 +185,17 @@ describe("the admin routes", () => {
     }
   });
 
-  it("sends anything else under /admin to the shelf, like every other unknown address", () => {
+  it("sends anything else under /admin to the not-found page, like every other unknown address", () => {
     /* The alternation in the regex is the validation. A third admin page is a
-       word added there, not a path that silently half-works. */
+       word added there, not a path that silently half-works.
+
+       **An address under `/admin` is not the same as `/admin` for somebody who
+       is not the administrator.** That one still gets the shelf, decided in
+       App.tsx, and docs/project/admin.md says why: the admin pages are in every
+       signed-in reader's bundle, so 403 is the honest posture and a 404 would
+       be pretending about something anyone can see is there. This is the
+       client's version of the server's own split — `/api/admin/anything` is a
+       403 and `/api/administer` is a 404. */
     for (const path of [
       "/admin/nonsense",
       "/admin/users/extra",
@@ -160,13 +204,15 @@ describe("the admin routes", () => {
       "/admin/USERS",
       "/admin/FEEDBACK",
     ]) {
-      expect(parseRoute(path), path).toEqual({ kind: "library" });
+      expect(parseRoute(path), path).toEqual({ kind: "not-found" });
     }
   });
 
   it("is spelled once, by the constants the links use", () => {
-    /* A link that does not parse lands the reader on the shelf while the
-       address bar says otherwise — which looks like nothing happened at all. */
+    /* A link that does not parse lands the reader on the 404 page while the
+       address bar says otherwise. That is at least visible — it landed silently
+       on the shelf until 2026-09-03 — but a link inside the app should never
+       reach it, and the constant is what makes sure. */
     expect(parseRoute(ADMIN_HREF)).toEqual({ kind: "admin", page: "home" });
     expect(parseRoute(ADMIN_USERS_HREF)).toEqual({ kind: "admin", page: "users" });
     expect(parseRoute(ADMIN_FEEDBACK_HREF)).toEqual({ kind: "admin", page: "feedback" });
@@ -181,11 +227,12 @@ describe("the features route", () => {
   });
 
   it("is not a prefix: an address under it is nobody's", () => {
-    expect(parseRoute("/features/zoom")).toEqual({ kind: "library" });
+    expect(parseRoute("/features/zoom")).toEqual({ kind: "not-found" });
   });
 
   /* A static page must survive the boot-time address settling untouched, or a
-     stranger following the landing page's link is rewritten to the shelf. */
+     stranger following the landing page's link is rewritten away from the page
+     they asked for. */
   it("is left alone by settleAddress", () => {
     expect(settleAddress("/features", "", "")).toBeNull();
   });
@@ -199,13 +246,13 @@ describe("the pricing route", () => {
   });
 
   it("is not a prefix: an address under it is nobody's", () => {
-    expect(parseRoute("/pricing/reader")).toEqual({ kind: "library" });
+    expect(parseRoute("/pricing/reader")).toEqual({ kind: "not-found" });
   });
 
   /* A static page must survive the boot-time address settling untouched, or a
-     stranger following the landing page's link is rewritten to the shelf — and
-     this is the one somebody sends somebody else, so it is the link most likely
-     to be followed cold. */
+     stranger following the landing page's link is rewritten away from the page
+     they asked for — and this is the one somebody sends somebody else, so it is
+     the link most likely to be followed cold. */
   it("is left alone by settleAddress", () => {
     expect(settleAddress("/pricing", "", "")).toBeNull();
   });
@@ -214,10 +261,11 @@ describe("the pricing route", () => {
 describe("the privacy route", () => {
   /* It is three lines of regex, and it is tested for the reason every other
      standalone route here is: a link that does not parse lands the reader on
-     the shelf with the address bar still saying `/privacy`, which looks like
-     nothing happened at all. The policy is also the one page a reader may have
-     been *sent* a link to, so a link that silently goes nowhere is worse here
-     than on `/design`. See src/web/PrivacyPage.tsx. */
+     the 404 page with the address bar still saying `/privacy`. The policy is
+     also the one page a reader may have been *sent* a link to, so a link that
+     goes nowhere is worse here than on `/design` — and telling them so, which
+     is what that page did not do until 2026-09-03, does not make the link work.
+     See src/web/PrivacyPage.tsx. */
   it("takes the address with or without the trailing slash", () => {
     expect(parseRoute("/privacy")).toEqual({ kind: "privacy" });
     expect(parseRoute("/privacy/")).toEqual({ kind: "privacy" });
@@ -229,10 +277,10 @@ describe("the privacy route", () => {
 
   it("does not swallow anything underneath it", () => {
     /* `/privacy/cookies` is an address nobody minted, and an unknown address is
-       the shelf — the same rule `/admin/foo` follows above. It must not become
-       the policy page, because a reader who typed it would be told they were
-       reading a document that does not answer what they asked. */
-    expect(parseRoute("/privacy/cookies")).toEqual({ kind: "library" });
+       the not-found page — the same rule `/admin/foo` follows above. It must not
+       become the policy page, because a reader who typed it would be told they
+       were reading a document that does not answer what they asked. */
+    expect(parseRoute("/privacy/cookies")).toEqual({ kind: "not-found" });
   });
 });
 
@@ -260,7 +308,7 @@ describe("readHref", () => {
    */
   it("escapes a slug that would otherwise change the shape of the path", () => {
     expect(readHref("a/b")).toBe("/read/a%2Fb");
-    expect(parseRoute(readHref("a/b"))).toEqual({ kind: "library" });
+    expect(parseRoute(readHref("a/b"))).toEqual({ kind: "not-found" });
   });
 
   it("carries view state across, with or without the leading question mark", () => {
@@ -346,6 +394,21 @@ describe("the add route", () => {
   it("sends /add and /add/ to the shelf, where the add box is", () => {
     expect(parseRoute("/add")).toEqual({ kind: "library" });
     expect(parseRoute("/add/")).toEqual({ kind: "library" });
+  });
+
+  /**
+   * **And an `/add/` carrying something unusable is still an add route** — not
+   * the shelf, and not the 404 page.
+   *
+   * `addUrlFrom` hands back whatever follows the prefix without judging it, so
+   * this reaches `AddPage`, which says *that isn't a web address we can fetch*
+   * over the thing the reader actually typed. That is a better answer than
+   * either of the general ones, and it is asserted here because the plan for
+   * the 404 page claimed the opposite until GPT Sol read it — an empty segment
+   * is the only case that falls through. 2026-09-03.
+   */
+  it("leaves a bad address in /add/ to the add page, which can say what is wrong with it", () => {
+    expect(parseRoute("/add/not a url")).toEqual({ kind: "add", url: "not a url" });
   });
 
   it("survives a hand-mangled escape rather than blanking the page", () => {

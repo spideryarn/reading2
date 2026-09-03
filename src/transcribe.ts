@@ -14,9 +14,12 @@
  * Measured 2026-08-27: every one of those models got `Spideryarn` and the block
  * id `spya-k3m9qt` wrong, and `google/gemini-3.1-flash-lite` *told what the
  * words might be* got them right on every run. The vocabulary is the whole
- * difference, and the dedicated endpoint has nowhere to put one — it accepts
- * OpenAI's `prompt` field, answers 200, and ignores it. See
- * [`DICTATION_MODEL`](./models.ts).
+ * difference, and the dedicated endpoint ignores the field OpenAI provides for
+ * it — `prompt` answers 200 and changes nothing. Stated that narrowly on
+ * purpose: some providers have their own biasing parameter under
+ * `provider.options` (Deepgram's `keyterm`, Groq's `prompt`) which nothing here
+ * has ever tried, so "has nowhere to put one" — which this comment used to say
+ * — is more than was measured. See [`DICTATION_MODEL`](./models.ts).
  *
  * ## The vocabulary is assembled here, never sent by the client
  *
@@ -155,6 +158,17 @@ export interface Transcription {
    * Nothing in the request path reads it.
    */
   usd?: number;
+  /**
+   * **What actually answered**, when OpenRouter says — which is not always what
+   * `model` asked for.
+   *
+   * Also here for a benchmark, and for the same reason as the `model` option on
+   * `transcribeWith`. Dictation routes with `zdr: true`, so OpenRouter is
+   * choosing an upstream under a constraint; a model bake-off that reports a
+   * slug it *sent* rather than the one that *replied* can score a fallback and
+   * call it a candidate. Nothing in the request path reads it.
+   */
+  answeredBy?: string;
 }
 
 /**
@@ -223,9 +237,30 @@ export async function transcribeWith(
     startedAt?: number;
     vocabularyMs?: number;
     where?: string;
+    /**
+     * **Which model, for a bake-off — and for nothing else.**
+     *
+     * It defaults to {@link DICTATION_MODEL} and every caller in `src/` leaves
+     * it alone; `evals/dictation/bench-models.ts` is the one that sets it.
+     *
+     * It is here because the alternative silently lies. That benchmark used to
+     * have a `MODEL` constant at the top of the file which was a *label*: the
+     * call went through this function to `DICTATION_MODEL` regardless, so a
+     * results file could name one model and have measured another. A benchmark
+     * whose model is a comment is the same failure as an eval that reimplements
+     * the request it is measuring — docs/reusable/silent-success.md — and the
+     * fix in both cases is that the eval sends the app's own request, with the
+     * one thing it is varying actually varied.
+     */
+    model?: string;
   } = {},
 ): Promise<Transcription> {
-  const { signal, vocabularyMs = 0, where = "direct" } = opts;
+  const {
+    signal,
+    vocabularyMs = 0,
+    where = "direct",
+    model = DICTATION_MODEL,
+  } = opts;
   const started = opts.startedAt ?? Date.now();
 
   /* Two aborts, one signal. The caller's covers a reader who navigated away;
@@ -245,7 +280,7 @@ export async function transcribeWith(
     call = await openRouterJson(
       "dictation",
       {
-        model: DICTATION_MODEL,
+        model,
         max_tokens: MAX_TOKENS,
         response_format: {
           type: "json_schema",
@@ -292,7 +327,7 @@ export async function transcribeWith(
          carries the status and nothing else, which is the whole of what
          distinguishes a 400 from a 429, and is structured, ours, and enough. */
       line.error(
-        { status: err.status, model: DICTATION_MODEL, ms: since(started) },
+        { status: err.status, model, ms: since(started) },
         "dictation service refused",
       );
       /* **429 and 402 get their own words**, from the file that owns
@@ -313,7 +348,7 @@ export async function transcribeWith(
       );
     }
     line.error(
-      { ...errorFields(err), model: DICTATION_MODEL, ms: since(started) },
+      { ...errorFields(err), model, ms: since(started) },
       "dictation call did not complete",
     );
     throw Object.assign(
@@ -358,7 +393,7 @@ export async function transcribeWith(
     text = field;
   } catch {
     line.error(
-      { model: DICTATION_MODEL, ms: since(started) },
+      { model, ms: since(started) },
       "dictation answer was not JSON",
     );
     throw Object.assign(
@@ -374,7 +409,7 @@ export async function transcribeWith(
   const cleaned = tidy(text);
   line.info(
     {
-      model: DICTATION_MODEL,
+      model,
       ms: since(started),
       // Lengths, never words. A transcript is as private as the question it
       // might be. What these catch is a pass that stops working: audio going up
@@ -391,9 +426,10 @@ export async function transcribeWith(
   );
   return {
     text: cleaned,
-    model: DICTATION_MODEL,
+    model,
     ms: Math.round(since(started)),
     ...(typeof cost === "number" ? { usd: cost } : {}),
+    ...(call.answeredBy ? { answeredBy: call.answeredBy } : {}),
   };
 }
 

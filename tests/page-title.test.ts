@@ -168,6 +168,16 @@ describe("the pages either side of an article", () => {
     expect(pageTitle({ kind: "callback" })).toBe(`Signing you in${SEP}${APP_NAME}`);
     expect(pageTitle({ kind: "loading" })).toBe(`Loading…${SEP}${APP_NAME}`);
     expect(pageTitle({ kind: "error" })).toBe(`Couldn’t open${SEP}${APP_NAME}`);
+    expect(pageTitle({ kind: "not-found" })).toBe(`Not found${SEP}${APP_NAME}`);
+  });
+
+  /* **The two neighbours must not collapse into one another**, which is the
+     only interesting thing about the `not-found` variant. `error` is a fetch
+     that failed for a reason we did not learn; `not-found` is a verdict reached
+     before any request went out. A reader told *Couldn't open* would go on
+     believing the address was right. src/web/page-title.ts § not-found. */
+  it("does not say the same thing as the page for a fetch that failed", () => {
+    expect(pageTitle({ kind: "not-found" })).not.toBe(pageTitle({ kind: "error" }));
   });
 });
 
@@ -186,6 +196,7 @@ describe("every title, whatever the page", () => {
     { kind: "features" },
     { kind: "pricing" },
     { kind: "landing" },
+    { kind: "not-found" },
     { kind: "login" },
     { kind: "callback" },
     { kind: "loading" },

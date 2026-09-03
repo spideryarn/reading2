@@ -449,7 +449,21 @@ describe("what the panel asks the server for", () => {
     await settle();
     const byForce = calls.slice(beforeForce);
     expect(byForce.map(([, method]) => method)).toContain("POST");
-    expect(byForce.every(([url]) => url.includes("/api/similar/"))).toBe(true);
+    /* **The Sketch's caption is excluded by name, not by loosening this to
+       "every POST".** From 2026-09-03 the panel reads the drawn Sketch's
+       caption for the Sketch chip's hover card (`useSketchCaption`), which is
+       a GET of an artefact that already exists and buys nothing. Naming it
+       keeps the rule this test is for: a request to a *paid* route arriving
+       from a picture that did not ask for it is still a failure, whichever
+       verb it uses. */
+    const paid = byForce.filter(([url]) => !url.includes("/api/sketch/"));
+    expect(paid.every(([url]) => url.includes("/api/similar/"))).toBe(true);
+    /* And that read must never be a POST: POST to that route is what starts a
+       two-minute, $0.20 draw, and a hover card must not be able to reach it. */
+    expect(
+      byForce.filter(([url]) => url.includes("/api/sketch/")).map(([, method]) => method),
+      "the caption read is not a plain GET — a POST there starts a draw",
+    ).toEqual(["GET"]);
   });
 });
 

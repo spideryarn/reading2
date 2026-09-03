@@ -116,10 +116,11 @@ vi.mock("../src/store/index.js", () => ({
   },
 }));
 
-const { MAX_AUDIO_BASE64, parseWhere, tidy, transcribe, vocabularyFor } = await import(
+const { MAX_AUDIO_BASE64, parseWhere, tidy, transcribe, transcribeWith, vocabularyFor } = await import(
   "../src/transcribe.js"
 );
 const { RECIPES, SOURCES } = await import("../src/vocabulary-sources.js");
+const { DICTATION_MODEL } = await import("../src/models.js");
 
 beforeEach(() => {
   sent.length = 0;
@@ -372,6 +373,30 @@ describe("the request", () => {
   it("requires the parameters it sends, and routes only through zero-retention providers", async () => {
     await transcribe(AUDIO, "webm", { kind: "profile" });
     expect(body().provider).toEqual({ zdr: true, require_parameters: true });
+  });
+
+  /* **`transcribeWith` takes a `model` option, and nothing in the app may use
+     it.** It exists so `evals/dictation/bench-models.ts` measures the model it
+     names — before it, that benchmark's model was a *label* and the call went
+     to `DICTATION_MODEL` regardless. The reason to pin it from here is that the
+     failure it would cause is invisible: a reader's dictation quietly served by
+     whatever model an eval left behind, transcribing about as well, costing
+     something else, and routed under a `zdr` promise nobody re-checked. */
+  it("sends the app's dictation model, whatever the eval seam allows", async () => {
+    await transcribe(AUDIO, "webm", { kind: "profile" });
+    expect(body().model).toBe(DICTATION_MODEL);
+  });
+
+  /* **The other half, and the half that fails silently.** The test above stops
+     an eval's model leaking into the app; this one stops the app's model
+     swallowing an eval's. If `transcribeWith` ignored its `model` option, every
+     arm of a bake-off would quietly measure `DICTATION_MODEL` while the results
+     file named three different candidates — which is precisely the bug the
+     option was added to remove, reappearing one layer down. It would break no
+     test, cost no error, and produce a table. GPT Sol's review, item 6. */
+  it("sends the model an eval asked for, so a bake-off measures what it names", async () => {
+    await transcribeWith(AUDIO, "webm", "", { model: "google/gemini-2.5-flash-lite" });
+    expect(body().model).toBe("google/gemini-2.5-flash-lite");
   });
 
   /* The three OpenRouter calls this app already had all pin the upstream to
