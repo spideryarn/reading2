@@ -48,7 +48,7 @@ import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AdminUser } from "../src/admin.js";
+import { ADMIN_EMAIL_LOCAL, ADMIN_USER_ID_LOCAL, type AdminUser } from "../src/admin.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -122,6 +122,17 @@ const BOB: AdminUser = {
   spendMonth: "2026-08",
 };
 
+/**
+ * The administrator, and a second account that is not.
+ *
+ * `ADMIN_USER_ID_LOCAL` rather than a made-up uuid: the marker asks `isAdmin`,
+ * and a fixture id that only *looked* like the administrator's would test a
+ * page that never draws the marker at all. `OTHER_ACCOUNT` is well-formed and
+ * on nobody's list.
+ */
+const GREG: AdminUser = { ...ALICE, id: ADMIN_USER_ID_LOCAL, email: ADMIN_EMAIL_LOCAL };
+const OTHER_ACCOUNT = "9a1f4c2e-7b3d-4a58-9e12-0c6d8f5a41b7";
+
 const jsonOk = (body: unknown) =>
   new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 
@@ -179,6 +190,20 @@ async function show(): Promise<HTMLElement> {
   });
   await settle();
   return host;
+}
+
+/**
+ * The `admin` markers in the table.
+ *
+ * Matched on the marker's own text rather than on a class or a `title`,
+ * and **exactly** — one of the fixtures below is `dev-admin@spideryarn.local`,
+ * so a `includes("admin")` here would find the address and pass for the wrong
+ * reason.
+ */
+function markers(el: HTMLElement): HTMLElement[] {
+  return [...el.querySelectorAll<HTMLElement>("tbody span")].filter(
+    (s) => (s.textContent ?? "").trim() === "admin",
+  );
 }
 
 /** Every cell of the table, row by row, as text. */
@@ -257,6 +282,84 @@ describe("the users page", () => {
        that the title is *some* other rendering rather than a fixed string. */
     const titled = [...el.querySelectorAll("tbody span[title]")].map((s) => s.getAttribute("title"));
     expect(titled.some((t) => t?.includes("2026"))).toBe(true);
+  });
+
+  it("marks the administrator's own row, and nobody else's", async () => {
+    /* Greg, 2026-09-03: *"also indicate if a row is an admin user or not"*. The
+       marker asks `isAdmin`, which is the id list `/api/admin/*` itself
+       compares against — so an unmarked row is an account this page would
+       refuse, rather than a second opinion about who Greg is. */
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, GREG] })));
+    const el = await show();
+
+    expect(markers(el)).toHaveLength(1);
+    const marked = markers(el)[0]?.closest("tr");
+    expect(marked?.textContent).toContain(GREG.email);
+    expect(marked?.textContent).not.toContain(ALICE.email);
+  });
+
+  it("draws two rows for two accounts on one address, and marks the one that gets in", async () => {
+    /* **A rendering case, not a diagnosis.** Two accounts on one address is
+       unusual — Supabase links a verified OAuth identity to the existing
+       account of the same address — but it is possible through SSO, an admin
+       API call or old data, and it is the one shape where a reader could count
+       *people* and the page counts *accounts*. What is asserted is only what
+       the page does with it: two rows, a count that says two, and a marker
+       saying which of them this app lets in. GPT Sol, 2026-09-03, for the
+       correction to what this fixture may claim. */
+    const TWIN: AdminUser = { ...BOB, id: OTHER_ACCOUNT, email: GREG.email };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [GREG, TWIN] })));
+    const el = await show();
+
+    expect(rows(el)).toHaveLength(2);
+    expect(el.textContent).toContain("2 accounts");
+    expect(markers(el)).toHaveLength(1);
+  });
+
+  it("says an address is unconfirmed even when no provider is recorded", async () => {
+    /* The note used to live behind `providers.length > 0`, so an account with
+       neither drew nothing at all under its address — the row with least else
+       to say about it. Its own small bug, found on the way to another. */
+    expect(BOB.providers).toEqual([]);
+    expect(BOB.emailConfirmedAt).toBeUndefined();
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [BOB] })));
+    const el = await show();
+
+    expect(el.textContent).toContain("email unconfirmed");
+  });
+
+  it("says it of an unconfirmed address only", async () => {
+    /* The control the assertion above needs to mean anything: an account with
+       no providers and a *confirmed* address must draw no such line. Without
+       this, "always say it" would pass the test above and be wrong. GPT Sol
+       asked for it, 2026-09-03. */
+    const CONFIRMED: AdminUser = { ...BOB, emailConfirmedAt: "2026-08-20T10:01:00.000Z" };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [CONFIRMED] })));
+    const el = await show();
+
+    expect(rows(el)).toHaveLength(1);
+    expect(el.textContent).not.toContain("unconfirmed");
+  });
+
+  it("counts the rows in the table, and the count is read off the page to prove it", async () => {
+    /* **The invariant Greg asked for, checked where it can be seen.** The page
+       counts `sorted`, the list the table is drawn from; only the DOM can say
+       whether that became `<tr>`s, so this reads the number back out of the
+       words and compares it with the rows themselves rather than with the
+       fixture.
+
+       Three accounts, one of them with no sign-up date at all — the row
+       `sinkLast` moves to the bottom, and so the one moment in the render where
+       a row is put somewhere else and could plausibly be put nowhere. */
+    const NEVER: AdminUser = { ...BOB, id: OTHER_ACCOUNT, email: "nobody@example.test", createdAt: "" };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonOk({ users: [ALICE, BOB, NEVER] })));
+    const el = await show();
+
+    const label = [...el.querySelectorAll("span")]
+      .map((s) => (s.textContent ?? "").trim())
+      .find((t) => /^\d+ accounts?$/.test(t));
+    expect(label).toBeDefined();
+    expect(Number.parseInt(label ?? "", 10)).toBe(rows(el).length);
   });
 
   it("shows a failure as words, and still offers a way to retry", async () => {
