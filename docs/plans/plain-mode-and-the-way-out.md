@@ -116,7 +116,7 @@ itself — *"giving `toc` a button of its own is what makes the radiogroup hones
   to `fitView` as `modeBand`, used to choose which panel renders, and used to decide whether the ×
   exists — the third consumer, which the plan first missed and Sol named. `fitView` also takes
   `chosen: mode === "plain" ? [] : cols`, so the existing "no columns" arithmetic does the work and
-  `layout.ts` is not touched at all.
+  `layout.ts` is not touched at all. *(It was, on 2026-09-03 — see § Centring the column below.)*
 - **`src/web/visitor.ts`.** `visitorGap` must return `null` for `plain`, and must do it by name.
   The fall-through is deliberately fail-closed, and the last mode that assumed otherwise shipped as
   owners-only with a plan claiming it was free (Outline, GPT Sol, 2026-08-28).
@@ -327,6 +327,71 @@ was watched failing first.
 A browser pass at 390 × 740 reproduces the table at the top of this file with the bars **staying**
 while a band is open — and, on the same page, still leaving while one is not, so the rule is scoped
 rather than switched off.
+
+## Centring the column — 2026-09-03
+
+> In Plain mode, can you centre the text on the page?
+>
+> — Greg, 2026-09-03
+
+Plain gave the article the whole window and the article used the left 738px of it, because the
+reading measure lives on `.prose` and the cell it sits in was as wide as the screen. On a 1600px
+window that is 850px of empty page down one side.
+
+Three things, and the shape of them is the part worth keeping:
+
+- **`PROSE_ALONE_MAX_REM = 50` in [`layout.ts`](../../src/web/layout.ts)** caps the reading column when
+  it is the only column there is — the measure plus `td.text`'s own two paddings, rounded up. So
+  `layout.ts` *is* touched now, and the claim above is amended rather than deleted. **The condition
+  is "no other column", not "Plain"**, which is what keeps the mode's name out of that file: an
+  article with no gist depths, or Hierarchy with `?cols=` set to nothing, is the same page.
+- **`Fit.alone`** carries that fact out to `App.tsx` as a `text-alone` class. It is deliberately
+  *not* `table.only-prose`, which TableView already sets and which a band mode also satisfies —
+  there the prose is the table's one column but the band has taken the room this would centre into.
+  Two questions, two names, the way `inMode` and `bandOpen` are.
+- **`styles.css` § plain, centred** is two declarations: `margin-inline: auto` on the table, and the
+  masthead capped to the same `--table-w` so the title sits over its own text. **The table moves,
+  not the prose inside its cell** — the gutter, a search hit's bar, the `row-active` fill and the
+  hover target are all drawn against the cell's edges and would every one of them have been left
+  behind by text that moved on its own.
+
+A `max-width` on the table was written first and changed nothing: a `table-layout: fixed` table is
+at least as wide as its `<col>`, whichever way `max-width` argues. Hence the cap in the arithmetic.
+
+### Measured, in headless Chrome on a real article
+
+| window | table | prose starts | title starts | title − prose |
+|---:|---:|---:|---:|---:|
+| 732 | 12–732 | 46 | 160 | +114 |
+| 800 | 12–800 | 46 | 160 | +114 |
+| 900 | 56–856 | 90 | 160 | +70 |
+| 1000 | 106–906 | 140 | 160 | +20 |
+| 1040 | 126–926 | 160 | 160 | 0 |
+| 1600 | 406–1206 | 440 | 436 | −4 |
+| 2560 | 886–1686 | 920 | 916 | −4 |
+
+Two things that table says and the rule's first comment did not. **Below 812px nothing has moved at
+all** — the cap is 50rem and the window is narrower than it, so every phone is exactly as it was.
+And **the masthead only tracks the prose from about 1046px upwards**: under that, the bar's
+reservation for the corner wordmark and the Feedback button is wider than the margin the centred
+column leaves, so the title stays where it has always been while the prose slides left towards it.
+That gap is pre-existing — the title was at 160 and the prose at 46 before any of this — and it
+closes smoothly rather than jumping. GPT Sol asked for the claim to say where it holds; the fix was
+to the claim, not to the rule, because correcting it properly means the masthead doing the centring
+arithmetic itself with `--logo-w` and `--feedback-w` in it, which is a third place to get
+`PROSE_ALONE_MAX_REM` wrong.
+
+**The cap is `50rem`, not `800`, and that is Sol's other finding.** `SPINE_W` at the top of
+`layout.ts` already records this lesson from the other side: nothing here locks the root font size,
+and every quantity this number stands for scales with it — `--reading-size` is `1.0625rem`, `ch`
+scales with the font size, and both of the cell's pads are rem. A fixed 800 would have clipped a
+20px-default reader's measure from 65ch to about 51ch, which is the one thing the cap must never do.
+`fitView` takes `rootFontPx`; `useRootFontPx()` in App.tsx measures it and re-measures on resize.
+
+**And the wiring has its own test**, because `tests/layout.test.ts` can only see the cap: delete the
+`text-alone` class or either stylesheet rule and all 31 of those stay green while the page is back
+where it started. `tests/text-alone-centring.test.ts` is the check, in the species of
+`tests/spine-width.test.ts` — Sol's third finding.
 
 ---
 
