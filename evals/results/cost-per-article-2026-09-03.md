@@ -276,7 +276,8 @@ the ones that touch quality are Greg's call rather than an engineer's.
 | 1 | ~~**Fix the article-cache breakpoint** so the *reader* marks too~~ ([260903c](../../docs/postmortems/260903c-the-conditional-article-cache-breakpoint-marks-the-writer-but-never-the-reader.md)) | **18.6%** of a batched job — **$0.1406 of $0.7558, predicted then measured on all three groups**: every reader now reads exactly its writer's prefix (25,428 / 25,428 / 27,234) | **Done** 2026-09-03 — `cacheArticleForStep`, a both-sides test, a call-site test that goes red on the old walk, and a `checkBatchedDraw` gate so the class is visible next time | **None.** The premium was already being paid; it bought nothing. |
 | 2 | **Keep modes on demand** (status quo) | The modes are 79–90% of a fully-pressed article. Not pressing them is the whole saving | Already true | One eager exception: `arc` auto-fires on owner open (`src/web/useArc.ts`). Changing it costs the L0 column until a press. |
 | 3 | **Effort on the five expensive modes** — sketch, timeline, hierarchy structure, quiz, ideas | Those five are **72% of a long article**. Reasoning is 36% of all spend | A per-stage constant already exists (`STAGE_EFFORT`) | **Quality, unmeasured.** `effort-vs-quality` covers `arc` and `glossary` only — neither is on this list. Measure before turning any dial. |
-| 4 | **Bound reasoning on the tasks that hit the ceiling** | Three paid failures here: $0.2157 + $0.0477 + $0.2124 = **$0.4758 for nothing**, 6.5% of the whole sweep | Ceilings are per-call parameters | Answer depth, and a ceiling that is too low converts a good answer into a truncated one — which is how `hierarchy` got to `medium`. |
+| 4 | **Give the answer room the reasoning cannot eat**, on the two tasks that hit their ceiling | $0.2157 + $0.0477 = **$0.2634 billed for zero visible tokens** | `max_tokens` is a per-call parameter | Answer depth, and a ceiling too low truncates the JSON mid-object — which is a parse error, not a short list. |
+| 4b | **The third paid failure is a different thing** and does not belong with them | $0.2124 | — | `hierarchy` draw 2 *did* write — 4,155 visible tokens, "11k characters of tree so far" — and was rejected by validation (`Node range not in blocks.json`). Bounding reasoning would not have saved it. |
 | 5 | **Cheaper models where selection is measurable** | Not measurable yet | Needs the model-arms follow-up plan | Quality. Deferred by design. |
 | 6 | ~~Duplicate embedding purchase~~ | Tiny | **Done** by a peer, 2026-09-03 (`src/similar.ts` onto the `article-vectors.ts` seam) | — |
 | 7 | ~~Duplicate job execution~~ | **$10.47–$10.81 of $31.22 historically** — a third of all spend ever | **Done** 2026-09-02 | — |
@@ -297,6 +298,14 @@ in this run billed in full for nothing, all by exhausting a reasoning budget bef
 token. It is left open rather than done because the fix is a per-call ceiling and nothing has
 measured what the right one is — a ceiling set too low turns a good answer into a truncated one,
 which is a quality trade in disguise and so Greg's call, not an engineer's.
+
+**A correction to row 4, found 2026-09-03 while explaining it.** An earlier version of this table
+put three failures in that row totalling $0.4758 and said all three "exhausted a reasoning budget
+before producing a first token". Only two did. The third — `hierarchy` draw 2, $0.2124 — wrote
+15,530 output tokens of which 4,155 were visible (`"11k characters of tree so far"`) and was thrown
+away by *validation*, not by a ceiling. The money is equally wasted; the remedy is not the same one,
+and merging them would have sized a `max_tokens` change against a number a third of which it cannot
+reach. See `evals/results/cost/2026-09-03-04-59-07-1bpfhts0-long-html/run.json`.
 
 **Number 3 is the big one and it is not an engineering decision.** Reasoning tokens are 36% of
 everything measured — $1.11 of $3.08 — and they are billed as output at $10/MTok and never shown to
