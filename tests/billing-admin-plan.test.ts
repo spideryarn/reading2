@@ -88,6 +88,7 @@ function row(fields: Partial<AccountSnapshot>): AccountSnapshot {
     stripeSubscriptionId: null,
     stripeCustomerId: null,
     cancelAtPeriodEnd: false,
+    cancelAt: null,
     ...fields,
   };
 }

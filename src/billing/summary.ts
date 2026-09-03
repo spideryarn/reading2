@@ -39,6 +39,7 @@ import type { OwnerId } from "../owner.js";
 import { accountSnapshot, entitlementFromRow, hasLapsed, usageFor } from "../store/pg-billing.js";
 import { allTiers } from "../store/pg-tiers.js";
 import { STORE } from "../store/live.js";
+import { planEndsAt } from "../billing-plan.js";
 import type { BillingSummary, ReaderPlan, TierOffer } from "../billing-plan.js";
 import { isTerminalStatus, offerableTiers } from "./tiers.js";
 import type { TierRow } from "./tiers.js";
@@ -121,7 +122,17 @@ export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSumma
       limit: entitlement.limit,
       used,
       periodEnd: entitlement.periodEnd.toISOString(),
-      cancelling: row?.cancelAtPeriodEnd === true,
+      /* **Derived once, here, and sent as a date rather than as the two flags
+         it came from** — `planEndsAt` says why. A cancellation through the
+         hosted Portal leaves `cancel_at_period_end` false, so the row's boolean
+         on its own said nothing was ending while Stripe had already scheduled
+         it: docs/project/billing.md § *The first live sale*. */
+      endsAt:
+        planEndsAt({
+          cancelAt: row?.cancelAt ?? null,
+          cancelAtPeriodEnd: row?.cancelAtPeriodEnd === true,
+          currentPeriodEnd: entitlement.periodEnd,
+        })?.toISOString() ?? null,
     });
   }
 

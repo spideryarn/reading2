@@ -378,14 +378,21 @@ export async function ingestEligibility(
  * The billing row as a page needs it: the entitlement columns, plus the one
  * fact entitlement does not care about.
  *
- * `cancelAtPeriodEnd` is not part of `BillingRow` because entitlement is not
- * decided by it — a cancelled-at-period-end subscription is still `active` and
- * still entitled until the period runs out. It matters to the *reader*, who is
- * owed the difference between "starts again on the 3rd" and "runs out on the
- * 3rd", so it travels beside the row rather than inside it.
+ * `cancelAtPeriodEnd` and `cancelAt` are not part of `BillingRow` because
+ * entitlement is not decided by either — a subscription scheduled to end is
+ * still `active` and still entitled until the period runs out. They matter to
+ * the *reader*, who is owed the difference between "starts again on the 3rd"
+ * and "runs out on the 3rd", so they travel beside the row rather than inside
+ * it.
+ *
+ * **Two fields, one answer.** They are two raw Stripe facts and neither implies
+ * the other (src/billing/subscription.ts). Nothing downstream may interpret
+ * them separately: `planEndsAt` in src/billing-plan.ts is the single place the
+ * pair becomes a date, and it is that date the browser is given.
  */
 export interface AccountSnapshot extends BillingRow {
   readonly cancelAtPeriodEnd: boolean;
+  readonly cancelAt: Date | null;
 }
 
 /**
@@ -398,7 +405,11 @@ export interface AccountSnapshot extends BillingRow {
  */
 export async function accountSnapshot(ownerId: string): Promise<AccountSnapshot | undefined> {
   const [row] = await getDb()
-    .select({ ...BILLING_COLUMNS, cancelAtPeriodEnd: billingAccounts.cancelAtPeriodEnd })
+    .select({
+      ...BILLING_COLUMNS,
+      cancelAtPeriodEnd: billingAccounts.cancelAtPeriodEnd,
+      cancelAt: billingAccounts.cancelAt,
+    })
     .from(billingAccounts)
     .where(eq(billingAccounts.ownerId, ownerId))
     .limit(1);
@@ -419,6 +430,7 @@ export async function allAccountSnapshots(): Promise<Map<string, AccountSnapshot
       ownerId: billingAccounts.ownerId,
       ...BILLING_COLUMNS,
       cancelAtPeriodEnd: billingAccounts.cancelAtPeriodEnd,
+      cancelAt: billingAccounts.cancelAt,
     })
     .from(billingAccounts);
   return new Map(rows.map(({ ownerId, ...row }) => [ownerId, row]));

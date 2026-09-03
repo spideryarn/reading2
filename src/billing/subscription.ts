@@ -18,6 +18,17 @@
  * *list filter*. `STRIPE_API_VERSION` in ./stripe.ts is what keeps that true,
  * and `tests/billing-stripe.test.ts` fails if the pin and the SDK drift apart.
  *
+ * ## A cancellation is a timestamp, and the boolean beside it stays false
+ *
+ * The same class of drift, found the same way — by a real subscription rather
+ * than by a fixture. Cancelling through the hosted Customer Portal sets
+ * `cancel_at` and leaves `cancel_at_period_end` at `false`, so code reading only
+ * the boolean stores "not cancelling" about a subscription Stripe has already
+ * scheduled to end. Nothing errors, and the reader is told their plan renews.
+ * Both fields are read here and both are stored; the single answer the browser
+ * gets is derived once, by `planEndsAt` in src/billing-plan.ts.
+ * docs/project/billing.md § *The first live sale* has the payload.
+ *
  * ## Everything unrecognised falls to free
  *
  * A subscription with two items, a quantity above one, a one-off price, a
@@ -41,6 +52,21 @@ export interface SubscriptionState {
   readonly currentPeriodStart: Date;
   readonly currentPeriodEnd: Date;
   readonly cancelAtPeriodEnd: boolean;
+  /**
+   * When Stripe will end it, if an ending is already scheduled.
+   *
+   * **Both this and `cancelAtPeriodEnd` are here because they are two raw
+   * Stripe facts, and neither is derivable from the other.** A cancellation
+   * through the hosted Customer Portal sets *this* and leaves the boolean
+   * `false`; one through the API can do the reverse. Turning the pair into the
+   * single question a reader is asking — *when does my plan end* — is
+   * `planEndsAt` in src/billing-plan.ts, and it happens in exactly one place so
+   * that two interpretations cannot drift apart.
+   *
+   * See docs/project/billing.md § *The first live sale*: reading only the
+   * boolean is how a real cancellation went untold on 2026-09-03.
+   */
+  readonly cancelAt: Date | null;
   readonly livemode: boolean;
 }
 
@@ -122,6 +148,11 @@ export function readSubscription(subscription: Stripe.Subscription): Reading {
       currentPeriodStart: start,
       currentPeriodEnd: end,
       cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
+      /* **`cancel_at`, never `canceled_at`.** The second one is when somebody
+         pressed cancel, which for a period-end cancellation is in the past
+         while the plan is still running — reading it as an ending would tell a
+         paid-up reader their plan finished last Tuesday. */
+      cancelAt: at(subscription.cancel_at),
       livemode: subscription.livemode === true,
     },
   };

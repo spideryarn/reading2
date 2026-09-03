@@ -165,6 +165,12 @@ export async function syncSubscriptionFromStripe(customerId: string): Promise<Sy
           currentPeriodStart: state?.currentPeriodStart ?? null,
           currentPeriodEnd: state?.currentPeriodEnd ?? null,
           cancelAtPeriodEnd: state?.cancelAtPeriodEnd ?? false,
+          /* **Null on every sync that finds no ending**, which is what makes an
+             un-cancelled subscription stop claiming a date it once had. A
+             reader who cancels and then changes their mind in the Portal is
+             exactly the case a partial update would leave saying "ends on the
+             3rd" for ever. */
+          cancelAt: state?.cancelAt ?? null,
           livemode: state?.livemode ?? null,
           lastSyncedAt: new Date(),
           updatedAt: new Date(),

@@ -25,6 +25,10 @@ function subscription(over: {
   id?: string;
   status?: string;
   cancelAtPeriodEnd?: boolean;
+  /** Unix seconds, as Stripe sends it. When the subscription is to end. */
+  cancelAt?: number | null;
+  /** Unix seconds. When somebody pressed cancel — never when it ends. */
+  canceledAt?: number | null;
   livemode?: boolean;
   items?: unknown[];
 } = {}): Stripe.Subscription {
@@ -33,6 +37,8 @@ function subscription(over: {
     object: "subscription",
     status: over.status ?? "active",
     cancel_at_period_end: over.cancelAtPeriodEnd ?? false,
+    cancel_at: over.cancelAt ?? null,
+    canceled_at: over.canceledAt ?? null,
     livemode: over.livemode ?? false,
     items: { object: "list", data: over.items ?? [item()] },
   } as unknown as Stripe.Subscription;
@@ -81,6 +87,7 @@ describe("the billing period comes from the item", () => {
         currentPeriodStart: new Date("2026-09-01T00:00:00Z"),
         currentPeriodEnd: new Date("2026-10-01T00:00:00Z"),
         cancelAtPeriodEnd: false,
+        cancelAt: null,
         livemode: false,
       },
     });
@@ -169,6 +176,92 @@ describe("everything unrecognised falls to free", () => {
   it("passes an unfamiliar status through rather than refusing on it", () => {
     const reading = readSubscription(subscription({ status: "something_new" }));
     expect(reading).toMatchObject({ kind: "understood", state: { status: "something_new" } });
+  });
+});
+
+/**
+ * **The second field whose meaning drifted under a pinned API version**, and the
+ * one that cost a live cancellation nobody was told about.
+ *
+ * Greg cancelled the first real subscription through the Customer Portal on
+ * 2026-09-03. Stripe did **not** set `cancel_at_period_end`; it set a
+ * `cancel_at` timestamp and left the boolean alone. Every fixture in this file
+ * had been written from the same assumption the code was — that the boolean is
+ * how Stripe says it — so the suite was green over a bug that was live.
+ *
+ * The payload below is the real one, transcribed from
+ * docs/project/billing.md § *The first live sale*. A fixture that sets the
+ * boolean tests the code we already had.
+ */
+describe("a cancellation Stripe expresses as a timestamp", () => {
+  /* 2026-10-03, the period end — and 2026-09-03, when he pressed cancel. */
+  const CANCEL_AT = 1791027429;
+  const CANCELED_AT = 1788435966;
+
+  /** The shape of the live subscription, and the whole of the regression. */
+  const portalCancelled = () =>
+    subscription({
+      id: "sub_1UBYxALv4piDbwcbVew6jxqN",
+      status: "active",
+      cancelAt: CANCEL_AT,
+      canceledAt: CANCELED_AT,
+      cancelAtPeriodEnd: false,
+    });
+
+  it("reads the date it ends, not just the boolean that stayed false", () => {
+    const reading = readSubscription(portalCancelled());
+    expect(reading.kind).toBe("understood");
+    if (reading.kind !== "understood") return;
+    /* The fact the reader is owed: *when*. A boolean cannot say it. */
+    expect(reading.state.cancelAt).toEqual(new Date(CANCEL_AT * 1000));
+    /* And the raw boolean is still reported as Stripe sent it, rather than
+       being quietly widened here — deriving one answer from the two is the
+       caller's job, done in exactly one place (`planEndsAt`). */
+    expect(reading.state.cancelAtPeriodEnd).toBe(false);
+  });
+
+  /**
+   * **Entitlement must not move**, and this is the half of it `readSubscription`
+   * owns. `active` is what Stripe says until the period actually ends, and it is
+   * what we grant until then; the pin against the wall itself is in
+   * tests/billing-usage-route.test.ts.
+   */
+  it("leaves the status alone, so a cancelled subscriber keeps what they paid for", () => {
+    const reading = readSubscription(portalCancelled());
+    expect(reading).toMatchObject({
+      kind: "understood",
+      state: { status: "active", currentPeriodEnd: new Date("2026-10-01T00:00:00Z") },
+    });
+  });
+
+  /* The other direction, so the case above cannot pass by reading any date at
+     all: an ordinary subscription carries no ending. */
+  it("carries no ending for a subscription nobody has cancelled", () => {
+    const reading = readSubscription(subscription());
+    expect(reading).toMatchObject({ kind: "understood", state: { cancelAt: null } });
+  });
+
+  /**
+   * `canceled_at` is *when somebody pressed cancel*, which for a period-end
+   * cancellation is in the past while the plan is still running. Reading it as
+   * an ending would tell a paid-up reader their plan ended last Tuesday.
+   */
+  it("does not mistake `canceled_at` for the ending", () => {
+    const reading = readSubscription(
+      subscription({ cancelAt: null, canceledAt: CANCELED_AT }),
+    );
+    expect(reading).toMatchObject({ kind: "understood", state: { cancelAt: null } });
+  });
+
+  /* The boolean still works on its own, because Stripe sets it on subscriptions
+     cancelled through the API rather than the Portal. Both are raw facts and
+     both are stored. */
+  it("still reads the old boolean, which has not stopped meaning anything", () => {
+    const reading = readSubscription(subscription({ cancelAtPeriodEnd: true }));
+    expect(reading).toMatchObject({
+      kind: "understood",
+      state: { cancelAtPeriodEnd: true, cancelAt: null },
+    });
   });
 });
 

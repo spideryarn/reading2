@@ -288,20 +288,23 @@ async function subscribed(fields: {
   periodStart: Date;
   periodEnd: Date;
   priceId?: string;
+  /** What a Portal cancellation writes, leaving `cancel_at_period_end` false. */
+  cancelAt?: Date | null;
 }): Promise<void> {
   if (!pool) return;
   await pool.query(
     `insert into spideryarn.billing_accounts
        (owner_id, stripe_customer_id, stripe_subscription_id, price_id, status,
-        current_period_start, current_period_end)
-     values ($1, $2, $3, $7, $4, $5, $6)
+        current_period_start, current_period_end, cancel_at)
+     values ($1, $2, $3, $7, $4, $5, $6, $8)
      on conflict (owner_id) do update set
        stripe_customer_id = excluded.stripe_customer_id,
        stripe_subscription_id = excluded.stripe_subscription_id,
        price_id = excluded.price_id,
        status = excluded.status,
        current_period_start = excluded.current_period_start,
-       current_period_end = excluded.current_period_end`,
+       current_period_end = excluded.current_period_end,
+       cancel_at = excluded.cancel_at`,
     [
       OWNER,
       `cus_${OWNER}`,
@@ -310,6 +313,7 @@ async function subscribed(fields: {
       fields.periodStart,
       fields.periodEnd,
       fields.priceId ?? "price_no_tier_sells",
+      fields.cancelAt ?? null,
     ],
   );
 }
@@ -453,6 +457,101 @@ describe("retry is the second front door", () => {
     const again = await post(`/api/jobs/${first.body.id}/retry`, {});
     expect(again.status).toBe(402);
     expect(again.body.error).toContain("[pay-free]");
+  });
+});
+
+/**
+ * **The pin.** A cancellation is a fact about the *future*; entitlement is a
+ * fact about now, and the two must not be confused.
+ *
+ * `cancel_at` landed on `billing_accounts` on 2026-09-03 so that `/profile`
+ * could finally say *your plan ends on the 3rd* — a real cancellation had gone
+ * untold (docs/project/billing.md § *The first live sale*). The whole risk of
+ * that change is in this direction: a version that treated a scheduled ending
+ * as an ending would take a paid-up reader's allowance away weeks early, and it
+ * would do it to somebody who has paid us. `entitlementFromRow` reads the
+ * status and the period and nothing else, and this is what says so from the
+ * outside — through the wall, not through the function.
+ */
+describe("a cancellation that has not happened yet takes nothing away", () => {
+  /* Past the free three, so a fall back to the free tier would refuse and this
+     case cannot pass on the free allowance by accident. */
+  const SPENT = FREE_LIMIT + 1;
+
+  /** Subscribed, paid up, and scheduled to end when the period does. */
+  async function cancelledButPaidUp(fields: {
+    cancelAt?: Date | null;
+    cancelAtPeriodEnd?: boolean;
+  }): Promise<Date> {
+    await sellATier();
+    const end = new Date(Date.now() + 25 * 86_400_000);
+    await subscribed({
+      status: "active",
+      priceId: TIER_PRICE,
+      periodStart: new Date(Date.now() - 5 * 86_400_000),
+      periodEnd: end,
+      cancelAt: fields.cancelAt ?? null,
+    });
+    if (fields.cancelAtPeriodEnd && pool) {
+      await pool.query(
+        "update spideryarn.billing_accounts set cancel_at_period_end = true where owner_id = $1",
+        [OWNER],
+      );
+    }
+    return end;
+  }
+
+  dbIt("still admits a reader who cancelled through the Portal", async () => {
+    /* The live shape exactly: a `cancel_at` timestamp with the boolean false. */
+    const end = await cancelledButPaidUp({ cancelAt: new Date(Date.now() + 25 * 86_400_000) });
+    expect(end.getTime()).toBeGreaterThan(Date.now());
+    const spent = await alreadySpent(SPENT);
+    try {
+      const reply = await add("cancelled-but-paid-up");
+      expect(reply.status, JSON.stringify(reply.body)).toBe(202);
+      /* And it really took a paid slot rather than slipping past unmetered. */
+      expect(await slotOf(reply.body.id as string)).not.toBeNull();
+    } finally {
+      await forgetSpend(spent);
+    }
+  });
+
+  dbIt("still admits a reader who cancelled through the API", async () => {
+    /* The other shape, so neither field can be the one that ends somebody
+       early. */
+    await cancelledButPaidUp({ cancelAtPeriodEnd: true });
+    const spent = await alreadySpent(SPENT);
+    try {
+      const reply = await add("cancelled-via-api");
+      expect(reply.status, JSON.stringify(reply.body)).toBe(202);
+    } finally {
+      await forgetSpend(spent);
+    }
+  });
+
+  /**
+   * The mirror, so the two above cannot pass by admitting everybody: once the
+   * period really is over, a `canceled` subscription is lapsed and refused.
+   * That is the boundary the pin is protecting — it moves at the period end and
+   * not a day before.
+   */
+  dbIt("refuses once the period it was paid for is actually over", async () => {
+    await sellATier();
+    await subscribed({
+      status: "canceled",
+      priceId: TIER_PRICE,
+      periodStart: new Date(Date.now() - 60 * 86_400_000),
+      periodEnd: new Date(Date.now() - 30 * 86_400_000),
+      cancelAt: new Date(Date.now() - 30 * 86_400_000),
+    });
+    const spent = await alreadySpent(SPENT);
+    try {
+      const refused = await add("cancelled-and-over");
+      expect(refused.status).toBe(402);
+      expect(refused.body.error).toContain("[pay-lapsed]");
+    } finally {
+      await forgetSpend(spent);
+    }
   });
 });
 

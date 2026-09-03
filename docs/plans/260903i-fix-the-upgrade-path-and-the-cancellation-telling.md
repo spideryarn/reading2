@@ -224,3 +224,83 @@ a click nobody recorded: `stripe:setup` would still create a broken one on the n
 
 Written 2026-09-03 before any code; restaged the same day after Sol's review returned DO NOT BUILD.
 Progress is appended below as each stage lands.
+
+### Stage 1 landed, 2026-09-03
+
+`cancel_at` is read, stored, and turned into one date by `planEndsAt`; `/profile` says when a plan
+ends. **Sol's code review: approve, no blockers** — with the note that the stage is not
+*operationally* complete until the production row is resynced, which is Stage 5.
+
+Three things worth keeping:
+
+- **The red was witnessed**, and its message is in the commit: `expected undefined to deeply equal
+  2026-10-03T11:37:09.000Z`. `1791027429` decodes to 11:37:09 UTC, exactly 30 days after the 11:37
+  sale, so the payload is self-consistent.
+- **The entitlement pins were mutation-tested rather than trusted.** Three green tests prove nothing
+  on their own, so `entitlementFromRow` was made to return FREE on a scheduled ending, twice: keyed
+  on `cancel_at` the Portal case reddened and the API case stayed green, and keyed on
+  `cancel_at_period_end` the reverse. The two pins are therefore independent, and neither passes by
+  admitting everybody.
+- **The migration was checked by diffing the generated snapshot against its predecessor**, not by
+  reading the one-line SQL — which is the check that trap actually needs, since a constraint landing
+  on a same-named column of another table looks fine in a single statement.
+
+**The backfill is a resend, not an `UPDATE`.** Re-deliver `customer.subscription.updated` for
+`sub_1UBYxALv4piDbwcbVew6jxqN`; `syncSubscriptionFromStripe` then does what it does for everyone
+else. A successful backfill is therefore *also* evidence the fix works live, where an `UPDATE` would
+only prove the column accepts a timestamp — and a hand-typed `1791027429` is a number we chose
+rather than one Stripe gave us. Sol's caveat, which Stage 5 must honour: **a Dashboard 2xx proves
+the transaction completed, not that the expected value landed.** Read the row back and expect
+`2026-10-03T11:37:09Z`.
+
+**Two `npm run check` gates are red in this worktree and neither is ours** — `test`
+(`load-article-serialisation`, `store-shelf-reads`: shared local Supabase, and neither file
+references billing) and `cycles` (biome cannot parse
+`evals/results/illustrated-v2/constitution.raw.json`, which is a peer's committed artefact carrying a
+```` ```json ```` fence). The second is worth somebody fixing properly: a gate that is red for
+everyone has stopped being a gate.
+
+### Stage 2 — the Portal, built 2026-09-03 (test mode only; live is Stage 5)
+
+Applied to the **sandbox** and read back; nothing was run against live or against the production
+database. `bpc_1UBWD7LUG7Oye8CXi4DGrb9c` now reads `enabled: true`,
+`default_allowed_updates: ["price"]`, `billing_cycle_anchor: "now"`,
+`proration_behavior: "always_invoice"`, both products listed, no `schedule_at_period_end` conditions.
+
+**Prose for [billing.md](../project/billing.md)**, to fold in once Stage 1 is out of that file. The
+section *A paying Reader cannot become a Researcher* can lose its warning box and become a
+description of how a plan change works, plus these five facts, none of which is in Stripe's
+documentation and all of which were measured in the sandbox on 2026-09-03:
+
+- **`always_invoice` is legal under Managed Payments.** The blocking question in the decision above
+  is answered: yes. Proved against a subscription born from a completed hosted Checkout and carrying
+  `managed_payments: { enabled: true }` — an API-created subscription reads `{ enabled: false }` and
+  would have proved nothing, which is the trap this nearly fell into. Both directions were accepted;
+  the upgrade raised a paid `subscription_update` invoice and the downgrade a **negative** one, which
+  becomes customer credit rather than a refund. Greg's "nobody is refunded" survives intact.
+- **`billing_cycle_anchor: "now"` works through the Portal, not just the API.** A test reader
+  switched Reader → Researcher on the hosted Portal and the subscription's `current_period_start`
+  moved to the second of the switch.
+- **`products` is absent from the API response unless expanded.** Not empty — missing. Both scripts
+  now send `expand: ["data.features.subscription_update.products"]`; without it a correct
+  configuration reads as one with nowhere to switch to.
+- **`schedule_at_period_end` cannot be cleared through the SDK at all.** `conditions: []` is dropped
+  from the form body, so Stripe answers 200 and changes nothing. The wire form that works is
+  `features[subscription_update][schedule_at_period_end][conditions]=`, and the SDK types the field
+  as `Array<Condition>` rather than `Emptyable<…>`, so there is no way to say it. `stripe:setup`
+  therefore reports this one drift as **not fixed** rather than pretending; clear it in the dashboard.
+- **`adjustable_quantity` defaults to *on*** whenever `products` is written without it, and quantity
+  is a straight multiplier on the money that entitlement never reads. Both scripts now send it off
+  and check it.
+
+Two constraints worth recording beside them: **`products` is required** whenever
+`subscription_update.enabled` is true (400 `parameter_missing` otherwise), and
+**`default_payment_method` cannot be updated** on a Managed Payments subscription created by
+Checkout.
+
+**Not proved:** the declined-upgrade case the stage asked for. The constraint immediately above
+blocks it — the subscription's card cannot be swapped for a failing one, and its first payment
+happens at Checkout, so a card that declines never gets a subscription in the first place. Testing it
+needs a second hosted Checkout with a card that succeeds once and fails later. The plan's reasoning
+stands unverified: Stripe applies the change even when payment fails, so a declined upgrade still
+grants 150, and `always_invoice` only shortens the unpaid window.

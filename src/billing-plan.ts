@@ -93,10 +93,13 @@ export type ReaderPlan =
       readonly tierName: string;
       readonly limit: number;
       readonly used: number;
-      /** ISO. When the allowance starts again — or when it runs out, if cancelling. */
+      /** ISO. When the allowance starts again — the renewal, not the ending. */
       readonly periodEnd: string;
-      /** Cancelled at the end of the period, so `periodEnd` is an ending. */
-      readonly cancelling: boolean;
+      /**
+       * ISO, or `null` when nothing is scheduled to end. **One field, not two
+       * flags** — see `planEndsAt`.
+       */
+      readonly endsAt: string | null;
     };
 
 /** The whole of `GET /api/billing/usage`. */
@@ -144,6 +147,49 @@ export interface BillingSummary {
    * `paid`, which is the smallest of the four cases that need hiding.
    */
   readonly canCheckout: boolean;
+}
+
+/* -------------------------------------------------- when the plan ends -- */
+
+/**
+ * **When this subscription ends, from the two facts Stripe keeps about it.**
+ *
+ * Stripe says *cancel at period end* in two unrelated ways, and which one you
+ * get depends on how the reader cancelled:
+ *
+ * - through the hosted **Customer Portal**: `cancel_at` is a timestamp and
+ *   `cancel_at_period_end` stays **`false`**;
+ * - through the **API**: `cancel_at_period_end` goes `true`, and `cancel_at`
+ *   may be null.
+ *
+ * Reading only the boolean is why a real cancellation on 2026-09-03 was never
+ * shown to the reader who made it — docs/project/billing.md § *The first live
+ * sale*. Both raw facts are therefore stored, and this is the **only** place
+ * they become an answer:
+ *
+ *     endsAt = cancelAt ?? (cancelAtPeriodEnd ? currentPeriodEnd : null)
+ *
+ * **One derived value reaches the browser, never two flags.** Two
+ * independently-interpreted cancellation fields on the wire is how a page and a
+ * route come to disagree about whether somebody is cancelling — and it would be
+ * the same class of bug again, one field quietly meaning less than it looks.
+ * GPT Sol, 2026-09-03.
+ *
+ * `cancelAt` wins where both are set, because it is a date and the boolean is
+ * only a claim about one. It is also not always the period end: Stripe permits
+ * an ending scheduled for any future moment, and the date is the thing the
+ * reader is owed either way.
+ *
+ * Pure and dateless in its inputs' provenance, so it is testable without a
+ * database — tests/billing-plan.test.ts.
+ */
+export function planEndsAt(cancellation: {
+  readonly cancelAt: Date | null;
+  readonly cancelAtPeriodEnd: boolean;
+  readonly currentPeriodEnd: Date | null;
+}): Date | null {
+  if (cancellation.cancelAt) return cancellation.cancelAt;
+  return cancellation.cancelAtPeriodEnd ? cancellation.currentPeriodEnd : null;
 }
 
 /* ------------------------------------------------------------- the words -- */
@@ -220,13 +266,22 @@ export function describePlan(plan: ReaderPlan): PlanCopy {
               "adds more.",
           };
     case "paid": {
-      const when = readableDate(plan.periodEnd);
+      /* **The ending, when there is one, and the renewal otherwise** — two
+         different dates asked of two different fields, so a plan that ends
+         before its period does cannot be described as renewing. */
+      const ends = plan.endsAt === null ? null : readableDate(plan.endsAt);
       return {
         headline: `${plan.tierName} — ${plan.used} of ${plan.limit} articles this month`,
-        detail: plan.cancelling
-          ? `Cancelled: this plan runs until ${when ?? "the end of the period"}, and then the ` +
-            "account goes back to the free allowance. Nothing you have added is affected."
-          : `The allowance starts again on ${when ?? "your renewal date"}.`,
+        detail:
+          plan.endsAt !== null
+            ? /* **Says the date, and then says what does not change.** The
+                 promise this product makes is that reading what you have
+                 already added is never gated (docs/project/vision.md), so the
+                 sentence a cancelling reader most needs is the second one. */
+              `Your plan ends on ${ends ?? "the end of the period"}, and the account then goes ` +
+              "back to the free allowance. Everything you have added stays where it is, and " +
+              "reading is never limited."
+            : `The allowance starts again on ${readableDate(plan.periodEnd) ?? "your renewal date"}.`,
       };
     }
   }

@@ -21,7 +21,13 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { describeAmounts, describePlan, formatAmount, readableDate } from "../src/billing-plan.js";
+import {
+  describeAmounts,
+  describePlan,
+  formatAmount,
+  planEndsAt,
+  readableDate,
+} from "../src/billing-plan.js";
 import type { ReaderPlan } from "../src/billing-plan.js";
 import { QUOTA_CODES, codeOfMessage, ingestQuotaReached, isQuotaRefusal } from "../src/messages.js";
 import { BILLING_NOT_AVAILABLE, BILLING_UNREACHABLE, NOTHING_TO_MANAGE } from "../src/messages.js";
@@ -96,7 +102,7 @@ describe("the other plan states", () => {
       limit: 20,
       used: 3,
       periodEnd: "2026-10-03T11:22:33.000Z",
-      cancelling: false,
+      endsAt: null,
     });
     expect(words).toContain("Spideryarn Reader");
     expect(words).toContain("3 of 20");
@@ -104,10 +110,11 @@ describe("the other plan states", () => {
     expect(words).toMatch(/starts again/i);
   });
 
-  it("does not say a cancelled subscription renews", () => {
-    /* The claim that would be false. `cancel_at_period_end` is a column and the
-       period end is the same date either way, so the only thing separating
-       "starts again on the 3rd" from "runs out on the 3rd" is this branch. */
+  it("does not say a cancelled subscription renews — it names the day it ends", () => {
+    /* The claim that would be false, and the one the reader was never told:
+       until 2026-09-03 the only input was `cancel_at_period_end`, which a
+       cancellation through the hosted Portal leaves `false`. See `planEndsAt`
+       and docs/project/billing.md § *The first live sale*. */
     const words = rendered({
       kind: "paid",
       tierId: "reader",
@@ -115,11 +122,36 @@ describe("the other plan states", () => {
       limit: 20,
       used: 3,
       periodEnd: "2026-10-03T11:22:33.000Z",
-      cancelling: true,
+      endsAt: "2026-10-03T11:22:33.000Z",
     });
     expect(words).not.toMatch(/starts again/i);
-    expect(words).toMatch(/cancelled/i);
-    expect(words).toContain("3 October 2026");
+    expect(words).toMatch(/ends on 3 October 2026/);
+    /* **And it does not leave them thinking they lose their library.** The
+       product's promise is that reading what you have already added is never
+       gated, and a cancellation notice is precisely where somebody fears
+       otherwise. */
+    expect(words).toMatch(/everything you have added stays/i);
+    expect(words).toMatch(/reading is never limited/i);
+  });
+
+  /**
+   * **An ending that is not the period end.** Stripe permits `cancel_at` at any
+   * future moment, so the two dates can differ — and only one of them is true.
+   * A version that reached for `periodEnd` whenever it saw a cancellation would
+   * pass every other case in this file and name the wrong day here.
+   */
+  it("names the ending's own date rather than the renewal date", () => {
+    const words = rendered({
+      kind: "paid",
+      tierId: "reader",
+      tierName: "Spideryarn Reader",
+      limit: 20,
+      used: 3,
+      periodEnd: "2026-10-03T11:22:33.000Z",
+      endsAt: "2026-11-17T09:00:00.000Z",
+    });
+    expect(words).toContain("17 November 2026");
+    expect(words).not.toContain("3 October 2026");
   });
 
   it("says an administrator has no limit rather than showing them a count", () => {
@@ -139,6 +171,56 @@ describe("the other plan states", () => {
   it("says nothing is metered when the deployment has no Postgres", () => {
     const words = rendered({ kind: "off" });
     expect(words).toMatch(/nothing is metered/i);
+  });
+});
+
+/**
+ * **The one place two Stripe facts become one answer**, and the arithmetic the
+ * live bug of 2026-09-03 got wrong by never doing it.
+ *
+ * Cancelling through the hosted Customer Portal sets `cancel_at` and leaves
+ * `cancel_at_period_end` at `false`; cancelling through the API does the
+ * reverse. Everything downstream reads only what comes out of here, so these
+ * four rows are the whole contract.
+ */
+describe("when a plan ends", () => {
+  const PERIOD_END = new Date("2026-10-03T11:37:09.000Z");
+  const CANCEL_AT = new Date("2026-11-17T09:00:00.000Z");
+
+  it("takes the timestamp when the Portal left the boolean false", () => {
+    /* The live payload's shape exactly, and the case that was silently missed. */
+    expect(
+      planEndsAt({ cancelAt: PERIOD_END, cancelAtPeriodEnd: false, currentPeriodEnd: PERIOD_END }),
+    ).toEqual(PERIOD_END);
+  });
+
+  it("falls back to the period end when only the old boolean says so", () => {
+    /* An API cancellation, which is the shape every fixture used to have. */
+    expect(
+      planEndsAt({ cancelAt: null, cancelAtPeriodEnd: true, currentPeriodEnd: PERIOD_END }),
+    ).toEqual(PERIOD_END);
+  });
+
+  it("prefers the timestamp over the period end when both say something", () => {
+    /* Because a date is an answer and a boolean is only a claim about one —
+       and Stripe permits an ending that is not the period end. */
+    expect(
+      planEndsAt({ cancelAt: CANCEL_AT, cancelAtPeriodEnd: true, currentPeriodEnd: PERIOD_END }),
+    ).toEqual(CANCEL_AT);
+  });
+
+  it("is null when nothing is scheduled to end, even with a period end sitting there", () => {
+    /* The direction that costs money the other way: a renewing subscriber told
+       their plan is ending is a cancellation we talked them into. */
+    expect(
+      planEndsAt({ cancelAt: null, cancelAtPeriodEnd: false, currentPeriodEnd: PERIOD_END }),
+    ).toBeNull();
+  });
+
+  it("says null rather than inventing a date when the boolean has no period to point at", () => {
+    expect(
+      planEndsAt({ cancelAt: null, cancelAtPeriodEnd: true, currentPeriodEnd: null }),
+    ).toBeNull();
   });
 });
 

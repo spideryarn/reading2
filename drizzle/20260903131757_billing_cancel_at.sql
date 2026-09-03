@@ -1,0 +1,1 @@
+ALTER TABLE "spideryarn"."billing_accounts" ADD COLUMN "cancel_at" timestamp with time zone;

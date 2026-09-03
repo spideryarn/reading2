@@ -3886,6 +3886,23 @@ export const billingAccounts = spideryarn.table(
     /** Cancelled, but paid up until the period ends — still entitled until then. */
     cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
     /**
+     * When Stripe will end the subscription, when an ending is scheduled.
+     *
+     * **Beside the boolean rather than instead of it**, because they are two
+     * raw Stripe facts and neither implies the other: a cancellation through
+     * the hosted Customer Portal sets this and leaves `cancel_at_period_end`
+     * at `false`, which is how a real cancellation went untold on 2026-09-03
+     * (docs/project/billing.md § *The first live sale*). Dropping the boolean
+     * would buy nothing and lose the record of what Stripe actually said.
+     *
+     * A timestamp rather than a second boolean because *when* is the thing the
+     * reader is owed — docs/project/sql.md. Entitlement never reads it: a
+     * subscription scheduled to end is `active` and entitled until it does.
+     * `planEndsAt` (src/billing-plan.ts) turns it and the boolean into the one
+     * date `/profile` shows.
+     */
+    cancelAt: timestamp("cancel_at", { withTimezone: true }),
+    /**
      * Which side of Stripe's test/live divide this row came from.
      *
      * Stored rather than inferred so that a row written by a misconfigured

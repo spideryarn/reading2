@@ -298,39 +298,104 @@ consequences and the statement descriptor recorded there.
 **Three: [Adaptive Pricing](#adaptive-pricing-and-why-a-london-customer-paid-euros) charged a
 British customer in euros**, because he was in Greece.
 
-**Four: we do not notice a cancellation** — below, because it is a live bug rather than a fact.
+**Four: a cancellation is expressed as a timestamp, and we were reading a boolean** — below. It was
+a live bug for a few hours on 2026-09-03 and is fixed; the payload is kept because it is the only
+one of its kind we have.
+
+### How Stripe says a subscription is ending
+
+Greg cancelled the live subscription through the Portal on 2026-09-03. Stripe expressed it as a
+**`cancel_at` timestamp** and left the old boolean alone:
+
+```
+"status": "active",
+"cancel_at": 1791027429,       // 2026-10-03 11:37 UTC, the period end
+"canceled_at": 1788435966,     // when the reader pressed cancel
+"cancel_at_period_end": false, // <-- still false
+"cancellation_details": { "reason": "cancellation_requested" }
+```
+
+[`src/billing/subscription.ts`](../../src/billing/subscription.ts) read only
+`cancel_at_period_end === true`, so the sync stored `false` and `/profile` went on saying the plan
+renews. Verified against the production row after the webhook had run: Stripe said cancelled, we
+said nothing.
+
+**What the code does now.** Both raw facts are read and both are stored — `cancel_at` is a nullable
+timestamp column on `billing_accounts` beside `cancel_at_period_end`, because neither implies the
+other: the hosted Portal writes the timestamp, an API cancellation writes the boolean. **They are
+turned into one answer in exactly one place**, `planEndsAt` in
+[`src/billing-plan.ts`](../../src/billing-plan.ts):
+
+```
+endsAt = cancelAt ?? (cancelAtPeriodEnd ? currentPeriodEnd : null)
+```
+
+and it is that single date — not the two flags — that
+[`src/billing/summary.ts`](../../src/billing/summary.ts) puts on the wire and
+[`BillingSection.tsx`](../../src/web/BillingSection.tsx) draws, as *"Your plan ends on 3 October
+2026"*. Two independently-interpreted cancellation flags reaching the browser is how a page and a
+route come to disagree, which would be this same bug a second time (GPT Sol, 2026-09-03). Note that
+`cancel_at` is **not always the period end** — Stripe permits an ending scheduled for any future
+moment — so the two dates are kept apart: `periodEnd` is the renewal and `endsAt` is the ending.
+
+**Entitlement did not move, and must not.** The subscription stays `active` until the period ends,
+which is exactly what we grant; a scheduled ending is a fact about the future and entitlement is a
+fact about now. `tests/billing-admission.test.ts` § *a cancellation that has not happened yet takes
+nothing away* pins it at the wall, in both cancellation shapes, with the mirror case that a period
+genuinely over is still refused.
+
+**`cancel_at` is written on every sync, including to null** — [`sync.ts`](../../src/billing/sync.ts)
+writes every field every time, so a reader who cancels and then changes their mind in the Portal
+stops being told their plan ends.
+
+The class is the one this file keeps meeting: **a Stripe field whose meaning drifted under a pinned
+API version**, the same shape as `current_period_start` moving to the subscription item.
+[silent-success.md](../reusable/silent-success.md) — the boolean is still there, still parses, and
+still means something, just not the thing the code wanted. It survived a green suite because every
+fixture had been written from the same assumption as the code; the regression test is built from the
+payload above rather than from a boolean.
 
 > [!WARNING]
-> **A cancelled subscription still reads as an ordinary active one, so `/profile` never says the
-> plan is ending.** Found by cancelling the live subscription through the Portal on 2026-09-03.
->
-> Stripe now expresses *cancel at period end* as a **`cancel_at` timestamp**, and leaves the old
-> boolean alone. The real subscription came back as:
->
-> ```
-> "status": "active",
-> "cancel_at": 1791027429,       // 2026-10-03, the period end
-> "canceled_at": 1788435966,     // when the reader pressed cancel
-> "cancel_at_period_end": false, // <-- still false
-> "cancellation_details": { "reason": "cancellation_requested" }
-> ```
->
-> [`src/billing/subscription.ts`](../../src/billing/subscription.ts) reads
-> `subscription.cancel_at_period_end === true`, so the sync stored `false`, and
-> [`src/billing/summary.ts`](../../src/billing/summary.ts)'s `cancelling` is therefore `false` too.
-> Verified against the production row after the webhook had run: Stripe said cancelled, we said
-> nothing. The reader is told they are on Reader, with no hint it stops on 3 October — and the first
-> they would learn of it is the day their allowance goes.
->
-> **Entitlement itself is not wrong**: the subscription stays `active` until the period ends, which
-> is exactly what we grant. Only the telling is broken. The fix is to derive `cancelling` from
-> `cancel_at` (or `cancellation_details`) as well as the boolean, and it wants a stored timestamp
-> rather than a boolean, since *when* it ends is the thing worth showing. **Not fixed.**
->
-> The class is the one this file keeps meeting: **a Stripe field whose meaning drifted under a
-> pinned API version**, the same shape as `current_period_start` moving to the subscription item.
-> `docs/reusable/silent-success.md` — the boolean is still there, still parses, and still means
-> something, just not the thing the code wants.
+> **The live row predates the column.** `cancel_at` landed after the cancellation webhook had already
+> been delivered, and `/profile` never resyncs from Stripe, so the one live cancelled subscription
+> reads `cancel_at = null` until something syncs that customer again. See
+> [The live row that needs a backfill](#the-live-row-that-needs-a-backfill).
+
+### The live row that needs a backfill
+
+**One production row, and nothing automatic will fix it.** `sub_1UBYxALv4piDbwcbVew6jxqN` was
+cancelled on 2026-09-03; the `customer.subscription.updated` webhook that carried the cancellation
+was delivered and handled *before* `cancel_at` existed as a column, so the row now reads
+`cancel_at = null` under a subscription Stripe has scheduled to end on 3 October. `/profile`
+[never resyncs from Stripe](#what-a-reader-sees), so nobody looking at the page can cause the row to
+catch up.
+
+**The recommendation is to make Stripe tell us again, not to type the date in.** Re-deliver that
+event from the Stripe Dashboard (Developers → Events → the `customer.subscription.updated` for that
+subscription → *Resend*), or make any change to the subscription that Stripe emits an event for.
+`syncSubscriptionFromStripe` then does exactly what it does for everyone else — asks Stripe what is
+true and writes all of it down, this time with a column to put it in.
+
+That is preferred over an `UPDATE … set cancel_at = '2026-10-03T11:37:09Z'` for three reasons, and
+the third is the one that decides it:
+
+1. It goes through the code path this change was made to fix, so a successful backfill is also
+   evidence the fix works against the live account — an `UPDATE` proves only that the column accepts
+   a timestamp.
+2. It writes **every** field, so anything else that has drifted since the last sync is corrected too.
+3. **A hand-typed timestamp is a number we chose, not one Stripe gave us.** Reading `1791027429` off
+   a document and converting it by hand is exactly the sort of step that lands the right value in the
+   wrong row or the wrong value in the right one, on the one production row that has a paying reader
+   attached to it.
+
+A one-row `UPDATE` is the fallback if re-delivery is not available, and it should be run with the
+`where` clause naming `stripe_subscription_id` rather than the owner. Either way it is a write to
+production data on a live subscriber's account, so it is **Greg's call to make and to run** —
+AGENTS.md § *Real data belongs to the reader*. Nothing in this change has run against production.
+
+**Nobody else can be in this state.** The window was the few hours between the cancellation and the
+migration, on an account with one live subscription; every cancellation from now on arrives with the
+column already there.
 
 ## What a reader sees
 
@@ -938,7 +1003,9 @@ any time. See [admin.md](admin.md).
 
 - **Comp subscriptions** for journalists and QA. Until then the only exemption is the hardcoded
   admin check.
-- **Telling a reader their plan is ending**, which the cancellation bug in that section blocks.
+- **Backfilling the one live cancelled row** — see
+  [The live row that needs a backfill](#the-live-row-that-needs-a-backfill). The code is fixed; the
+  row predates the column.
 - **Grandfathered subscribers keep paying and lose their allowance** — the warning under
   [Adding a tier or a currency](#adding-a-tier-or-a-currency). Nobody is grandfathered yet, so this
   is a trap rather than a live fault, and changing a price is what springs it.
