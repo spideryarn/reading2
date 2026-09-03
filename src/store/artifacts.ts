@@ -539,11 +539,15 @@ export function metaRawSha256(row: {
  * What `revision_step_runs.implementation_version` says for a row this seam
  * wrote, and it is load-bearing that it is **not** `"imported"`.
  *
- * The importer withdraws inferred rows by deleting everything stamped
- * `imported` whose artefact has gone (src/store/import.ts), scoped that way
- * precisely so that *a migration tool cannot delete a pipeline record*. A row
- * from here carrying that marker would be inside the blast radius of every
+ * The importer withdrew inferred rows by deleting everything stamped `imported`
+ * whose artefact had gone (src/store/import.ts, deleted 2026-09-01), scoped that
+ * way precisely so that *a migration tool cannot delete a pipeline record*. A row
+ * from here carrying that marker would have been inside the blast radius of every
  * `npm run db:import`.
+ *
+ * The importer is gone and nothing in `src/` writes `"imported"` any more. The
+ * distinction is kept because it is the reason this constant has a name and a
+ * comment rather than being a bare string, and the next bulk tool inherits it.
  *
  * There is no real implementation version to write yet — no step declares one
  * (see `StepStamp.implementationVersion` in artifacts.ts) — so this says where

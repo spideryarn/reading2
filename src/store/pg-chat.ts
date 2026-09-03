@@ -64,7 +64,7 @@ import { and, asc, eq, gt, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import { titleFrom, withEdit, withRetry, withSpokenTurn, withTurn } from "../chat.js";
 import { getDb } from "../db/client.js";
-import { articles, chatMessages, chatThreads } from "../db/schema.js";
+import { chatMessages, chatThreads } from "../db/schema.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import type {
@@ -78,7 +78,8 @@ import type {
 import { isThreadKind } from "../types.js";
 import type { ChatStore, SweepOptions } from "./contracts.js";
 import { CHAT_SWEPT, requireTail } from "./fs.js";
-import { notFound, ownedSlug, requireSlug } from "./pg.js";
+import { READ_COMMITTED } from "./isolation.js";
+import { articleIdForOwned, lockArticleRow } from "./pg.js";
 
 const logger = log("store");
 
@@ -100,19 +101,6 @@ const DB_NOW = sql`clock_timestamp()` as unknown as Date;
 
 type Db = ReturnType<typeof getDb>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
-
-/** The article's uuid, or a tagged 404 — the same shape src/api.ts throws. */
-async function articleIdFor(slug: string, db: Db | Tx = getDb()): Promise<string> {
-  requireSlug(slug);
-  const rows = await db
-    .select({ id: articles.id })
-    .from(articles)
-    .where(ownedSlug(slug))
-    .limit(1);
-  const found = rows[0];
-  if (!found) throw notFound(slug);
-  return found.id;
-}
 
 /** A message as the client sees it. Absent, not null — `exactOptionalPropertyTypes`. */
 function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
@@ -239,11 +227,6 @@ async function threadsFor(articleId: string, db: Db | Tx = getDb()): Promise<Cha
   }));
 }
 
-/** Take the article row, so nothing else in this article writes until we commit. */
-async function lockArticle(tx: Tx, articleId: string): Promise<void> {
-  await tx.select({ id: articles.id }).from(articles).where(eq(articles.id, articleId)).for("update");
-}
-
 /**
  * One message, as a row.
  *
@@ -331,17 +314,17 @@ async function upsertThread(tx: Tx, articleId: string, thread: ChatThread): Prom
 
 export const pgChatStore: ChatStore = {
   async load(slug: string): Promise<ChatThread[]> {
-    return threadsFor(await articleIdFor(slug));
+    return threadsFor(await articleIdForOwned(slug));
   },
 
   async begin(slug, turn, now = () => new Date().toISOString()) {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     const at = now();
     const attempt = randomUUID();
 
     const out = await db.transaction(async (tx) => {
-      await lockArticle(tx, articleId);
+      await lockArticleRow(tx, articleId);
       const threads = await threadsFor(articleId, tx);
       const { thread, user, reply } = withTurn(threads, turn, at);
 
@@ -359,7 +342,7 @@ export const pgChatStore: ChatStore = {
           messageRow(articleId, thread.id, reply, base + 1, attempt),
         ]);
       return { thread, user, reply, attempt };
-    });
+    }, READ_COMMITTED);
 
     logger.info(
       { slug, threadId: out.thread.id, messageId: out.reply.id, turns: out.thread.messages.length },
@@ -385,11 +368,11 @@ export const pgChatStore: ChatStore = {
    */
   async appendSpoken(slug, spoken, now = () => new Date().toISOString()) {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     const at = now();
 
     const out = await db.transaction(async (tx) => {
-      await lockArticle(tx, articleId);
+      await lockArticleRow(tx, articleId);
       const threads = await threadsFor(articleId, tx);
       const { thread, user, reply } = withSpokenTurn(threads, spoken, at);
 
@@ -402,7 +385,7 @@ export const pgChatStore: ChatStore = {
           messageRow(articleId, thread.id, reply, base + 1),
         ]);
       return { thread, user, reply, attempt: undefined };
-    });
+    }, READ_COMMITTED);
 
     logger.info(
       {
@@ -419,7 +402,7 @@ export const pgChatStore: ChatStore = {
 
   async finish(slug, threadId, messageId, patch, opts = {}): Promise<void> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     const at = new Date((opts.now ?? (() => new Date().toISOString()))());
 
     /* **Refused without an attempt, rather than falling back to identity.**
@@ -438,7 +421,7 @@ export const pgChatStore: ChatStore = {
     }
 
     await db.transaction(async (tx) => {
-      await lockArticle(tx, articleId);
+      await lockArticleRow(tx, articleId);
       /* **The thread's clock moves whether or not the message matched.**
 
          The filesystem does this unconditionally — its `map` rebuilds the
@@ -480,19 +463,19 @@ export const pgChatStore: ChatStore = {
             eq(chatMessages.attemptId, attempt),
           ),
         );
-    });
+    }, READ_COMMITTED);
 
     if (patch.status === "error") logger.warn({ slug, threadId, messageId }, "chat answer failed");
   },
 
   async retry(slug, threadId, messageId, now = () => new Date().toISOString()) {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     const at = now();
     const attempt = randomUUID();
 
     const out = await db.transaction(async (tx) => {
-      await lockArticle(tx, articleId);
+      await lockArticleRow(tx, articleId);
       const threads = await threadsFor(articleId, tx);
       // Throws ChatConflict from inside the transaction, on purpose. See header.
       const { thread, reply, user } = withRetry(threads, threadId, messageId, at);
@@ -542,7 +525,7 @@ export const pgChatStore: ChatStore = {
           ),
         );
       return { thread, reply, user, attempt };
-    });
+    }, READ_COMMITTED);
 
     logger.info(
       { slug, threadId: out.thread.id, messageId: out.reply.id, turns: out.thread.messages.length },
@@ -553,12 +536,12 @@ export const pgChatStore: ChatStore = {
 
   async edit(slug, threadId, messageId, question, opts = {}) {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     const at = (opts.now ?? (() => new Date().toISOString()))();
     const attempt = randomUUID();
 
     const out = await db.transaction(async (tx) => {
-      await lockArticle(tx, articleId);
+      await lockArticleRow(tx, articleId);
       const threads = await threadsFor(articleId, tx);
       /* Checked against the list read INSIDE the lock. Checking a copy read
          earlier would be checking what the client saw against what the client
@@ -613,7 +596,7 @@ export const pgChatStore: ChatStore = {
         .insert(chatMessages)
         .values(messageRow(articleId, thread.id, reply, kept + 1, attempt));
       return { thread, user, reply, discarded, attempt };
-    });
+    }, READ_COMMITTED);
 
     logger.info(
       {
@@ -630,7 +613,7 @@ export const pgChatStore: ChatStore = {
 
   async rename(slug: string, threadId: string, title: string): Promise<ChatThread[]> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     /* **`updated_at` is deliberately not touched.** The file does not touch it,
        and the panel sorts by it — so "bump the clock on every write", which is
        a habit rather than a decision, would jump a renamed conversation to the
@@ -640,28 +623,28 @@ export const pgChatStore: ChatStore = {
        under the lock and upserts what it read. Without this, a rename that
        lands in the middle of a turn is written back to the old name. */
     await db.transaction(async (tx) => {
-      await lockArticle(tx, articleId);
+      await lockArticleRow(tx, articleId);
       await tx
         .update(chatThreads)
         .set({ title: titleFrom(title) })
         .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, threadId)));
-    });
+    }, READ_COMMITTED);
     logger.info({ slug, threadId }, "chat thread renamed");
     return threadsFor(articleId);
   },
 
   async remove(slug: string, threadId: string): Promise<ChatThread[]> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     // Messages go with it: `chat_messages_thread_fk` is `on delete cascade`.
     // Under the lock for the same reason as `rename`: a `begin` in flight would
     // otherwise re-create the thread it just read.
     await db.transaction(async (tx) => {
-      await lockArticle(tx, articleId);
+      await lockArticleRow(tx, articleId);
       await tx
         .delete(chatThreads)
         .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, threadId)));
-    });
+    }, READ_COMMITTED);
     const remaining = await threadsFor(articleId);
     logger.info({ slug, threadId, remaining: remaining.length }, "chat thread deleted");
     return remaining;
@@ -669,7 +652,7 @@ export const pgChatStore: ChatStore = {
 
   async sweepPending(slug: string, opts: SweepOptions): Promise<ChatThread[]> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     const cutoff = new Date(Date.now() - opts.graceMs);
 
     /* No "is anything stale?" pre-check. The file has one to avoid rewriting

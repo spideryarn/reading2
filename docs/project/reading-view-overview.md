@@ -44,6 +44,8 @@ of compression, down the page for position and across for detail. Read that firs
 
 - **[web-client.md](web-client.md)** — where the client code lives, how the middle became a slot,
   what Tailwind and shadcn may touch, dark mode, and the full list of constraints.
+- **[new-mode.md](new-mode.md)** — the one checklist for adding a mode: the tables the compiler
+  checks, then the residue it does not, for the client and for a generated artefact.
 
 ### The article itself
 

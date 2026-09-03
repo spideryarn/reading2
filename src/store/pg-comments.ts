@@ -41,13 +41,14 @@ import {
 } from "../comments.js";
 import { getDb } from "../db/client.js";
 import { EXPLAIN_TIMEOUT_MS } from "../explain.js";
-import { articles, comments as commentsTable } from "../db/schema.js";
+import { comments as commentsTable } from "../db/schema.js";
 import { isSpideryarnId, mintUniqueId } from "../ids.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import type { Comment } from "../types.js";
 import type { CommentStore } from "./contracts.js";
-import { ownedSlug } from "./pg.js";
+import { READ_COMMITTED } from "./isolation.js";
+import { articleIdForOwned } from "./pg.js";
 
 const logger = log("store");
 
@@ -79,21 +80,6 @@ const logger = log("store");
  * own clock had not started. GPT Sol, 2026-09-01.
  */
 export const COMMENT_ANSWER_LEASE_MS = EXPLAIN_TIMEOUT_MS + 30_000;
-
-/** The article's uuid, or a tagged 404 — the same shape src/api.ts throws. */
-async function articleIdFor(slug: string): Promise<string> {
-  const db = getDb();
-  const rows = await db
-    .select({ id: articles.id })
-    .from(articles)
-    .where(ownedSlug(slug))
-    .limit(1);
-  const found = rows[0];
-  if (!found) {
-    throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
-  }
-  return found.id;
-}
 
 /** A row as the client sees it. Absent, not null — `exactOptionalPropertyTypes`. */
 function toComment(row: typeof commentsTable.$inferSelect): Comment {
@@ -140,7 +126,7 @@ async function listFor(articleId: string): Promise<Comment[]> {
 
 export const pgCommentStore: CommentStore = {
   async load(slug: string): Promise<Comment[]> {
-    return listFor(await articleIdFor(slug));
+    return listFor(await articleIdForOwned(slug));
   },
 
   /**
@@ -201,7 +187,7 @@ export const pgCommentStore: CommentStore = {
    */
   async create(slug: string, input: NewComment): Promise<Comment> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     const supplied = input.id !== undefined && isSpideryarnId(input.id) ? input.id : undefined;
 
     /* The named allowlist creation is allowed to write. Every answer column is
@@ -298,7 +284,7 @@ export const pgCommentStore: CommentStore = {
             .from(commentsTable)
             .where(eq(commentsTable.articleId, articleId));
           return write(mintUniqueId(new Set(takenRows.map((r) => r.id))), tx as typeof db);
-        });
+        }, READ_COMMITTED);
         /* `undefined` means the insert conflicted on an id we had just proved
            was free, which is the collision the retry below is for. */
         if (!stored) {
@@ -343,7 +329,7 @@ export const pgCommentStore: CommentStore = {
     id: string,
   ): Promise<{ comment: Comment; attempt: string }> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     const [row] = await db
       .update(commentsTable)
       .set({
@@ -452,7 +438,7 @@ export const pgCommentStore: CommentStore = {
   /** The reader edited their words. `body` and `updated_at`, and nothing else. */
   async patchBody(slug: string, id: string, body: string | null): Promise<Comment> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     const [row] = await db
       .update(commentsTable)
       .set({ body, updatedAt: new Date() })
@@ -483,7 +469,7 @@ export const pgCommentStore: CommentStore = {
    */
   async patchMark(slug: string, id: string, mark: MarkPatch): Promise<Comment> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     const [row] = await db
       .update(commentsTable)
       .set({ criterionId: mark.criterionId, valence: mark.valence, updatedAt: new Date() })
@@ -515,7 +501,7 @@ export const pgCommentStore: CommentStore = {
     expect: { blockId: string; quote: string; start: number },
   ): Promise<Comment> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     /* The anchor and `status` are in the WHERE, not read and checked first:
        `sourceCommentId` comes off a request and on its own names any comment
        this reader owns on this article, so the link has to be a compare-and-set
@@ -610,7 +596,7 @@ export const pgCommentStore: CommentStore = {
       );
     }
 
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
 
     /* `id` is deliberately not settable. src/comments.ts spreads `{ ...c,
        ...patch, id: c.id }` — the trailing `id` puts it back — so a patch
@@ -684,7 +670,7 @@ export const pgCommentStore: CommentStore = {
 
   async remove(slug: string, id: string): Promise<Comment[]> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     await db
       .delete(commentsTable)
       .where(and(eq(commentsTable.articleId, articleId), eq(commentsTable.id, id)));
@@ -723,7 +709,7 @@ export const pgCommentStore: CommentStore = {
    */
   async sweepPending(slug: string, keep: ReadonlySet<string>): Promise<Comment[]> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     const swept = await db
       .update(commentsTable)
       /* The attempt is declared dead, so its fence goes with it — otherwise the
@@ -762,7 +748,7 @@ export const pgCommentStore: CommentStore = {
     const rows = await getDb()
       .select({ id: commentsTable.id })
       .from(commentsTable)
-      .where(eq(commentsTable.articleId, await articleIdFor(slug)));
+      .where(eq(commentsTable.articleId, await articleIdForOwned(slug)));
     return rows.length;
   },
 };

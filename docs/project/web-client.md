@@ -107,47 +107,8 @@ value in `MODES`, a component, and a width; it is deliberately not a new negotia
 
 ## Adding a mode
 
-> We keep adding new modes because we're experimenting with what feels good. We want to make it
-> easy/consistent/robust/reusable to add new modes.
->
-> — Greg, 2026-09-02
-
-What a mode *is* is [reading-view-overview.md](reading-view-overview.md); the reasoning, the measured
-counts, and the shapes deliberately **rejected** — a mode registry, a sixteen-prop `<ModeBands>`, a
-`Record<Mode, BandSpec | null>` — are in
-[260902o-adding-a-mode.md](../plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md).
-Read its *Rejected* list before proposing a registry again.
-
-**The vocabulary is `MODES` in [`src/modes.ts`](../../src/modes.ts), and the compiler asks for the
-rest.** A fourteenth word there is red until it has a row in each of these totals:
-
-| Table | Where |
-|---|---|
-| `MODE_LABEL` | [`src/title-text.ts`](../../src/title-text.ts) — the only place a mode is spelled for a person |
-| `OWNER_MODE_NOTE` | [`src/messages.ts`](../../src/messages.ts) |
-| `MODES_UI`, via `ModesMissingFromDock` | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) — an ordered array, because the order is Greg's; the type check stands in for the `Record` |
-| `POLICY` | [`src/web/visitor.ts`](../../src/web/visitor.ts) — what a visitor may see; there is no fall-through any more, a missing row is a typecheck error |
-| `BAND_SAYS` | [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) |
-
-**Then the residue, which is why this section exists** — what tells you, in italics:
-
-- **The band branch**: the `mode === "…"` if-chain near the bottom of `Reader` in
-  [`App.tsx`](../../src/web/App.tsx), whose own header comment records why it is still a chain and
-  not a table. *Nothing; this list.*
-- **The mode's URL params**, [`params.ts`](../../src/web/params.ts) — [url-state.md](url-state.md).
-  *Nothing.*
-- **A resolver in [`search-hits.ts`](../../src/web/search-hits.ts)** if the mode marks passages;
-  `Found` is the one currency. *Nothing.*
-- **A read hook** shaped like [`useIdeas.ts`](../../src/web/useIdeas.ts) — ordering from
-  [`useOrderedRead.ts`](../../src/web/useOrderedRead.ts), the job from
-  [`useStepJob.ts`](../../src/web/useStepJob.ts), rather than a ninth copy of either. *Nothing.*
-- **The band's chrome**: the header markup is `.band-head`, and the scroller under it is documented
-  in the same place — [`styles.css`](../../src/web/styles.css) § mode band. *Nothing.*
-- **`CACHEABLE`** in [`lib/api.ts`](../../src/web/lib/api.ts), if the mode has a GET.
-  *[`tests/cacheable-covers-artefact-routes.test.ts`](../../tests/cacheable-covers-artefact-routes.test.ts)*,
-  which derives the list rather than repeating it.
-
-The server half is [architecture.md § Conventions](architecture.md#conventions).
+The checklist lives in **[new-mode.md](new-mode.md)** since 2026-09-03 — both halves, the client
+and the artefact, in one place at Greg's request. This heading stays so links to it keep working.
 
 ## Tailwind and shadcn components
 

@@ -1,4 +1,4 @@
-# Doc edits from the sweep that want Greg's approval
+# Doc edits from the sweep — proposed, approved, applied
 
 Companion to [260903a-improve-the-codebase-sweep.md](260903a-improve-the-codebase-sweep.md).
 
@@ -10,11 +10,17 @@ unattended, so the sweep split its doc edits in two rather than guessing:
 - **Applied**, because CLAUDE.md also says *"Signposting is not a rule"* and *"update the docs as you
   go"*: factual corrections and table rows in entry-point docs, where the change tracks a code change
   or fixes a number. Listed below so you can see exactly what moved, but already committed.
-- **Not applied, awaiting approval**: anything that adds or changes **guidance**. Two of those.
+- **Held back for approval**: anything that adds or changes **guidance**. Three of those, and Greg
+  approved all three on 2026-09-03. They are recorded below with the before and after they were
+  approved from, rather than rewritten into the past tense — the point of this file is that the
+  proposal and the change are the same text.
 
 ---
 
-## Awaiting approval
+## Approved by Greg, 2026-09-03, and applied
+
+All three landed as written below. The only thing still open is the pre-commit hook under item 2 —
+see the note there.
 
 ### 1. `docs/reusable/rename-or-move.md` — a new section
 
@@ -74,10 +80,17 @@ one command*:
 > somebody who already knew that story. The second is the whole recipe, and it is one command so
 > there is no gap for a peer to land in.
 
-**The alternative worth considering instead**, and it is stronger: install it as a real
+**Still open — the alternative worth considering instead**, and it is stronger: install it as a real
 `pre-commit` hook. `.git/hooks/` is currently empty, so there is no hook infrastructure to fit into
 and adding some is a decision rather than a tidy-up — which is why this run did not make it. A hook
 catches the agent who did not read the recipe, which is the population the guard exists for.
+
+**Deliberately not done under the 2026-09-03 approval**, which covered the three doc edits. Two
+reasons to decide it separately: linked worktrees share one `.git/hooks/`, so installing one changes
+every agent's commits in every tree at once rather than just this one; and hooks are not in version
+control, so it would live on this box and no other, which makes it the kind of change
+[hetzner-remote-server-box.md § A change to the box is a change to a file](../project/hetzner-remote-server-box.md#a-change-to-the-box-is-a-change-to-a-file)
+says to ask about — now, going forwards, or both.
 
 ### 3. `docs/reusable/improve-the-codebase.md` — one sentence, from this run's own failures
 

@@ -1,6 +1,6 @@
 /**
- * **The quiz stage's pure half** — ordering, band quotas, and what validation
- * throws away. No network, no model.
+ * **The quiz stage's pure half** — ordering, the band spread, and what
+ * validation throws away. No network, no model.
  *
  * Every case here is a way the stage would be wrong *quietly*. A quiz that
  * comes back with twelve plausible questions about nothing in particular looks
@@ -11,8 +11,8 @@
  *   and a test asserting the behaviour it produces, which is the opposite of
  *   what Greg asked for. See `puts an easy peripheral question before a hard
  *   central one` below — it is the assertion that goes red on the wrong rule;
- * - **the quotas**, because a model asked nicely for a spread does not give one
- *   (the spike measured `ease` never leaving 2–4 across 24 questions);
+ * - **the spread**, because a model asked nicely for one does not give it (the
+ *   spike measured `ease` never leaving 2–4 across 24 questions);
  * - **the drops**, because a dropped question is indistinguishable from one the
  *   model chose not to set;
  * - **the stamp field names**, because getting those wrong makes every quiz
@@ -32,11 +32,11 @@ import {
   MAX_QUESTIONS,
   PROMPT_VERSION,
   QUIZ_SYSTEM,
-  bandQuota,
+  SPREAD_FROM,
   buildQuiz,
   emptyDropped,
+  missingBandEnds,
   orderQuestions,
-  quotaShortfall,
   validateEvidence,
 } from "../src/quiz.js";
 import { GRADE_WORDS, gradeWords, QUIZ_MARK_SYSTEM } from "../src/quiz-mark.js";
@@ -150,54 +150,120 @@ describe("the order the reader meets the questions in", () => {
   });
 });
 
-describe("the band quota", () => {
+describe("both ends of the band scale", () => {
   /* Asking nicely does not work — the spike's two runs produced 24 questions
-     and `ease` never left 2–4 on either. So the batch is *required* to use both
-     ends, and a batch that does not is a failed generation.
+     and `ease` never left 2–4 on either. So a batch is *required* to use both
+     ends, and one that uses neither is a failed generation.
 
-     The quota scales with the batch, which is the decision the plan left open:
-     "at least three easy and three hard" is right for a full twelve and is an
-     instruction to pad a piece that only supports four questions. See
-     `bandQuota` in src/quiz.ts. */
-  it("wants three of each end in a full batch", () => {
-    expect(bandQuota(MAX_QUESTIONS)).toBe(3);
+     **What "required" means changed on 2026-09-03.** It used to be a
+     proportion, `min(3, floor(n / 4))`, and the tests that pinned that
+     arithmetic are gone with it — see `missingBandEnds` in src/quiz.ts and
+     docs/plans/260903c-fix-quiz-build-band-spread-failure-and-lost-quiz-answers.md
+     for why the proportion was the wrong thing to be measuring. The two things
+     those tests were protecting survive here: a batch too short to carry a
+     spread is asked for nothing, and a full batch that came back flat fails.
+     The third — "three of each end of a full twelve" — is now the *prompt's*
+     target rather than the gate's floor, and is pinned in "the generation
+     prompt" below. */
+
+  /**
+   * Every batch size the rule applies to — generated rather than listed,
+   * because a hand-picked list is how the first draft of this block claimed to
+   * cover every gated size while skipping 6, 7, 10 and 11.
+   */
+  const gated = Array.from({ length: MAX_QUESTIONS - SPREAD_FROM + 1 }, (_, i) => SPREAD_FROM + i);
+
+  /** `n` questions, of which one is `easy`, one is `hard`, and the rest medium. */
+  const oneOfEachEnd = (n: number): QuizQuestion[] => [
+    question("spya-easy01", "easy", 4),
+    question("spya-hard01", "hard", 5),
+    ...Array.from({ length: n - 2 }, (_, i) =>
+      question(`spya-med0${String(i).padStart(2, "0")}`, "medium", 3),
+    ),
+  ];
+
+  /** `n` questions with `band` at one end and nothing at the other. */
+  const oneEndOnly = (n: number, band: QuizBand): QuizQuestion[] => [
+    question("spya-end001", band, 4),
+    ...Array.from({ length: n - 1 }, (_, i) =>
+      question(`spya-med0${String(i).padStart(2, "0")}`, "medium", 3),
+    ),
+  ];
+
+  it.each(gated)("is satisfied at %i by one question at each end", (n) => {
+    /* One of each is the whole rule, at every gated size. The batch that failed
+       in production — nine questions, one `hard` — differs from this only in
+       the count, which is exactly the thing that should not have mattered. */
+    expect(missingBandEnds(oneOfEachEnd(n))).toEqual([]);
   });
 
-  it("asks nothing of a batch too short to carry a spread", () => {
-    expect(bandQuota(0)).toBe(0);
-    expect(bandQuota(3)).toBe(0);
+  it.each(gated)("names the missing end at %i when the batch reaches only one", (n) => {
+    expect(missingBandEnds(oneEndOnly(n, "easy"))).toEqual(["hard"]);
+    expect(missingBandEnds(oneEndOnly(n, "hard"))).toEqual(["easy"]);
   });
 
-  it("scales in between rather than jumping", () => {
-    expect(bandQuota(4)).toBe(1);
-    expect(bandQuota(8)).toBe(2);
-    expect(bandQuota(11)).toBe(2);
-  });
-
-  it("reports both ends of a full batch that has neither", () => {
-    const all = Array.from({ length: 12 }, (_, i) =>
+  it("names both ends of a batch that has neither", () => {
+    const flat = Array.from({ length: MAX_QUESTIONS }, (_, i) =>
       question(`spya-med0${String(i).padStart(2, "0")}`, "medium", 3),
     );
-    expect(quotaShortfall(all)).toEqual([
-      { band: "easy", want: 3, have: 0 },
-      { band: "hard", want: 3, have: 0 },
-    ]);
+    expect(missingBandEnds(flat)).toEqual(["easy", "hard"]);
   });
 
-  it("is satisfied by a batch that uses both ends", () => {
-    const spread: QuizQuestion[] = [
-      ...Array.from({ length: 3 }, (_, i) => question(`spya-easy0${i}`, "easy", 4)),
-      ...Array.from({ length: 6 }, (_, i) => question(`spya-med00${i}`, "medium", 3)),
-      ...Array.from({ length: 3 }, (_, i) => question(`spya-hard0${i}`, "hard", 5)),
+  it("asks nothing of a batch one question short of the boundary", () => {
+    /* The exemption side of `SPREAD_FROM`, and the reason it exists: a
+       three-question article is not a failed generation. "Up to twelve, fewer
+       where the article does not support twelve" is the count rule, and a
+       spread rule firing here would turn that ceiling into a floor and so
+       instruct the model to pad. */
+    const short = Array.from({ length: SPREAD_FROM - 1 }, (_, i) =>
+      question(`spya-med0${String(i).padStart(2, "0")}`, "medium", 3),
+    );
+    expect(missingBandEnds(short)).toEqual([]);
+    expect(missingBandEnds([])).toEqual([]);
+    expect(missingBandEnds([question("spya-med001", "medium", 3)])).toEqual([]);
+  });
+
+  it("asks for both ends the moment the batch reaches the boundary", () => {
+    /* The other side of the same line. Both sides are asserted because the
+       boundary is a product decision rather than a fact about arithmetic, and
+       the old rule's boundary fell out of a `floor()` where nobody could see
+       it. */
+    const atBoundary = Array.from({ length: SPREAD_FROM }, (_, i) =>
+      question(`spya-med0${String(i).padStart(2, "0")}`, "medium", 3),
+    );
+    expect(missingBandEnds(atBoundary)).toEqual(["easy", "hard"]);
+  });
+
+  it("builds the batch production rejected: nine questions, one of them hard", () => {
+    /* The reported failure, 2026-09-03. Nine survivors with a single `hard`
+       question were refused because the old quota wanted two — discarding a
+       paid 36-second call over a batch that carries both ends and orders
+       perfectly well. It has to build. */
+    const bands = [
+      "easy",
+      "easy",
+      "easy",
+      "medium",
+      "medium",
+      "medium",
+      "medium",
+      "medium",
+      "hard",
     ];
-    expect(quotaShortfall(spread)).toEqual([]);
-  });
-
-  it("asks nothing of a legitimately short batch", () => {
-    /* A three-question article is not a failed generation. "Up to twelve, fewer
-       where the article does not support twelve" is the count rule, and a quota
-       that fired here would turn it into a floor. */
-    expect(quotaShortfall([question("spya-med001", "medium", 3)])).toEqual([]);
+    const quiz = buildQuiz(
+      {
+        questions: bands.map((band, i) => ({
+          question: `Question number ${i}?`,
+          referenceAnswer: "Because the article says so.",
+          band,
+          value: 3,
+          evidence: [{ blockId: "spya-aaaaaa", quote: "does not make anything actually wet" }],
+        })),
+      },
+      { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped: emptyDropped() },
+    );
+    expect(quiz.questions).toHaveLength(9);
+    expect(quiz.questions.filter((q) => q.band === "hard")).toHaveLength(1);
   });
 
   it("fails the stage rather than writing a full batch with no spread", () => {
@@ -219,7 +285,118 @@ describe("the band quota", () => {
           dropped: emptyDropped(),
         },
       ),
-    ).toThrow(/easy/);
+    ).toThrow(/all came out at the same middling level/);
+  });
+
+  /**
+   * The message this throws is rendered verbatim to the reader in red today
+   * (src/jobs.ts → src/web/JobProgress.tsx), so it is held to copy.md's rules
+   * until stage 2 splits the two audiences at that seam.
+   *
+   * `failing` returns the message rather than asserting on it, so each case
+   * below can say what it is protecting.
+   */
+  const failing = (
+    bands: readonly string[],
+    quote = "does not make anything actually wet",
+  ): string => {
+    const questions = bands.map((band, i) => ({
+      question: `Question number ${i}?`,
+      referenceAnswer: "Because the article says so.",
+      band,
+      value: 3,
+      evidence: [{ blockId: "spya-aaaaaa", quote }],
+    }));
+    try {
+      buildQuiz(
+        { questions },
+        { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped: emptyDropped() },
+      );
+    } catch (err) {
+      return (err as Error).message;
+    }
+    throw new Error("the batch was supposed to be refused");
+  };
+
+  /** `n` bands: `band` once, then medium. */
+  const oneEndOnlyBands = (band: string, n: number): string[] =>
+    Array.from({ length: n }, (_, i) => (i === 0 ? band : "medium"));
+
+  it("names the end that is missing, and counts what survived rather than what was sent", () => {
+    /* The count is the one GPT Sol reproduced and the reason this test grew a
+       second case. `fresh.length` is survivors, so a message saying the service
+       "wrote" that many is false whenever validation dropped anything — twelve
+       back with seven unanchored reported five written. Both cases below assert
+       the count, and the dropped-heavy one is what makes the wording load-
+       bearing rather than incidental. */
+    const noHard = failing(oneEndOnlyBands("easy", 5));
+    expect(noHard).toContain("5 survived checking");
+    expect(noHard).toContain("no hard one among them");
+
+    const noEasy = failing(oneEndOnlyBands("hard", 7));
+    expect(noEasy).toContain("7 survived checking");
+    expect(noEasy).toContain("no easy one among them");
+
+    /* Twelve sent, seven of them naming a quote the article does not contain,
+       so five survive and the sentence must describe five *survivors*. */
+    const afterDrops = (() => {
+      const questions = Array.from({ length: 12 }, (_, i) => ({
+        question: `Question number ${i}?`,
+        referenceAnswer: "Because the article says so.",
+        band: i === 0 ? "easy" : "medium",
+        value: 3,
+        evidence: [
+          {
+            blockId: "spya-aaaaaa",
+            quote: i < 5 ? "does not make anything actually wet" : "a sentence the article lacks",
+          },
+        ],
+      }));
+      try {
+        buildQuiz(
+          { questions },
+          { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped: emptyDropped() },
+        );
+      } catch (err) {
+        return (err as Error).message;
+      }
+      throw new Error("the batch was supposed to be refused");
+    })();
+    expect(afterDrops).toContain("5 survived checking");
+    expect(afterDrops).not.toContain("12");
+  });
+
+  it("does not overstate what a batch missing one end would read like", () => {
+    /* Five easy-and-medium questions with no hard one DO build up from easier
+       to harder; they just stop short of the hard end. An earlier draft said
+       they "would not build up from easier to harder", which is a claim about
+       the batch that is plainly false to anyone looking at it — GPT Sol's, and
+       the kind of overstatement that makes a reader distrust the rest. */
+    const noHard = failing(oneEndOnlyBands("easy", 5));
+    expect(noHard).toContain("would not cover the full range");
+    expect(noHard).not.toContain("would not build up");
+  });
+
+  it("carries nothing a reader cannot act on, and says what they can", () => {
+    /* What went wrong in production was not a missing fact but three extra
+       ones: a source-file reference, a section name, and an instruction
+       addressed to whoever tunes the prompt.
+
+       Note what is NOT excluded. The words `easy` and `hard` appear, doing
+       ordinary work in an English sentence — "no hard one among them" is not
+       jargon. What the regex rejects is the band as a *quoted name*, which is
+       our vocabulary for a scale the panel never shows
+       (src/web/QuizPanel.tsx sees neither band nor value). */
+    const both = [failing(oneEndOnlyBands("easy", 5)), failing(oneEndOnlyBands("hard", 7))];
+    for (const message of both) {
+      expect(message).not.toMatch(/src\/|\.ts|§|prompt|wanted|"easy"|"hard"|"medium"/);
+      /* Something to do, said as copy.md rule 3 asks — how it usually goes,
+         rather than a bare "try again", and in the words on the button the
+         reader is looking at ("Write the questions" / "Write them again",
+         src/web/QuizPanel.tsx). Trying again is what Greg had to guess at on the
+         day, and it worked. */
+      expect(message).toContain("Writing the questions again usually");
+    }
   });
 });
 
@@ -508,9 +685,24 @@ describe("the generation prompt", () => {
     expect(QUIZ_SYSTEM).toContain("NOT AN ANSWER KEY");
   });
 
-  it("asks for the quota structurally, in both bands", () => {
+  it("asks for the spread structurally, in both bands", () => {
     expect(QUIZ_SYSTEM).toContain("THE SPREAD IS NOT OPTIONAL");
     expect(QUIZ_SYSTEM).toMatch(/at least three "easy" and at least three "hard"/);
+  });
+
+  it("does not promise a retry that does not exist, or describe the gate at all", () => {
+    /* The prompt used to tell the model a failing batch meant "the article is
+       asked again". Nothing retries at any layer, so that was a false promise
+       the model was reasoning against — the whole reason the section was
+       touched on 2026-09-03.
+
+       The assertion above only pins the sentence that did NOT change, so it
+       would watch the false one come back without a word. This is the negative
+       half, and it is deliberately wider than the one sentence: any description
+       of what our gate does is a description that goes stale when the gate
+       moves, which is exactly what happened here within a day. State the target
+       and let src/quiz.ts § missingBandEnds enforce the floor. */
+    expect(QUIZ_SYSTEM).not.toMatch(/asked again|thrown away whole|press the button/i);
   });
 
   it("tells the model an unanchored question is thrown away", () => {

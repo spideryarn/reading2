@@ -137,6 +137,19 @@ const SHARED = new Set([
   // the point: two spellings of "is this Greg" is one place for them to
   // disagree. See docs/project/admin.md.
   "admin.js",
+  /* What plan a reader is on, and the sentences `/profile` says about it. On the
+     list for the same reason `admin.js` is, and it is the same argument one
+     question along: `GET /api/billing/usage` builds a `ReaderPlan` and
+     BillingSection.tsx draws it, so the shape is a wire contract with an end on
+     each side. It imports nothing at all.
+
+     **It is a flat module rather than `src/billing/plan.ts` because of this
+     rule**, and that is worth saying rather than looking like a naming whim: the
+     rest of `src/billing/` constructs Stripe clients and opens database
+     transactions, and the one file the browser may have had to leave the
+     directory to prove it. See src/billing-plan.ts and docs/project/billing.md
+     § What a reader sees. */
+  "billing-plan.js",
   /* The Sketch diagram's schema, its validator and its painter — the two files
      that turn a model's scene into geometry. On the list for the reason the
      header states rather than for convenience: `sketch-scene.js` imports

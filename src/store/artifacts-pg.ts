@@ -276,8 +276,11 @@ function compact<T extends object>(value: T): T {
  * saying. There is no "is there a meta" column to read, and `Meta.title` is the
  * one required field in src/types.ts besides the slug — so a revision with a
  * null title has nothing that would make a usable `meta`. `db:export` makes the
- * same call, and `src/store/import.ts` is what produces the state: it accepts a
- * missing `meta.json` and writes `title: null`.
+ * same call. **What produces the state** is `metaColumns` below, which writes
+ * `title: meta.title ?? null` — and, before it ever runs, a draft revision that
+ * has existed since `beginRevision` and has not reached stage 2 yet.
+ * (`src/store/import.ts` was the named producer until 2026-09-01: it accepted a
+ * missing `meta.json` and wrote `title: null`. It is deleted; the state is not.)
  *
  * **`=== null`, not truthiness**, which is not pedantry. An empty-string title
  * is a different fact — extraction ran and produced nothing usable — and it
@@ -1174,12 +1177,14 @@ async function writeRawSource(
  *    minted fails loudly — which is the intended behaviour, because it means
  *    stage 3 re-minted instead of carrying ids forward
  *    (docs/project/block-ids.md).
- * 2. **Delete, unconditionally.** `src/store/import.ts` puts its delete *inside*
- *    `if (blocks.length)`, so writing an empty set leaves the previous
- *    revision's inherited rows in place — the stage returns nothing, the old
- *    article survives, and the run reports done. That is a silent success of
- *    the worst kind, and it is the one behaviour this function deliberately
- *    does not copy.
+ * 2. **Delete, unconditionally.** `src/store/import.ts` (deleted 2026-09-01) put
+ *    its delete *inside* `if (blocks.length)`, so writing an empty set left the
+ *    previous revision's inherited rows in place — the stage returns nothing,
+ *    the old article survives, and the run reports done. That is a silent
+ *    success of the worst kind, and it is the one behaviour this function
+ *    deliberately does not copy. tests/store-artefacts-pg.test.ts § "deletes
+ *    every block when it is handed none" is the check, watched red by moving
+ *    this delete back inside that condition.
  * 3. **Insert only when there is something to insert**, because an empty
  *    `INSERT … VALUES` is a syntax error rather than a no-op.
  *

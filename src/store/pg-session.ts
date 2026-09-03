@@ -44,6 +44,14 @@
  * Cases 2 and 5 both publish, which is the sentence worth keeping: **publication
  * does not hang off `commit`.**
  *
+ * **Cases 2 to 5 all settle the job's quota slot**, in the same transaction —
+ * charged on a `done`, given back on every other ending, including case 4's,
+ * which is inside the `release` branch and is therefore not one of "both
+ * branches". Case 1 settles nothing: the job is not over. The other two endings
+ * a job can have are the ones that happen with nobody inside it, and they settle
+ * their own — `settleExpired` and `requestCancel` in src/store/pg-jobs.ts.
+ * docs/project/billing.md.
+ *
  * And clearing `jobs.draft_revision_id` is part of every ending, because
  * `sweepAbandonedDrafts` treats *any* job's pointer as ownership — a terminal
  * job's included. `finish` and `releaseStep` still do not clear it and must not:
@@ -96,8 +104,10 @@ import {
 } from "./artifacts-pg.js";
 import { createPgCheckpointStore } from "./checkpoints-pg.js";
 import { guardDbStore } from "./db-errors.js";
+import { READ_COMMITTED } from "./isolation.js";
 import { DraftGoneError, StaleAttemptError } from "./jobs.js";
 import type { JobEnding } from "./jobs.js";
+import { settleReservation } from "./pg-billing.js";
 import { finishIn, releaseStepIn } from "./pg-jobs.js";
 import {
   JobDraftGone,
@@ -136,55 +146,19 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
  */
 const NOTHING_UNCONVERTED: ReadonlySet<StepName> = new Set<StepName>();
 
-/**
- * **`read committed`, asked for rather than inherited — every transaction here.**
- *
- * It is PostgreSQL's default, so on an ordinary database this changes nothing.
- * It is written into the `begin` because the correctness of what happens inside
- * these three transactions *depends* on it, and a `default_transaction_isolation`
- * set on the role or the database would take it away silently: nothing errors,
- * nothing fails on a laptop, and the failures arrive as a first ingest that
- * cannot write its document.
- *
- * Two things inside want it, and both are **insert conflict-tolerantly, then
- * read what you waited for**:
- *
- * - `writeRawSource` (src/store/artifacts-pg.ts) inserts `on conflict do
- *   nothing` into `raw_sources` and reads the row back to compare it.
- * - `lockOrCreateArticle` (src/store/pg-revisions.ts) does the same shape for
- *   the `articles` row: `on conflict do nothing`, then re-read.
- *
- * **What actually goes wrong is not the read back.** Measured rather than
- * reasoned about, 2026-09-01: at `repeatable read` an `insert … on conflict do
- * nothing` that meets a conflicting row from outside its own snapshot raises
- * `40001 could not serialize access due to concurrent update` at the *insert*,
- * whichever order the two transactions arrive in — waiting for an uncommitted
- * writer and finding an already-committed one both do it. So the read back is
- * never reached, and `do nothing` is not the escape at `repeatable read` that
- * it is at `read committed`.
- *
- * The outcome is the one the pin is for, and it is the worse one: **nothing in
- * `src/` catches or retries `40001`**, so the serialization failure aborts the
- * whole commit — artefacts, step completion, publication, job ending — and
- * reaches the reader through `guardDbStore` as *"could not reach its database
- * just then … usually a moment's trouble"*, which is a lie about something that
- * would happen every time two readers add the same new document at once. That
- * is docs/postmortems/260901f-a-for-update-that-locks-nothing.md arriving
- * through a different door.
- *
- * `settleJob` and `beginStep` are pinned as well as `commit`, because both
- * reach `lockOrCreateArticle` or a `for update` on the `jobs` row and neither
- * has any reason to run at a level nobody chose. GPT Sol's final review,
- * finding 3, docs/plans/260901d-final-review-sol.md — its verdict is right and
- * its mechanism is not; it predicted an invisible row on the read back.
- * The one other place in the repo that says this out loud is
- * src/store/pg-feedback.ts, which pins its own.
- *
- * Proved rather than asserted: tests/store-session-isolation.test.ts drives
- * this file's `commit` down a connection whose `default_transaction_isolation`
- * is `repeatable read` and asks the transaction itself what level it got.
- */
-const READ_COMMITTED = { isolationLevel: "read committed" } as const;
+/* **`READ_COMMITTED` was defined here, and moved to [isolation.ts](isolation.ts)
+   on 2026-09-03** when every transaction in the store started naming its level
+   rather than four of twenty-four. The argument and the measurement behind it
+   went with it; this note is the pointer.
+
+   All three transactions below — `commit`, `settleJob` and `beginStep` — are
+   pinned, because each reaches `lockOrCreateArticle` or a `for update` on the
+   `jobs` row and none has any reason to run at a level nobody chose. GPT Sol's
+   final review, finding 3, docs/plans/260901d-final-review-sol.md.
+
+   tests/store-session-isolation.test.ts is the check that this file's `commit`
+   really gets it, asked of the transaction itself down a connection whose
+   default is wrong. */
 
 /** What the transaction decided that only the caller may say out loud. */
 interface Announcement {
@@ -346,6 +320,35 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
     ending.error ?? `the job ended ${ending.status} with no message`;
 
   /**
+   * **The quota slot this job is spending**, read inside the settling
+   * transaction and off the job row itself.
+   *
+   * A read rather than a value carried in. `settleIn` is handed `{ id,
+   * attemptId }` and a transition, and widening either of those to carry a
+   * billing id would push it through `JobTransition` — which the filesystem
+   * session shares — for a column only Postgres has. One extra `select` on a row
+   * this transaction has already fenced and locked is cheaper than that, and it
+   * cannot be stale: nothing but `enqueueOrGet`'s own INSERT ever writes this
+   * column.
+   *
+   * `null` means the job spends no quota — CLI work, a step re-run, seeding.
+   * `settleReservation` does nothing with it.
+   *
+   * It stopped being the *ordinary* answer on 2026-09-03: this comment used to
+   * end "and every job today, because nothing calls `reserveIngest` yet", and a
+   * job enqueued through `POST /api/jobs` now arrives carrying one
+   * ([src/billing/admission.ts](../billing/admission.ts)).
+   */
+  const reservationOf = async (tx: Tx, jobId: string): Promise<string | null> => {
+    const [row] = await tx
+      .select({ ingestEventId: jobsTable.ingestEventId })
+      .from(jobsTable)
+      .where(eq(jobsTable.id, jobId))
+      .limit(1);
+    return row?.ingestEventId ?? null;
+  };
+
+  /**
    * The whole of the state machine, inside the caller's transaction.
    *
    * Returns what happened **and** what the caller should log once the
@@ -410,6 +413,11 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
          now carries `kept` too — and a `keep` never reaches here, so the
          remaining case would type as `kept | ended` and lose its `ending`. */
       if (settlement.kind !== "ended") return { settlement, announce: {} };
+      /* **Case 4 is an ending, so the slot goes back here too** — and it is the
+         one the plan's "both branches of `settleIn`" misses. The reader pressed
+         Stop while the step ran, `releaseStepIn`'s own `case` ended the job
+         instead of queueing it, and nothing below this line runs for it. */
+      await settleReservation(tx, await reservationOf(tx, transition.jobId), "released");
       return {
         settlement,
         announce: await discardAfterCancel(tx, slug, reasonFor(settlement.ending)),
@@ -487,6 +495,28 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
     }
 
     const after = await finishIn(tx, transition.jobId, transition.attempt, ending);
+
+    /**
+     * **The charge, and the release, in the transaction that just ended the
+     * job.** Cases 2, 3 and 5 — a terminal success, a stage failure or
+     * cancellation, and an all-skipped claim.
+     *
+     * **After `finishIn`, not before**, so it runs only over an ending the
+     * fence accepted: a claimant that had lost the job raises
+     * `StaleAttemptError` above this line and settles nothing.
+     *
+     * A `done` **charges, strictly** — `settleReservation` throws unless exactly
+     * one row moved, and that throw takes the publication back with it. Both
+     * directions of getting this wrong are bad: publishing without charging is a
+     * free ingest, and charging without publishing is a debit for an article
+     * nobody got. Every other ending **releases, tolerantly**; see
+     * src/store/pg-billing.ts for why the two differ.
+     */
+    await settleReservation(
+      tx,
+      await reservationOf(tx, transition.jobId),
+      ending.status === "done" ? "succeeded" : "released",
+    );
     return { settlement: settlementOf(transition, after), announce };
   };
 

@@ -41,6 +41,12 @@ function user(over: Partial<AdminUser> = {}): AdminUser {
     spendCalls: 42,
     spendUnpricedCalls: 0,
     spendMonth: "2026-09",
+    /* Not what this file is about, but `AdminUser` requires them: a reader with
+       no `billing_accounts` row is on the free tier with nothing used. */
+    plan: "free",
+    ingests: 0,
+    ingestLimit: 3,
+    ingestWindow: "lifetime",
     ...over,
   };
 }
