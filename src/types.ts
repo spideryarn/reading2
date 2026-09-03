@@ -929,6 +929,14 @@ export interface QuoteDrops {
   overCap: number;
   /** Not an object, or with no `text` at all. */
   malformed: number;
+  /* **Every counter here is a quote that is not in the list**, which is what
+     lets `Quotes.discarded` cross to a visitor and be said out loud.
+
+     The scores the model failed to give us are counted too, and deliberately
+     NOT here: nothing about them costs the reader a quote, and they are a fact
+     about our prompt rather than about the list on the screen. They live on
+     `QuoteScoreDrops` in src/quotes.ts, which does not ride the artefact — read
+     its docstring before adding a counter to either. */
 }
 
 /**

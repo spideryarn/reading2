@@ -29,6 +29,7 @@ import {
   safeUrl,
   existingFor,
   idsByTerm,
+  noGlossaryScoreDrops,
   suggestedCount,
 } from "../src/glossary.js";
 import { formsOf, termPattern, termSpans } from "../src/term-match.js";
@@ -364,6 +365,112 @@ describe("buildGlossary", () => {
     const second = buildGlossary({ entries: [] }, { ...opts, existing: first });
     expect(second.entries).toHaveLength(1);
     expect(second.passes).toBe(2);
+  });
+});
+
+/**
+ * **The scores the prompt requires, and what happened when they did not come.**
+ *
+ * The glossary prompt requires `difficulty` and `centrality` on every entry, so
+ * a missing one is the model disobeying rather than a permitted omission — and
+ * until these counters existed nothing anywhere said so. A model that started
+ * writing `centrality: "high"` would have quietly stopped offering prioritised
+ * order and no log line would have moved. docs/reusable/silent-success.md, and
+ * docs/plans/260903c-threshold-sliders-hide-below-threshold-items.md § Stage 1.
+ *
+ * **Absent and rejected are counted apart** because they are different
+ * failures: absent is a field the model never wrote, rejected is one it wrote
+ * wrong. A counter that only fired inside `score()` would never see the first.
+ */
+describe("buildGlossary score accounting", () => {
+  const opts = { slug: "a-slug", blocks: BLOCKS, sourceHash: "deadbeefdeadbeef", elapsedMs: 1234 };
+
+  it("counts nothing when both scores arrive in range", () => {
+    const scores = noGlossaryScoreDrops();
+    const g = buildGlossary(
+      { entries: [{ name: "Seth", gloss: "The author.", difficulty: 0.4, centrality: 0.9 }] },
+      { ...opts, scores },
+    );
+    expect(scores).toEqual({
+      difficultyAbsent: 0,
+      difficultyRejected: 0,
+      centralityAbsent: 0,
+      centralityRejected: 0,
+    });
+    // Unchanged from today: a good entry keeps both numbers exactly.
+    expect(g.entries[0]?.difficulty).toBe(0.4);
+    expect(g.entries[0]?.centrality).toBe(0.9);
+  });
+
+  it("counts a score the model simply left out", () => {
+    const scores = noGlossaryScoreDrops();
+    const g = buildGlossary(
+      { entries: [{ name: "Seth", gloss: "The author.", difficulty: 0.4 }] },
+      { ...opts, scores },
+    );
+    expect(scores.centralityAbsent).toBe(1);
+    expect(scores.centralityRejected).toBe(0);
+    expect(scores.difficultyAbsent).toBe(0);
+    // Unchanged from today: the entry survives with the half it has.
+    expect(g.entries[0]?.difficulty).toBe(0.4);
+    expect(g.entries[0]?.centrality).toBeUndefined();
+  });
+
+  it("counts a score that was present and refused, separately", () => {
+    const scores = noGlossaryScoreDrops();
+    const g = buildGlossary(
+      { entries: [{ name: "Qualia", gloss: "Raw feels.", difficulty: 7, centrality: "high" }] },
+      { ...opts, scores },
+    );
+    expect(scores.difficultyRejected).toBe(1);
+    expect(scores.centralityRejected).toBe(1);
+    expect(scores.difficultyAbsent).toBe(0);
+    expect(scores.centralityAbsent).toBe(0);
+    // Unchanged from today: out of range is dropped, never clamped.
+    expect(g.entries[0]?.difficulty).toBeUndefined();
+    expect(g.entries[0]?.centrality).toBeUndefined();
+  });
+
+  it("counts nothing for an entry it threw away, and nothing for a previous pass", () => {
+    /* An entry with no name never becomes a row, so it has no missing score —
+       and the entries a second pass inherits were parsed by the run that
+       counted them. Counting either would inflate the number this exists to
+       watch. */
+    const first = buildGlossary(
+      { entries: [{ name: "Seth", gloss: "The author." }] },
+      { ...opts, scores: noGlossaryScoreDrops() },
+    );
+    const scores = noGlossaryScoreDrops();
+    buildGlossary(
+      { entries: [{ name: "", gloss: "no name" }, null, "a bare string"] },
+      { ...opts, existing: first, scores },
+    );
+    expect(scores).toEqual({
+      difficultyAbsent: 0,
+      difficultyRejected: 0,
+      centralityAbsent: 0,
+      centralityRejected: 0,
+    });
+  });
+
+  it("counts what the model returned, before dedupe can borrow a score", () => {
+    /* `dedupe` does `winner.difficulty ?? loser.difficulty`, so two half-scored
+       duplicates merge into one fully-scored entry. Counting after that would
+       report zero for a run in which the model omitted two scores — the exact
+       silence these counters exist to break. */
+    const scores = noGlossaryScoreDrops();
+    const g = buildGlossary(
+      {
+        entries: [
+          { name: "Seth", gloss: "The author.", difficulty: 0.4 },
+          { name: "Seth", senseHere: "The author, again.", centrality: 0.9 },
+        ],
+      },
+      { ...opts, scores },
+    );
+    expect(g.entries).toHaveLength(1);
+    expect(scores.centralityAbsent).toBe(1);
+    expect(scores.difficultyAbsent).toBe(1);
   });
 });
 

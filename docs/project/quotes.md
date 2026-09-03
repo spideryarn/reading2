@@ -195,6 +195,27 @@ reader is told" true for half the readers and quietly false for the other half.
 claim about authorship and we cannot make it: an author quoting their own earlier work lands in that
 counter, and the whole reason `authorVoice` refuses a blockquote is that we cannot tell those apart.
 
+### The scores are counted too, and nobody is told
+
+```ts
+{ importanceAbsent, importanceRejected, strikingAbsent, strikingRejected }
+```
+
+A **second** shape — `QuoteScoreDrops` in [quotes.ts](../../src/quotes.ts) — and not four more
+counters on `discarded`, because none of these costs the reader a quote: the line is in the list, one
+number short. It does not ride the artefact and it is not shown to anybody. A reader cannot act on a
+score the model failed to write, and it is a fact about our prompt rather than about their article.
+
+**Absent and rejected are apart.** Absent is a field the model never wrote — permitted here, and
+`priorityOf`'s `max` was designed around it. Rejected is one it wrote wrong, which `score()` throws
+away silently: a model that started answering `"high"` for `0.8` would quietly stop the panel
+offering *prioritised* order and nothing anywhere would say so
+([silent-success.md](../reusable/silent-success.md)). A counter that only fired inside `score()`
+would see the second and never the first. Counted per field, in `place`, over the quotes it kept —
+so `dedupeOverlaps` and `MAX_QUOTES` do not move them; the question is what the *model* returned.
+Logged at the end of the stage in [pipeline.ts](../../src/pipeline.ts). The glossary's twin is
+[glossary.md § The scores the prompt required, and did not get](glossary.md#the-scores-the-prompt-required-and-did-not-get).
+
 ## Two scores, combined with `max`
 
 | field | the question |

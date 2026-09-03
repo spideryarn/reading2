@@ -619,6 +619,21 @@ never sort by them silently.** So:
 `?sort=` is in the URL like everything else ([url-state.md](url-state.md)), and it pushes history
 because reordering a list is a deliberate act on the view.
 
+### The scores the prompt required, and did not get
+
+The prompt **requires** both scores on every entry, so a missing one is the model disobeying rather
+than taking an offer — unlike quotes, where omitting one is allowed. Until 2026-09-03 nothing
+counted either that or a score `score()` refused for being the wrong type or out of range, so a model
+that started answering `"high"` for `0.8` would have quietly stopped the panel offering *prioritised*
+order with no log line moving ([silent-success.md](../reusable/silent-success.md)).
+
+`GlossaryScoreDrops` in [glossary.ts](../../src/glossary.ts) counts four things —
+`difficultyAbsent`, `difficultyRejected`, `centralityAbsent`, `centralityRejected` — per field, in
+`toEntries`, over the entries it kept and before `dedupe` can borrow a missing score off a duplicate.
+It does **not** ride the artefact and is shown to no reader: it is a fact about our prompt, not about
+their article. Logged at the end of the stage in [pipeline.ts](../../src/pipeline.ts). The quotes'
+twin is [quotes.md § The scores are counted too](quotes.md#the-scores-are-counted-too-and-nobody-is-told).
+
 ### Prioritised, which is now the default
 
 The first clause of that condition — *the list arrives in document order* — lasted a day. On

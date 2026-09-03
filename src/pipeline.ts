@@ -2200,6 +2200,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              is the thing to watch when a glossary starts feeling wrong, and it
              is invisible unless it is written down. */
           unmatched: run.unmatched,
+          /* **The scores the prompt requires and did not get** — src/glossary.ts
+             § `GlossaryScoreDrops`. `*Absent` is the model ignoring an instruction
+             that says both are mandatory; `*Rejected` is it answering `"high"`
+             where a number belongs. Either one silently costs the panel its
+             prioritised order, and this line is the only place it shows.
+             Counts, never a term. docs/project/logging.md. */
+          difficultyAbsent: run.scores.difficultyAbsent,
+          difficultyRejected: run.scores.difficultyRejected,
+          centralityAbsent: run.scores.centralityAbsent,
+          centralityRejected: run.scores.centralityRejected,
         },
         `glossary ${ctx.slug}: ${total} terms (${run.added} new, pass ${run.glossary.passes})`,
       );
@@ -2297,6 +2307,15 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           overlapping: run.dropped.overlapping,
           overCap: run.dropped.overCap,
           malformed: run.dropped.malformed,
+          /* **Fields, not quotes** — src/quotes.ts § `QuoteScoreDrops`. Nothing here
+             cost anyone a quote; each is a number the model did not give us, or
+             gave us wrong. An omission is permitted by this stage's prompt and a
+             rejection is not, so they are separate keys. Counts, never a quote.
+             docs/project/logging.md. */
+          importanceAbsent: run.scores.importanceAbsent,
+          importanceRejected: run.scores.importanceRejected,
+          strikingAbsent: run.scores.strikingAbsent,
+          strikingRejected: run.scores.strikingRejected,
           /* The profile's LENGTH, never the profile — it is the reader's own
              words about themselves. docs/project/logging.md. */
           profileChars: ctx.profile?.length ?? 0,
