@@ -276,6 +276,13 @@
      arithmetic (the column widths, `minWidth`, and the two breakpoints at the
      end of this file), so px is the unit it belongs in. GPT Sol, 2026-08-28. */
   --spine-w: 12px;
+  /* The reading cell's own horizontal padding — the gutter's column on the left
+     (§ the gutter) and an ordinary breathing space on the right. Named because
+     two rules need the same two numbers: `td.text` sets them as padding, and
+     the centred masthead (§ plain, centred) insets itself by them so the title
+     starts on the same pixel as the first line of the article under it. */
+  --text-pad-l: 2.1rem;
+  --text-pad-r: 1.4rem;
   /* **How much horizontal room the mode band takes from the table**, set inline
      in pixels by App from `fit.modeW`. Declared here so every rule below can
      add it unconditionally: `+ 0px` is a no-op, which is what makes the default
@@ -960,7 +967,7 @@ td.gist .title::before {
    column's shadow. It does not — only `.pin-left` is pinned, and it is on the
    other side of the prose. GPT Sol, 2026-08-31.) */
 td.text {
-  padding: var(--block-pad) 1.4rem var(--block-pad) 2.1rem;
+  padding: var(--block-pad) var(--text-pad-r) var(--block-pad) var(--text-pad-l);
   position: relative;
   border-bottom: 0;
   /* One gutter slot's height. **On the cell rather than on `.blk-gutter`**,
@@ -3324,11 +3331,17 @@ td.text.has-hit[data-hues="8"] {
   box-shadow: inset 0 2px 0 var(--highlight);
 }
 
-/* Not built yet. Dimmed and inert, but still focusable and still hoverable —
-   the tooltip IS the content, so a button the pointer slides off would have
-   nothing to say. `aria-disabled` rather than `disabled` for the same reason:
-   `disabled` would take it out of the tab order and stop it firing the hover
-   events the tooltip needs. */
+/* **Dimmed and inert, but still focusable and still hoverable** — the tooltip
+   IS the content, so a button the pointer slides off would have nothing to say.
+   `aria-disabled` rather than `disabled` for the same reason: `disabled` would
+   take it out of the tab order and stop it firing the hover events the tooltip
+   needs, which is worst in exactly the case that needs explaining.
+
+   Written for buttons that were not built yet, and unused by anything for
+   weeks. Its first real user is the bar's experimental switch while it is
+   saving or waiting for its first answer — Dock.tsx §
+   `DockExperimentalSwitch`, whose comment repeats this argument because it is
+   the thing a reader of that file will want to argue with. */
 .dock-btn.soon {
   color: var(--ink-faintest, var(--ink-faint));
   opacity: 0.5;
@@ -10231,6 +10244,274 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
 .sk-empty-why { font-size: 0.81rem; color: var(--ink-faint); }
 .sk-run { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
 
+/* ---------------------------------------------------------- § illustrated ----
+ *
+ * The fifth diagram sub-mode: the Sketch's argument, painted by an image model
+ * — docs/project/diagram.md § Illustrated, src/web/IllustratedView.tsx.
+ *
+ * **This section owns almost nothing, and that is the point.** Every other
+ * picture in this file is paint: a `fill`, a `stroke-width`, a dash. This one
+ * is a JPEG fetched from `/api/illustrated/:slug/:hash.jpeg`, so the stylesheet
+ * has no opinion about a single pixel inside it. What is left is a frame, a
+ * scroller, and the type for the words underneath — which are the part a reader
+ * can check the picture against, and are therefore the part that has to be
+ * legible rather than the part that has to be pretty.
+ *
+ * **Deliberately a sibling of `§ sketch` above rather than a reuse of it.** The
+ * bar, the chip row and the overlay are the same three shapes at the same three
+ * sizes, and sharing `.sk-*` was tried in the head and rejected: the two views'
+ * bodies have nothing else in common (one is an `<svg>` with a card of fixed
+ * height under it, one is an `<img>` with a scrolling list), so a shared prefix
+ * would mean every future rule in either section having to be checked against a
+ * picture it was not written for. The cost is about twenty duplicated
+ * declarations, all of them one line, none of them arithmetic.
+ */
+
+.ill { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+
+/* The bar over the plate: which plate, and how big to show it.
+
+   **It wraps, where `.sk-bar` scrolls, and that is a correction made in a
+   browser rather than a preference.** Sketch's scene row scrolls horizontally
+   with no scrollbar, on the argument that a second line would push the picture
+   down. That works there because a Sketch scene's title is two or three words.
+   A plate's title is written by the brief model as a phrase — *"The Funnel, the
+   Fork, and the Return"* — and at 400px the first plate's chip filled the row,
+   the second was cut mid-word, and the **third was not on screen at all**, with
+   no scrollbar to say so. A reader cannot press a control they have no way of
+   knowing exists. There are at most `MAX_PLATES` of them, so wrapping costs a
+   line and only when there is more than one. Found at 1280 and 390 on
+   2026-09-03. */
+.ill-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem 0.5rem;
+  padding: 0.3rem 0.6rem;
+  font-family: var(--font-ui); font-size: 0.81rem;
+}
+.ill-title { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Its own line, below Back and Enlarge — `flex-basis: 100%` on a wrapping row
+   is what puts it there without a second container. */
+.ill-plates { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 0.2rem; min-width: 0; order: 1; }
+/* **A visible edge on every chip, not only the selected one.** `.sk-scene` shows
+   the unselected ones as bare text and gets away with it because they sit in a
+   horizontal row, where the arrangement itself says *these are the options*.
+   These wrap onto a line each, and three lines of unboxed text read as a list of
+   headings rather than as three buttons — a control the reader cannot tell is a
+   control. Found in a browser at 1280 and 390, 2026-09-03. */
+.ill-plate-chip {
+  flex: 0 1 auto;
+  border: 1px solid var(--rule); border-radius: 4px;
+  padding: 0.15rem 0.35rem;
+  color: var(--ink-faint); background: none; cursor: pointer;
+  font-family: inherit; font-size: inherit;
+  text-align: left;
+  /* Wraps inside the chip rather than being cut: two lines of a plate's name is
+     better than half of it, and the row is already on its own line. */
+  max-width: 100%; overflow-wrap: anywhere;
+}
+.ill-plate-chip:hover { color: var(--ink); background: var(--surface-raised); }
+/* The open one is not truncated — the one label in the row that has to be
+   readable is the one saying where you are. The row already scrolls. */
+.ill-plate-chip.on { color: var(--ink); border-color: var(--rule-strong); background: var(--surface-raised); }
+.ill-plate-chip:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+.ill-up, .ill-zoom {
+  display: inline-flex; align-items: center; gap: 0.2rem;
+  border: 1px solid var(--rule); border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  color: var(--ink-soft); background: none; cursor: pointer;
+  font-family: inherit; font-size: inherit;
+}
+.ill-up { flex: none; }
+.ill-zoom { margin-left: auto; }
+.ill-up:hover, .ill-zoom:hover { background: var(--surface-raised); color: var(--ink); }
+.ill-up:focus-visible, .ill-zoom:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+/* ---- the plate, and the three things it can be instead ---- */
+
+.ill-scroll {
+  flex: 1; min-height: 0; overflow: auto;
+  padding: 0 0.6rem 0.8rem;
+}
+/* **`max-width` and `max-height`, over the `width`/`height` attributes the
+   component sets from the stored record.** Those attributes are there to give
+   the browser the aspect ratio before the bytes arrive, so the list underneath
+   does not jump up the page and then back down — they are not a size, and a
+   rule that let them be one would draw a 1024px plate in a 288px band.
+
+   **The height cap is the band's, and it is what keeps the list on screen.**
+   Plates are 2:3 portrait, so at the full width of a 400px band one is 600px
+   tall and the *what it depicts* rows — the only part of this mode that can be
+   checked, and the only part that is clickable — begin below the fold with
+   nothing to say they are there. Enlarge is where a plate is actually looked
+   at, and it lifts the cap.
+
+   **38vh rather than the 46 it was first set to**, and the correction came from
+   a browser rather than from arithmetic: at 46 the first row still started 17
+   pixels below a 900-pixel viewport, because the budget above the picture is
+   not fixed — a plate row of three wrapped titles and a staleness note are both
+   real states and both real lines. The number now leaves room for those *and*
+   the first row or two. Nothing enforces it, so if the chrome above grows
+   again, measure it again rather than trusting this comment. */
+.ill-plate {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%; max-height: 38vh;
+  width: auto; height: auto;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--surface-raised);
+}
+/* A plate that is loading, that failed to fetch, or that the run never painted.
+   One rule for all three: they occupy the same place and say the same kind of
+   thing, and the words carry the difference.
+
+   **The same grey as every other failure in this band**, not a red — `.sk-failed`
+   above has the argument, including that `--destructive` is referenced in this
+   file six times and defined nowhere, so bare it is simply dropped. */
+.ill-plate-out {
+  display: flex; align-items: center; gap: 0.4rem;
+  margin: 0.4rem 0;
+  padding: 1.2rem 0.8rem;
+  border: 1px dashed var(--rule);
+  border-radius: 4px;
+  font-family: var(--font-ui); font-size: 0.81rem; line-height: 1.4;
+  color: var(--ink-faint);
+}
+
+/* ---- the sentence that says what this is ---- */
+
+/* **Not small print, and not a tooltip.** This is the one picture in the app
+   that cannot be checked against what it claims to depict, so the sentence
+   saying so sits directly under it at the same size as the rows below —
+   docs/project/diagram.md § It is an interpretation. The left rule is the same
+   device `.sk-card` uses for "this belongs to the thing above it". */
+.ill-says {
+  margin: 0.5rem 0 0.7rem;
+  padding: 0.4rem 0 0.4rem 0.55rem;
+  border-left: 2px solid var(--rule-strong);
+  font-family: var(--font-ui); font-size: 0.79rem; line-height: 1.45;
+  color: var(--ink-soft);
+}
+/* The register the model chose, in its own words — inside the brief, above the
+   prompt. Italic because it is a quote from the brief rather than our sentence. */
+.ill-style { font-style: italic; color: var(--ink-faint); }
+
+/* ---- what it depicts: the only clickable layer ---- */
+
+.ill-list-head {
+  margin: 0 0 0.3rem;
+  font-family: var(--font-ui); font-size: 0.75rem; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.ill-list { margin: 0; padding: 0; list-style: none; }
+.ill-list li + li { border-top: 1px solid var(--rule); }
+.ill-row {
+  display: block; width: 100%;
+  padding: 0.45rem 0.1rem;
+  border: none; background: none; cursor: pointer;
+  text-align: left;
+  font-family: var(--font-ui);
+}
+.ill-row:hover { background: var(--surface-raised); }
+.ill-row:focus-visible { outline: 2px solid var(--highlight); outline-offset: -2px; }
+.ill-depicts { display: block; font-size: 0.82rem; line-height: 1.35; color: var(--ink); }
+/* **Wraps, and is never clamped.** The quote is how a reader reads the picture
+   back against the piece, so cutting it to an ellipsis would take away the
+   whole reason the row exists. `<q>` supplies its own marks, so none here. */
+.ill-quote {
+  display: block; margin-top: 0.2rem;
+  /* The article's own words, in the article's own face — `--font-reading` is
+     documented in styles/tokens.css as exactly that, and it is what makes a
+     quote read as lifted rather than as more chrome. */
+  font-family: var(--font-reading);
+  font-size: 0.82rem; line-height: 1.4; color: var(--ink-faint);
+}
+.ill-row:hover .ill-depicts { color: var(--highlight); }
+.ill-none {
+  margin: 0.4rem 0;
+  font-family: var(--font-ui); font-size: 0.79rem; line-height: 1.45; color: var(--ink-faint);
+}
+
+/* ---- the brief ---- */
+
+.ill-brief { margin-top: 0.8rem; font-family: var(--font-ui); font-size: 0.79rem; }
+.ill-brief summary { cursor: pointer; color: var(--ink-faint); }
+.ill-brief summary:hover { color: var(--ink); }
+.ill-brief p {
+  margin: 0.4rem 0 0;
+  padding-left: 0.55rem;
+  border-left: 2px solid var(--rule);
+  line-height: 1.5; color: var(--ink-soft);
+  /* The image model was sent one paragraph of prose; showing it as one is the
+     point. `pre-wrap` would honour whatever line breaks the brief model happened
+     to write, which is a fact about the JSON rather than about the brief. */
+  white-space: normal;
+}
+
+/* ---- full screen ---- */
+
+/* The same `<dialog>` `showModal()` § sketch above uses, for its four reasons.
+   The band is 288–400px and the plates are 2:3 portrait, so in the band a plate
+   is a thumbnail and **this is where one is actually looked at**. */
+.ill-full {
+  width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh;
+  margin: 0; padding: 0; border: none; background: transparent;
+  display: none;
+}
+.ill-full[open] { display: flex; align-items: flex-start; justify-content: center; }
+.ill-full::backdrop { background: rgb(0 0 0 / 0.72); }
+.ill-in-full {
+  /* Narrower than `.sk-in-full`'s 1120 because a 2:3 portrait plate at 1120px
+     wide is 1680px tall — taller than any window, so the reader would be
+     scrolling a picture instead of seeing one. At 720 it is 1080 tall, which
+     fits a laptop with the list beginning just below the fold. */
+  width: min(94vw, 720px);
+  height: 100dvh;
+  background: var(--page);
+  border-left: 1px solid var(--rule); border-right: 1px solid var(--rule);
+  display: flex; flex-direction: column;
+}
+.ill-in-full .ill-bar { padding: 0.5rem 0.8rem; font-size: 0.88rem; }
+/* The cap comes off: this is the whole reason the overlay exists. Still bounded
+   by the panel's own width, so a plate cannot run past the bottom of a laptop
+   screen and take the list with it. */
+.ill-in-full .ill-plate { max-height: 78vh; }
+/* `overscroll-behavior` stops a trackpad flick inside a tall plate scrolling
+   the article behind it — Lightbox.tsx § two things `<dialog>` does not do. */
+.ill-in-full .ill-scroll { padding: 0 0.9rem 1.2rem; overscroll-behavior: contain; }
+.ill-in-full .ill-says, .ill-in-full .ill-depicts, .ill-in-full .ill-quote { font-size: 0.86rem; }
+
+/* What the band says while the overlay has the picture. */
+.ill.away { justify-content: flex-start; }
+.ill-elsewhere {
+  margin: 0; padding: 0.75rem 0.7rem;
+  font-family: var(--font-ui); font-size: 0.85rem; line-height: 1.45; color: var(--ink-faint);
+}
+.ill-back {
+  padding: 0; background: none; border: none; cursor: pointer;
+  font-family: inherit; font-size: inherit; color: var(--highlight);
+}
+.ill-back:hover { text-decoration: underline; }
+
+/* ---- the notes, the job, and before there is a picture ---- */
+
+.ill-note {
+  margin: 0 0.6rem 0.3rem;
+  font-family: var(--font-ui); font-size: 0.77rem; line-height: 1.35; color: var(--ink-faint);
+}
+.ill-busy, .ill-failed {
+  display: flex; align-items: center; gap: 0.4rem;
+  margin: 0;
+  padding: 0.15rem 0.7rem 0.3rem;
+  font-family: var(--font-ui); font-size: 0.81rem; color: var(--ink-faint);
+}
+.ill-wait, .ill-empty { padding: 0.75rem 0.7rem; font-family: var(--font-ui); font-size: 0.85rem; color: var(--ink-soft); }
+.ill-wait { display: flex; align-items: center; gap: 0.4rem; }
+.ill-empty p { margin: 0 0 0.5rem; line-height: 1.45; }
+.ill-empty-why { font-size: 0.81rem; color: var(--ink-faint); }
+.ill-run { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
+
 /* ---------------------------------------------------- § drift and trail ----
  *
  * The two pictures whose axes came out of a model: one dot per paragraph,
@@ -11252,6 +11533,81 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    landscape phone, and it removes a row reading `Text verbatim` above a column
    of the author's paragraphs, which is not a loss at any size. */
 table.only-prose thead { display: none; }
+
+/* **And when it is the only column, it sits in the middle of the window.**
+   Greg, 2026-09-03: *"In Plain mode, can you centre the text on the page?"* —
+   the article had the whole width and used the left 738px of it, which on a
+   1600px screen is 850px of empty page down one side.
+
+   **The table moves, not the prose inside its cell**, and that is the whole
+   reason this is one declaration rather than a section. Four things are drawn
+   against the cell's own edges and would every one of them be left behind by
+   text that moved on its own: the gutter is absolutely positioned at the
+   cell's left (§ the gutter), a search hit paints an inset shadow at x=0
+   (§ has-hit), `row-active` fills the cell, and the hover target *is* the
+   cell. Moving the column moves all four, and no rule above has to learn that
+   a mode exists.
+
+   The margin it divides is made by `PROSE_ALONE_MAX_REM` in layout.ts — read
+   that for the width and for why the condition is "no other column" rather than
+   "Plain mode". A `max-width` here could not do it: this table is
+   `table-layout: fixed` with a `<col>` carrying an inline pixel width, and a
+   fixed table is at least as wide as its columns whatever `max-width` says.
+   Measured, 2026-09-03 — the rule was written that way first and changed
+   nothing at all.
+
+   **`.text-alone`, not `table.only-prose`**, though the two look
+   interchangeable from here. `only-prose` above is also true with a band open,
+   where the prose is the table's only column and the band has already taken
+   the space this would centre into; centring there would push the article away
+   from the panel it is being read against. layout.ts § `Fit.alone`. */
+.reader.text-alone table.zoom { margin-inline: auto; }
+
+/* And the masthead goes over the column rather than staying at the left edge
+   of a window it no longer shares with anything. Same width — `--table-w` is
+   written inline by App from `fit.tableW`, so the number lives once, in
+   layout.ts — and the same auto margins.
+
+   **It tracks the prose from about 1046px of window upwards, and not below**,
+   which is a smaller claim than the obvious one and the measurements are in
+   docs/plans/plain-mode-and-the-way-out.md § Centring the column. This bar
+   reserves `--logo-w` on its left for the corner wordmark and `--feedback-w` on
+   its right for the button (§ header), and under about 1046px that reservation
+   is wider than the margin the centred column leaves — so `max-width` stops
+   controlling anything and the title stays where it has always been while the
+   prose slides left towards it. The gap closes smoothly (114px at 800, 20px at
+   1000, 0 at 1040) and there is no jump; below 812px neither of them has moved
+   at all. **That misalignment is not new** — the title was at 160 and the prose
+   at 46 before any of this — and correcting it would mean this rule doing the
+   centring arithmetic itself with both of those widths in it, which is a
+   third place for `PROSE_ALONE_MAX_REM` to be got wrong. GPT Sol asked for the
+   claim to say where it holds, 2026-09-03; it is the claim that was wrong
+   rather than the rule.
+
+   Above that, measured: the title lands 4px left of the first line of prose,
+   because centring inside this bar's asymmetric padding is not quite centring
+   inside the window.
+
+   The bars themselves stay full-bleed, deliberately: the controls row and the
+   dock are chrome that spans the window in every mode, and the masthead is the
+   one piece of *the article* above the fold. */
+.reader.text-alone .masthead-inner {
+  /* The reading column *inside* the cell's own padding, which is what lands the
+     title on the prose's own left edge rather than 34px to the left of it.
+     `--text-pad-*` at the top of this file is the one place those two numbers
+     live, and `--table-w` is written inline by App from `fit.tableW`, so
+     `PROSE_ALONE_MAX_REM` is not copied into CSS.
+
+     **Expressed as a narrower box rather than as padding on this one, so that
+     it costs nothing when the cap is not biting.** Below 812px of window the
+     table already fills the row, `--table-w` is the whole of it, and this
+     max-width is wider than the bar has to give — the rule then does nothing
+     at all, which is what a masthead already pushed rightwards by the corner
+     wordmark wants. Padding would have indented it again on exactly those
+     widths. */
+  max-width: calc(var(--table-w) - var(--text-pad-l) - var(--text-pad-r));
+  margin-inline: auto;
+}
 
 /* ------------------------------------------------------------- lightbox --
    One figure, as big as the window will allow — Lightbox.tsx, opened by the ⤢
@@ -12862,3 +13218,32 @@ table.only-prose thead { display: none; }
   .fb-button-text { display: none; }
   .fb-button { justify-content: center; padding: 0; }
 }
+
+/* ---------------------------------------------------------------- metadata --
+   Every <button> on the Metadata page inherits the type around it.
+
+   Greg, 2026-09-03, on that page: *"clean up their display (some of them seem
+   larger than others somehow?)"*. They were, and the cause is one line up in
+   tailwind.css § note 4: **we import preflight nowhere**, deliberately, because
+   it would reset everything inside `.prose` — the one place we render the
+   article author's own HTML and cannot enumerate the tags. So a `<button>` keeps
+   the UA's own `font`, which in Chrome is 13.333px Arial, and no Tailwind class
+   contests it: `tw:text-inherit` is `color`, and `tw:text-sm` sets a size while
+   leaving the family alone.
+
+   The visible result was the collapsible section headings. A shut section's
+   heading is a button (Metadata.tsx § Section) carrying the h2's 0.68rem
+   uppercase classes on its parent and nothing of its own, so it drew half again
+   the size of every heading beside it, in a different typeface. Everything else
+   on the page was subtler: the right size in the wrong face.
+
+   Scoped to this page rather than added globally. A bare `button { font:
+   inherit }` is the part of preflight everybody wants, but twenty components in
+   this file already declare their own (grep `font: inherit`) and were built
+   looking at the UA default underneath them — a global reset is a change to all
+   of them at once, in a tree several agents are working in.
+
+   In `app`, so it is a floor rather than a ceiling: utilities outrank it
+   (tailwind.css § the @layer statement), and `tw:font-mono` on the fingerprint
+   and `tw:text-sm` on Delete still win. */
+.metadata-page button { font: inherit; }

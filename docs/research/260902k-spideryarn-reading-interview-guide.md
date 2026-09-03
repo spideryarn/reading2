@@ -238,7 +238,11 @@ this in 2 minutes"; streaks and engagement mechanics; confident claims with no p
 
 **Ask.** What would make you kill a feature even if people loved it?
 
-**Answer.**
+**Answer.** Not asked, but his earlier dictated notes
+([260902k-greg-notes-the-edge-between-ease-and-difficulty.md](260902k-greg-notes-the-edge-between-ease-and-difficulty.md))
+answer it: *"you can go to the gym or you can buy a forklift truck to lift the weights. But if you
+buy the forklift truck that lifts the weights, then you atrophy."* And the test: *"what will help
+the human to best form their own rich updated internal representations?"*
 
 ## 13. Beta, price, and the promise
 

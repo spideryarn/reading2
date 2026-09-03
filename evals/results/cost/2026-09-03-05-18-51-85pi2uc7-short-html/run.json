@@ -1,0 +1,209 @@
+{
+  "meta": {
+    "startedAt": "2026-09-03T05:18:50.842Z",
+    "commit": "da3aba391959e35d4a47d24b61ca3e4e0f9dd275",
+    "gitDirty": true,
+    "srcPatchSha256": "90247762e16eb1663412a1fbec36685371d27e3edcbc399b445dc33ae7333364",
+    "store": "postgres",
+    "databaseTarget": "postgresql://postgres:***@127.0.0.1:54362/postgres",
+    "evalOwnerId": "00000000-0000-4000-8000-000000000002",
+    "environmentOwnerId": "f4d08b58-5573-4811-9887-e26c114fb324",
+    "scenario": "per-mode",
+    "node": "v26.8.1",
+    "effort": {
+      "pipelineEnvOverride": null,
+      "hierarchy": "medium",
+      "labels": "module-private in src/labels.ts — pinned by commit + srcPatchSha256",
+      "articleStages": {
+        "arc": "high",
+        "tweets": "high",
+        "glossary": "medium",
+        "quotes": "medium",
+        "ideas": "high",
+        "sketch": "high",
+        "timeline": "high",
+        "quiz": "high"
+      }
+    }
+  },
+  "runTag": "85pi2uc7",
+  "notes": [
+    "Stage 1 (fetch) is a fixture read, so the elapsed time excludes real-world fetch latency. It costs no model call, so the money is unaffected.",
+    "There is no `labels` step: nav labels fan out inside `hierarchy`, so every label call carries stepName=hierarchy and job=labels. The hierarchy/labels split is in `byAiJob`.",
+    "Per-step wall clock is max(finishedAt) - min(startedAt). sum(durationMs) is printed beside it and is several times larger wherever a step fanned out; it is not a wait.",
+    "Unpriced rows are unknown, not zero. A total carrying them is short by an unknown amount.",
+    "Pipeline cache breakpoints are conditional and off by default (`sharesArticleCache`), so an ordinary ingest marks nothing and these are cold numbers in that sense too. Checked in the code: `sharesArticleCache` returns false for anything that is not an ArticleStage, and `hierarchy` is not one — so nothing an ingest writes can be read warm by a later draw.",
+    "`scenario` says whether the modes were measured one per job (`per-mode`) or several in one (`batched-modes`). The two are different numbers and must never be aggregated together.",
+    "A draw that was billed and did not produce its artefact is a PAID FAILURE: its money was really spent and it is not the price of anything, so it is excluded from every per-mode and whole-article figure and listed separately. Read `jobStatus` and `steps` per draw, not the money alone — a truncated generation is billed in full with an `outcome: \"ok\"` row.",
+    "A missing ledger row is read against `steps`: if the step that would have bought it failed, or never ran because something before it did, the absence is EXPLAINED (finding kind `explained-absence`) and the sweep carries on — a run measuring how often hierarchy fails cannot stop the first time it does. An absence nothing explains is still fatal and still stops the run, because that is a row that was lost rather than never bought.",
+    "`observedSpend` is what each step's own collector saw, from AdvanceParts.onStepSpend. Its `calls` is what the ledger is reconciled against. Its `writeFailures` is a LOWER BOUND: collectSpend calls onDone before draining its writes, so a write that rejects late is not counted there — which is exactly why the check is calls-made against rows-kept."
+  ],
+  "draws": [
+    {
+      "phase": "ingest",
+      "mode": null,
+      "fixture": "short-html",
+      "fixtureFile": "tests/fixtures/data-root/data/writes/raw.html",
+      "fixtureSha256": {
+        "measured": "728a75e7d96b2727aad5cb35b66966fdb724e1999999438e8fba3a13cdfd4dc4",
+        "manifest": "728a75e7d96b2727aad5cb35b66966fdb724e1999999438e8fba3a13cdfd4dc4",
+        "matches": true
+      },
+      "fixtureBytes": 9280,
+      "createdArticle": true,
+      "repeat": 1,
+      "order": 1,
+      "slug": "evalcost-85pi2uc7-short-html-1-spya-duzbya",
+      "url": "https://cost-eval.invalid/85pi2uc7/short-html-1",
+      "jobId": "spya-uc3a8n",
+      "elapsedMs": 2031,
+      "jobStatus": "error",
+      "jobError": "Refusing to publish \"evalcost-85pi2uc7-short-html-1-spya-duzbya\": it has no tree",
+      "steps": [
+        {
+          "name": "fetch",
+          "status": "done",
+          "detail": "9 KB (fixture short-html)"
+        },
+        {
+          "name": "extract",
+          "status": "done",
+          "detail": "Writes and Write-Nots"
+        },
+        {
+          "name": "blocks",
+          "status": "error",
+          "detail": "19 blocks, 19 new ids (0 kept)",
+          "error": "Refusing to publish \"evalcost-85pi2uc7-short-html-1-spya-duzbya\": it has no tree"
+        }
+      ],
+      "blocks": {
+        "observed": 19,
+        "manifest": 19,
+        "matches": true
+      },
+      "gistableBlocks": 18,
+      "unreadable": 0,
+      "money": {
+        "credits": 0,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [],
+      "byAiJob": [],
+      "ledgerWallClockMs": null,
+      "observedSpend": [
+        {
+          "step": "fetch",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "blocks",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "findings": [],
+      "articleId": "9afbe624-98c4-4d2e-a716-0cfc27e64142",
+      "adoption": {
+        "kind": "minted",
+        "requested": "evalcost-85pi2uc7-short-html-1",
+        "got": "evalcost-85pi2uc7-short-html-1-spya-duzbya",
+        "why": "an ingest draw mints"
+      }
+    },
+    {
+      "phase": "ingest",
+      "mode": null,
+      "fixture": "short-html",
+      "fixtureFile": "tests/fixtures/data-root/data/writes/raw.html",
+      "fixtureSha256": {
+        "measured": "728a75e7d96b2727aad5cb35b66966fdb724e1999999438e8fba3a13cdfd4dc4",
+        "manifest": "728a75e7d96b2727aad5cb35b66966fdb724e1999999438e8fba3a13cdfd4dc4",
+        "matches": true
+      },
+      "fixtureBytes": 9280,
+      "createdArticle": true,
+      "repeat": 2,
+      "order": 2,
+      "slug": "evalcost-85pi2uc7-short-html-2-spya-jmkm87",
+      "url": "https://cost-eval.invalid/85pi2uc7/short-html-2",
+      "jobId": "spya-vy2j8e",
+      "elapsedMs": 838,
+      "jobStatus": "error",
+      "jobError": "Refusing to publish \"evalcost-85pi2uc7-short-html-2-spya-jmkm87\": it has no tree",
+      "steps": [
+        {
+          "name": "fetch",
+          "status": "done",
+          "detail": "9 KB (fixture short-html)"
+        },
+        {
+          "name": "extract",
+          "status": "done",
+          "detail": "Writes and Write-Nots"
+        },
+        {
+          "name": "blocks",
+          "status": "error",
+          "detail": "19 blocks, 19 new ids (0 kept)",
+          "error": "Refusing to publish \"evalcost-85pi2uc7-short-html-2-spya-jmkm87\": it has no tree"
+        }
+      ],
+      "blocks": {
+        "observed": 19,
+        "manifest": 19,
+        "matches": true
+      },
+      "gistableBlocks": 18,
+      "unreadable": 0,
+      "money": {
+        "credits": 0,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [],
+      "byAiJob": [],
+      "ledgerWallClockMs": null,
+      "observedSpend": [
+        {
+          "step": "fetch",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "blocks",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "findings": [],
+      "articleId": "d69cfb2d-c924-4aef-8e80-e67f8295e8bf",
+      "adoption": {
+        "kind": "minted",
+        "requested": "evalcost-85pi2uc7-short-html-2",
+        "got": "evalcost-85pi2uc7-short-html-2-spya-jmkm87",
+        "why": "an ingest draw mints"
+      }
+    }
+  ]
+}

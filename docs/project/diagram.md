@@ -1682,9 +1682,15 @@ scene, and the image model can ignore the brief entirely.
 
 So three things are owed to the reader and are not decoration: a **visible label**
 saying this is an illustration of the argument rather than a diagram of it; the
-**brief itself** shown beside the picture, because a prompt can be read against
+**brief itself** under the picture, because a prompt can be read against
 the article where a picture cannot; and **Sketch one chip to the left**, still the
 diagram of record.
+
+The label is a line of its own and never a tooltip — a thing you have to go looking
+for has not been said. The brief is one press behind a `<details>` rather than
+open: it is 200–500 words of composition plus the register the model chose, which
+open by default pushed the *what it depicts* list off the bottom of a 1280-tall
+screen. The one that must be readable without a gesture is the label.
 
 What *is* checked is the brief. Every vignette names a block id that must exist
 and quotes a passage that must occur **in that block** —
@@ -1774,6 +1780,8 @@ failure a future model silently ignoring `output_format` would cause.
 | a plate's bytes, validated and content-addressed | [`src/illustrated-image.ts`](../../src/illustrated-image.ts) |
 | the step | `illustrated` in [`src/pipeline.ts`](../../src/pipeline.ts) |
 | the routes | `/api/illustrated/:slug` and `/api/illustrated/:slug/:hash.jpeg`, [`src/routes.ts`](../../src/routes.ts) |
+| the read, and whether the button would be refused | [`src/web/useIllustrated.ts`](../../src/web/useIllustrated.ts) |
+| the plate, the plate row, Enlarge, and the *what it depicts* list | [`src/web/IllustratedView.tsx`](../../src/web/IllustratedView.tsx) |
 | the harness that paints one offline | [`evals/illustrated/`](../../evals/illustrated/) |
 
 **It is the only step whose input is another step's artefact**, and that has two

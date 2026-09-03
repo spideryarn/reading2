@@ -33,6 +33,8 @@
 
 import type { AiCallRow, ScopeKind } from "../../src/ai-spend.js";
 import { formatNanos } from "../../src/ai-spend.js";
+import { ARTICLE_RENDERER, STAGE_EFFORT } from "../../src/models.js";
+import type { ArticleStage } from "../../src/models.js";
 import { totalRows } from "../../src/store/ai-calls.js";
 
 /** What a set of rows cost, in the three pockets `totalRows` keeps apart. */
@@ -229,6 +231,12 @@ export type FindingKind =
   | "explained-absence"
   /** A call reported no cache-read count, so there is no evidence it was cold. */
   | "unknown-cache-telemetry"
+  /**
+   * A call paid the 1.25x premium to write a cache entry and nothing later in the
+   * same batched job read it. The premium is a bet on a read; this is the bet
+   * lost. See `checkBatchedDraw`.
+   */
+  | "unclaimed-cache-write"
   /** A job that was supposed to adopt an article minted a fresh one instead. */
   | "not-adopted";
 
@@ -621,9 +629,11 @@ export type DrawPhase = "ingest" | "mode" | "batched";
  * scaffolding per mode on `long-html`). That is only a *cold* per-mode number if
  * a later job cannot read the cached article prefix an earlier one wrote. The
  * argument that it cannot is in the plan — `runStep` marks the article only when
- * a **later step of the same job** will read it (src/pipeline.ts §
- * `sharesArticleCache`), a single-mode job's `later` list is empty, and
- * Anthropic's cache is explicit-only so nothing warms implicitly.
+ * **another step of the same job** would read it (src/pipeline.ts §
+ * `cacheArticleForStep`), a single-mode job has no other step, and Anthropic's
+ * cache is explicit-only so nothing warms implicitly. That predicate looked only
+ * at *later* steps until 2026-09-03, which was a bug in the batched case and
+ * makes no difference here: a lone mode has nothing in either direction.
  *
  * All of which is an argument. These are the measurements.
  *
@@ -664,6 +674,172 @@ export function checkColdDraw(
   return opts.phase === "mode" ? modeDrawIsCold(rows) : eachStepStartsCold(rows);
 }
 
+/** How far a read may fall short of the write it claims and still count as that write's. */
+const CACHE_CLAIM_TOLERANCE = 0.1;
+
+/**
+ * Which shared-article cache group a step belongs to, or `null` for a step that
+ * is in none.
+ *
+ * **Using the pipeline's own tables here is a narrower thing than it looks, and
+ * the distinction is the whole reason this gate is trustworthy.** The rule below
+ * takes *membership* from `STAGE_EFFORT` and `ARTICLE_RENDERER` — a symmetric
+ * question ("do these two stages send the same bytes at the same effort") that
+ * the pipeline has always answered correctly — and takes the *verdict* from the
+ * ledger. What it never asks is `sharesArticleCache`'s question, "should this
+ * step mark", which is where the direction bug lived and which a check would
+ * inherit whole.
+ *
+ * An earlier draft of this file claimed a predicate-based check "would have
+ * passed on the broken code" full stop. GPT Sol was right that this is too
+ * broad: a check that used the predicate only to find a compatible pair and then
+ * demanded a read would have failed. Avoiding the production predicate for the
+ * verdict is still the right instinct; avoiding its tables for membership was
+ * over-correction, and it cost this gate the group-scoping it needed.
+ *
+ * A step in no group — `hierarchy` and its `labels` fan-out above all — is out of
+ * scope entirely rather than forgiven case by case. Labels writes three entries
+ * in parallel and reads at most one **on purpose**, so any rule about unclaimed
+ * writes is simply the wrong question to ask it.
+ */
+function cacheGroupOf(step: string | null): string | null {
+  if (step === null) return null;
+  const effort = STAGE_EFFORT[step as ArticleStage] as string | undefined;
+  const renderer = ARTICLE_RENDERER[step as ArticleStage] as string | undefined;
+  return effort === undefined || renderer === undefined ? null : `${effort}+${renderer}`;
+}
+
+/**
+ * **Did the write premium get collected?** The batched draw's own question, and
+ * the one nothing was asking.
+ *
+ * A batched draw exists to price two modes sharing a job, which is the only shape
+ * where the article cache can pay off at all. `checkColdDraw` returns `[]` for it
+ * — correctly, because a warm read is the thing being measured rather than a
+ * contamination — and that left the phase with **no rule at all**. The eval
+ * computed the numbers that prove
+ * [260903c](../../docs/postmortems/260903c-the-conditional-article-cache-breakpoint-marks-the-writer-but-never-the-reader.md)
+ * and printed them without judging them; a human found the bug by reading a table.
+ *
+ * **The rule is stated in money, on purpose, and this is the whole design.** The
+ * obvious implementation asks `sharesArticleCache` who *should* share and checks
+ * that they did — and it would have passed on the broken code, because the
+ * predicate was right about the group and wrong about the direction, and a check
+ * built on the predicate inherits both. So this asks a question the pipeline's
+ * tables cannot answer for it:
+ *
+ * > **Every call that paid to write a cache entry must be followed, within this
+ * > draw, by a call that reads about that many tokens.**
+ *
+ * A write is a 1.25x bet on a later read. An unclaimed write is that bet lost,
+ * whatever the reason — no breakpoint on the reader (this bug), a prefix that
+ * diverges before the article (the `ideas`/`ARTICLE_RENDERER` near-miss), an
+ * expired TTL, a group that was never really a group. The check does not care
+ * which, and that is why it survives the next mechanism.
+ *
+ * Deliberately loose in one direction: a write is happy with *any* later read of
+ * the right size, not a matched pair. Hierarchy's label fan-out writes three
+ * near-identical entries in parallel and reads one of them, and a one-to-one
+ * matcher would call two of those a loss when paying for them is a documented
+ * choice about latency. Money going missing is the signal; bookkeeping is not.
+ */
+export function checkBatchedDraw(rows: readonly AiCallRow[], phase: DrawPhase): Finding[] {
+  if (phase !== "batched" || rows.length === 0) return [];
+  const findings: Finding[] = [];
+
+  const inGroups = rows.filter((r) => cacheGroupOf(r.stepName) !== null);
+  if (inGroups.length === 0) return [];
+
+  for (const row of inGroups) {
+    if (row.cacheReadTokens === null) {
+      findings.push(noCacheTelemetry(row, `A call of this batched draw (step ${row.stepName})`));
+    } else if (row.cacheWriteTokens === null) {
+      findings.push(
+        noCacheTelemetry(row, `A call of this batched draw (step ${row.stepName})`, "cache-write"),
+      );
+    }
+  }
+  /* One unknown poisons the arithmetic for the whole group — a missing field
+     could have been the read that squares any of these writes — so stop rather
+     than report a shortfall that is really an absence. */
+  if (findings.length > 0) return findings;
+
+  const priced = inGroups as (AiCallRow & { cacheWriteTokens: number; cacheReadTokens: number })[];
+  const byGroup = new Map<string, typeof priced>();
+  for (const r of priced) {
+    const key = cacheGroupOf(r.stepName) as string;
+    const bucket = byGroup.get(key);
+    if (bucket) bucket.push(r);
+    else byGroup.set(key, [r]);
+  }
+
+  for (const [, group] of byGroup) {
+    const calls = [...group].sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
+    const steps = new Set(calls.map((c) => c.stepName));
+
+    /* **Reads are consumed, at most once each.** `some()` per writer was the
+       first version and it let one read absolve any number of writes — GPT Sol
+       exercised it with arc writing 25,428 unread, ideas writing 27,239 and
+       timeline reading 27,239, and got no findings at all. Scoping to a group
+       stops a read answering for another group's write; consuming stops it
+       answering twice inside this one. */
+    const unspent = calls.filter((c) => c.cacheReadTokens > 0).map((c) => ({ call: c, spent: false }));
+
+    for (const writer of calls.filter((c) => c.cacheWriteTokens > 0)) {
+      const floor = writer.cacheWriteTokens * (1 - CACHE_CLAIM_TOLERANCE);
+      const claim = unspent.find(
+        (r) =>
+          !r.spent &&
+          Date.parse(r.call.startedAt) > Date.parse(writer.startedAt) &&
+          r.call.cacheReadTokens >= floor,
+      );
+      if (claim) {
+        claim.spent = true;
+        continue;
+      }
+      const best = Math.max(
+        0,
+        0,
+        ...calls
+          .filter((c) => Date.parse(c.startedAt) > Date.parse(writer.startedAt))
+          .map((c) => c.cacheReadTokens),
+      );
+      findings.push({
+        kind: "unclaimed-cache-write",
+        step: writer.stepName,
+        fatal: true,
+        message:
+          `Step ${writer.stepName ?? "(unnamed)"} paid to write ${writer.cacheWriteTokens} cached ` +
+          `token(s) and no later call in its cache group read them — the best any of them managed ` +
+          `was ${best}. That is the 1.25x write premium spent on nothing, which is the exact loss ` +
+          "the conditional breakpoint exists to prevent. Either the reader is sending no " +
+          "`cache_control` (a request without one performs no lookup, however warm the entry is), " +
+          "or the two prompts diverge somewhere before the article and the prefixes never matched.",
+      });
+    }
+
+    /* **And the silence that looks like success.** Two members of one group in a
+       batched job with no write and no read anywhere is not "nothing to check":
+       it is both markers missing, which is what a regression that switched
+       `cacheArticle` off everywhere would look like. The rule above cannot see
+       it, because it only ever asks about writes that happened. */
+    if (steps.size > 1 && calls.every((c) => c.cacheWriteTokens === 0 && c.cacheReadTokens === 0)) {
+      findings.push({
+        kind: "unclaimed-cache-write",
+        step: calls[0]?.stepName ?? null,
+        fatal: true,
+        message:
+          `This batched job ran ${[...steps].join(" and ")}, which share one cached article prefix, ` +
+          "and no call wrote or read a single cached token. A pair that shares a group and caches " +
+          "nothing means neither request carried a `cache_control` breakpoint — the whole saving " +
+          "this scenario exists to measure is silently absent, and every number here is a cold one " +
+          "wearing a batched label.",
+      });
+    }
+  }
+  return findings;
+}
+
 /**
  * **Unknown is fatal, and the message has to say which kind of fatal.**
  *
@@ -673,13 +849,13 @@ export function checkColdDraw(
  * called cold — which is a different sentence from "it was warm", and a reader
  * who is told the wrong one goes looking for the wrong thing.
  */
-function noCacheTelemetry(row: AiCallRow, what: string): Finding {
+function noCacheTelemetry(row: AiCallRow, what: string, field = "cache-read"): Finding {
   return {
     kind: "unknown-cache-telemetry",
     step: row.stepName,
     fatal: true,
     message:
-      `${what} reported no cache-read count at all (${row.requestedModel} via ` +
+      `${what} reported no ${field} count at all (${row.requestedModel} via ` +
       `${row.upstream ?? "an upstream that did not say"}), so there is no evidence it was cold. ` +
       "Fatal because it is unknown, not because it is warm: coercing the absent field to zero " +
       "is what let a guard with nothing under it pass.",

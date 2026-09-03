@@ -29,6 +29,11 @@
        this project, so it is checked by this project. */
     "vite.api.config.ts",
     "vitest.config.ts",
+    /* Throwaway, and deleted in Stage D of
+       docs/plans/260903e-a-private-test-database-so-the-suite-stops-racing-dev-servers.md
+       once the real factory replaces it. Listed so `npm run check` covers it
+       rather than reporting it as a file no project checks. */
+    "vitest.spike.config.ts",
     "drizzle.config.ts"
   ],
   "exclude": ["src/web"]
