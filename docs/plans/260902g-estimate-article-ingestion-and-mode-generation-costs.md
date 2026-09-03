@@ -514,15 +514,90 @@ free, which was checked in the code before running rather than assumed.
 
 ### Stage: All modes, all three articles, with repeats where variance lives
 
-- [ ] Extend to every per-article mode step (arc, tweets, glossary, quotes, ideas, timeline,
-      quiz, sketch) plus article embeddings and referee stored artefacts, after ingest, cold,
-      separable per (article, step).
-- [ ] Long-article hierarchy: 3–5 independent cold draws under fresh slugs, interleaved; report
-      the variation treatment from Principles.
-- [ ] Per-interaction unit costs (chat turn, quiz marking, explain, search, referee per-turn,
-      dictation): one sample call each or representative ledger rows; for request-path scenarios
-      report cold first touch and warm later turn separately (the article cache is real there).
+**Design settled 2026-09-03** with Fable, then each load-bearing claim re-checked against the code
+by the orchestrator (two of them moved). Greg authorised up to **$20**; the plan below spends
+about **$6**.
+
+#### The decision that shapes the stage: ingest once, then one job per mode
+
+A per-mode cost has to be **cold**, and the runner mints a fresh slug and URL per draw — so the
+obvious shape pays for ingest once per mode, eight times over. On `long-html` that is ~$3.40 of
+ingest bought purely as scaffolding, per fixture.
+
+Instead: **ingest once, then run each mode as its own job against the adopted article.** Sound
+because the cache is marked *per job*, and there is no entry for a later job to read:
+
+- `runStep` sets `cacheArticle` from `sharesArticleCache(step, laterStepsOfThisJob)`
+  ([`src/pipeline.ts`](../../src/pipeline.ts) § `sharesArticleCache`). A single-mode job's `later`
+  list is **empty**, so it marks nothing and writes no cache entry.
+- Anthropic's cache is **explicit-only** (`cache_control`), and every article mode is Anthropic:
+  `QUICK_MODEL_OPENROUTER` and `PDF_READER_MODEL` are used in exactly one file,
+  [`src/pdf-read.ts`](../../src/pdf-read.ts). **This is the correction to the design review**,
+  which noted that OpenAI models cache a repeated prefix *automatically* — true, and it would span
+  jobs — but then argued it away only for `extract`. It is contained because no mode goes near an
+  OpenAI model. The automatic cache therefore bears on PDF `extract` alone, which this shape runs
+  **once** per fixture; the discarded shape would have re-run it eight times and quietly warmed it.
+- Adoption is a designed path, not a trick: a job arriving with neither URL nor upload is
+  `{kind: "adopted"}` ([`src/jobs.ts`](../../src/jobs.ts) § `enqueue`), whose docstring says
+  several such jobs queuing on one article "is the whole of what Greg asked for".
+
+- [ ] **`--all-modes`**: per fixture, one ingest draw, then eight single-mode jobs (`arc`,
+      `tweets`, `glossary`, `quotes`, `ideas`, `timeline`, `quiz`, `sketch`) against the adopted
+      article. One `run.json`, one cleanup. Plus article embeddings and referee stored artefacts.
+- [ ] **`--against <slug>`**: a job on an article that already exists, for the batched-mode
+      scenario. A mode already generated on that article **skips** on its `stepIsDone` stamp
+      ([`src/pipeline.ts`](../../src/pipeline.ts)), which the existing fatal `no-spend` finding
+      turns into a stop rather than a wrong number — so batched draws must target articles where
+      those modes have never run.
+- [ ] **A finding that tests the coldness rather than arguing it.** On a per-mode draw, the
+      **earliest call by `startedAt`** having `cacheReadTokens > 0` is **fatal** — allowed under
+      `--batched-modes`, where a warm read is the point. Earliest, not any: a later call in the
+      same step reading off the first is within-run caching, which Principles keeps as part of
+      production cost. This is the whole argument above, made falsifiable.
+- [ ] **Long-article hierarchy: 4 cold draws** — the `--all-modes` ingest is draw 1, plus
+      `--repeat 3`. Report median, range, truncation/semantic-failure count, cost conditional on
+      success and total paid cost, as *observed variation* (Principles). A fifth draw only if the
+      range exceeds ~30% of the median.
+- [ ] **Per-interaction unit costs: driven live, in a new `evals/cost/interactions.ts`** — chat
+      turn, quiz marking, explain, search, referee per-turn, dictation, cold and warm reported
+      separately. Not harvested from the ledger: no row records the commit, so a prompt or
+      `max_tokens` change is invisible; chat's historical warm rows straddle the 2026-08-26
+      automatic-breakpoint bug (postmortem 260826h) and so describe a broken-cache era; and the
+      referee tasks have no coverage at all. Historical figures become **sanity cross-checks, not
+      comparators**. Viable with no production change: the only request-path collector is the one
+      `handleApi` opens ([`src/routes.ts`](../../src/routes.ts)), and no request-path function
+      opens a nested `collectSpend`, so calling those functions under
+      `withLedger("eval", () => runAsOwner(EVAL_OWNER_ID, …))` records eval-scoped rows.
+      **Correcting the review again**: request-path calls send no effort parameter at all, so the
+      moved-constant trap does not literally apply to them — the other three grounds stand.
 - [ ] Run over all three fixtures. Stop & review with Greg: the range, ranked expensive bits.
+
+#### The run, in order, with what each line is expected to cost
+
+Estimates, not promises — the point of the stage is that nobody knows these yet. The run stops on
+any fatal finding, so an overrun surfaces as a stopped run rather than a bill.
+
+| # | Command | Est. |
+|---|---|---|
+| 1 | `npm run eval:cost -- --preflight` | $0 |
+| 2 | `--fixture short-html --all-modes` | ~$0.35 |
+| 3 | `--fixture pdf --all-modes` | ~$1.25 |
+| 4 | `--fixture long-html --all-modes` (its ingest is hierarchy draw 1) | ~$1.40 |
+| 5 | `--fixture long-html --repeat 3 --steps fetch,extract,blocks,hierarchy --keep` (draws 2–4) | ~$1.35 |
+| 6 | `npx tsx evals/cost/interactions.ts` against a kept article, cold and warm | ~$0.80 |
+| 7–9 | `--against <kept-n> --batched-modes` for `arc,tweets` · `glossary,quotes` · `ideas,timeline` | ~$0.55 |
+| 10 | Delete the kept articles and jobs by recorded id; ledger rows stay | $0 |
+
+**~$5.70, worst case ~$8**, against $20 authorised. The remainder is deliberately left unspent for
+the model-arms follow-up rather than absorbed here.
+
+Lines 7–9 are the first measurement of `sharesArticleCache` **paying off** — what a reader who
+presses two buttons at once actually pays, against two separate presses. It has never been priced.
+
+**Two corpus gaps stay open and are Greg's call, not this stage's**: nothing checked in is a normal
+~1,000-word article (the hole runs 625 → 1,638 words), and no PDF fixture is near 20 pages. Both
+would be new material, and [`fixtures.ts`](../../evals/cost/fixtures.ts) says what gets measured is
+a decision. The report must say **561 words**, not "about a thousand".
 
 ### Stage: Committed report + docs
 
