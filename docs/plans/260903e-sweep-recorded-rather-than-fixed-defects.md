@@ -517,7 +517,10 @@ be "top of the queue for the next weekly sweep". Sol pointed out that is another
 it is: a queue nobody owns is a sentence. So the first item below gets a **named plan** instead, and
 the rest are honestly just recorded.
 
-- **Content extraction silently drops headings, tables and math** (`content-extraction.md:134`,
+- **Content extraction silently drops headings, tables and math** — now
+  [260903i](260903i-fix-content-extraction-structural-loss-and-junk-blocks.md), a named plan rather
+  than a line in this list, which is the only thing that distinguishes it from the deferrals this
+  document is about. (`content-extraction.md:134`,
   *"The rest is not fixed… nothing reports it"*). 13 of 15 fixture pages lose 10%+ of some structural
   element; Wikipedia's *Transformer* loses all 188 `<math>` elements; 87 of 328 blocks on one article
   are ≤6 characters and all `gistable`, so bracket-citations become TOC entries. This corrupts the
