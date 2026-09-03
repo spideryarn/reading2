@@ -341,9 +341,13 @@ Three rules that outrank convenience, all learned the expensive way:
 - **A guard belongs on the thing, not on the place.** `guardDbStore` was applied at every selection
   in `src/store/index.ts` and at none of the three outside it, so on 2026-08-27 the shelf rendered a
   failed `select … from "spideryarn"."jobs"` — its columns, its `where` and the owner's uuid — in red
-  on the homepage. Every Postgres store is now wrapped **at its export**, so there is no unguarded
-  spelling left to import, and [`tests/store-guarded.test.ts`](../../tests/store-guarded.test.ts)
-  asks the objects rather than the source. See
+  on the homepage. Every Postgres store the owner's routes use is now wrapped **at its export**, so
+  there is no unguarded spelling left to import, and
+  [`tests/store-guarded.test.ts`](../../tests/store-guarded.test.ts) asks the objects rather than the
+  source. **The public reader is the one exception and is not an oversight**:
+  [`src/store/public-reader.ts`](../../src/store/public-reader.ts) scrubs its own, deliberately and
+  more narrowly, because its import graph is closed and walked by
+  [`tests/public-imports.test.ts`](../../tests/public-imports.test.ts). See
   [the postmortem](../postmortems/260827c-unguarded-job-store-and-the-migration-that-migrated-the-laptop.md).
 
 Everything below is still planned, not built. The whole design — the schema, the reasoning, and the things that break quietly —

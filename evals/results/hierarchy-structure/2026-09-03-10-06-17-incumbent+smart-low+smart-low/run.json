@@ -1,0 +1,363 @@
+{
+  "startedAt": "2026-09-03T10:06:17.493Z",
+  "commit": "2568d142e0d3aeef0703c231f30032586ef87451",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "incumbent",
+      "kind": "one-call",
+      "comparison": "baseline",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "medium"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-low",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-low",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    }
+  ],
+  "results": [
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 1,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 134
+        },
+        "parts": {
+          "count": 7,
+          "words": [
+            2044,
+            1555,
+            2700,
+            1553,
+            1692,
+            3076,
+            17
+          ],
+          "balanceCv": 0.5046230276730972
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 5.333333333333333,
+          "max": 26,
+          "within5to9": 0.42424242424242425
+        },
+        "headings": {
+          "boundaries": 24,
+          "boundariesOnHeadings": 0.625,
+          "headingsCut": 0.625,
+          "l1OnHeadings": 0.8333333333333334,
+          "sourceHeadingShare": 0.48484848484848486,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 33,
+          "meanWords": 2.696969696969697,
+          "within2to6": 0.8181818181818182,
+          "copiedHeadings": 15,
+          "retention": 0.7222222222222222
+        },
+        "gists": {
+          "count": 33,
+          "coverage": 1,
+          "meanWords": 20.545454545454547,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.5215014857080329
+        }
+      },
+      "calls": [
+        {
+          "ms": 137303,
+          "inputTokens": 28625,
+          "outputTokens": 14570,
+          "reasoningTokens": 11107,
+          "generationId": "gen-1788429978-Sfso3KnPPbzN6ryWdNn4",
+          "costUsd": 0.20295,
+          "providerCostUsd": 0.20295
+        }
+      ],
+      "repaired": {
+        "ranges": 11,
+        "blocks": 11,
+        "largest": 1,
+        "where": [
+          "root > child 2 (overlap, 1)",
+          "root > child 3 (overlap, 1)",
+          "root > child 7 (gap, 1)",
+          "root > child 1 > child 3 (overlap, 1)",
+          "root > child 1 > child 4 (overlap, 1)",
+          "root > child 1 > child 4 (over, 1)",
+          "root > child 2 > child 2 (overlap, 1)",
+          "root > child 3 > child 2 (overlap, 1)",
+          "root > child 4 > child 1 (gap, 1)",
+          "root > child 6 > child 1 (gap, 1)",
+          "root > child 6 > child 4 (short, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 7 > child 1"
+        ]
+      }
+    },
+    {
+      "arm": "smart-low",
+      "comparison": "isolated",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 2,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 134
+        },
+        "parts": {
+          "count": 7,
+          "words": [
+            1385,
+            871,
+            1532,
+            2511,
+            3245,
+            3080,
+            13
+          ],
+          "balanceCv": 0.6115553755951147
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 5.766666666666667,
+          "max": 15,
+          "within5to9": 0.43333333333333335
+        },
+        "headings": {
+          "boundaries": 21,
+          "boundariesOnHeadings": 0.8095238095238095,
+          "headingsCut": 0.7083333333333334,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.5,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 30,
+          "meanWords": 2.6333333333333333,
+          "within2to6": 0.8,
+          "copiedHeadings": 14,
+          "retention": 0.59375
+        },
+        "gists": {
+          "count": 30,
+          "coverage": 1,
+          "meanWords": 18.733333333333334,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.5091154319250293
+        }
+      },
+      "calls": [
+        {
+          "ms": 59151,
+          "inputTokens": 28625,
+          "outputTokens": 6029,
+          "reasoningTokens": 2812,
+          "generationId": "gen-1788430115-OINDFIV8jRuWgp6xYTmT",
+          "costUsd": 0.11754,
+          "providerCostUsd": 0.11754
+        }
+      ],
+      "repaired": {
+        "ranges": 5,
+        "blocks": 7,
+        "largest": 2,
+        "where": [
+          "root > child 7 (gap, 2)",
+          "root > child 6 > child 2 (gap, 1)",
+          "root > child 6 > child 6 (short, 2)",
+          "root > child 7 > child 1 (overlap, 1)",
+          "root > child 7 > child 3 (gap, 2)"
+        ],
+        "droppedChildren": [
+          "root > child 7 > child 2"
+        ],
+        "droppedHeadings": []
+      }
+    },
+    {
+      "arm": "smart-low",
+      "comparison": "isolated",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 3,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 134
+        },
+        "parts": {
+          "count": 8,
+          "words": [
+            1065,
+            979,
+            1744,
+            2511,
+            1553,
+            1692,
+            3080,
+            13
+          ],
+          "balanceCv": 0.5590531087955459
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 5.333333333333333,
+          "max": 26,
+          "within5to9": 0.42424242424242425
+        },
+        "headings": {
+          "boundaries": 23,
+          "boundariesOnHeadings": 0.6521739130434783,
+          "headingsCut": 0.625,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.36363636363636365,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 33,
+          "meanWords": 2.878787878787879,
+          "within2to6": 0.8787878787878788,
+          "copiedHeadings": 10,
+          "retention": 0.644927536231884
+        },
+        "gists": {
+          "count": 33,
+          "coverage": 1,
+          "meanWords": 18.363636363636363,
+          "multiSentence": 0,
+          "templateRepetition": 0.12121212121212122,
+          "retention": 0.4990049855128662
+        }
+      },
+      "calls": [
+        {
+          "ms": 61712,
+          "inputTokens": 28625,
+          "outputTokens": 6298,
+          "reasoningTokens": 2994,
+          "generationId": "gen-1788430174-eRIxz8SEgp408TnzBVhA",
+          "costUsd": 0.12023,
+          "providerCostUsd": 0.12023
+        }
+      ],
+      "repaired": {
+        "ranges": 7,
+        "blocks": 10,
+        "largest": 2,
+        "where": [
+          "root > child 3 (overlap, 1)",
+          "root > child 8 (gap, 2)",
+          "root > child 7 > child 2 (gap, 1)",
+          "root > child 7 > child 4 (gap, 2)",
+          "root > child 7 > child 4 (short, 2)",
+          "root > child 8 > child 1 (overlap, 1)",
+          "root > child 8 > child 3 (gap, 2)"
+        ],
+        "droppedChildren": [
+          "root > child 8 > child 2"
+        ],
+        "droppedHeadings": [
+          "root > child 8 > child 1"
+        ]
+      }
+    }
+  ]
+}
