@@ -155,6 +155,24 @@ Switching tabs, navigating anywhere in the app, and locking the phone are all fi
   409). The engine calls them; it does not reimplement them.
 - **The `File` stays in memory for the life of the transfer, and nowhere else.** No IndexedDB, no
   attempt at resumption across a reload — see *What this does not fix*.
+- **Retry re-PUTs the same `File` to the same grant, and that is measured rather than assumed.**
+  A signed upload grant is **not single-use**: it is a JWT carrying `{url, upsert:false,
+  scope:"upload", exp}` with `exp` two hours out (`GRANT_SECONDS`,
+  [`src/store/blobs-supabase.ts`](../../src/store/blobs-supabase.ts)), so what a second PUT hits is
+  the *object*, not a spent token. Measured against the local Supabase stack on 2026-09-03
+  (storage-api at `127.0.0.1:54361`, bucket `sources`):
+
+  | sequence | result |
+  | --- | --- |
+  | sign → PUT | `200` |
+  | → PUT again, same token | `400` body `{"statusCode":"409","error":"Duplicate"}` |
+  | sign → PUT aborted at 320 KB of 5 MB | no object at all (`HEAD` → not found) |
+  | → PUT again in full, same token | `200` |
+
+  So the case retry exists for — a transfer that failed partway — works, and the case where it
+  cannot help is already answered by `uploadFailure(409)`: *"That file has already been sent. Choose
+  it again to start over. [st-dup]"*. `realStatus` in `src/web/upload.ts` is what turns that `400`
+  into a `409`, which is the scar from the last time this pair was reasoned about instead of run.
 - **`chosen` stays component state; the transfer does not.** A file picked and not yet committed
   should die when you leave the shelf. A file being sent should not.
 
