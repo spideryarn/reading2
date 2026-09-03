@@ -470,11 +470,17 @@ not re-derive it. The honest ceiling for this class is a test per instance, not 
   believing it is happening.
 - **T3.2 · Schema-per-worktree.** Already written up in [worktrees.md](../project/worktrees.md).
   See T1.3 for why the cheap version is a regression.
-- **T3.3 · `src/db/client.ts:54` pool on reload.** `let pool: Pool | undefined`, and `closeDb()` is
-  called only from CLI scripts — nothing fires it on a dev-server module reload. Each reload may
-  abandon up to `poolMax()` = 5 connections unclosed. **Hypothesis, not proved**: no exhaustion was
-  reproduced, and `process-state.ts` explicitly carves out "a lazily-built client" as fine to
-  duplicate. Wants a measurement against the pooler limit before anyone acts. Flagged, not scheduled.
+- **T3.3 · `src/db/client.ts:54` pool on reload — ~~flagged~~ struck. Not a defect.**
+  The claim was that a reload abandons up to `poolMax()` = 5 connections because `closeDb()` only
+  runs from CLI scripts. I deferred it as "wants a measurement, not an opinion". **It wanted one line
+  of reading:** `node_modules/pg-pool/index.js:99` defaults `idleTimeoutMillis` to 10,000 ms with
+  `min` 0, and the timer is per-client — so an abandoned pool's connections close themselves within
+  about ten seconds whether or not anything still references the `Pool`. Worst case is ≤5 extra
+  connections for ten seconds against a local Postgres with a 100-connection ceiling.
+  `process-state.ts` also says outright that "a lazily-built client" is fine to duplicate, so the
+  `globalThis` escape hatch was never the answer either.
+  **The lesson is about me, not the pool: "wants a measurement" is a task, and deferring it cost more
+  words than doing it.**
 
 ---
 
@@ -589,28 +595,87 @@ the one that mattered and the plan had called it clean. Same file, so it stays o
 also carries the `sse()` count comment and, in adjacent files the lane owns outright,
 `src/comments.ts` and `src/store/db-errors.ts`.
 
-### Deferred for Greg — questions, not work
+### Deferred for Greg — mostly not questions after all
+
+**Read this heading's history before adding to it.** It said *"questions, not work"* and listed five
+items. Fable was asked to arbitrate them and found **four were actions I had mislabelled as
+questions**, one of which had been answered days earlier. That is a failure mode in its own right:
+over-deferring hands Greg a pile of small decisions he should not have to make, and it is harder to
+notice than over-reaching because it looks like caution. **The test that catches it: can I name the
+thing only Greg knows? If not, it is work.**
+
+What each turned out to be is recorded in place below rather than deleted.
 
 Carried forward from [260903a](260903a-improve-the-codebase-sweep.md), still open, and **not actioned
 in this run**:
 
-1. **The `check-staged-revert` pre-commit hook.** Linked worktrees share one `.git/hooks/`, so
-   installing one changes every agent's commits in every tree at once; and hooks are not in version
-   control, so it would live on this box only. Reasons in
-   [260903a-…-doc-proposals.md](260903a-improve-the-codebase-sweep-doc-proposals.md).
-2. **`DELETE /api/glossary/:slug`** — a declared 501, blocked on
-   [260826e](260826e-postgres-storage-implementation.md)'s open question about mutating a published
-   revision. A product decision.
-3. **`src/web/styles.css` at 12,898 lines** — measured on this tree, not carried over. The review
-   caught this plan quoting yesterday's 12,830, which is the same drift
-   [260903a](260903a-improve-the-codebase-sweep.md) had just corrected from "~1200": **the number
-   moved again within a day, which is itself the argument for citing a command rather than a
-   figure.** Recommendation unchanged: leave it. One long file with one reason to change is just a
-   long file.
+1. ~~**The `check-staged-revert` pre-commit hook.**~~ **Not a question — Greg answered it on
+   2026-09-02 and I did not look.** [260902b](260902b-protect-main-from-an-accidental-push.md)
+   already designs what this needs (a tracked `.githooks/` plus one `core.hooksPath` flip) and
+   records: *"Just write a plan, and make minimal changes to AGENTS.md if needed … for now."* There
+   is no safe partial version — `core.hooksPath` lives in the shared `.git/config`, so it flips every
+   worktree whenever it happens — so the right move was never "ask again" but "attach to the flip
+   already planned". **Done:** `pre-commit` is now a second hook in that plan's Stage 1, with the one
+   thing to verify named. Nothing to decide here.
+2. **`DELETE /api/glossary/:slug`** — **the blocker was resolved and the pointer outlived it.**
+   `SEAM_ASYMMETRIES` said this was blocked on step 11 of
+   [260826e](260826e-postgres-storage-implementation.md) deciding whether a published revision may be
+   mutated. **It decided yes**, and the answer is in `src/db/schema.ts` on `article_revisions`:
+   *"Immutable in its text"* — with `glossary` named there as one of four columns written onto an
+   already-published revision in a single `UPDATE`, which `src/store/artifacts-pg.ts` does on every
+   glossary run today. Nulling the column is that same write.
+
+   So this is **not a product decision; it is unbuilt work behind a stale sign** — and meanwhile the
+   deployed app's "start again" button answers 501. The entry now says so. **Not built here**:
+   restoring a feature is outside a sweep, and one thing must be settled first that is implementation
+   rather than permission. Nulling the column does not change the step's fingerprint
+   (`FINGERPRINT_COLUMNS` hashes the step's *inputs* — tree, title, byline, siteName), so check
+   whether an ordinary run re-runs `glossary` afterwards or whether the `revision_step_runs` row
+   still says done. **If the latter, the delete must remove that row too, or "start again" deletes a
+   glossary that nothing regenerates** — worse than the 501 it replaces.
+   **This is the one item worth your attention, and as an FYI rather than a question.**
+3. ~~**`src/web/styles.css`**~~ — **removed from this list. It was already settled and I re-opened
+   it.** [design-css-overview.md](../project/design-css-overview.md) calls it genuinely undecided and
+   [260903a](260903a-improve-the-codebase-sweep.md) T3.2 already said "Greg's call, not an
+   engineering one, named here only so the next sweep does not re-open it". This sweep re-opened it.
+   No drift inside, one reason to change: leave it, and stop putting it in front of him every week.
+   (It is 12,898 lines today, not the 12,830 this plan first quoted — the figure moved within a day,
+   which is the argument for citing a command rather than a number.)
+   **The one angle nobody has looked at is not size but contention**: 128 commits in 60 days into one
+   file that ten-plus agents share is a merge-conflict magnet, and that *would* be engineering rather
+   than taste. Nobody has measured a conflict rate, so it is not a finding — it is what to measure if
+   this ever comes back.
 
 New, and also Greg's:
 
 4. **T3.3, the pool on reload** — wants a measurement, not an opinion.
+5. ~~**Raise vitest's global `testTimeout`.**~~ **Done — 30s, with `hookTimeout` to match.**
+   Deferred first as "a repo-wide policy change", then applied on Fable's argument, which is better
+   than mine was: *"affects every agent's runs" is true of every test-config line and every
+   dependency bump you committed tonight without asking.* The repo already argues for it in its own
+   voice, thirty-odd files already set 20–60s locally, and this applies that policy once rather than
+   one bite at a time. The five suites that were timing out now pass in 10.7s together.
+
+   **The measurement.** `vitest.config.ts` sets no `testTimeout`, so everything runs on vitest's 5s
+   default. Every one of tonight's ~60 spurious failures was a timeout at that boundary, and the
+   suites that hit it — `tests/pdf-chunk-concurrency.ts`, `pdf-seam-hyphens`, `block-policy-prompts`,
+   `health-schema`, `ai-calls-spend-pg` — legitimately take **5–9 seconds** doing real work (parsing
+   a PDF, building twelve prompts). **None of them sets its own timeout.** They are not slow because
+   something is wrong; they are within a factor of two of the default, so they fail whenever the box
+   is busy, which on this machine is most of the time.
+
+   **The repo already argues for this, in the paragraph T1.2 corrected**
+   ([testing.md](../project/testing.md)): *"Being generous costs nothing except when something really
+   is stuck; being tight costs whoever is unlucky."* That is exactly this case, and the guidance is
+   currently applied per-file by whoever gets bitten — `tests/lockfile.test.ts` has 60s, and got it
+   the day somebody lost time to it.
+
+   **The trade-off, named rather than buried:** a genuinely hung test would take 30s to fail instead
+   of 5s. Against tonight, where the 5s default produced a gate nobody could read and hid one real
+   regression behind six false ones, that looks like a good trade — but it is a policy about every
+   agent's runs, not a fix to a defect, and the evidence for it is confounded by the very load it is
+   about. **Greg's call.** The narrower alternative is per-file timeouts on the five named above,
+   which is more edits and does not cover the sixth suite to drift over the line.
 
 ### Not doing, and why
 

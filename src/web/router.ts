@@ -233,7 +233,7 @@ export function parseRoute(pathname: string): Route {
   if (new RegExp(`^${LOGIN_HREF}/?$`).test(pathname)) return { kind: "login" };
   // Beside `design` and above `/read/` for the same reason: it is not about an
   // article, so the article regex must never get a chance at it.
-  if (/^\/profile\/?$/.test(pathname)) return { kind: "profile" };
+  if (new RegExp(`^${PROFILE_HREF}/?$`).test(pathname)) return { kind: "profile" };
   // Beside `design` and `profile`, and for the same reason. Above `/read/`
   // because it is not about an article, and above the sign-in gate in App.tsx
   // because it is not about being signed in either.
@@ -350,6 +350,16 @@ export const ADMIN_USERS_HREF = "/admin/users";
 export const ADMIN_FEEDBACK_HREF = "/admin/feedback";
 export const DESIGN_HREF = "/design";
 export const LOGIN_HREF = "/login";
+/**
+ * The reader's own page — the profile box, the plan, the settings.
+ *
+ * A constant for the same reason `ADMIN_HREF` is one, and it earned it: the
+ * string was written out at three call sites before the quota's refusal copy
+ * needed a fourth (`QuotaNotice` in QuotaNotice.tsx), which is the point at
+ * which a typo stops being a broken link and starts being a reader who has just
+ * been refused an article landing on the shelf with no way forward.
+ */
+export const PROFILE_HREF = "/profile";
 /**
  * The privacy policy. Linked from the landing page's footer and from
  * `/profile`, so both a stranger and a reader can find it.

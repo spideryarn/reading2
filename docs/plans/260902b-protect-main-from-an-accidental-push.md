@@ -169,6 +169,35 @@ which is where all the current risk is.
       test — and say which was chosen.
 - [ ] `npm test` and `npm run typecheck`.
 
+#### And a second hook, riding the same flip: `pre-commit` → `check-staged-revert`
+
+Added 2026-09-03 by [260903d](260903d-improve-the-codebase-second-sweep.md), which reached this from
+the other end and found it belonged here rather than in a list of its own.
+
+`scripts/check-staged-revert.ts` is the guard written after the day that cost six hours. It is an npm
+script named in AGENTS.md's commit recipe, which means it protects everyone who reads the recipe —
+and the population it exists for is whoever did not. **It wants to be a hook for exactly the reason
+`pre-push` does, and it should not be a second decision:** `core.hooksPath` lives in the shared
+`.git/config`, so flipping it changes every worktree at once whenever it happens. One flip, two
+hooks.
+
+- [ ] `.githooks/pre-commit`, running `scripts/check-staged-revert.ts`, tracked alongside
+      `pre-push`.
+- [ ] Its own red-first test, same shape as the list above: an index that undoes a commit ⇒ refuses;
+      an ordinary staged change ⇒ allows; **nothing staged at all** ⇒ allows, which is the case a
+      pathspec commit produces and the one most likely to be got wrong.
+- [ ] **Check, rather than assume, that the hook sees a better index than the npm script does.** The
+      recipe's `npm run check:staged-revert` inspects the *shared* index — the very thing the
+      pathspec form of `git commit -- <paths>` then ignores. Git is documented to build a temporary
+      index for a pathspec commit and to run `pre-commit` against it, which would make the hook
+      strictly more accurate than the script in both the safe and the unsafe form. **That is the
+      strongest argument for the hook and it is the one thing here nobody has verified on this box.**
+      Verify it before relying on it; if it does not hold, the hook is only louder, not better.
+- [ ] Guard the failure mode that would block every agent: a worktree without `node_modules` cannot
+      run `npx tsx`, and a hook that dies there refuses every commit in every tree. Decide whether it
+      fails open with a warning or hard, and say which — this is the reason not to install it
+      casually.
+
 ### Stage 2 — make it survive a fresh clone, and notice when it has not
 
 The hook is worthless if it is not installed, and **an uninstalled hook looks exactly like a
