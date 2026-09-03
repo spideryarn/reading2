@@ -984,6 +984,41 @@ recorded in D′1a: a private symbol breaks under module duplication.
 which is the third such collision in this plan (260903e, the glossary delete, and now this). It is
 not a problem to solve here, but it is the reason this document re-derives rather than inherits.
 
+**And the "unforgeable" claim is not true, measured 2026-09-03.** `ad22f508`'s message says *"make
+the scrubbed-error mark unforgeable"* and `db-errors.ts` says the mark *"can only be put here"*.
+Neither holds. `SCRUBBED` is `Symbol.for("spideryarn.scrubbedDbError")`, and `Symbol.for` reads a
+**process-global registry any module can reach** — that was the deliberate choice, for a good reason
+(a module-private symbol breaks under module duplication), but it means the key is public by
+construction.
+
+What actually rejects the committed forge test in
+[`store-guard-idempotent.test.ts`](../../tests/store-guard-idempotent.test.ts) is **the freeze, not
+the mark** — that test marks its error and leaves it unfrozen. Probed both arms directly:
+
+| the forged error | result |
+|---|---|
+| carries the real `SCRUBBED` key, **not** frozen | scrubbed to `STORAGE_FAILED` — the committed test's case |
+| carries the real `SCRUBBED` key **and** is frozen | **passes through unscrubbed**, `SENTINEL-frozen` intact |
+
+So the boundary is *mark plus freeze*, and **a forger can supply both** in two lines. The same
+finding is P1 of [`260903e-merge-review-sol.md`](260903e-merge-review-sol.md), reached independently
+by another worktree's reviewer.
+
+**What the real defence is, and it should be the one written down.** Nothing can make a guarded
+store throw an attacker-constructed object: the errors reaching `mayPassThrough` come from Drizzle,
+from `pg`, or from our own named classes, and an attacker controls article *content* — Drizzle's
+bound parameters — not the shape of a thrown object. That is a sound argument and it is why this is
+**not** live. It is also a much narrower claim than "unforgeable", and the gap matters: if some later
+path rethrows a caller-supplied object, the boundary fails silently and the comment says it cannot.
+
+**Not fixed here, deliberately.** `db-errors.ts` is another worktree's active area as of
+2026-09-03, that reviewer already has the finding, and CLAUDE.md's rule is to stay inside your stage
+and talk through artefacts rather than reaching into somebody else's code. This paragraph is the
+artefact. **What this plan must not do is inherit the stronger claim** — D′1's account of the
+boundary is exactly as strong as the paragraph above, and no stronger. The right long-term fix is
+probably to stop describing the freeze as an integrity check *and* an authenticity check, since it
+is only the first; whoever fixes it should say which of the two the code is actually buying.
+
 #### And it surfaced a live instance of 260901d's class, seven times over
 
 **The mechanism, stated generally, because it will recur:** guarding a store at its *export* means
