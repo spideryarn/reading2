@@ -1214,6 +1214,13 @@ export async function openRouterJson(
     /* Read once, before the status is judged. A failed body still has to be
        consumed or the connection leaks, and reading it twice throws. */
     const text = await response.text();
+    /* **The images seam does this the other way round on purpose**, parsing the
+       body and metering any `usage` in it *before* judging the status, because
+       a `429` there arrives carrying the cost of a plate that was already drawn
+       (`openRouterImage` below). It has not been changed here, and that is a
+       gap rather than a decision: no non-2xx on this wire has been *observed*
+       carrying usage, and nobody has looked. If you are here because a chat
+       call's money went missing, this is the line. */
     if (!response.ok) {
       outcome = "error";
       throw new ProviderRefused(response.status, text, response.headers);
@@ -1513,10 +1520,6 @@ export async function openRouterImage(
     /* Read once, before the status is judged: a failed body still has to be
        consumed or the connection leaks, and reading it twice throws. */
     const text = await response.text();
-    if (!response.ok) {
-      outcome = "error";
-      throw new ProviderRefused(response.status, text, response.headers);
-    }
     let json: unknown = null;
     try {
       json = JSON.parse(text);
@@ -1526,11 +1529,26 @@ export async function openRouterImage(
          the article. `readPlate` throws our own sentence a line below. */
     }
     const record = json as ImageBody | null;
-    /* **Before the picture is read**, so a 200 that generated a plate and then
-       refused to hand it over is still billed for the plate it generated. */
+    /* **The usage is read before the status is judged, and before the picture
+       is read.** Both orders were wrong once and in the same direction — money
+       the provider told us about, thrown away because of what we decided to do
+       next:
+         - a `200` that generated a plate and then refused to hand it over is
+           still billed for the plate it generated;
+         - a **`429` whose body carries `usage`** is a call the provider priced,
+           and rejecting it on the status before parsing recorded an unpriced
+           error row for a plate that had already cost $0.013 (GPT Sol,
+           2026-09-03). Nothing about a non-2xx makes its `usage` less true.
+       The body is still never quoted: `ProviderRefused` gets the text and
+       decides what may be said about it, and nothing from it reaches a message
+       of ours. */
     if (record?.usage) meter.saw(record.usage);
     meter.sawModel(record?.model);
     meter.sawUpstream(record?.provider);
+    if (!response.ok) {
+      outcome = "error";
+      throw new ProviderRefused(response.status, text, response.headers);
+    }
     const plate = readPlate(record);
     return {
       image: plate.image,

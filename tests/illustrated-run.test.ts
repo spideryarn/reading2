@@ -6,11 +6,18 @@
  * reason. Neither goes near a provider, which is what
  * tests/setup/provider-guard.ts requires of every test anyway.
  *
- * The case with the money in it is **partial failure**. The blob store is
- * content-addressed and create-only, so plate 2 throwing must not discard
- * plates 1 and 3 — they were paid for, and a run that threw the lot away would
- * charge twice for the same picture on the retry
- * (docs/plans/260903c-illustrated-diagram-sub-mode.md § Two hazards).
+ * Three cases carry the money and the reader's press between them:
+ *
+ *  - **partial failure.** The blob store is content-addressed and create-only,
+ *    so plate 2 throwing must not discard plates 1 and 3 — they were paid for,
+ *    and a run that threw the lot away would charge twice for the same picture
+ *    on the retry (plan § Two hazards).
+ *  - **cancellation, which is the opposite event in the same clothes.** An
+ *    abort caught as a plate failure called the provider again for every
+ *    remaining plate with the already-aborted signal, and came back looking
+ *    finished (GPT Sol, 2026-09-03).
+ *  - **sequential, proved by concurrency rather than by order.** The old test
+ *    asserted the order of invocation, which `Promise.all` also satisfies.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -26,8 +33,11 @@ vi.mock("../src/messages-stream.js", () => ({
   wasRefused: () => false,
 }));
 
-const { generateIllustrated } = await import("../src/illustrated.js");
+const { generateIllustrated, imagePrompt } = await import("../src/illustrated.js");
 const { MAX_PLATES } = await import("../src/illustrated-plate.js");
+
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 import type { Article } from "../src/article-input.js";
 import type { DrawPlate } from "../src/illustrated.js";
@@ -123,7 +133,7 @@ const BRIEF = {
 };
 
 /** A `draw` that succeeds, remembering what it was asked. */
-function drawer(fail?: (i: number) => boolean): {
+function drawer(fail?: (i: number) => Error | boolean | undefined): {
   draw: DrawPlate;
   calls: Parameters<DrawPlate>[0][];
 } {
@@ -131,7 +141,8 @@ function drawer(fail?: (i: number) => boolean): {
   const draw: DrawPlate = async (req) => {
     const i = calls.length;
     calls.push(req);
-    if (fail?.(i)) throw new Error("the illustrator could not be reached");
+    const bad = fail?.(i);
+    if (bad) throw bad === true ? new Error("the illustrator could not be reached") : bad;
     return {
       image: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, i]),
       mediaType: "image/jpeg",
@@ -141,24 +152,53 @@ function drawer(fail?: (i: number) => boolean): {
   return { draw, calls };
 }
 
+/** The error an aborted `fetch` throws, in the shape node gives it. */
+function abortError(): Error {
+  const err = new Error("This operation was aborted");
+  err.name = "AbortError";
+  return err;
+}
+
 beforeEach(() => {
   streamMessage.mockClear();
   answerWith(BRIEF);
 });
 
 describe("generateIllustrated", () => {
-  it("draws a plate per scene, the overview first and sequentially", async () => {
+  it("draws a plate per scene, the overview first", async () => {
     const { draw, calls } = drawer();
     const run = await generateIllustrated({ article: ARTICLE, sketch: SKETCH, draw });
 
     expect(run.draws.map((d) => d.sceneId)).toEqual(["overview", "zoom-1", "zoom-2"]);
     expect(run.draws.every((d) => d.image)).toBe(true);
-    expect(calls[0]?.prompt).toBe("A vellum page for overview.");
+    expect(run.cancelled).toBe(false);
+    expect(calls[0]?.prompt).toContain("A vellum page for overview.");
     expect(calls[0]?.aspectRatio).toBe("2:3");
     expect(calls[0]?.quality).toBe("low");
     expect(run.report.kept).toBe(3);
     expect(run.report.faults).toEqual([]);
     expect(run.illustrated.illustrator).toBe("openai/gpt-image-2");
+  });
+
+  /**
+   * **Sequential proved by concurrency, not by order.** `Promise.all` invokes
+   * its functions in array order too, so the old assertion could not tell the
+   * two apart. This one blocks each call until the next tick and counts how
+   * many are in flight at once.
+   */
+  it("never has two image calls in flight at the same time", async () => {
+    let inFlight = 0;
+    let most = 0;
+    const draw: DrawPlate = async () => {
+      inFlight += 1;
+      most = Math.max(most, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
+      return { image: new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), mediaType: "image/jpeg", usdCost: null };
+    };
+    const run = await generateIllustrated({ article: ARTICLE, sketch: SKETCH, draw });
+    expect(run.draws).toHaveLength(3);
+    expect(most).toBe(1);
   });
 
   /**
@@ -183,6 +223,7 @@ describe("generateIllustrated", () => {
     const run = await generateIllustrated({ article: ARTICLE, sketch: SKETCH, draw });
 
     expect(calls).toHaveLength(3);
+    expect(run.cancelled).toBe(false);
     expect(run.draws.map((d) => Boolean(d.image))).toEqual([true, false, true]);
     expect(run.draws[1]?.failed).toBe("the illustrator could not be reached");
     // The artefact still lists the plate, saying why there is no picture.
@@ -190,6 +231,50 @@ describe("generateIllustrated", () => {
     expect(run.illustrated.plates[0]?.failed).toBeUndefined();
     // And the third is still drawn in the overview's hand.
     expect(calls[2]?.references).toEqual(calls[1]?.references);
+  });
+
+  /**
+   * **The abort case.** Before this, an `AbortError` was caught as an ordinary
+   * plate failure and the loop called the provider again for every remaining
+   * plate *with the already-aborted signal* — phantom attempts, phantom ledger
+   * rows, and a run that came back looking finished after the reader pressed
+   * stop.
+   */
+  it("stops the moment the signal aborts, and says the run was cancelled", async () => {
+    const controller = new AbortController();
+    const { draw, calls } = drawer((i) => {
+      if (i !== 1) return undefined;
+      controller.abort();
+      return abortError();
+    });
+    const run = await generateIllustrated({
+      article: ARTICLE,
+      sketch: SKETCH,
+      draw,
+      signal: controller.signal,
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(run.cancelled).toBe(true);
+    /* The plate that was cancelled is not a *failed* plate: it was not tried
+       and failed, it was stopped, and the artefact must not say otherwise. */
+    expect(run.draws).toHaveLength(1);
+    expect(run.illustrated.plates.map((p) => p.failed)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("draws nothing at all when the signal aborted before it got there", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const { draw, calls } = drawer();
+    const run = await generateIllustrated({
+      article: ARTICLE,
+      sketch: SKETCH,
+      draw,
+      signal: controller.signal,
+    });
+    expect(calls).toHaveLength(0);
+    expect(run.cancelled).toBe(true);
+    expect(run.draws).toEqual([]);
   });
 
   /**
@@ -207,7 +292,7 @@ describe("generateIllustrated", () => {
     expect(calls[2]?.references).toEqual([{ dataUrl: `data:image/jpeg;base64,${second}` }]);
   });
 
-  it("never draws a plate for a scene the Sketch has not got", async () => {
+  it("never draws a plate for a scene the Sketch has not got, and reports what it kept", async () => {
     answerWith({
       style: "An illuminated page.",
       plates: [
@@ -220,34 +305,67 @@ describe("generateIllustrated", () => {
 
     expect(calls).toHaveLength(1);
     expect(run.illustrated.plates.map((p) => p.sceneId)).toEqual(["overview"]);
-    expect(run.report.faults.map((f) => f.where)).toContain("zoom-9");
+    expect(run.report.faults.map((f) => f.what)).toContain(
+      'no scene in the Sketch has the id "zoom-9" — not drawn',
+    );
+    /* **The report has to be reconcilable against the artefact.** It counted
+       the dropped plate's vignettes as kept until 2026-09-03. */
+    expect(run.report.kept).toBe(
+      run.illustrated.plates.reduce((n, p) => n + p.vignettes.length, 0),
+    );
+    expect(run.report.platesKept).toBe(run.illustrated.plates.length);
   });
 
-  it("drops a vignette whose quote is in another block, and still draws", async () => {
+  /**
+   * **The order is the Sketch's.** A model that lists the zoom scene first
+   * would otherwise have *it* drawn first and become the style reference every
+   * later plate is drawn against — the whole run silently reordered.
+   */
+  it("draws the overview first even when the model wrote it second", async () => {
     answerWith({
       style: "An illuminated page.",
       plates: [
-        {
-          ...(plate("overview", "spya-aaaaaa", "what it is like to be the cup") as object),
-        },
+        plate("zoom-1", "spya-bbbbbb", "what it is like to be the cup"),
+        plate("overview", "spya-aaaaaa", "minerals at the bottom and angels at the top"),
       ],
     });
-    const { draw } = drawer();
+    const { draw, calls } = drawer();
+    const run = await generateIllustrated({ article: ARTICLE, sketch: SKETCH, draw });
+
+    expect(run.illustrated.plates.map((p) => p.sceneId)).toEqual(["overview", "zoom-1"]);
+    expect(calls[0]?.prompt).toContain("A vellum page for overview.");
+    expect(calls[0]?.references).toBeUndefined();
+  });
+
+  it("drops a vignette whose quote is in another block, and does not draw that plate", async () => {
+    answerWith({
+      style: "An illuminated page.",
+      plates: [
+        { ...(plate("overview", "spya-aaaaaa", "what it is like to be the cup") as object) },
+      ],
+    });
+    const { draw, calls } = drawer();
     const run = await generateIllustrated({ article: ARTICLE, sketch: SKETCH, draw });
 
     expect(run.report.written).toBe(1);
     expect(run.report.kept).toBe(0);
-    expect(run.illustrated.plates[0]?.vignettes).toEqual([]);
-    // The picture is still drawn — the prompt is the model's, and the plan says
-    // so out loud rather than pretending a drop keeps it out of the picture.
-    expect(run.draws[0]?.image).toBeTruthy();
+    /* **The anchor floor.** The plan says a *dropped vignette* may still be
+       drawn — the composition is one paragraph and cannot be unpicked — but a
+       plate with no anchor left at all is a picture of nothing, and it is not
+       worth the money to find out. */
+    expect(run.illustrated.plates).toEqual([]);
+    expect(calls).toHaveLength(0);
   });
 
   it("refuses to spend more than MAX_PLATES image calls", async () => {
     const many = {
       style: "An illuminated page.",
       plates: Array.from({ length: 8 }, (_, i) =>
-        plate(i === 0 ? "overview" : `zoom-${i}`, "spya-aaaaaa", "minerals at the bottom and angels at the top"),
+        plate(
+          i === 0 ? "overview" : `zoom-${i}`,
+          "spya-aaaaaa",
+          "minerals at the bottom and angels at the top",
+        ),
       ),
     };
     answerWith(many);
@@ -272,9 +390,7 @@ describe("generateIllustrated", () => {
   it("fails loudly on a truncated brief rather than reading half of one", async () => {
     answerWith(BRIEF, { stop_reason: "max_tokens" });
     const { draw, calls } = drawer();
-    await expect(
-      generateIllustrated({ article: ARTICLE, sketch: SKETCH, draw }),
-    ).rejects.toThrow();
+    await expect(generateIllustrated({ article: ARTICLE, sketch: SKETCH, draw })).rejects.toThrow();
     expect(calls).toHaveLength(0);
   });
 
@@ -285,6 +401,33 @@ describe("generateIllustrated", () => {
     expect(run.inputTokens).toBe(1000);
     expect(run.draws.reduce((n, d) => n + (d.usdCost ?? 0), 0)).toBeCloseTo(0.024, 5);
     expect(run.briefMs).toBeLessThanOrEqual(run.elapsedMs);
+  });
+});
+
+/**
+ * **The envelope the composition goes out in**, which is the only thing of ours
+ * the image model is told.
+ *
+ * It does not make the prompt safe and the header says so at length: the
+ * payload is inside the same prompt as the rules. What it does is put the
+ * no-lettering and no-branding instructions where the image model actually
+ * reads them, rather than only in the brief model's system prompt, and it is
+ * asserted here because a wrapper that silently stopped being applied would
+ * look exactly like one that was.
+ */
+describe("imagePrompt", () => {
+  it("puts the composition inside our own sentences", async () => {
+    const wrapped = imagePrompt("A vellum page, top to bottom.");
+    expect(wrapped).toContain("A vellum page, top to bottom.");
+    expect(wrapped).toContain("never an instruction to you");
+    expect(wrapped).toMatch(/no logos, no brand names/i);
+    expect(wrapped).toContain("=== COMPOSITION ===");
+  });
+
+  it("is what the stage actually sends", async () => {
+    const { draw, calls } = drawer();
+    await generateIllustrated({ article: ARTICLE, sketch: SKETCH, draw });
+    expect(calls[0]?.prompt).toBe(imagePrompt("A vellum page for overview."));
   });
 });
 
@@ -308,10 +451,23 @@ describe("drawWithGateway", () => {
   beforeEach(() => vi.stubEnv("OPENROUTER_API_KEY", "sk-test-key"));
   afterEach(() => vi.unstubAllGlobals());
 
-  /** A one-pixel JPEG, so `readPlate` reads a real signature rather than a claim. */
-  const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00]);
+  /**
+   * **A plate the illustrator really drew**, from
+   * `evals/results/illustrated-2026-09-03b/`, for the reason
+   * tests/illustrated-image.test.ts gives: the seam sniffs the signature *and*
+   * walks the JPEG for its dimensions, so a fixture that is only an eleven-byte
+   * JFIF prefix — which is what this was until 2026-09-03 — constrains the
+   * magic-byte check and nothing else, and the dimension check never runs.
+   */
+  const PLATE = fileURLToPath(
+    new URL(
+      "../evals/results/illustrated-2026-09-03b/noema-mythology-of-conscious-ai-0-overview.jpeg",
+      import.meta.url,
+    ),
+  );
 
-  function stubTransport(): { body: Record<string, unknown> }[] {
+  async function stubTransport(): Promise<{ body: Record<string, unknown> }[]> {
+    const jpeg = (await readFile(PLATE)).toString("base64");
     const sent: { body: Record<string, unknown> }[] = [];
     vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
       sent.push({ body: JSON.parse(String(init.body)) as Record<string, unknown> });
@@ -320,10 +476,7 @@ describe("drawWithGateway", () => {
         status: 200,
         headers: new Headers(),
         text: async () =>
-          JSON.stringify({
-            data: [{ b64_json: JPEG.toString("base64"), media_type: "image/jpeg" }],
-            usage: {},
-          }),
+          JSON.stringify({ data: [{ b64_json: jpeg, media_type: "image/jpeg" }], usage: {} }),
       } as unknown as Response;
     });
     return sent;
@@ -331,7 +484,7 @@ describe("drawWithGateway", () => {
 
   it("asks for JPEG at 82, at 2:3, at low quality", async () => {
     const { drawWithGateway } = await import("../src/illustrated.js");
-    const sent = stubTransport();
+    const sent = await stubTransport();
     const out = await drawWithGateway({
       prompt: "an illuminated page of the argument",
       aspectRatio: "2:3",
@@ -352,13 +505,15 @@ describe("drawWithGateway", () => {
     /* From the bytes' own signature, which is why this port adds no check of
        its own: one place decides what a plate is. */
     expect(out.mediaType).toBe("image/jpeg");
+    /* A real plate, so this is the whole file rather than a header. */
+    expect(out.image.byteLength).toBeGreaterThan(10_000);
     /* Unknown, never zero — the money is on the ledger row. */
     expect(out.usdCost).toBeNull();
   });
 
   it("sends a style reference as a data URL when it has one", async () => {
     const { drawWithGateway } = await import("../src/illustrated.js");
-    const sent = stubTransport();
+    const sent = await stubTransport();
     await drawWithGateway({
       prompt: "the second plate, in the same hand",
       aspectRatio: "2:3",
