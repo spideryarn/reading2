@@ -104,7 +104,7 @@ like**. Only the first collapsed.
 | | speaks | used by | code |
 |---|---|---|---|
 | **Messages** | Anthropic's Messages protocol, via OpenRouter's Anthropic-compatible endpoint (`/api/v1/messages`, which OpenRouter calls the "Anthropic Skin") | the pipeline stages — hierarchy, labels, arc, tweets, glossary, ideas, quotes, timeline, quiz, sketch | [`src/messages-stream.ts`](../../src/messages-stream.ts) |
-| **chat** | OpenAI's chat/completions shape | explain, chat, search, quiz marking, the three referee runs, dictation, PDF reading | [`src/ai-call.ts`](../../src/ai-call.ts) |
+| **chat** | OpenAI's chat/completions shape | explain, chat, search, quiz marking, the three referee runs, dictation, PDF reading, and `env-proposal` — the one job with no reader at all, `gjd-remote push-env` asking a cheap model to sort a repo's env key *names* ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)) | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **embeddings** | `/api/v1/embeddings` — OpenAI-shaped, different endpoint | turning a paragraph into a vector | [`src/ai-call.ts`](../../src/ai-call.ts) |
 
 Two files, and **no third way to spend money**. Each gateway's tests scan `src/` and fail if any
