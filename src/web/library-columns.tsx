@@ -32,7 +32,7 @@
 
 import type { LibraryEntry } from "../types.js";
 import type { SortableColumn } from "./lib/DataTable.js";
-import { localeText, numberOrMissing } from "./lib/table-sort.js";
+import { at, localeText, numberOrMissing } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
 import { timeAgo } from "./relative-time.js";
 import { readHref } from "./router.js";
@@ -40,13 +40,6 @@ import { Actions, Details, SharedBadge } from "./ShelfEntry.js";
 import type { Shelf } from "./ShelfEntry.js";
 import { TitleEditor } from "./TitleEditor.js";
 import { Tooltip } from "./Tooltip.js";
-
-/** Parsed to a number, or `undefined` for absent and unparseable alike. */
-function at(iso: string | undefined): number | undefined {
-  if (!iso) return undefined;
-  const t = Date.parse(iso);
-  return Number.isNaN(t) ? undefined : t;
-}
 
 /**
  * What the card should say on its meta line while this column is the sort.
