@@ -1,0 +1,8 @@
+{
+  "A": "evals/results/hierarchy-structure/2026-09-03-12-29-23-deepseek-flash+glm-flash+qwen-27b+gemini-flash+hunyuan+deepseek-pro+grok+glm+smart-low+incumbent+headings/trees/gemini-flash.gwern-scaling-long.json",
+  "B": "evals/results/hierarchy-structure/2026-09-03-12-29-23-deepseek-flash+glm-flash+qwen-27b+gemini-flash+hunyuan+deepseek-pro+grok+glm+smart-low+incumbent+headings/trees/smart-low.gwern-scaling-long.json",
+  "C": "evals/results/hierarchy-structure/2026-09-03-12-29-23-deepseek-flash+glm-flash+qwen-27b+gemini-flash+hunyuan+deepseek-pro+grok+glm+smart-low+incumbent+headings/trees/incumbent.gwern-scaling-long.json",
+  "D": "evals/results/hierarchy-structure/2026-09-03-12-29-23-deepseek-flash+glm-flash+qwen-27b+gemini-flash+hunyuan+deepseek-pro+grok+glm+smart-low+incumbent+headings/trees/grok.gwern-scaling-long.json",
+  "E": "headings (built in place)",
+  "F": "evals/results/hierarchy-structure/2026-09-03-12-56-47-deepseek-flash+deepseek-pro//trees/deepseek-pro.gwern-scaling-long.r1.json"
+}

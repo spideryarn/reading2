@@ -2065,11 +2065,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           deduped: run.deduped,
           kb: Math.round(run.bytes / 1024),
           ms: run.elapsedMs,
-          /* Error *names* only, from `collectAssets`, and only when there are
-             any. A `CorruptObject` here means something is at a canonical name
-             that does not hash to it, which needs a person with the service
-             key — and it is the one failure in this step that is about us
-             rather than about the publisher. src/store/blobs.ts. */
+          /* What actually failed, from `collectAssets`, and only when there
+             are any. Redacted and bounded there — no URLs, no tokens — and it
+             carries the status, which is what says whether this is about the
+             publisher or about us: a `CorruptObject` means something is at a
+             canonical name that does not hash to it (src/store/blobs.ts), and
+             a `Storage put failed (415)` on every image at once means our own
+             bucket's allowlist has drifted. The *name* alone said "Error" to
+             both. At most five distinct ones, then `"+N more"`, because the
+             message no longer collapses the way a name did.
+             src/collect-assets.ts § `describeStorageFailure`. */
           ...(run.storageErrors.length ? { storageErrors: run.storageErrors } : {}),
         },
         `assets ${ctx.slug}: ${run.stored} stored, ${run.failed} failed`,

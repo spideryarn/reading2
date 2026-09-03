@@ -66,9 +66,13 @@
  *
  *  - `LandingPage`, signed out, answers `/profile`, `/design`, `/admin`,
  *    `/add/...` and an unshared `/read/<slug>` as well as `/`.
- *  - `Library` answers `/admin` for a reader who is not the administrator, and
- *    every unrecognised address, because `parseRoute` falls through to
- *    `library` rather than having a 404.
+ *  - `Library` answers `/admin` for a reader who is not the administrator.
+ *    **It answered every unrecognised address too until 2026-09-03**, when
+ *    those got a page of their own (NotFoundPage.tsx) and this list shrank to
+ *    the one case; `/admin` stayed, deliberately, for the reason
+ *    docs/project/admin.md gives. The escape hatch is worth no less for
+ *    covering one address instead of all of them — that address is exactly
+ *    where the route and the page still disagree.
  *
  * On any of those the route said one thing while the reader looked at another,
  * and the row grew a Home link pointing at the page under their feet. GPT Sol

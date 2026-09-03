@@ -158,6 +158,23 @@ their absence as well as the cards' presence
 [`tests/referee-tooltips.test.tsx`](../../tests/referee-tooltips.test.tsx),
 [`tests/feedback-button-tooltip.test.tsx`](../../tests/feedback-button-tooltip.test.tsx)).
 
+**An SVG `<title>` is the same mistake spread over a whole picture**, and it is worse than the
+attribute because there is nothing to aim at: the tooltip is the *whole* drawing, so the sentence
+follows the pointer around and comes up on top of shapes the panel is already describing in a card
+of its own. The Sketch picture had one until 2026-09-03 — Greg: *"The 'Down the page is time…'
+tooltip for Diagram/Sketch mode is annoying — it shows whenever the mouse is hovering over the
+Sketch diagram"*. It was not carrying the accessible name either: the same `<svg>` has an
+`aria-label`, which takes the *name* and leaves a `<title>` beside it to land on the *description* —
+so the tree was announcing the caption twice, and removing it removed the duplicate, not the name.
+The caption now lives on the Sketch chip's own card
+([diagram.md](diagram.md#the-sketch-chip-also-says-what-was-actually-drawn-2026-09-03)) and, where
+the picture has only one scene, on a card on its name in the bar — that name held a `title`
+attribute until the same day, and it survived only because the SVG `<title>` was showing the same
+sentence anyway. Both are pinned by
+[`tests/sketch-caption-is-not-a-native-tooltip.test.tsx`](../../tests/sketch-caption-is-not-a-native-tooltip.test.tsx).
+A picture that has no `aria-label` still needs one of the two, so remove a `<title>` only once
+something else names the element.
+
 **Deleting a `title` can take an accessible name with it**, and that is the trap the Feedback button
 found. Its label is `display: none` below the narrow breakpoint, so with the `title` gone the button
 was an unlabelled icon on exactly the widths where no tooltip can be opened either. An `aria-label`

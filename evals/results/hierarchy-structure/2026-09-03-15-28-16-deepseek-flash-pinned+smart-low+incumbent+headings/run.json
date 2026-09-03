@@ -1,0 +1,332 @@
+{
+  "startedAt": "2026-09-03T15:28:16.405Z",
+  "commit": "890d19f6489a7204141fa6c6dc3992bbb5429b5b",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "deepseek-flash-pinned",
+      "kind": "one-call",
+      "comparison": "bakeoff",
+      "call": {
+        "model": "deepseek/deepseek-v4-flash-0731",
+        "effort": "low",
+        "provider": {
+          "zdr": true,
+          "require_parameters": true,
+          "only": [
+            "OpenInference"
+          ]
+        }
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-low",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "incumbent",
+      "kind": "one-call",
+      "comparison": "baseline",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "medium"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "headings",
+      "kind": "headings",
+      "comparison": "baseline"
+    }
+  ],
+  "expected": [
+    {
+      "arm": "deepseek-flash-pinned",
+      "slug": "openai-huggingface"
+    },
+    {
+      "arm": "smart-low",
+      "slug": "openai-huggingface"
+    },
+    {
+      "arm": "incumbent",
+      "slug": "openai-huggingface"
+    },
+    {
+      "arm": "headings",
+      "slug": "openai-huggingface"
+    }
+  ],
+  "results": [
+    {
+      "arm": "deepseek-flash-pinned",
+      "comparison": "bakeoff",
+      "slug": "openai-huggingface",
+      "run": 1,
+      "callOrder": 1,
+      "blocksSha256": {
+        "measured": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "manifest": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "matchesManifest": true
+      },
+      "outcome": "threw",
+      "error": "chat wire 429: Provider returned error",
+      "calls": []
+    },
+    {
+      "arm": "smart-low",
+      "comparison": "isolated",
+      "slug": "openai-huggingface",
+      "run": 1,
+      "callOrder": 2,
+      "blocksSha256": {
+        "measured": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "manifest": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "matchesManifest": true
+      },
+      "outcome": "threw",
+      "error": "The tree does not cover the whole article: it skips 0 block(s) at the start and 3 at the end. Every block gets exactly one leaf, so a block outside the root's range has no row anywhere and nothing can resolve its id.",
+      "calls": [
+        {
+          "ms": 46247,
+          "inputTokens": 10307,
+          "outputTokens": 4092,
+          "reasoningTokens": 1381,
+          "generationId": "gen-1788449297-uGlrPZo7XQXziCZrXCFm",
+          "costUsd": 0.061534,
+          "providerCostUsd": 0.061534,
+          "upstream": "Anthropic"
+        }
+      ],
+      "repaired": {
+        "ranges": 1,
+        "blocks": 1,
+        "largest": 1,
+        "where": [
+          "root > child 4 > child 3 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      }
+    },
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "openai-huggingface",
+      "run": 1,
+      "callOrder": 3,
+      "blocksSha256": {
+        "measured": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "manifest": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "openai-huggingface",
+        "blocks": 95,
+        "bodyBlocks": 94,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 93
+        },
+        "parts": {
+          "count": 7,
+          "words": [
+            206,
+            318,
+            663,
+            988,
+            808,
+            619,
+            487
+          ],
+          "balanceCv": 0.4310998148386128
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 4.032258064516129,
+          "max": 8,
+          "within5to9": 0.25806451612903225
+        },
+        "headings": {
+          "boundaries": 22,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.03225806451612903,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 93,
+            "words": 4082
+          }
+        },
+        "titles": {
+          "count": 31,
+          "meanWords": 4.32258064516129,
+          "within2to6": 0.9354838709677419,
+          "copiedHeadings": 1,
+          "retention": 0.55
+        },
+        "gists": {
+          "count": 31,
+          "coverage": 1,
+          "meanWords": 22.419354838709676,
+          "multiSentence": 0,
+          "templateRepetition": 0.16129032258064516,
+          "retention": 0.5022519856997536
+        }
+      },
+      "calls": [
+        {
+          "ms": 95403,
+          "inputTokens": 10307,
+          "outputTokens": 10828,
+          "reasoningTokens": 7404,
+          "generationId": "gen-1788449343-LlcwYcKuad5o94QrCgwC",
+          "costUsd": 0.128894,
+          "providerCostUsd": 0.128894,
+          "upstream": "Anthropic"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      },
+      "vsDisk": {
+        "partCountA": 7,
+        "partCountB": 8,
+        "l1Boundaries": 0.4444444444444444,
+        "allBoundaries": 0.3783783783783784,
+        "boundaryDistance": {
+          "mean": 0.5882352941176471,
+          "within1Block": 0.9215686274509803
+        }
+      }
+    },
+    {
+      "arm": "headings",
+      "comparison": "baseline",
+      "slug": "openai-huggingface",
+      "run": 1,
+      "callOrder": 4,
+      "blocksSha256": {
+        "measured": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "manifest": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "openai-huggingface",
+        "blocks": 95,
+        "bodyBlocks": 94,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 1,
+          "otherProblems": 0,
+          "advice": 92
+        },
+        "parts": {
+          "count": 0,
+          "words": [],
+          "balanceCv": 0
+        },
+        "depth": {
+          "maxInternal": 0,
+          "minLeaf": 1,
+          "maxLeaf": 1,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 95,
+          "max": 95,
+          "within5to9": 0
+        },
+        "headings": {
+          "boundaries": 0,
+          "boundariesOnHeadings": null,
+          "headingsCut": null,
+          "l1OnHeadings": null,
+          "sourceHeadingShare": 0,
+          "sourceHeadingValid": null,
+          "longestHeadinglessRun": {
+            "blocks": 93,
+            "words": 4082
+          }
+        },
+        "titles": {
+          "count": 1,
+          "meanWords": 7,
+          "within2to6": 0,
+          "copiedHeadings": 1,
+          "retention": null
+        },
+        "gists": {
+          "count": 0,
+          "coverage": 0,
+          "meanWords": 0,
+          "multiSentence": null,
+          "templateRepetition": null,
+          "retention": null
+        }
+      },
+      "sectionLevel": null,
+      "flat": true,
+      "vsDisk": {
+        "partCountA": 0,
+        "partCountB": 8,
+        "l1Boundaries": 0,
+        "allBoundaries": 0,
+        "boundaryDistance": null
+      }
+    }
+  ],
+  "effortCatalogue": [
+    {
+      "model": "deepseek/deepseek-v4-flash-0731",
+      "supportedEfforts": [
+        "max",
+        "high",
+        "low"
+      ],
+      "defaultEffort": "high",
+      "mandatory": false
+    },
+    {
+      "model": "anthropic/claude-sonnet-5",
+      "supportedEfforts": [
+        "max",
+        "xhigh",
+        "high",
+        "medium",
+        "low"
+      ],
+      "defaultEffort": "high",
+      "mandatory": false
+    }
+  ],
+  "completedAt": "2026-09-03T15:30:39.367Z"
+}

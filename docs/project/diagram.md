@@ -270,6 +270,40 @@ second, cannot be styled, truncates at the OS's own idea of a line, and does not
 exist at all on a touch device — for a sentence whose job is to explain what a
 picture *is*, that is close to not being there.
 
+#### The Sketch chip also says what was actually drawn, 2026-09-03
+
+Greg:
+
+> The "Down the page is time…" tooltip for Diagram/Sketch mode is annoying — it
+> shows whenever the mouse is hovering over the Sketch diagram. Perhaps append
+> that text instead to the tooltip when I hover over the Sketch button.
+
+It was an SVG `<title>` inside the drawn picture, which is a native tooltip over
+every pixel of it — [tooltips.md](tooltips.md) has why that is the worst case of
+the paragraph above. So the picture's own caption moved to the one card where a
+reader is choosing between pictures: a third paragraph on the Sketch chip's
+hover card, between what the picture is and what it costs, and the only line in
+any of these cards that is not the same words for every article.
+
+It costs one free GET per Diagram open —
+[`useSketchCaption`](../../src/web/useSketch.ts), deliberately not `useSketch`,
+because a second `useSketch` on the page is a second `useAutoRun` and a hover
+card must not be able to start a $0.20 draw.
+
+**And deliberately not gated on the picture**, which is the one thing the review
+changed. Gating it on `kind !== "sketch"` saves a duplicate free GET while
+`SketchView` is reading the same artefact, and costs two real faults: the same
+chip gives a card one paragraph shorter once you have pressed it, and the reset
+that comes with the gate blanks the caption on the way back, so a card opened in
+that window grows a paragraph while you are reading it. ⟨Fable, code review⟩,
+2026-09-03.
+
+The same review took the `title` attribute off the single-scene picture's name
+in the bar ([`SketchView.tsx`](../../src/web/SketchView.tsx)) and gave it the
+card the multi-scene row already had — with the SVG `<title>` gone, that
+attribute was the only copy of the caption left in the panel on a touch device,
+which is the one place a `title` shows nothing at all.
+
 ### And then everything under the chips, 2026-08-30
 
 > add detailed tooltips to the various diagram-buttons etc to explain how things
