@@ -40,6 +40,8 @@ import {
   validateEvidence,
 } from "../src/quiz.js";
 import { GRADE_WORDS, gradeWords, QUIZ_MARK_SYSTEM } from "../src/quiz-mark.js";
+import { readerFailureOf } from "../src/job-failure.js";
+import { kindOfMessage, worthRetrying } from "../src/messages.js";
 import { CAPABLE_MODEL } from "../src/models.js";
 import type { Block, QuizBand, QuizQuestion } from "../src/types.js";
 
@@ -274,32 +276,34 @@ describe("both ends of the band scale", () => {
       value: 3,
       evidence: [{ blockId: "spya-aaaaaa", quote: "does not make anything actually wet" }],
     }));
-    expect(() =>
-      buildQuiz(
-        { questions },
-        {
-          slug: "x",
-          blocks,
-          sourceHash: "hash",
-          elapsedMs: 1,
-          dropped: emptyDropped(),
-        },
-      ),
-    ).toThrow(/all came out at the same middling level/);
+    /* The reader's half, which is where that sentence lives now — `.toThrow`
+       matches `Error.message`, and `Error.message` is the diagnostic since the
+       seam split the two audiences (src/job-failure.ts § Two strings, not one). */
+    expect(readerOf(questions)).toMatch(/all came out at the same middling level/);
   });
 
   /**
-   * The message this throws is rendered verbatim to the reader in red today
-   * (src/jobs.ts → src/web/JobProgress.tsx), so it is held to copy.md's rules
-   * until stage 2 splits the two audiences at that seam.
+   * **The refusal, taken apart into its two audiences.**
    *
-   * `failing` returns the message rather than asserting on it, so each case
-   * below can say what it is protecting.
+   * Since stage 2 of
+   * docs/plans/260903c-fix-quiz-build-band-spread-failure-and-lost-quiz-answers.md
+   * a refused batch throws *two* sentences: `Error.message` is the diagnostic,
+   * for the log and Sentry, and `readerFailureOf` is what src/jobs.ts persists
+   * onto `job.error` and `step.error` and the band renders in red. Every
+   * assertion below has to say which one it is about, and the copy rules apply
+   * to the second.
+   *
+   * The step label handed to `readerFailureOf` is only used by the *generic*
+   * sentence, which none of these reach — every one of them declares its own.
+   * It is spelled out rather than imported from `STEPS` so this file stays a
+   * test of the quiz's pure half and drags in no pipeline.
    */
-  const failing = (
+  const STEP_LABEL = "Writing the questions";
+
+  const refused = (
     bands: readonly string[],
     quote = "does not make anything actually wet",
-  ): string => {
+  ): { reader: string; diagnostic: string } => {
     const questions = bands.map((band, i) => ({
       question: `Question number ${i}?`,
       referenceAnswer: "Because the article says so.",
@@ -313,7 +317,27 @@ describe("both ends of the band scale", () => {
         { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped: emptyDropped() },
       );
     } catch (err) {
-      return (err as Error).message;
+      return {
+        reader: readerFailureOf(err, STEP_LABEL).message,
+        diagnostic: (err as Error).message,
+      };
+    }
+    throw new Error("the batch was supposed to be refused");
+  };
+
+  /** Just the reader's half, which is what most of the cases below are about. */
+  const failing = (bands: readonly string[], quote?: string): string =>
+    (quote === undefined ? refused(bands) : refused(bands, quote)).reader;
+
+  /** The same, from a raw question list rather than a list of bands. */
+  const readerOf = (questions: readonly unknown[]): string => {
+    try {
+      buildQuiz(
+        { questions },
+        { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped: emptyDropped() },
+      );
+    } catch (err) {
+      return readerFailureOf(err, STEP_LABEL).message;
     }
     throw new Error("the batch was supposed to be refused");
   };
@@ -339,8 +363,8 @@ describe("both ends of the band scale", () => {
 
     /* Twelve sent, seven of them naming a quote the article does not contain,
        so five survive and the sentence must describe five *survivors*. */
-    const afterDrops = (() => {
-      const questions = Array.from({ length: 12 }, (_, i) => ({
+    const afterDrops = readerOf(
+      Array.from({ length: 12 }, (_, i) => ({
         question: `Question number ${i}?`,
         referenceAnswer: "Because the article says so.",
         band: i === 0 ? "easy" : "medium",
@@ -351,18 +375,12 @@ describe("both ends of the band scale", () => {
             quote: i < 5 ? "does not make anything actually wet" : "a sentence the article lacks",
           },
         ],
-      }));
-      try {
-        buildQuiz(
-          { questions },
-          { slug: "x", blocks, sourceHash: "hash", elapsedMs: 1, dropped: emptyDropped() },
-        );
-      } catch (err) {
-        return (err as Error).message;
-      }
-      throw new Error("the batch was supposed to be refused");
-    })();
+      })),
+    );
     expect(afterDrops).toContain("5 survived checking");
+    /* Twelve is the number the *diagnostic* carries — the reader is told what
+       survived and nothing about what was sent, because the difference is a
+       validator's business. */
     expect(afterDrops).not.toContain("12");
   });
 
@@ -397,6 +415,66 @@ describe("both ends of the band scale", () => {
          day, and it worked. */
       expect(message).toContain("Writing the questions again usually");
     }
+  });
+
+  /**
+   * **The seam, from this side of it.**
+   *
+   * tests/step-failure-seam.test.ts proves that an *undeclared* error cannot
+   * reach the reader; this proves the other half for the failure that started
+   * it. The band arithmetic and the pointer to the prompt were what Greg was
+   * shown in production on 2026-09-03. They are still written — a 1-in-4
+   * failure rate is exactly what somebody wants those figures for — they just
+   * go to the log now.
+   */
+  it("keeps the arithmetic for the log and out of the reader's sentence", () => {
+    const { reader, diagnostic } = refused(oneEndOnlyBands("easy", 9));
+
+    /* The reader's half: a code to quote, and none of the three things
+       docs/project/copy.md says must not be there. */
+    expect(reader).toMatch(/\[quiz-spread\]$/);
+    expect(reader).not.toContain("src/quiz.ts");
+    expect(reader).not.toMatch(/easy 1, medium 8/);
+
+    /* The developer's: the counts, the band as a name, and the thing to change
+       if this keeps happening. Asserted rather than assumed, because a split
+       that quietly dropped the diagnostic would look exactly like a split that
+       worked. */
+    expect(diagnostic).toContain("9 of 9 survived");
+    expect(diagnostic).toContain("missing hard");
+    expect(diagnostic).toContain("easy 1, medium 8, hard 0");
+    expect(diagnostic).toContain("src/quiz.ts");
+    /* And they really are two strings, not one string read twice. */
+    expect(diagnostic).not.toBe(reader);
+  });
+
+  /**
+   * `retry`, and it has to be declared rather than inferred: the sentence used
+   * to carry no code at all, so `failureKindOf` answered `undefined` and the
+   * button survived by the compatibility rule rather than by anybody meaning
+   * it. Now it is meant. src/job-failure.ts § Which way to be wrong.
+   */
+  it("says out loud that another go is worth having", () => {
+    const { reader } = refused(oneEndOnlyBands("easy", 9));
+    expect(kindOfMessage(reader)).toBe("retry");
+    expect(worthRetrying(reader)).toBe(true);
+  });
+
+  /**
+   * The other refusal in the same function, migrated with it: every question
+   * naming a passage the article does not contain. Its old sentence was a tally
+   * of five drop reasons, which is a debugging aid on a reader's screen.
+   */
+  it("tells the reader why there are no questions without reciting the drop counts", () => {
+    const { reader, diagnostic } = refused(
+      oneEndOnlyBands("easy", 5),
+      "a sentence this article does not contain",
+    );
+    expect(reader).toMatch(/\[quiz-unanchored\]$/);
+    expect(reader).toContain("could be tied back to a passage");
+    expect(reader).not.toMatch(/malformed|duplicates|block id/);
+    expect(diagnostic).toContain("malformed");
+    expect(diagnostic).toContain("duplicates");
   });
 });
 

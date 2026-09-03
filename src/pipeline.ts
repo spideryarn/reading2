@@ -1253,7 +1253,10 @@ async function acquireUpload(
   const refuse = async (reason: RejectReason): Promise<never> => {
     await rejectUpload(upload.id, reason);
     const failure = rejectionFailure(reason);
-    throw stageFailure(failure.kind, failure.message);
+    /* The whole `ReaderFacingFailure`, not its two halves passed separately:
+       `rejectionFailure` already wrote the reader a sentence per reason, and
+       that sentence is what src/jobs.ts persists. src/job-failure.ts. */
+    throw stageFailure(failure);
   };
 
   const store = blobStore();

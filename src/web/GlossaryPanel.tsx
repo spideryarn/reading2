@@ -88,6 +88,7 @@ import { Tooltip } from "./Tooltip.js";
    Unreachable here — `safeUrl` parsed it server-side before it was stored. */
 import { hostOf, isWebUrl } from "../urls.js";
 import type { UseGlossary } from "./useGlossary.js";
+import type { StepFailure } from "./useStepJob.js";
 import { builtButEmpty } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
@@ -1301,6 +1302,11 @@ function Looked({
   look: ((id: string) => Promise<void>) | null;
   looking: boolean;
   busy: boolean;
+  /** **Not a `StepFailure`.** A web lookup is a request, not a job — there is
+      nothing on the queue to retry and the only control the term has ever had
+      is the Check-the-web button itself, which simply comes back. See
+      `worthRetrying` in src/messages.ts § The two places that deliberately do
+      not ask. */
   failed: string | null;
 }) {
   const lookup = entry.lookup;
@@ -1465,7 +1471,7 @@ function Foot({
   /** The whole artefact, because the foot is where its provenance is shown. */
   glossary: Glossary;
   job: Job | null;
-  failed: string | null;
+  failed: StepFailure | null;
   onMore(useProfile?: boolean): Promise<void>;
   withProfile: boolean;
   onWithProfile(next: boolean): void;
@@ -1558,7 +1564,7 @@ function Foot({
         </div>
       )}
 
-      {failed && <p className="gloss-error">{failed}</p>}
+      {failed && <p className="gloss-error">{failed.message}</p>}
 
       {/* Provenance, quietly. `passes` is the number worth showing that nothing
           else would: a list that took three calls to build is a different
@@ -1579,7 +1585,7 @@ function Foot({
 function Progress(props: {
   job: Job | null;
   starting: boolean;
-  failed: string | null;
+  failed: StepFailure | null;
   stalled: boolean;
   onRun(): Promise<void>;
   onCancel(id: string): void;

@@ -113,7 +113,7 @@ let ideas: ReturnType<typeof useIdeas> | null = null;
 
 function Harness(): ReactElement {
   ideas = useIdeas("constitution");
-  return createElement("div", null, ideas.failed ?? "");
+  return createElement("div", null, ideas.failed?.message ?? "");
 }
 
 beforeEach(() => {
@@ -214,7 +214,7 @@ describe("a job the server received and refused", () => {
     /* Before the poll lands. **The broken code passes this**, which is why it
        is here: it is the frame the reader never sees, and a test that stopped
        at this line is the one that proved a ternary. */
-    expect(ideas?.failed).toBe(REFUSED);
+    expect(ideas?.failed?.message).toBe(REFUSED);
     expect(sent.some((r) => r.method === "POST" && r.url === "/api/jobs")).toBe(true);
 
     /* And the poll the failed POST started really is out — without this the
@@ -225,7 +225,7 @@ describe("a job the server received and refused", () => {
 
     /* After a perfectly successful poll. The job was still refused and the
        reason is still the server's. */
-    expect(ideas?.failed).toBe(REFUSED);
+    expect(ideas?.failed?.message).toBe(REFUSED);
     expect(host.textContent).toBe(REFUSED);
   });
 
@@ -244,7 +244,7 @@ describe("a job the server received and refused", () => {
     });
     await settle();
     await answerPolls();
-    expect(ideas?.failed).toBe(REFUSED);
+    expect(ideas?.failed?.message).toBe(REFUSED);
 
     refusing = false;
     await act(async () => {

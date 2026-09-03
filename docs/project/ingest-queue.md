@@ -1221,7 +1221,8 @@ identically. The whole story is in [260826a-toc-max-tokens.md](../postmortems/26
 are the four in [`src/messages.ts`](../../src/messages.ts) — the same four the reader-facing failure
 sentences already use — and three of them mean another go cannot help.
 
-- A stage says so at the throw site with `stageFailure(kind, message)`
+- A stage says so at the throw site with `stageFailure(kind, detail)` — or with
+  `stageFailure(failure, detail)`, which says the kind *and* writes the reader's sentence
   ([`src/job-failure.ts`](../../src/job-failure.ts)). Grep for that name to see every claim the
   pipeline makes.
 - [`src/jobs.ts`](../../src/jobs.ts) copies it onto the job as `failureKind`, beside the message it
@@ -1230,6 +1231,14 @@ sentences already use — and three of them mean another go cannot help.
 - [`AddArticle.tsx`](../../src/web/AddArticle.tsx) asks `jobWorthRetrying(job)`. Nothing takes the
   button's place when it is hidden: the failed step's own message is already on the card and already
   says why.
+- **[`JobProgress.tsx`](../../src/web/JobProgress.tsx) asks the same question**, since 2026-09-03.
+  Until then the band drew its ordinary run button again under every failure and never asked — so
+  one job could offer a button on the shelf and withhold it in the band, or the reverse, and the
+  band is the only surface a reader inside a mode has. It gets the same Retry
+  (`POST /api/jobs/:id/retry`) and the same silence where the button is withheld. The answer
+  reaches it as `StepFailure.retryable`, a field on the failure rather than a prop beside it, so a
+  panel cannot wire the sentence and forget the judgement
+  ([`src/web/useStepJob.ts`](../../src/web/useStepJob.ts)).
 
 **A structured field rather than a bracketed code**, which is the other half of how a failure can
 carry its kind. The codes exist because a stored chat message or comment keeps `err.message` and has

@@ -285,6 +285,34 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      an interrupted job resumes from its artefacts rather than starting again,
      so another go is both allowed and cheap. See `INTERRUPTED`. */
   "jb-gone": "retry",
+  /* **The four generic step failures**, `stepGaveUp` above — one per kind, and
+     that is why there are four rather than one. The kind is what decides
+     whether a Retry appears, and a single sentence would have had to either
+     promise a retry under a failure stored as `bug` or withhold one under a
+     blip. Registered like everything else here, because `readerFailureOf`
+     (src/job-failure.ts) is not the only reader: `monitoring-scrub.ts` uses
+     this table to decide whether a sentence is provably ours and may go to
+     Sentry, and an unregistered code is withheld. */
+  "jb-step-again": "retry",
+  "jb-step-ours": "ours",
+  "jb-step-bug": "bug",
+  "jb-step-no": "blocked",
+  /* Not a failure at all — the reader pressed Stop. `retry` because a stopped
+     job resumes from its artefacts, the same reason `jb-gone` is. See
+     `STEP_STOPPED`. */
+  "jb-stopped": "retry",
+  /* The two token-budget failures, split from their own diagnostics on
+     2026-09-03. `ai-too-long` is arithmetic done before the call and
+     `ai-over-room` is the call coming back cut off; both withhold the button,
+     for the reasons at `TooLongForOnePass` and `truncationFailure` in
+     src/token-budget.ts. */
+  "ai-too-long": "blocked",
+  "ai-over-room": "bug",
+  /* Writing quiz questions, `quiz-`. Both are `retry` and both mean it: the
+     batch is written afresh on every call, so a second one genuinely can come
+     out better. See `quizBandsNotSpread` and `QUIZ_NOTHING_ANCHORED`. */
+  "quiz-spread": "retry",
+  "quiz-unanchored": "retry",
   /* Not a model call. `db-` rather than `ai-` so that a reader quoting four
      characters, and whoever they quote them to, can tell the two apart at a
      glance — see `STORAGE_BUSY`. */
@@ -654,6 +682,225 @@ export const UNEXPECTED_FAILURE: ReaderFacingFailure = {
     "Something went wrong inside this app while handling that request, and it was not something the " +
     "app knew how to explain. It has been recorded, and it needs fixing here rather than by you. " +
     "[ai-unexpected]",
+};
+
+/* ------------------------------------------------------- a step that gave up -- */
+
+/**
+ * **What the reader is told when a pipeline step failed and nobody wrote them a
+ * sentence about it.**
+ *
+ * The safety net on the seam described in docs/project/copy.md § The seam
+ * between the two audiences. A step throws; src/jobs.ts copies something onto
+ * `step.error` and `job.error`; those are persisted and rendered. Until
+ * 2026-09-03 what it copied was `Error.message`, so a step's *diagnostic* was
+ * published — which had already leaked provider prose through six stages, a
+ * `src/token-budget.ts` reference through eight, and a source-file reference
+ * plus band arithmetic through the quiz.
+ *
+ * **So the default is generic, and a useful sentence has to be declared.** The
+ * alternative considered and rejected was an allowlist of steps trusted to
+ * write their own: one new `throw` inside an approved step leaks immediately,
+ * and nothing goes red. The cost is honest — an unmigrated failure says less
+ * than its diagnostic did — and it is recoverable, because the diagnostic still
+ * reaches **the log**. Publishing an unaudited internal string is neither.
+ * ⟨Sol, 2026-09-03⟩
+ *
+ * The log and not Sentry: Sentry withholds any message it cannot prove we wrote
+ * every word of, which a step's free-text diagnostic is not. That cost, and the
+ * tempting fix that must not be taken, are in src/job-failure.ts § The log, and
+ * not Sentry.
+ *
+ * **There is no type-level way to do better**, written down so the next person
+ * does not spend an afternoon finding out: TypeScript has no checked
+ * exceptions, so `PipelineStep.run()`'s signature (src/pipeline.ts) cannot
+ * constrain what is thrown through it. A `Result` return could, and would still
+ * need this net for the exceptions nobody planned — which is most of them.
+ *
+ * **Total over `FailureKind`, so a fifth kind is a red compile** rather than a
+ * quiet fall-through — the shape `RETRYABLE` above and `KNOWN_KINDS` in
+ * src/job-failure.ts already keep, for the same reason.
+ *
+ * `step` is the step's own **label** — "Fetching the page", "Writing the
+ * questions" — which is the word the reader is already watching on the card and
+ * in the band. Naming the step is the one thing this sentence knows about the
+ * failure, and it is the rule ingest already follows: each step is named, not
+ * counted.
+ */
+const STEP_GAVE_UP: Record<FailureKind, (step: string) => string> = {
+  retry: (step) =>
+    `${step} did not finish. What went wrong has been recorded for whoever supports this app, ` +
+    `and a step that stops like this often comes out differently on a second attempt — so ` +
+    `trying again is worth a go. [jb-step-again]`,
+  ours: (step) =>
+    `${step} did not finish, and the reason is something about how this app is set up rather ` +
+    `than anything about the article or about you. Nothing you can do from here will change ` +
+    `that, and trying again will not help until somebody fixes it. [jb-step-ours]`,
+  bug: (step) =>
+    `${step} did not finish, and it stopped on a defect in this app rather than on anything you ` +
+    `did. It has been recorded, it needs fixing here, and trying again will not help until it ` +
+    `is. [jb-step-bug]`,
+  /* **No remedy, because a total fallback has none to offer.** This ended *"A
+     shorter piece sometimes gets through"* for six hours, borrowed from the
+     `blocked` messages that really are about size. It is not true of every
+     `blocked` step: `RawDocumentUnavailable` and `NoBlocksProduced`
+     (src/pipeline.ts) have nothing to do with length, and pointing a reader at
+     a shorter article would send them off doing the wrong thing — the exact
+     cost docs/project/copy.md's opening paragraph names. The only claim a
+     sentence standing in for *every* blocked failure can make is that repeating
+     the identical request will not change it. ⟨Sol, 2026-09-03⟩ A step that has
+     a real way out should declare its own message and say so. */
+  blocked: (step) =>
+    `${step} could not be done for this article as it stands, and asking for it again unchanged ` +
+    `would most likely come back the same way. [jb-step-no]`,
+};
+
+/**
+ * The generic sentence for one kind of failure of one named step.
+ *
+ * Read through `readerFailureOf` in src/job-failure.ts rather than called
+ * directly: that is where "nobody said, so offer the retry" lives, and it
+ * belongs in one place.
+ */
+export function stepGaveUp(kind: FailureKind, step: string): ReaderFacingFailure {
+  return { kind, message: STEP_GAVE_UP[kind](step) };
+}
+
+/**
+ * **The reader stopped it**, which is not a failure and must not read as one.
+ *
+ * A cancel unwinds through `runStep`'s catch like everything else, so for the
+ * first six hours of the seam's life it was handed `stepGaveUp`'s copy — which
+ * says the problem *has been recorded* on a branch that deliberately skips
+ * Sentry, and which inherits the *kind* of whatever was in flight when Stop
+ * landed. A refusal racing a Stop therefore left *asking again will be refused*
+ * on a step of a job that was about to be marked retryable. GPT Sol's stage 2
+ * review; src/jobs.ts § the catch in `runStep`.
+ *
+ * `retry`, and it means it: Retry skips every step that finished, so a stopped
+ * job really does pick up rather than start over. That is `INTERRUPTED`'s
+ * promise too, and this is deliberately **not** that message — an interruption
+ * is *nobody came back*, and telling somebody who pressed Stop that something
+ * went wrong is the app not listening (src/job-state.ts § the eight states).
+ *
+ * The step is not named here, unlike `stepGaveUp`: the shelf card draws this
+ * directly under `step.label`, and the band does not draw it at all.
+ */
+export const STEP_STOPPED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "You stopped this before it finished. Whatever had already been done is kept, so starting it " +
+    "again picks up from there rather than beginning over. [jb-stopped]",
+};
+
+/* ----------------------------------------------------- more than one response -- */
+
+/**
+ * **The article needs more room than one model response has**, worked out
+ * before the call rather than discovered by it — `TooLongForOnePass` in
+ * src/token-budget.ts.
+ *
+ * The developer half is the exception's own message, which names the two token
+ * figures and the doc; it stays on `Error.message`, goes to the log, and is
+ * what somebody re-tuning the constants needs. This half is what the reader
+ * gets, and it deliberately says nothing about tokens: they did not choose a
+ * number and cannot change one.
+ *
+ * `blocked` rather than `bug`, matching the exception's own declared kind and
+ * for its stated reason — a request that cannot pass a size boundary, where the
+ * reader's move is a shorter piece.
+ */
+export const ARTICLE_TOO_LONG_FOR_ONE_PASS: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "This article is longer than this step can handle in one go, and reading a long piece in " +
+    "sections is not built yet. Trying again will not help — the article is the same length each " +
+    "time — but a shorter piece will work. [ai-too-long]",
+};
+
+/**
+ * **The answer ran past the room it was given and arrived unfinished**, which
+ * is a budget in this app set wrongly rather than anything about the article —
+ * `truncationFailure` in src/token-budget.ts.
+ *
+ * The two audiences docs/project/copy.md recorded and did not split are split
+ * here: `truncatedMessage` keeps the arithmetic — how much of the spend went on
+ * the answer and how much on the reasoning, which is the thing that took a bug
+ * two six-minute runs to work out — and travels on `Error.message` to the log.
+ * This sentence is what reaches the card.
+ *
+ * `bug`, the kind the exception already declared, and the wording keeps its
+ * hedge: the model's output varies between calls, so *unlikely* rather than
+ * *cannot*. The button is hidden either way, and a hidden button under a claim
+ * of certainty is the pair that has to stay honest.
+ */
+export const ANSWER_RAN_PAST_ITS_ROOM: ReaderFacingFailure = {
+  kind: "bug",
+  message:
+    "The AI service was given less room than this article's answer needed, so what came back was " +
+    "cut off and could not be used. That is a limit set wrongly in this app rather than anything " +
+    "about the article or about you: it has been recorded, it needs fixing here, and trying again " +
+    "is unlikely to help until it is. [ai-over-room]",
+};
+
+/* ------------------------------------------------------------------------ quiz -- */
+
+/**
+ * **The batch came back without both ends of the scale.**
+ *
+ * Written inline at its throw site on 2026-09-03 and moved here the next day —
+ * inline because at that moment one string had to be both the reader's sentence
+ * and the developer's, and the reader won the tie. With the seam split it can
+ * be what it should have been: a `ReaderFacingFailure` with a kind and a code,
+ * while the band arithmetic goes to the log.
+ *
+ * The wording is unchanged from the reviewed version, and two phrases in it are
+ * load-bearing:
+ *
+ * - **"survived checking against it"** rather than "the AI service wrote", with
+ *   `survived` the count of what got through validation. A draft said "wrote",
+ *   which is false the moment anything is dropped: twelve back with seven
+ *   unanchored reported that the service wrote five. It is also the panel's own
+ *   phrase for the same event (src/web/QuizPanel.tsx), so a reader who meets
+ *   both gets one vocabulary. ⟨Sol⟩
+ * - **"cover the full range"** rather than "build up from easier to harder":
+ *   easy-plus-medium with no hard *does* build up, it just stops short, and a
+ *   claim the reader can see is false costs the rest of the sentence. ⟨Sol⟩
+ *
+ * `gap` is `missingEndsInReaderWords` (src/quiz.ts) — the missing end said to
+ * somebody who has never heard of a band. The words `easy` and `hard` appear in
+ * it doing ordinary work in an English sentence; the band as a *name* never
+ * does, because the panel shows neither band nor value.
+ */
+export function quizBandsNotSpread(survived: number, gap: string): ReaderFacingFailure {
+  return {
+    kind: "retry",
+    message:
+      `Of the questions written for this article, ${survived} survived checking against it — but ` +
+      `${gap}, so they would not cover the full range from easier to harder. Writing the ` +
+      `questions again usually gets a better spread. [quiz-spread]`,
+  };
+}
+
+/**
+ * **Every question named a passage the article does not contain.**
+ *
+ * The other way the quiz build refuses a paid answer, and it had the same
+ * fault: its sentence was a tally of drop reasons — unanchored, unknown ids,
+ * unquoted, malformed, duplicates — which is exactly what somebody debugging
+ * the validator wants and exactly nothing a reader can act on. The tally stays
+ * on `Error.message`.
+ *
+ * `retry`, and honestly so: the questions are written afresh each time, and a
+ * batch that anchored to nothing is the kind of answer a second call usually
+ * does better on.
+ */
+export const QUIZ_NOTHING_ANCHORED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "None of the questions written for this article could be tied back to a passage in it, so " +
+    "there was nothing to check your answers against. Writing the questions again usually " +
+    "works. [quiz-unanchored]",
 };
 
 /* ---------------------------------------------------------- placing passages -- */
