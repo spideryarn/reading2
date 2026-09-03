@@ -2464,7 +2464,7 @@ td.text.has-hit[data-hues="8"] {
   gap: 0.5rem;
 }
 .cmt-dialog-label {
-  font-size: 0.66rem;
+  font-size: 0.77rem;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -2488,7 +2488,7 @@ td.text.has-hit[data-hues="8"] {
   padding-left: 0.7rem;
   border-left: 2px solid var(--highlight);
   font-family: var(--font-reading);
-  font-size: 0.9rem;
+  font-size: 0.98rem;
   line-height: 1.45;
   color: var(--ink-soft);
 }
@@ -2498,7 +2498,7 @@ td.text.has-hit[data-hues="8"] {
   align-items: center;
   gap: 0.6rem;
   padding: 0.4rem 0 0.6rem;
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   color: var(--ink-faint);
 }
 /* Lucide's `LoaderCircle` — a single open arc — turned by a CSS keyframe. The
@@ -2520,7 +2520,7 @@ td.text.has-hit[data-hues="8"] {
 
 .cmt-answer p {
   margin: 0 0 0.7rem;
-  font-size: 0.83rem;
+  font-size: 0.92rem;
   line-height: 1.55;
   color: var(--ink);
 }
@@ -2576,11 +2576,11 @@ td.text.has-hit[data-hues="8"] {
   background: var(--page);
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
 }
 .cmt-followup input::placeholder { color: var(--ink-faint); }
 .cmt-followup input:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
-.cmt-followup button { font-size: 0.7rem; white-space: nowrap; }
+.cmt-followup button { font-size: 0.81rem; white-space: nowrap; }
 .cmt-followup button:disabled { opacity: 0.4; cursor: default; }
 
 /* The reader's own words on a comment, edited in place — CommentDialog's
@@ -2597,7 +2597,7 @@ td.text.has-hit[data-hues="8"] {
   background: var(--page);
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   line-height: 1.45;
   /* Grows with what is written, rather than scrolling a two-line window. */
   field-sizing: content;
@@ -2610,17 +2610,17 @@ td.text.has-hit[data-hues="8"] {
 .cmt-open-thread {
   display: block;
   margin: 0 0 0.6rem;
-  font-size: 0.7rem;
+  font-size: 0.81rem;
 }
 
 .cmt-error {
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   color: var(--ink-soft);
 }
 .cmt-error p {
   margin: 0 0 0.5rem;
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   line-height: 1.4;
   color: var(--destructive);
   overflow-wrap: anywhere;
@@ -2632,7 +2632,7 @@ td.text.has-hit[data-hues="8"] {
   border-top: 1px solid var(--rule);
 }
 .cmt-sources-label {
-  font-size: 0.62rem;
+  font-size: 0.74rem;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -2645,11 +2645,11 @@ td.text.has-hit[data-hues="8"] {
   flex-direction: column;
   gap: 0.3rem;
 }
-.cmt-sources li { font-size: 0.74rem; line-height: 1.35; }
+.cmt-sources li { font-size: 0.84rem; line-height: 1.35; }
 .cmt-sources a { color: var(--highlight-ink); }
 .cmt-host {
   display: block;
-  font-size: 0.66rem;
+  font-size: 0.77rem;
   color: var(--ink-faint);
 }
 
@@ -2661,7 +2661,7 @@ td.text.has-hit[data-hues="8"] {
   margin-top: 0.6rem;
   padding-top: 0.55rem;
   border-top: 1px solid var(--rule);
-  font-size: 0.66rem;
+  font-size: 0.77rem;
   color: var(--ink-faint);
 }
 /* Delete stays hard right; everything else in the footer packs to the left, in
@@ -2672,7 +2672,7 @@ td.text.has-hit[data-hues="8"] {
 
 .cmt-transport-error {
   font-family: var(--font-mono);
-  font-size: 0.62rem;
+  font-size: 0.74rem;
   color: var(--destructive);
   max-width: 18rem;
   overflow: hidden;
@@ -2741,7 +2741,7 @@ td.text.has-hit[data-hues="8"] {
    that goes nowhere reads as "there is more this way" when there isn't. */
 .cmt-nav button:disabled { color: var(--ink-faint); opacity: 0.35; cursor: default; }
 .cmt-count {
-  font-size: 0.66rem;
+  font-size: 0.77rem;
   font-variant-numeric: tabular-nums;
   color: var(--ink-faint);
   min-width: 2.5rem;
@@ -2763,8 +2763,8 @@ td.text.has-hit[data-hues="8"] {
 .cmt-search.on { color: var(--highlight); }
 .cmt-search.off { color: var(--ink-faint); opacity: 0.65; }
 .cmt-search svg { display: block; }
-.cmt-search-n { font-size: 0.62rem; font-variant-numeric: tabular-nums; }
-.tooltip.tip-search { max-width: 17rem; font-size: 0.75rem; line-height: 1.45; }
+.cmt-search-n { font-size: 0.74rem; font-variant-numeric: tabular-nums; }
+.tooltip.tip-search { max-width: 17rem; font-size: 0.85rem; line-height: 1.45; }
 .tooltip.tip-search strong { color: var(--highlight-ink); font-weight: 600; }
 
 /* Work happening somewhere the reader isn't looking. */
@@ -3865,7 +3865,39 @@ td.text.has-hit[data-hues="8"] {
   background: var(--panel);
   border-right: 1px solid var(--rule-strong);
   font-family: var(--font-ui);
-  font-size: 0.87rem;
+  /* **The band is read, not merely glanced at, so it is sized to be read.** Was
+     0.87rem, with the panels beneath it running down to 0.58rem — 9px, against
+     17px of prose two inches to the right. Greg, 2026-09-03: *"For some of the
+     modes, the font is too small to read, e.g. Ideas."*
+
+     On that day every `rem` font-size in the band's panels was lifted through
+     one formula: **new = round(0.20 + 0.87 × old, 2)**. Linear rather than a
+     flat multiplier because the complaint is about the bottom of the range: it
+     lifts 0.58rem by 21% and 0.95rem by 8%, so the smallest text gains most and
+     the ladder compresses towards the prose instead of running away from it
+     below. It is **order-preserving** — non-decreasing, not injective: the
+     rounding collapses 0.73 and 0.74 onto one value, and 0.65 and 0.66 onto
+     another. Nothing reverses, which is what the outline's four fisheye tiers
+     need and what a ladder of named rungs would not have given them.
+
+     Three surfaces outside the band went with it, because they are the same
+     text and a reader meets them from the same page: the **hover cards over the
+     prose** (`.prose-card-*`, `.gloss-card`), the **comment, annotate and chat
+     dialogs**, and **`ProfileBox`/`DictationStrip`** (`.prof-*`) — which are in
+     the band, and also on `/profile`, on the metadata page and inside the
+     feedback dialog, so those three moved too.
+
+     NOT lifted: the article, the dock, the gist columns (`.ctx-*`,
+     `.nav-label`, `.outline td.gist`) where the column can be 192px and the
+     size is load-bearing, the library, the landing page, and the SVG labels
+     inside the diagrams, which are `px` and belong to the drawing.
+
+     There is no knob: the values are literal, as they were. What is written
+     down instead is the formula, so the next lift can be the same shape rather
+     than a fresh argument per rule. **A lift is not free**: two fixed-height
+     cards under the pictures hold a stated number of lines, and their heights
+     are a consequence of these sizes — see `.diag-card` and `.sk-card`. */
+  font-size: 0.96rem;
 }
 
 /* **The title row every band has — one family, for all of them.** It replaced
@@ -3909,7 +3941,7 @@ td.text.has-hit[data-hues="8"] {
 .band-head h2 {
   flex: 1;
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.98rem;
   font-weight: 600;
   color: var(--ink);
   min-width: 0;
@@ -3954,7 +3986,7 @@ td.text.has-hit[data-hues="8"] {
   margin: 0;
   padding: 0.4rem 0.7rem;
   color: var(--highlight-ink);
-  font-size: 0.8rem;
+  font-size: 0.9rem;
 }
 
 /* ---- the list of conversations ---- */
@@ -4012,14 +4044,14 @@ td.text.has-hit[data-hues="8"] {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--ink-faint);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
 }
 .chat-thread-meta {
   display: flex;
   align-items: baseline;
   gap: 0.4rem;
   color: var(--ink-faint);
-  font-size: 0.75rem;
+  font-size: 0.85rem;
 }
 /* The dot between the facts, drawn in CSS rather than written into the markup,
    so that adding or removing one of them cannot leave a stray separator — and
@@ -4067,11 +4099,11 @@ td.text.has-hit[data-hues="8"] {
   gap: 0.6rem;
   min-height: 1.2rem;
   padding: 1rem 0.9rem;
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   color: var(--ink-faint);
 }
 .chat-empty p { margin: 0 0 0.5rem; }
-.chat-empty-hint { font-size: 0.82rem; line-height: 1.45; }
+.chat-empty-hint { font-size: 0.91rem; line-height: 1.45; }
 .chat-new {
   display: inline-flex;
   align-items: center;
@@ -4163,7 +4195,7 @@ td.text.has-hit[data-hues="8"] {
   margin: 0.75rem 0 0.35rem;
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.85rem;
+  font-size: 0.94rem;
   font-weight: 600;
   line-height: 1.35;
 }
@@ -4201,7 +4233,7 @@ td.text.has-hit[data-hues="8"] {
 }
 .chat-turn.model .fmt-pre code {
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   line-height: 1.45;
 }
 
@@ -4225,7 +4257,7 @@ td.text.has-hit[data-hues="8"] {
   gap: 0.4rem;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: 0.9rem;
 }
 
 /* The same line, for the case where this browser has lost the stream and is
@@ -4262,7 +4294,7 @@ td.text.has-hit[data-hues="8"] {
   margin: 0.3rem 0 0;
   color: var(--highlight-ink);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
 }
 
 /* Block-id chips. The whole feature, visually: a claim you can press to go and
@@ -4337,7 +4369,7 @@ td.text.has-hit[data-hues="8"] {
   padding: 0;
   list-style: none;
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   line-height: 1.45;
   color: var(--ink-faint);
 }
@@ -4382,7 +4414,7 @@ td.text.has-hit[data-hues="8"] {
   border-top: 1px solid var(--rule);
   list-style: none;
   font-family: var(--font-ui);
-  font-size: 0.75rem;
+  font-size: 0.85rem;
 }
 .chat-sources a { color: var(--ink-faint); }
 .chat-sources a:hover { color: var(--highlight-ink); }
@@ -4423,7 +4455,7 @@ td.text.has-hit[data-hues="8"] {
   background: var(--page);
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.85rem;
+  font-size: 0.94rem;
   line-height: 1.4;
   resize: none;
 }
@@ -4464,13 +4496,18 @@ td.text.has-hit[data-hues="8"] {
   max-height: 22.5rem;
   /* A shade larger than chat's 0.85rem. This is prose the reader is composing
      and will want to read back before sending, not a one-line question. */
-  font-size: 0.9rem;
+  font-size: 0.98rem;
   line-height: 1.5;
 }
 /* The whole control row drops below the box rather than sitting beside it: at
    six rows tall, buttons aligned to `flex-end` beside the textarea sit level
    with its last line and read as belonging to nothing. */
-.remember .chat-composer { flex-wrap: wrap; align-items: center; }
+/* The tightest row in the app: talk, live + its device picker, the stance
+   picker, and send, all on one line under a full-width box. It fitted with 4px
+   to spare before the 2026-09-03 lift and wrapped after it, stranding send
+   alone at the left of a second line. A narrower gap here rather than smaller
+   text — the row is short of a few pixels, not of room to read. */
+.remember .chat-composer { flex-wrap: wrap; align-items: center; gap: 0.3rem; }
 .remember .chat-input { flex-basis: 100%; }
 
 /* The bottom row reads left to right in the order the reader does things:
@@ -4492,7 +4529,7 @@ td.text.has-hit[data-hues="8"] {
   gap: 0.35rem;
 }
 .chat-talk-label {
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   color: var(--ink-faint);
   white-space: nowrap;
 }
@@ -4546,7 +4583,7 @@ td.text.has-hit[data-hues="8"] {
   color: var(--page);
 }
 .chat-live-label {
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   color: var(--ink-faint);
   white-space: nowrap;
 }
@@ -4561,7 +4598,7 @@ td.text.has-hit[data-hues="8"] {
   background: transparent;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
 }
 .chat-live-mic select:disabled { opacity: 0.5; }
 
@@ -4574,7 +4611,7 @@ td.text.has-hit[data-hues="8"] {
   padding: 0;
   list-style: none;
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
 }
 .chat-pointed li {
   display: flex;
@@ -4590,7 +4627,7 @@ td.text.has-hit[data-hues="8"] {
   align-items: center;
   gap: 0.3rem;
   margin-left: auto;
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   color: var(--ink-faint);
 }
 .chat-stance-label { white-space: nowrap; }
@@ -4601,7 +4638,10 @@ td.text.has-hit[data-hues="8"] {
   background: var(--surface-raised);
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  /* Matches `.chat-live-mic select`, its neighbour in the same row. The two
+     were 0.88 and 0.83 for no reason anyone chose, and a select is as wide as
+     its longest option ("Signposts") whether you can spare the width or not. */
+  font-size: 0.83rem;
 }
 .chat-stance select:disabled { opacity: 0.45; cursor: default; }
 
@@ -4610,7 +4650,7 @@ td.text.has-hit[data-hues="8"] {
    its quality. Only ever present on a non-default stance. */
 .chat-stance-tag {
   margin-right: auto;
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   font-variant: small-caps;
   letter-spacing: 0.03em;
   color: var(--ink-faint);
@@ -4635,7 +4675,7 @@ td.text.has-hit[data-hues="8"] {
    matches nothing in the article. */
 
 /* The title row is `.band-head`, § mode band. */
-.gloss-count { color: var(--ink-faint); font-size: 0.75rem; }
+.gloss-count { color: var(--ink-faint); font-size: 0.85rem; }
 
 /* The sort control. Small, quiet, and always visible when there is a choice —
    the whole condition on keeping the model's scores is that ordering by them is
@@ -4652,7 +4692,7 @@ td.text.has-hit[data-hues="8"] {
 .gloss-sort-label {
   margin-right: 0.15rem;
   color: var(--ink-faint);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   text-transform: lowercase;
 }
 .gloss-sort-btn {
@@ -4662,7 +4702,7 @@ td.text.has-hit[data-hues="8"] {
   background: none;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.74rem;
+  font-size: 0.84rem;
   cursor: pointer;
 }
 .gloss-sort-btn:hover { color: var(--ink); background: var(--surface-raised); }
@@ -4692,7 +4732,7 @@ td.text.has-hit[data-hues="8"] {
 }
 .gloss-gate-label {
   color: var(--ink-faint);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   text-transform: lowercase;
 }
 /* Monospaced and pushed right, like the scores on the rows it governs — this
@@ -4702,7 +4742,7 @@ td.text.has-hit[data-hues="8"] {
   margin-left: auto;
   color: var(--ink-soft);
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.79rem;
   white-space: nowrap;
 }
 .gloss-gate-reset {
@@ -4729,7 +4769,7 @@ td.text.has-hit[data-hues="8"] {
 .gloss-gate-note {
   margin: 0.3rem 0 0;
   color: var(--ink-faint);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   line-height: 1.35;
 }
 
@@ -4755,14 +4795,14 @@ td.text.has-hit[data-hues="8"] {
 }
 .srch-gate-label {
   color: var(--ink-faint);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   text-transform: lowercase;
 }
 .srch-gate-value {
   margin-left: auto;
   color: var(--ink-soft);
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.79rem;
   white-space: nowrap;
 }
 .srch-gate-reset {
@@ -4790,7 +4830,7 @@ td.text.has-hit[data-hues="8"] {
 .srch-gate-note {
   margin: 0.3rem 0 0;
   color: var(--ink-faint);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   line-height: 1.35;
 }
 
@@ -4799,18 +4839,18 @@ td.text.has-hit[data-hues="8"] {
   margin: 0.35rem 0 0;
   max-width: 46ch;
   color: var(--ink-faint);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   line-height: 1.45;
 }
 .gloss-error {
   margin: 0.4rem 0.7rem 0;
   color: var(--highlight-ink);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
 }
 
 .gloss-empty { padding: 1rem 0.9rem; color: var(--ink-faint); }
 .gloss-empty p { margin: 0 0 0.5rem; }
-.gloss-hint { font-size: 0.82rem; line-height: 1.45; }
+.gloss-hint { font-size: 0.91rem; line-height: 1.45; }
 
 .gloss-stale {
   margin: 0.5rem 0.7rem 0;
@@ -4825,7 +4865,7 @@ td.text.has-hit[data-hues="8"] {
   gap: 0.35rem;
   margin: 0 0 0.5rem;
   color: var(--ink-soft);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   line-height: 1.4;
 }
 .gloss-stale svg { flex: none; color: var(--highlight); }
@@ -4869,7 +4909,7 @@ td.text.has-hit[data-hues="8"] {
   background: var(--panel);
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: lowercase;
@@ -4914,13 +4954,13 @@ td.text.has-hit[data-hues="8"] {
   min-width: 0;
   overflow-wrap: break-word;
   color: var(--ink);
-  font-size: 0.86rem;
+  font-size: 0.95rem;
   font-weight: 600;
 }
 .gloss-term.on .gloss-name { color: var(--highlight-ink); }
 .gloss-kind {
   color: var(--ink-faint);
-  font-size: 0.68rem;
+  font-size: 0.79rem;
   text-transform: lowercase;
   letter-spacing: 0.02em;
 }
@@ -4940,7 +4980,7 @@ td.text.has-hit[data-hues="8"] {
   display: block;
   margin-top: 0.2rem;
   color: var(--ink-soft);
-  font-size: 0.79rem;
+  font-size: 0.89rem;
   line-height: 1.45;
 }
 
@@ -4959,7 +4999,7 @@ td.text.has-hit[data-hues="8"] {
   margin: 0 0 0.15rem;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.66rem;
+  font-size: 0.77rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: lowercase;
@@ -4974,7 +5014,7 @@ td.text.has-hit[data-hues="8"] {
 .gloss-part-text {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.76rem;
+  font-size: 0.86rem;
   line-height: 1.45;
 }
 /* `tabIndex={0}` on the span it wraps, so the tooltip is reachable by keyboard
@@ -5029,14 +5069,14 @@ td.text.has-hit[data-hues="8"] {
   align-items: center;
   gap: 0.25rem;
   color: var(--ink-faint);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   text-decoration: none;
 }
 .gloss-sources a:hover { color: var(--highlight-ink); text-decoration: underline; }
 .gloss-sources a:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
 
 .gloss-open { padding: 0 0.7rem 0.65rem; }
-.gloss-open p { margin: 0 0 0.4rem; font-size: 0.76rem; line-height: 1.45; }
+.gloss-open p { margin: 0 0 0.4rem; font-size: 0.86rem; line-height: 1.45; }
 .gloss-open p:last-child { margin-bottom: 0; }
 .gloss-aliases { color: var(--ink-faint); }
 .gloss-detail { color: var(--ink-soft); }
@@ -5090,7 +5130,7 @@ td.text.has-hit[data-hues="8"] {
 .prose-card-name {
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.82rem;
+  font-size: 0.91rem;
   font-weight: 600;
   /* A long canonical name wraps rather than widening the card past its
      max-width and pushing the whole panel off the flip axis. */
@@ -5120,7 +5160,7 @@ td.text.has-hit[data-hues="8"] {
   margin: 0 0 0.15rem;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.64rem;
+  font-size: 0.76rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: lowercase;
@@ -5130,7 +5170,7 @@ td.text.has-hit[data-hues="8"] {
   margin: 0;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   line-height: 1.45;
 }
 
@@ -5157,7 +5197,7 @@ td.text.has-hit[data-hues="8"] {
   margin: 0 0 0.2rem;
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.82rem;
+  font-size: 0.91rem;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -5169,7 +5209,7 @@ td.text.has-hit[data-hues="8"] {
   border: 1px solid var(--rule-strong);
   border-radius: 3px;
   color: var(--ink-faint);
-  font-size: 0.58rem;
+  font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.04em;
 }
@@ -5178,7 +5218,7 @@ td.text.has-hit[data-hues="8"] {
    arrived — see LinkCard, `titled`. */
 .prose-card-trail {
   color: var(--ink-faint);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   overflow-wrap: anywhere;
 }
 /* `arXiv 2212.13345`. Monospace because it is an identifier meant to be copied
@@ -5191,14 +5231,14 @@ td.text.has-hit[data-hues="8"] {
   margin: 0 0 0.25rem;
   color: var(--ink-soft);
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.68rem;
+  font-size: 0.79rem;
   overflow-wrap: anywhere;
 }
 .prose-card-cite-label {
   flex: none;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.62rem;
+  font-size: 0.74rem;
   font-weight: 600;
   letter-spacing: 0.03em;
 }
@@ -5216,7 +5256,7 @@ td.text.has-hit[data-hues="8"] {
   margin: 0 0 0.15rem;
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   font-weight: 600;
   line-height: 1.3;
   overflow-wrap: break-word;
@@ -5226,7 +5266,7 @@ td.text.has-hit[data-hues="8"] {
   margin: 0.15rem 0 0;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.66rem;
+  font-size: 0.77rem;
 }
 /* The wait, and only ever where there is nothing else yet. `.cmt-spinner` is
    the house animation — see docs/project/icons.md. */
@@ -5235,7 +5275,7 @@ td.text.has-hit[data-hues="8"] {
   align-items: center;
   gap: 0.3rem;
   color: var(--ink-faint);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
 }
 .prose-card-waiting svg { flex: none; }
 /* The address itself. On an external card it sits above the foot, deliberately
@@ -5246,7 +5286,7 @@ td.text.has-hit[data-hues="8"] {
   margin-top: 0.35rem;
   color: var(--ink-faint);
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.64rem;
+  font-size: 0.76rem;
   line-height: 1.35;
   overflow-wrap: anywhere;
   /* Three lines is enough to recognise any URL and to read most of them whole;
@@ -5280,7 +5320,7 @@ td.text.has-hit[data-hues="8"] {
   padding-top: 0.4rem;
   border-top: 1px solid var(--rule);
   font-family: var(--font-ui);
-  font-size: 0.68rem;
+  font-size: 0.79rem;
 }
 .prose-card-link,
 .prose-card-open {
@@ -5387,7 +5427,7 @@ td.text.has-hit[data-hues="8"] {
   overflow-y: auto;
   overscroll-behavior: contain;
   font-family: var(--font-reading);
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   line-height: 1.5;
   color: var(--ink-soft);
 }
@@ -5457,7 +5497,7 @@ td.text.has-hit[data-hues="8"] {
   width: 100%;
   margin: 0 0 0.35rem;
   color: var(--ink-soft);
-  font-size: 0.76rem;
+  font-size: 0.86rem;
 }
 .gloss-btn {
   display: inline-flex;
@@ -5469,7 +5509,7 @@ td.text.has-hit[data-hues="8"] {
   background: var(--surface-raised);
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.76rem;
+  font-size: 0.86rem;
   cursor: pointer;
 }
 .gloss-btn:hover { border-color: var(--highlight); color: var(--ink); }
@@ -5485,7 +5525,7 @@ td.text.has-hit[data-hues="8"] {
 .gloss-provenance {
   margin: 0.45rem 0 0;
   color: var(--ink-faint);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
 }
 
 /* ------------------------------------------------------- the mode switch --
@@ -5658,7 +5698,7 @@ td.text.has-hit[data-hues="8"] {
   background: var(--page);
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.85rem;
+  font-size: 0.94rem;
   line-height: 1.4;
 }
 .srch-input:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
@@ -5699,7 +5739,7 @@ td.text.has-hit[data-hues="8"] {
   background: none;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   cursor: pointer;
 }
 .srch-mode:hover { color: var(--ink); }
@@ -5718,7 +5758,7 @@ td.text.has-hit[data-hues="8"] {
   background: var(--surface-raised);
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   cursor: pointer;
 }
 .srch-go:disabled { opacity: 0.4; cursor: default; }
@@ -5728,7 +5768,7 @@ td.text.has-hit[data-hues="8"] {
   margin: 0;
   padding: 0.5rem 0.7rem;
   color: var(--destructive, oklch(0.65 0.2 25));
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   border-bottom: 1px solid var(--rule);
 }
 
@@ -5764,7 +5804,7 @@ td.text.has-hit[data-hues="8"] {
 .srch-all-tick {
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
 }
 .srch-all-tick:hover { color: var(--ink-soft); }
 /* The native box, restyled rather than replaced. `accent-color` is the whole of
@@ -5832,7 +5872,7 @@ td.text.has-hit[data-hues="8"] {
   background: none;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.82rem;
+  font-size: 0.91rem;
   text-align: left;
   cursor: pointer;
 }
@@ -5857,7 +5897,7 @@ td.text.has-hit[data-hues="8"] {
   align-items: center;
   gap: 0.25rem;
   color: var(--ink-faint);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
 }
 .srch-icon {
   display: inline-flex;
@@ -5994,7 +6034,7 @@ td.text.has-hit[data-hues="8"] {
   background: none;
   color: var(--ink-faint);
   font-family: inherit;
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   text-align: center;
   cursor: pointer;
 }
@@ -6039,7 +6079,7 @@ td.text.has-hit[data-hues="8"] {
   gap: 0.35rem;
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   line-height: 1.4;
 }
 .srch-stale svg { flex: none; color: var(--highlight); }
@@ -6051,21 +6091,21 @@ td.text.has-hit[data-hues="8"] {
   display: block;
   margin-top: 0.35rem;
   color: var(--ink-faint);
-  font-size: 0.74rem;
+  font-size: 0.84rem;
 }
 
 /* ---- nothing to show, in its five flavours ---- */
 
 .srch-empty { padding: 0.85rem 0.9rem; color: var(--ink-faint); }
 .srch-empty p { margin: 0 0 0.5rem; }
-.srch-empty-hint { font-size: 0.8rem; line-height: 1.5; }
+.srch-empty-hint { font-size: 0.9rem; line-height: 1.5; }
 .srch-empty-hint em { color: var(--ink-soft); font-style: italic; }
 .srch-working, .srch-failed {
   display: flex;
   align-items: center;
   gap: 0.35rem;
   color: var(--ink-soft);
-  font-size: 0.82rem;
+  font-size: 0.91rem;
 }
 .srch-failed { color: var(--destructive, oklch(0.65 0.2 25)); }
 /* The 600ms before the spinner is allowed to say anything. Holding one line's
@@ -6079,7 +6119,7 @@ td.text.has-hit[data-hues="8"] {
   background: var(--surface-raised);
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   cursor: pointer;
 }
 .srch-retry:hover { border-color: var(--hit); }
@@ -6094,7 +6134,7 @@ td.text.has-hit[data-hues="8"] {
   padding: 0.4rem 0.7rem;
   border-bottom: 1px solid var(--rule);
 }
-.srch-count { margin-right: auto; color: var(--ink-faint); font-size: 0.72rem; }
+.srch-count { margin-right: auto; color: var(--ink-faint); font-size: 0.83rem; }
 .srch-sort-btn {
   padding: 0.1rem 0.4rem;
   border: 1px solid transparent;
@@ -6102,7 +6142,7 @@ td.text.has-hit[data-hues="8"] {
   background: none;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   cursor: pointer;
 }
 .srch-sort-btn:hover { color: var(--ink); }
@@ -6120,7 +6160,7 @@ td.text.has-hit[data-hues="8"] {
   background: none;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   text-align: left;
   cursor: pointer;
 }
@@ -6187,7 +6227,7 @@ td.text.has-hit[data-hues="8"] {
   border-radius: 3px;
   background: rgb(var(--hit-rgb) / calc(var(--hit-a) * 0.35));
   color: var(--ink);
-  font-size: 0.68rem;
+  font-size: 0.79rem;
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -6235,7 +6275,7 @@ td.text.has-hit[data-hues="8"] {
   padding: 0.3rem 0.7rem 0.35rem;
   border-bottom: 1px solid var(--rule);
   color: var(--ink-faint);
-  font-size: 0.66rem;
+  font-size: 0.77rem;
   line-height: 1.4;
 }
 .srch-legend-item { display: inline-flex; align-items: center; gap: 0.3rem; }
@@ -6277,13 +6317,13 @@ td.text.has-hit[data-hues="8"] {
   overflow: hidden;
   line-height: 1.4;
 }
-.srch-hit-why { color: var(--ink-faint); font-size: 0.73rem; line-height: 1.4; }
-.srch-hit-whole { color: var(--ink-faint); font-size: 0.68rem; font-style: italic; }
+.srch-hit-why { color: var(--ink-faint); font-size: 0.84rem; line-height: 1.4; }
+.srch-hit-whole { color: var(--ink-faint); font-size: 0.79rem; font-style: italic; }
 
 /* The longer snippet, on hover. Wider than the band, because the whole point of
    it is to show more than the row could. */
 .tip-hit { max-width: 26rem; }
-.tip-hit p { margin: 0; font-size: 0.8rem; line-height: 1.5; }
+.tip-hit p { margin: 0; font-size: 0.9rem; line-height: 1.5; }
 /* What the two numbers in the gutter mean, under the passage they belong to.
    Ruled off and set smaller, because it is *about* the result rather than part
    of it — the passage is the reader's, the note is ours. */
@@ -6295,7 +6335,7 @@ td.text.has-hit[data-hues="8"] {
   padding-top: 0.4rem;
   border-top: 1px solid var(--rule);
   color: var(--ink-faint);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
 }
 .tip-hit-meta b { color: var(--ink-soft); font-weight: 600; }
 .tip-hit-meta em { font-style: italic; }
@@ -6398,7 +6438,7 @@ td.text.has-hit[data-hues="8"] {
 .ref-notice p {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   line-height: 1.5;
 }
 /* **The fact, as the control.** The whole line is the target rather than a 12px
@@ -6417,7 +6457,7 @@ td.text.has-hit[data-hues="8"] {
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   line-height: 1.5;
   text-align: left;
   cursor: pointer;
@@ -6460,7 +6500,7 @@ td.text.has-hit[data-hues="8"] {
   gap: 0.3rem;
   margin: 0 0 0.35rem;
   color: var(--ink-faint);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -6491,14 +6531,14 @@ td.text.has-hit[data-hues="8"] {
 .ref-scan-line {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   line-height: 1.5;
 }
 .ref-scan-line + .ref-scan-line { margin-top: 0.4rem; }
 .ref-scan-warn { color: var(--ink); }
 /* The cap notice and the forgeability sentence: true, and not the thing being
    read first. */
-.ref-scan-note, .ref-scan-blind { margin-top: 0.4rem; color: var(--ink-faint); font-size: 0.72rem; }
+.ref-scan-note, .ref-scan-blind { margin-top: 0.4rem; color: var(--ink-faint); font-size: 0.83rem; }
 
 .ref-scan-list {
   margin: 0.45rem 0 0;
@@ -6516,7 +6556,7 @@ td.text.has-hit[data-hues="8"] {
   gap: 0.1rem;
   padding: 0.35rem 0;
   border-top: 1px solid var(--rule);
-  font-size: 0.74rem;
+  font-size: 0.84rem;
   line-height: 1.45;
 }
 /* **Dimmed, never hidden.** The `ordinary` label is read off class names and is
@@ -6528,7 +6568,7 @@ td.text.has-hit[data-hues="8"] {
 .ref-scan-where, .ref-scan-detail {
   color: var(--ink-faint);
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   overflow-wrap: anywhere;
 }
 /* The words themselves, which is the thing the referee actually needs to see. */
@@ -6558,7 +6598,7 @@ td.text.has-hit[data-hues="8"] {
   background: transparent;
   color: var(--ink-faint);
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   cursor: pointer;
 }
 .ref-view-btn:hover { color: var(--ink); border-color: var(--rule-strong); }
@@ -6621,7 +6661,7 @@ td.text.has-hit[data-hues="8"] {
 .ref-how-head h3 {
   flex: 1;
   margin: 0;
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   font-weight: 600;
   color: var(--ink);
 }
@@ -6639,7 +6679,7 @@ td.text.has-hit[data-hues="8"] {
 
 .ref-how-p {
   margin: 0.35rem 0 0;
-  font-size: 0.74rem;
+  font-size: 0.84rem;
   line-height: 1.45;
   color: var(--ink-soft);
 }
@@ -6652,7 +6692,7 @@ td.text.has-hit[data-hues="8"] {
 .ref-how-btn {
   flex: none;
   font: inherit;
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   padding: 0.1rem 0.35rem;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
@@ -6676,14 +6716,14 @@ td.text.has-hit[data-hues="8"] {
 .crit { padding: 0 0.35rem 0.5rem; }
 
 .crit-new { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.35rem 0; }
-.crit-label { font-size: 0.72rem; color: var(--ink-faint); }
+.crit-label { font-size: 0.83rem; color: var(--ink-faint); }
 /* The poles' two inputs and the criterion box. There was a scale `<select>` in
    here until 2026-09-02, when the ramp became a property of the mode
    (`?refscale=`) rather than of a criterion — CriteriaPanel.tsx says why. */
 .crit-text, .crit-poles input {
   width: 100%;
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 0.91rem;
   color: var(--ink);
   background: var(--page);
   border: 1px solid var(--rule);
@@ -6695,7 +6735,7 @@ td.text.has-hit[data-hues="8"] {
 .crit-kinds { display: flex; flex-wrap: wrap; gap: 0.25rem; }
 .crit-kind-btn {
   font: inherit;
-  font-size: 0.74rem;
+  font-size: 0.84rem;
   color: var(--ink-faint);
   background: none;
   border: 1px solid var(--rule);
@@ -6705,12 +6745,12 @@ td.text.has-hit[data-hues="8"] {
 }
 .crit-kind-btn.on { color: var(--ink); border-color: var(--rule-strong); background: var(--panel); }
 .crit-kind-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
-.crit-kind-note { margin: 0; font-size: 0.72rem; color: var(--ink-faint); }
+.crit-kind-note { margin: 0; font-size: 0.83rem; color: var(--ink-faint); }
 
 .crit-presets { display: flex; flex-wrap: wrap; gap: 0.2rem; }
 .crit-preset {
   font: inherit;
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   color: var(--ink-faint);
   background: none;
   border: 1px dashed var(--rule);
@@ -6723,7 +6763,7 @@ td.text.has-hit[data-hues="8"] {
 .crit-run {
   align-self: flex-start;
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   padding: 0.15rem 0.6rem;
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
@@ -6737,10 +6777,10 @@ td.text.has-hit[data-hues="8"] {
    what `:disabled` was doing for it. */
 .crit-run[aria-disabled="true"] { opacity: 0.5; cursor: default; }
 
-.crit-error { margin: 0.25rem 0; font-size: 0.76rem; color: var(--ink); }
+.crit-error { margin: 0.25rem 0; font-size: 0.86rem; color: var(--ink); }
 .crit-retry {
   font: inherit;
-  font-size: 0.74rem;
+  font-size: 0.84rem;
   background: none;
   border: none;
   color: var(--highlight);
@@ -6752,7 +6792,7 @@ td.text.has-hit[data-hues="8"] {
 /* **What the tick does**, above the list. Claims says the same thing inside its
    checkbox's own label; here the label is the criterion's words, so the sentence
    has to live beside the list rather than in it. */
-.crit-how { margin: 0.25rem 0; font-size: 0.72rem; color: var(--ink-faint); }
+.crit-how { margin: 0.25rem 0; font-size: 0.83rem; color: var(--ink-faint); }
 
 /* **The key**, shown only while a for/against criterion is switched on —
    `TheKey` in CriteriaPanel.tsx says what it is for and why it tracks the mode's
@@ -6764,7 +6804,7 @@ td.text.has-hit[data-hues="8"] {
   flex-wrap: wrap;
   gap: 0.15rem 0.5rem;
   margin: 0.25rem 0;
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   color: var(--ink-faint);
 }
 .crit-key-lead { color: var(--ink-faint); }
@@ -6784,7 +6824,7 @@ td.text.has-hit[data-hues="8"] {
    rail. A coloured tick there would be pointing at the wrong thing
    (CriteriaPanel.tsx § `identityPaintsProse`). */
 .crit-tick input { margin-top: 0.15rem; accent-color: rgb(var(--cat-rgb, var(--hit-wash-rgb))); }
-.crit-criterion { font-size: 0.82rem; color: var(--ink); }
+.crit-criterion { font-size: 0.91rem; color: var(--ink); }
 
 .crit-colour, .crit-del {
   flex: none;
@@ -6811,7 +6851,7 @@ td.text.has-hit[data-hues="8"] {
 .crit-swatch.current { outline: 2px solid var(--highlight); outline-offset: 1px; }
 .crit-swatch-auto {
   font: inherit;
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   background: none;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
@@ -6820,7 +6860,7 @@ td.text.has-hit[data-hues="8"] {
   padding: 0 0.3rem;
 }
 
-.crit-meta { margin: 0.15rem 0 0.25rem; font-size: 0.7rem; color: var(--ink-faint); }
+.crit-meta { margin: 0.15rem 0 0.25rem; font-size: 0.81rem; color: var(--ink-faint); }
 
 .crit-results { margin: 0; padding: 0; list-style: none; }
 .crit-result { padding: 0.25rem 0; }
@@ -6850,12 +6890,12 @@ td.text.has-hit[data-hues="8"] {
    in the row and the first thing in the accessible name. */
 .crit-rank {
   flex: none;
-  font-size: 1rem;
+  font-size: 1.07rem;
   font-variant-numeric: tabular-nums;
   color: var(--ink-faint);
   min-width: 1.1rem;
 }
-.crit-quote { font-size: 0.8rem; }
+.crit-quote { font-size: 0.9rem; }
 
 .crit-valence {
   display: flex;
@@ -6863,7 +6903,7 @@ td.text.has-hit[data-hues="8"] {
   flex-wrap: wrap;
   gap: 0.3rem;
   margin: 0.15rem 0 0 1.45rem;
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   color: var(--ink-faint);
 }
 .crit-valence-swatch {
@@ -6887,11 +6927,11 @@ td.text.has-hit[data-hues="8"] {
    refuses, drawn instead of printed. */
 .crit-gap {
   margin: 0.15rem 0 0 1.45rem;
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
-.crit-disagree { margin: 0.1rem 0 0 1.45rem; font-size: 0.72rem; color: var(--ink-faint); }
+.crit-disagree { margin: 0.1rem 0 0 1.45rem; font-size: 0.83rem; color: var(--ink-faint); }
 
 /* Two sub-lists and not one, with two class names rather than a shared name and
    a modifier — `Yours` in CriteriaPanel.tsx says why. They look identical on
@@ -6902,12 +6942,12 @@ td.text.has-hit[data-hues="8"] {
 .crit-misses-head,
 .crit-unpaired-head {
   margin: 0 0 0.15rem;
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   color: var(--ink-faint);
   border-top: 1px solid var(--rule);
   padding-top: 0.25rem;
 }
-.crit-unpaired-why { margin: 0 0 0.15rem; font-size: 0.68rem; color: var(--ink-faint); }
+.crit-unpaired-why { margin: 0 0 0.15rem; font-size: 0.79rem; color: var(--ink-faint); }
 .crit-miss-list,
 .crit-unpaired-list { margin: 0; padding: 0; list-style: none; }
 .crit-miss,
@@ -6916,13 +6956,13 @@ td.text.has-hit[data-hues="8"] {
    the two lists read as one column rather than as two shapes. */
 .crit-yours {
   margin: 0.1rem 0 0 1.45rem;
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 
-.crit-why { margin: 0.1rem 0 0 1.45rem; font-size: 0.72rem; color: var(--ink-faint); }
-.crit-cites { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.15rem 0 0 1.45rem; font-size: 0.72rem; }
+.crit-why { margin: 0.1rem 0 0 1.45rem; font-size: 0.83rem; color: var(--ink-faint); }
+.crit-cites { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.15rem 0 0 1.45rem; font-size: 0.83rem; }
 
 /* --- Claims, the second sub-mode. src/web/ClaimsPanel.tsx.
 
@@ -6943,7 +6983,7 @@ td.text.has-hit[data-hues="8"] {
 
 /* What a row is and is not, above the button, because it is the thing a referee
    is likeliest to read past: linkage, never adequacy. */
-.clm-what { margin: 0; font-size: 0.74rem; line-height: 1.45; color: var(--ink-faint); }
+.clm-what { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
 
 .clm-run {
   align-self: flex-start;
@@ -6953,35 +6993,35 @@ td.text.has-hit[data-hues="8"] {
   background: var(--surface-raised);
   color: var(--ink);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   cursor: pointer;
 }
 .clm-run:hover:not(:disabled) { border-color: var(--ink-faint); }
 .clm-run:disabled { opacity: 0.6; cursor: default; }
 .clm-run:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
 
-.clm-error { margin: 0.25rem 0; font-size: 0.76rem; color: var(--ink); }
+.clm-error { margin: 0.25rem 0; font-size: 0.86rem; color: var(--ink); }
 .clm-retry {
   border: 0;
   padding: 0;
   background: none;
   color: var(--ink-faint);
   font: inherit;
-  font-size: 0.74rem;
+  font-size: 0.84rem;
   text-decoration: underline;
   cursor: pointer;
 }
 
 /* Both of these are quiet lines rather than warnings: one says the paper has
    moved since the run, the other says what the order means. Neither is a fault. */
-.clm-stale, .clm-order { margin: 0; font-size: 0.7rem; color: var(--ink-faint); }
+.clm-stale, .clm-order { margin: 0; font-size: 0.81rem; color: var(--ink-faint); }
 
 .clm-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.55rem; }
 .clm-row { border-top: 1px solid var(--rule); padding: 0.45rem 0 0; }
 
 /* The claim in one line, and the paper's own sentence under it — the label and
    the evidence that the paper said it, in that order. */
-.clm-claim { margin: 0 0 0.15rem; font-size: 0.82rem; font-weight: 600; color: var(--ink); }
+.clm-claim { margin: 0 0 0.15rem; font-size: 0.91rem; font-weight: 600; color: var(--ink); }
 
 .clm-jump {
   display: block;
@@ -6996,19 +7036,19 @@ td.text.has-hit[data-hues="8"] {
 }
 .clm-jump:hover .clm-quote { text-decoration: underline; }
 .clm-jump:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
-.clm-quote { font-size: 0.78rem; color: var(--ink); }
+.clm-quote { font-size: 0.88rem; color: var(--ink); }
 
-.clm-tick { display: flex; align-items: center; gap: 0.3rem; margin-top: 0.25rem; font-size: 0.7rem; color: var(--ink-faint); cursor: pointer; }
+.clm-tick { display: flex; align-items: center; gap: 0.3rem; margin-top: 0.25rem; font-size: 0.81rem; color: var(--ink-faint); cursor: pointer; }
 .clm-tick input { accent-color: rgb(var(--cat-rgb, var(--hit-wash-rgb))); }
 
 /* **Not an error colour and not an error shape.** A claim the model found no
    passage for is an ordinary answer about the run, and dressing it as a warning
    is how it comes to be read as a finding about the paper. */
-.clm-none { margin: 0.2rem 0 0; font-size: 0.74rem; line-height: 1.45; color: var(--ink-faint); }
+.clm-none { margin: 0.2rem 0 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
 
 .clm-passages { margin: 0.25rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.3rem; }
 .clm-passage { padding-left: 0.5rem; border-left: 2px solid var(--rule); }
-.clm-why { margin: 0.1rem 0 0; font-size: 0.72rem; color: var(--ink-faint); }
+.clm-why { margin: 0.1rem 0 0; font-size: 0.83rem; color: var(--ink-faint); }
 
 /* --- Mirror, the third sub-mode. src/web/MirrorPanel.tsx.
 
@@ -7024,7 +7064,7 @@ td.text.has-hit[data-hues="8"] {
 
 /* What the mode is, above the button, because it is the thing a referee is
    likeliest to misread: this call is not given the paper. */
-.mir-what { margin: 0; font-size: 0.74rem; line-height: 1.45; color: var(--ink-faint); }
+.mir-what { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
 
 .mir-run {
   align-self: flex-start;
@@ -7034,20 +7074,20 @@ td.text.has-hit[data-hues="8"] {
   background: var(--surface-raised);
   color: var(--ink);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   cursor: pointer;
 }
 .mir-run:hover:not(:disabled) { border-color: var(--ink-faint); }
 .mir-run:disabled { opacity: 0.6; cursor: default; }
 .mir-run:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
 
-.mir-error { margin: 0; font-size: 0.76rem; color: var(--ink); }
+.mir-error { margin: 0; font-size: 0.86rem; color: var(--ink); }
 /* **Not an error colour, and not an error shape.** An empty answer is the
    commonest correct outcome this feature has; the sentence beside it is an
    answer, so it reads like every other quiet line in a panel. */
 .mir-nothing, .mir-coverage {
   margin: 0;
-  font-size: 0.76rem;
+  font-size: 0.86rem;
   line-height: 1.45;
   color: var(--ink-faint);
 }
@@ -7062,12 +7102,12 @@ td.text.has-hit[data-hues="8"] {
   gap: 0.35rem;
   margin: 0 0 0.2rem;
 }
-.mir-kind { font-size: 0.74rem; font-weight: 600; color: var(--ink); }
+.mir-kind { font-size: 0.84rem; font-weight: 600; color: var(--ink); }
 .mir-evidence {
   padding: 0.05rem 0.3rem;
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
-  font-size: 0.66rem;
+  font-size: 0.77rem;
   color: var(--ink-faint);
   white-space: nowrap;
 }
@@ -7088,7 +7128,7 @@ td.text.has-hit[data-hues="8"] {
 }
 .mir-jump:hover .mir-quote { text-decoration: underline; }
 .mir-jump:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
-.mir-quote, .mir-criterion { font-size: 0.78rem; color: var(--ink); }
+.mir-quote, .mir-criterion { font-size: 0.88rem; color: var(--ink); }
 
 /* The referee's own sentence, and the passage under it — set apart from the
    model's remark below, because on this panel who wrote which is the whole
@@ -7097,20 +7137,20 @@ td.text.has-hit[data-hues="8"] {
   margin: 0.15rem 0 0;
   padding-left: 0.5rem;
   border-left: 2px solid var(--rule);
-  font-size: 0.74rem;
+  font-size: 0.84rem;
   color: var(--ink-faint);
 }
 
-.mir-placement { margin: 0.15rem 0 0; font-size: 0.74rem; color: var(--ink-faint); }
+.mir-placement { margin: 0.15rem 0 0; font-size: 0.84rem; color: var(--ink-faint); }
 .mir-placement-number { font-variant-numeric: tabular-nums; color: var(--ink); }
 
-.mir-note { margin: 0.25rem 0 0; font-size: 0.78rem; line-height: 1.45; color: var(--ink); }
+.mir-note { margin: 0.25rem 0 0; font-size: 0.88rem; line-height: 1.45; color: var(--ink); }
 
 .mir-evidence-note {
   margin: 0;
   padding-top: 0.35rem;
   border-top: 1px solid var(--rule);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   line-height: 1.45;
   color: var(--ink-faint);
 }
@@ -7137,9 +7177,9 @@ td.text.has-hit[data-hues="8"] {
 
 /* What the sub-mode is, and whose question it answers — the thing an editor is
    likeliest to misread, since every other sub-mode is the referee's. */
-.cnd-what { margin: 0; font-size: 0.74rem; line-height: 1.45; color: var(--ink-faint); }
-.cnd-quiet { margin: 0; font-size: 0.74rem; line-height: 1.45; color: var(--ink-faint); }
-.cnd-error { margin: 0; font-size: 0.76rem; color: var(--ink); }
+.cnd-what { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
+.cnd-quiet { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
+.cnd-error { margin: 0; font-size: 0.86rem; color: var(--ink); }
 
 /* **The one press that spends money**, and the line under it that says so.
    `StartBrief` in CandidatesPanel.tsx says why this is a button rather than a
@@ -7154,7 +7194,7 @@ td.text.has-hit[data-hues="8"] {
   gap: 0.3rem;
   width: 100%;
   font: inherit;
-  font-size: 0.76rem;
+  font-size: 0.86rem;
   padding: 0.3rem 0.5rem;
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
@@ -7164,7 +7204,7 @@ td.text.has-hit[data-hues="8"] {
 }
 .cnd-start-btn:hover { border-color: var(--ink-faint); }
 .cnd-start-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
-.cnd-start-note { margin: 0; font-size: 0.7rem; line-height: 1.45; color: var(--ink-faint); }
+.cnd-start-note { margin: 0; font-size: 0.81rem; line-height: 1.45; color: var(--ink-faint); }
 
 .cnd-list-box {
   display: flex;
@@ -7181,24 +7221,24 @@ td.text.has-hit[data-hues="8"] {
   justify-content: space-between;
   gap: 0.5rem;
   margin: 0;
-  font-size: 0.74rem;
+  font-size: 0.84rem;
   font-weight: 600;
   color: var(--ink);
 }
 /* How many names, not how good they are. A count of a list is not a score of a
    person, and it is the number an editor actually needs: the shortlist has to
    be deep enough to survive a 60–70% attrition rate. */
-.cnd-count { font-size: 0.7rem; font-weight: 400; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.cnd-count { font-size: 0.81rem; font-weight: 400; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 
 .cnd-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
 .cnd-row { border-top: 1px solid var(--rule); padding: 0.4rem 0 0; }
-.cnd-name { margin: 0; font-size: 0.82rem; font-weight: 600; color: var(--ink); }
+.cnd-name { margin: 0; font-size: 0.91rem; font-weight: 600; color: var(--ink); }
 /* The affiliation is the model's claim and reads as one. */
-.cnd-affil { font-weight: 400; font-size: 0.74rem; color: var(--ink-faint); }
-.cnd-requirement { margin: 0.15rem 0 0; font-size: 0.76rem; line-height: 1.45; color: var(--ink); }
-.cnd-why { margin: 0.1rem 0 0; font-size: 0.72rem; line-height: 1.45; color: var(--ink-faint); }
+.cnd-affil { font-weight: 400; font-size: 0.84rem; color: var(--ink-faint); }
+.cnd-requirement { margin: 0.15rem 0 0; font-size: 0.86rem; line-height: 1.45; color: var(--ink); }
+.cnd-why { margin: 0.1rem 0 0; font-size: 0.83rem; line-height: 1.45; color: var(--ink-faint); }
 .cnd-sources { margin: 0.2rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.1rem; }
-.cnd-sources li { font-size: 0.72rem; }
+.cnd-sources li { font-size: 0.83rem; }
 .cnd-sources a { color: var(--ink); }
 /* The real host beside the model's label, exactly as chat's citation chips do
    it — the label is a search result's words, and this is where they lead. */
@@ -7207,7 +7247,7 @@ td.text.has-hit[data-hues="8"] {
 /* What the rules threw away. Quiet, but never absent when there is something to
    say: a shortlist that silently shrank is the failure this whole panel is
    built against. */
-.cnd-dropped { margin: 0; font-size: 0.7rem; line-height: 1.45; color: var(--ink-faint); }
+.cnd-dropped { margin: 0; font-size: 0.81rem; line-height: 1.45; color: var(--ink-faint); }
 
 /* The three sentences that are printed whatever the model said — what was not
    checked, and what the list is skewed towards. Separated by a rule so they
@@ -7216,15 +7256,15 @@ td.text.has-hit[data-hues="8"] {
   margin: 0;
   padding-top: 0.3rem;
   border-top: 1px solid var(--rule);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   line-height: 1.45;
   color: var(--ink-faint);
 }
 
 .cnd-turns { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
-.cnd-turn { font-size: 0.78rem; line-height: 1.5; color: var(--ink); }
+.cnd-turn { font-size: 0.88rem; line-height: 1.5; color: var(--ink); }
 .cnd-turn.user { padding-left: 0.5rem; border-left: 2px solid var(--rule-strong); }
-.cnd-asked { margin: 0; font-size: 0.76rem; color: var(--ink-faint); white-space: pre-wrap; }
+.cnd-asked { margin: 0; font-size: 0.86rem; color: var(--ink-faint); white-space: pre-wrap; }
 .cnd-stop {
   margin-top: 0.25rem;
   display: inline-flex;
@@ -7235,7 +7275,7 @@ td.text.has-hit[data-hues="8"] {
   border-radius: var(--radius);
   background: var(--surface-raised);
   color: var(--ink-faint);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   cursor: pointer;
 }
 .cnd-stop:hover { color: var(--ink); }
@@ -7250,7 +7290,7 @@ td.text.has-hit[data-hues="8"] {
   background: var(--page);
   color: var(--ink);
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   resize: vertical;
 }
 .cnd-box:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
@@ -7264,7 +7304,7 @@ td.text.has-hit[data-hues="8"] {
   border-radius: var(--radius);
   background: var(--surface-raised);
   color: var(--ink);
-  font-size: 0.76rem;
+  font-size: 0.86rem;
   cursor: pointer;
 }
 .cnd-send:hover:not(:disabled) { border-color: var(--ink-faint); }
@@ -7325,7 +7365,7 @@ td.text.has-hit[data-hues="8"] {
   width: 3.4rem;
   flex: none;
   padding: 0;
-  font-size: 0.68rem;
+  font-size: 0.79rem;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -7337,7 +7377,7 @@ td.text.has-hit[data-hues="8"] {
   background: transparent;
   color: var(--ink-soft);
   font: inherit;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   cursor: pointer;
   transition: color 0.12s, border-color 0.12s;
 }
@@ -7490,7 +7530,7 @@ td.text.has-hit[data-hues="8"] {
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 0.91rem;
   font-weight: 600;
   text-align: left;
   cursor: pointer;
@@ -7500,7 +7540,7 @@ td.text.has-hit[data-hues="8"] {
   margin-right: 0.4rem;
   color: var(--ink-faint);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   font-weight: 400;
 }
 
@@ -7511,7 +7551,7 @@ td.text.has-hit[data-hues="8"] {
   flex: none;
   color: var(--ink-faint);
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
 }
 
 .summ-text {
@@ -7520,7 +7560,7 @@ td.text.has-hit[data-hues="8"] {
      a summary set in the interface font reads as a system message. Same call
      `.chat-scroll` makes for the same reason. */
   font-family: var(--font-reading);
-  font-size: 0.84rem;
+  font-size: 0.93rem;
   line-height: 1.5;
   color: var(--ink-soft);
   /* Paragraphs in the longer rungs arrive as blank lines in one string. */
@@ -7542,7 +7582,7 @@ td.text.has-hit[data-hues="8"] {
   white-space: normal;
   vertical-align: baseline;
 }
-.summ-text .cite .block-ref { font-size: 0.62rem; }
+.summ-text .cite .block-ref { font-size: 0.74rem; }
 
 /* Where this section starts and ends. Under the summary, as in a gist cell —
    and the one place ids appear at the `gist` rung, which is the default and the
@@ -7567,7 +7607,7 @@ td.text.has-hit[data-hues="8"] {
   color: var(--ink-faint);
   font: inherit;
   font-family: var(--font-ui);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   cursor: pointer;
 }
 .summ-more:hover { color: var(--ink); border-color: var(--highlight); }
@@ -7606,7 +7646,7 @@ td.text.has-hit[data-hues="8"] {
   background: transparent;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.82rem;
+  font-size: 0.91rem;
   line-height: 1.35;
   text-align: left;
   cursor: pointer;
@@ -7630,7 +7670,7 @@ td.text.has-hit[data-hues="8"] {
   /* `--font-id`, the token tokens.css reserves for "block ids, and only block
      ids" — this is one, and BlockRef beside it uses the same. */
   font-family: var(--font-id);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   color: var(--ink-faint);
   margin-bottom: 0.3rem;
 }
@@ -7639,13 +7679,13 @@ td.text.has-hit[data-hues="8"] {
   /* The reading face, because this IS the article — set in the UI font it would
      read as a description of the paragraph rather than as the paragraph. */
   font-family: var(--font-reading);
-  font-size: 0.85rem;
+  font-size: 0.94rem;
   line-height: 1.45;
   color: var(--ink);
 }
 .tip-cite-empty {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: 0.91rem;
   font-style: italic;
   color: var(--ink-faint);
 }
@@ -7654,7 +7694,7 @@ td.text.has-hit[data-hues="8"] {
   padding-top: 0.35rem;
   border-top: 1px solid var(--rule);
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   color: var(--ink-faint);
 }
 
@@ -7697,7 +7737,7 @@ td.text.has-hit[data-hues="8"] {
   margin-left: 0.4rem;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   font-style: italic;
 }
 
@@ -7708,7 +7748,7 @@ td.text.has-hit[data-hues="8"] {
   margin: 0.3rem 0 0;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.75rem;
+  font-size: 0.85rem;
 }
 
 .chat-turn.you.editing { background: var(--surface-raised); }
@@ -7721,7 +7761,7 @@ td.text.has-hit[data-hues="8"] {
   background: transparent;
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.85rem;
+  font-size: 0.94rem;
   line-height: 1.4;
   resize: vertical;
 }
@@ -7733,7 +7773,7 @@ td.text.has-hit[data-hues="8"] {
   margin: 0.35rem 0 0;
   color: var(--highlight-ink);
   font-family: var(--font-ui);
-  font-size: 0.74rem;
+  font-size: 0.84rem;
 }
 
 .chat-send.stop {
@@ -7759,7 +7799,7 @@ td.text.has-hit[data-hues="8"] {
   background: var(--surface-raised);
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   cursor: pointer;
   box-shadow: 0 1px 6px rgb(0 0 0 / 0.14);
 }
@@ -7839,7 +7879,7 @@ td.text.has-hit[data-hues="8"] {
 .prof-box-label {
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
@@ -7858,7 +7898,7 @@ td.text.has-hit[data-hues="8"] {
   background: var(--surface-raised);
   color: var(--ink);
   font-family: var(--font-reading);
-  font-size: 0.85rem;
+  font-size: 0.94rem;
   line-height: 1.5;
   resize: vertical;
 }
@@ -7879,7 +7919,7 @@ td.text.has-hit[data-hues="8"] {
   margin: 0;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.68rem;
+  font-size: 0.79rem;
   line-height: 1.35;
 }
 /* Tabular figures so the count does not shuffle its own width as it climbs —
@@ -7888,7 +7928,7 @@ td.text.has-hit[data-hues="8"] {
   flex-shrink: 0;
   color: var(--ink-faint);
   font-family: var(--font-mono);
-  font-size: 0.65rem;
+  font-size: 0.77rem;
   font-variant-numeric: tabular-nums;
 }
 /* Over the cap. The box does NOT stop accepting text — the server refuses and
@@ -7903,7 +7943,7 @@ td.text.has-hit[data-hues="8"] {
   margin: 0.35rem 0 0;
   color: var(--highlight);
   font-family: var(--font-ui);
-  font-size: 0.68rem;
+  font-size: 0.79rem;
 }
 
 /* -------------------------------------------- profile: dictation feedback --
@@ -7918,7 +7958,7 @@ td.text.has-hit[data-hues="8"] {
   gap: 0.45rem;
   margin: 0.35rem 0 0;
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   line-height: 1.4;
 }
 .prof-listening-what {
@@ -7933,7 +7973,7 @@ td.text.has-hit[data-hues="8"] {
   margin: 0;
   color: var(--ink-faint);
   font-family: var(--font-reading);
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   font-style: italic;
   line-height: 1.4;
 }
@@ -8051,7 +8091,7 @@ td.text.has-hit[data-hues="8"] {
   gap: 0.45rem;
   margin: 0.35rem 0 0;
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   color: var(--ink-faint);
 }
 .prof-mic-picker select {
@@ -8076,7 +8116,7 @@ td.text.has-hit[data-hues="8"] {
   gap: 0.45rem;
   margin: 0.35rem 0 0;
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   line-height: 1.4;
 }
 .prof-recording-what { min-width: 0; color: var(--ink-faint); }
@@ -8168,7 +8208,7 @@ td.text.has-hit[data-hues="8"] {
   border-radius: 999px;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.62rem;
+  font-size: 0.74rem;
   letter-spacing: 0.02em;
   white-space: nowrap;
   cursor: pointer;
@@ -8211,7 +8251,7 @@ td.text.has-hit[data-hues="8"] {
   gap: 0.3rem;
   padding: 0.12rem 0.25rem;
   font-family: var(--font-ui);
-  font-size: 0.68rem;
+  font-size: 0.79rem;
   background: none;
   border: 1px solid transparent;
   border-radius: 3px;
@@ -8265,7 +8305,7 @@ td.text.has-hit[data-hues="8"] {
 .prof-panel-lede {
   margin: 0 0 0.5rem;
   color: var(--ink-faint);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   line-height: 1.45;
 }
 .prof-panel-box {
@@ -8281,13 +8321,13 @@ td.text.has-hit[data-hues="8"] {
 }
 .prof-panel-label {
   color: var(--ink-faint);
-  font-size: 0.6rem;
+  font-size: 0.72rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 .prof-panel-edit {
   color: var(--highlight);
-  font-size: 0.66rem;
+  font-size: 0.77rem;
   white-space: nowrap;
 }
 .prof-panel-text {
@@ -8297,7 +8337,7 @@ td.text.has-hit[data-hues="8"] {
      Tailwind's `--font-prose` alias, because that alias is for `tw:` utility
      classes and this file spells it the other way everywhere else. */
   font-family: var(--font-reading);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   line-height: 1.45;
   color: var(--ink);
   white-space: pre-wrap;
@@ -8306,7 +8346,7 @@ td.text.has-hit[data-hues="8"] {
    than theirs. */
 .prof-panel-text.quiet {
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   color: var(--ink-faint);
 }
 
@@ -8317,7 +8357,7 @@ td.text.has-hit[data-hues="8"] {
   gap: 0.35rem;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.68rem;
+  font-size: 0.79rem;
   cursor: pointer;
   user-select: none;
 }
@@ -8411,7 +8451,7 @@ td.text.has-hit[data-hues="8"] {
   background: transparent;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   cursor: pointer;
 }
 .diag-kind:hover { color: var(--ink); border-color: var(--rule-strong); }
@@ -8492,7 +8532,7 @@ td.text.has-hit[data-hues="8"] {
 .diag-step-btn[aria-disabled="true"] { opacity: 0.3; cursor: default; }
 .diag-step-at {
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   color: var(--ink-faint);
   /* Tabular figures, or the number jitters sideways as it counts past 9 and 99
      — which on a control the reader is holding down reads as the layout being
@@ -8526,7 +8566,7 @@ td.text.has-hit[data-hues="8"] {
 .diag-quiet {
   margin: 0.9rem 0.2rem;
   color: var(--ink-faint);
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   line-height: 1.5;
 }
 /* **The wait, and only ever where the picture is missing.** Drift and Trail
@@ -8547,7 +8587,7 @@ td.text.has-hit[data-hues="8"] {
   margin: 0.9rem 0.2rem;
   padding: 0 0.6rem;
   color: var(--ink-faint);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   line-height: 1.5;
   text-align: center;
   text-wrap: balance;
@@ -8692,15 +8732,23 @@ line.diag-now {
      these sizes. Sized for a two-line title plus three lines of gist, which is
      what a 288px band needs: at that width a six-word section title does not
      fit on one line, and ellipsizing it was the thing that made the card's
-     promise ("the full title") false. Found by GPT Sol, 2026-08-26. */
-  min-height: 6.4rem;
-  max-height: 6.4rem;
+     promise ("the full title") false. Found by GPT Sol, 2026-08-26.
+
+     **The height is arithmetic, not taste, and it has to be redone whenever the
+     text changes size.** 2 × 0.91rem × 1.3 (title) + 0.3rem (gist margin) +
+     3 × 0.85rem × 1.4 (gist) = 99.8px, plus 0.5rem + 0.6rem of padding and the
+     1px border = 118px = 7.4rem. It was 6.4rem, which was 5px short of its own
+     promise even before the 2026-09-03 lift (§ mode band) and 16px short after
+     — and `overflow: hidden` is deliberate here, so nothing looked wrong: the
+     third gist line was simply not there. GPT Sol again, 2026-09-03. */
+  min-height: 7.4rem;
+  max-height: 7.4rem;
   overflow: hidden;
 }
 .diag-card.empty {
   border-left-color: transparent;
   color: var(--ink-faint);
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   line-height: 1.45;
   display: flex;
   align-items: center;
@@ -8717,7 +8765,7 @@ line.diag-now {
   border-radius: calc(var(--radius) * 0.35);
   background: var(--highlight-wash);
   color: var(--highlight-ink);
-  font-size: 0.62rem;
+  font-size: 0.74rem;
   text-transform: lowercase;
   white-space: nowrap;
 }
@@ -8729,7 +8777,7 @@ line.diag-now {
   background: none;
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.82rem;
+  font-size: 0.91rem;
   font-weight: 600;
   line-height: 1.3;
   text-align: left;
@@ -8746,11 +8794,11 @@ line.diag-now {
 }
 .diag-card-title:hover { color: var(--highlight-ink); }
 .diag-card-num { color: var(--ink-faint); margin-right: 0.35rem; font-weight: 500; }
-.diag-card-count { flex: none; color: var(--ink-faint); font-size: 0.72rem; }
+.diag-card-count { flex: none; color: var(--ink-faint); font-size: 0.83rem; }
 .diag-card-gist {
   margin: 0.3rem 0 0;
   color: var(--ink-soft);
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -8825,7 +8873,7 @@ line.diag-now {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.66rem;
+  font-size: 0.77rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -8848,7 +8896,7 @@ line.diag-now {
   padding-left: 0.7rem;
   border-left: 2px solid var(--highlight);
   font-family: var(--font-reading);
-  font-size: 0.9rem;
+  font-size: 0.98rem;
   line-height: 1.45;
   color: var(--ink-soft);
 }
@@ -8862,7 +8910,7 @@ line.diag-now {
   background: var(--page);
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   line-height: 1.45;
   field-sizing: content;
   min-height: 3.4rem;
@@ -8880,7 +8928,7 @@ line.diag-now {
   align-items: center;
   gap: 0.4rem;
   margin: 0.6rem 0 0.15rem;
-  font-size: 0.74rem;
+  font-size: 0.84rem;
   color: var(--ink-soft);
   cursor: pointer;
 }
@@ -8893,7 +8941,7 @@ line.diag-now {
   gap: 0.5rem;
   margin-top: 0.55rem;
 }
-.annotate-actions button { font-size: 0.7rem; white-space: nowrap; }
+.annotate-actions button { font-size: 0.81rem; white-space: nowrap; }
 
 .annotate-save {
   padding: 0.32rem 0.6rem;
@@ -8909,7 +8957,7 @@ line.diag-now {
 
 .annotate-hint {
   margin: 0.5rem 0 0;
-  font-size: 0.66rem;
+  font-size: 0.77rem;
   color: var(--ink-faint);
 }
 
@@ -8937,20 +8985,20 @@ line.diag-now {
 }
 
 .place-title {
-  font-size: 0.66rem;
+  font-size: 0.77rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-faint);
 }
 
 .place-optional {
-  font-size: 0.64rem;
+  font-size: 0.76rem;
   color: var(--ink-faint);
 }
 
 .place-note {
   margin: 0.35rem 0 0;
-  font-size: 0.68rem;
+  font-size: 0.79rem;
   line-height: 1.4;
   color: var(--ink-faint);
 }
@@ -8963,7 +9011,7 @@ line.diag-now {
 }
 
 .place-pick-label {
-  font-size: 0.68rem;
+  font-size: 0.79rem;
   color: var(--ink-soft);
   white-space: nowrap;
 }
@@ -8979,7 +9027,7 @@ line.diag-now {
   background: var(--page);
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
 }
 
 /* What is stored now, shown before it is overwritten — v1 keeps no history of
@@ -8990,7 +9038,7 @@ line.diag-now {
   align-items: center;
   gap: 0.4rem;
   margin: 0.45rem 0 0;
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   color: var(--ink-soft);
 }
 
@@ -9019,7 +9067,7 @@ line.diag-now {
   background: none;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   text-align: left;
   cursor: pointer;
 }
@@ -9040,13 +9088,13 @@ line.diag-now {
 
 .place-clear {
   margin-top: 0.35rem;
-  font-size: 0.68rem;
+  font-size: 0.79rem;
 }
 
 /* A write that did not land, said out loud in the dialog that made it. */
 .cmt-write-error {
   margin: 0.5rem 0 0;
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   line-height: 1.4;
   color: var(--destructive);
   overflow-wrap: anywhere;
@@ -9072,7 +9120,7 @@ line.diag-now {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.66rem;
+  font-size: 0.77rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -9092,7 +9140,7 @@ line.diag-now {
   padding: 0.1rem 0.2rem;
   line-height: 1;
   font: inherit;
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   color: var(--ink-faint);
   cursor: pointer;
 }
@@ -9114,7 +9162,7 @@ line.diag-now {
   padding-left: 0.7rem;
   border-left: 2px solid var(--highlight);
   font-family: var(--font-reading);
-  font-size: 0.9rem;
+  font-size: 0.98rem;
   line-height: 1.45;
   color: var(--ink-soft);
 }
@@ -9122,7 +9170,7 @@ line.diag-now {
 .chat-dialog-opening {
   margin: 0.55rem 0 0.6rem;
   font-family: var(--font-reading);
-  font-size: 0.85rem;
+  font-size: 0.94rem;
   line-height: 1.45;
   color: var(--ink-faint);
   display: -webkit-box;
@@ -9135,7 +9183,7 @@ line.diag-now {
    being asked, and a reader who knew that needs telling it has stopped. */
 .chat-dialog-hint {
   margin: 0 0 0.4rem;
-  font-size: 0.66rem;
+  font-size: 0.77rem;
   color: var(--ink-faint);
 }
 
@@ -9145,7 +9193,7 @@ line.diag-now {
   align-items: center;
   gap: 0.4rem;
   margin: 0.6rem 0;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   color: var(--ink-faint);
 }
 .chat-dialog-spinner { animation: cmt-spin 0.9s linear infinite; }
@@ -9157,7 +9205,7 @@ line.diag-now {
   margin-top: 0.5rem;
   padding-top: 0.5rem;
   border-top: 1px solid var(--rule);
-  font-size: 0.66rem;
+  font-size: 0.77rem;
 }
 .chat-dialog-delete { margin-left: auto; }
 .chat-dialog button.linky {
@@ -9182,7 +9230,7 @@ line.diag-now {
 
 .chat-dialog-error {
   margin: 0.4rem 0 0;
-  font-size: 0.66rem;
+  font-size: 0.77rem;
   color: var(--destructive);
 }
 
@@ -9488,7 +9536,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
   background: var(--panel);
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.66rem;
+  font-size: 0.77rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -9503,7 +9551,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
 .ideas-blurb {
   margin: 0.15rem 0 0.4rem;
   color: var(--ink-faint);
-  font-size: 0.68rem;
+  font-size: 0.79rem;
   line-height: 1.35;
 }
 
@@ -9516,6 +9564,21 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    wrapping is the normal case. Truncating it would hide the half that carries
    the claim — "Writing is a test of thought, not a…" is exactly the wrong
    half to keep. */
+/* **The three sizes below are `.gloss-*`'s, on purpose.** This section's own
+   header says `.ideas` is `.gloss` with a class beside it, and ideas.md calls
+   the two siblings — a term is a word you look up, an idea is a claim you hold.
+   They were not siblings on screen: after the 2026-09-03 lift (§ mode band) an
+   idea's name was 0.88rem against a term's 0.95, its quote 0.83 against a
+   definition's 0.89, and its reason 0.77 against a part's 0.86. Nobody chose
+   that; the two panels were written a week apart. GPT Sol, reviewing the lift,
+   was blunt about where it left the panel Greg actually complained about: the
+   badge grew 21% and the sentence stayed at 14px.
+
+   The order matters more than the numbers. `.ideas-quote` is **the article's own
+   words**, and § quotes mode's one rule is that the reader's eye should land on
+   the author's sentence — so it may not sit below the model's gloss of it, and
+   `.ideas-reason`, which its own comment below calls the load-bearing part of an
+   assumed idea, may not be the smallest thing on screen. */
 .ideas-name {
   display: block;
   width: 100%;
@@ -9524,7 +9587,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
   background: none;
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: 0.95rem;
   line-height: 1.35;
   text-align: left;
   cursor: pointer;
@@ -9571,7 +9634,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
 .ideas-quote {
   display: block;
   color: var(--ink-soft);
-  font-size: 0.72rem;
+  font-size: 0.89rem; /* `.gloss-gloss` — see the note on `.ideas-name` */
   line-height: 1.4;
 }
 /* The model's one line on what this passage does with the idea. For an assumed
@@ -9581,7 +9644,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
   display: block;
   margin-top: 0.1rem;
   color: var(--ink-faint);
-  font-size: 0.66rem;
+  font-size: 0.86rem; /* `.gloss-part-text` — see the note on `.ideas-name` */
   line-height: 1.35;
 }
 
@@ -9789,7 +9852,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
   margin: 0.3rem 0 0;
   padding: 0;
   list-style: none;
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   line-height: 1.45;
   color: var(--ink-faint);
 }
@@ -9833,7 +9896,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
 .sk-bar {
   display: flex; align-items: center; gap: 0.5rem;
   padding: 0.3rem 0.6rem;
-  font-family: var(--font-ui); font-size: 0.7rem;
+  font-family: var(--font-ui); font-size: 0.81rem;
 }
 .sk-title { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The scene switcher: the overview and each zoom, as a row. Scrolls rather than
@@ -10004,7 +10067,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    lines of the sentence it was clamping. */
 .sk-in-full .sk-card { height: 7.5rem; }
 .sk-in-full .sk-card-detail { -webkit-line-clamp: 3; }
-.sk-in-full .sk-bar { padding: 0.5rem 0.8rem; font-size: 0.78rem; }
+.sk-in-full .sk-bar { padding: 0.5rem 0.8rem; font-size: 0.88rem; }
 .sk-in-full .sk-scene { max-width: 20rem; }
 /* Stops a trackpad flick inside a tall picture scrolling the article behind it
    — the case that actually happens. Lightbox.tsx § two things `<dialog>` does
@@ -10015,12 +10078,12 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
 .sk.away { justify-content: flex-start; }
 .sk-elsewhere {
   margin: 0; padding: 0.75rem 0.7rem;
-  font-family: var(--font-ui); font-size: 0.75rem; line-height: 1.45; color: var(--ink-faint);
+  font-family: var(--font-ui); font-size: 0.85rem; line-height: 1.45; color: var(--ink-faint);
 }
 
 .sk-note {
   margin: 0 0.6rem 0.3rem;
-  font-family: var(--font-ui); font-size: 0.65rem; line-height: 1.35;
+  font-family: var(--font-ui); font-size: 0.77rem; line-height: 1.35;
   color: var(--ink-faint);
 }
 
@@ -10128,29 +10191,34 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
   padding: 0.45rem 0.6rem 0.5rem;
   background: var(--panel);
   /* Fixed height, for the reason `.diag-card` gives: a card that grew with its
-     text would resize the picture above it every time the pointer crossed a box. */
-  height: 6.2rem;
+     text would resize the picture above it every time the pointer crossed a box.
+     Grown with the text on 2026-09-03 (§ mode band) in the same proportion, so
+     a card that fitted before still fits. Unlike `.diag-card` this height was
+     never derived from a stated line budget — a node carrying caption, title,
+     sub, two lines of detail and the jump link overflows it and always has —
+     so this is a lift, not a fix. */
+  height: 6.9rem;
   overflow: hidden;
   font-family: var(--font-ui);
 }
 .sk-card.empty { border-left-color: var(--rule); }
-.sk-card-caption { margin: 0; font-size: 0.72rem; line-height: 1.4; color: var(--ink-faint); }
-.sk-card-title { margin: 0; font-size: 0.8rem; line-height: 1.3; color: var(--ink); font-weight: 500; }
-.sk-card-sub { margin: 0.1rem 0 0; font-size: 0.68rem; color: var(--ink-faint); }
+.sk-card-caption { margin: 0; font-size: 0.83rem; line-height: 1.4; color: var(--ink-faint); }
+.sk-card-title { margin: 0; font-size: 0.9rem; line-height: 1.3; color: var(--ink); font-weight: 500; }
+.sk-card-sub { margin: 0.1rem 0 0; font-size: 0.79rem; color: var(--ink-faint); }
 .sk-card-detail {
-  margin: 0.2rem 0 0; font-size: 0.7rem; line-height: 1.35; color: var(--ink-soft);
+  margin: 0.2rem 0 0; font-size: 0.81rem; line-height: 1.35; color: var(--ink-soft);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .sk-card-jump {
   margin-top: 0.25rem; padding: 0;
   background: none; border: none; cursor: pointer;
-  font-family: inherit; font-size: 0.68rem; color: var(--highlight);
+  font-family: inherit; font-size: 0.79rem; color: var(--highlight);
 }
 .sk-card-jump:hover { text-decoration: underline; }
 
 /* ---- before there is a picture ---- */
 
-.sk-wait, .sk-empty { padding: 0.75rem 0.7rem; font-family: var(--font-ui); font-size: 0.75rem; color: var(--ink-soft); }
+.sk-wait, .sk-empty { padding: 0.75rem 0.7rem; font-family: var(--font-ui); font-size: 0.85rem; color: var(--ink-soft); }
 .sk-wait { display: flex; align-items: center; gap: 0.4rem; }
 /* A redraw already under way, over a picture that is still readable. Above the
    notes rather than below, because it is the one line here about *now*. */
@@ -10161,7 +10229,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
   margin: 0;
   padding: 0.15rem 0.7rem 0.3rem;
   font-family: var(--font-ui);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   color: var(--ink-faint);
 }
 /* The other end of `.sk-busy`: a redraw that came back failed.
@@ -10176,11 +10244,11 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
   margin: 0;
   padding: 0.15rem 0.7rem 0.3rem;
   font-family: var(--font-ui);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   color: var(--ink-faint);
 }
 .sk-empty p { margin: 0 0 0.5rem; line-height: 1.45; }
-.sk-empty-why { font-size: 0.7rem; color: var(--ink-faint); }
+.sk-empty-why { font-size: 0.81rem; color: var(--ink-faint); }
 .sk-run { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
 
 /* ---------------------------------------------------- § drift and trail ----
@@ -10255,7 +10323,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
   margin-right: 0.15rem;
   color: var(--ink-faintest, var(--ink-faint));
   font-family: var(--font-ui);
-  font-size: 0.64rem;
+  font-size: 0.76rem;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
@@ -10266,7 +10334,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
   background: transparent;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.68rem;
+  font-size: 0.79rem;
   cursor: pointer;
 }
 .diag-opt-btn:hover { color: var(--ink); }
@@ -10307,7 +10375,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
   border-left: 2px solid rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.8);
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.66rem;
+  font-size: 0.77rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -10557,7 +10625,7 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
   margin: 0.25rem 0 0;
   color: var(--highlight-ink, var(--highlight));
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   line-height: 1.4;
 }
 
@@ -11593,10 +11661,10 @@ table.only-prose thead { display: none; }
 }
 
 /* The tiers. Size and colour only — see the header. */
-.outln-row.tier-cur  { font-size: 0.95rem; }
-.outln-row.tier-near { font-size: 0.9rem; }
-.outln-row.tier-mid  { font-size: 0.85rem; }
-.outln-row.tier-far  { font-size: 0.82rem; color: var(--ink-faint); }
+.outln-row.tier-cur  { font-size: 1.03rem; }
+.outln-row.tier-near { font-size: 0.98rem; }
+.outln-row.tier-mid  { font-size: 0.94rem; }
+.outln-row.tier-far  { font-size: 0.91rem; color: var(--ink-faint); }
 
 /* Where the reader is. `.here` is the whole ancestor chain and `.now` is the
    one deepest drawn row — two marks because at a shallow rung the part is the
@@ -11663,7 +11731,7 @@ table.only-prose thead { display: none; }
   grid-column: 2;
   margin: 0.2rem 0 0.1rem;
   font-family: var(--font-reading);
-  font-size: 0.85rem;
+  font-size: 0.94rem;
   font-weight: 400;
   line-height: 1.4;
   color: var(--ink);
@@ -11691,7 +11759,7 @@ table.only-prose thead { display: none; }
 }
 
 .outln-card { max-width: 22rem; }
-.outln-card-crumb { font-size: 0.75rem; color: var(--ink-faint); }
+.outln-card-crumb { font-size: 0.85rem; color: var(--ink-faint); }
 .outln-card-title { font-weight: 600; margin-bottom: 0.2rem; }
 .outln-card-gist { margin: 0; font-family: var(--font-reading); }
 
@@ -11754,7 +11822,7 @@ table.only-prose thead { display: none; }
    second look for them would teach the reader they mean something else. What is
    NOT shared is the row, which is a different thing entirely. */
 /* The title row is `.band-head`, § mode band. */
-.quotes-count { color: var(--ink-faint); font-size: 0.75rem; }
+.quotes-count { color: var(--ink-faint); font-size: 0.85rem; }
 
 .quotes-rank {
   display: flex;
@@ -11767,7 +11835,7 @@ table.only-prose thead { display: none; }
 .quotes-rank-label {
   margin-right: 0.15rem;
   color: var(--ink-faint);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   text-transform: lowercase;
 }
 .quotes-rank-btn {
@@ -11777,7 +11845,7 @@ table.only-prose thead { display: none; }
   background: none;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.74rem;
+  font-size: 0.84rem;
   cursor: pointer;
 }
 .quotes-rank-btn:hover { color: var(--ink); background: var(--surface-raised); }
@@ -11803,14 +11871,14 @@ table.only-prose thead { display: none; }
 }
 .quotes-bar-label {
   color: var(--ink-faint);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   text-transform: lowercase;
 }
 .quotes-bar-value {
   margin-left: auto;
   color: var(--ink-soft);
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.79rem;
   white-space: nowrap;
 }
 .quotes-bar-reset {
@@ -11835,7 +11903,7 @@ table.only-prose thead { display: none; }
 .quotes-bar-note {
   margin: 0.3rem 0 0;
   color: var(--ink-faint);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   line-height: 1.35;
 }
 
@@ -11851,7 +11919,7 @@ table.only-prose thead { display: none; }
   padding: 0.4rem 0.7rem;
   border-bottom: 1px solid var(--rule);
   color: var(--ink-faint);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   line-height: 1.4;
 }
 .quotes-discarded svg { flex: none; transform: translateY(1px); }
@@ -11861,14 +11929,14 @@ table.only-prose thead { display: none; }
   margin: 0;
   padding: 0.7rem;
   color: var(--ink-faint);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   line-height: 1.45;
 }
 .quotes-error { color: var(--highlight-ink); }
 
 .quotes-empty { padding: 0.7rem; }
-.quotes-empty p { margin: 0 0 0.5rem; font-size: 0.82rem; color: var(--ink-soft); }
-.quotes-hint { color: var(--ink-faint) !important; font-size: 0.74rem !important; line-height: 1.45; }
+.quotes-empty p { margin: 0 0 0.5rem; font-size: 0.91rem; color: var(--ink-soft); }
+.quotes-hint { color: var(--ink-faint) !important; font-size: 0.84rem !important; line-height: 1.45; }
 .quotes-run { display: flex; flex-direction: column; gap: 0.4rem; }
 
 .quotes-stale {
@@ -11882,7 +11950,7 @@ table.only-prose thead { display: none; }
   gap: 0.3rem;
   margin: 0 0 0.45rem;
   color: var(--ink-soft);
-  font-size: 0.76rem;
+  font-size: 0.86rem;
   line-height: 1.4;
 }
 .quotes-stale svg { flex: none; color: var(--highlight-ink); transform: translateY(1px); }
@@ -11900,7 +11968,7 @@ table.only-prose thead { display: none; }
   padding: 0.35rem 0.7rem;
   background: var(--surface-raised);
   color: var(--ink-faint);
-  font-size: 0.66rem;
+  font-size: 0.77rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -11945,7 +12013,7 @@ table.only-prose thead { display: none; }
   border-left: 2px solid var(--rule-strong);
   color: var(--ink);
   font-family: var(--font-reading);
-  font-size: 0.84rem;
+  font-size: 0.93rem;
   line-height: 1.45;
 }
 .quotes-row.on .quotes-text { border-left-color: var(--highlight); }
@@ -11997,7 +12065,7 @@ table.only-prose thead { display: none; }
   margin: 0;
   color: var(--ink-faint);
   font-family: var(--font-mono);
-  font-size: 0.64rem;
+  font-size: 0.76rem;
 }
 
 /* ------------------------------------------------------- § score bars ----
@@ -12090,7 +12158,7 @@ table.only-prose thead { display: none; }
   margin: 0;
   padding: 0.3rem 0.7rem 0.45rem;
   color: var(--ink-faint);
-  font-size: 0.68rem;
+  font-size: 0.79rem;
   line-height: 1.4;
 }
 .tl-thin { border-bottom: 1px solid var(--rule); }
@@ -12119,7 +12187,7 @@ table.only-prose thead { display: none; }
   background: var(--panel);
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.66rem;
+  font-size: 0.77rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -12128,7 +12196,7 @@ table.only-prose thead { display: none; }
 .tl-blurb {
   margin: 0.15rem 0 0.4rem;
   color: var(--ink-faint);
-  font-size: 0.68rem;
+  font-size: 0.79rem;
   line-height: 1.35;
 }
 
@@ -12158,7 +12226,7 @@ table.only-prose thead { display: none; }
 .tl-when {
   display: block;
   font-family: var(--font-ui);
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   line-height: 1.3;
   letter-spacing: 0.01em;
 }
@@ -12192,7 +12260,7 @@ table.only-prose thead { display: none; }
   margin-top: 0.1rem;
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   line-height: 1.35;
 }
 .tl-row:hover .tl-label { color: var(--highlight-ink); }
@@ -12232,7 +12300,7 @@ table.only-prose thead { display: none; }
 .tl-quote {
   display: block;
   color: var(--ink-soft);
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   line-height: 1.4;
 }
 
@@ -12275,7 +12343,7 @@ table.only-prose thead { display: none; }
   background: transparent;
   color: var(--ink-faint);
   font: inherit;
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   padding: 0.15rem 0.5rem;
   cursor: pointer;
 }
@@ -12299,7 +12367,7 @@ table.only-prose thead { display: none; }
 
 .quiz-question {
   margin: 0.4rem 0 0.7rem;
-  font-size: 0.95rem;
+  font-size: 1.03rem;
   line-height: 1.45;
 }
 
@@ -12307,7 +12375,7 @@ table.only-prose thead { display: none; }
   width: 100%;
   box-sizing: border-box;
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 0.94rem;
   line-height: 1.45;
   padding: 0.45rem 0.55rem;
   border: 1px solid var(--rule);
@@ -12334,7 +12402,7 @@ table.only-prose thead { display: none; }
   margin: 0.6rem 0;
   padding: 0 0 0 0.7rem;
   border-left: 2px solid var(--rule);
-  font-size: 0.85rem;
+  font-size: 0.94rem;
   line-height: 1.5;
   white-space: pre-wrap;
 }
@@ -12348,7 +12416,7 @@ table.only-prose thead { display: none; }
   gap: 0.3rem;
 }
 .quiz-mic-label {
-  font-size: 0.7rem;
+  font-size: 0.81rem;
   color: var(--ink-faint);
 }
 
@@ -12361,7 +12429,7 @@ table.only-prose thead { display: none; }
   background: transparent;
   padding: 0;
   font: inherit;
-  font-size: 0.72rem;
+  font-size: 0.83rem;
   color: var(--ink-faint);
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -12386,7 +12454,7 @@ table.only-prose thead { display: none; }
 }
 .quiz-reference-text {
   margin: 0;
-  font-size: 0.83rem;
+  font-size: 0.92rem;
   line-height: 1.5;
 }
 .quiz-evidence {
@@ -12397,7 +12465,7 @@ table.only-prose thead { display: none; }
   margin: 0.45rem 0 0;
 }
 .quiz-evidence-label {
-  font-size: 0.68rem;
+  font-size: 0.79rem;
   color: var(--ink-faint);
 }
 
@@ -12428,7 +12496,7 @@ table.only-prose thead { display: none; }
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   line-height: 1.4;
   text-align: left;
   padding: 0.4rem 0.2rem;
@@ -12452,7 +12520,7 @@ table.only-prose thead { display: none; }
   white-space: normal;
   vertical-align: baseline;
 }
-.quiz-reply .cite .block-ref { font-size: 0.62rem; }
+.quiz-reply .cite .block-ref { font-size: 0.74rem; }
 
 .quiz-rewrite {
   padding: 0.45rem 0.7rem;
