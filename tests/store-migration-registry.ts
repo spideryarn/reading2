@@ -19,10 +19,10 @@
  * says nothing about them, while their *lane* is decided by GoTrue reading
  * `postgres` whatever the SQL does. Co-location is worth having; pretending one
  * verdict implies the other is not. So: one file, two separately typed maps,
- * two completeness guards. **`STORE_MIGRATION` is finalised here in stage A.
- * `TEST_LANES` is empty and is filled in stage T-C**, after the database
- * factory exists — because deciding a lane means testing an assumption about a
- * clean database, which cannot be done before there is one.
+ * two completeness guards. **`STORE_MIGRATION` is finalised in stage A;
+ * `TEST_LANES` in stage T-C**, after the database factory exists — because
+ * deciding a lane means testing an assumption about a clean database, which
+ * cannot be done before there is one.
  *
  * ## Where the entries come from, and what is deliberately absent
  *
@@ -991,19 +991,494 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
  * Which vitest project a Postgres-touching suite belongs in — 260903e's Stage
  * C, absorbed here as stage T-C.
  *
- * **Empty on purpose, and stage T-C fills it.** Assigning a lane means testing
- * an assumption about a clean database, and there is no clean database until
- * the factory in T-B exists. Guessing now would produce a map that looks
- * authoritative and was never checked against anything.
+ * ## What a lane is
  *
- * The names below are 260903e's; T-C owns the final spelling. `shared-services`
- * is the one that proves the two maps are not one map: `tests/auth-user-
- * seeding.test.ts`, `tests/seed-admin-signin.test.ts` and
- * `tests/admin-store.test.ts` all belong to it because GoTrue reads the
- * `postgres` database whatever the SQL does — and the store verdict above has
- * nothing to say about any of them.
+ * `private-postgres` — the run mints its own database
+ * ([`scripts/db-test-create.ts`](../scripts/db-test-create.ts)) and points
+ * `DATABASE_URL` at it, so no dev server, no peer's suite and no residue from a
+ * killed run can be inside it. This is where a Postgres suite belongs unless
+ * something stops it.
+ *
+ * `shared-services` — the suite is about a **Supabase service**, and the
+ * services are bound to the stack's one configured database. GoTrue, Storage,
+ * Realtime and PostgREST all read `postgres` and cloning the SQL does not
+ * redirect them, so a suite that joins their answers to app rows has to run
+ * where both halves agree.
+ *
+ * `unit` — no database at all, and the ordinary parallel lane. **It is the
+ * default and it is not written down**: a file absent from the map below is a
+ * unit-lane file, which is most of `tests/`. The variant exists because T-D's
+ * third project needs a name. An explicit `unit` *entry* would mean the scan
+ * calls a file Postgres-touching and it still needs no database — there is none
+ * today, and the guard **refuses one**, deliberately: routing it needs a third
+ * case wherever T-D derives its project globs, and a lane the projects cannot
+ * route sends a file to a project that creates no database and then fails for a
+ * reason nobody can place. Widen both together or neither.
+ *
+ * ## Why this is a second map and not a second column on `STORE_MIGRATION`
+ *
+ * Because neither verdict predicts the other, and GPT Sol's counter-example
+ * settles it: `tests/auth-user-seeding.test.ts`, `tests/seed-admin-signin.test.ts`
+ * and `tests/admin-store.test.ts` are all genuine Postgres tests, so the store
+ * verdict above says nothing about them, while their lane is decided by GoTrue
+ * reading `postgres` whatever the SQL does. A classification that cannot
+ * predict its own exceptions is not the same classification.
+ *
+ * ## A file cannot be in two lanes, and that is the compiler's job
+ *
+ * This is a `Record`, so two entries for one file is TypeScript error 1117 —
+ * *"an object literal cannot have multiple properties with the same name"* —
+ * rather than something a test has to notice. Watched: duplicating
+ * `"tests/store-comments.test.ts"` with the other lane makes `npm run
+ * typecheck` refuse the file by name. So
+ * [store-migration-registry.test.ts](store-migration-registry.test.ts) polices
+ * only the two directions a `Record` cannot: a scanned file with no entry, and
+ * an entry for a file the scan no longer finds.
+ *
+ * ## The four in `shared-services`, and why each
+ *
+ * - **`tests/auth-user-seeding.test.ts`** — its subject is that a row this repo
+ *   writes into `auth.users` is one GoTrue can read back, and it proves it by
+ *   calling `GET /auth/v1/admin/users`. The service answers about `postgres`,
+ *   so a row seeded into a clone is invisible to the only oracle the file has.
+ * - **`tests/seed-admin-signin.test.ts`** — signs in through the Auth service
+ *   as `ADMIN_USER_ID_LOCAL`. Same service, same database, and the account it
+ *   needs is one `db:seed-dev` put in the shared stack.
+ * - **`tests/admin-store.test.ts`** — the one that has to be *reasoned* about
+ *   rather than watched, because **it passes in the private lane while checking
+ *   nothing**, which is this repo's chronic failure shape. Accounts come from
+ *   GoTrue over HTTP (`postgres`, so still non-empty, so its
+ *   `users.length > 0` control still fires) and every aggregate beside them is
+ *   `?? 0` out of the clone (`src/store/pg-admin.ts`). Its claim is that the
+ *   *types* of a real join survive the driver; against a clone the join has one
+ *   real side and one empty one, and `typeof 0` is `"number"` however wrong the
+ *   number is. Measured green on a private database on 2026-09-03 — which is
+ *   the argument for moving it, not against.
+ * - **`tests/db-test-create.test.ts`** — the factory's own suite, and the only
+ *   one of the four chosen **by contract rather than by a red**: it passes
+ *   57/57 in the private lane too, because `dumpSharedSchema` hardcodes
+ *   `-d postgres` and the host and port do not change. What is wrong is
+ *   quieter. `baseUrl()`'s documented job is to mean *the shared database*, and
+ *   under a private lane it silently means a clone — so the factory's own suite
+ *   would mint siblings of a clone, and T-D's lane would create a database in
+ *   order to create databases. The file whose job is to police the factory is
+ *   the worst place to leave that ambiguity. Its integration half is
+ *   additionally gated on `SPIDERYARN_TEST_DB_FACTORY=1`, and T-D decides
+ *   whether the lane sets it.
+ *
+ * **`tests/store-realtime-sessions.test.ts` is deliberately not here**, and
+ * 260903e's first list was wrong to include it. Checked rather than inherited:
+ * its Postgres half inserts its own two `auth.users` rows through
+ * `seedAuthUser` — a database fixture written over the same connection as
+ * everything else, **not** a call to the Auth service — and exercises
+ * `pgRealtimeSessionStore` over Drizzle. The string `Realtime` in it is the
+ * feature's name, and nothing in the file speaks to a Supabase service. It
+ * passed in the private lane, first time, unchanged.
+ *
+ * ## Storage is **not** isolated, and nothing here changes that
+ *
+ * The private lane clones the SQL. The bucket does not move: `blobStore` talks
+ * to the Storage service over HTTP and that service is bound to `postgres`, so
+ * two runs share one bucket and `storage.objects` in a clone is permanently
+ * empty. Acceptable, because every key this repo writes is content-addressed —
+ * two runs writing the same bytes write the same object, and neither can
+ * clobber the other's contents. But it is a **stated limitation**, not
+ * something a reader should discover: a test that asserts on what the bucket
+ * contains, or on it being empty, is not isolated by the private lane and will
+ * race a peer.
+ *
+ * **Two files reach the real bucket, and getting to that number took three
+ * goes.** Five suites mention `src/store/blobs.js` at all. Two of them —
+ * `tests/illustrated-route.test.ts` and `tests/store-export-bundle.test.ts` —
+ * `vi.mock` it, the first to a filesystem blob store over a temp directory and
+ * the second to a store that *throws* on any read (`blob store touched: this
+ * code path must not read the bucket`), so neither goes near Storage. A third,
+ * `tests/store-export-raw.test.ts`, imports only a type. What is left:
+ *
+ * - `tests/helpers-load-article.test.ts` — calls `blobStore().head()` directly,
+ *   to prove the loader *puts* the raw document in the bucket rather than
+ *   assuming the backfill already did.
+ * - `tests/source-store.test.ts` — calls `storeRawSource(bytes, kind)` with its
+ *   default third argument, which is `blobStore()`. Nothing in the file says
+ *   "bucket", which is why the first two counts of this list both missed it:
+ *   one said three (counting the two mocked files), GPT Sol's review said one
+ *   (spotting the mocks but not the default argument). Neither was right, and
+ *   the way to see it is to follow what `blobStore()` is *called by*, not what
+ *   the test file mentions.
+ *
+ * ## How the lanes were decided
+ *
+ * By running, not by reading — 260903e's own instruction, and the reason this
+ * map could not be written in stage A. Every entry below was run against a
+ * database minted by the factory, one file at a time, under `REQUIRE_POSTGRES=1`
+ * so that a skip counted as a failure. The results, the tail of suites that
+ * assume seeded local state, and what was fixed against what was catalogued are
+ * in
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § T-C.
  */
 export type TestLane = "private-postgres" | "shared-services" | "unit";
 
-/** Stage T-C fills this. See the note above before adding the first entry. */
-export const TEST_LANES: Readonly<Record<string, TestLane>> = {};
+/**
+ * Keyed by repository-relative path, alphabetical within each lane.
+ *
+ * The set of keys is not a judgment: it is whatever
+ * [store-migration-registry.test.ts](store-migration-registry.test.ts) § the
+ * lane scan finds — every test file that calls `pgReady(`, builds its own `pg`
+ * `Pool`/`Client`, or imports a helper that opens a connection. Adding a file
+ * that touches Postgres therefore turns that guard red until it is given a lane
+ * here.
+ *
+ * **That scan is a syntactic inventory guard and nothing more**, which is worth
+ * knowing before you rely on this list being complete. It reads the text a file
+ * contains, so it cannot see an aliased constructor (`new PgPool()`), a helper
+ * of a file's own that connects somewhere else, a dynamic `import()`, or a
+ * transitive `getDb()` inside application code. The guard's own docstring gives
+ * the measurements and says why a transitive-import guard is the wrong answer.
+ * **The semantic backstop is T-D's**: the unit project must delete or poison
+ * `DATABASE_URL` after `.env.local` has loaded, so a database test that escaped
+ * this list fails loudly rather than quietly reaching the shared database.
+ */
+export const TEST_LANES: Readonly<Record<string, TestLane>> = {
+  /* ---- shared-services: bound to the stack's own `postgres` -------------- */
+
+  "tests/admin-store.test.ts": "shared-services",
+  "tests/auth-user-seeding.test.ts": "shared-services",
+  "tests/db-test-create.test.ts": "shared-services",
+  "tests/seed-admin-signin.test.ts": "shared-services",
+
+  /* ---- private-postgres: everything else that touches a database --------- */
+
+  "tests/a-claim-that-lost-its-draft.test.ts": "private-postgres",
+  "tests/admin-feedback-store.test.ts": "private-postgres",
+  "tests/ai-calls-spend-pg.test.ts": "private-postgres",
+  "tests/all-skipped-publication-refusal.test.ts": "private-postgres",
+  "tests/article-rows-snapshot.test.ts": "private-postgres",
+  "tests/billing-admission.test.ts": "private-postgres",
+  "tests/billing-checkout.test.ts": "private-postgres",
+  "tests/billing-quota-race.test.ts": "private-postgres",
+  "tests/billing-settlement.test.ts": "private-postgres",
+  "tests/billing-tiers.test.ts": "private-postgres",
+  "tests/billing-usage-route.test.ts": "private-postgres",
+  "tests/blocks-baseline.test.ts": "private-postgres",
+  "tests/candidates-route.test.ts": "private-postgres",
+  "tests/chat-anchor.test.ts": "private-postgres",
+  "tests/chat-library-exclusion.test.ts": "private-postgres",
+  "tests/chat-route.test.ts": "private-postgres",
+  "tests/checkpoints-durable-resume.test.ts": "private-postgres",
+  "tests/claim-session-postgres.test.ts": "private-postgres",
+  "tests/comment-referee-mark.test.ts": "private-postgres",
+  "tests/comment-sweep.test.ts": "private-postgres",
+  "tests/corpus-lock.test.ts": "private-postgres",
+  "tests/db-error-scrub.test.ts": "private-postgres",
+  "tests/db-referee-criteria.test.ts": "private-postgres",
+  "tests/db-schema-drift.test.ts": "private-postgres",
+  "tests/db-schema.test.ts": "private-postgres",
+  "tests/db-transaction-errors.test.ts": "private-postgres",
+  "tests/enqueue-owns-the-article.test.ts": "private-postgres",
+  "tests/export-route.test.ts": "private-postgres",
+  "tests/feedback-store.test.ts": "private-postgres",
+  "tests/find-article.test.ts": "private-postgres",
+  "tests/glossary-delete-then-rebuild.test.ts": "private-postgres",
+  "tests/glossary-ideas-baseline.test.ts": "private-postgres",
+  "tests/helpers-load-article.test.ts": "private-postgres",
+  "tests/helpers-seed-reader-state.test.ts": "private-postgres",
+  "tests/illustrated-pg.test.ts": "private-postgres",
+  "tests/illustrated-route.test.ts": "private-postgres",
+  "tests/load-article-serialisation.test.ts": "private-postgres",
+  "tests/lock-lifecycle.test.ts": "private-postgres",
+  "tests/migration-reconciliations.test.ts": "private-postgres",
+  "tests/owner-isolation.test.ts": "private-postgres",
+  "tests/pg-ready.test.ts": "private-postgres",
+  "tests/pg-session-exact-base.test.ts": "private-postgres",
+  "tests/pg-session-real-step.test.ts": "private-postgres",
+  "tests/pipeline-slug-claim.test.ts": "private-postgres",
+  "tests/plans-match-tiers.test.ts": "private-postgres",
+  "tests/public-visibility-pg.test.ts": "private-postgres",
+  "tests/referee-criteria-store.test.ts": "private-postgres",
+  "tests/referee-routes-postgres.test.ts": "private-postgres",
+  "tests/remember-route.test.ts": "private-postgres",
+  "tests/run-lock.test.ts": "private-postgres",
+  "tests/running-slot.test.ts": "private-postgres",
+  "tests/source-store.test.ts": "private-postgres",
+  "tests/store-ai-calls.test.ts": "private-postgres",
+  "tests/store-artefacts-pg.test.ts": "private-postgres",
+  "tests/store-block-roles-pg.test.ts": "private-postgres",
+  "tests/store-carry-forward.test.ts": "private-postgres",
+  "tests/store-chat-pg.test.ts": "private-postgres",
+  "tests/store-checkpoints.test.ts": "private-postgres",
+  "tests/store-comments-parity.test.ts": "private-postgres",
+  "tests/store-comments.test.ts": "private-postgres",
+  "tests/store-export-bundle.test.ts": "private-postgres",
+  "tests/store-export-covers-tables.test.ts": "private-postgres",
+  "tests/store-export-isolation.test.ts": "private-postgres",
+  "tests/store-export-raw.test.ts": "private-postgres",
+  "tests/store-export-referee.test.ts": "private-postgres",
+  "tests/store-glossary-delete-pg.test.ts": "private-postgres",
+  "tests/store-job-draft.test.ts": "private-postgres",
+  "tests/store-jobs-parity.test.ts": "private-postgres",
+  "tests/store-lookups-pg.test.ts": "private-postgres",
+  "tests/store-parity-referee.test.ts": "private-postgres",
+  "tests/store-parity.test.ts": "private-postgres",
+  "tests/store-pg-referee-claims.test.ts": "private-postgres",
+  "tests/store-pg-session.test.ts": "private-postgres",
+  "tests/store-publish-guards.test.ts": "private-postgres",
+  "tests/store-raw-source-race.test.ts": "private-postgres",
+  "tests/store-reader-parity.test.ts": "private-postgres",
+  "tests/store-reader-state-parity.test.ts": "private-postgres",
+  "tests/store-realtime-sessions.test.ts": "private-postgres",
+  "tests/store-revision-policy.test.ts": "private-postgres",
+  "tests/store-roundtrip.test.ts": "private-postgres",
+  "tests/store-searches-pg.test.ts": "private-postgres",
+  "tests/store-session-isolation.test.ts": "private-postgres",
+  "tests/store-shelf-pg.test.ts": "private-postgres",
+  "tests/store-shelf-reads.test.ts": "private-postgres",
+  "tests/store-slug-guard.test.ts": "private-postgres",
+  "tests/store-step-fence.test.ts": "private-postgres",
+  "tests/store-transaction-isolation.test.ts": "private-postgres",
+  "tests/store-uploads-parity.test.ts": "private-postgres",
+  "tests/store-writes-land-in-postgres.test.ts": "private-postgres",
+};
+
+/**
+ * **Every fixed owner uuid a Postgres-touching suite names, and what it does
+ * about the `auth.users` row behind it** — one entry per *(file, owner)* pair.
+ *
+ * ## Why pairs and not files, which is the whole of GPT Sol's blocking finding
+ *
+ * The first version of this was keyed by file, and treated a `seedAuthUser(`
+ * call anywhere in a file as covering **every** owner in it. Sol found the
+ * witness already in the tree: `tests/store-jobs-parity.test.ts` declares
+ * `STRANGER` and seeds only `OWNER` and `OWNER_B`. It is safe today because
+ * `STRANGER` is never written under — and **the file-keyed guard would have
+ * stayed green on the day that stopped being true**, which is this repo's
+ * chronic failure shape. The pairs number a couple of dozen across a couple of
+ * dozen files — small enough to audit per owner, so it is audited per owner.
+ * **No total is written here on purpose.** Four counts in this plan drifted
+ * within one day, and the entries below are the list; a number beside them is
+ * a second claim that can be wrong on its own
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § Counts are perishable here).
+ *
+ * ## Keyed by uuid, and the reason names the constant
+ *
+ * The uuid is the identity the foreign key cares about; the constant's name is
+ * what a reader recognises. So the key is the uuid — a changed one goes stale
+ * and the guard says so — and the reason says `OUTSIDER` or `STRANGER` out
+ * loud. Lower-case, because Postgres compares `uuid` by value and two spellings
+ * of one owner would otherwise read as two owners.
+ *
+ * ## The two verdicts
+ *
+ * `seeded` — the file puts a row in `auth.users` for this owner. **Mostly
+ * checked rather than promised**: the scan resolves the arguments of every
+ * `seedAuthUser`/`seedLocalAccounts` call, and where it can see the owner
+ * there, no `why` is required. Where it *cannot* — `tests/feedback-store.test.ts`
+ * seeds through a local `seedOwner()` wrapper, one level of indirection past
+ * anything a regex should chase — a `why` is required and the guard enforces
+ * that. A `seeded` verdict in a file with no seed call at all is refused
+ * outright.
+ *
+ * `no-row-needed` — a foreign key is checked on **write**, and this owner is
+ * never on the writing side of one. Always with a reason, because the reason is
+ * the part that can go out of date: it has to say what the owner is used for
+ * *and* what would change if that stopped being true.
+ *
+ * ## What this cannot do, said plainly
+ *
+ * It cannot tell you the verdict is *still* true. Nothing statically observable
+ * changes when a suite starts writing rows under its outsider — the scan sees
+ * the same uuid on the same line. What catches that is running the suite
+ * against a private database, which is what stage T-C did and what T-D makes
+ * routine. This map's job is narrower and worth having on its own: **a new
+ * owner cannot arrive unnoticed.**
+ */
+export type OwnerVerdict =
+  | {
+      readonly kind: "seeded";
+      /** Required only when the scan cannot see the seed call's argument. */
+      readonly why?: string;
+    }
+  | { readonly kind: "no-row-needed"; readonly why: string };
+
+/** Keyed by repository-relative path, then by lower-case owner uuid. */
+export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerVerdict>>>> = {
+  /* ---- seeded, and the scan can see it -------------------------------- */
+
+  "tests/admin-feedback-store.test.ts": {
+    "00000000-0000-4000-8000-00000000fc01": { kind: "seeded" },
+    "00000000-0000-4000-8000-00000000fc02": { kind: "seeded" },
+  },
+  "tests/ai-calls-spend-pg.test.ts": {
+    "00000000-0000-4000-8000-00000000ad01": { kind: "seeded" },
+    "00000000-0000-4000-8000-00000000ad02": { kind: "seeded" },
+  },
+  "tests/billing-quota-race.test.ts": {
+    "0b111a99-0000-4000-8000-00000000c0da": { kind: "seeded" },
+  },
+  "tests/db-referee-criteria.test.ts": {
+    "7ac042a4-7c19-44a6-ab6d-448acc5909b8": { kind: "seeded" },
+  },
+  "tests/db-schema.test.ts": {
+    "11111111-1111-1111-1111-111111111111": { kind: "seeded" },
+    "22222222-2222-2222-2222-222222222222": { kind: "seeded" },
+  },
+  "tests/referee-criteria-store.test.ts": {
+    "3f0a17c6-9d54-4b8e-9a2f-5c1b7e0d4a63": { kind: "seeded" },
+  },
+  "tests/store-reader-parity.test.ts": {
+    "00000000-0000-4000-8000-000000005e11": { kind: "seeded" },
+  },
+  "tests/store-realtime-sessions.test.ts": {
+    "00000000-0000-4000-8000-00000000ac0f": { kind: "seeded" },
+    "00000000-0000-4000-8000-00000000ac2f": { kind: "seeded" },
+  },
+
+  /* ---- seeded, one level of indirection past the scan ------------------ */
+
+  "tests/feedback-store.test.ts": {
+    "00000000-0000-4000-8000-00000000fb01": {
+      kind: "seeded",
+      why:
+        "`ALICE`, seeded in `beforeAll` through the file's own `seedOwner(id, email)` wrapper, " +
+        "which is what calls `seedAuthUser`. The scan resolves a seed call's arguments and one " +
+        "enclosing `for (… of […])`, and stops there rather than following a local function — so " +
+        "this pair is declared rather than observed, and the declaration is the evidence.",
+    },
+    "00000000-0000-4000-8000-00000000fb02": {
+      kind: "seeded",
+      why:
+        "`BOB`, the second owner, through the same `seedOwner` wrapper. Two owners because the " +
+        "file's subject is that one reader's feedback is invisible to the other, and both sides " +
+        "of that have to hold real rows for the reads to mean anything.",
+    },
+  },
+
+  /* ---- no row needed, and why -------------------------------------------- */
+
+  "tests/export-route.test.ts": {
+    "0e5c0001-0000-4000-8000-0000000000b9": {
+      kind: "no-row-needed",
+      why:
+        "`OUTSIDER` is only ever the `sub` of a request, so the export must 404 for somebody who " +
+        "does not own the article; nothing is written under it. **And the 404 is not the only " +
+        "evidence** — the same suite runs the owner through the same path for a 200, and removing " +
+        "the ownership predicate was observed to answer 200 for the outsider too. So seeding a " +
+        "row would neither strengthen nor weaken the claim. It becomes wrong the moment the file " +
+        "inserts anything owned by `OUTSIDER`.",
+    },
+  },
+  "tests/find-article.test.ts": {
+    "75dcc8e4-56a0-4f74-88e4-f92d1431abb8": {
+      kind: "no-row-needed",
+      why:
+        "`OUTSIDER` reaches Postgres only through `setRequestOwner`, to show `ownedSlug` filters " +
+        "on the owner and not on the slug. Every insert in the file belongs to " +
+        "`currentOwnerId()`, which the private lane provides.",
+    },
+  },
+  "tests/illustrated-route.test.ts": {
+    "0e5c0001-0000-4000-8000-0000000000c7": {
+      kind: "no-row-needed",
+      why:
+        "`OUTSIDER` is a request `sub` and nothing else — the illustrated route must not serve " +
+        "another reader's article. Its own comment says it is the same shape as `export-route`'s, " +
+        "and it is: a `where` clause needs no row.",
+    },
+  },
+  "tests/owner-isolation.test.ts": {
+    "00000000-0000-4000-8000-0000000000a1": {
+      kind: "no-row-needed",
+      why:
+        "**`ALICE` is a request-context identity, not the owner of anything persisted.** The file " +
+        "has two separate jobs and this pair belongs to the first: that the `AsyncLocalStorage` " +
+        "box hands back whoever the request set, nests correctly, and throws outside a scope. Its " +
+        "persisted fixture is owned by the ambient owner, which the lane provides.",
+    },
+    "00000000-0000-4000-8000-0000000000b2": {
+      kind: "no-row-needed",
+      why:
+        "`BOB`, the other half of the request-context pair above — used to prove the box changes " +
+        "answer between two nested scopes and back again. Nothing is stored under it.",
+    },
+    "00000000-0000-4000-8000-0000000000b1": {
+      kind: "no-row-needed",
+      why:
+        "`OUTSIDER` is the reader whose queries must find nothing: the file's second job is that " +
+        "every path from a slug to an article carries an owner predicate. Reads only, so no " +
+        "foreign key is reached.",
+    },
+  },
+  "tests/pipeline-slug-claim.test.ts": {
+    "00000000-0000-4000-8000-0000000000b3": {
+      kind: "no-row-needed",
+      why:
+        "`OUTSIDER` is a request owner used to show that claiming a slug somebody else owns is " +
+        "refused **before** any write happens. The refusal is the assertion, so there is nothing " +
+        "under the foreign key to seed.",
+    },
+  },
+  "tests/public-visibility-pg.test.ts": {
+    "00000000-0000-4000-8000-0000000000ec": {
+      kind: "no-row-needed",
+      why:
+        "**Not read-only, and the first version of this reason said it was.** `OUTSIDER` is the " +
+        "`as:` of a `PUT /api/article/:slug/visibility` that must answer 404 rather than 403. " +
+        "What makes it safe is not that it never writes but that the `UPDATE` carries " +
+        "`owner_id = OUTSIDER` in its `WHERE`: it matches no row, writes nothing, and never puts " +
+        "the id in a column. An `INSERT` under it would need a real row.",
+    },
+  },
+  "tests/source-store.test.ts": {
+    "00000000-0000-4000-8000-0000000000c8": {
+      kind: "no-row-needed",
+      why:
+        "`OUTSIDER` appears once, inside a `setRequestOwner` around a read that must not find the " +
+        "source. The store never writes a row owned by it.",
+    },
+  },
+  "tests/store-ai-calls.test.ts": {
+    "00000000-0000-4000-8000-00000000ac01": {
+      kind: "no-row-needed",
+      why:
+        "**A false positive the scan cannot avoid, which is why it is declared here rather than " +
+        "excused in a regex.** The literal on the `ownerId:` line is `row()`'s default, and " +
+        "`row()` is shared by the file's two halves: the filesystem-ledger half writes it to a " +
+        "JSONL file with no foreign key anywhere, and the Postgres half overrides it with " +
+        "`currentOwnerId()` on every fixture. `ai_calls_owner_id_users_id_fk` is real, so the " +
+        "constraint exists — nothing reaches it with this id.",
+    },
+  },
+  "tests/store-jobs-parity.test.ts": {
+    "00000000-0000-4000-8000-0000000000b5": {
+      kind: "no-row-needed",
+      why:
+        "**The pair that made this map pair-keyed.** `STRANGER` is read-only: it is handed to " +
+        "`claim` and to the owner-scoped reads to show that a job belonging to somebody else is " +
+        "neither claimable nor visible, and every row the file writes belongs to `OWNER` or " +
+        "`OWNER_B`, which it seeds per run. The file-keyed version of this guard called the whole " +
+        "file covered because those two are seeded, and would have gone on saying so if " +
+        "`STRANGER` started owning a row. If it ever does, this entry becomes `seeded` and the " +
+        "seed goes in beside the other two.",
+    },
+  },
+  "tests/store-pg-referee-claims.test.ts": {
+    "00000000-0000-4000-8000-0000000000f4": {
+      kind: "no-row-needed",
+      why:
+        "`OUTSIDER` is a request owner for the one case that asks whether a claim is visible to " +
+        "somebody who did not make it. The claims themselves are written under " +
+        "`currentOwnerId()`.",
+    },
+  },
+  "tests/store-uploads-parity.test.ts": {
+    "00000000-0000-4000-8000-00000000d107": {
+      kind: "no-row-needed",
+      why:
+        "`STRANGER` is passed to `read` and to `claim({ owner })`, both of which must answer as " +
+        "though the upload did not exist. `claim` is an `UPDATE` and therefore a write, but " +
+        "`eq(uploads.ownerId, options.owner)` is in its `WHERE` — no row matches, nothing is " +
+        "written, and the id never lands in a column.",
+    },
+  },
+};
