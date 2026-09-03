@@ -1,0 +1,27 @@
+{
+  "ranking": ["C", "A", "F", "E", "D", "B"],
+  "unusable": [],
+  "boundaryFaults": {
+    "A": ["“Appendix” / “It From Byte” — both open on identical prose, creating a duplicate rather than a navigable boundary."],
+    "F": ["“Appendix” / “It From Byte” — both open on identical prose, creating a duplicate rather than a navigable boundary."],
+    "D": ["“Meta-Learning” / “Scaling” — the former also absorbs the distinct “Flexing GPT” and “Baking The Cake” arguments."],
+    "B": ["“GPT-3's Capabilities” / “Scaling Laws & Blessings Of Scale” — the capabilities section welds the demonstrations in “Flexing GPT” to the separate AGI argument in “Baking The Cake”.", "“Prospects And Skeptics” / “Emergent Agency” — “Prospects” and “Critiquing The Critics” are distinct arguments despite sharing a polemical target."]
+  },
+  "missingCuts": [],
+  "titles": {
+    "A": "names",
+    "B": "generic",
+    "C": "names",
+    "D": "generic",
+    "E": "names",
+    "F": "names"
+  },
+  "gists": {
+    "A": "claims",
+    "B": "claims",
+    "C": "none",
+    "D": "claims",
+    "E": "claims",
+    "F": "claims"
+  }
+}

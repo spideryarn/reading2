@@ -377,6 +377,18 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "underneath them comes from `loadArticleIntoPg`. It also reads `data/` corpus JSON directly " +
       "with `readFile`, which the graph walk cannot see and stage G's corpus decision still owns.",
   },
+  "tests/hierarchy-eval-incumbent-parity.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with the hierarchy-effort eval off `dev`. Two assertions on " +
+      "constants and nothing else: that the eval's `INCUMBENT` arm and `src/hierarchy.ts`'s " +
+      "`PRODUCTION_EFFORT` agree, and that the noise-floor arm is byte-identical to the incumbent " +
+      "while `smart-low` differs from it. It touches no store of either kind — its only static " +
+      "reach is importing `src/hierarchy.ts` for that one exported string, and that module's own " +
+      "imports are what put this file on the graph. Re-run witness 2 to confirm.",
+  },
   "tests/illustrated-pg.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],

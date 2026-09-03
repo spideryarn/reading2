@@ -150,6 +150,10 @@ const ALLOWED: Readonly<Record<string, string>> = {
     "Reads GET /api/v1/key to reconcile. Costs nothing and buys no inference.",
   "evals/hierarchy-structure/verify-costs.ts":
     "Reads GET /api/v1/generation to reconcile a finished eval run's stored ids against the provider's own cost figures. Costs nothing and buys no inference — and it cannot live in the declared file, because a metered declaration covers only what declaredFetch guards.",
+  "evals/hierarchy-structure/preflight.ts":
+    "Reads GET /api/v1/models immediately before a paid run, to check that each arm's model really has the effort its arm asks for — OpenRouter maps an unsupported level onto the nearest one rather than refusing it, so the alternative is a results file labelled with an effort that never ran. Costs nothing and buys no inference.",
+  "evals/hierarchy-structure/verify-zdr.ts":
+    "Reads GET /api/v1/endpoints/zdr to check that a finished run's challenger calls were served by an upstream that retains nothing — the request asked for it, and this is the only thing that can say whether it was honoured. Costs nothing and buys no inference; same reason as verify-costs.ts for why it cannot live in the declared file.",
   "evals/declared-spend.ts":
     "The bypass wrapper itself, and the guarded fetch that makes one safe.",
   "src/spend-declarations.ts": "The register. Data, not transport.",
