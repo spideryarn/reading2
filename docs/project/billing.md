@@ -5,7 +5,7 @@ the same family of questions. Who are you, what may you do, and what stops someb
 asking politely. The build is
 [260902i](../plans/260902i-stripe-payments-and-subscription-tiers.md).
 
-**Status: the quota is live, the paying works, and the button exists.** Tiers are database rows as of
+**Status: live, and it has taken real money.** Tiers are database rows as of
 2026-09-02; a job's ending settles its slot at all seven places a job can end and adding an article
 takes one, so a free account is held to three lifetime ingests. As of 2026-09-03 there are checkout,
 portal and confirm routes, and the **whole round trip has been run for real** in Stripe test mode:
@@ -13,6 +13,10 @@ card `4242…` through hosted Checkout → signed webhook → `syncSubscriptionF
 never executed until then) → an `active` row with the period Stripe reported → the same account
 admitting a fourth ingest where a free one is refused, and refusing the twenty-first with Stripe's
 own renewal date on it.
+
+**The first live sale happened the same day** — see
+[The first live sale](#the-first-live-sale-and-the-four-things-it-measured), which is where the
+facts that only a real purchase can establish are written down.
 
 The **reader-facing surface** landed the same day — see [What a reader sees](#what-a-reader-sees).
 What is not built is marked *not built* below rather than described in the present tense.
@@ -198,20 +202,55 @@ everywhere.
 
 ### Managed Payments, and what it is worth
 
-On by default on the Spideryarn account, and worth an explicit decision rather than drift. Stripe
-becomes merchant of record and **registers, files and remits VAT/GST in its own name** across 80+
-countries including the UK, the EU and the US — which retires the OSS problem below rather than
-managing it. It also takes fraud liability and fights disputes.
+**On, and confirmed on by the first live sale** — `managed_payments: { enabled: true }` on
+`sub_1UBYxA…`, 2026-09-03. It arrived as a default rather than a decision, which is why it is
+written up here. Stripe becomes merchant of record and **registers, files and remits VAT/GST in its
+own name** across 80+ countries including the UK, the EU and the US — which retires the OSS problem
+below rather than managing it. It also takes fraud liability and fights disputes.
 
-It costs **3.5% on top of** normal processing — on an £8 subscription, roughly 32p becomes 60p — and
-the customer's statement reads `LINK.COM* SPIDERYARN.COM`, with receipts, invoices and subscription
-management on link.com and an invoice footer saying "sold through Link". Checkout and Payment Links
-only, digital goods only, and Stripe may refund a customer without asking if a support escalation
-goes unanswered for 48 hours.
+It costs **3.5% on top of** normal processing — on an £8 subscription, roughly 32p becomes 60p.
+Checkout and Payment Links only, digital goods only, and Stripe may refund a customer without asking
+if a support escalation goes unanswered for 48 hours. Three further restrictions matter to anything
+built on top of it, and they rule out designs rather than merely costing money: **a subscription may
+only be created through Checkout or a Payment Link**, invoice items may not be attached to a
+customer, and one-off invoices outside the billing period cannot be generated
+([eligibility](https://docs.stripe.com/payments/managed-payments/eligibility)).
+
+**The statement descriptor is `ONELINK* SPIDERYARN`**, read off the live charge — not the
+`LINK.COM* SPIDERYARN.COM` this section predicted before anybody had paid. Receipts, invoices and
+subscription management live on link.com, and the invoice's `account_name` is literally **"Link"**
+with `issuer.type: "stripe"`, so a customer's paperwork says Link and not Spideryarn.
 
 Turn it off at `dashboard.stripe.com/settings/managed-payments` (per mode) or per session with
-`managed_payments[enabled]=false`. **Unverified**: what happens to subscriptions already running when
-it is toggled — which is the argument for deciding before anyone has subscribed.
+`managed_payments[enabled]=false`. **Still unverified**: what happens to subscriptions already
+running when it is toggled — which was the argument for deciding before anyone had subscribed, and
+somebody now has.
+
+### Adaptive Pricing, and why a London customer paid euros
+
+**Managed Payments turns [Adaptive Pricing](https://docs.stripe.com/payments/currencies/localize-prices/adaptive-pricing)
+on by default**, and it picks the currency from where the customer physically is. On the first live
+sale that was Greece, so a customer with a **GB billing address and a GB card was charged €9.00**
+rather than £8.00. Stripe Tax, meanwhile, used the *billing address*: the invoice carries 20% UK VAT,
+not Greece's 24%. So the two halves of the transaction answered "where is this customer?" differently
+and both were arguably right.
+
+This is worth knowing rather than fixing, but it is not free. It defeats the reason
+[three currencies](#why-three-currencies-rather-than-one) exist: the account settles in GBP, so a
+EUR charge takes Stripe's **+2% cross-currency fee** — exactly the charge that section set out to
+avoid. Measured end to end on the live sale:
+
+| | |
+|---|---|
+| Customer paid | **€9.00** |
+| less 20% UK VAT, inclusive (Stripe remits it) | €7.50 |
+| landed in the Spideryarn balance | **£5.98** |
+
+so roughly 8% of the net went in fees — Managed Payments' 3.5%, card processing, and the 2% that
+Adaptive Pricing invited. A UK reader sitting in the UK gets £8 and avoids that last part; a UK
+reader on holiday does not. **Not a bug, and not currently worth engineering around** — but it does
+mean the three-currency design saves less than it looks like it should, and anybody reading the
+revenue numbers should not be surprised by a euro line from a British customer.
 
 ### VAT, flagged rather than resolved
 
@@ -239,6 +278,58 @@ looking at forty of them, reads as arithmetic going wrong, so `pay-lapsed` names
 resubscribing instead. It is chosen from the **billing row** — a subscription id beside a status the
 allowlist does not entitle — and not from `used > limit`, which is the same answer most of the time
 and a wrong one the day somebody lowers a tier's `ingests_per_period`.
+
+## The first live sale, and the four things it measured
+
+Greg bought Reader on the live account on **2026-09-03 at 11:37 UTC** — `cus_VBwqG2jsgqOKh4`,
+`sub_1UBYxALv4piDbwcbVew6jxqN`, on `acct_1UBW3NLv4piDbwcb`. Live mode gets exactly one first
+customer, so what it settled is written down here rather than re-derived.
+
+**One: the live round trip works, end to end and unattended.** Hosted Checkout → signed webhook →
+`syncSubscriptionFromStripe` → a production `billing_accounts` row reading `status=active`,
+`livemode=true`, the right price and a period ending 2026-10-03. `last_synced_at` was **11 seconds**
+after the charge. The test-mode run had proved the code; this proved the deployed webhook endpoint,
+the live keys and the production database, none of which the test run touches.
+
+**Two: [Managed Payments](#managed-payments-and-what-it-is-worth) is really on**, with the
+consequences and the statement descriptor recorded there.
+
+**Three: [Adaptive Pricing](#adaptive-pricing-and-why-a-london-customer-paid-euros) charged a
+British customer in euros**, because he was in Greece.
+
+**Four: we do not notice a cancellation** — below, because it is a live bug rather than a fact.
+
+> [!WARNING]
+> **A cancelled subscription still reads as an ordinary active one, so `/profile` never says the
+> plan is ending.** Found by cancelling the live subscription through the Portal on 2026-09-03.
+>
+> Stripe now expresses *cancel at period end* as a **`cancel_at` timestamp**, and leaves the old
+> boolean alone. The real subscription came back as:
+>
+> ```
+> "status": "active",
+> "cancel_at": 1791027429,       // 2026-10-03, the period end
+> "canceled_at": 1788435966,     // when the reader pressed cancel
+> "cancel_at_period_end": false, // <-- still false
+> "cancellation_details": { "reason": "cancellation_requested" }
+> ```
+>
+> [`src/billing/subscription.ts`](../../src/billing/subscription.ts) reads
+> `subscription.cancel_at_period_end === true`, so the sync stored `false`, and
+> [`src/billing/summary.ts`](../../src/billing/summary.ts)'s `cancelling` is therefore `false` too.
+> Verified against the production row after the webhook had run: Stripe said cancelled, we said
+> nothing. The reader is told they are on Reader, with no hint it stops on 3 October — and the first
+> they would learn of it is the day their allowance goes.
+>
+> **Entitlement itself is not wrong**: the subscription stays `active` until the period ends, which
+> is exactly what we grant. Only the telling is broken. The fix is to derive `cancelling` from
+> `cancel_at` (or `cancellation_details`) as well as the boolean, and it wants a stored timestamp
+> rather than a boolean, since *when* it ends is the thing worth showing. **Not fixed.**
+>
+> The class is the one this file keeps meeting: **a Stripe field whose meaning drifted under a
+> pinned API version**, the same shape as `current_period_start` moving to the subscription item.
+> `docs/reusable/silent-success.md` — the boolean is still there, still parses, and still means
+> something, just not the thing the code wants.
 
 ## What a reader sees
 
@@ -825,7 +916,17 @@ any time. See [admin.md](admin.md).
 
 ## Not built yet
 
-Comp subscriptions for journalists and QA, and go-live. The order is in
+**Go-live happened on 2026-09-03** — see
+[The first live sale](#the-first-live-sale-and-the-four-things-it-measured). What is left:
+
+- **Comp subscriptions** for journalists and QA. Until then the only exemption is the hardcoded
+  admin check.
+- **Telling a reader their plan is ending**, which the cancellation bug in that section blocks.
+- **Grandfathered subscribers keep paying and lose their allowance** — the warning under
+  [Adding a tier or a currency](#adding-a-tier-or-a-currency). Nobody is grandfathered yet, so this
+  is a trap rather than a live fault, and changing a price is what springs it.
+
+The order is in
 [the plan](../plans/260902i-stripe-payments-and-subscription-tiers.md#where-the-build-stands).
 
 ## Where the code is
