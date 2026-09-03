@@ -1,0 +1,2203 @@
+{
+  "ranAt": "2026-09-03T12:39:47.304Z",
+  "runs": 3,
+  "arms": [
+    {
+      "name": "gemini-3.1-flash-lite +vocab",
+      "model": "google/gemini-3.1-flash-lite",
+      "vocabulary": true
+    },
+    {
+      "name": "gemini-3.5-flash-lite +vocab",
+      "model": "google/gemini-3.5-flash-lite",
+      "vocabulary": true
+    },
+    {
+      "name": "gemini-3.8-flash +vocab",
+      "model": "google/gemini-3.8-flash",
+      "vocabulary": true
+    },
+    {
+      "name": "gemini-3.1-flash-lite bare",
+      "model": "google/gemini-3.1-flash-lite",
+      "vocabulary": false
+    },
+    {
+      "name": "gemini-3.5-flash-lite bare",
+      "model": "google/gemini-3.5-flash-lite",
+      "vocabulary": false
+    },
+    {
+      "name": "gemini-3.8-flash bare",
+      "model": "google/gemini-3.8-flash",
+      "vocabulary": false
+    },
+    {
+      "name": "gemini-3.1-flash-lite +vocab (again)",
+      "model": "google/gemini-3.1-flash-lite",
+      "vocabulary": true
+    }
+  ],
+  "spentUsd": 0.1283383499999999,
+  "lost": [],
+  "whoAnswered": {
+    "gemini-3.1-flash-lite +vocab": {
+      "google/gemini-3.1-flash-lite": 30
+    },
+    "gemini-3.5-flash-lite +vocab": {
+      "google/gemini-3.5-flash-lite": 30
+    },
+    "gemini-3.8-flash +vocab": {
+      "google/gemini-3.8-flash": 30
+    },
+    "gemini-3.1-flash-lite bare": {
+      "google/gemini-3.1-flash-lite": 30
+    },
+    "gemini-3.5-flash-lite bare": {
+      "google/gemini-3.5-flash-lite": 30
+    },
+    "gemini-3.8-flash bare": {
+      "google/gemini-3.8-flash": 30
+    },
+    "gemini-3.1-flash-lite +vocab (again)": {
+      "google/gemini-3.1-flash-lite": 30
+    }
+  },
+  "suppliedClips": [
+    "noema-glossary",
+    "noema-names",
+    "fowler-glossary",
+    "fowler-names",
+    "site-terms",
+    "profile",
+    "control-no-hard-terms"
+  ],
+  "vocabularyChars": {
+    "noema-glossary": 850,
+    "noema-names": 850,
+    "fowler-glossary": 842,
+    "fowler-names": 842,
+    "constitution-mixed": 155,
+    "site-terms": 850,
+    "profile": 155,
+    "short": 155,
+    "purpose-box": 850,
+    "control-no-hard-terms": 155
+  },
+  "results": {
+    "gemini-3.1-flash-lite +vocab": {
+      "noema-glossary": {
+        "words": [
+          29,
+          29,
+          29
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 12,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          1088,
+          1273,
+          1256
+        ],
+        "usd": [
+          0.0003125,
+          0.0003125,
+          0.0003125
+        ],
+        "transcripts": [
+          "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism.",
+          "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism.",
+          "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism."
+        ]
+      },
+      "noema-names": {
+        "words": [
+          27,
+          27,
+          27
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 15,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          1076,
+          1044,
+          1360
+        ],
+        "usd": [
+          0.000275,
+          0.000275,
+          0.000269
+        ],
+        "transcripts": [
+          "Worth checking whether Hinton would accept this. The Ex Machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making.",
+          "Worth checking whether Hinton would accept this. The Ex Machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making.",
+          "Worth checking whether Hinton would accept this. The ex machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making."
+        ]
+      },
+      "fowler-glossary": {
+        "words": [
+          21,
+          21,
+          21
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 12,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          959,
+          977,
+          1220
+        ],
+        "usd": [
+          0.00027325,
+          0.00027925,
+          0.00028075
+        ],
+        "transcripts": [
+          "Ranking Philoprogenitiveness above Combativeness tells you more about Victorian morals than about Acquisitiveness and Veneration is barely argued for at all.",
+          "Ranking philoprogenitiveness above combativeness tells you more about Victorian morals than about acquisitiveness, and veneration is barely argued for at all.",
+          "Ranking Philoprogenitiveness above Combativeness tells you more about Victorian morals than about Acquisitiveness, and Veneration is barely argued for at all."
+        ]
+      },
+      "fowler-names": {
+        "words": [
+          26,
+          26,
+          26
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 15,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          976,
+          1063,
+          864
+        ],
+        "usd": [
+          0.00029075,
+          0.00029075,
+          0.00029675
+        ],
+        "transcripts": [
+          "Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all.",
+          "Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all.",
+          "Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all."
+        ]
+      },
+      "constitution-mixed": {
+        "words": [
+          31,
+          31,
+          31
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 21,
+        "recallTotal": 21,
+        "invented": [],
+        "ms": [
+          2018,
+          1831,
+          1798
+        ],
+        "usd": [
+          0.0002845,
+          0.0002905,
+          0.000283
+        ],
+        "transcripts": [
+          "Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent, conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in.",
+          "Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent, conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in.",
+          "Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in."
+        ]
+      },
+      "site-terms": {
+        "words": [
+          24,
+          24,
+          24
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 15,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          1659,
+          1299,
+          1606
+        ],
+        "usd": [
+          0.000286,
+          0.0002875,
+          0.0002875
+        ],
+        "transcripts": [
+          "Add this to spideryarn, please. The granularity zoom is fine but the gist column should follow the block id, which here is spya-k3m9qt.",
+          "Add this to spideryarn, please. The granularity zoom is fine, but the gist column should follow the block ID, which here is spya-k3m9qt.",
+          "Add this to spideryarn, please. The granularity zoom is fine, but the gist column should follow the block ID, which here is spya-k3m9qt."
+        ]
+      },
+      "profile": {
+        "words": [
+          28,
+          28,
+          28
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 9,
+        "recallTotal": 9,
+        "invented": [],
+        "ms": [
+          1519,
+          1389,
+          1210
+        ],
+        "usd": [
+          0.000249,
+          0.0002475,
+          0.0002475
+        ],
+        "transcripts": [
+          "My background is in cognitive science, and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me.",
+          "My background is in cognitive science and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me.",
+          "My background is in cognitive science and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me."
+        ]
+      },
+      "short": {
+        "words": [
+          5,
+          5,
+          5
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 3,
+        "recallTotal": 3,
+        "invented": [],
+        "ms": [
+          1368,
+          1364,
+          993
+        ],
+        "usd": [
+          0.0001205,
+          0.0001205,
+          0.0001205
+        ],
+        "transcripts": [
+          "Ask about the principal hierarchy.",
+          "Ask about the principal hierarchy.",
+          "Ask about the principal hierarchy."
+        ]
+      },
+      "purpose-box": {
+        "words": [
+          21,
+          21,
+          21
+        ],
+        "edits": [
+          5,
+          4,
+          4
+        ],
+        "recallHit": 3,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          2047,
+          1595,
+          1471
+        ],
+        "usd": [
+          0.000268,
+          0.0002605,
+          0.0002725
+        ],
+        "transcripts": [
+          "Does this actually answer Vervicon relevance realization, worth sending to Angeli Chowdhury before Thursday, and it bears on Friston, too.",
+          "Does this actually answer Vervik on relevance realization worth sending to Angeli Chowdhury before Thursday, and it bears on Friston too?",
+          "Does this actually answer Vevik on relevance realization? Worth sending to Angeli Chaudhri before Thursday, and it bears on Friston, too."
+        ]
+      },
+      "control-no-hard-terms": {
+        "words": [
+          31,
+          31,
+          31
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 0,
+        "recallTotal": 0,
+        "invented": [],
+        "ms": [
+          1389,
+          989,
+          1463
+        ],
+        "usd": [
+          0.000243,
+          0.000243,
+          0.000243
+        ],
+        "transcripts": [
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end, I had stopped believing the setup.",
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end, I had stopped believing the setup.",
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end, I had stopped believing the setup."
+        ]
+      }
+    },
+    "gemini-3.5-flash-lite +vocab": {
+      "noema-glossary": {
+        "words": [
+          29,
+          29,
+          29
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 12,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          1478,
+          1413,
+          1332
+        ],
+        "usd": [
+          0.0003286,
+          0.0003286,
+          0.0003286
+        ],
+        "transcripts": [
+          "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism.",
+          "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism.",
+          "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism."
+        ]
+      },
+      "noema-names": {
+        "words": [
+          27,
+          27,
+          27
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 15,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          1340,
+          1291,
+          1473
+        ],
+        "usd": [
+          0.0002874,
+          0.0002874,
+          0.0002974
+        ],
+        "transcripts": [
+          "Worth checking whether Hinton would accept this. The ex-machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making.",
+          "Worth checking whether Hinton would accept this. The ex-machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making.",
+          "Worth checking whether Hinton would accept this. The ex-machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making."
+        ]
+      },
+      "fowler-glossary": {
+        "words": [
+          21,
+          21,
+          21
+        ],
+        "edits": [
+          0,
+          0,
+          1
+        ],
+        "recallHit": 12,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          1353,
+          1204,
+          1159
+        ],
+        "usd": [
+          0.0002972,
+          0.0002972,
+          0.0002872
+        ],
+        "transcripts": [
+          "Ranking philoprogenitiveness above combativeness tells you more about Victorian morals than about acquisitiveness, and veneration is barely argued for at all.",
+          "Ranking philoprogenitiveness above combativeness tells you more about Victorian morals than about acquisitiveness, and veneration is barely argued for at all.",
+          "Ranking philoprogenitiveness above combativeness tells you more about Victorian morals than about acquisitiveness, and veneration is barely argued through at all."
+        ]
+      },
+      "fowler-names": {
+        "words": [
+          26,
+          26,
+          26
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 15,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          1170,
+          1320,
+          1222
+        ],
+        "usd": [
+          0.0003121,
+          0.0003121,
+          0.0003121
+        ],
+        "transcripts": [
+          "Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all.",
+          "Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all.",
+          "Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all."
+        ]
+      },
+      "constitution-mixed": {
+        "words": [
+          31,
+          31,
+          31
+        ],
+        "edits": [
+          5,
+          2,
+          2
+        ],
+        "recallHit": 19,
+        "recallTotal": 21,
+        "invented": [],
+        "ms": [
+          1623,
+          1383,
+          1461
+        ],
+        "usd": [
+          0.0002928,
+          0.0002828,
+          0.0002928
+        ],
+        "transcripts": [
+          "courageability and the disposition dialer intention. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in.",
+          "corrigibility and the disposition dial are intention. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in.",
+          "corrigibility and the disposition dial are intention. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in."
+        ]
+      },
+      "site-terms": {
+        "words": [
+          24,
+          24,
+          24
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 15,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          1397,
+          1436,
+          1340
+        ],
+        "usd": [
+          0.0003163,
+          0.0003163,
+          0.0003163
+        ],
+        "transcripts": [
+          "Add this to Spideryarn please. The granularity zoom is fine, but the gist column should follow the block ID, which here is spya-k3m9qt.",
+          "Add this to Spideryarn please. The granularity zoom is fine, but the gist column should follow the block ID, which here is spya-k3m9qt.",
+          "Add this to Spideryarn please. The granularity zoom is fine, but the gist column should follow the block id, which here is spya-k3m9qt."
+        ]
+      },
+      "profile": {
+        "words": [
+          28,
+          28,
+          28
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 9,
+        "recallTotal": 9,
+        "invented": [],
+        "ms": [
+          1287,
+          1257,
+          1208
+        ],
+        "usd": [
+          0.0002569,
+          0.0002569,
+          0.0002544
+        ],
+        "transcripts": [
+          "My background is in cognitive science, and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me.",
+          "My background is in cognitive science, and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me.",
+          "My background is in cognitive science and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me."
+        ]
+      },
+      "short": {
+        "words": [
+          5,
+          5,
+          5
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 3,
+        "recallTotal": 3,
+        "invented": [],
+        "ms": [
+          1444,
+          1242,
+          1451
+        ],
+        "usd": [
+          0.0001298,
+          0.0001298,
+          0.0001398
+        ],
+        "transcripts": [
+          "Ask about the principal hierarchy.",
+          "Ask about the principal hierarchy.",
+          "Ask about the principal hierarchy."
+        ]
+      },
+      "purpose-box": {
+        "words": [
+          21,
+          21,
+          21
+        ],
+        "edits": [
+          5,
+          4,
+          5
+        ],
+        "recallHit": 3,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          1463,
+          1330,
+          1322
+        ],
+        "usd": [
+          0.000285,
+          0.000285,
+          0.000285
+        ],
+        "transcripts": [
+          "Does this actually answer Vicon relevance realization worth sending to Angeli Chaudhry before Thursday, and it bears on Friston too.",
+          "Does this actually answer Vicon relevance realization? Worth sending to Angela Chaudhuri before Thursday, and it bears on Friston, too.",
+          "Does this actually answer vicon relevance realization? Worth sending to Angèle Chauri before Thursday, and it bears on Friston too."
+        ]
+      },
+      "control-no-hard-terms": {
+        "words": [
+          31,
+          31,
+          31
+        ],
+        "edits": [
+          0,
+          0,
+          2
+        ],
+        "recallHit": 0,
+        "recallTotal": 0,
+        "invented": [],
+        "ms": [
+          1347,
+          1730,
+          1335
+        ],
+        "usd": [
+          0.0002572,
+          0.0002572,
+          0.0002597
+        ],
+        "transcripts": [
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end I had stopped believing the setup.",
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end I had stopped believing the setup.",
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end I had stopped believing the set up."
+        ]
+      }
+    },
+    "gemini-3.8-flash +vocab": {
+      "noema-glossary": {
+        "words": [
+          29,
+          29,
+          29
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 12,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          3776,
+          6283,
+          2409
+        ],
+        "usd": [
+          0.00117525,
+          0.00119025,
+          0.00098025
+        ],
+        "transcripts": [
+          "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism.",
+          "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism.",
+          "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism."
+        ]
+      },
+      "noema-names": {
+        "words": [
+          27,
+          27,
+          27
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 15,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          3888,
+          4092,
+          18079
+        ],
+        "usd": [
+          0.001221,
+          0.00110475,
+          0.001221
+        ],
+        "transcripts": [
+          "Worth checking whether Hinton would accept this. The Ex Machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making.",
+          "Worth checking whether Hinton would accept this. The Ex Machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making.",
+          "Worth checking whether Hinton would accept this. The Ex Machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making."
+        ]
+      },
+      "fowler-glossary": {
+        "words": [
+          21,
+          21,
+          21
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 12,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          5287,
+          5088,
+          3362
+        ],
+        "usd": [
+          0.00125925,
+          0.00127425,
+          0.0010455
+        ],
+        "transcripts": [
+          "Ranking Philoprogenitiveness above Combativeness tells you more about Victorian morals than about Acquisitiveness, and Veneration is barely argued for at all.",
+          "Ranking Philoprogenitiveness above Combativeness tells you more about Victorian morals than about Acquisitiveness, and Veneration is barely argued for at all.",
+          "Ranking Philoprogenitiveness above Combativeness tells you more about Victorian morals than about Acquisitiveness, and Veneration is barely argued for at all."
+        ]
+      },
+      "fowler-names": {
+        "words": [
+          26,
+          26,
+          26
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 15,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          5713,
+          5236,
+          3048
+        ],
+        "usd": [
+          0.00152025,
+          0.00125025,
+          0.0011565
+        ],
+        "transcripts": [
+          "Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all.",
+          "Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all.",
+          "Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all."
+        ]
+      },
+      "constitution-mixed": {
+        "words": [
+          31,
+          31,
+          31
+        ],
+        "edits": [
+          0,
+          0,
+          3
+        ],
+        "recallHit": 20,
+        "recallTotal": 21,
+        "invented": [],
+        "ms": [
+          6430,
+          5461,
+          10303
+        ],
+        "usd": [
+          0.00155325,
+          0.00177825,
+          0.003117
+        ],
+        "transcripts": [
+          "Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in.",
+          "Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent, conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in.",
+          "Corrigibility and the dispositional RL in tension. Anthropic wants Claude to be a transparent, conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in."
+        ]
+      },
+      "site-terms": {
+        "words": [
+          24,
+          24,
+          24
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 15,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          3563,
+          9361,
+          4311
+        ],
+        "usd": [
+          0.00116325,
+          0.001182,
+          0.00112575
+        ],
+        "transcripts": [
+          "Add this to Spideryarn, please. The granularity zoom is fine, but the gist column should follow the block id, which here is spya-k3m9qt.",
+          "Add this to Spideryarn, please. The granularity zoom is fine, but the gist column should follow the block ID, which here is spya-k3m9qt.",
+          "Add this to Spideryarn, please. The granularity zoom is fine, but the gist column should follow the block ID, which here is spya-k3m9qt."
+        ]
+      },
+      "profile": {
+        "words": [
+          28,
+          28,
+          28
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 9,
+        "recallTotal": 9,
+        "invented": [],
+        "ms": [
+          4804,
+          4217,
+          6842
+        ],
+        "usd": [
+          0.001056,
+          0.001056,
+          0.001071
+        ],
+        "transcripts": [
+          "My background is in cognitive science, and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me.",
+          "My background is in cognitive science, and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me.",
+          "My background is in cognitive science, and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me."
+        ]
+      },
+      "short": {
+        "words": [
+          5,
+          5,
+          5
+        ],
+        "edits": [
+          0,
+          0,
+          1
+        ],
+        "recallHit": 2,
+        "recallTotal": 3,
+        "invented": [],
+        "ms": [
+          3159,
+          8074,
+          3537
+        ],
+        "usd": [
+          0.00117075,
+          0.00192825,
+          0.00075075
+        ],
+        "transcripts": [
+          "Ask about the principal hierarchy.",
+          "Ask about the principal hierarchy.",
+          "Ask about the principle hierarchy."
+        ]
+      },
+      "purpose-box": {
+        "words": [
+          21,
+          21,
+          21
+        ],
+        "edits": [
+          2,
+          2,
+          2
+        ],
+        "recallHit": 6,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          7745,
+          5227,
+          4800
+        ],
+        "usd": [
+          0.0024,
+          0.0014325,
+          0.00136875
+        ],
+        "transcripts": [
+          "Does this actually answer Vervaeke on relevance realization? Worth sending to Anjali Chaudhry before Thursday, and it bears on Friston too.",
+          "Does this actually answer Vervaeke on relevance realization? Worth sending to Anjali Chaudhry before Thursday, and it bears on Friston, too.",
+          "Does this actually answer Vervaeke on relevance realization? Worth sending to Anjali Chaudhry before Thursday, and it bears on Friston, too."
+        ]
+      },
+      "control-no-hard-terms": {
+        "words": [
+          31,
+          31,
+          31
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 0,
+        "recallTotal": 0,
+        "invented": [],
+        "ms": [
+          4875,
+          5562,
+          4579
+        ],
+        "usd": [
+          0.00122175,
+          0.00123675,
+          0.00144675
+        ],
+        "transcripts": [
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end I had stopped believing the setup.",
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end I had stopped believing the setup.",
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end I had stopped believing the setup."
+        ]
+      }
+    },
+    "gemini-3.1-flash-lite bare": {
+      "noema-glossary": {
+        "words": [
+          29,
+          29,
+          29
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 12,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          1388,
+          1799,
+          1768
+        ],
+        "usd": [
+          0.00025975,
+          0.00025375,
+          0.00025975
+        ],
+        "transcripts": [
+          "The Muller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism.",
+          "The Muller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism.",
+          "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism."
+        ]
+      },
+      "noema-names": {
+        "words": [
+          27,
+          27,
+          27
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 15,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          1991,
+          1477,
+          1672
+        ],
+        "usd": [
+          0.00022225,
+          0.00021625,
+          0.00021625
+        ],
+        "transcripts": [
+          "Worth checking whether Hinton would accept this. The ex machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making.",
+          "Worth checking whether Hinton would accept this. The ex machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making.",
+          "Worth checking whether Hinton would accept this. The ex machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making."
+        ]
+      },
+      "fowler-glossary": {
+        "words": [
+          21,
+          21,
+          21
+        ],
+        "edits": [
+          0,
+          2,
+          0
+        ],
+        "recallHit": 11,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          1005,
+          1027,
+          1236
+        ],
+        "usd": [
+          0.00021825,
+          0.00022725,
+          0.00022425
+        ],
+        "transcripts": [
+          "Ranking philoprogenitiveness above combativeness tells you more about Victorian morals than about acquisitiveness, and veneration is barely argued for at all.",
+          "Ranking philo-progenitiveness above combativeness tells you more about Victorian morals than about acquisitiveness, and veneration is barely argued for at all.",
+          "Ranking philoprogenitiveness above combativeness tells you more about Victorian morals than about acquisitiveness, and veneration is barely argued for at all."
+        ]
+      },
+      "fowler-names": {
+        "words": [
+          26,
+          26,
+          26
+        ],
+        "edits": [
+          1,
+          1,
+          1
+        ],
+        "recallHit": 12,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          847,
+          1160,
+          962
+        ],
+        "usd": [
+          0.00024025,
+          0.00024025,
+          0.00024025
+        ],
+        "transcripts": [
+          "Elementiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all.",
+          "Elementiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all.",
+          "Elementiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all."
+        ]
+      },
+      "constitution-mixed": {
+        "words": [
+          31,
+          31,
+          31
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 21,
+        "recallTotal": 21,
+        "invented": [],
+        "ms": [
+          745,
+          936,
+          907
+        ],
+        "usd": [
+          0.00027625,
+          0.00027625,
+          0.00027025
+        ],
+        "transcripts": [
+          "Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in.",
+          "Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in.",
+          "Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in."
+        ]
+      },
+      "site-terms": {
+        "words": [
+          24,
+          24,
+          24
+        ],
+        "edits": [
+          5,
+          5,
+          4
+        ],
+        "recallHit": 9,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          1339,
+          1880,
+          1487
+        ],
+        "usd": [
+          0.00023475,
+          0.00023025,
+          0.00023175
+        ],
+        "transcripts": [
+          "Add this to speed array on, please. The granularity zoom is fine but the gist column should follow the block ID, which here is SpyK3M9QT.",
+          "Add this to speed array on, please. The granularity zoom is fine, but the gist column should follow the block ID, which here is SpyK3M9QT.",
+          "Add this to spidey run, please. The granularity zoom is fine, but the gist column should follow the block ID, which here is SpierK3M9QT."
+        ]
+      },
+      "profile": {
+        "words": [
+          28,
+          28,
+          28
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 9,
+        "recallTotal": 9,
+        "invented": [],
+        "ms": [
+          1066,
+          1001,
+          1153
+        ],
+        "usd": [
+          0.00023475,
+          0.00023475,
+          0.00023625
+        ],
+        "transcripts": [
+          "My background is in cognitive science and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me.",
+          "My background is in cognitive science and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me.",
+          "My background is in cognitive science, and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me."
+        ]
+      },
+      "short": {
+        "words": [
+          5,
+          5,
+          5
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 3,
+        "recallTotal": 3,
+        "invented": [],
+        "ms": [
+          939,
+          766,
+          756
+        ],
+        "usd": [
+          0.00010775,
+          0.00010775,
+          0.00010775
+        ],
+        "transcripts": [
+          "Ask about the principal hierarchy.",
+          "Ask about the principal hierarchy.",
+          "Ask about the principal hierarchy."
+        ]
+      },
+      "purpose-box": {
+        "words": [
+          21,
+          21,
+          21
+        ],
+        "edits": [
+          4,
+          5,
+          5
+        ],
+        "recallHit": 3,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          1275,
+          1199,
+          1181
+        ],
+        "usd": [
+          0.00021375,
+          0.00020925,
+          0.00021225
+        ],
+        "transcripts": [
+          "Does this actually answer Vurbic on relevance realization? Worth sending to Angeli Chaudhry before Thursday, and it bears on Friston, too.",
+          "Does this actually answer Vevicon relevance realization? Worth sending to Angeli Chowdhury before Thursday, and it bears on Friston, too.",
+          "Does this actually answer Vevicon relevance realization? Worth sending to Angeli Chaudhri before Thursday, and it bears on Friston, too."
+        ]
+      },
+      "control-no-hard-terms": {
+        "words": [
+          31,
+          31,
+          31
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 0,
+        "recallTotal": 0,
+        "invented": [],
+        "ms": [
+          2331,
+          1922,
+          1018
+        ],
+        "usd": [
+          0.00023025,
+          0.00022275,
+          0.00022275
+        ],
+        "transcripts": [
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end, I had stopped believing the setup.",
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end I had stopped believing the setup.",
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end I had stopped believing the setup."
+        ]
+      }
+    },
+    "gemini-3.5-flash-lite bare": {
+      "noema-glossary": {
+        "words": [
+          29,
+          29,
+          29
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 12,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          2094,
+          1534,
+          1380
+        ],
+        "usd": [
+          0.0002653,
+          0.0002553,
+          0.0002653
+        ],
+        "transcripts": [
+          "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism.",
+          "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism.",
+          "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism."
+        ]
+      },
+      "noema-names": {
+        "words": [
+          27,
+          27,
+          27
+        ],
+        "edits": [
+          0,
+          0,
+          2
+        ],
+        "recallHit": 14,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          1174,
+          1106,
+          1228
+        ],
+        "usd": [
+          0.0002341,
+          0.0002241,
+          0.0002391
+        ],
+        "transcripts": [
+          "Worth checking whether Hinton would accept this. The ex-machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making.",
+          "Worth checking whether Hinton would accept this. The ex-machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making.",
+          "Worth checking whether Hinton would accept this. The ex-machina reading of Ava feels like a distraction from the Turing point that an Ilseth is actually making."
+        ]
+      },
+      "fowler-glossary": {
+        "words": [
+          21,
+          21,
+          21
+        ],
+        "edits": [
+          2,
+          2,
+          1
+        ],
+        "recallHit": 9,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          1604,
+          1369,
+          1397
+        ],
+        "usd": [
+          0.0002262,
+          0.0002262,
+          0.0002237
+        ],
+        "transcripts": [
+          "Ranking philo-progenitiveness above combativeness tells you more about Victorian morals than about acquisitiveness, and veneration is barely argued for at all.",
+          "Ranking philo-progenitiveness above combativeness tells you more about Victorian morals than about acquisitiveness, and veneration is barely argued for at all.",
+          "Ranking phalloprogentiveness above combativeness tells you more about Victorian morals than about acquisitiveness, and veneration is barely argued for at all."
+        ]
+      },
+      "fowler-names": {
+        "words": [
+          26,
+          26,
+          26
+        ],
+        "edits": [
+          1,
+          1,
+          1
+        ],
+        "recallHit": 12,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          1578,
+          1103,
+          1371
+        ],
+        "usd": [
+          0.0002536,
+          0.0002436,
+          0.0002436
+        ],
+        "transcripts": [
+          "Elementiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all.",
+          "Elementiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all.",
+          "Elementiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all."
+        ]
+      },
+      "constitution-mixed": {
+        "words": [
+          31,
+          31,
+          31
+        ],
+        "edits": [
+          4,
+          5,
+          4
+        ],
+        "recallHit": 17,
+        "recallTotal": 21,
+        "invented": [],
+        "ms": [
+          1608,
+          1420,
+          1357
+        ],
+        "usd": [
+          0.0002675,
+          0.00028,
+          0.0002675
+        ],
+        "transcripts": [
+          "corrigibility and the disposition dialar intention. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe. And sandbagging is the failure mode nobody has priced in.",
+          "corrigibility and the disposition dialar intention, anthropic wants claud to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in.",
+          "corrigibility and the disposition dialog intension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in."
+        ]
+      },
+      "site-terms": {
+        "words": [
+          24,
+          24,
+          24
+        ],
+        "edits": [
+          4,
+          4,
+          4
+        ],
+        "recallHit": 9,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          1170,
+          1207,
+          1042
+        ],
+        "usd": [
+          0.000248,
+          0.0002355,
+          0.000238
+        ],
+        "transcripts": [
+          "Add this to Spiderion place. The granularity zoom is fine, but the gist column should follow the block ID, which here is SpireK3M9QT.",
+          "Add this to Spideyon place. The granularity zoom is fine, but the gist column should follow the block ID, which here is spk3m9qt.",
+          "Add this to Spideyon place. The granularity zoom is fine, but the gist column should follow the block ID, which here is SpireK3M9QT."
+        ]
+      },
+      "profile": {
+        "words": [
+          28,
+          28,
+          28
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 9,
+        "recallTotal": 9,
+        "invented": [],
+        "ms": [
+          1440,
+          1396,
+          1318
+        ],
+        "usd": [
+          0.0002316,
+          0.0002391,
+          0.0002316
+        ],
+        "transcripts": [
+          "My background is in cognitive science, and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me.",
+          "My background is in cognitive science and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me.",
+          "My background is in cognitive science, and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me."
+        ]
+      },
+      "short": {
+        "words": [
+          5,
+          5,
+          5
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 3,
+        "recallTotal": 3,
+        "invented": [],
+        "ms": [
+          1194,
+          1314,
+          1154
+        ],
+        "usd": [
+          0.0001145,
+          0.0001245,
+          0.0001245
+        ],
+        "transcripts": [
+          "Ask about the principal hierarchy.",
+          "Ask about the principal hierarchy.",
+          "Ask about the principal hierarchy."
+        ]
+      },
+      "purpose-box": {
+        "words": [
+          21,
+          21,
+          21
+        ],
+        "edits": [
+          4,
+          6,
+          4
+        ],
+        "recallHit": 3,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          1665,
+          1531,
+          1250
+        ],
+        "usd": [
+          0.0002292,
+          0.0002267,
+          0.0002267
+        ],
+        "transcripts": [
+          "Does this actually answer VVB on relevance realisation? Worth sending to Angeli Chaudhry before Thursday, and it bears on Fricton too.",
+          "Does this actually answer Vcon relevance realization? Worth sending to Angeli Chaudhry before Thursday, and it bears on Frizton too.",
+          "Does this actually answer Vicon relevance realisation, worth sending to Angeli Chaudhry before Thursday, and it bears on Friston, too?"
+        ]
+      },
+      "control-no-hard-terms": {
+        "words": [
+          31,
+          31,
+          31
+        ],
+        "edits": [
+          2,
+          0,
+          0
+        ],
+        "recallHit": 0,
+        "recallTotal": 0,
+        "invented": [],
+        "ms": [
+          1699,
+          1378,
+          1273
+        ],
+        "usd": [
+          0.0002444,
+          0.0002419,
+          0.0002419
+        ],
+        "transcripts": [
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end I had stopped believing the set up.",
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end I had stopped believing the setup.",
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end I had stopped believing the setup."
+        ]
+      }
+    },
+    "gemini-3.8-flash bare": {
+      "noema-glossary": {
+        "words": [
+          29,
+          29,
+          29
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 12,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          3091,
+          3564,
+          5765
+        ],
+        "usd": [
+          0.00102075,
+          0.00108075,
+          0.00104325
+        ],
+        "transcripts": [
+          "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism.",
+          "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism.",
+          "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism."
+        ]
+      },
+      "noema-names": {
+        "words": [
+          27,
+          27,
+          27
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 15,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          4285,
+          22479,
+          8619
+        ],
+        "usd": [
+          0.00091275,
+          0.00117525,
+          0.00218025
+        ],
+        "transcripts": [
+          "Worth checking whether Hinton would accept this. The Ex Machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making.",
+          "Worth checking whether Hinton would accept this. The Ex Machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making.",
+          "Worth checking whether Hinton would accept this. The Ex Machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making."
+        ]
+      },
+      "fowler-glossary": {
+        "words": [
+          21,
+          21,
+          21
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 12,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          6265,
+          4059,
+          7899
+        ],
+        "usd": [
+          0.001053,
+          0.001173,
+          0.0013005
+        ],
+        "transcripts": [
+          "Ranking philoprogenitiveness above combativeness tells you more about Victorian morals than about acquisitiveness, and veneration is barely argued for at all.",
+          "Ranking philoprogenitiveness above combativeness tells you more about Victorian morals than about acquisitiveness, and veneration is barely argued for at all.",
+          "Ranking philoprogenitiveness above combativeness tells you more about Victorian morals than about acquisitiveness, and veneration is barely argued for at all."
+        ]
+      },
+      "fowler-names": {
+        "words": [
+          26,
+          26,
+          26
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 15,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          5310,
+          4002,
+          6936
+        ],
+        "usd": [
+          0.0012465,
+          0.001089,
+          0.00108525
+        ],
+        "transcripts": [
+          "Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all.",
+          "Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all.",
+          "Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all."
+        ]
+      },
+      "constitution-mixed": {
+        "words": [
+          31,
+          31,
+          31
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 21,
+        "recallTotal": 21,
+        "invented": [],
+        "ms": [
+          6498,
+          3401,
+          4068
+        ],
+        "usd": [
+          0.00124125,
+          0.00113625,
+          0.001155
+        ],
+        "transcripts": [
+          "Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in.",
+          "Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in.",
+          "Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in."
+        ]
+      },
+      "site-terms": {
+        "words": [
+          24,
+          24,
+          24
+        ],
+        "edits": [
+          4,
+          4,
+          4
+        ],
+        "recallHit": 9,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          26436,
+          16522,
+          28954
+        ],
+        "usd": [
+          0.00388875,
+          0.0062625,
+          0.0111975
+        ],
+        "transcripts": [
+          "Add this to SpiderEye on, please. The granularity zoom is fine, but the gist column should follow the block ID, which here is 5K3M9QT.",
+          "Add this to Spyder, Ian, please. The granularity zoom is fine, but the gist column should follow the block ID, which here is 5K3M9QT.",
+          "Add this to Spyder, Ian, please. The granularity zoom is fine, but the gist column should follow the block ID, which here is 5k3m9qt."
+        ]
+      },
+      "profile": {
+        "words": [
+          28,
+          28,
+          28
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 9,
+        "recallTotal": 9,
+        "invented": [],
+        "ms": [
+          3790,
+          5214,
+          3298
+        ],
+        "usd": [
+          0.000804,
+          0.00084525,
+          0.00077775
+        ],
+        "transcripts": [
+          "My background is in cognitive science, and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me.",
+          "My background is in cognitive science, and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me.",
+          "My background is in cognitive science, and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me."
+        ]
+      },
+      "short": {
+        "words": [
+          5,
+          5,
+          5
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 3,
+        "recallTotal": 3,
+        "invented": [],
+        "ms": [
+          4811,
+          3912,
+          4527
+        ],
+        "usd": [
+          0.00073875,
+          0.00066375,
+          0.001185
+        ],
+        "transcripts": [
+          "Ask about the principal hierarchy.",
+          "Ask about the principal hierarchy.",
+          "Ask about the principal hierarchy."
+        ]
+      },
+      "purpose-box": {
+        "words": [
+          21,
+          21,
+          21
+        ],
+        "edits": [
+          2,
+          3,
+          3
+        ],
+        "recallHit": 4,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          4757,
+          5349,
+          6907
+        ],
+        "usd": [
+          0.000858,
+          0.0011355,
+          0.0011805
+        ],
+        "transcripts": [
+          "Does this actually answer V on relevance realisation? Worth sending to Anjali Chaudhry before Thursday, and it bears on Friston too.",
+          "Does this actually answer V on relevance realization? Worth sending to Anjali Choudhury before Thursday, and it bears on Friston, too.",
+          "Does this actually answer Sperber on relevance realization? Worth sending to Anjali Chaudhry before Thursday, and it bears on Friston too."
+        ]
+      },
+      "control-no-hard-terms": {
+        "words": [
+          31,
+          31,
+          31
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 0,
+        "recallTotal": 0,
+        "invented": [],
+        "ms": [
+          5476,
+          4201,
+          10269
+        ],
+        "usd": [
+          0.001041,
+          0.0008235,
+          0.0010485
+        ],
+        "transcripts": [
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end I had stopped believing the setup.",
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end I had stopped believing the setup.",
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end, I had stopped believing the setup."
+        ]
+      }
+    },
+    "gemini-3.1-flash-lite +vocab (again)": {
+      "noema-glossary": {
+        "words": [
+          29,
+          29,
+          29
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 12,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          1094,
+          939,
+          981
+        ],
+        "usd": [
+          0.0003125,
+          0.0003065,
+          0.0003065
+        ],
+        "transcripts": [
+          "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism.",
+          "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism.",
+          "The Muller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism."
+        ]
+      },
+      "noema-names": {
+        "words": [
+          27,
+          27,
+          27
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 15,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          1177,
+          976,
+          1173
+        ],
+        "usd": [
+          0.000275,
+          0.000275,
+          0.000275
+        ],
+        "transcripts": [
+          "Worth checking whether Hinton would accept this. The Ex Machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making.",
+          "Worth checking whether Hinton would accept this. The Ex Machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making.",
+          "Worth checking whether Hinton would accept this. The Ex Machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making."
+        ]
+      },
+      "fowler-glossary": {
+        "words": [
+          21,
+          21,
+          21
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 12,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          838,
+          962,
+          955
+        ],
+        "usd": [
+          0.00028075,
+          0.00027925,
+          0.00027925
+        ],
+        "transcripts": [
+          "Ranking Philoprogenitiveness above Combativeness tells you more about Victorian morals than about Acquisitiveness, and Veneration is barely argued for at all.",
+          "Ranking philoprogenitiveness above combativeness tells you more about Victorian morals than about acquisitiveness, and veneration is barely argued for at all.",
+          "Ranking philoprogenitiveness above combativeness tells you more about Victorian morals than about acquisitiveness, and veneration is barely argued for at all."
+        ]
+      },
+      "fowler-names": {
+        "words": [
+          26,
+          26,
+          26
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 15,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          972,
+          1035,
+          1048
+        ],
+        "usd": [
+          0.00029675,
+          0.00029675,
+          0.00029675
+        ],
+        "transcripts": [
+          "Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all.",
+          "Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all.",
+          "Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all."
+        ]
+      },
+      "constitution-mixed": {
+        "words": [
+          31,
+          31,
+          31
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 21,
+        "recallTotal": 21,
+        "invented": [],
+        "ms": [
+          2196,
+          2171,
+          1353
+        ],
+        "usd": [
+          0.000289,
+          0.0002905,
+          0.000283
+        ],
+        "transcripts": [
+          "Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in.",
+          "Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent, conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in.",
+          "Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in."
+        ]
+      },
+      "site-terms": {
+        "words": [
+          24,
+          24,
+          24
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 15,
+        "recallTotal": 15,
+        "invented": [],
+        "ms": [
+          1615,
+          1924,
+          1331
+        ],
+        "usd": [
+          0.0002875,
+          0.0002935,
+          0.0002875
+        ],
+        "transcripts": [
+          "Add this to spideryarn, please. The granularity zoom is fine, but the gist column should follow the block ID, which here is spya-k3m9qt.",
+          "Add this to spideryarn, please. The granularity zoom is fine, but the gist column should follow the block ID, which here is spya-k3m9qt.",
+          "Add this to spideryarn, please. The granularity zoom is fine, but the gist column should follow the block ID, which here is spya-k3m9qt."
+        ]
+      },
+      "profile": {
+        "words": [
+          28,
+          28,
+          28
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 9,
+        "recallTotal": 9,
+        "invented": [],
+        "ms": [
+          2155,
+          1336,
+          1048
+        ],
+        "usd": [
+          0.000243,
+          0.000249,
+          0.000249
+        ],
+        "transcripts": [
+          "My background is in cognitive science, and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me.",
+          "My background is in cognitive science, and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me.",
+          "My background is in cognitive science, and I have spent most of my working life on startups. So the software engineering parts are the easy bit for me."
+        ]
+      },
+      "short": {
+        "words": [
+          5,
+          5,
+          5
+        ],
+        "edits": [
+          1,
+          1,
+          1
+        ],
+        "recallHit": 0,
+        "recallTotal": 3,
+        "invented": [],
+        "ms": [
+          1163,
+          884,
+          1171
+        ],
+        "usd": [
+          0.0001205,
+          0.0001205,
+          0.0001205
+        ],
+        "transcripts": [
+          "Ask about the principle hierarchy.",
+          "Ask about the principle hierarchy.",
+          "Ask about the principle hierarchy."
+        ]
+      },
+      "purpose-box": {
+        "words": [
+          21,
+          21,
+          21
+        ],
+        "edits": [
+          4,
+          5,
+          5
+        ],
+        "recallHit": 3,
+        "recallTotal": 12,
+        "invented": [],
+        "ms": [
+          2062,
+          1251,
+          1707
+        ],
+        "usd": [
+          0.0002665,
+          0.0002635,
+          0.0002635
+        ],
+        "transcripts": [
+          "Does this actually answer Vervik on relevance realization, worth sending to Angely Chaudhry before Thursday, and it bears on Friston, too.",
+          "Does this actually answer Vervicon relevance realization? Worth sending to Angelyne Chowdhury before Thursday, and it bears on Friston, too.",
+          "Does this actually answer Vervecon relevance realization worth sending to Angeli Chaudhry before Thursday, and it bears on Friston, too."
+        ]
+      },
+      "control-no-hard-terms": {
+        "words": [
+          31,
+          31,
+          31
+        ],
+        "edits": [
+          0,
+          0,
+          0
+        ],
+        "recallHit": 0,
+        "recallTotal": 0,
+        "invented": [],
+        "ms": [
+          1543,
+          1235,
+          1032
+        ],
+        "usd": [
+          0.000243,
+          0.000243,
+          0.0002415
+        ],
+        "transcripts": [
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end, I had stopped believing the setup.",
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end, I had stopped believing the setup.",
+          "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end I had stopped believing the setup."
+        ]
+      }
+    }
+  }
+}

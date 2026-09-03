@@ -55,11 +55,15 @@ that does not come back.
 >
 > — Greg, 2026-09-02
 
-The site is written for the product as it is about to be — Beta, sign-up open, paid — not for the
-alpha behind an invite list that the landing page describes today. Stripe payments are being built;
-public-readable articles and the first real users are the next milestones. Price is not decided; the
-2025 thinking was $20 a month for as many articles as you like, paid by individuals first and
-institutions later.
+The site was written for the product as it was about to be — Beta, sign-up open, paid. **Since
+2026-09-03 it simply describes the product**: Stripe payments are live, the first real sale has
+happened, sign-up is open to anyone, and the two honest lines that stood in for the gap — the
+landing page's beta strip and the sentence under the plans — are deleted. Writing the copy forward
+is why nothing else had to change.
+
+Prices are the three plans in [billing.md](billing.md), rendered by `Plans.tsx` on the landing,
+features and pricing pages. The 2025 thinking was $20 a month for as many articles as you like; what
+shipped is Free / Reader / Researcher, paid by individuals first and institutions later.
 
 ## Chat, on the site
 

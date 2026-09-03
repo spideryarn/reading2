@@ -55,10 +55,47 @@ have that article's glossary loaded three feet away — and the quiz box most of
 set from the piece is asking the reader to say the piece's own words back.
 
 It cost the choice of route. OpenRouter has a purpose-built `POST /api/v1/audio/transcriptions`,
-which is cheaper and faster and would have been the obvious pick — and it has nowhere to put a
-vocabulary. It accepts OpenAI's `prompt` parameter, answers `200`, and ignores it. Confirmed by
+which is cheaper and faster and would have been the obvious pick — and it ignores the field OpenAI
+provides for exactly this. It accepts `prompt`, answers `200`, and changes nothing. Confirmed by
 sending it a field called `wibble_not_a_real_field`, which also answered `200`. That is
 [silent-success](../reusable/silent-success.md) with a status code on it.
+
+**That is narrower than "it cannot be told", which is what this doc said until 2026-09-03.** Some
+providers have their own biasing parameter under `provider.options` — Deepgram's `keyterm`, up to a
+hundred terms, and Groq's own `prompt` — and nothing here has ever tried one. So the dedicated route
+is unmeasured rather than ruled out, and the plan below says what it would take to measure it.
+
+## Why not OpenAI
+
+Asked properly on 2026-09-03 — [260903i](../plans/260903i-which-model-transcribes-dictation.md) —
+because the first bake-off never had. It gave the Gemini models a vocabulary and everybody else
+none, so it settled the *route* and left the *model* confounded.
+
+The answer is that `openai/gpt-audio` and `openai/gpt-audio-mini` are not reachable from here, for
+two reasons that are both about our request rather than their ears. **Neither has a
+zero-data-retention endpoint on OpenRouter**, and `zdr: true` is the flag that lets the sentence on
+the button say a reader's voice is not stored — so reaching them means dropping a published promise
+([privacy.md](privacy.md)), which is Greg's call and not a benchmark's. And **OpenAI's
+`input_audio` rejects webm**, which is what `MediaRecorder` produces; a wav in the same request gets
+a `200`. Adopting them would need a transcode on the request path, in front of the one call a person
+is sitting and waiting for.
+
+Both facts are measured, not read, and re-measuring them is a minute: `npm run
+eval:dictation-gate`. Run it before believing any leaderboard about this feature, and run it again
+if either fact changes.
+
+Among what is reachable, `gemini-3.1-flash-lite` stayed — and the finding worth carrying out of that
+plan is not about models at all. **Given its vocabulary, every candidate got every hard term right,
+and the incumbent made no word errors at all.** The differences that first looked like a better ear
+turned out to live entirely in the three clips whose words nobody had, which measures how a model
+guesses rather than how it hears. So model choice is not what limits this feature; the vocabulary
+is, which is [260828l](../plans/260828l-dictation-vocabulary.md)'s subject and not this one's.
+
+Two things did survive: **the newer sibling is worse** (`3.5-flash-lite` was the only arm to put
+errors into the clip with no jargon in it), and **the flash tier cannot be had at this speed** — it
+spends reasoning tokens before transcribing and that endpoint refuses to turn them off.
+`DICTATION_MODEL` in [`src/models.ts`](../../src/models.ts) carries the short version beside the
+line it would change; the plan owns the numbers.
 
 ## What is in the vocabulary
 
