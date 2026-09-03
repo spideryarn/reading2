@@ -101,6 +101,24 @@ const PROMPT_VERSION = "toc/3";
  */
 const EFFORT = "medium" as const;
 
+/**
+ * **What production actually thinks at, for anything that needs to say so.**
+ *
+ * Exported on 2026-09-03 because `evals/hierarchy-structure/arms.ts` had typed
+ * the number in again, and drifted: it called `"high"` the incumbent for the
+ * eight days after the max_tokens postmortem moved this to `"medium"`. Every
+ * paid arm in that harness was therefore scored against a recipe the pipeline
+ * does not run, and `smart-low` — declared as isolating the single variable
+ * `effort` — was quietly answering high-vs-low instead of the medium-vs-low
+ * question production has. GPT Sol found it by reading both files at once,
+ * which is the only way a restated constant is ever found.
+ *
+ * `structureRequest` below already hands this out to callers who have blocks;
+ * `evals/cost` reads it that way and stayed correct throughout. This export is
+ * for the callers who only want the number.
+ */
+export { EFFORT as PRODUCTION_EFFORT };
+
 const SYSTEM = `You are building a nested table of contents for an article. It goes all the
 way down to individual paragraphs, and it will be rendered as a navigation sidebar.
 

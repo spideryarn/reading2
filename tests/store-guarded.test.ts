@@ -56,8 +56,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { ChatConflict } from "../src/chat.js";
-import { STORAGE_BUSY } from "../src/messages.js";
 import { ProductRefused } from "../src/store/artifacts.js";
+import { MissingAttempt } from "../src/store/contracts.js";
 import { guardDbStore, isGuardedStore } from "../src/store/db-errors.js";
 import { CheckpointRequestError } from "../src/store/checkpoints.js";
 import { StaleAttemptError } from "../src/store/jobs.js";
@@ -122,6 +122,52 @@ describe("the stores selected outside src/store/index.ts", () => {
     });
     expect(isGuardedStore(store)).toBe("checkpoints");
   });
+});
+
+/**
+ * **And every other Postgres store, by the name its log lines print.**
+ *
+ * The discovery test in section 2 reads the *source* for `= guardDbStore(`; this
+ * reads the **objects**, which is the only thing that can say a store really
+ * arrived wrapped, and it is the only place the seam names are written down as
+ * an assertion. They are not decoration: `guardDbStore` builds every diagnostic's
+ * `where` as `<seam>.<method>`, so `reader.loadArticle` is what somebody greps
+ * for, and a rename here is a rename of the log.
+ *
+ * Fifteen of these were wrapped at the *selection* in src/store/index.ts until
+ * 2026-09-03, which meant the guard depended on that one file remembering.
+ * `pgArticleReader` is the sharpest case: src/store/pg-shelf.ts imports it
+ * directly and never goes near index.ts.
+ *
+ * Imported one module at a time rather than through src/store/index.ts, which
+ * would drag in the filesystem store and half the app for no gain. No database:
+ * every one of these calls `getDb()` inside its methods.
+ */
+describe("every Postgres store, asked for the seam it was guarded under", () => {
+  const seams: ReadonlyArray<readonly [string, string, string]> = [
+    ["../src/store/pg.js", "pgArticleReader", "reader"],
+    ["../src/store/pg-chat.js", "pgChatStore", "chat"],
+    ["../src/store/pg-searches.js", "pgSearchStore", "searches"],
+    ["../src/store/pg-comments.js", "pgCommentStore", "comments"],
+    ["../src/store/pg-shelf.js", "pgShelfStore", "shelf"],
+    ["../src/store/pg-shelf.js", "pgLibrarySearch", "library"],
+    ["../src/store/pg-reader.js", "pgReaderStore", "reader-profile"],
+    ["../src/store/pg-source.js", "pgSourceStore", "source"],
+    ["../src/store/pg-referee-criteria.js", "pgRefereeCriteriaStore", "referee-criteria"],
+    ["../src/store/pg-referee-claims.js", "pgRefereeClaimsStore", "referee-claims"],
+    ["../src/store/pg-lookups.js", "pgGlossaryLookupStore", "glossary-lookup"],
+    ["../src/store/pg-admin.js", "pgAdminStore", "admin"],
+    ["../src/store/pg-visibility.js", "pgVisibilityStore", "visibility"],
+    ["../src/store/pg-feedback.js", "pgFeedbackStore", "feedback"],
+    ["../src/store/realtime-sessions-pg.js", "pgRealtimeSessionStore", "realtime-sessions"],
+  ];
+
+  for (const [module, name, seam] of seams) {
+    it(`${name} is guarded as "${seam}"`, async () => {
+      const exports = (await import(module)) as Record<string, unknown>;
+      expect(isGuardedStore(exports[name])).toBe(seam);
+    });
+  }
 });
 
 /* --------------------------------------------------- 2. the static guard -- */
@@ -246,57 +292,90 @@ describe("no Postgres store is selected without a guard", () => {
    */
   it("and it really did find the guarded exports", async () => {
     const guarded = await guardedAtExport();
-    /* `pgCommentStore` joined the list on 2026-09-03 —
-       docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md's first
-       recommendation, which that landing recorded and did not make. It is here
-       for the reason the other two are: a wrapper a test can import its way
-       around is a wrapper the tests do not cover. */
-    expect([...guarded].sort()).toEqual(["pgCommentStore", "pgJobStore", "pgUploadStore"]);
+    /* **Eighteen, written out.** It was two until 2026-09-03 — the two stores
+       from the accident above — while db-errors.ts and docs/project/database.md
+       both said *every* Postgres store was wrapped at its export. The other
+       fifteen were wrapped at the selection in src/store/index.ts instead, so
+       the sentence was true of two and the list said so. It is now true of all
+       of them, and the list is the thing that says which.
+
+       Spelt out rather than counted, for the reason the docstring above gives:
+       an empty set vouches for nobody, and so does a length. A store that
+       stops being guarded has to delete its own name from here, which is a
+       line a reviewer sees. */
+    expect([...guarded].sort()).toEqual([
+      "pgAdminStore",
+      "pgArticleReader",
+      "pgChatStore",
+      "pgCommentStore",
+      "pgFeedbackStore",
+      "pgGlossaryLookupStore",
+      "pgGlossaryStore",
+      "pgJobStore",
+      "pgLibrarySearch",
+      "pgReaderStore",
+      "pgRealtimeSessionStore",
+      "pgRefereeClaimsStore",
+      "pgRefereeCriteriaStore",
+      "pgSearchStore",
+      "pgShelfStore",
+      "pgSourceStore",
+      "pgUploadStore",
+      "pgVisibilityStore",
+    ]);
   });
 
   /**
-   * **And nothing wraps one of them a second time.**
+   * **The hole the list above cannot see, and it was open within an hour.**
    *
-   * A redundancy check now rather than a safety one, and the difference is
-   * worth stating. Until 2026-09-03 a second wrapper was actively harmful: it
-   * downgraded a connection blip from *"try again in a few seconds"* to *"a
-   * bug"* and took the Retry button off the reader's card — the measurement is
-   * in src/store/db-errors.ts § Wrapping a wrapped store is a no-op, and
-   * section 4 below asserts the identity that retired it. So `guardDbStore` is
-   * idempotent now and a double wrap costs nothing at runtime. What it still
-   * means is that whoever wrote it did
-   * not know the store guards itself at its own export, and the `what` name
-   * they chose will never appear in a log line. Cheap to catch, so caught.
+   * An exact list catches a store that *stops* being guarded — its name has to
+   * be deleted, where a reviewer sees it. It cannot catch a store that **never
+   * was**, because a new adapter simply is not in the list and the assertion
+   * goes on passing. That is a guard agreeing with the bug.
    *
-   * **What a regex can and cannot see.** It reads the second argument as
-   * written, so it catches the literal form — somebody wrapping
-   * `pgCommentStore` (or the job or upload store) at a selection site, the way
-   * every other Postgres store there is wrapped. It cannot follow a store that
-   * arrives as a variable: `guarded()` in src/store/index.ts is
-   * `guardDbStore(what, pg)`, and all this can record of it is the parameter
-   * name. That indirection is exactly what the wrapper's own idempotence is
-   * for, which is why it is safe for this scan to be the shallow half.
+   * It is not hypothetical. `pgGlossaryStore` (src/store/pg-glossary.ts) landed
+   * on `dev` from another worktree on 2026-09-03, minutes after the fifteen were
+   * moved, wrapped at its *selection* in src/store/index.ts and not at its
+   * export — the exact arrangement docs/project/database.md had just stopped
+   * describing. Everything above stayed green.
+   *
+   * So this asks the question from the other end: **every `export const pgX`
+   * under `src/store/` is guarded at its export, or is one of two exceptions
+   * that says here why.** Discovery is by shape rather than by list, so a
+   * sixteenth adapter joins the check by being written.
    */
-  it("and nobody wraps an already-guarded store a second time", async () => {
+  it("so every exported Postgres store is guarded at its export, or declared here", async () => {
+    /* The two that are deliberately not, each for a reason in its own file. */
+    const EXCEPTIONS = new Map([
+      [
+        "pgCostStore",
+        "guarded in the leaf src/store/ai-calls.ts, which is where the ledger is selected — " +
+          "index.ts cannot see it without closing an import cycle",
+      ],
+      [
+        "pgPublicReader",
+        "scrubs its own, deliberately and more narrowly, because its import graph is closed " +
+          "and walked by tests/public-imports.test.ts",
+      ],
+    ]);
+
     const guarded = await guardedAtExport();
-    const wrapped: string[] = [];
+    const exported: string[] = [];
     for (const file of await sourcesUnder(root)) {
       const code = strip(await readFile(file, "utf8"));
-      /* The name is either a string literal — every call but one — or an
-         identifier, which is `guardDbStore(what, pg)` in src/store/index.ts.
-         Both are matched so that the count below is of *every* call site: a
-         pattern that quietly stopped seeing one form is the way this test would
-         come to vouch for a tree it had never read. */
-      for (const m of code.matchAll(
-        /guardDbStore\(\s*(?:["'][^"']*["']|[A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)/g,
-      )) {
-        if (m[1]) wrapped.push(`${file.slice(root.length)}: ${m[1]}`);
+      for (const m of code.matchAll(/export\s+const\s+(pg[A-Z][\w$]*)/g)) {
+        if (m[1]) exported.push(m[1]);
       }
     }
-    /* The collector's own alarm — a regex that matched nothing would vouch for
-       every double-wrap in the tree. docs/reusable/silent-success.md. */
-    expect(wrapped.length).toBeGreaterThan(3);
-    expect(wrapped.filter((w) => guarded.has(w.split(": ")[1] ?? ""))).toEqual([]);
+
+    /* The control. A regex that found nothing would leave `unguarded` empty and
+       vouch for every store in the repo — the same failure this whole file is
+       about. Twenty exported adapters as of 2026-09-03; the floor is deliberately
+       loose, because the exact number is the thing that keeps changing. */
+    expect(exported.length).toBeGreaterThan(15);
+
+    const unguarded = exported.filter((n) => !guarded.has(n) && !EXCEPTIONS.has(n)).sort();
+    expect(unguarded).toEqual([]);
   });
 });
 
@@ -384,6 +463,34 @@ describe("the errors the guard must not eat", () => {
     expect((err as Error).message).toContain("missing arc");
   });
 
+  /**
+   * **A fenced write that arrived without its fence, and the reason it is here.**
+   *
+   * `SearchStore.finish`, `CommentStore.patch`, `ChatStore.finish` and
+   * `RefereeCriteriaStore.finish` each refuse one, and until 2026-09-03 all four
+   * threw a bare `Error`. Through `src/store/index.ts` the store was already
+   * guarded, so in production the refusal has always read *"this app asked its
+   * database for something it would not do"* — which drops the entire content of
+   * it, namely **what the caller forgot**. The two suites covering it passed
+   * because they import the adapter directly, back when the adapter's export was
+   * unguarded: coverage that existed and proved nothing, exactly as in
+   * docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md.
+   *
+   * Guarding all fifteen at their exports is what made it visible. This test is
+   * the cheap pin, and it needs no database.
+   */
+  it("lets a missing attempt through, naming what the caller forgot", async () => {
+    const err = await throwing(new MissingAttempt("SearchStore.finish", "begin()"))
+      .go()
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(MissingAttempt);
+    expect((err as Error).message).toContain("needs the attempt that begin() returned");
+    /* **And no slug in it**, which is what lets it onto the allowlist at all:
+       src/store/db-errors.ts refuses any candidate whose message can carry a
+       URL, and a slug is a URL path segment derived from a title. */
+    expect((err as Error).message).not.toMatch(/"[^"]*"/);
+  });
+
   /** The one that was already on the list, kept honest. */
   it("lets a chat conflict through as itself", async () => {
     const err = await throwing(new ChatConflict("thread-1"))
@@ -420,66 +527,5 @@ describe("the errors the guard must not eat", () => {
       .go()
       .catch((e: unknown) => e)) as Error;
     expect(err.message).toBe("No such article");
-  });
-});
-
-/* ------------------------------- 4. wrapped at the export, and only once -- */
-
-describe("the comment store, which the postmortem asked for and did not get", () => {
-  /**
-   * `docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md`'s **first**
-   * recommendation, self-labelled *"Not done here"* and done on 2026-09-03.
-   *
-   * Production was never wrong about it — src/store/index.ts has wrapped this
-   * store at the composition root since 2026-08-26, `CommentIdTaken` carries a
-   * `status`, and door 1 of `mayPassThrough` lets it out. What was wrong is
-   * that every test importing `pgCommentStore` got the raw object, so the four
-   * `toBeInstanceOf(CommentIdTaken)` assertions in tests/store-comments.test.ts
-   * were evidence about a code path nothing serves. This is the assertion that
-   * they are not, again.
-   */
-  it("is guarded at its own export", async () => {
-    const { pgCommentStore } = await import("../src/store/pg-comments.js");
-    expect(isGuardedStore(pgCommentStore)).toBe("comments");
-  });
-
-  /**
-   * **Wrapping a wrapped store is a no-op, because `guardDbStore` makes it one.**
-   *
-   * It hands back an already-branded store unchanged, and this is the assertion
-   * that it still does. Not tidiness: until 2026-09-03 a second wrapper quietly
-   * changed what the reader was told. `scrubDbError` copies a SQLSTATE onto the
-   * error it returns and has nothing to copy an **errno** onto, so on a second
-   * pass an `ECONNRESET` stopped answering `isTransient` and `STORAGE_BUSY`
-   * ("wait a few seconds and try again") became `STORAGE_FAILED` ("a bug, and
-   * trying again will not help") — which src/jobs.ts persists as the
-   * `retry`/`bug` failure kind, and which is the Retry button on the reader's
-   * card. SQLSTATE failures survived a second pass because the code *is*
-   * copied, which is how probing the obvious case talks you into believing a
-   * second wrapper is free.
-   *
-   * The identity check is the one that cannot be satisfied by accident: the
-   * `STORAGE_BUSY` assertion alone would also pass if somebody taught
-   * `scrubDbError` to carry an errno through, and the invariant here is that
-   * there is only ever one wrapper. The *name* is the first wrapper's — a
-   * second `guardDbStore("something-else", store)` does not rename it, which is
-   * the right way round: the guard travels with the store from its own export,
-   * and a composition root's label for it is the later, weaker claim.
-   */
-  it("and wrapping it again gives the same object back, blip still transient", async () => {
-    const raw = {
-      go: async (): Promise<never> => {
-        throw Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" });
-      },
-    };
-
-    const once = guardDbStore("probe", raw);
-    const twice = guardDbStore("composition-root", once);
-    expect(twice).toBe(once);
-    expect(isGuardedStore(twice)).toBe("probe");
-
-    /* The reason the identity matters, stated as the reader's sentence. */
-    const err = (await twice.go().catch((e: unknown) => e)) as Error;
-    expect(err.message).toBe(STORAGE_BUSY.message);
   });
 });

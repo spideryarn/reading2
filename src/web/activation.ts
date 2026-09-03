@@ -106,16 +106,20 @@ import type { StepName } from "../types.js";
 import { jobEngine } from "./jobEngine.js";
 
 /**
- * The five surfaces a press can start.
+ * The six surfaces a press can start.
  *
  * Spelt as `StepName`s because that is what they are — the step each panel's
  * job runs — which is also what `beginAutoAttempt` is keyed on. Naming them
  * twice, once for the token and once for the guard, is how the two would come
  * to disagree.
+ *
+ * **Two of them are chips inside Diagram rather than modes**, and they are the
+ * two that spend the most: `sketch` and `illustrated`. See `MODE_TARGET` below
+ * for why the mode itself arms nothing.
  */
 export type AutoRunTarget = Extract<
   StepName,
-  "glossary" | "ideas" | "quotes" | "timeline" | "sketch"
+  "glossary" | "ideas" | "quotes" | "timeline" | "sketch" | "illustrated"
 >;
 
 /**
@@ -123,7 +127,9 @@ export type AutoRunTarget = Extract<
  *
  * **`diagram` is not here**, and that is right: opening Diagram costs nothing
  * and lands on a picture drawn from the tree. The Sketch chip inside it arms
- * `sketch` itself, because it is the chip that is the gesture.
+ * `sketch` itself, because it is the chip that is the gesture — and the
+ * Illustrated chip beside it arms `illustrated` for the same reason and a
+ * dearer one: $0.27–$0.40 a press.
  *
  * Everything else in `MODES` is either free (Plain, Hierarchy, Outline,
  * Summary — they read the tree that is already there) or stores nothing at all

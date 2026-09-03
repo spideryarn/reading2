@@ -650,9 +650,18 @@ because the cache is marked *per job*, and there is no entry for a later job to 
       previous instance of this class created this one. Invisible to every check, and three things
       were nominally watching — `tests/article-cache-group.test.ts` **asserts the bug as correct**,
       `evals/prompt-caching.ts` prints the instruction that would have found it, and
-      `evals/cost/report.ts` states the mechanism and applies it to the wrong case. **Fix
-      described, deliberately not applied — Greg's call**; worth $0.1406 of $0.7558 (18.6%), which
-      is 3.6× what deleting the optimisation would save.
+      `evals/cost/report.ts` states the mechanism and applies it to the wrong case. Worth $0.1406 of
+      $0.7558 (18.6%), which is 3.6× what deleting the optimisation would save.
+
+      **Fixed 2026-09-03**, after Fable talked the design out of the `status === "done"` filter this
+      plan's postmortem first recommended, and verified on a paid `arc,tweets` run before being
+      believed: predicted $0.045770, measured $0.045756 on the input side. `cacheArticleForStep`
+      replaces the inline `slice(i + 1)`; a generated both-sides test was watched failing against the
+      old predicate first; and `checkBatchedDraw` gives the batched phase the rule it never had —
+      stated in money rather than in `sharesArticleCache`, because a check built on the predicate
+      would have passed on the broken code. One qualification the percentage hides: the reading view
+      enqueues one step per press, so production almost certainly never emitted this shape, and the
+      value is forward-looking.
 
 #### Code review, GPT Sol: *"not ready for the paid sweep"* — no P0s, five P1s
 
@@ -744,12 +753,118 @@ a decision. The report must say **561 words**, not "about a thousand".
       are worth doing now because neither trades against quality: **fix the article-cache
       breakpoint** (18.6% of a batched job, and a bug rather than a tuning) and **bound reasoning
       on the tasks that hit the ceiling** ($0.4758 of this sweep, 6.5%, billed in full for nothing).
+
+### Stage: Act on candidate 1 — the article-cache breakpoint ✅ 2026-09-03
+
+Not in the original plan; added when the sweep found a live bug rather than only a number. Design
+arbitrated by Fable, code reviewed by GPT Sol.
+
+- [x] `cacheArticleForStep(steps, index)` in [`src/pipeline.ts`](../../src/pipeline.ts) — mark for
+      any *other* group member in the job, either direction, filtered by position not by name. The
+      inline `slice(i + 1)` at the [`src/jobs.ts`](../../src/jobs.ts) call site is gone, which is
+      the point: it was untestable without a job, a store session and a claim.
+- [x] **No `status === "done"` filter.** Fable's argument, accepted: `done` doesn't mean a live
+      entry (a resumed job has `done` steps whose entries expired), the filter would depend on
+      `runStep` mutating `job.steps` as it walks, and the asymmetry — 0.25× for a marker onto a cold
+      prefix against 0.9× for one withheld from a warm one — says guess *yes*. Marking
+      **unconditionally** is left untaken: it breaks even above a ~22% within-TTL hit rate nobody has
+      measured.
+- [x] Both-sides test, generated from the tables, **watched failing against the old predicate
+      first** — four failures, every one a reader. The two tests that asserted the bug as correct
+      are gone.
+- [x] `checkBatchedDraw` in [`evals/cost/report.ts`](../../evals/cost/report.ts) — the batched phase
+      had no rule at all. Stated in money (*every write must be followed by a read of about that
+      size*) rather than in `sharesArticleCache`, because a check built on the predicate would have
+      passed on the broken code. Fires on all three real pre-fix result files.
+- [x] `tests/article-cache-call-site.test.ts` — the test that would actually have gone red on
+      `24335207`. Sol showed the blunt way that the predicate tests could not: reverting *only*
+      `runStep` left all 154 focused tests green. This one runs a real two-mode job through the real
+      walk with a recording registry and reads `StepContext.cacheArticle` back — `[true, false]`
+      against the old call site.
+- [x] Verified on paid runs before being believed, which the three previous instances of this class
+      were not. **All three groups**, on Sol's closing point that one pair proves the structural fix
+      and not that the other prefixes match: every reader now reads exactly its writer's prefix
+      (25,428 / 25,428 / 27,234), for the **$0.1406 predicted before any of it ran**. The gate fires
+      on all three pre-fix result files and passes all three post-fix ones.
+- [ ] **Not built, and stated rather than skipped silently:** the per-stage request-shape test
+      (postmortem item 3 — `cacheArticle: true` ⇒ exactly one `cache_control`, `false` ⇒ none). It is
+      the one item that explicitly would *not* have caught this bug, both directions are already
+      measured for arc/tweets, and it is eight stages × real fixtures.
       The big one — **effort on the five expensive modes, which are 72% of a long article and where
       reasoning is 36% of all spend** — is deliberately *not* recommended on cost evidence alone:
       `effort-vs-quality` covers `arc` and `glossary`, neither of which is on that list. Two
       candidates are already done, one of them by a peer during this run.
 - [x] Turn the appendix candidates into a recommendation ranked by measured saving × ease, each
       with its tradeoff named; decisions to Greg.
+
+### Stage: Act on candidate 3 — effort on hierarchy structure ✅ 2026-09-03 (answered, not settled)
+
+Also not in the original plan. The stage above declined to recommend an effort change on cost
+evidence alone; this is the measurement that declining asked for, taken on the one stage of the five
+where a quality harness already existed. Ideas from Fable and GPT Sol, result reviewed by Sol.
+Write-up: [hierarchy-effort-2026-09-03.md](../../evals/results/hierarchy-effort-2026-09-03.md).
+
+- [x] **The harness could not answer the question and nobody had noticed.**
+      `evals/hierarchy-structure/arms.ts` declared the incumbent at `effort: "high"` while
+      production has run `"medium"` since the max_tokens postmortem, so `smart-low` — the arm whose
+      declared purpose is to isolate the single variable `effort` — was answering high-vs-low. Fixed
+      by importing `PRODUCTION_EFFORT` from [`src/hierarchy.ts`](../../src/hierarchy.ts), so the
+      drift is unrepresentable rather than documented; pinned behind that by
+      `tests/hierarchy-eval-incumbent-parity.test.ts`, seen red first.
+- [x] **A paid call reporting $0 now fails.** `assertCallAccounted`'s own docstring names "a cost
+      that lands as zero, silently" and then guarded `null`. Three `cheap-high` calls booked ~13k
+      output tokens and reported $0.00; `verify-costs.ts` agreed, because $0 ≈ $0. Cause is
+      `is_byok: true` — the quick tier runs on our own OpenAI key, so OpenRouter routes it and does
+      not bill it. `evals/cost` already handled this (its § "PDF extraction is BYOK"); its sibling
+      did not.
+- [x] A long fixture that is actually long: the corpus on disk was stale (`constitution` is 84
+      blocks here against the manifest's 360), so `gwern.html` went through stages 2–3 into
+      `data/gwern-scaling-long` — 184 blocks, 16,846 words, and `incumbent` prices at $0.21/draw
+      against the cost report's $0.2138 median, so the two harnesses agree.
+- [x] 10 `medium` draws and 8 `low`, $3.88 over 31 calls, every one reconciled against the
+      provider's records. **Provisionally keep `medium`:** `low` is 36% cheaper and 47% faster, its
+      trees need 2.6× the boundary repair, and it dropped a proposed section in 3 of 7 draws against
+      0 of 10.
+- [x] **Two of the write-up's own conclusions withdrawn inside it**, both found by Sol's review.
+      The causal story ("`low` invents its own boundaries") was unsound — `sourceHeadingShare`
+      counts all internal nodes rather than depth-1 ones, and `l1OnHeadings` is 96.7% against 95.8%,
+      so `low`'s extra parts *do* start on author headings. The length threshold was confounded: the
+      short and long runs use different articles.
+- [x] The noise-floor method downgraded from a discriminator to an informal comparison, for the
+      reason Sol gave: `|mean(incumbent) − mean(incumbent-repeat)|` is one realisation of a
+      difference whose expected value is zero.
+- [ ] **Not done, and it is the cheapest thing left:** a blind comparison of the trees already saved
+      under each run's `trees/`. Every measure taken is mechanical, no person has looked at a tree,
+      and this is the only step that can turn repair counts into a claim about quality. Costs
+      attention, not money.
+- [ ] Not done: replication on more long articles, and a re-run after the repair work below, which
+      raises `low`'s floor more than `medium`'s.
+
+### Stage (follow-up plan, not this one): hierarchy reliability and efficiency
+
+Ideas gathered 2026-09-03 from Fable and GPT Sol independently; neither built. The two agreed on
+what to reject, which is most of the value: **caching is worth roughly nothing here** (one call per
+article, and the modes run past the TTL), **chunking is a scale design not a cost lever** (186
+blocks against a ~1,976 ceiling), and **the two-pass split should stay**.
+
+- [ ] Make an unresolvable child *end* non-fatal. `planChildRanges` derives every kept child's end
+      from the next sibling's start, so for a child whose start resolves the model's end contributes
+      nothing to its range — and one bad end voids the whole sibling set. Note this **reverses a
+      written decision** (`src/hierarchy.ts` argues the diagnostic is worth more), so it needs Greg.
+- [ ] Checkpoint the validated structure before the label fan-out. Today a label-stage failure
+      re-buys a $0.21 structure *and* invalidates every label checkpoint already paid for, because
+      the new tree has different sections.
+- [ ] `missedHeadingBoundaries` as loud telemetry. The prompt calls every authored heading a hard
+      boundary; the invariants only check the converse, so a tree can merge across one and score
+      valid.
+- [ ] **Sol's biggest cost idea, still unpriced:** the label pass runs on `CAPABLE_MODEL`
+      ([`src/labels.ts`](../../src/labels.ts)) and emits *zero* reasoning tokens. Arithmetic says
+      ~$0.115 → ~$0.012. Needs the Model-arms stage below first — Luna cannot ride the Messages
+      wire — and needs the BYOK fix above, or the bakeoff will score Luna free.
+- [ ] Greg's idea, worth keeping as the target wire format: **NDJSON plus start ordinals**, one line
+      per node. Truncation has bitten this stage three times and today discards the whole paid
+      response; complete lines would survive. Sequence it *after* the measurements, since it
+      invalidates every eval baseline.
 
 ### Stage (follow-up plan, not this one): Model arms
 

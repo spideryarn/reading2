@@ -346,20 +346,14 @@ Three rules that outrank convenience, all learned the expensive way:
 - **A guard belongs on the thing, not on the place.** `guardDbStore` was applied at every selection
   in `src/store/index.ts` and at none of the three outside it, so on 2026-08-27 the shelf rendered a
   failed `select … from "spideryarn"."jobs"` — its columns, its `where` and the owner's uuid — in red
-  on the homepage. [`tests/store-guarded.test.ts`](../../tests/store-guarded.test.ts) now asks the
-  objects rather than the source. See
+  on the homepage. Every Postgres store the owner's routes use is now wrapped **at its export**, so
+  there is no unguarded spelling left to import, and
+  [`tests/store-guarded.test.ts`](../../tests/store-guarded.test.ts) asks the objects rather than the
+  source. **The public reader is the one exception and is not an oversight**:
+  [`src/store/public-reader.ts`](../../src/store/public-reader.ts) scrubs its own, deliberately and
+  more narrowly, because its import graph is closed and walked by
+  [`tests/public-imports.test.ts`](../../tests/public-imports.test.ts). See
   [the postmortem](../postmortems/260827c-unguarded-job-store-and-the-migration-that-migrated-the-laptop.md).
-  **Three stores are wrapped at their export** — jobs, uploads and, since 2026-09-03, comments — and
-  those are the ones with no unguarded spelling left to import. The rest are still wrapped at the
-  selection in `src/store/index.ts`, which is safe for production and is *not* safe for the tests: a
-  test importing `pgShelfStore` gets an object nothing serves, which is how a 409 and a 404 came to
-  arrive as 500s for four days with two green assertions about them
-  ([260901d](../postmortems/260901d-a-409-and-a-404-arrived-as-500.md)). The sentence that used to be
-  here said all of them were guarded at their export; it was wrong, and it was wrong in the direction
-  that reads as handled. **Moving the rest is additive**, because `guardDbStore` returns an
-  already-guarded store unchanged: a store may be wrapped at its export *and* selected at a root that
-  wraps what it selects. That idempotence is not cosmetic — a second pass used to turn a connection
-  blip's *"try again"* into *"a bug"*, since a scrubbed error carries a SQLSTATE but no errno.
 
 Everything below is still planned, not built. The whole design — the schema, the reasoning, and the things that break quietly —
 is in [260825f-postgres-migration.md](../plans/260825f-postgres-migration.md). The parts worth knowing before you
@@ -1144,14 +1138,14 @@ files — which is what makes it worth a section rather than a comment.
 The trap is that the two places pull in **opposite directions**, so there is no single right answer
 to copy.
 
-**As a hash input, the two spellings must collapse.** `hashBlocks`
-([`src/source-hash.ts:94-105`](../../src/source-hash.ts)) uses loose `!= null`, which catches `null`
+**As a hash input, the two spellings must collapse.** `src/source-hash.ts` § `hashBlocks` uses
+loose `!= null`, which catches `null`
 and `undefined` in one test, and then `?? ""` so both normalise to the same bytes. They have to: the
 same article read from either store must hash identically, or every `sourceHash` comparison in the
 pipeline says "the text changed" when nothing did.
 
-**As a presence signal, the two spellings must not collapse.** `publicArticle`
-([`src/public/dto.ts:337-340`](../../src/public/dto.ts)) uses strict `!== null`, and its comment
+**As a presence signal, the two spellings must not collapse.** `src/public/dto.ts` §
+`publicArticle` uses strict `!== null`, and its comment
 explains why truthiness would be worse — an artefact is always truthy, so the day one can be falsy
 while present, truthiness would report it as never built. The whole payload rests on
 present-versus-absent.

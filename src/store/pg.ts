@@ -76,7 +76,6 @@ import {
   PROMPT_VERSION as ILLUSTRATED_PROMPT_VERSION,
 } from "../illustrated.js";
 import type { Illustrated } from "../illustrated-plate.js";
-import { isSlug } from "../ingest.js";
 import { deriveLibraryScalars, headingTitleOf, type LibraryScalars } from "../library-scalars.js";
 import { log } from "../log.js";
 import { CAPABLE_MODEL } from "../models.js";
@@ -125,6 +124,7 @@ import type {
 import { metaRawSha256, sameStamp } from "./artifacts.js";
 import type { ArtifactMap } from "./artifacts.js";
 import type { ArticleReader, RawSource } from "./contracts.js";
+import { guardDbStore } from "./db-errors.js";
 import { postgresBlobStore } from "./blobs.js";
 import { readRawDocument } from "./raw-document.js";
 import { pgReaderStore } from "./pg-reader.js";
@@ -134,11 +134,14 @@ export function notFound(slug: string): Error {
   return Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
 }
 
-/** A slug that is about to reach a query, or a 400 — the same guard src/api.ts keeps. */
-export function requireSlug(slug: string): void {
-  if (isSlug(slug)) return;
-  throw Object.assign(new Error(`Not a slug: ${JSON.stringify(slug)}`), { status: 400 });
-}
+/* **Moved to a leaf, and re-exported from here so nothing else changed** — the
+   same move, for the same reason, as `ownedSlug` below. `pg.ts` imports
+   `src/api.ts`, so a store file that wanted only this guard would inherit the
+   whole read layer; [require-slug.ts](require-slug.ts) imports `isSlug` and
+   nothing else. It has a dozen callers here, so it is re-exported rather than
+   re-imported at each of them. */
+export { requireSlug } from "./require-slug.js";
+import { requireSlug } from "./require-slug.js";
 
 /**
  * The four shelf columns, as the shape `describeArticle` wants.
@@ -695,10 +698,12 @@ const REVISION_READ_POLICY: Record<
   /* **The library's cached scalars, and the library now reads them.**
      They are written by `deriveLibraryScalars` (src/library-scalars.ts) inside
      the same transaction that writes the blocks and the tree they describe —
-     by `publishRevision`, and by the importer's in-place update — so they
-     cannot describe text that is no longer there. That atomicity, not
-     immutability, is the invariant: GPT Sol's second finding on the plan showed
-     the importer updates a published revision in place.
+     by `publishRevision` — so they cannot describe text that is no longer
+     there. That atomicity, not immutability, is the invariant.
+
+     This used to name "the importer's in-place update" as the second writer,
+     and the importer was deleted on 2026-09-01. `publishRevision` is the only
+     one left. docs/plans/260903e-glossary-delete-in-postgres.md.
 
      Until 2026-08-28 no read selected them and the shelf recomputed all five
      from every block row of every article, once per homepage load. */
@@ -2120,7 +2125,7 @@ export function shareableArtefacts(revision: {
  * The narrower inferred type buys callers nothing here: every method already
  * returns exactly what the interface declares.
  */
-export const pgArticleReader: ArticleReader = {
+const rawPgArticleReader: ArticleReader = {
   /**
    * **The raw document, out of the object store the revision names.**
    *
@@ -2971,3 +2976,6 @@ export const pgArticleReader: ArticleReader = {
     };
   },
 };
+
+/** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
+export const pgArticleReader: ArticleReader = guardDbStore("reader", rawPgArticleReader);

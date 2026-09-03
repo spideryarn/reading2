@@ -52,6 +52,7 @@ import { articleRevisions, articles } from "../db/schema.js";
 import { canonicalKey, MAX_UPLOAD_BYTES } from "../source.js";
 import { postgresBlobStore, type RawSourceStore } from "./blobs.js";
 import type { SourcePdf, SourceStore } from "./contracts.js";
+import { guardDbStore } from "./db-errors.js";
 import { ownedSlug } from "./owned-slug.js";
 
 /**
@@ -185,5 +186,9 @@ export function createPgSourceStore(sources: () => RawSourceStore = matchingBuck
   };
 }
 
-/** The one the server uses: the bucket that matches `DATABASE_URL`. */
-export const pgSourceStore: SourceStore = createPgSourceStore();
+/**
+ * The one the server uses: the bucket that matches `DATABASE_URL`.
+ *
+ * Guarded where it is built, not where it is selected — src/store/db-errors.ts.
+ */
+export const pgSourceStore: SourceStore = guardDbStore("source", createPgSourceStore());

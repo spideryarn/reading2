@@ -95,6 +95,7 @@ import {
 import type { AdminUser } from "../admin.js";
 import type { OwnerId } from "../types.js";
 import type { AdminStore } from "./contracts.js";
+import { guardDbStore } from "./db-errors.js";
 import { projectMismatch } from "./blobs.js";
 import {
   listFeedbackAcrossOwners,
@@ -535,7 +536,7 @@ function accountSource(): ReturnType<typeof gotruePages> {
   return gotruePages(url, key);
 }
 
-export const pgAdminStore: AdminStore = {
+const rawPgAdminStore: AdminStore = {
   async listUsersAcrossOwners(): Promise<AdminUser[]> {
     const q = adminQueries(getDb());
 
@@ -605,3 +606,6 @@ export const pgAdminStore: AdminStore = {
   readFeedbackAcrossOwners,
   readFeedbackScreenshotAcrossOwners,
 };
+
+/** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
+export const pgAdminStore: AdminStore = guardDbStore("admin", rawPgAdminStore);

@@ -46,7 +46,7 @@ import { isSpideryarnId, mintUniqueId } from "../ids.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import type { Comment } from "../types.js";
-import type { CommentStore } from "./contracts.js";
+import { MissingAttempt, type CommentStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned } from "./pg.js";
@@ -581,19 +581,36 @@ const rawPgCommentStore: CommentStore = {
        to carry it through got the whole race back, with nothing anywhere
        reporting it — the reasoning `pgSearchStore.finish` sets out at length. */
     if (attempt === undefined) {
-      throw new Error(
-        `patch("${slug}") needs the attempt that beginAnswer() returned. ` +
-          "Without it a model call the sweep already buried can overwrite the retry.",
-      );
+      throw new MissingAttempt("CommentStore.patch", "beginAnswer()");
     }
     /* **And the status has to be one this answer can end on.** The attempt is
        released below whatever the patch says, so a patch leaving the comment
        `pending` would strip the fence off a row still waiting for an answer,
        after which anybody's late write can land on it. */
     if (patch.status !== "done" && patch.status !== "error") {
-      throw new Error(
-        `patch("${slug}") must end an answer: status was ${JSON.stringify(patch.status)}, ` +
-          'expected "done" or "error".',
+      /* **`status`, so the guard lets the sentence through.** A fence violation
+         is a caller's bug that never reached the database, and its whole
+         content is which invariant broke — scrubbed, it arrives as *"this app
+         asked its database for something it would not do"*, which is a false
+         sentence about a real bug. Door 1 in src/store/db-errors.ts: a refusal
+         a route answers with a number carries the number, rather than this
+         file's name joining an allowlist. The class of bug is
+         docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md; it was
+         invisible here until the store was guarded at its export, because the
+         test that covers it imports this module directly.
+
+         **And the message names the method, not the slug.** A `status` is not a
+         licence to leak — db-errors.ts says so of `CommentIdTaken` — and a slug is
+         a URL path segment derived from a title, so it is exactly what that file
+         refuses to let across. Which article it was is in the request the log
+         already carries. Same shape as `MissingAttempt` in ./contracts.js, which
+         is the sibling refusal in this same family. */
+      throw Object.assign(
+        new Error(
+          `CommentStore.patch must end an answer: status was ${JSON.stringify(patch.status)}, ` +
+            'expected "done" or "error".',
+        ),
+        { status: 500 },
       );
     }
 
@@ -754,37 +771,5 @@ const rawPgCommentStore: CommentStore = {
   },
 };
 
-/**
- * The comment store, with nothing a database said able to leave it.
- *
- * Wrapped **here** rather than only at the selection in src/store/index.ts,
- * which is where it was — the third store to make this move, after
- * src/store/pg-jobs.ts and src/store/pg-uploads.ts, and the one that had the
- * incident. `docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md` names
- * it as the highest-value change on its list and did not make it.
- *
- * **The value is what the tests can see, not what production does.** The
- * selection in index.ts has wrapped this store since 2026-08-26, so nothing
- * about a live request changes here. What changes is that
- * tests/store-comments.test.ts, tests/comment-sweep.test.ts and the parity
- * suites import *this* object — so their four `toBeInstanceOf(CommentIdTaken)`
- * assertions are now about the object production runs rather than about a raw
- * store nothing serves. That is the whole of the postmortem's argument: a
- * wrapper a test can import its way around is a wrapper the tests do not cover,
- * and the 409 and the 404 that arrived as 500s were green in two files for four
- * days for exactly that reason.
- *
- * **So this object reaches `guarded()` in src/store/index.ts already wrapped,
- * and `guardDbStore` hands it straight back.** That idempotence is not a
- * nicety: a second pass produces a scrubbed error carrying no errno, so a
- * connection failure that `TRANSIENT_ERRNOS` had classified `STORAGE_BUSY`
- * ("wait a few seconds and try again") comes back out as `STORAGE_FAILED` ("a
- * bug; trying again will not help"), which src/jobs.ts persists as `bug` and
- * which takes the Retry button off the card. Measured, not reasoned — the
- * SQLSTATE cases survive a second pass because the code is copied onto the
- * scrubbed error and the errno ones do not. The invariant lives with the
- * wrapper (src/store/db-errors.ts § Wrapping a wrapped store is a no-op), where
- * it covers every caller rather than one composition root; pinned by
- * tests/store-guarded.test.ts § 4.
- */
+/** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
 export const pgCommentStore: CommentStore = guardDbStore("comments", rawPgCommentStore);

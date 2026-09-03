@@ -49,7 +49,8 @@
  * is: **an allowlist of what may pass through unchanged**, and everything else
  * is translated.
  *
- * Four things pass:
+ * Six things pass — the count has been wrong here before, so it is worth
+ * recounting when you add one:
  *
  * 1. **An error carrying a numeric `status`.** That is this codebase's mark for
  *    "I chose this failure and I chose its wording" — a 404 for a slug with no
@@ -86,15 +87,19 @@
  *    do"*. That is a false sentence about a real bug, and it drops the half
  *    that says which artefact was missing — which is the whole content of the
  *    refusal, and the thing whoever is converting a stage needs.
+ * 6. **An error this file already scrubbed**, arriving through a second guard
+ *    because one guarded store called another. It is the only entry that needs
+ *    no judgement — we wrote its message — and the reasoning is at `SCRUBBED`
+ *    below.
  *
- * What the four have in common is the test to apply to a fifth: the type is
- * **closed** and its message is built from values *we* chose. `StaleAttemptError`
- * interpolates a job id, which is a uuid we minted, and `IllegalTransition` two
- * members of a five-literal union. The moment a candidate's
- * message can contain a URL, a title, a quote or a model's answer, it does not
- * belong on this list however well-behaved its class is.
+ * What the closed classes have in common is the test to apply to the next one:
+ * the type is **closed** and its message is built from values *we* chose.
+ * `StaleAttemptError` interpolates a job id, which is a uuid we minted, and
+ * `IllegalTransition` two members of a five-literal union. The moment a
+ * candidate's message can contain a URL, a title, a quote or a model's answer,
+ * it does not belong on this list however well-behaved its class is.
  *
- * ## Adding a sixth: don't. Give the class a `status` instead.
+ * ## Adding another closed class: don't. Give it a `status` instead.
  *
  * Door 1 is the one to use. A refusal a *route* answers with a number should
  * carry that number as `readonly status`, the way `PublishRefused`,
@@ -112,6 +117,20 @@
  * docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md is why. The same
  * message test applies either way: a `status` is not a licence to leak, and
  * tests/db-error-scrub.test.ts pins that for both of them.
+ *
+ * **It happened a third time on 2026-09-03**, and the trigger is worth naming
+ * because it will keep recurring: guarding the remaining fifteen Postgres stores
+ * at their *exports* meant that tests importing an adapter directly stopped
+ * seeing raw errors. They had been green about a path production never takes —
+ * the route goes through `index.ts`, where the store was guarded all along. Four
+ * fenced `finish`/`patch` methods refusing a write with no attempt, and three
+ * refusing a patch that would not end the run, had therefore *always* reached the
+ * reader as *"this app asked its database for something it would not do"*.
+ * All seven now carry `status` and name the **method** rather than the slug —
+ * `MissingAttempt` (src/store/contracts.ts) and its three siblings in
+ * pg-searches.ts, pg-comments.ts and pg-referee-criteria.ts. The slug is dropped
+ * on purpose: it is a URL path segment derived from a title, and "a `status` is
+ * not a licence to leak" is the rule two paragraphs up.
  *
  * The cost is real and is worth saying out loud: a plain bug in a Postgres store
  * (a `TypeError`, say) now reaches the log without its message. **The stack
@@ -306,8 +325,42 @@ function framesOf(err: unknown): string | undefined {
   return at === -1 ? undefined : stack.slice(at);
 }
 
+/**
+ * **The mark on an error this file has already replaced.**
+ *
+ * A guarded store that calls another guarded store is an ordinary shape — the
+ * shelf store asks the article reader for a `LibraryEntry` (pg-shelf.ts §
+ * `entryFor`), and the reader asks the reader-profile store for the profile
+ * (pg.ts). Once every adapter is wrapped at its own export, one failed query
+ * crosses two *different* wrappers, and the early return in `guardDbStore` — an
+ * identity check on one object — cannot see that.
+ *
+ * Untreated, the second wrapper scrubs the first one's output: two
+ * `database call failed` lines for one rejected query, and the second has lost
+ * the `table` and the `routine` and reports `errorType: "StoreFailure"`, naming
+ * our own wrapper as the thing that failed. Measured, not reasoned about, with a
+ * non-uuid owner against the local database on 2026-09-03:
+ *
+ *     where: "reader.listArticles"  sqlstate: 22P02  routine: string_to_uuid
+ *     where: "shelf.patch"          sqlstate: 22P02  errorType: "StoreFailure"
+ *
+ * So an error this file produced is on the allowlist below. It is the one entry
+ * that needs no judgement: its message is a constant from src/messages.ts, its
+ * stack is frames only, and the SQLSTATE the routes read is already copied onto
+ * it. It is the same reasoning as the early return, applied at the other end —
+ * tests/store-guard-idempotent.test.ts holds both.
+ *
+ * A symbol rather than `err.name === "StoreFailure"`, because `name` is writable
+ * and a thrower could set it: this mark can only be put here.
+ */
+const SCRUBBED = Symbol.for("spideryarn.scrubbedDbError");
+
 /** May this error go out as it is? See the header — it is an allowlist. */
 function mayPassThrough(err: unknown): boolean {
+  /* Something this file already scrubbed, coming back through a second guard —
+     see `SCRUBBED` above. It is safe by construction and its diagnostic has
+     been written, so passing it keeps one failure to one log line. */
+  if (err !== null && typeof err === "object" && SCRUBBED in (err as object)) return true;
   if (err instanceof ChatConflict) return true;
   /* The checkpoint store refusing its own arguments — a bad key, the wrong
      slug, a value that will not serialise. None of these reached the database,
@@ -342,6 +395,9 @@ function scrubDbError(where: string, err: unknown): unknown {
 
   const scrubbed = new Error(failure.message);
   scrubbed.name = "StoreFailure";
+  /* Non-enumerable, so nothing that serialises an error — the log's own
+     `safeError`, a JSON response — can see it or carry it anywhere. */
+  Object.defineProperty(scrubbed, SCRUBBED, { value: true, enumerable: false });
   const frames = framesOf(err);
   if (frames) scrubbed.stack = `${scrubbed.name}: ${scrubbed.message}\n${frames}`;
   /* Only when it is a SQLSTATE. `err.code` on a `pg` connection failure can be
@@ -408,44 +464,47 @@ export function isGuardedStore(store: unknown): string | undefined {
  * what keeps the caller's types exact. The alternative is one wrapper per
  * store, which is five copies of the same six lines and five chances to forget.
  *
- * ## Wrapping a wrapped store is a no-op, and it has to be
+ * ## Wrapping an already-wrapped store hands the same object back
  *
- * A store now guards itself at its own export (`pgCommentStore`, `pgJobStore`,
- * `pgUploadStore`) *and* is selected at a composition root that wraps what it
- * selects, so the same object arrives here twice by ordinary means. A second
- * wrapper looks free and is not: `scrubDbError` copies a SQLSTATE onto the
- * error it hands back and has **nothing to copy an errno onto**, so on a second
- * pass an `ECONNRESET` or `ETIMEDOUT` stops matching `TRANSIENT_ERRNOS` — the
- * reader's `STORAGE_BUSY` (*wait a few seconds and try again*) becomes
- * `STORAGE_FAILED` (*a bug, and trying again will not help*), which src/jobs.ts
- * persists as `bug` and which takes the Retry button off a job that failed on a
- * connection blip. It logs the failure twice as well, the second time with every
- * diagnostic field empty.
+ * **And that is a rule with a bug behind it, not an optimisation.** Until
+ * 2026-09-03 this function wrapped whatever it was given, so a store guarded at
+ * both ends turned one rejected call into **two** `database call failed` lines:
+ * the inner one carrying the real SQLSTATE, table and constraint, and an outer
+ * one carrying none of them and reporting `errorType: "StoreFailure"` — a log
+ * line that says the database failed and names our own wrapper as the thing
+ * that failed. The caller-facing contract survived intact (the SQLSTATE is
+ * preserved through both layers, so the 404/409 mapping in
+ * docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md was never at
+ * risk), which is exactly what made it survive: nothing went red, and the
+ * damage was only to the diagnostics somebody would read while chasing
+ * something else.
  *
- * Measured on 2026-09-03, not reasoned: the SQLSTATE cases survive a second
- * pass because the code *is* copied; the errno cases do not. That asymmetry is
- * why probing the obvious case tells you double-wrapping is harmless.
+ * The docstring below the mark used to say *"so wrapping a wrapped store stays
+ * harmless"*. It meant only that the wrapper's own `Object.entries` loop cannot
+ * see the non-enumerable mark and so cannot copy it — and it was read as a
+ * general guarantee twice on the day
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * was written, once by that plan and once by a reviewer. It now says what it
+ * means.
  *
- * So the guard is idempotent here rather than at any one call site — GPT Sol's
- * review, which pointed out that a check in `guarded()` (src/store/index.ts)
- * protects one composition path and leaves every other caller able to
- * double-wrap. The alternative it rejected was teaching `scrubDbError` to carry
- * a raw errno through on `code`, which collides with the `ENOENT`/404 reading
- * `scrubDbError` above already warns about.
- * `tests/store-guarded.test.ts` § 4 asserts the identity.
- * docs/plans/260903e-sweep-recorded-rather-than-fixed-defects.md.
+ * **The inner name wins**, because it is the more specific one: a store guarded
+ * where it is built knows which adapter it is, and a store guarded again where
+ * it is selected only knows which seam asked for it.
+ * `tests/store-guard-idempotent.test.ts`.
  */
 export function guardDbStore<T extends object>(what: string, store: T): T {
-  /* Already wrapped — hand it straight back, keeping the *first* wrapper's
-     name. The guard travels with the store from its own export; a composition
-     root's label for the same object is the later and weaker claim. */
+  /* Already guarded — hand it straight back. See the header above: the second
+     wrapper does not change what the caller sees, only what the log says, and
+     what it says is wrong. */
   if (isGuardedStore(store) !== undefined) return store;
 
   const guarded: Record<string, unknown> = {};
-  /* The mark `isGuardedStore` reads, and the thing the line above asks for.
-     Non-enumerable so that it is invisible to `Object.entries` — including this
-     function's own loop — and to anything that copies or serialises a store. A
-     symbol rather than a string key for the same reason. */
+  /* The mark `isGuardedStore` reads. Non-enumerable so that nothing which walks
+     a store's properties — `Object.entries`, this function's own loop included
+     — can see it or copy it by accident. That is the *only* thing its
+     non-enumerability buys; it is not what makes double wrapping safe, which is
+     the early return above. A symbol rather than a string key for the same
+     reason. */
   Object.defineProperty(guarded, GUARDED, { value: what, enumerable: false });
   let wrapped = 0;
   for (const [key, value] of Object.entries(store)) {

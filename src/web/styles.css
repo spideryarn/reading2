@@ -3331,11 +3331,17 @@ td.text.has-hit[data-hues="8"] {
   box-shadow: inset 0 2px 0 var(--highlight);
 }
 
-/* Not built yet. Dimmed and inert, but still focusable and still hoverable —
-   the tooltip IS the content, so a button the pointer slides off would have
-   nothing to say. `aria-disabled` rather than `disabled` for the same reason:
-   `disabled` would take it out of the tab order and stop it firing the hover
-   events the tooltip needs. */
+/* **Dimmed and inert, but still focusable and still hoverable** — the tooltip
+   IS the content, so a button the pointer slides off would have nothing to say.
+   `aria-disabled` rather than `disabled` for the same reason: `disabled` would
+   take it out of the tab order and stop it firing the hover events the tooltip
+   needs, which is worst in exactly the case that needs explaining.
+
+   Written for buttons that were not built yet, and unused by anything for
+   weeks. Its first real user is the bar's experimental switch while it is
+   saving or waiting for its first answer — Dock.tsx §
+   `DockExperimentalSwitch`, whose comment repeats this argument because it is
+   the thing a reader of that file will want to argue with. */
 .dock-btn.soon {
   color: var(--ink-faintest, var(--ink-faint));
   opacity: 0.5;
@@ -10238,6 +10244,274 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
 .sk-empty-why { font-size: 0.81rem; color: var(--ink-faint); }
 .sk-run { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
 
+/* ---------------------------------------------------------- § illustrated ----
+ *
+ * The fifth diagram sub-mode: the Sketch's argument, painted by an image model
+ * — docs/project/diagram.md § Illustrated, src/web/IllustratedView.tsx.
+ *
+ * **This section owns almost nothing, and that is the point.** Every other
+ * picture in this file is paint: a `fill`, a `stroke-width`, a dash. This one
+ * is a JPEG fetched from `/api/illustrated/:slug/:hash.jpeg`, so the stylesheet
+ * has no opinion about a single pixel inside it. What is left is a frame, a
+ * scroller, and the type for the words underneath — which are the part a reader
+ * can check the picture against, and are therefore the part that has to be
+ * legible rather than the part that has to be pretty.
+ *
+ * **Deliberately a sibling of `§ sketch` above rather than a reuse of it.** The
+ * bar, the chip row and the overlay are the same three shapes at the same three
+ * sizes, and sharing `.sk-*` was tried in the head and rejected: the two views'
+ * bodies have nothing else in common (one is an `<svg>` with a card of fixed
+ * height under it, one is an `<img>` with a scrolling list), so a shared prefix
+ * would mean every future rule in either section having to be checked against a
+ * picture it was not written for. The cost is about twenty duplicated
+ * declarations, all of them one line, none of them arithmetic.
+ */
+
+.ill { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+
+/* The bar over the plate: which plate, and how big to show it.
+
+   **It wraps, where `.sk-bar` scrolls, and that is a correction made in a
+   browser rather than a preference.** Sketch's scene row scrolls horizontally
+   with no scrollbar, on the argument that a second line would push the picture
+   down. That works there because a Sketch scene's title is two or three words.
+   A plate's title is written by the brief model as a phrase — *"The Funnel, the
+   Fork, and the Return"* — and at 400px the first plate's chip filled the row,
+   the second was cut mid-word, and the **third was not on screen at all**, with
+   no scrollbar to say so. A reader cannot press a control they have no way of
+   knowing exists. There are at most `MAX_PLATES` of them, so wrapping costs a
+   line and only when there is more than one. Found at 1280 and 390 on
+   2026-09-03. */
+.ill-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem 0.5rem;
+  padding: 0.3rem 0.6rem;
+  font-family: var(--font-ui); font-size: 0.81rem;
+}
+.ill-title { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Its own line, below Back and Enlarge — `flex-basis: 100%` on a wrapping row
+   is what puts it there without a second container. */
+.ill-plates { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 0.2rem; min-width: 0; order: 1; }
+/* **A visible edge on every chip, not only the selected one.** `.sk-scene` shows
+   the unselected ones as bare text and gets away with it because they sit in a
+   horizontal row, where the arrangement itself says *these are the options*.
+   These wrap onto a line each, and three lines of unboxed text read as a list of
+   headings rather than as three buttons — a control the reader cannot tell is a
+   control. Found in a browser at 1280 and 390, 2026-09-03. */
+.ill-plate-chip {
+  flex: 0 1 auto;
+  border: 1px solid var(--rule); border-radius: 4px;
+  padding: 0.15rem 0.35rem;
+  color: var(--ink-faint); background: none; cursor: pointer;
+  font-family: inherit; font-size: inherit;
+  text-align: left;
+  /* Wraps inside the chip rather than being cut: two lines of a plate's name is
+     better than half of it, and the row is already on its own line. */
+  max-width: 100%; overflow-wrap: anywhere;
+}
+.ill-plate-chip:hover { color: var(--ink); background: var(--surface-raised); }
+/* The open one is not truncated — the one label in the row that has to be
+   readable is the one saying where you are. The row already scrolls. */
+.ill-plate-chip.on { color: var(--ink); border-color: var(--rule-strong); background: var(--surface-raised); }
+.ill-plate-chip:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+.ill-up, .ill-zoom {
+  display: inline-flex; align-items: center; gap: 0.2rem;
+  border: 1px solid var(--rule); border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  color: var(--ink-soft); background: none; cursor: pointer;
+  font-family: inherit; font-size: inherit;
+}
+.ill-up { flex: none; }
+.ill-zoom { margin-left: auto; }
+.ill-up:hover, .ill-zoom:hover { background: var(--surface-raised); color: var(--ink); }
+.ill-up:focus-visible, .ill-zoom:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+/* ---- the plate, and the three things it can be instead ---- */
+
+.ill-scroll {
+  flex: 1; min-height: 0; overflow: auto;
+  padding: 0 0.6rem 0.8rem;
+}
+/* **`max-width` and `max-height`, over the `width`/`height` attributes the
+   component sets from the stored record.** Those attributes are there to give
+   the browser the aspect ratio before the bytes arrive, so the list underneath
+   does not jump up the page and then back down — they are not a size, and a
+   rule that let them be one would draw a 1024px plate in a 288px band.
+
+   **The height cap is the band's, and it is what keeps the list on screen.**
+   Plates are 2:3 portrait, so at the full width of a 400px band one is 600px
+   tall and the *what it depicts* rows — the only part of this mode that can be
+   checked, and the only part that is clickable — begin below the fold with
+   nothing to say they are there. Enlarge is where a plate is actually looked
+   at, and it lifts the cap.
+
+   **38vh rather than the 46 it was first set to**, and the correction came from
+   a browser rather than from arithmetic: at 46 the first row still started 17
+   pixels below a 900-pixel viewport, because the budget above the picture is
+   not fixed — a plate row of three wrapped titles and a staleness note are both
+   real states and both real lines. The number now leaves room for those *and*
+   the first row or two. Nothing enforces it, so if the chrome above grows
+   again, measure it again rather than trusting this comment. */
+.ill-plate {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%; max-height: 38vh;
+  width: auto; height: auto;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--surface-raised);
+}
+/* A plate that is loading, that failed to fetch, or that the run never painted.
+   One rule for all three: they occupy the same place and say the same kind of
+   thing, and the words carry the difference.
+
+   **The same grey as every other failure in this band**, not a red — `.sk-failed`
+   above has the argument, including that `--destructive` is referenced in this
+   file six times and defined nowhere, so bare it is simply dropped. */
+.ill-plate-out {
+  display: flex; align-items: center; gap: 0.4rem;
+  margin: 0.4rem 0;
+  padding: 1.2rem 0.8rem;
+  border: 1px dashed var(--rule);
+  border-radius: 4px;
+  font-family: var(--font-ui); font-size: 0.81rem; line-height: 1.4;
+  color: var(--ink-faint);
+}
+
+/* ---- the sentence that says what this is ---- */
+
+/* **Not small print, and not a tooltip.** This is the one picture in the app
+   that cannot be checked against what it claims to depict, so the sentence
+   saying so sits directly under it at the same size as the rows below —
+   docs/project/diagram.md § It is an interpretation. The left rule is the same
+   device `.sk-card` uses for "this belongs to the thing above it". */
+.ill-says {
+  margin: 0.5rem 0 0.7rem;
+  padding: 0.4rem 0 0.4rem 0.55rem;
+  border-left: 2px solid var(--rule-strong);
+  font-family: var(--font-ui); font-size: 0.79rem; line-height: 1.45;
+  color: var(--ink-soft);
+}
+/* The register the model chose, in its own words — inside the brief, above the
+   prompt. Italic because it is a quote from the brief rather than our sentence. */
+.ill-style { font-style: italic; color: var(--ink-faint); }
+
+/* ---- what it depicts: the only clickable layer ---- */
+
+.ill-list-head {
+  margin: 0 0 0.3rem;
+  font-family: var(--font-ui); font-size: 0.75rem; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.ill-list { margin: 0; padding: 0; list-style: none; }
+.ill-list li + li { border-top: 1px solid var(--rule); }
+.ill-row {
+  display: block; width: 100%;
+  padding: 0.45rem 0.1rem;
+  border: none; background: none; cursor: pointer;
+  text-align: left;
+  font-family: var(--font-ui);
+}
+.ill-row:hover { background: var(--surface-raised); }
+.ill-row:focus-visible { outline: 2px solid var(--highlight); outline-offset: -2px; }
+.ill-depicts { display: block; font-size: 0.82rem; line-height: 1.35; color: var(--ink); }
+/* **Wraps, and is never clamped.** The quote is how a reader reads the picture
+   back against the piece, so cutting it to an ellipsis would take away the
+   whole reason the row exists. `<q>` supplies its own marks, so none here. */
+.ill-quote {
+  display: block; margin-top: 0.2rem;
+  /* The article's own words, in the article's own face — `--font-reading` is
+     documented in styles/tokens.css as exactly that, and it is what makes a
+     quote read as lifted rather than as more chrome. */
+  font-family: var(--font-reading);
+  font-size: 0.82rem; line-height: 1.4; color: var(--ink-faint);
+}
+.ill-row:hover .ill-depicts { color: var(--highlight); }
+.ill-none {
+  margin: 0.4rem 0;
+  font-family: var(--font-ui); font-size: 0.79rem; line-height: 1.45; color: var(--ink-faint);
+}
+
+/* ---- the brief ---- */
+
+.ill-brief { margin-top: 0.8rem; font-family: var(--font-ui); font-size: 0.79rem; }
+.ill-brief summary { cursor: pointer; color: var(--ink-faint); }
+.ill-brief summary:hover { color: var(--ink); }
+.ill-brief p {
+  margin: 0.4rem 0 0;
+  padding-left: 0.55rem;
+  border-left: 2px solid var(--rule);
+  line-height: 1.5; color: var(--ink-soft);
+  /* The image model was sent one paragraph of prose; showing it as one is the
+     point. `pre-wrap` would honour whatever line breaks the brief model happened
+     to write, which is a fact about the JSON rather than about the brief. */
+  white-space: normal;
+}
+
+/* ---- full screen ---- */
+
+/* The same `<dialog>` `showModal()` § sketch above uses, for its four reasons.
+   The band is 288–400px and the plates are 2:3 portrait, so in the band a plate
+   is a thumbnail and **this is where one is actually looked at**. */
+.ill-full {
+  width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh;
+  margin: 0; padding: 0; border: none; background: transparent;
+  display: none;
+}
+.ill-full[open] { display: flex; align-items: flex-start; justify-content: center; }
+.ill-full::backdrop { background: rgb(0 0 0 / 0.72); }
+.ill-in-full {
+  /* Narrower than `.sk-in-full`'s 1120 because a 2:3 portrait plate at 1120px
+     wide is 1680px tall — taller than any window, so the reader would be
+     scrolling a picture instead of seeing one. At 720 it is 1080 tall, which
+     fits a laptop with the list beginning just below the fold. */
+  width: min(94vw, 720px);
+  height: 100dvh;
+  background: var(--page);
+  border-left: 1px solid var(--rule); border-right: 1px solid var(--rule);
+  display: flex; flex-direction: column;
+}
+.ill-in-full .ill-bar { padding: 0.5rem 0.8rem; font-size: 0.88rem; }
+/* The cap comes off: this is the whole reason the overlay exists. Still bounded
+   by the panel's own width, so a plate cannot run past the bottom of a laptop
+   screen and take the list with it. */
+.ill-in-full .ill-plate { max-height: 78vh; }
+/* `overscroll-behavior` stops a trackpad flick inside a tall plate scrolling
+   the article behind it — Lightbox.tsx § two things `<dialog>` does not do. */
+.ill-in-full .ill-scroll { padding: 0 0.9rem 1.2rem; overscroll-behavior: contain; }
+.ill-in-full .ill-says, .ill-in-full .ill-depicts, .ill-in-full .ill-quote { font-size: 0.86rem; }
+
+/* What the band says while the overlay has the picture. */
+.ill.away { justify-content: flex-start; }
+.ill-elsewhere {
+  margin: 0; padding: 0.75rem 0.7rem;
+  font-family: var(--font-ui); font-size: 0.85rem; line-height: 1.45; color: var(--ink-faint);
+}
+.ill-back {
+  padding: 0; background: none; border: none; cursor: pointer;
+  font-family: inherit; font-size: inherit; color: var(--highlight);
+}
+.ill-back:hover { text-decoration: underline; }
+
+/* ---- the notes, the job, and before there is a picture ---- */
+
+.ill-note {
+  margin: 0 0.6rem 0.3rem;
+  font-family: var(--font-ui); font-size: 0.77rem; line-height: 1.35; color: var(--ink-faint);
+}
+.ill-busy, .ill-failed {
+  display: flex; align-items: center; gap: 0.4rem;
+  margin: 0;
+  padding: 0.15rem 0.7rem 0.3rem;
+  font-family: var(--font-ui); font-size: 0.81rem; color: var(--ink-faint);
+}
+.ill-wait, .ill-empty { padding: 0.75rem 0.7rem; font-family: var(--font-ui); font-size: 0.85rem; color: var(--ink-soft); }
+.ill-wait { display: flex; align-items: center; gap: 0.4rem; }
+.ill-empty p { margin: 0 0 0.5rem; line-height: 1.45; }
+.ill-empty-why { font-size: 0.81rem; color: var(--ink-faint); }
+.ill-run { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
+
 /* ---------------------------------------------------- § drift and trail ----
  *
  * The two pictures whose axes came out of a model: one dot per paragraph,
@@ -12992,3 +13266,419 @@ table.only-prose thead { display: none; }
    (tailwind.css § the @layer statement), and `tw:font-mono` on the fingerprint
    and `tw:text-sm` on Delete still win. */
 .metadata-page button { font: inherit; }
+
+/* =========================================================== § the site ==
+   The signed-out marketing pages — LandingPage.tsx and FeaturesPage.tsx — and
+   nothing else in the app. Everything here is prefixed `.site-`.
+
+   **Why these are classes and not utilities.** Every one of them is used on
+   both pages, which is what makes them a system rather than a nudge, and
+   docs/project/design-css-overview.md § Which mechanism owns what puts a system
+   in this file. The `tw:` utilities stay for per-element adjustments; the
+   visual language lives here so the two pages cannot drift into two languages.
+
+   **The posture is Greg's, 2026-09-03, and it was chosen against advice.**
+   Offered "tidy it", "restructure it" and "go full modern-SaaS", he picked the
+   third; a cross-model consultation and the design research had both argued for
+   the second on brand grounds. The plan records that in full:
+   docs/plans/260903g-redesign-the-signed-out-marketing-pages.md § The decision
+   Greg made. So: glow, display type, tilt, bento, scroll-reveal — spent on
+   craft rather than on volume, and none of it reaching the reading view, which
+   is a different room with different rules.
+
+   **The one thing to know before editing.** The app's own surface tokens are too
+   close together to build depth from: --background is oklch(0.145 0 0), --card
+   is 0.205, --border a little above both — three greys within 0.13, so a dark
+   screenshot on the dark page reads as a smudge. That is the defect this block
+   exists to fix, and it fixes it with translucent white over the page rather
+   than by adding tokens, because these values are marketing-page staging and
+   not part of the app's palette. Do not lift them into tokens.css.
+
+   How to shoot the pictures these rules frame: docs/project/marketing-pages.md. */
+
+/* ---- the ladder: surfaces and hairlines, over a near-black page ---- */
+.site {
+  --site-hairline: rgb(255 255 255 / 0.10);
+  --site-hairline-strong: rgb(255 255 255 / 0.16);
+  --site-surface: rgb(255 255 255 / 0.028);
+  --site-surface-raised: rgb(255 255 255 / 0.05);
+  /* The lift under a framed screenshot. Black on near-black does almost
+     nothing, so the shadow is mostly there to darken the few pixels directly
+     under the bottom edge; the top-edge inset highlight in .site-frame is what
+     actually separates the object from the page. */
+  --site-lift: 0 24px 60px -18px rgb(0 0 0 / 0.75), 0 2px 8px rgb(0 0 0 / 0.4);
+  background: var(--background);
+}
+
+/* ---- the glow: ONE per page, behind the hero, and nowhere else ----
+   Every site the design research surveyed uses its gradient exactly once, at
+   the top, rather than behind each screenshot; repeated, it stops reading as
+   emphasis and starts reading as wallpaper.
+
+   Mixed in plain rgb() rather than oklch. --page is written `oklch(0.145 0 0)`
+   with the hue explicitly 0 rather than missing, so polar interpolation drags a
+   mix round to 11.7deg and lands pink instead of warm — the trap in
+   design-css-overview.md § Colour, which --highlight-wash escapes only by
+   saying `in oklab`. */
+.site-glow {
+  position: absolute;
+  inset-inline: -30%;
+  top: -18rem;
+  height: 46rem;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(46% 46% at 34% 38%, rgb(219 138 69 / 0.34) 0%, rgb(219 138 69 / 0.10) 45%, transparent 74%),
+    radial-gradient(40% 42% at 72% 26%, rgb(96 178 214 / 0.11) 0%, transparent 70%);
+  filter: blur(46px);
+}
+
+/* The faint grid under the hero, fading out downward. Two repeating gradients
+   and a mask; no image request, no dependency. */
+.site-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.028) 0 1px, transparent 1px 5.5rem),
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 0.028) 0 1px, transparent 1px 5.5rem);
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.9), transparent 78%);
+}
+
+/* ---- the top bar ---- */
+.site-nav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  backdrop-filter: blur(14px);
+  background: color-mix(in oklab, var(--background) 82%, transparent);
+  border-bottom: 1px solid transparent;
+  transition: border-color 180ms ease, background-color 180ms ease;
+}
+/* Painted only once the page has moved, so the bar is invisible over the hero
+   and becomes a surface over content. `animation-timeline: scroll()` does this
+   with no scroll listener and no React state; where it is unsupported the bar
+   simply keeps its transparent border, which is the correct look at the top of
+   the page and an acceptable one further down. */
+@supports (animation-timeline: scroll()) {
+  .site-nav {
+    animation: site-nav-settle linear both;
+    animation-timeline: scroll(root block);
+    animation-range: 0 6rem;
+  }
+  @keyframes site-nav-settle {
+    to {
+      border-bottom-color: var(--site-hairline);
+      background: color-mix(in oklab, var(--background) 92%, transparent);
+    }
+  }
+}
+
+/* ---- display type ----
+   Marketing type on the surveyed sites runs 3-5x the body size; ours ran about
+   2x. clamp() rather than breakpoints because there is one number here and it
+   should be continuous. */
+.site-display {
+  font-family: var(--font-reading);
+  font-size: clamp(2.6rem, 7.2vw, 4.75rem);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  font-weight: 560;
+  /* The gradient runs from the page's own foreground into the brand orange, so
+     the orange arrives as the end of a sentence rather than as a second colour.
+     background-clip: text needs a transparent fill; the plain `color` above it
+     is what a browser without it paints, and that is a good enough answer.
+
+     The stops are early — orange by 88% — and that is not taste. The background
+     box is the whole BLOCK, not the ink, so on a `max-w-[16ch]` heading whose
+     last line is short, stops in the 80-100% band land on empty space to the
+     right of the words and the orange never appears at all. Measured on the
+     first build of this page: the heading rendered entirely white. Anything
+     added here should be checked against a screenshot, not against the swatch. */
+  color: var(--foreground);
+}
+/* The gradient itself is behind a `@supports` that names BOTH halves, and the
+   transparent fill is inside it.
+
+   `color` is not a fallback for `-webkit-text-fill-color: transparent` — fill
+   wins wherever it is understood, so a browser that takes the fill and not the
+   clip paints nothing at all. Printing with background graphics off, and forced
+   colors, can do the same to a browser that understands both. An invisible
+   headline is a much worse failure than a headline that is merely white, so the
+   plain colour above is the default and the gradient is the enhancement.
+   Cross-family review, 2026-09-03, finding 8. */
+@supports ((background-clip: text) or (-webkit-background-clip: text)) {
+  .site-display {
+    background: linear-gradient(102deg, var(--foreground) 0%, var(--foreground) 26%, #eda86e 62%, var(--spideryarn-orange) 88%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+@media print {
+  .site-display {
+    background: none;
+    -webkit-text-fill-color: currentColor;
+    color: #000;
+  }
+}
+@media (forced-colors: active) {
+  .site-display {
+    background: none;
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
+.site-lede {
+  font-family: var(--font-reading);
+  font-size: clamp(1.1rem, 2.1vw, 1.375rem);
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  max-width: 46ch;
+}
+
+/* ---- buttons ----
+   Hand-written rather than shadcn's Button: these are the only two buttons on
+   the site pages, both are links rather than buttons, and the orange fill is a
+   size and weight nothing else in the app uses. */
+.site-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  padding: 0.72rem 1.4rem;
+  font-size: 0.95rem;
+  font-weight: 560;
+  text-decoration: none;
+  transition: transform 140ms ease, box-shadow 180ms ease, background-color 140ms ease;
+}
+.site-cta-primary {
+  background: var(--spideryarn-orange);
+  color: oklch(0.16 0.02 60);
+  box-shadow: 0 8px 28px -8px rgb(219 138 69 / 0.55);
+}
+.site-cta-primary:hover {
+  background: #e79a5b;
+  transform: translateY(-1px);
+  box-shadow: 0 12px 34px -8px rgb(219 138 69 / 0.65);
+}
+.site-cta-ghost {
+  border: 1px solid var(--site-hairline-strong);
+  background: var(--site-surface);
+  color: var(--foreground);
+}
+.site-cta-ghost:hover {
+  background: var(--site-surface-raised);
+  border-color: rgb(255 255 255 / 0.24);
+  transform: translateY(-1px);
+}
+
+/* ---- a screenshot, framed as an object ----
+   The inset top highlight is the load-bearing line: it catches light on the top
+   edge, which is what makes a dark rectangle on a dark page read as a raised
+   thing rather than as a hole. The drop shadow alone does almost nothing here.
+
+   No fake browser chrome. The app's own masthead is already a header, and a
+   second one states a platform this product does not have — which is also what
+   the surveyed sites that skip drop shadows mostly do. */
+.site-frame {
+  position: relative;
+  border-radius: 14px;
+  border: 1px solid var(--site-hairline-strong);
+  background: var(--card);
+  overflow: hidden;
+  box-shadow: var(--site-lift), inset 0 1px 0 rgb(255 255 255 / 0.07);
+}
+.site-frame img {
+  display: block;
+  width: 100%;
+}
+
+/* The hero's frame, which additionally carries a lit top-left edge. Drawn as a
+   masked 1px inset ring rather than a border, so it can be a gradient.
+
+   Two things here are corrections rather than choices (cross-family review,
+   2026-09-03, finding 11):
+
+   - `inset: 0`, not `-1px`. `.site-frame` sets `overflow: hidden`, so a ring
+     placed outside the padding box is drawn on the clipped side of the edge and
+     simply is not there.
+   - The whole pseudo-element lives inside a `@supports` for mask-composite.
+     Without the composite the two mask layers do not subtract, the ring becomes
+     a solid gradient wash across the middle of the screenshot, and the hero —
+     the one picture above the fold — is the thing it ruins. A missing lit edge
+     costs nothing; a veil over the product does. */
+@supports ((mask-composite: exclude) or (-webkit-mask-composite: xor)) {
+  .site-frame-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(160deg, rgb(255 255 255 / 0.22), rgb(219 138 69 / 0.16) 42%, transparent 70%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+    z-index: 1;
+  }
+}
+
+/* ---- the tilt, and why it straightens ----
+   Greg asked for the tilted hero. A tilted screenshot of a READING product is
+   self-defeating held still — the thing being sold is legible text — so it
+   arrives tilted and straightens as the reader scrolls into it. Modern on
+   arrival, readable once you engage, and it costs no JavaScript.
+
+   Authored FLAT by default, so a browser without scroll-driven animation
+   (Firefox, today) sees the finished, legible state rather than a permanently
+   skewed one. Same "visible by default, animated as enhancement" shape as the
+   reveal below. */
+.site-tilt-stage { perspective: 2000px; }
+.site-tilt { transform: none; transform-origin: 50% 0%; }
+@supports (animation-timeline: scroll()) {
+  .site-tilt {
+    animation: site-untilt linear both;
+    /* The DOCUMENT's scroll, not this element's view() progress. The hero is
+       already partly on screen when the page loads, so a view() timeline hands
+       it a progress part-way through its range and it renders nearly flat —
+       which is what the first build did, silently, looking exactly like a tilt
+       that had been dialled to zero. scroll(root) is 0 at the top of the page,
+       which is the only place this element is asked to be tilted. */
+    animation-timeline: scroll(root block);
+    animation-range: 0 34rem;
+  }
+  @keyframes site-untilt {
+    from { transform: perspective(2000px) rotateX(11deg) scale(0.945); }
+    to { transform: none; }
+  }
+}
+
+/* ---- scroll reveal ----
+   Finished state as the default rule, so an unsupported browser shows static
+   content: never invisible, never broken. The global prefers-reduced-motion
+   guard in tailwind.css flattens the duration of all of this already. */
+.site-reveal { opacity: 1; transform: none; }
+@supports (animation-timeline: view()) {
+  .site-reveal {
+    animation: site-rise linear both;
+    animation-timeline: view(block);
+    animation-range: entry 0% entry 62%;
+  }
+  @keyframes site-rise {
+    from { opacity: 0.001; transform: translateY(1.4rem); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+/* A scroll-driven animation has no scroll to be driven by on paper, and what it
+   resolves to there is not something the spec pins down. Printing a page whose
+   every section starts at opacity 0 is a good way to get eleven blank sheets,
+   so both of these are turned off outright for print.
+
+   The same override is what a screenshot harness should set before capturing a
+   full page — Playwright's full-page capture stitches without scrolling, so
+   everything below the first viewport keeps its start state and comes out
+   blank. That is not a bug in the page, but it is indistinguishable from one in
+   a screenshot, and it cost half an hour here before anyone believed the page
+   was fine. docs/project/marketing-pages.md § Screenshotting the site itself. */
+@media print {
+  .site-reveal,
+  .site-tilt,
+  .site-nav {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* **The global reduced-motion guard does not cover any of the above**, and that
+   is the trap in this block worth knowing.
+
+   tailwind.css sets `animation-duration: 0.01ms !important` on everything, which
+   is the right instrument for a time-driven animation and does nothing at all to
+   a scroll-driven one: CSS Animations Level 2 says a time duration on a
+   scroll-progress timeline is treated as `auto`, so the animation is driven by
+   the scroller regardless. A reader who has asked their operating system for no
+   motion would still get the tilt, the reveals and the nav.
+
+   So it needs its own block, and it has to turn the animations *off* rather than
+   speed them up. Found by a cross-family review, 2026-09-03
+   (docs/plans/260903g-redesign-review-sol.md, finding 6) — the guard was present,
+   documented, and missed the only motion on the page, which is the same shape
+   the guard's own comment in tailwind.css tells a story about. */
+@media (prefers-reduced-motion: reduce) {
+  .site-reveal,
+  .site-tilt,
+  .site-nav {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* No preflight in this app (tailwind.css § note 4), so every heading and
+   paragraph here arrives with the UA's own margins — and a `tw:mb-3` removes
+   only one of the two. The declared spacing above is therefore not the rendered
+   spacing, panel padding is not the padding you see, and the pages are taller
+   than the numbers say. Scoped to `.site` rather than global, because twenty
+   components in this file were built looking at the UA default underneath them.
+
+   `:where()` keeps it at zero specificity, so every `tw:mt-*` above still wins. */
+.site :where(h1, h2, h3, h4, p, figure, ul, ol) {
+  margin: 0;
+}
+
+/* ---- panels, and the bento ---- */
+.site-panel {
+  border-radius: 14px;
+  border: 1px solid var(--site-hairline);
+  background: var(--site-surface);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+}
+.site-panel-hover { transition: border-color 160ms ease, background-color 160ms ease; }
+.site-panel-hover:hover {
+  border-color: var(--site-hairline-strong);
+  background: var(--site-surface-raised);
+}
+
+/* Six columns rather than four, because the row wants thirds AND halves: a
+   full-width tile is 6, a half 3, a third 2. Four columns cannot spell thirds
+   without a second grid. */
+.site-bento {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 640px) {
+  .site-bento { grid-template-columns: repeat(2, 1fr); }
+  .site-bento > .featured { grid-column: span 2; }
+}
+@media (min-width: 900px) {
+  .site-bento { grid-template-columns: repeat(6, 1fr); }
+  .site-bento > * { grid-column: span 2; }
+  .site-bento > .wide { grid-column: span 3; }
+  .site-bento > .featured { grid-column: span 6; }
+}
+
+/* ---- an eyebrow: the small orange word above a heading ---- */
+.site-eyebrow {
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--spideryarn-orange);
+}
+
+/* ---- a section heading, one size, on both pages ---- */
+.site-h2 {
+  font-family: var(--font-reading);
+  font-size: clamp(1.7rem, 3.2vw, 2.35rem);
+  line-height: 1.14;
+  letter-spacing: -0.02em;
+  font-weight: 540;
+  color: var(--foreground);
+}

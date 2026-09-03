@@ -45,6 +45,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mode } from "../src/modes.js";
 import type { Job } from "../src/types.js";
+import { EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -259,7 +260,20 @@ function Reading({ slug, start }: { slug: string; start: Mode }): ReactElement {
     mode === "quotes" ? createElement(QuotesBand, { slug }) : null,
     mode === "timeline" ? createElement(TimelineBand, { slug }) : null,
     mode === "glossary" ? createElement(GlossaryBand, { slug }) : null,
-    createElement(Dock, { slug, view: "article" as const, mode, onMode: setMode, signedIn: true }),
+    /* **The switch on**, because three of the five modes this file presses —
+       Quotes, Timeline and Remember — went behind it on 2026-09-03, and a bar
+       with the default answer draws no Quotes button for `press("Quotes")` to
+       find. As a prop that is one literal; had `Dock` subscribed to the store
+       itself it would be a posed session and an `/api/reader` body in a file
+       whose subject is jobs. Dock.tsx § experimental. */
+    createElement(Dock, {
+      slug,
+      view: "article" as const,
+      mode,
+      onMode: setMode,
+      signedIn: true,
+      experimental: EXPERIMENTAL_ON,
+    }),
   );
 }
 

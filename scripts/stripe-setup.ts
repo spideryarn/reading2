@@ -1,8 +1,14 @@
 /**
  * Make Stripe match what the database says we sell.
  *
- *     npx tsx scripts/stripe-setup.ts            # say what it would do
- *     npx tsx scripts/stripe-setup.ts --apply    # do it
+ *     npm run stripe:setup                     # say what it would do
+ *     npm run stripe:setup -- --apply          # do it
+ *     npm run stripe:setup -- --prod --apply   # do it to LIVE
+ *
+ * `--prod` takes the account and the database from `.env.prod` together, rather
+ * than either being named on the command line — scripts/stripe-target.ts says
+ * why that is not a preference. Every run prints the database it is pointed at
+ * before it does anything.
  *
  * **The database is the source of truth and Stripe follows it.** Edit a row in
  * `billing_tiers` (or insert one, with its prices in `billing_tier_prices`),
@@ -37,14 +43,16 @@ import type Stripe from "stripe";
 
 import {
   STRIPE_API_VERSION,
+  accountProblem,
   expectedLivemode,
   stripeClient,
   stripeConfigProblem,
 } from "../src/billing/stripe.js";
 import type { TierRow } from "../src/billing/tiers.js";
-import { loadEnvLocal } from "../src/env.js";
 import { isMain } from "../src/is-main.js";
 import { readTiers, recordTierPrice } from "../src/store/pg-tiers.js";
+
+import { aimAtTarget, refuseUnknownArgs, targetLine } from "./stripe-target.js";
 
 /** Marks the objects this script owns, so a hand-made one is never adopted. */
 const managed = (tier: TierRow) => ({
@@ -73,6 +81,31 @@ function money(tier: TierRow): string {
     .join(" / ");
 }
 
+/**
+ * **The number on the pricing page is the number charged.**
+ *
+ * `tax_behavior` decides whether tax is added to `unit_amount` or taken out of
+ * it, and its default — `unspecified` — behaves as *exclusive*. Left that way,
+ * a reader shown "€9 a month" is charged €10.71: measured on 2026-09-03, a real
+ * test purchase from a German IP came back as a €9.00 subtotal plus €1.71 of
+ * 19% VAT. Every unit test passed; nothing in this repo renders a Stripe
+ * invoice.
+ *
+ * `inclusive` is the choice `docs/project/billing.md` had already made, and for
+ * B2C in the UK and EU it is the only defensible one: a consumer price is
+ * quoted VAT-included, and "€9 plus whatever your country charges" is not a
+ * price a reader can act on. The cost is that our net varies by the buyer's
+ * country — €9 is €7.56 net in Germany at 19% and €7.44 in Ireland at 21% —
+ * which is a margin question, not a display bug.
+ *
+ * **It cannot be changed later.** `tax_behavior` is immutable like the amount,
+ * so getting it wrong means minting a new price and moving the lookup key, and
+ * anyone already subscribed stays on what they bought. `differences` therefore
+ * checks it, so a price created before this line is *replaced* rather than
+ * quietly kept.
+ */
+const TAX_BEHAVIOR = "inclusive" as const;
+
 /** The price fields, in the shape Stripe wants them. */
 function amountsFor(tier: TierRow) {
   const [base, ...rest] = currenciesOf(tier);
@@ -80,8 +113,9 @@ function amountsFor(tier: TierRow) {
   return {
     currency: base,
     unit_amount: tier.amounts[base] as number,
+    tax_behavior: TAX_BEHAVIOR,
     currency_options: Object.fromEntries(
-      rest.map((c) => [c, { unit_amount: tier.amounts[c] as number }]),
+      rest.map((c) => [c, { unit_amount: tier.amounts[c] as number, tax_behavior: TAX_BEHAVIOR }]),
     ),
   };
 }
@@ -94,19 +128,66 @@ function differences(price: Stripe.Price, tier: TierRow): string[] {
   if (price.currency !== base) wrong.push(`base currency is ${price.currency}`);
   if (price.unit_amount !== tier.amounts[base as string]) wrong.push(`${base} is ${price.unit_amount}`);
   if (price.recurring?.interval !== "month") wrong.push(`interval is ${price.recurring?.interval}`);
+  /* See TAX_BEHAVIOR. `unspecified` is the default and charges tax on top, so
+     a price carrying it is one that overcharges — worth replacing, and it can
+     only be fixed by replacing. */
+  if (price.tax_behavior !== TAX_BEHAVIOR) wrong.push(`tax behaviour is ${price.tax_behavior}`);
   for (const c of rest) {
-    const got = price.currency_options?.[c]?.unit_amount;
-    if (got !== tier.amounts[c]) wrong.push(`${c} is ${got ?? "absent"}`);
+    const option = price.currency_options?.[c];
+    if (!option || option.unit_amount !== tier.amounts[c]) {
+      wrong.push(`${c} is ${option?.unit_amount ?? "absent"}`);
+    } else if (option.tax_behavior !== TAX_BEHAVIOR) {
+      wrong.push(`${c} tax behaviour is ${option.tax_behavior}`);
+    }
   }
   return wrong;
 }
 
 /**
- * Bring the product's customer-visible name and description into line.
+ * What kind of thing a tax authority thinks we are selling.
+ *
+ * **A new Stripe account will not sell without one.** Managed Payments — Stripe
+ * acting as merchant of record — is *on by default* on accounts created from
+ * 2026, and it refuses a Checkout Session whose product has no `tax_code`:
+ *
+ * > Invalid line_items[0]: the product tax code is missing. … Product tax code
+ * > is required for Managed Payments, which is enabled by default on your
+ * > account.
+ *
+ * That is how this arrived: the first Checkout on the new account failed with a
+ * 400, which our route correctly turned into "we could not reach Stripe just
+ * now" — true in the sense that mattered to the reader, and misleading to
+ * whoever reads it next, so the real message is quoted here.
+ *
+ * `txcd_10103000` is *Software as a service (SaaS) — personal use*: delivered
+ * over the internet, not customised per buyer, nothing downloaded, sold to a
+ * person rather than a business. That is Spideryarn. The near neighbour is
+ * `txcd_10105001`, *Artificial Intelligence as a Service — Cloud Based —
+ * Personal Use*, and the case for it is that the models are most of the cost;
+ * the case against, taken here, is that a reader buys a reading tool and the AI
+ * is how it works, not what it is. The `- business use` variants only change US
+ * sales tax and we sell to consumers.
+ *
+ * One constant rather than a column on `billing_tiers`, because both tiers are
+ * the same product sold in two sizes. The day a tier is genuinely a different
+ * kind of thing, make it a column then.
+ *
+ * It is set whether or not Managed Payments stays on: Stripe Tax wants the same
+ * field, and an untaxed-looking product is wrong either way.
+ */
+const PRODUCT_TAX_CODE = "txcd_10103000";
+
+/**
+ * Bring the product's customer-visible name, description and tax code into line.
  *
  * Separate from the price because the rules are opposite: a price is immutable
  * and a mismatch means creating a new one, while a product's words are ordinary
  * mutable fields and a mismatch just means somebody edited the row.
+ *
+ * `tax_code` comes back from Stripe either as a string or as an expanded object,
+ * so it is narrowed rather than compared directly — a `TaxCode` object compared
+ * against our string is always unequal, which would make this update on every
+ * run and never converge.
  */
 async function syncProductWords(
   product: string | Stripe.Product | Stripe.DeletedProduct,
@@ -118,14 +199,25 @@ async function syncProductWords(
   const full = typeof product === "string" ? await stripe.products.retrieve(product) : product;
   if ("deleted" in full && full.deleted) return;
   const live = full as Stripe.Product;
-  if (live.name === tier.productName && (live.description ?? "") === tier.description) return;
-
-  if (!apply) {
-    steps.push({ what: tier.id, detail: `would update the product's name/description on ${live.id}` });
+  const taxCode = typeof live.tax_code === "string" ? live.tax_code : live.tax_code?.id;
+  if (
+    live.name === tier.productName &&
+    (live.description ?? "") === tier.description &&
+    taxCode === PRODUCT_TAX_CODE
+  ) {
     return;
   }
-  await stripe.products.update(live.id, { name: tier.productName, description: tier.description });
-  steps.push({ what: tier.id, detail: `updated the product's name/description on ${live.id}` });
+
+  if (!apply) {
+    steps.push({ what: tier.id, detail: `would update the product's name/description/tax code on ${live.id}` });
+    return;
+  }
+  await stripe.products.update(live.id, {
+    name: tier.productName,
+    description: tier.description,
+    tax_code: PRODUCT_TAX_CODE,
+  });
+  steps.push({ what: tier.id, detail: `updated the product's name/description/tax code on ${live.id}` });
 }
 
 /** Create, find or replace one tier's product and price, and record the id. */
@@ -193,6 +285,8 @@ export async function ensureTier(tier: TierRow, apply: boolean): Promise<Step[]>
     (await stripe.products.create({
       name: tier.productName,
       description: tier.description,
+      /* See PRODUCT_TAX_CODE: without this a new account refuses to sell at all. */
+      tax_code: PRODUCT_TAX_CODE,
       metadata: managed(tier),
     }));
 
@@ -297,13 +391,28 @@ export async function ensurePortalConfiguration(
 }
 
 async function main(): Promise<void> {
-  loadEnvLocal();
+  refuseUnknownArgs(process.argv, ["--apply", "--prod"]);
   const apply = process.argv.includes("--apply");
+  /* Before anything reads the environment — it decides which Stripe account and
+     which database everything below reaches. scripts/stripe-target.ts. */
+  aimAtTarget(process.argv.includes("--prod"));
+
+  /* **Before `stripeConfigProblem()`**, so the target is on screen even when
+     the run is about to fail. A line you only get on the good path is a line
+     that is missing exactly when you are trying to work out what went wrong. */
+  console.log(`\nStripe setup — ${expectedLivemode() ? "LIVE" : "test"} mode, API ${STRIPE_API_VERSION}`);
+  console.log(`  ${targetLine()}`);
 
   const problem = stripeConfigProblem();
   if (problem) throw new Error(problem);
 
-  console.log(`\nStripe setup — ${expectedLivemode() ? "LIVE" : "test"} mode, API ${STRIPE_API_VERSION}`);
+  /* The account, before anything is created in it. `stripeConfigProblem` checks
+     the key's mode; this checks whose account it opens. src/billing/stripe.ts. */
+  const account = await stripeClient().accounts.retrieveCurrent();
+  const wrongAccount = accountProblem(account.id);
+  if (wrongAccount && expectedLivemode()) throw new Error(wrongAccount);
+  console.log(`  Account: ${account.id}${wrongAccount ? ` — ⚠ ${wrongAccount}` : ""}`);
+
   console.log(apply ? "  applying\n" : "  dry run; pass --apply to make changes\n");
 
   /* Uncached: this script is the thing that changes tiers, so reading a

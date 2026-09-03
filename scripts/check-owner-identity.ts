@@ -55,35 +55,32 @@
  * `.env.local` beat the shell (src/env.ts, and the reason is a good one). That
  * makes "export the production URL and run it" quietly wrong: `.env.local`
  * would win and this would report on the Docker container instead. `.env.prod`
- * is otherwise "read by nothing" (docs/project/database.md), so it is read here
+ * is otherwise "read by nothing" (docs/project/database.md), so it is read
  * explicitly, and the guard below refuses anything local.
+ *
+ * That reader was private to this file until 2026-09-03, when `stripe-setup`
+ * and `stripe-check` needed the same escape hatch to go live. It is now
+ * `readEnvProd` in src/env.ts — beside the rule it excepts, and one parser
+ * rather than three.
  */
-
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { sql } from "drizzle-orm";
 
 import { closeDb, getDb } from "../src/db/client.js";
-import { loadEnvLocal } from "../src/env.js";
-
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+import { loadEnvLocal, readEnvProd } from "../src/env.js";
 
 /* Must come first: it memoises, so every later assignment survives it. */
 loadEnvLocal();
 
+/* `readEnvProd` rather than the private reader this file used to carry: it is
+   now shared with the Stripe scripts, it parses the file once instead of once
+   per name, and it handles an `export ` prefix and single-quoted values, which
+   the regex here did not. It also finds the primary checkout's copy when this
+   is running in a worktree, where there is none. */
+const prod = readEnvProd();
+
 function fromProd(name: string): string | undefined {
-  let text: string;
-  try {
-    text = readFileSync(path.join(ROOT, ".env.prod"), "utf8");
-  } catch {
-    return undefined;
-  }
-  return new RegExp(`^${name}=(.*)$`, "m")
-    .exec(text)?.[1]
-    ?.trim()
-    .replace(/^"|"$/g, "");
+  return prod?.values[name];
 }
 
 function die(message: string): never {
@@ -102,7 +99,11 @@ const serviceKey = fromProd("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const expected = process.env.SPIDERYARN_OWNER_ID;
 
 if (databaseUrl === "" || supabaseUrl === "" || serviceKey === "") {
-  die("Need DATABASE_URL, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.prod. See docs/project/database.md.");
+  die(
+    prod
+      ? `Need DATABASE_URL, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in ${prod.file}. See docs/project/database.md.`
+      : "There is no .env.prod in this checkout or the primary one. See docs/project/database.md.",
+  );
 }
 if (/(?:127\.0\.0\.1|localhost)/.test(databaseUrl) || /(?:127\.0\.0\.1|localhost)/.test(supabaseUrl)) {
   die("Those point at the local stack. This script is about the production shelf.");

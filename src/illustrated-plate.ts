@@ -129,7 +129,20 @@ import { findQuote } from "./quote-match.js";
 import type { Sketch, SketchScene } from "./sketch-scene.js";
 import type { BlockId } from "./types.js";
 
-export const ILLUSTRATED_VERSION = "illustrated/1";
+/**
+ * **The version, and the only one.** Stamped onto every artefact this file
+ * writes, and compared against the artefact's `version` in src/store/pg.ts to
+ * answer `outdated` — so it has to be one constant, and until 2026-09-03 it was
+ * two. `illustrated.ts` had its own `PROMPT_VERSION` beside this one, equal by
+ * coincidence rather than by construction, and bumping only that one gave every
+ * freshly drawn artefact `outdated: true` for ever: written as `illustrated/1`
+ * here, compared against `illustrated/2` there. `illustrated.ts` now re-exports
+ * this, so there is nothing to keep in step.
+ *
+ * Bump it whenever `SYSTEM` or `renderPrompt` changes what the model is asked.
+ * It also feeds `inputFingerprint`, so a bump marks every stored plate stale.
+ */
+export const ILLUSTRATED_VERSION = "illustrated/2";
 
 /**
  * **How many plates one run may draw**, and it is one character to change.
@@ -792,9 +805,17 @@ function readImage(raw: unknown): IllustratedImage | null {
 }
 
 /**
- * The plates that actually have a picture. The panel's scene row is built from
- * this rather than from `plates`, because a plate whose call failed is a row
- * that says so rather than a row that opens onto nothing.
+ * The plates that actually have a picture — a count, not a row list.
+ *
+ * **This said the panel's plate row is built from it, and stage 4 did the
+ * opposite on purpose.** That sentence also carried its own refutation: a plate
+ * filtered out of the row cannot "say so", it simply is not there, and a gap is
+ * exactly what docs/project/diagram.md § Illustrated says a failed plate must
+ * not be. `src/web/IllustratedView.tsx` lists every plate and draws the
+ * failure sentence in place of the picture.
+ *
+ * So what is left for this is the question it really answers — *how many of
+ * them came out* — which is what `src/pipeline.ts` logs at the end of a run.
  */
 export function drawnPlates(illustrated: Illustrated): IllustratedPlate[] {
   return illustrated.plates.filter((p) => p.image !== undefined);

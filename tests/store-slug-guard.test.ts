@@ -48,10 +48,12 @@ import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import { pgChatStore } from "../src/store/pg-chat.js";
 import { pgCommentStore } from "../src/store/pg-comments.js";
+import { pgGlossaryStore } from "../src/store/pg-glossary.js";
 import { pgGlossaryLookupStore } from "../src/store/pg-lookups.js";
 import { pgRefereeClaimsStore } from "../src/store/pg-referee-claims.js";
 import { pgRefereeCriteriaStore } from "../src/store/pg-referee-criteria.js";
 import { pgSearchStore } from "../src/store/pg-searches.js";
+import { pgVisibilityStore } from "../src/store/pg-visibility.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
@@ -70,7 +72,21 @@ const when = reachable ? describe : describe.skip;
  */
 const MALFORMED = "not a slug";
 
-/** Every store whose reads name an article by slug. Add the seventh here. */
+/**
+ * **Every per-article Postgres store method that takes a slug**, whichever way
+ * it names the article and whether it reads or writes.
+ *
+ * The first six are `load`, and the family was described as "stores whose reads
+ * name an article by slug" for as long as that was all it held. It is not any
+ * more, and the wording mattered: `pgVisibilityStore.set` is a **write**, it
+ * resolves its slug through `lockedArticleQuery` rather than through
+ * `articleIdForOwned`, and it had no `requireSlug` at all until 2026-09-03 —
+ * exactly the seventh copy this file's header predicted. A family defined by
+ * "reads" would have gone on excluding it by its own definition.
+ *
+ * So the rule is the wider one: if a slug can arrive from a reader and reach a
+ * query, the guard belongs in front of it, and the method belongs here.
+ */
 const STORES: readonly (readonly [string, (slug: string) => Promise<unknown>])[] = [
   ["the comment store", (slug) => pgCommentStore.load(slug)],
   ["the chat store", (slug) => pgChatStore.load(slug)],
@@ -78,6 +94,8 @@ const STORES: readonly (readonly [string, (slug: string) => Promise<unknown>])[]
   ["the referee-claims store", (slug) => pgRefereeClaimsStore.load(slug)],
   ["the referee-criteria store", (slug) => pgRefereeCriteriaStore.load(slug)],
   ["the glossary-lookup store", (slug) => pgGlossaryLookupStore.load(slug)],
+  ["the visibility switch", (slug) => pgVisibilityStore.set(slug, "public", true)],
+  ["the glossary delete", (slug) => pgGlossaryStore.deleteGlossary(slug)],
 ];
 
 when("a malformed slug", () => {

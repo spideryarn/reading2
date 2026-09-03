@@ -11,13 +11,33 @@
  * `file:`, `w:`, `h:` in that order; keep them so.
  *
  * **How these were made, 2026-09-03.** Headless system Chrome driven by
- * Playwright, 1440×900 at 2× (scripts in the plan,
- * docs/plans/260902k-website-copy-homepage-and-features.md), of real articles
- * in a local library — *The Mythology of AI Consciousness* by Anil Seth for
- * most of them. Then `pngquant --quality 65-92 --speed 1` and a downscale to
- * about twice the width they are drawn at. PNG rather than JPEG: small light
- * text on a near-black ground rings around every glyph as a JPEG, and a UI
- * screenshot has few enough flat colours that quantised PNG is smaller anyway.
+ * Playwright, 1440×900 at 2×, of real articles in a local library — *The
+ * Mythology of AI Consciousness* by Anil Seth for most of them, and Feynman's
+ * *Cargo Cult Science* for the four landscape shots retaken that afternoon. The
+ * capture scripts were session scratch and were not kept; a retake is a fresh
+ * playwright-core script against system Chrome, signed in as the local admin,
+ * following the alt text below for what each shot shows. Then
+ * `pngquant --quality 65-92 --speed 1` and a downscale to about twice the width
+ * they are drawn at. PNG rather than JPEG: small light text on a near-black
+ * ground rings around every glyph as a JPEG, and a UI screenshot has few enough
+ * flat colours that quantised PNG is smaller anyway.
+ *
+ * **The four retaken shots are 2160 wide and the rest are 1440, and that is not
+ * drift.** The pages draw a landscape shot at 1152px now rather than 768px
+ * (SiteBits.tsx § Showcase), so 1440 is 1.25× and visibly soft where it used to
+ * be 1.9×. The remaining 1440-wide landscape shots — `ask`, `referee`, `library`
+ * — are under-resolution for the same reason and are worth retaking next; the
+ * portrait panels are drawn at ~360px and are fine.
+ *
+ * **What cost the afternoon, so it does not cost the next one** — the whole
+ * recipe is in docs/project/marketing-pages.md, but three things in particular:
+ * the mode bar's controls are `role="radio"` and not `button` (Dock.tsx), so
+ * `getByRole("button")` finds nothing; `?mode=hierarchy` must be named, because
+ * a bare article URL opens in Plain and photographs as prose with no columns;
+ * and an on-demand mode renders an empty "nobody has found the terms for this
+ * one yet" state on a bare URL visit — the run only starts when the mode-bar
+ * control is actually pressed, and pressing it while already in that mode
+ * toggles the band shut instead.
  *
  * Imported rather than dropped in `public/` so Vite hashes them and a redeploy
  * cannot serve a stale one.
@@ -48,30 +68,30 @@ export const SHOTS = {
   glossary: {
     src: glossaryShot,
     file: "glossary-card.png",
-    w: 1440,
-    h: 878,
-    alt: "The article's prose with its key terms underlined, and a card open over one of them explaining what the author means by it.",
+    w: 2160,
+    h: 1350,
+    alt: "The prose of Feynman's “Cargo Cult Science” with its key terms underlined, a panel of their definitions beside it, and a card open over one of them explaining what the author means by it.",
   },
   outline: {
     src: outlineShot,
     file: "outline.png",
-    w: 1440,
-    h: 900,
-    alt: "A table of contents beside the prose, detailed near the section being read and sparser further away.",
+    w: 2160,
+    h: 1350,
+    alt: "A table of contents beside the prose, detailed for the section being read and its neighbours and sparser further away.",
   },
   zoom: {
     src: zoomShot,
     file: "zoom-columns.png",
-    w: 1440,
-    h: 900,
-    alt: "Columns of increasingly detailed summary beside the article's own prose.",
+    w: 2160,
+    h: 1350,
+    alt: "Four columns of increasingly detailed summary — argument, parts, sections — beside the article's own prose, with the current path marked down all four.",
   },
   meaning: {
     src: meaningShot,
     file: "search-meaning.png",
-    w: 1440,
-    h: 900,
-    alt: "A search by meaning with its matching passages marked in the prose and painted as a lane in the narrow strip beside it.",
+    w: 2160,
+    h: 1350,
+    alt: "A search by meaning with its matching passages scored in the panel, marked in the prose and painted as a lane in the narrow strip beside it.",
   },
   meaningPanel: {
     src: meaningPanelShot,

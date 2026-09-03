@@ -271,7 +271,7 @@ export async function invalidate(prefix: string, userId: string | null): Promise
  *
  * For the shelf, which must not offer an article that cannot be opened. The
  * prose specifically: an article whose glossary survived but whose blocks were
- * evicted is not something anybody can read. See `offlineLibrary` in
+ * evicted is not something anybody can read. See `onlyWhatWeHave` in
  * [api.ts](./api.ts).
  */
 export async function cachedSlugs(userId: string | null): Promise<Set<string>> {
