@@ -62,6 +62,7 @@ import {
   type FeedbackSubmission,
   type NewFeedback,
 } from "./contracts.js";
+import { guardDbStore } from "./db-errors.js";
 
 const logger = log("store");
 
@@ -174,7 +175,7 @@ function charsIn(input: NewFeedback): number {
   return input.body.length;
 }
 
-export const pgFeedbackStore: FeedbackStore = {
+const rawPgFeedbackStore: FeedbackStore = {
   async submit(input: NewFeedback): Promise<FeedbackSubmission> {
     const db = getDb();
     const ownerId = currentOwnerId();
@@ -367,3 +368,6 @@ export const pgFeedbackStore: FeedbackStore = {
     return marked;
   },
 };
+
+/** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
+export const pgFeedbackStore: FeedbackStore = guardDbStore("feedback", rawPgFeedbackStore);

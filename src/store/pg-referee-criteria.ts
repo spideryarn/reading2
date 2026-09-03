@@ -49,7 +49,8 @@ import {
 import { CRITERION_SWEPT, withCriterion } from "../referee-criteria-store.js";
 import { MAX_CRITERIA, type SavedCriterion } from "../saved-criteria.js";
 import { requireColour } from "../searches.js";
-import type { RefereeCriteriaStore, SweepOptions } from "./contracts.js";
+import { MissingAttempt, type RefereeCriteriaStore, type SweepOptions } from "./contracts.js";
+import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned, lockArticleRow, sourceHashFor } from "./pg.js";
 
@@ -129,7 +130,7 @@ async function criteriaFor(
   return readable(rows, slug);
 }
 
-export const pgRefereeCriteriaStore: RefereeCriteriaStore = {
+const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
   async load(slug: string): Promise<SavedCriterion[]> {
     return criteriaFor(await articleIdForOwned(slug), getDb(), slug);
   },
@@ -281,18 +282,35 @@ export const pgRefereeCriteriaStore: RefereeCriteriaStore = {
        and accepting `undefined` here would silently reopen the cross-process
        race the column exists to close. pg-searches.ts § finish. */
     if (attempt === undefined) {
-      throw new Error(
-        `finish("${slug}") needs the attempt that begin() returned. ` +
-          "Without it a model call the sweep already buried can overwrite the retry.",
-      );
+      throw new MissingAttempt("RefereeCriteriaStore.finish", "begin()");
     }
     /* And the status has to be one this run can end on: the attempt is released
        below whatever the patch says, so a patch leaving the row `pending` would
        strip the fence off a row still waiting for an answer. */
     if (patch.status !== "done" && patch.status !== "error") {
-      throw new Error(
-        `finish("${slug}") must end a criterion: status was ${JSON.stringify(patch.status)}, ` +
-          'expected "done" or "error".',
+      /* **`status`, so the guard lets the sentence through.** A fence violation
+         is a caller's bug that never reached the database, and its whole
+         content is which invariant broke — scrubbed, it arrives as *"this app
+         asked its database for something it would not do"*, which is a false
+         sentence about a real bug. Door 1 in src/store/db-errors.ts: a refusal
+         a route answers with a number carries the number, rather than this
+         file's name joining an allowlist. The class of bug is
+         docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md; it was
+         invisible here until the store was guarded at its export, because the
+         test that covers it imports this module directly.
+
+         **And the message names the method, not the slug.** A `status` is not a
+         licence to leak — db-errors.ts says so of `CommentIdTaken` — and a slug is
+         a URL path segment derived from a title, so it is exactly what that file
+         refuses to let across. Which article it was is in the request the log
+         already carries. Same shape as `MissingAttempt` in ./contracts.js, which
+         is the sibling refusal in this same family. */
+      throw Object.assign(
+        new Error(
+          `RefereeCriteriaStore.finish must end a criterion: status was ${JSON.stringify(patch.status)}, ` +
+            'expected "done" or "error".',
+        ),
+        { status: 500 },
       );
     }
 
@@ -396,3 +414,6 @@ export const pgRefereeCriteriaStore: RefereeCriteriaStore = {
     return criteriaFor(articleId, db, slug);
   },
 };
+
+/** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
+export const pgRefereeCriteriaStore: RefereeCriteriaStore = guardDbStore("referee-criteria", rawPgRefereeCriteriaStore);

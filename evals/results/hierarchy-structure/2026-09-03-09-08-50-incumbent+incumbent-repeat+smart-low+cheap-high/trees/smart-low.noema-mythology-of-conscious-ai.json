@@ -1,0 +1,2044 @@
+{
+  "version": "toc/3",
+  "generator": "claude-sonnet-5",
+  "slug": "noema-mythology-of-conscious-ai",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0021",
+        "n0047",
+        "n0132",
+        "n0153"
+      ],
+      "range": [
+        "spya-tgnssb",
+        "spya-w8z40d"
+      ],
+      "title": "The Mythology Of Conscious AI",
+      "gist": "Popular belief in imminent conscious AI rests on psychological biases and a flawed computer metaphor, so real machine consciousness is unlikely and its illusion is dangerous, urging caution rather than pursuit.",
+      "sourceHeading": "The Mythology Of Conscious AI"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0007",
+        "n0010",
+        "n0017"
+      ],
+      "range": [
+        "spya-tgnssb",
+        "spya-u774u3"
+      ],
+      "title": "Framing The Question",
+      "gist": "Seth introduces why AI consciousness matters both for AI systems' moral status and for how humans understand themselves."
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0004",
+        "n0005",
+        "n0006"
+      ],
+      "range": [
+        "spya-tgnssb",
+        "spya-d2h6jh"
+      ],
+      "title": "Title & Credits",
+      "gist": "The essay is introduced along with its prize and authorship credits."
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-tgnssb",
+        "spya-tgnssb"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-cfbkp2",
+        "spya-cfbkp2"
+      ],
+      "title": ""
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-d2h6jh",
+        "spya-d2h6jh"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0008",
+        "n0009"
+      ],
+      "range": [
+        "spya-gp3g6s",
+        "spya-rg493b"
+      ],
+      "title": "About The Author",
+      "gist": "Anil Seth, a neuroscientist studying consciousness, won the Berggruen Prize for this essay."
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-gp3g6s",
+        "spya-gp3g6s"
+      ],
+      "title": ""
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-rg493b",
+        "spya-rg493b"
+      ],
+      "title": ""
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0011",
+        "n0012",
+        "n0013",
+        "n0014",
+        "n0015",
+        "n0016"
+      ],
+      "range": [
+        "spya-u6w37a",
+        "spya-e68t9h"
+      ],
+      "title": "The Question Of Machine Consciousness",
+      "gist": "Cultural fears and claims like Blake Lemoine's about LaMDA show the question of AI consciousness is taken increasingly seriously by experts."
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-u6w37a",
+        "spya-u6w37a"
+      ],
+      "title": ""
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-gjy45p",
+        "spya-gjy45p"
+      ],
+      "title": ""
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-d9a0wr",
+        "spya-d9a0wr"
+      ],
+      "title": ""
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-cvyfqe",
+        "spya-cvyfqe"
+      ],
+      "title": ""
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-epw4h3",
+        "spya-epw4h3"
+      ],
+      "title": ""
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-e68t9h",
+        "spya-e68t9h"
+      ],
+      "title": ""
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0018",
+        "n0019",
+        "n0020"
+      ],
+      "range": [
+        "spya-z2b4ny",
+        "spya-u774u3"
+      ],
+      "title": "Why It Matters",
+      "gist": "How we treat the question of AI consciousness shapes AI systems' moral status, our own psychological health, and our understanding of ourselves."
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-z2b4ny",
+        "spya-z2b4ny"
+      ],
+      "title": ""
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-sge6a2",
+        "spya-sge6a2"
+      ],
+      "title": ""
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-u774u3",
+        "spya-u774u3"
+      ],
+      "title": ""
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0022",
+        "n0031",
+        "n0039"
+      ],
+      "range": [
+        "spya-nh8mt7",
+        "spya-gxdsbh"
+      ],
+      "title": "The Temptations Of Conscious AI",
+      "gist": "Human psychological biases, not evidence, make us prone to mistake intelligent-seeming machines for conscious ones.",
+      "sourceHeading": "The Temptations Of Conscious AI"
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 2,
+      "parent": "n0021",
+      "children": [
+        "n0023",
+        "n0024",
+        "n0025",
+        "n0026",
+        "n0027",
+        "n0028",
+        "n0029",
+        "n0030"
+      ],
+      "range": [
+        "spya-nh8mt7",
+        "spya-xm96be"
+      ],
+      "title": "Intelligence Versus Consciousness",
+      "gist": "Intelligence is about doing while consciousness is about being, and AI's intelligence does not entail experience."
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-nh8mt7",
+        "spya-nh8mt7"
+      ],
+      "title": ""
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-q23td7",
+        "spya-q23td7"
+      ],
+      "title": ""
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-f87ghx",
+        "spya-f87ghx"
+      ],
+      "title": ""
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-nj888h",
+        "spya-nj888h"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-qb6xsj",
+        "spya-qb6xsj"
+      ],
+      "title": ""
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-hk6gha",
+        "spya-hk6gha"
+      ],
+      "title": ""
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-j0a9rq",
+        "spya-j0a9rq"
+      ],
+      "title": ""
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-xm96be",
+        "spya-xm96be"
+      ],
+      "title": ""
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 2,
+      "parent": "n0021",
+      "children": [
+        "n0032",
+        "n0033",
+        "n0034",
+        "n0035",
+        "n0036",
+        "n0037",
+        "n0038"
+      ],
+      "range": [
+        "spya-cvaqgs",
+        "spya-cqh2pq"
+      ],
+      "title": "Psychological Biases",
+      "gist": "Anthropocentrism, human exceptionalism, and anthropomorphism lead us to project consciousness onto language-using machines."
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 3,
+      "parent": "n0031",
+      "children": [],
+      "range": [
+        "spya-cvaqgs",
+        "spya-cvaqgs"
+      ],
+      "title": ""
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 3,
+      "parent": "n0031",
+      "children": [],
+      "range": [
+        "spya-h4mwb2",
+        "spya-h4mwb2"
+      ],
+      "title": ""
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 3,
+      "parent": "n0031",
+      "children": [],
+      "range": [
+        "spya-her4zk",
+        "spya-her4zk"
+      ],
+      "title": ""
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 3,
+      "parent": "n0031",
+      "children": [],
+      "range": [
+        "spya-nxxnrj",
+        "spya-nxxnrj"
+      ],
+      "title": ""
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 3,
+      "parent": "n0031",
+      "children": [],
+      "range": [
+        "spya-k6fpme",
+        "spya-k6fpme"
+      ],
+      "title": ""
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 3,
+      "parent": "n0031",
+      "children": [],
+      "range": [
+        "spya-t29n67",
+        "spya-t29n67"
+      ],
+      "title": ""
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 3,
+      "parent": "n0031",
+      "children": [],
+      "range": [
+        "spya-cqh2pq",
+        "spya-cqh2pq"
+      ],
+      "title": ""
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 2,
+      "parent": "n0021",
+      "children": [
+        "n0040",
+        "n0041",
+        "n0042",
+        "n0043",
+        "n0044",
+        "n0045",
+        "n0046"
+      ],
+      "range": [
+        "spya-cke6sj",
+        "spya-gxdsbh"
+      ],
+      "title": "Techno-Rapture And Pareidolia",
+      "gist": "Exponential-growth thinking and techno-utopian fantasies fuel a pareidolia-like tendency to see consciousness in AI where none may exist."
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 3,
+      "parent": "n0039",
+      "children": [],
+      "range": [
+        "spya-cke6sj",
+        "spya-cke6sj"
+      ],
+      "title": ""
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 3,
+      "parent": "n0039",
+      "children": [],
+      "range": [
+        "spya-v7s7gu",
+        "spya-v7s7gu"
+      ],
+      "title": ""
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 3,
+      "parent": "n0039",
+      "children": [],
+      "range": [
+        "spya-v4sduf",
+        "spya-v4sduf"
+      ],
+      "title": ""
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 3,
+      "parent": "n0039",
+      "children": [],
+      "range": [
+        "spya-mcaa4g",
+        "spya-mcaa4g"
+      ],
+      "title": ""
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 3,
+      "parent": "n0039",
+      "children": [],
+      "range": [
+        "spya-k850tu",
+        "spya-k850tu"
+      ],
+      "title": ""
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 3,
+      "parent": "n0039",
+      "children": [],
+      "range": [
+        "spya-rtcxt4",
+        "spya-rtcxt4"
+      ],
+      "title": ""
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 3,
+      "parent": "n0039",
+      "children": [],
+      "range": [
+        "spya-gxdsbh",
+        "spya-gxdsbh"
+      ],
+      "title": ""
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0048",
+        "n0052",
+        "n0079",
+        "n0093",
+        "n0108",
+        "n0121"
+      ],
+      "range": [
+        "spya-d3g67c",
+        "spya-nuy4fw"
+      ],
+      "title": "Consciousness & Computation",
+      "gist": "Four arguments—brain-computer disanalogy, non-computational dynamics, life's role, and simulation-instantiation gap—undermine the assumption that computation suffices for consciousness.",
+      "sourceHeading": "Consciousness & Computation"
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 2,
+      "parent": "n0047",
+      "children": [
+        "n0049",
+        "n0050",
+        "n0051"
+      ],
+      "range": [
+        "spya-d3g67c",
+        "spya-cv97j7"
+      ],
+      "title": "Computational Functionalism",
+      "gist": "The essay questions the widespread assumption that the right computation is sufficient for consciousness."
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 3,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-d3g67c",
+        "spya-d3g67c"
+      ],
+      "title": ""
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 3,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-wepmnr",
+        "spya-wepmnr"
+      ],
+      "title": ""
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 3,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-cv97j7",
+        "spya-cv97j7"
+      ],
+      "title": ""
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 2,
+      "parent": "n0047",
+      "children": [
+        "n0053",
+        "n0054",
+        "n0055",
+        "n0056",
+        "n0057",
+        "n0058",
+        "n0059",
+        "n0060",
+        "n0061",
+        "n0062",
+        "n0063",
+        "n0064",
+        "n0065",
+        "n0066",
+        "n0067",
+        "n0068",
+        "n0069",
+        "n0070",
+        "n0071",
+        "n0072",
+        "n0073",
+        "n0074",
+        "n0075",
+        "n0076",
+        "n0077",
+        "n0078"
+      ],
+      "range": [
+        "spya-sk4su6",
+        "spya-hrbtpu"
+      ],
+      "title": "1: Brains Are Not Computers",
+      "gist": "Brains lack the clean software-hardware separation that defines Turing computation, undermining the brain-as-computer metaphor.",
+      "sourceHeading": "1: Brains Are Not Computers"
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-sk4su6",
+        "spya-sk4su6"
+      ],
+      "title": ""
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-a8jgf4",
+        "spya-a8jgf4"
+      ],
+      "title": ""
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-u9egtc",
+        "spya-u9egtc"
+      ],
+      "title": ""
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-qcevgh",
+        "spya-qcevgh"
+      ],
+      "title": ""
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-cf70dt",
+        "spya-cf70dt"
+      ],
+      "title": ""
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-gx8jm9",
+        "spya-gx8jm9"
+      ],
+      "title": ""
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-dfujdu",
+        "spya-dfujdu"
+      ],
+      "title": ""
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-va8qxr",
+        "spya-va8qxr"
+      ],
+      "title": ""
+    },
+    "n0061": {
+      "id": "n0061",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-b3yn6t",
+        "spya-b3yn6t"
+      ],
+      "title": ""
+    },
+    "n0062": {
+      "id": "n0062",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-qknqjx",
+        "spya-qknqjx"
+      ],
+      "title": ""
+    },
+    "n0063": {
+      "id": "n0063",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-v5vz2t",
+        "spya-v5vz2t"
+      ],
+      "title": ""
+    },
+    "n0064": {
+      "id": "n0064",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-va72zk",
+        "spya-va72zk"
+      ],
+      "title": ""
+    },
+    "n0065": {
+      "id": "n0065",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-b0086e",
+        "spya-b0086e"
+      ],
+      "title": ""
+    },
+    "n0066": {
+      "id": "n0066",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-cf8rt8",
+        "spya-cf8rt8"
+      ],
+      "title": ""
+    },
+    "n0067": {
+      "id": "n0067",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-zw2m7u",
+        "spya-zw2m7u"
+      ],
+      "title": ""
+    },
+    "n0068": {
+      "id": "n0068",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-ycpfzs",
+        "spya-ycpfzs"
+      ],
+      "title": ""
+    },
+    "n0069": {
+      "id": "n0069",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-ey2gx2",
+        "spya-ey2gx2"
+      ],
+      "title": ""
+    },
+    "n0070": {
+      "id": "n0070",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-p4vmm0",
+        "spya-p4vmm0"
+      ],
+      "title": ""
+    },
+    "n0071": {
+      "id": "n0071",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-jnwfxp",
+        "spya-jnwfxp"
+      ],
+      "title": ""
+    },
+    "n0072": {
+      "id": "n0072",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-un9fjn",
+        "spya-un9fjn"
+      ],
+      "title": ""
+    },
+    "n0073": {
+      "id": "n0073",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-ahtr6e",
+        "spya-ahtr6e"
+      ],
+      "title": ""
+    },
+    "n0074": {
+      "id": "n0074",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-v2q8qk",
+        "spya-v2q8qk"
+      ],
+      "title": ""
+    },
+    "n0075": {
+      "id": "n0075",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-v52g4f",
+        "spya-v52g4f"
+      ],
+      "title": ""
+    },
+    "n0076": {
+      "id": "n0076",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-ecfgkp",
+        "spya-ecfgkp"
+      ],
+      "title": ""
+    },
+    "n0077": {
+      "id": "n0077",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-uwxe4h",
+        "spya-uwxe4h"
+      ],
+      "title": ""
+    },
+    "n0078": {
+      "id": "n0078",
+      "depth": 3,
+      "parent": "n0052",
+      "children": [],
+      "range": [
+        "spya-hrbtpu",
+        "spya-hrbtpu"
+      ],
+      "title": ""
+    },
+    "n0079": {
+      "id": "n0079",
+      "depth": 2,
+      "parent": "n0047",
+      "children": [
+        "n0080",
+        "n0081",
+        "n0082",
+        "n0083",
+        "n0084",
+        "n0085",
+        "n0086",
+        "n0087",
+        "n0088",
+        "n0089",
+        "n0090",
+        "n0091",
+        "n0092"
+      ],
+      "range": [
+        "spya-affgsh",
+        "spya-gr2k02"
+      ],
+      "title": "2: Other Games In Town",
+      "gist": "Many biological and physical processes are continuous, stochastic, or non-algorithmic, so consciousness may not depend solely on Turing-style computation.",
+      "sourceHeading": "2: Other Games In Town"
+    },
+    "n0080": {
+      "id": "n0080",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-affgsh",
+        "spya-affgsh"
+      ],
+      "title": ""
+    },
+    "n0081": {
+      "id": "n0081",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-gw0hsq",
+        "spya-gw0hsq"
+      ],
+      "title": ""
+    },
+    "n0082": {
+      "id": "n0082",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-n393ru",
+        "spya-n393ru"
+      ],
+      "title": ""
+    },
+    "n0083": {
+      "id": "n0083",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-gamzr3",
+        "spya-gamzr3"
+      ],
+      "title": ""
+    },
+    "n0084": {
+      "id": "n0084",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-zg9me8",
+        "spya-zg9me8"
+      ],
+      "title": ""
+    },
+    "n0085": {
+      "id": "n0085",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-kjfjgm",
+        "spya-kjfjgm"
+      ],
+      "title": ""
+    },
+    "n0086": {
+      "id": "n0086",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-wze0fn",
+        "spya-wze0fn"
+      ],
+      "title": ""
+    },
+    "n0087": {
+      "id": "n0087",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-v8s83c",
+        "spya-v8s83c"
+      ],
+      "title": ""
+    },
+    "n0088": {
+      "id": "n0088",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-sq9v5k",
+        "spya-sq9v5k"
+      ],
+      "title": ""
+    },
+    "n0089": {
+      "id": "n0089",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-t54yqa",
+        "spya-t54yqa"
+      ],
+      "title": ""
+    },
+    "n0090": {
+      "id": "n0090",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-ezw0kc",
+        "spya-ezw0kc"
+      ],
+      "title": ""
+    },
+    "n0091": {
+      "id": "n0091",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-f0qxnb",
+        "spya-f0qxnb"
+      ],
+      "title": ""
+    },
+    "n0092": {
+      "id": "n0092",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-gr2k02",
+        "spya-gr2k02"
+      ],
+      "title": ""
+    },
+    "n0093": {
+      "id": "n0093",
+      "depth": 2,
+      "parent": "n0047",
+      "children": [
+        "n0094",
+        "n0095",
+        "n0096",
+        "n0097",
+        "n0098",
+        "n0099",
+        "n0100",
+        "n0101",
+        "n0102",
+        "n0103",
+        "n0104",
+        "n0105",
+        "n0106",
+        "n0107"
+      ],
+      "range": [
+        "spya-e7jqx4",
+        "spya-pfkhtt"
+      ],
+      "title": "3: Life Matters",
+      "gist": "Consciousness may be tied to the predictive, self-regulating processes distinctive of living biological systems.",
+      "sourceHeading": "3: Life Matters"
+    },
+    "n0094": {
+      "id": "n0094",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-e7jqx4",
+        "spya-e7jqx4"
+      ],
+      "title": ""
+    },
+    "n0095": {
+      "id": "n0095",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-hj5y6s",
+        "spya-hj5y6s"
+      ],
+      "title": ""
+    },
+    "n0096": {
+      "id": "n0096",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-hrydkk",
+        "spya-hrydkk"
+      ],
+      "title": ""
+    },
+    "n0097": {
+      "id": "n0097",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-dp8sem",
+        "spya-dp8sem"
+      ],
+      "title": ""
+    },
+    "n0098": {
+      "id": "n0098",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-xhvztm",
+        "spya-xhvztm"
+      ],
+      "title": ""
+    },
+    "n0099": {
+      "id": "n0099",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-njmsbz",
+        "spya-njmsbz"
+      ],
+      "title": ""
+    },
+    "n0100": {
+      "id": "n0100",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-f3bgh0",
+        "spya-f3bgh0"
+      ],
+      "title": ""
+    },
+    "n0101": {
+      "id": "n0101",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-hzp9yz",
+        "spya-hzp9yz"
+      ],
+      "title": ""
+    },
+    "n0102": {
+      "id": "n0102",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-b59nm2",
+        "spya-b59nm2"
+      ],
+      "title": ""
+    },
+    "n0103": {
+      "id": "n0103",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-b228ay",
+        "spya-b228ay"
+      ],
+      "title": ""
+    },
+    "n0104": {
+      "id": "n0104",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-dgf4em",
+        "spya-dgf4em"
+      ],
+      "title": ""
+    },
+    "n0105": {
+      "id": "n0105",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-vys3vj",
+        "spya-vys3vj"
+      ],
+      "title": ""
+    },
+    "n0106": {
+      "id": "n0106",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-da9tvt",
+        "spya-da9tvt"
+      ],
+      "title": ""
+    },
+    "n0107": {
+      "id": "n0107",
+      "depth": 3,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-pfkhtt",
+        "spya-pfkhtt"
+      ],
+      "title": ""
+    },
+    "n0108": {
+      "id": "n0108",
+      "depth": 2,
+      "parent": "n0047",
+      "children": [
+        "n0109",
+        "n0110",
+        "n0111",
+        "n0112",
+        "n0113",
+        "n0114",
+        "n0115",
+        "n0116",
+        "n0117",
+        "n0118",
+        "n0119",
+        "n0120"
+      ],
+      "range": [
+        "spya-cqh5wq",
+        "spya-xdy4fe"
+      ],
+      "title": "4: Simulation Is Not Instantiation",
+      "gist": "Simulating a brain computationally does not create consciousness unless computation itself is sufficient for it.",
+      "sourceHeading": "4: Simulation Is Not Instantiation"
+    },
+    "n0109": {
+      "id": "n0109",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-cqh5wq",
+        "spya-cqh5wq"
+      ],
+      "title": ""
+    },
+    "n0110": {
+      "id": "n0110",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-fz5xq5",
+        "spya-fz5xq5"
+      ],
+      "title": ""
+    },
+    "n0111": {
+      "id": "n0111",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-cepmwf",
+        "spya-cepmwf"
+      ],
+      "title": ""
+    },
+    "n0112": {
+      "id": "n0112",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-npjt4j",
+        "spya-npjt4j"
+      ],
+      "title": ""
+    },
+    "n0113": {
+      "id": "n0113",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-pbcr03",
+        "spya-pbcr03"
+      ],
+      "title": ""
+    },
+    "n0114": {
+      "id": "n0114",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-jvrmrh",
+        "spya-jvrmrh"
+      ],
+      "title": ""
+    },
+    "n0115": {
+      "id": "n0115",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-t5ppft",
+        "spya-t5ppft"
+      ],
+      "title": ""
+    },
+    "n0116": {
+      "id": "n0116",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-tb4wr2",
+        "spya-tb4wr2"
+      ],
+      "title": ""
+    },
+    "n0117": {
+      "id": "n0117",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-xvm37k",
+        "spya-xvm37k"
+      ],
+      "title": ""
+    },
+    "n0118": {
+      "id": "n0118",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-sq7un9",
+        "spya-sq7un9"
+      ],
+      "title": ""
+    },
+    "n0119": {
+      "id": "n0119",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-bcnvp2",
+        "spya-bcnvp2"
+      ],
+      "title": ""
+    },
+    "n0120": {
+      "id": "n0120",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [],
+      "range": [
+        "spya-xdy4fe",
+        "spya-xdy4fe"
+      ],
+      "title": ""
+    },
+    "n0121": {
+      "id": "n0121",
+      "depth": 2,
+      "parent": "n0047",
+      "children": [
+        "n0122",
+        "n0123",
+        "n0124",
+        "n0125",
+        "n0126",
+        "n0127",
+        "n0128",
+        "n0129",
+        "n0130",
+        "n0131"
+      ],
+      "range": [
+        "spya-uzr60x",
+        "spya-nuy4fw"
+      ],
+      "title": "Summary Of Arguments",
+      "gist": "Together these arguments suggest consciousness is unlikely to emerge automatically from smarter AI, though artificial consciousness isn't ruled out entirely."
+    },
+    "n0122": {
+      "id": "n0122",
+      "depth": 3,
+      "parent": "n0121",
+      "children": [],
+      "range": [
+        "spya-uzr60x",
+        "spya-uzr60x"
+      ],
+      "title": ""
+    },
+    "n0123": {
+      "id": "n0123",
+      "depth": 3,
+      "parent": "n0121",
+      "children": [],
+      "range": [
+        "spya-e3cq2m",
+        "spya-e3cq2m"
+      ],
+      "title": ""
+    },
+    "n0124": {
+      "id": "n0124",
+      "depth": 3,
+      "parent": "n0121",
+      "children": [],
+      "range": [
+        "spya-ymbpwn",
+        "spya-ymbpwn"
+      ],
+      "title": ""
+    },
+    "n0125": {
+      "id": "n0125",
+      "depth": 3,
+      "parent": "n0121",
+      "children": [],
+      "range": [
+        "spya-ps0kap",
+        "spya-ps0kap"
+      ],
+      "title": ""
+    },
+    "n0126": {
+      "id": "n0126",
+      "depth": 3,
+      "parent": "n0121",
+      "children": [],
+      "range": [
+        "spya-mtzbbg",
+        "spya-mtzbbg"
+      ],
+      "title": ""
+    },
+    "n0127": {
+      "id": "n0127",
+      "depth": 3,
+      "parent": "n0121",
+      "children": [],
+      "range": [
+        "spya-nv6tp0",
+        "spya-nv6tp0"
+      ],
+      "title": ""
+    },
+    "n0128": {
+      "id": "n0128",
+      "depth": 3,
+      "parent": "n0121",
+      "children": [],
+      "range": [
+        "spya-c5ve5t",
+        "spya-c5ve5t"
+      ],
+      "title": ""
+    },
+    "n0129": {
+      "id": "n0129",
+      "depth": 3,
+      "parent": "n0121",
+      "children": [],
+      "range": [
+        "spya-rn8y3y",
+        "spya-rn8y3y"
+      ],
+      "title": ""
+    },
+    "n0130": {
+      "id": "n0130",
+      "depth": 3,
+      "parent": "n0121",
+      "children": [],
+      "range": [
+        "spya-z4bud7",
+        "spya-z4bud7"
+      ],
+      "title": ""
+    },
+    "n0131": {
+      "id": "n0131",
+      "depth": 3,
+      "parent": "n0121",
+      "children": [],
+      "range": [
+        "spya-nuy4fw",
+        "spya-nuy4fw"
+      ],
+      "title": ""
+    },
+    "n0132": {
+      "id": "n0132",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0133",
+        "n0139",
+        "n0143"
+      ],
+      "range": [
+        "spya-e7fdmb",
+        "spya-d89xf7"
+      ],
+      "title": "What (Not) To Do?",
+      "gist": "Given deep uncertainty, we should avoid deliberately creating conscious AI while also guarding against the ethical dangers of merely conscious-seeming machines.",
+      "sourceHeading": "What (Not) To Do?"
+    },
+    "n0133": {
+      "id": "n0133",
+      "depth": 2,
+      "parent": "n0132",
+      "children": [
+        "n0134",
+        "n0135",
+        "n0136",
+        "n0137",
+        "n0138"
+      ],
+      "range": [
+        "spya-e7fdmb",
+        "spya-yverz7"
+      ],
+      "title": "Ethics Of Creating Conscious AI",
+      "gist": "Because moral status hinges on consciousness, deliberately creating conscious AI would be an ethical disaster we should avoid."
+    },
+    "n0134": {
+      "id": "n0134",
+      "depth": 3,
+      "parent": "n0133",
+      "children": [],
+      "range": [
+        "spya-e7fdmb",
+        "spya-e7fdmb"
+      ],
+      "title": ""
+    },
+    "n0135": {
+      "id": "n0135",
+      "depth": 3,
+      "parent": "n0133",
+      "children": [],
+      "range": [
+        "spya-ryg483",
+        "spya-ryg483"
+      ],
+      "title": ""
+    },
+    "n0136": {
+      "id": "n0136",
+      "depth": 3,
+      "parent": "n0133",
+      "children": [],
+      "range": [
+        "spya-qu7j89",
+        "spya-qu7j89"
+      ],
+      "title": ""
+    },
+    "n0137": {
+      "id": "n0137",
+      "depth": 3,
+      "parent": "n0133",
+      "children": [],
+      "range": [
+        "spya-zajp75",
+        "spya-zajp75"
+      ],
+      "title": ""
+    },
+    "n0138": {
+      "id": "n0138",
+      "depth": 3,
+      "parent": "n0133",
+      "children": [],
+      "range": [
+        "spya-yverz7",
+        "spya-yverz7"
+      ],
+      "title": ""
+    },
+    "n0139": {
+      "id": "n0139",
+      "depth": 2,
+      "parent": "n0132",
+      "children": [
+        "n0140",
+        "n0141",
+        "n0142"
+      ],
+      "range": [
+        "spya-vs0vpj",
+        "spya-p8ky7g"
+      ],
+      "title": "Emerging Technologies And Risks",
+      "gist": "Non-digital technologies like organoids may pose more real risk of accidental consciousness than current LLMs."
+    },
+    "n0140": {
+      "id": "n0140",
+      "depth": 3,
+      "parent": "n0139",
+      "children": [],
+      "range": [
+        "spya-vs0vpj",
+        "spya-vs0vpj"
+      ],
+      "title": ""
+    },
+    "n0141": {
+      "id": "n0141",
+      "depth": 3,
+      "parent": "n0139",
+      "children": [],
+      "range": [
+        "spya-x63ycg",
+        "spya-x63ycg"
+      ],
+      "title": ""
+    },
+    "n0142": {
+      "id": "n0142",
+      "depth": 3,
+      "parent": "n0139",
+      "children": [],
+      "range": [
+        "spya-p8ky7g",
+        "spya-p8ky7g"
+      ],
+      "title": ""
+    },
+    "n0143": {
+      "id": "n0143",
+      "depth": 2,
+      "parent": "n0132",
+      "children": [
+        "n0144",
+        "n0145",
+        "n0146",
+        "n0147",
+        "n0148",
+        "n0149",
+        "n0150",
+        "n0151",
+        "n0152"
+      ],
+      "range": [
+        "spya-n0bnf9",
+        "spya-d89xf7"
+      ],
+      "title": "Conscious-Seeming Machines",
+      "gist": "Machines that merely seem conscious raise their own ethical dilemmas, since our feelings about them resist rational correction."
+    },
+    "n0144": {
+      "id": "n0144",
+      "depth": 3,
+      "parent": "n0143",
+      "children": [],
+      "range": [
+        "spya-n0bnf9",
+        "spya-n0bnf9"
+      ],
+      "title": ""
+    },
+    "n0145": {
+      "id": "n0145",
+      "depth": 3,
+      "parent": "n0143",
+      "children": [],
+      "range": [
+        "spya-fdefb5",
+        "spya-fdefb5"
+      ],
+      "title": ""
+    },
+    "n0146": {
+      "id": "n0146",
+      "depth": 3,
+      "parent": "n0143",
+      "children": [],
+      "range": [
+        "spya-gwz5eu",
+        "spya-gwz5eu"
+      ],
+      "title": ""
+    },
+    "n0147": {
+      "id": "n0147",
+      "depth": 3,
+      "parent": "n0143",
+      "children": [],
+      "range": [
+        "spya-xk9gne",
+        "spya-xk9gne"
+      ],
+      "title": ""
+    },
+    "n0148": {
+      "id": "n0148",
+      "depth": 3,
+      "parent": "n0143",
+      "children": [],
+      "range": [
+        "spya-fb397y",
+        "spya-fb397y"
+      ],
+      "title": ""
+    },
+    "n0149": {
+      "id": "n0149",
+      "depth": 3,
+      "parent": "n0143",
+      "children": [],
+      "range": [
+        "spya-tv922y",
+        "spya-tv922y"
+      ],
+      "title": ""
+    },
+    "n0150": {
+      "id": "n0150",
+      "depth": 3,
+      "parent": "n0143",
+      "children": [],
+      "range": [
+        "spya-kqs33c",
+        "spya-kqs33c"
+      ],
+      "title": ""
+    },
+    "n0151": {
+      "id": "n0151",
+      "depth": 3,
+      "parent": "n0143",
+      "children": [],
+      "range": [
+        "spya-mxxutn",
+        "spya-mxxutn"
+      ],
+      "title": ""
+    },
+    "n0152": {
+      "id": "n0152",
+      "depth": 3,
+      "parent": "n0143",
+      "children": [],
+      "range": [
+        "spya-d89xf7",
+        "spya-d89xf7"
+      ],
+      "title": ""
+    },
+    "n0153": {
+      "id": "n0153",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0154",
+        "n0162"
+      ],
+      "range": [
+        "spya-v98v5u",
+        "spya-w8z40d"
+      ],
+      "title": "Soul Machine",
+      "gist": "Rather than fantasizing about disembodied digital souls, we should recognize consciousness as rooted in living, embodied existence.",
+      "sourceHeading": "Soul Machine"
+    },
+    "n0154": {
+      "id": "n0154",
+      "depth": 2,
+      "parent": "n0153",
+      "children": [
+        "n0155",
+        "n0156",
+        "n0157",
+        "n0158",
+        "n0159",
+        "n0160",
+        "n0161"
+      ],
+      "range": [
+        "spya-v98v5u",
+        "spya-w4hwnc"
+      ],
+      "title": "AI As A Mirror",
+      "gist": "AI reflects our own nature back at us, risking that we mechanize our self-understanding if we conflate machines with minds."
+    },
+    "n0155": {
+      "id": "n0155",
+      "depth": 3,
+      "parent": "n0154",
+      "children": [],
+      "range": [
+        "spya-v98v5u",
+        "spya-v98v5u"
+      ],
+      "title": ""
+    },
+    "n0156": {
+      "id": "n0156",
+      "depth": 3,
+      "parent": "n0154",
+      "children": [],
+      "range": [
+        "spya-y4vjdg",
+        "spya-y4vjdg"
+      ],
+      "title": ""
+    },
+    "n0157": {
+      "id": "n0157",
+      "depth": 3,
+      "parent": "n0154",
+      "children": [],
+      "range": [
+        "spya-qwvjwn",
+        "spya-qwvjwn"
+      ],
+      "title": ""
+    },
+    "n0158": {
+      "id": "n0158",
+      "depth": 3,
+      "parent": "n0154",
+      "children": [],
+      "range": [
+        "spya-hbueqc",
+        "spya-hbueqc"
+      ],
+      "title": ""
+    },
+    "n0159": {
+      "id": "n0159",
+      "depth": 3,
+      "parent": "n0154",
+      "children": [],
+      "range": [
+        "spya-vnkr36",
+        "spya-vnkr36"
+      ],
+      "title": ""
+    },
+    "n0160": {
+      "id": "n0160",
+      "depth": 3,
+      "parent": "n0154",
+      "children": [],
+      "range": [
+        "spya-zv36xq",
+        "spya-zv36xq"
+      ],
+      "title": ""
+    },
+    "n0161": {
+      "id": "n0161",
+      "depth": 3,
+      "parent": "n0154",
+      "children": [],
+      "range": [
+        "spya-w4hwnc",
+        "spya-w4hwnc"
+      ],
+      "title": ""
+    },
+    "n0162": {
+      "id": "n0162",
+      "depth": 2,
+      "parent": "n0153",
+      "children": [
+        "n0163",
+        "n0164",
+        "n0165"
+      ],
+      "range": [
+        "spya-fyrb7m",
+        "spya-w8z40d"
+      ],
+      "title": "Rethinking The Soul",
+      "gist": "True selfhood is better understood as an embodied feeling of being alive than as a disembodied, uploadable essence."
+    },
+    "n0163": {
+      "id": "n0163",
+      "depth": 3,
+      "parent": "n0162",
+      "children": [],
+      "range": [
+        "spya-fyrb7m",
+        "spya-fyrb7m"
+      ],
+      "title": ""
+    },
+    "n0164": {
+      "id": "n0164",
+      "depth": 3,
+      "parent": "n0162",
+      "children": [],
+      "range": [
+        "spya-gvzuc4",
+        "spya-gvzuc4"
+      ],
+      "title": ""
+    },
+    "n0165": {
+      "id": "n0165",
+      "depth": 3,
+      "parent": "n0162",
+      "children": [],
+      "range": [
+        "spya-w8z40d",
+        "spya-w8z40d"
+      ],
+      "title": ""
+    }
+  }
+}

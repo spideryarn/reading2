@@ -294,8 +294,14 @@ Postgres is worse than no count at all, because it looks like an answer. They go
 
 ## Finding an article, and finding a passage in one
 
-One box at the top of the shelf, **two matchers behind it** — which is the same shape the in-article
-search already has ([search.md](search.md)), deliberately rather than coincidentally.
+One box **directly above the list**, with **two matchers behind it** — which is the same shape the
+in-article search already has ([search.md](search.md)), deliberately rather than coincidentally.
+
+It sat at the very top of the page until 2026-09-03, above the box for *adding* an article and
+separated from the list it filters by everything in between. Greg: *"Move the search bar so it's
+just above the list of articles."* The order the page renders in is now **add box and its jobs →
+errors and Undo → search → `ShelfControls` → the "n of m" count → the list**
+([`Library.tsx`](../../src/web/Library.tsx)).
 
 1. **The cards, filtered in the browser.** Case- and accent-folded substring match over `title`,
    `byline`, `siteName` and `gist` — exactly the four fields a card renders, because matching

@@ -55,6 +55,7 @@ import type { Claim, ClaimsRun } from "../referee-claims.js";
 import { CLAIMS_TIMEOUT_MS } from "../referee-claims-run.js";
 import { CLAIMS_SWEPT } from "../referee-claims-store.js";
 import type { RefereeClaimsStore } from "./contracts.js";
+import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned, lockArticleRow, sourceHashFor } from "./pg.js";
 
@@ -121,7 +122,7 @@ async function runFor(articleId: string, db: Db | Tx = getDb()): Promise<ClaimsR
   return row ? toRun(row) : null;
 }
 
-export const pgRefereeClaimsStore: RefereeClaimsStore = {
+const rawPgRefereeClaimsStore: RefereeClaimsStore = {
   async load(slug: string): Promise<ClaimsRun | null> {
     return runFor(await articleIdForOwned(slug));
   },
@@ -269,3 +270,6 @@ export const pgRefereeClaimsStore: RefereeClaimsStore = {
     return runFor(articleId, db);
   },
 };
+
+/** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
+export const pgRefereeClaimsStore: RefereeClaimsStore = guardDbStore("referee-claims", rawPgRefereeClaimsStore);

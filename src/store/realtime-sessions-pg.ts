@@ -27,6 +27,7 @@ import { getDb } from "../db/client.js";
 import { articles, realtimeSessions } from "../db/schema.js";
 import type { OwnerId } from "../owner.js";
 import type { RealtimeSession, RealtimeSessionStore } from "./contracts.js";
+import { guardDbStore } from "./db-errors.js";
 import { ownedSlug } from "./owned-slug.js";
 
 type Row = typeof realtimeSessions.$inferSelect;
@@ -72,7 +73,7 @@ function toSession(r: Row): RealtimeSession {
   };
 }
 
-export const pgRealtimeSessionStore: RealtimeSessionStore = {
+const rawPgRealtimeSessionStore: RealtimeSessionStore = {
   async issue(session: RealtimeSession): Promise<void> {
     const articleId = session.articleSlug
       ? await articleIdFor(session.articleSlug, session.ownerId)
@@ -166,3 +167,6 @@ export const pgRealtimeSessionStore: RealtimeSessionStore = {
       );
   },
 };
+
+/** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
+export const pgRealtimeSessionStore: RealtimeSessionStore = guardDbStore("realtime-sessions", rawPgRealtimeSessionStore);

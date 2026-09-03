@@ -1,0 +1,1183 @@
+{
+  "startedAt": "2026-09-03T09:08:50.340Z",
+  "commit": "380753b90604aad3f60ab6f94ca088fb89b98087",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "incumbent",
+      "kind": "one-call",
+      "comparison": "baseline",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "medium"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "incumbent-repeat",
+      "kind": "one-call",
+      "comparison": "noise-floor",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "medium"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-low",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "cheap-high",
+      "kind": "one-call",
+      "comparison": "bakeoff",
+      "call": {
+        "model": "openai/gpt-5.6-luna",
+        "effort": "high"
+      },
+      "seed": "none"
+    }
+  ],
+  "results": [
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "constitution",
+      "run": 1,
+      "callOrder": 1,
+      "blocksSha256": {
+        "measured": "0001e71193a64eb566ceca1285cdb2a7580916f4bcd95a2a5810d964c6902db5",
+        "manifest": "58dd654c87248ce4fc966ad83074b7b6cdaf6569e36ae477e09d28803afdec5f",
+        "matchesManifest": false
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "constitution",
+        "blocks": 84,
+        "bodyBlocks": 84,
+        "headingBlocks": 10,
+        "fragmentBlocks": 1,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 85
+        },
+        "parts": {
+          "count": 2,
+          "words": [
+            2028,
+            2769
+          ],
+          "balanceCv": 0.15447154471544716
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 6.533333333333333,
+          "max": 15,
+          "within5to9": 0.5333333333333333
+        },
+        "headings": {
+          "boundaries": 11,
+          "boundariesOnHeadings": 0.5454545454545454,
+          "headingsCut": 0.6666666666666666,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.5333333333333333,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 33,
+            "words": 1101
+          }
+        },
+        "titles": {
+          "count": 15,
+          "meanWords": 4.066666666666666,
+          "within2to6": 0.8666666666666667,
+          "copiedHeadings": 8,
+          "retention": 0.5190476190476191
+        },
+        "gists": {
+          "count": 15,
+          "coverage": 1,
+          "meanWords": 22.733333333333334,
+          "multiSentence": 0,
+          "templateRepetition": 0.26666666666666666,
+          "retention": 0.7079955436147387
+        }
+      },
+      "calls": [
+        {
+          "ms": 112904,
+          "inputTokens": 11114,
+          "outputTokens": 11064,
+          "reasoningTokens": 8987,
+          "generationId": "gen-1788426530-nncaMvkHllXOnECXnHXW",
+          "costUsd": 0.132868,
+          "providerCostUsd": 0.132868
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      },
+      "vsDisk": {
+        "partCountA": 2,
+        "partCountB": 2,
+        "l1Boundaries": 1,
+        "allBoundaries": 0.5,
+        "boundaryDistance": {
+          "mean": 0.42857142857142855,
+          "within1Block": 0.9523809523809523
+        }
+      }
+    },
+    {
+      "arm": "incumbent-repeat",
+      "comparison": "noise-floor",
+      "slug": "constitution",
+      "run": 1,
+      "callOrder": 2,
+      "blocksSha256": {
+        "measured": "0001e71193a64eb566ceca1285cdb2a7580916f4bcd95a2a5810d964c6902db5",
+        "manifest": "58dd654c87248ce4fc966ad83074b7b6cdaf6569e36ae477e09d28803afdec5f",
+        "matchesManifest": false
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "constitution",
+        "blocks": 84,
+        "bodyBlocks": 84,
+        "headingBlocks": 10,
+        "fragmentBlocks": 1,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 85
+        },
+        "parts": {
+          "count": 2,
+          "words": [
+            2028,
+            2769
+          ],
+          "balanceCv": 0.15447154471544716
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 7.384615384615385,
+          "max": 15,
+          "within5to9": 0.46153846153846156
+        },
+        "headings": {
+          "boundaries": 9,
+          "boundariesOnHeadings": 0.6666666666666666,
+          "headingsCut": 0.6666666666666666,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.7692307692307693,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 33,
+            "words": 1101
+          }
+        },
+        "titles": {
+          "count": 13,
+          "meanWords": 4,
+          "within2to6": 0.8461538461538461,
+          "copiedHeadings": 9,
+          "retention": 0.3125
+        },
+        "gists": {
+          "count": 13,
+          "coverage": 1,
+          "meanWords": 18.923076923076923,
+          "multiSentence": 0,
+          "templateRepetition": 0.3076923076923077,
+          "retention": 0.6497095852865085
+        }
+      },
+      "calls": [
+        {
+          "ms": 74492,
+          "inputTokens": 11114,
+          "outputTokens": 7332,
+          "reasoningTokens": 5593,
+          "generationId": "gen-1788426644-crI5bLQwYrbICb5zryEn",
+          "costUsd": 0.095548,
+          "providerCostUsd": 0.095548
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 2 > child 5",
+          "root > child 2 > child 6",
+          "root > child 2 > child 7"
+        ]
+      },
+      "vsDisk": {
+        "partCountA": 2,
+        "partCountB": 2,
+        "l1Boundaries": 1,
+        "allBoundaries": 0.7272727272727273,
+        "boundaryDistance": {
+          "mean": 0.631578947368421,
+          "within1Block": 0.8421052631578947
+        }
+      }
+    },
+    {
+      "arm": "smart-low",
+      "comparison": "isolated",
+      "slug": "constitution",
+      "run": 1,
+      "callOrder": 3,
+      "blocksSha256": {
+        "measured": "0001e71193a64eb566ceca1285cdb2a7580916f4bcd95a2a5810d964c6902db5",
+        "manifest": "58dd654c87248ce4fc966ad83074b7b6cdaf6569e36ae477e09d28803afdec5f",
+        "matchesManifest": false
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "constitution",
+        "blocks": 84,
+        "bodyBlocks": 84,
+        "headingBlocks": 10,
+        "fragmentBlocks": 1,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 85
+        },
+        "parts": {
+          "count": 2,
+          "words": [
+            2028,
+            2769
+          ],
+          "balanceCv": 0.15447154471544716
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 6.533333333333333,
+          "max": 12,
+          "within5to9": 0.5333333333333333
+        },
+        "headings": {
+          "boundaries": 11,
+          "boundariesOnHeadings": 0.5454545454545454,
+          "headingsCut": 0.6666666666666666,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.6,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 33,
+            "words": 1101
+          }
+        },
+        "titles": {
+          "count": 15,
+          "meanWords": 3.8,
+          "within2to6": 0.8666666666666667,
+          "copiedHeadings": 10,
+          "retention": 0.26666666666666666
+        },
+        "gists": {
+          "count": 15,
+          "coverage": 1,
+          "meanWords": 19.533333333333335,
+          "multiSentence": 0,
+          "templateRepetition": 0.4,
+          "retention": 0.6590875736463973
+        }
+      },
+      "calls": [
+        {
+          "ms": 48733,
+          "inputTokens": 11114,
+          "outputTokens": 4475,
+          "reasoningTokens": 2812,
+          "generationId": "gen-1788426719-E921hdPDkA8O2PquyCjp",
+          "costUsd": 0.066978,
+          "providerCostUsd": 0.066978
+        }
+      ],
+      "repaired": {
+        "ranges": 3,
+        "blocks": 7,
+        "largest": 4,
+        "where": [
+          "root > child 1 (gap, 2)",
+          "root > child 1 > child 1 (gap, 3)",
+          "root > child 2 > child 1 (gap, 4)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      },
+      "vsDisk": {
+        "partCountA": 2,
+        "partCountB": 2,
+        "l1Boundaries": 1,
+        "allBoundaries": 0.5,
+        "boundaryDistance": {
+          "mean": 0.7619047619047619,
+          "within1Block": 0.7619047619047619
+        }
+      }
+    },
+    {
+      "arm": "cheap-high",
+      "comparison": "bakeoff",
+      "slug": "constitution",
+      "run": 1,
+      "callOrder": 4,
+      "blocksSha256": {
+        "measured": "0001e71193a64eb566ceca1285cdb2a7580916f4bcd95a2a5810d964c6902db5",
+        "manifest": "58dd654c87248ce4fc966ad83074b7b6cdaf6569e36ae477e09d28803afdec5f",
+        "matchesManifest": false
+      },
+      "outcome": "threw",
+      "error": "the structure-arm response is not valid JSON: it ends part-way through — cut off after 4741 characters",
+      "calls": [
+        {
+          "ms": 142103,
+          "inputTokens": 7261,
+          "outputTokens": 12465,
+          "reasoningTokens": 11394,
+          "generationId": "gen-1788426767-zmgz7dSu6cIQHT0k24aj",
+          "costUsd": 0,
+          "providerCostUsd": 0
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      }
+    },
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "noema-mythology-of-conscious-ai",
+      "run": 1,
+      "callOrder": 5,
+      "blocksSha256": {
+        "measured": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "manifest": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "matchesManifest": true
+      },
+      "outcome": "threw",
+      "error": "The node at root > child 4 > child 5 has a range that runs backwards — its start block comes 1 block(s) after its end block in the article.",
+      "calls": [
+        {
+          "ms": 83379,
+          "inputTokens": 19490,
+          "outputTokens": 8998,
+          "reasoningTokens": 5524,
+          "generationId": "gen-1788426910-KMpRkcCSidrl26qFSqxo",
+          "costUsd": 0.12896,
+          "providerCostUsd": 0.12896
+        }
+      ],
+      "repaired": {
+        "ranges": 3,
+        "blocks": 4,
+        "largest": 2,
+        "where": [
+          "root > child 4 (overlap, 1)",
+          "root > child 3 > child 1 (gap, 1)",
+          "root > child 3 > child 4 (gap, 2)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 1 > child 1",
+          "root > child 1 > child 2",
+          "root > child 1 > child 3",
+          "root > child 1 > child 4",
+          "root > child 2 > child 1",
+          "root > child 2 > child 2",
+          "root > child 2 > child 3",
+          "root > child 2 > child 4",
+          "root > child 2 > child 5",
+          "root > child 3 > child 1",
+          "root > child 3 > child 6",
+          "root > child 4 > child 1",
+          "root > child 4 > child 2",
+          "root > child 4 > child 3",
+          "root > child 4 > child 4",
+          "root > child 4 > child 5"
+        ]
+      }
+    },
+    {
+      "arm": "incumbent-repeat",
+      "comparison": "noise-floor",
+      "slug": "noema-mythology-of-conscious-ai",
+      "run": 1,
+      "callOrder": 6,
+      "blocksSha256": {
+        "measured": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "manifest": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "noema-mythology-of-conscious-ai",
+        "blocks": 141,
+        "bodyBlocks": 141,
+        "headingBlocks": 9,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 117
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            655,
+            1296,
+            4673,
+            999,
+            660
+          ],
+          "balanceCv": 0.92172431404891
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 5.666666666666667,
+          "max": 26,
+          "within5to9": 0.3333333333333333
+        },
+        "headings": {
+          "boundaries": 23,
+          "boundariesOnHeadings": 0.34782608695652173,
+          "headingsCut": 1,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.3,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 25,
+            "words": 1749
+          }
+        },
+        "titles": {
+          "count": 30,
+          "meanWords": 3.3666666666666667,
+          "within2to6": 0.9666666666666667,
+          "copiedHeadings": 9,
+          "retention": 0.6706349206349206
+        },
+        "gists": {
+          "count": 30,
+          "coverage": 1,
+          "meanWords": 24.933333333333334,
+          "multiSentence": 0,
+          "templateRepetition": 0.13333333333333333,
+          "retention": 0.6407334202032344
+        }
+      },
+      "calls": [
+        {
+          "ms": 104539,
+          "inputTokens": 19490,
+          "outputTokens": 10691,
+          "reasoningTokens": 7217,
+          "generationId": "gen-1788426994-K72aGXCCEM7EdGzV6TR5",
+          "costUsd": 0.14589,
+          "providerCostUsd": 0.14589
+        }
+      ],
+      "repaired": {
+        "ranges": 3,
+        "blocks": 11,
+        "largest": 8,
+        "where": [
+          "root > child 4 (gap, 8)",
+          "root > child 3 > child 4 (gap, 2)",
+          "root > child 4 > child 5 (overlap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      },
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 5,
+        "l1Boundaries": 1,
+        "allBoundaries": 0.4827586206896552,
+        "boundaryDistance": {
+          "mean": 0.46511627906976744,
+          "within1Block": 0.9069767441860465
+        }
+      }
+    },
+    {
+      "arm": "smart-low",
+      "comparison": "isolated",
+      "slug": "noema-mythology-of-conscious-ai",
+      "run": 1,
+      "callOrder": 7,
+      "blocksSha256": {
+        "measured": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "manifest": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "noema-mythology-of-conscious-ai",
+        "blocks": 141,
+        "bodyBlocks": 141,
+        "headingBlocks": 9,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 117
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            655,
+            1296,
+            4673,
+            999,
+            660
+          ],
+          "balanceCv": 0.92172431404891
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 6.833333333333333,
+          "max": 26,
+          "within5to9": 0.375
+        },
+        "headings": {
+          "boundaries": 17,
+          "boundariesOnHeadings": 0.47058823529411764,
+          "headingsCut": 1,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.375,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 25,
+            "words": 1749
+          }
+        },
+        "titles": {
+          "count": 24,
+          "meanWords": 3.5416666666666665,
+          "within2to6": 1,
+          "copiedHeadings": 9,
+          "retention": 0.711111111111111
+        },
+        "gists": {
+          "count": 24,
+          "coverage": 1,
+          "meanWords": 17.416666666666668,
+          "multiSentence": 0,
+          "templateRepetition": 0.08333333333333333,
+          "retention": 0.6173344017094019
+        }
+      },
+      "calls": [
+        {
+          "ms": 40451,
+          "inputTokens": 19490,
+          "outputTokens": 3975,
+          "reasoningTokens": 1587,
+          "generationId": "gen-1788427100-0ODxhjTNkROr3gIJDqkc",
+          "costUsd": 0.07873,
+          "providerCostUsd": 0.07873
+        }
+      ],
+      "repaired": {
+        "ranges": 5,
+        "blocks": 12,
+        "largest": 4,
+        "where": [
+          "root > child 4 (gap, 4)",
+          "root > child 3 > child 4 (gap, 2)",
+          "root > child 3 > child 6 (short, 4)",
+          "root > child 4 > child 2 (overlap, 1)",
+          "root > child 5 > child 2 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      },
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 5,
+        "l1Boundaries": 1,
+        "allBoundaries": 0.5416666666666666,
+        "boundaryDistance": {
+          "mean": 0.6216216216216216,
+          "within1Block": 0.7567567567567568
+        }
+      }
+    },
+    {
+      "arm": "cheap-high",
+      "comparison": "bakeoff",
+      "slug": "noema-mythology-of-conscious-ai",
+      "run": 1,
+      "callOrder": 8,
+      "blocksSha256": {
+        "measured": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "manifest": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "noema-mythology-of-conscious-ai",
+        "blocks": 141,
+        "bodyBlocks": 141,
+        "headingBlocks": 9,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 117
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            655,
+            1296,
+            4673,
+            999,
+            660
+          ],
+          "balanceCv": 0.92172431404891
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 4.783783783783784,
+          "max": 16,
+          "within5to9": 0.5405405405405406
+        },
+        "headings": {
+          "boundaries": 30,
+          "boundariesOnHeadings": 0.26666666666666666,
+          "headingsCut": 1,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.2702702702702703,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 25,
+            "words": 1749
+          }
+        },
+        "titles": {
+          "count": 37,
+          "meanWords": 3.4864864864864864,
+          "within2to6": 1,
+          "copiedHeadings": 10,
+          "retention": 0.7407407407407407
+        },
+        "gists": {
+          "count": 37,
+          "coverage": 1,
+          "meanWords": 20.37837837837838,
+          "multiSentence": 0,
+          "templateRepetition": 0.16216216216216217,
+          "retention": 0.6340047601270513
+        }
+      },
+      "calls": [
+        {
+          "ms": 145666,
+          "inputTokens": 12712,
+          "outputTokens": 13053,
+          "reasoningTokens": 10876,
+          "generationId": "gen-1788427141-TxKVq1AKGQ9EsoxfXDGP",
+          "costUsd": 0,
+          "providerCostUsd": 0
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      },
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 5,
+        "l1Boundaries": 1,
+        "allBoundaries": 0.42857142857142855,
+        "boundaryDistance": {
+          "mean": 1.52,
+          "within1Block": 0.7
+        }
+      }
+    },
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "writes",
+      "run": 1,
+      "callOrder": 9,
+      "blocksSha256": {
+        "measured": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "manifest": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "writes",
+        "blocks": 19,
+        "bodyBlocks": 19,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 18
+        },
+        "parts": {
+          "count": 4,
+          "words": [
+            132,
+            177,
+            181,
+            71
+          ],
+          "balanceCv": 0.3163628810869527
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 2.3846153846153846,
+          "max": 4,
+          "within5to9": 0
+        },
+        "headings": {
+          "boundaries": 7,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.15384615384615385,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 18,
+            "words": 558
+          }
+        },
+        "titles": {
+          "count": 13,
+          "meanWords": 3.6923076923076925,
+          "within2to6": 0.8461538461538461,
+          "copiedHeadings": 2,
+          "retention": 0.5606060606060607
+        },
+        "gists": {
+          "count": 13,
+          "coverage": 1,
+          "meanWords": 21,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.42343169650861956
+        }
+      },
+      "calls": [
+        {
+          "ms": 23352,
+          "inputTokens": 2151,
+          "outputTokens": 2234,
+          "reasoningTokens": 897,
+          "generationId": "gen-1788427287-M7lhQuiN1HvidWUXoIVW",
+          "costUsd": 0.026642,
+          "providerCostUsd": 0.026642
+        }
+      ],
+      "repaired": {
+        "ranges": 2,
+        "blocks": 2,
+        "largest": 1,
+        "where": [
+          "root > child 2 (gap, 1)",
+          "root > child 1 > child 2 (short, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 4 > child 2"
+        ]
+      },
+      "vsDisk": {
+        "partCountA": 4,
+        "partCountB": 4,
+        "l1Boundaries": 0.2,
+        "allBoundaries": 0.5,
+        "boundaryDistance": {
+          "mean": 0.3333333333333333,
+          "within1Block": 1
+        }
+      }
+    },
+    {
+      "arm": "incumbent-repeat",
+      "comparison": "noise-floor",
+      "slug": "writes",
+      "run": 1,
+      "callOrder": 10,
+      "blocksSha256": {
+        "measured": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "manifest": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "writes",
+        "blocks": 19,
+        "bodyBlocks": 19,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 18
+        },
+        "parts": {
+          "count": 4,
+          "words": [
+            9,
+            271,
+            210,
+            71
+          ],
+          "balanceCv": 0.7476671926168998
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 2.3846153846153846,
+          "max": 4,
+          "within5to9": 0
+        },
+        "headings": {
+          "boundaries": 7,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.07692307692307693,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 18,
+            "words": 558
+          }
+        },
+        "titles": {
+          "count": 13,
+          "meanWords": 3.3846153846153846,
+          "within2to6": 1,
+          "copiedHeadings": 1,
+          "retention": 0.3055555555555555
+        },
+        "gists": {
+          "count": 13,
+          "coverage": 1,
+          "meanWords": 18.076923076923077,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.38514993051192153
+        }
+      },
+      "calls": [
+        {
+          "ms": 22401,
+          "inputTokens": 2151,
+          "outputTokens": 2241,
+          "reasoningTokens": 1001,
+          "generationId": "gen-1788427310-z6GWOrEGFF7elQHTaX4q",
+          "costUsd": 0.026712,
+          "providerCostUsd": 0.026712
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      },
+      "vsDisk": {
+        "partCountA": 4,
+        "partCountB": 4,
+        "l1Boundaries": 0.5,
+        "allBoundaries": 0.38461538461538464,
+        "boundaryDistance": {
+          "mean": 0.5,
+          "within1Block": 0.9444444444444444
+        }
+      }
+    },
+    {
+      "arm": "smart-low",
+      "comparison": "isolated",
+      "slug": "writes",
+      "run": 1,
+      "callOrder": 11,
+      "blocksSha256": {
+        "measured": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "manifest": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "writes",
+        "blocks": 19,
+        "bodyBlocks": 19,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 18
+        },
+        "parts": {
+          "count": 4,
+          "words": [
+            9,
+            271,
+            210,
+            71
+          ],
+          "balanceCv": 0.7476671926168998
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 2.2,
+          "max": 4,
+          "within5to9": 0
+        },
+        "headings": {
+          "boundaries": 9,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.13333333333333333,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 18,
+            "words": 558
+          }
+        },
+        "titles": {
+          "count": 15,
+          "meanWords": 3.4,
+          "within2to6": 0.8666666666666667,
+          "copiedHeadings": 2,
+          "retention": 0.4743589743589744
+        },
+        "gists": {
+          "count": 15,
+          "coverage": 1,
+          "meanWords": 15.4,
+          "multiSentence": 0,
+          "templateRepetition": 0.13333333333333333,
+          "retention": 0.4044949494949496
+        }
+      },
+      "calls": [
+        {
+          "ms": 17205,
+          "inputTokens": 2151,
+          "outputTokens": 1586,
+          "reasoningTokens": 397,
+          "generationId": "gen-1788427333-0vfbJ6ELduuOZCa4SUCF",
+          "costUsd": 0.020162,
+          "providerCostUsd": 0.020162
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      },
+      "vsDisk": {
+        "partCountA": 4,
+        "partCountB": 4,
+        "l1Boundaries": 0.5,
+        "allBoundaries": 0.5384615384615384,
+        "boundaryDistance": {
+          "mean": 0.45,
+          "within1Block": 0.9
+        }
+      }
+    },
+    {
+      "arm": "cheap-high",
+      "comparison": "bakeoff",
+      "slug": "writes",
+      "run": 1,
+      "callOrder": 12,
+      "blocksSha256": {
+        "measured": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "manifest": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "writes",
+        "blocks": 19,
+        "bodyBlocks": 19,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 18
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            113,
+            167,
+            125,
+            85,
+            71
+          ],
+          "balanceCv": 0.2984023238194877
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 2.5,
+          "max": 5,
+          "within5to9": 0.08333333333333333
+        },
+        "headings": {
+          "boundaries": 5,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.16666666666666666,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 18,
+            "words": 558
+          }
+        },
+        "titles": {
+          "count": 12,
+          "meanWords": 3.3333333333333335,
+          "within2to6": 1,
+          "copiedHeadings": 2,
+          "retention": 0.7
+        },
+        "gists": {
+          "count": 12,
+          "coverage": 1,
+          "meanWords": 16,
+          "multiSentence": 0,
+          "templateRepetition": 0.16666666666666666,
+          "retention": 0.4172494172494172
+        }
+      },
+      "calls": [
+        {
+          "ms": 124025,
+          "inputTokens": 1481,
+          "outputTokens": 10713,
+          "reasoningTokens": 10096,
+          "generationId": "gen-1788427350-5mybYqxmzWZiaaGeQuuW",
+          "costUsd": 0,
+          "providerCostUsd": 0
+        }
+      ],
+      "repaired": {
+        "ranges": 1,
+        "blocks": 4,
+        "largest": 4,
+        "where": [
+          "root > child 2 (gap, 4)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      },
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 4,
+        "l1Boundaries": 0.4,
+        "allBoundaries": 0.45454545454545453,
+        "boundaryDistance": {
+          "mean": 0.4375,
+          "within1Block": 0.9375
+        }
+      }
+    }
+  ]
+}

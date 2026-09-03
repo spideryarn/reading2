@@ -58,7 +58,8 @@ import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import { MAX_RUNS, requireColour, withRun } from "../searches.js";
 import type { SearchHit, SearchRun } from "../types.js";
-import type { SearchStore, SweepOptions } from "./contracts.js";
+import { MissingAttempt, type SearchStore, type SweepOptions } from "./contracts.js";
+import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned, lockArticleRow, sourceHashFor } from "./pg.js";
 
@@ -120,7 +121,7 @@ async function runsFor(articleId: string, db: Db | Tx = getDb()): Promise<Search
   return rows.map(toRun);
 }
 
-export const pgSearchStore: SearchStore = {
+const rawPgSearchStore: SearchStore = {
   async load(slug: string): Promise<SearchRun[]> {
     return runsFor(await articleIdForOwned(slug));
   },
@@ -283,10 +284,7 @@ export const pgSearchStore: SearchStore = {
        The column exists to close that; accepting `undefined` would reopen it
        silently. GPT Sol, 2026-08-26. */
     if (attempt === undefined) {
-      throw new Error(
-        `finish("${slug}") needs the attempt that begin() returned. ` +
-          "Without it a model call the sweep already buried can overwrite the retry.",
-      );
+      throw new MissingAttempt("SearchStore.finish", "begin()");
     }
 
     /* **And the status has to be one this run can end on.** The attempt is
@@ -294,9 +292,29 @@ export const pgSearchStore: SearchStore = {
        `pending` would strip the fence off a row that is still waiting for an
        answer — after which anybody's late write can land on it. */
     if (patch.status !== "done" && patch.status !== "error") {
-      throw new Error(
-        `finish("${slug}") must end a run: status was ${JSON.stringify(patch.status)}, ` +
-          "expected \"done\" or \"error\".",
+      /* **`status`, so the guard lets the sentence through.** A fence violation
+         is a caller's bug that never reached the database, and its whole
+         content is which invariant broke — scrubbed, it arrives as *"this app
+         asked its database for something it would not do"*, which is a false
+         sentence about a real bug. Door 1 in src/store/db-errors.ts: a refusal
+         a route answers with a number carries the number, rather than this
+         file's name joining an allowlist. The class of bug is
+         docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md; it was
+         invisible here until the store was guarded at its export, because the
+         test that covers it imports this module directly.
+
+         **And the message names the method, not the slug.** A `status` is not a
+         licence to leak — db-errors.ts says so of `CommentIdTaken` — and a slug is
+         a URL path segment derived from a title, so it is exactly what that file
+         refuses to let across. Which article it was is in the request the log
+         already carries. Same shape as `MissingAttempt` in ./contracts.js, which
+         is the sibling refusal in this same family. */
+      throw Object.assign(
+        new Error(
+          `SearchStore.finish must end a run: status was ${JSON.stringify(patch.status)}, ` +
+            'expected "done" or "error".',
+        ),
+        { status: 500 },
       );
     }
 
@@ -429,3 +447,6 @@ export const pgSearchStore: SearchStore = {
     return runsFor(articleId);
   },
 };
+
+/** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
+export const pgSearchStore: SearchStore = guardDbStore("searches", rawPgSearchStore);

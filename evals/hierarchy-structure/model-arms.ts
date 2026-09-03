@@ -88,6 +88,57 @@ export function assertCallAccounted(stats: CallStats, label: string): void {
         `fix the accounting before re-running.`,
     );
   }
+  /**
+   * **Zero is the failure this function was written to catch, and the first
+   * version did not catch it.** The docstring above named it exactly — "a cost
+   * that lands as zero, silently... a free arm that was not free" — and then
+   * guarded `null`, which is a different thing. A zero satisfies "a source
+   * answered", and it also sails through verify-costs.ts, because $0 and $0
+   * agree to within any tolerance.
+   *
+   * Observed 2026-09-03 on the `cheap-high` arm: three calls, 10,713–13,053
+   * output tokens each, all reporting `costUsd: 0`, all reconciled
+   * `$0.000000 ≈ $0.000000 ✓` against the generation endpoint's own record.
+   *
+   * **And the zero was accurate — which is worse.** The record says
+   * `is_byok: true` and `total_cost: 0`: the quick tier resolves to an OpenAI
+   * model reached on our own OpenAI key, so OpenRouter routed it and did not
+   * bill it. The money is real (src/models.ts prices it at $0.20/M in,
+   * $1.20/M out — about $0.018 for that call) and it lands on a different
+   * invoice, where nothing in this repo is looking.
+   *
+   * So the arm was about to be scored free beside a $0.13 Sonnet arm, with
+   * every ledger in agreement. "A tenth the price" versus "free" is the whole
+   * substance of the decision this harness exists to inform, and BYOK is a
+   * property of the key rather than of the model, so it will do this to any
+   * future arm pointed at the same tier. See docs/project/ai-gateway.md.
+   *
+   * **evals/cost already knew this and this harness did not**, which is the
+   * part worth remembering. PDF extraction runs on the same tier, and
+   * evals/results/cost-per-article-2026-09-03.md § "PDF extraction is BYOK"
+   * says so out loud, prices it from the table at $0.0517, and states that
+   * every figure in that report is credits + BYOK for exactly this reason. Two
+   * harnesses, one gateway, one of them reporting the other's known-real cost
+   * as zero.
+   *
+   * A call that really is free has to say so somewhere a reader can see it; it
+   * does not get to be the default reading of a number that is missing because
+   * somebody else billed it.
+   */
+  const zeroSource =
+    stats.costUsd === 0 ? "the response's usage" : stats.providerCostUsd === 0 ? "the generation endpoint" : null;
+  if (zeroSource !== null) {
+    throw new Error(
+      `${label}: ${zeroSource} reported $0 for a call that booked ` +
+        `${stats.inputTokens} input and ${stats.outputTokens} output tokens ` +
+        `(id ${stats.generationId ?? "missing"}). Tokens were spent, so $0 is a bill ` +
+        `somewhere else, not a free call — and $0 agrees with $0, so the reconciler ` +
+        `passes it too. Check the generation record for is_byok: a BYOK call is routed ` +
+        `by OpenRouter and invoiced by the provider, so its cost is real and absent here. ` +
+        `Price it from src/models.ts and say so, or record the call as genuinely free ` +
+        `where a reader will see it.`,
+    );
+  }
   if (stats.costUsd !== null && stats.providerCostUsd !== null) {
     /* 10% is a JUDGEMENT CALL, not a discovered constant, and here is the
        judgement: the failures this check exists for — a zero, a mapping that
