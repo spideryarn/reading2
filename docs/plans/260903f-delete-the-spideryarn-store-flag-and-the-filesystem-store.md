@@ -16,9 +16,12 @@ on Greg's decision** — see stage T. That is the largest change to its shape si
 three later stages consume it**:
 
 ```
-A (store inventory) → B0 → T-B (factory) → T-C (lanes) → T-D (activation) → T-E (pollution)
+A (store inventory) ✅ → B0 → T-B (factory) → T-C (lanes) → T-D (activation) → T-E (pollution)
   → C → B → D → E → F (hinge) → G → H → I
 ```
+
+**Stage A is done.** Both witnesses are built, the registry is checked in with 93 classified entries,
+and its guard has been watched failing four different ways. **B0 is next**, and it needs a quiet box.
 
 The `pdf` spike is independent and can happen any time before E.
 **All of D′ is off the list: D′1 is landed, D′2 was scheduled twice, D′3 is cancelled.**
@@ -85,6 +88,7 @@ manifest that a test can police.
 | ungated test files importing `store/index`, `routes` or `api` | **43** |
 | test files importing a condemned filesystem module (incl. helpers) | **67** — union **105 candidates**, deliberately over-inclusive |
 | filesystem-only source | **~3,900 lines**; `src/store/fs.ts` alone is 576 |
+| **test files that actually touch it, measured** | **88** — and this is the one to use; see stage A |
 
 Every count in this table was checked by the second review; those it corrected are corrected here.
 **The candidate union is direct-import only** — see stage A on why that is not good enough.
@@ -316,6 +320,131 @@ with the bug. So the manifest gets **two independent witnesses**:
 **And the manifest is a ledger, not the protection.** The real protection against a wrong
 classification is the per-suite mutation evidence from B and the assertion inventory in G. Do not
 let a green manifest test stand in for either.
+
+#### Witness 2 is measured: [`tests/store-migration-witness.json`](../../tests/store-migration-witness.json)
+
+The whole suite run with the eight condemned modules instrumented at method level, default store.
+**The number that matters is 88, and it is neither of the two we had.**
+
+| | |
+|---|---|
+| test files that **actually reach** the filesystem store | **88** |
+| test files that run and touch nothing | **499** |
+| unresolved — skips entirely | **1** (`gjd-remote-tab-lifecycle`) |
+| for comparison: statically reachable (witness 1) | 192 |
+| for comparison: direct-import grep candidates | 105 |
+
+**46 of the 88 touch it with no direct import at all**, and 38 were not static candidates by the
+dynamic witness's own baseline either. **One file imports a condemned module and never touches it**
+(`store-artefacts-pg`). So the grep over-counted by roughly a fifth and under-counted by about half,
+in different files — which is the whole argument for having both witnesses.
+
+**The instrument was proved before its output was believed.** Four positive controls hit, with
+method-level detail (`store-parity` reaching twelve distinct `fs:` and `copy-artefacts:` methods);
+four negative controls clean. **One positive control missed, and the miss is explained rather than
+waved through**: `tests/store-fs-write-chains.test.ts` loads `ai-calls-fs` under a *second module id*
+(`import("…?copy=2")`) and `vi.mock`s `node:fs/promises`, so by construction the instrument cannot
+see it — and that duplication is the file's own subject. **A known blind spot of exactly one file,
+recorded in the JSON.**
+
+**"Did not report" was kept distinct from "did not touch"**, which is the distinction the whole
+witness exists for. Three files failed or skipped mid-run and were re-run afterwards under the
+instrument: `pg-session-real-step` **does** touch, `store-job-draft` does not, and
+`gjd-remote-tab-lifecycle` skips and stays unresolved rather than being assumed clean.
+
+#### Stage A is built: [`tests/store-migration-registry.ts`](../../tests/store-migration-registry.ts)
+
+**93 entries** — the 88 the dynamic witness watched, plus `tests/slug.test.ts` (the grep-only
+candidate an import walk is structurally blind to) and files that arrived from `dev` *after* the
+witness ran, each carrying `evidence: "static-only"` so the field says which witness backs each
+verdict.
+
+| category | n |
+|---|---|
+| `database-integration` | 33 |
+| `filesystem-adapter-behaviour` | 24 |
+| `shared-mechanism-collateral` | 23 |
+| `store-agnostic-fake` | 13 |
+
+**The fourth category survived, and our framing of it was too narrow.** We proposed
+`ledger-collateral`: files that touch the filesystem store only because `selected()` in
+[`ai-calls.ts`](../../src/store/ai-calls.ts) returns the filesystem ledger whenever
+`NODE_ENV === "test"`. Checked rather than accepted, the ledger turns out to be **one of five such
+mechanisms**, and the other two large ones are more interesting than it:
+
+- **`step-context-paths` (7)** — `runStep` in [`jobs.ts`](../../src/jobs.ts) calls
+  `contextPaths(job.slug)` **unconditionally, under either store**. That is why `fsLocations` and
+  `dataRoot` show up on pure-Postgres suites. `ai-calls-fs.ts` never touches either; it resolves its
+  own root.
+- **`fixture-loader` (12, the largest)** — `tests/helpers/load-article.ts` copies fixtures into
+  Postgres with `copyArtefacts` **from a `createFsArtifactStore`**, so twelve already-converted
+  Postgres suites inherit both touches from one helper. **Stage D decides all twelve at once.**
+- `ledger-redirect` (7), plus a `shared-symbol` and an `import-only`.
+
+**The rule applied is that a file is collateral only if *every* recorded site is incidental** — a
+genuine database test that also happens to write ledger rows stays `database-integration`. So the
+category removes **23 files from the work**, not the dozen we guessed.
+
+**The hard tail is named, and it is not the big files.** Around ten no-database queue and coordinator
+suites each keep the **real** `fsJobStore` deliberately, and **each one's docstring states the reason
+the migration falsifies**: `owner-jobs` says *"jobs never reach Postgres"*;
+`all-skipped-publication-log` says *"no database at all, deliberately… so this cannot skip itself
+into a green run"*. Every one then needs an `auth.users` row — 5 of 5 writes refused without one, per
+stage C's spike. Two of them, `retry-is-only-for-a-failed-job` and `step-failure-seam`, additionally
+assert on bytes read back **out of `data/_jobs/`** on purpose, because that is what a later request
+sees. `jobs.test.ts` alone carries **26 filesystem sites across three adapters** and is the single
+largest conversion in the inventory.
+
+**And `referee-routes-postgres.test.ts` exists because its author deliberately avoided this.**
+Pinning `referee-claims-routes` and `referee-criteria-routes` to Postgres would have cost them their
+no-model guarantee, so a third file was written instead. **The hinge removes the option they chose**,
+so both need the rewrite that was consciously dodged.
+
+#### The guard, and the four things broken to prove it fails
+
+`tests/store-migration-registry.test.ts`. Seven assertions; the one that matters is the **hole
+check** — every file the import graph can reach is either in the registry, or recorded by the witness
+as having run and touched nothing, or listed by the witness as unresolved. **No fourth way to be
+accounted for.** It re-derives the static universe by running `store-migration-candidates.ts` as a
+subprocess on every run: 17 seconds, **deliberately uncached**, because a cached answer is a claim
+about the tree as it was and the tree moving is the entire reason the check exists.
+
+Each of these was broken on purpose, watched failing by name, and put back:
+
+| broken | what it said |
+|---|---|
+| a registry key renamed | `files the import graph says can reach a condemned module… ["tests/glossary-delete-then-rebuild.test.ts"]` — **this is the one that proves the graph walk actually ran** |
+| another key renamed | `witnessed as touching the filesystem store, with no registry entry: ["tests/routes.test.ts"]` |
+| a reason copy-pasted between two entries | `entries sharing a reason word for word: [["tests/block-roles.test.ts", "tests/tweets.test.ts"]]` |
+| `evidence` removed from a static-only entry | `entries claiming dynamic evidence the witness does not have: ["tests/slug.test.ts"]` |
+
+Three further controls guard the hole check itself, because **both set-differences are empty when
+their inputs are empty**: an unread witness, an empty `ranAndTouchedNothing`, or a walk that parsed
+nothing would each pass silently otherwise.
+
+**A fifth red was unplanned and was a real find**: a placeholder ban list caught the word `unknown`
+inside *"an unknown `questionId` is a 404"*. Loosened, with the reason recorded — **a ban list that
+catches ordinary English trains people to reword good prose**, which is worse than the thing it was
+guarding against.
+
+#### Three the registry is least confident about, recorded rather than smoothed over
+
+- **`store-roundtrip.test.ts`** — its export target (`src/store/export.ts`) survives while its
+  *source* side dies. It needs a new left-hand side rather than a new claim, and somebody should
+  decide what before stage G.
+- **`store-pg-session.test.ts` case 6** proves the preflight reads `session.reads` and never the disk
+  **by planting a good `arc.json` in `data/`**. With no disk, that control has to be *re-expressed*
+  rather than dropped — dropping it is how the claim quietly becomes untested.
+- **`helpers-load-article` and `load-article-serialisation`** are the loader's own tests, so they are
+  stage D's to edit and fit none of the three original categories. `database-integration` was widened
+  in the registry's docstring to mean *"it belongs on Postgres — the work is getting it there, or
+  removing the filesystem half it still carries"*, and says so.
+
+**The instrument is kept, not thrown away.** `vitest.witness.config.ts` and `tests/setup/fs-store-witness*.ts`
+are listed in `tsconfig.json` beside 260903e's spike config and are **not** wired into
+`vitest.config.ts`, so `npm test` never loads them. Witness 2 is a measurement with a date on it and
+the tree keeps moving — it counted 588 test files and the walk saw 597 ninety minutes later. Whoever
+re-takes it needs this. It dies with the filesystem store in G.
 
 #### Witness 1 is built: [`scripts/store-migration-candidates.ts`](../../scripts/store-migration-candidates.ts)
 
