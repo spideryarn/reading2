@@ -1048,11 +1048,18 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      **It is cache-COMPATIBLE with `glossary` and with nothing else** — same
      model, same effort, same renderer, same bytes. Compatible is all it is, and
      the first version of this comment claimed a saving it does not get: a cache
-     entry is only *written* when a later step in the SAME job would read it
+     entry is only *written* when another step in the SAME job would read it
      (`cacheArticle` in src/pipeline.ts § StepContext), and a reader pressing
      "Find the terms" and then "Choose the quotes" makes two jobs minutes apart.
      The saving is real for `steps: ["glossary","quotes"]` in one job and for
      nothing else. GPT Sol, 2026-08-31.
+
+     **And until 2026-09-03 it was not real even there**, which is worth leaving
+     here because this comment was right in intent and the code did not deliver
+     it: the predicate looked only at *later* steps, so `glossary` wrote the
+     entry and `quotes` — last in the group, always — sent no breakpoint and read
+     nothing. Measured at 25,428 wasted cached tokens on a 17,000-word article.
+     docs/postmortems/260903c-the-conditional-article-cache-breakpoint-marks-the-writer-but-never-the-reader.md.
 
      It is still a constraint: `sharesArticleCache` groups on effort AND
      renderer, so moving either stage's effort ends the compatibility silently.

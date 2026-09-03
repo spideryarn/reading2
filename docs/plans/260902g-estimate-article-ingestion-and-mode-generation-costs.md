@@ -650,9 +650,18 @@ because the cache is marked *per job*, and there is no entry for a later job to 
       previous instance of this class created this one. Invisible to every check, and three things
       were nominally watching — `tests/article-cache-group.test.ts` **asserts the bug as correct**,
       `evals/prompt-caching.ts` prints the instruction that would have found it, and
-      `evals/cost/report.ts` states the mechanism and applies it to the wrong case. **Fix
-      described, deliberately not applied — Greg's call**; worth $0.1406 of $0.7558 (18.6%), which
-      is 3.6× what deleting the optimisation would save.
+      `evals/cost/report.ts` states the mechanism and applies it to the wrong case. Worth $0.1406 of
+      $0.7558 (18.6%), which is 3.6× what deleting the optimisation would save.
+
+      **Fixed 2026-09-03**, after Fable talked the design out of the `status === "done"` filter this
+      plan's postmortem first recommended, and verified on a paid `arc,tweets` run before being
+      believed: predicted $0.045770, measured $0.045756 on the input side. `cacheArticleForStep`
+      replaces the inline `slice(i + 1)`; a generated both-sides test was watched failing against the
+      old predicate first; and `checkBatchedDraw` gives the batched phase the rule it never had —
+      stated in money rather than in `sharesArticleCache`, because a check built on the predicate
+      would have passed on the broken code. One qualification the percentage hides: the reading view
+      enqueues one step per press, so production almost certainly never emitted this shape, and the
+      value is forward-looking.
 
 #### Code review, GPT Sol: *"not ready for the paid sweep"* — no P0s, five P1s
 
@@ -744,6 +753,43 @@ a decision. The report must say **561 words**, not "about a thousand".
       are worth doing now because neither trades against quality: **fix the article-cache
       breakpoint** (18.6% of a batched job, and a bug rather than a tuning) and **bound reasoning
       on the tasks that hit the ceiling** ($0.4758 of this sweep, 6.5%, billed in full for nothing).
+
+### Stage: Act on candidate 1 — the article-cache breakpoint ✅ 2026-09-03
+
+Not in the original plan; added when the sweep found a live bug rather than only a number. Design
+arbitrated by Fable, code reviewed by GPT Sol.
+
+- [x] `cacheArticleForStep(steps, index)` in [`src/pipeline.ts`](../../src/pipeline.ts) — mark for
+      any *other* group member in the job, either direction, filtered by position not by name. The
+      inline `slice(i + 1)` at the [`src/jobs.ts`](../../src/jobs.ts) call site is gone, which is
+      the point: it was untestable without a job, a store session and a claim.
+- [x] **No `status === "done"` filter.** Fable's argument, accepted: `done` doesn't mean a live
+      entry (a resumed job has `done` steps whose entries expired), the filter would depend on
+      `runStep` mutating `job.steps` as it walks, and the asymmetry — 0.25× for a marker onto a cold
+      prefix against 0.9× for one withheld from a warm one — says guess *yes*. Marking
+      **unconditionally** is left untaken: it breaks even above a ~22% within-TTL hit rate nobody has
+      measured.
+- [x] Both-sides test, generated from the tables, **watched failing against the old predicate
+      first** — four failures, every one a reader. The two tests that asserted the bug as correct
+      are gone.
+- [x] `checkBatchedDraw` in [`evals/cost/report.ts`](../../evals/cost/report.ts) — the batched phase
+      had no rule at all. Stated in money (*every write must be followed by a read of about that
+      size*) rather than in `sharesArticleCache`, because a check built on the predicate would have
+      passed on the broken code. Fires on all three real pre-fix result files.
+- [x] `tests/article-cache-call-site.test.ts` — the test that would actually have gone red on
+      `24335207`. Sol showed the blunt way that the predicate tests could not: reverting *only*
+      `runStep` left all 154 focused tests green. This one runs a real two-mode job through the real
+      walk with a recording registry and reads `StepContext.cacheArticle` back — `[true, false]`
+      against the old call site.
+- [x] Verified on paid runs before being believed, which the three previous instances of this class
+      were not. **All three groups**, on Sol's closing point that one pair proves the structural fix
+      and not that the other prefixes match: every reader now reads exactly its writer's prefix
+      (25,428 / 25,428 / 27,234), for the **$0.1406 predicted before any of it ran**. The gate fires
+      on all three pre-fix result files and passes all three post-fix ones.
+- [ ] **Not built, and stated rather than skipped silently:** the per-stage request-shape test
+      (postmortem item 3 — `cacheArticle: true` ⇒ exactly one `cache_control`, `false` ⇒ none). It is
+      the one item that explicitly would *not* have caught this bug, both directions are already
+      measured for arc/tweets, and it is eight stages × real fixtures.
       The big one — **effort on the five expensive modes, which are 72% of a long article and where
       reasoning is 36% of all spend** — is deliberately *not* recommended on cost evidence alone:
       `effort-vs-quality` covers `arc` and `glossary`, neither of which is on that list. Two

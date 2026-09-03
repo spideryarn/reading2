@@ -57,6 +57,7 @@ import {
   cacheRatio,
   checkAdoption,
   checkCold,
+  checkBatchedDraw,
   checkColdDraw,
   type DrawOutcome,
   formatFindings,
@@ -1244,6 +1245,218 @@ describe("checkColdDraw", () => {
 
   it("has nothing to say about a draw with no rows — that is no-spend's job", () => {
     expect(checkColdDraw([], { phase: "mode", batchedModes: false })).toEqual([]);
+  });
+});
+
+/**
+ * **The batched phase's own rule: did the write premium get collected?**
+ *
+ * `checkColdDraw` is silent on a batched draw, correctly — a warm read there is
+ * the measurement, not a contamination — and that left the one phase where the
+ * article cache can pay off with no check at all. The 2026-09-03 sweep computed
+ * the numbers that prove
+ * docs/postmortems/260903c-…-marks-the-writer-but-never-the-reader.md and printed
+ * them unjudged.
+ *
+ * The rule is stated in money rather than in `sharesArticleCache`, and the first
+ * case below is why: the predicate was *right about the group and wrong about the
+ * direction*, so a check that asked it who should share would have agreed with
+ * the bug and passed. Asking "was this write ever read" needs none of the
+ * pipeline's tables and so cannot inherit their mistakes.
+ */
+describe("checkBatchedDraw", () => {
+  const writer = row({
+    id: "writer",
+    stepName: "arc",
+    startedAt: "2026-09-03T05:47:10.000Z",
+    cacheWriteTokens: 25_428,
+    cacheReadTokens: 0,
+  });
+
+  it("refuses the real broken numbers: a writer that paid and a reader that never looked", () => {
+    /* Verbatim from evals/results/cost/2026-09-03-05-47-10-e0a1he1b-against-…,
+       the job that priced `arc,tweets` before the fix. `tweets` read nothing AND
+       wrote nothing, which is only possible if no `cache_control` reached the
+       provider — a prefix that merely failed to match would have written its
+       own entry. */
+    const reader = row({
+      id: "reader",
+      stepName: "tweets",
+      startedAt: "2026-09-03T05:47:40.000Z",
+      reportedInputTokens: 27_533,
+      cacheWriteTokens: 0,
+      cacheReadTokens: 0,
+    });
+    const findings = checkBatchedDraw([writer, reader], "batched");
+    expect(findings.map((f) => f.kind)).toEqual(["unclaimed-cache-write"]);
+    expect(findings[0]!.fatal).toBe(true);
+    expect(findings[0]!.step).toBe("arc");
+    expect(findings[0]!.message).toContain("25428");
+    expect(findings[0]!.message).toContain("the best any of them managed was 0");
+  });
+
+  it("accepts the shape the fix produces: the reader reads what the writer wrote", () => {
+    const reader = row({
+      id: "reader",
+      stepName: "tweets",
+      startedAt: "2026-09-03T05:47:40.000Z",
+      reportedInputTokens: 2_105,
+      cacheWriteTokens: 0,
+      cacheReadTokens: 25_428,
+    });
+    expect(checkBatchedDraw([writer, reader], "batched")).toEqual([]);
+  });
+
+  it("catches the other failure too: both marked, but the prefixes never matched", () => {
+    /* The `ideas`/`ARTICLE_RENDERER` near-miss, which this rule gets for free
+       because it never asks *why* the money went missing. Two stages of one
+       group that both send a breakpoint but disagree on the bytes each write a
+       full entry and neither reads one — two lost bets, two findings. */
+    const other = row({
+      id: "other",
+      stepName: "tweets",
+      startedAt: "2026-09-03T05:47:40.000Z",
+      cacheWriteTokens: 27_239,
+      cacheReadTokens: 0,
+    });
+    const findings = checkBatchedDraw([writer, other], "batched");
+    expect(findings.map((f) => f.step)).toEqual(["arc", "tweets"]);
+    expect(findings.every((f) => f.kind === "unclaimed-cache-write")).toBe(true);
+  });
+
+  it("will not let one group's read absolve another group's lost write", () => {
+    /* **GPT Sol's exploit of the first version of this rule**, which evaluated
+       `some()` per writer over every call in the draw. arc writes and is never
+       read; ideas writes and timeline reads exactly what ideas wrote; the
+       timeline read satisfied arc's writer too and the gate returned nothing.
+       arc is `high`+`text` and those two are `high`+`ids` — different prefixes
+       entirely, so that read could never have been arc's. */
+    const ideas = row({
+      id: "ideas",
+      stepName: "ideas",
+      startedAt: "2026-09-03T05:47:40.000Z",
+      cacheWriteTokens: 27_239,
+      cacheReadTokens: 0,
+    });
+    const timeline = row({
+      id: "timeline",
+      stepName: "timeline",
+      startedAt: "2026-09-03T05:48:10.000Z",
+      cacheWriteTokens: 0,
+      cacheReadTokens: 27_239,
+    });
+    const findings = checkBatchedDraw([writer, ideas, timeline], "batched");
+    expect(findings.map((f) => f.step)).toEqual(["arc"]);
+    expect(findings[0]!.kind).toBe("unclaimed-cache-write");
+  });
+
+  it("spends each read once, so one read cannot square two writes", () => {
+    /* Two writers in one group and a single read. Whichever the read is matched
+       to, the other is a real loss and must be reported. */
+    const second = row({
+      id: "second",
+      stepName: "tweets",
+      startedAt: "2026-09-03T05:47:40.000Z",
+      cacheWriteTokens: 25_428,
+      cacheReadTokens: 0,
+    });
+    const third = row({
+      id: "third",
+      stepName: "tweets",
+      startedAt: "2026-09-03T05:48:10.000Z",
+      cacheWriteTokens: 0,
+      cacheReadTokens: 25_428,
+    });
+    expect(checkBatchedDraw([writer, second, third], "batched")).toHaveLength(1);
+  });
+
+  it("refuses a same-group pair that cached nothing at all, which is both markers missing", () => {
+    /* The silence that looks like success, and the shape a regression switching
+       `cacheArticle` off everywhere would produce: no write to be unclaimed, so
+       the write rule has nothing to say, and every number in the draw is a cold
+       one wearing a batched label. */
+    const cold = (id: string, step: string, at: string) =>
+      row({ id, stepName: step as never, startedAt: at, cacheWriteTokens: 0, cacheReadTokens: 0 });
+    const findings = checkBatchedDraw(
+      [
+        cold("a", "arc", "2026-09-03T05:47:10.000Z"),
+        cold("b", "tweets", "2026-09-03T05:47:40.000Z"),
+      ],
+      "batched",
+    );
+    expect(findings.map((f) => f.kind)).toEqual(["unclaimed-cache-write"]);
+    expect(findings[0]!.message).toContain("no call wrote or read a single cached token");
+  });
+
+  it("says nothing about one lone stage that cached nothing — there was nobody to share with", () => {
+    const alone = row({
+      id: "alone",
+      stepName: "arc",
+      cacheWriteTokens: 0,
+      cacheReadTokens: 0,
+    });
+    expect(checkBatchedDraw([alone], "batched")).toEqual([]);
+  });
+
+  it("will not accept a read that came BEFORE the write it is supposed to claim", () => {
+    /* Ordering is the whole content of "was it read": a read earlier in the job
+       belongs to some other entry, and counting it would let a writer be
+       squared by money that was already spent when it placed its bet. */
+    const early = row({
+      id: "early",
+      stepName: "tweets",
+      startedAt: "2026-09-03T05:46:00.000Z",
+      cacheWriteTokens: 0,
+      cacheReadTokens: 25_428,
+    });
+    expect(checkBatchedDraw([writer, early], "batched").map((f) => f.kind)).toEqual([
+      "unclaimed-cache-write",
+    ]);
+  });
+
+  it("allows a read that falls a little short, and refuses one that falls a lot", () => {
+    const near = (read: number) =>
+      row({
+        id: "r",
+        stepName: "tweets",
+        startedAt: "2026-09-03T05:47:40.000Z",
+        cacheWriteTokens: 0,
+        cacheReadTokens: read,
+      });
+    expect(checkBatchedDraw([writer, near(24_000)], "batched")).toEqual([]);
+    expect(checkBatchedDraw([writer, near(4_000)], "batched")).toHaveLength(1);
+  });
+
+  it("has no opinion about a step in no cache group, however its writes end up", () => {
+    /* **`hierarchy` and its label fan-out are out of scope, not forgiven.** The
+       first version tried to forgive them with a loose matcher, and GPT Sol
+       showed that unsafe in both directions: three parallel batches with no
+       re-ask — the shape the first three measured label draws actually had —
+       drew three fatal findings, while any large later article read would have
+       claimed all three writes. Paying for parallel batches that mostly go
+       unread is a documented latency choice, so "was this write collected" is
+       simply the wrong question to ask it. src/labels.ts, prompt-caching.md § the
+       labels row. */
+    const batch = (id: string) =>
+      row({ id, stepName: "hierarchy", startedAt: "2026-09-03T05:47:10.000Z", cacheWriteTokens: 1_107 });
+    expect(checkBatchedDraw([batch("b1"), batch("b2"), batch("b3")], "batched")).toEqual([]);
+    expect(checkBatchedDraw([writer, batch("b1"), batch("b2")], "batched")).toHaveLength(1);
+  });
+
+  it("stops at unknown telemetry rather than reporting a shortfall that is really an absence", () => {
+    /* A missing field could have been the read that squares any of these
+       writes, so one unknown poisons the arithmetic for all of them. */
+    const silent = row({ id: "s", stepName: "tweets", cacheReadTokens: null });
+    const findings = checkBatchedDraw([writer, silent], "batched");
+    expect(findings.map((f) => f.kind)).toEqual(["unknown-cache-telemetry"]);
+    expect(findings[0]!.fatal).toBe(true);
+  });
+
+  it("says nothing on the phases that are not batched, and nothing on an empty draw", () => {
+    const reader = row({ id: "reader", stepName: "tweets", cacheWriteTokens: 0, cacheReadTokens: 0 });
+    expect(checkBatchedDraw([writer, reader], "mode")).toEqual([]);
+    expect(checkBatchedDraw([writer, reader], "ingest")).toEqual([]);
+    expect(checkBatchedDraw([], "batched")).toEqual([]);
   });
 });
 
