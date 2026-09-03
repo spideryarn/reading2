@@ -418,7 +418,16 @@ function SignedIn({
   // The shelf is home, so it gets no way-home logo — a link to the page you are
   // already on is a dead control, and Library.tsx names the app in its own
   // `<h1>` anyway. Everywhere else, the corner. See HomeLogo.tsx.
-  if (route.kind === "library") return <Library />;
+  /* **`key`, and it is the account switch rather than a hint to React.** A
+     direct A→B sign-in keeps this element in the same place in the tree, so
+     without a key React reuses the instance and `useShelf`'s state — the shelf,
+     the Undo strip's title, an open rename — survives into the new reader's
+     first commit. The hook clears all of it, but a passive effect runs *after*
+     that commit, so there is a frame with A's articles under B's session. The
+     key removes the frame by removing the instance. GPT Sol's review of
+     docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md
+     § Stage 5, 2026-09-03. */
+  if (route.kind === "library") return <Library key={user.id} readerId={user.id} />;
   // The corner logo, because this is not home and the reader may have arrived
   // straight here from a bookmarklet with no shelf behind them.
   if (route.kind === "add")
@@ -481,7 +490,7 @@ function SignedIn({
      on `/api/admin/`, and it would refuse a hand-written `fetch` from this page
      just the same. src/admin.ts § the two halves. */
   if (route.kind === "admin") {
-    if (!isAdmin(user.id)) return <Library />;
+    if (!isAdmin(user.id)) return <Library key={user.id} readerId={user.id} />;
     return (
       <>
         <HomeLogo />
