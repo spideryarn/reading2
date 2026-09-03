@@ -728,6 +728,20 @@ adopted for ([web-client.md § Tailwind and shadcn](web-client.md#tailwind-and-s
 The reading view stays hand-written, because its geometry is not something utilities can say. Every
 class needs the `tw:` prefix — unprefixed names silently do nothing.
 
+## Offline, the shelf lists only what it can open
+
+A reader who has lost the network still gets a shelf: `apiFetch` saves every GET body to IndexedDB
+and reads it back when the transport itself fails
+([260827r-offline-reading.md](../plans/260827r-offline-reading.md)). But **a card that opens to an
+error is worse than a card that is missing**, so the saved shelf is filtered through the prose we
+actually still hold — `onlyWhatWeHave` in [`src/web/lib/api.ts`](../../src/web/lib/api.ts), asking
+the cache rather than trusting a remembered flag, because eviction runs on its own schedule.
+
+The filter keeps the route's `{ articles: [...] }` envelope, and that is the whole trap: it spent a
+fortnight testing `Array.isArray(body)` against a payload that has never been an array, so it
+returned the shelf untouched every single time and the test covering it had invented a third shape
+— [260903e-offline-shelf-filter-never-ran.md](../postmortems/260903e-offline-shelf-filter-never-ran.md).
+
 ## The fixture is always on the shelf
 
 `example/` is listed under the slug `example`, flagged, and sorted below the real articles. A fresh

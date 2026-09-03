@@ -197,6 +197,17 @@ have caught the class, per [engineering-manager.md](../reusable/engineering-mana
 Done when: the new test is red against the old filter and green after; the legacy-shape test passes;
 the postmortem is written.
 
+**Done, 2026-09-03.** All three new assertions were watched go red first, and their *directions* are
+the evidence: the two real-envelope cases failed because nothing was filtered, and the bare-array
+case failed because it *was* — the old guard only ever worked on a shape production has never sent.
+`tests/api-fetch-offline.test.ts` is now **27 passed**. Two preventions landed with the fix rather
+than staying as prose: `LibraryResponse` is named once in [`src/types.ts`](../../src/types.ts) and
+annotates the route's own `send(...)`, and the test fixture is typed off `keyof` it — proved to fire
+by making it a bare array and watching `npm run typecheck` reject it. The postmortem is
+[260903e-offline-shelf-filter-never-ran.md](../postmortems/260903e-offline-shelf-filter-never-ran.md),
+and [library.md](../project/library.md#offline-the-shelf-lists-only-what-it-can-open) now says the
+shelf has an offline half at all, which it did not.
+
 ### Stage 3 — the two layout jobs
 
 Both asked for directly, both independent.
