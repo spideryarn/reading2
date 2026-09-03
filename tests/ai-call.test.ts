@@ -283,7 +283,7 @@ describe("one record per call, however the call ends", () => {
     );
     expect(report.calls).toHaveLength(1);
     expect(report.calls[0]?.job).toBe("chat");
-    expect(report.calls[0]?.costNanos).toBe(68_000);
+    expect(report.calls[0]?.cost).toEqual({ source: "provider", costNanos: 68_000 });
     expect(report.calls[0]?.upstreamCostNanos).toBe(68_000);
     expect(report.calls[0]?.isByok).toBe(false);
     expect(report.calls[0]?.inputTokens).toBe(14);
@@ -393,7 +393,7 @@ describe("one record per call, however the call ends", () => {
     });
     expect(report.calls).toHaveLength(1);
     expect(report.calls[0]?.outcome).toBe("error");
-    expect(report.calls[0]?.costNanos).toBeNull();
+    expect(report.calls[0]?.cost).toEqual({ source: "none" });
     /* The one handle on a call that produced no usage object at all. */
     expect(report.calls[0]?.generationId).toBe("gen-refused");
     expect(report.pending).toHaveLength(0);
@@ -471,7 +471,7 @@ describe("one record per call, however the call ends", () => {
     });
     expect(report.calls).toHaveLength(1);
     expect(report.calls[0]?.outcome).toBe("error");
-    expect(report.calls[0]?.costNanos).toBe(68_000);
+    expect(report.calls[0]?.cost).toEqual({ source: "provider", costNanos: 68_000 });
   });
 
   it("records a consumer that broke out early", async () => {
@@ -623,7 +623,7 @@ describe("one record per call, however the call ends", () => {
     expect(report.calls).toHaveLength(1);
     expect(report.calls[0]?.outcome).toBe("error");
     /* The cost it did report is kept: the money went either way. */
-    expect(report.calls[0]?.costNanos).toBe(68_000);
+    expect(report.calls[0]?.cost).toEqual({ source: "provider", costNanos: 68_000 });
   });
 
   it("writes no record at all when there was no attempt to record", async () => {
@@ -700,7 +700,7 @@ describe("one record per call, however the call ends", () => {
       ),
     );
     expect(report.calls).toHaveLength(1);
-    expect(report.calls[0]?.costNanos).toBeNull();
+    expect(report.calls[0]?.cost).toEqual({ source: "none" });
   });
 
   it("records a call per round, because a turn that ran three bought three", async () => {
@@ -721,7 +721,9 @@ describe("one record per call, however the call ends", () => {
       }
     });
     expect(report.calls).toHaveLength(3);
-    expect(report.calls.every((c) => c.costNanos === 68_000)).toBe(true);
+    expect(report.calls.every((c) => c.cost.source === "provider" && c.cost.costNanos === 68_000)).toBe(
+      true,
+    );
   });
 });
 
@@ -760,7 +762,7 @@ describe("the non-streamed half", () => {
     );
     expect(report.calls).toHaveLength(1);
     expect(report.calls[0]?.job).toBe("dictation");
-    expect(report.calls[0]?.costNanos).toBe(500_000_000);
+    expect(report.calls[0]?.cost).toEqual({ source: "provider", costNanos: 500_000_000 });
   });
 
   it("hands back null rather than the provider's words when the body is not JSON", async () => {

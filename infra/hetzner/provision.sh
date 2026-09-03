@@ -84,11 +84,47 @@ export NEEDRESTART_MODE=a
 run() {
   local secs=$1 what=$2; shift 2
   echo "--- $what (timeout ${secs}s)"
-  if ! timeout --kill-after=30 "$secs" "$@" </dev/null; then
-    echo "FATAL: '$what' failed or timed out after ${secs}s" >&2
+  local rc=0
+  timeout --kill-after=30 "$secs" "$@" </dev/null || rc=$?
+  # Failed and timed out are different bugs, and the message used to say both
+  # at once: an installer that printed success and exited 1 after eighteen
+  # seconds read as "failed or timed out after 300s", and the timeout was the
+  # half everyone looked at (docs/postmortems/260903a-a-logout-hook-decided-the-exit-status.md).
+  if [ "$rc" -ne 0 ]; then
+    if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+      echo "FATAL: '$what' timed out after ${secs}s (exit $rc)" >&2
+    else
+      echo "FATAL: '$what' failed with exit $rc" >&2
+    fi
     return 1
   fi
 }
+
+# "${AS_USER[@]}" <script>: run a bash script as $USER_NAME, in a NON-login shell.
+#
+# Not `su - $USER_NAME -c`, which this replaced on 2026-09-03. `su -` starts a
+# LOGIN shell, and a login shell runs ~/.bash_logout on the way out -- Ubuntu's
+# stock one calls `clear_console -q`, which fails when there is no console, and
+# under the `set -e` inside the command that failure became the shell's exit
+# status. So the Claude installer printed "Installation complete", exited 0,
+# and the step still reported FATAL; every `su -` step with `set -e` in it did.
+# docs/postmortems/260903a-a-logout-hook-decided-the-exit-status.md.
+#
+# A non-interactive command wants a non-login shell: no profile, no logout
+# hook, and an environment that is spelled out here rather than inherited from
+# root. HOME is the user's (the installers put their binaries under it and
+# refuse to run under sudo, which is why sudo is not the tool either), and
+# PATH starts with ~/.local/bin, where claude and codex live.
+#
+# An array rather than a function so that `run` and `timeout`, which exec a
+# command by name, can be handed it: an external command cannot call a shell
+# function, and `export -f` is the kind of trick that works until it does not.
+AS_USER=(
+  runuser -u "$USER_NAME" -- env -i
+  HOME="/home/$USER_NAME" USER="$USER_NAME" LOGNAME="$USER_NAME" SHELL=/bin/bash
+  PATH="/home/$USER_NAME/.local/bin:/usr/local/bin:/usr/bin:/bin"
+  bash -c
+)
 apt_get() {
   apt-get -o DPkg::Lock::Timeout=600 -y "$@" </dev/null
 }
@@ -213,7 +249,7 @@ command -v npm >/dev/null || { echo "FATAL: node installed but npm is missing" >
 # first half of an installer and stops -- and `set -o pipefail` reports that
 # correctly, long after the half-install already happened. This file pins node
 # and supabase for adjacent reasons.
-run 300 "install claude code" su - "$USER_NAME" -c 'set -eu; t=$(mktemp); curl -fsSL https://claude.ai/install.sh -o "$t"; rc=0; bash "$t" || rc=$?; rm -f "$t"; exit $rc'
+run 300 "install claude code" "${AS_USER[@]}" 'set -eu; t=$(mktemp); curl -fsSL https://claude.ai/install.sh -o "$t"; rc=0; bash "$t" || rc=$?; rm -f "$t"; exit $rc'
 
 # Expose the user-owned binary at a path a stock PATH already contains.
 #
@@ -249,7 +285,7 @@ command -v claude >/dev/null || { echo "FATAL: installer reported success but cl
 # repoint it, the parent directory does. Checked again, more fully, at the end
 # of the run.
 CLAUDE_BIN=$(readlink -f /usr/local/bin/claude)
-su - "$USER_NAME" -c "test -w '$(dirname "$CLAUDE_BIN")' && test -w '/home/$USER_NAME/.local/bin'" \
+"${AS_USER[@]}" "test -w '$(dirname "$CLAUDE_BIN")' && test -w '/home/$USER_NAME/.local/bin'" \
   || { echo "FATAL: $USER_NAME cannot write $CLAUDE_BIN or its launcher dir - auto-update would fail exactly as it did before" >&2; exit 1; }
 
 echo "=== codex cli ==="
@@ -290,7 +326,7 @@ echo "=== codex cli ==="
 # of every shell started afterwards, which is what we want, but it is a real
 # observable effect and the only dotfile edit in this whole script. The symlink
 # below is what makes codex findable everywhere the rc file is never read.
-run 300 "install codex cli" su - "$USER_NAME" -c 'set -eu; t=$(mktemp); curl -fsSL https://chatgpt.com/codex/install.sh -o "$t"; rc=0; CODEX_HOME='"/home/$USER_NAME/.codex"' CODEX_INSTALL_DIR='"/home/$USER_NAME/.local/bin"' CODEX_NON_INTERACTIVE=1 sh "$t" || rc=$?; rm -f "$t"; exit $rc'
+run 300 "install codex cli" "${AS_USER[@]}" 'set -eu; t=$(mktemp); curl -fsSL https://chatgpt.com/codex/install.sh -o "$t"; rc=0; CODEX_HOME='"/home/$USER_NAME/.codex"' CODEX_INSTALL_DIR='"/home/$USER_NAME/.local/bin"' CODEX_NON_INTERACTIVE=1 sh "$t" || rc=$?; rm -f "$t"; exit $rc'
 
 # Same stock-PATH problem, same one-line answer -- see the claude symlink above
 # for the full reasoning.
@@ -317,7 +353,7 @@ esac
 # repoints; `releases/` is where the new version is staged; `.local/bin` is the
 # launcher. Missing any one of them is an update that fails partway.
 for d in "/home/$USER_NAME/.local/bin" "/home/$USER_NAME/.codex/packages/standalone" "/home/$USER_NAME/.codex/packages/standalone/releases"; do
-  su - "$USER_NAME" -c "test -d '$d' && test -w '$d' && test -x '$d'" \
+  "${AS_USER[@]}" "test -d '$d' && test -w '$d' && test -x '$d'" \
     || { echo "FATAL: $USER_NAME cannot mutate '$d' - 'codex update' would fail, and codex doctor would not say so" >&2; exit 1; }
 done
 # No ~/.codex/config.toml is written on purpose: run-codex.ts passes
@@ -668,7 +704,7 @@ chmod 0644 /tmp/provision-tmux-reload.sh
 # below counts a FRESH server started from the file and so cannot see a running
 # one that ignored it. `gjd-remote doctor` is what covers it: its `tmux keys`
 # check counts both, and it runs daily where this runs almost never.
-run 60 "reload running tmux" su - "$USER_NAME" -c "bash /tmp/provision-tmux-reload.sh" \
+run 60 "reload running tmux" "${AS_USER[@]}" "bash /tmp/provision-tmux-reload.sh" \
   || echo "WARNING: could not reload the running tmux server; the file is correct. Check: gjd-remote doctor"
 rm -f /tmp/provision-tmux-reload.sh
 
@@ -870,7 +906,7 @@ mv "$tmp" "$f"
 SETTINGS
 # 0644: the scripts are written by root in /tmp and read by $USER_NAME's shell.
 chmod 0644 "$CLAUDE_SETTINGS_SH" "$CLAUDE_STATUSLINE_SH"
-run 30 "claude settings" su - "$USER_NAME" -c "bash $CLAUDE_SETTINGS_SH $CLAUDE_STATUSLINE_SH"
+run 30 "claude settings" "${AS_USER[@]}" "bash $CLAUDE_SETTINGS_SH $CLAUDE_STATUSLINE_SH"
 rm -f "$CLAUDE_SETTINGS_SH" "$CLAUDE_STATUSLINE_SH"
 
 echo "=== mcp servers ==="
@@ -900,8 +936,8 @@ CAP="NODE_OPTIONS=--max-old-space-size=512"
 # name -- so the second rebuild would die here.
 add_mcp() {
   name=$1; shift
-  timeout 60 su - "$USER_NAME" -c "claude mcp remove --scope user $name </dev/null" </dev/null 2>/dev/null || true
-  timeout 60 su - "$USER_NAME" -c "claude mcp add --env '$CAP' --scope user $name -- $* </dev/null" </dev/null
+  timeout 60 "${AS_USER[@]}" "claude mcp remove --scope user $name </dev/null" </dev/null 2>/dev/null || true
+  timeout 60 "${AS_USER[@]}" "claude mcp add --env '$CAP' --scope user $name -- $* </dev/null" </dev/null
 }
 # --browser chrome, explicitly: use the system google-chrome-stable rather than
 # Playwright's own chromium download, which this box deliberately does not have.

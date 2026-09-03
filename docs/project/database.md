@@ -570,6 +570,27 @@ branch rather than on whoever migrates next. Predicted as failure row 8 of
 [260828r-worktrees.md](../plans/260828r-worktrees.md), for two worktrees; it happened between two
 sessions in one tree.
 
+### When the journal itself is mid-merge
+
+Every one of those checks reads `drizzle/meta/_journal.json` first, so a journal that will not parse
+takes all of them out together. That is not hypothetical: nearly every change appends to the same
+last entry, so this file conflicts more than any other in the repo, and nothing but tooling ever
+opens it — the markers sit there unseen. On 2026-09-02 a half-finished merge in the shared primary
+left `<<<<<<< HEAD` in it, `db:migrate` died on a `SyntaxError` at a byte offset, and the ledger got
+the blame: it reported three rows belonging to no migration, all three of which turned out to be
+real migrations. `spideryarn.ai_calls` stayed behind the code meanwhile, so **every paid call on the
+box was recorded nowhere** for hours.
+
+`readJournal` now refuses a journal whose first marker it can see, naming the file, the line and the
+marker, so `db:migrate` and `db:generate` say what is wrong instead of guessing. It reads real lines
+rather than regexing the file, and accepts markers longer than the default seven plus diff3's
+`|||||||` — but `conflict-marker-size` is configurable downwards, and `db:chain` calls drizzle
+directly, so this is a good first line rather than a fence.
+
+Resolving it is **not** resolving the fork — see
+[Repairing a fork](#repairing-a-fork-what-the-losing-migration-is-decides-everything), which is the
+half that matters and the reason the message points there rather than restating it.
+
 ### Rule 4 on a laptop: the draft that ran, and the file that was committed
 
 `db-repair-migration-ledger.ts` does not clear a **rule 4** refusal — it repairs watermark gaps, and

@@ -882,8 +882,10 @@ export function parseRealtimeUsage(body: unknown): RealtimeUsage {
      `<=` rather than `===`, because OpenAI's own responses sometimes arrive with
      the nested breakdown absent or partial (openai/openai-agents-js#538), and
      refusing a true-but-incomplete report to be pedantic about arithmetic would
-     lose real money. The splits are then a lower bound on the total, which is
-     visible on the row rather than hidden. */
+     throw away the evidence that the turn happened at all. The splits are then a
+     lower bound on the total, which is visible on the row rather than hidden —
+     and `priceResponseRow` below refuses to *price* such a row, which is the
+     half of this rule that was missing until 2026-09-03. */
   if (inputTextTokens + inputAudioTokens + inputImageTokens > inputTokens) {
     throw badReport("the input token details add up to more than inputTokens");
   }
@@ -892,6 +894,25 @@ export function parseRealtimeUsage(body: unknown): RealtimeUsage {
   }
   if (outputTextTokens + outputAudioTokens > outputTokens) {
     throw badReport("the output token details add up to more than outputTokens");
+  }
+  /* **A cached token is an input token that was already there, so there cannot
+     be more of them than there were.**
+
+     The chain above bounds each cached detail by `cachedTokens` and
+     `cachedTokens` by `inputTokens`, and *nothing in that chain* relates cached
+     text to text. `priceResponseRow` then subtracts one from the other and
+     prices a negative quantity of fresh input: GPT Sol produced
+     `inputTextTokens=100, cachedTextTokens=1000` and got a row claiming
+     **minus** $0.0032. A negative cost is worse than a missing one — it does not
+     merely fail to add, it silently subtracts from a total somebody is about to
+     set a price against, and every check downstream agrees with it because they
+     all just sum a column. Refused here, and the database refuses it again
+     (`ai_calls_costs_not_negative`). */
+  if (cachedTextTokens > inputTextTokens) {
+    throw badReport("cachedTextTokens is larger than inputTextTokens, and a cached token is an input token");
+  }
+  if (cachedAudioTokens > inputAudioTokens) {
+    throw badReport("cachedAudioTokens is larger than inputAudioTokens, and a cached token is an input token");
   }
   /* **No image rate exists, so an image token cannot be priced.** `liveSession`
      above configures no image input, so this can only fire if the session
@@ -1162,11 +1183,41 @@ function priceResponseRow(
   usage: Extract<RealtimeUsage, { kind: "response" }>,
   at: Date,
 ): RealtimeMoney {
+  /* **Every input token and every output token has to have a modality, or this
+     row is not priced at all.**
+
+     The rate card is per modality, so this function prices the *details* and
+     never the totals. `parseRealtimeUsage` deliberately admits a report whose
+     details sum to less than their parents — OpenAI has shipped `response.done`
+     with the nested breakdown missing (openai/openai-agents-js#538) and we would
+     rather keep the evidence of the turn than refuse it. But pricing such a
+     report multiplies the rates by a split that is *short*, and in the limiting
+     case — every detail zero, both totals real — by a split that is entirely
+     zero. GPT Sol produced exactly that: `inputTokens=1000, outputTokens=200`,
+     accepted at `computedCostNanos = 0`. A turn that cost twenty cents lands in
+     the ledger as free, and no check anywhere goes red, because a free call and
+     a zero-cost call are the same row.
+
+     So the row is **kept and marked unpriced**. `npm run cost` already counts
+     `cost_source: 'none'` and prints the total as short by an unknown amount,
+     which is the true statement; a small confident number is not.
+
+     **The cached split is deliberately exempt.** An absent or short cached split
+     prices that input at the FRESH rate, which is ten times the cached one — the
+     error is upward, against us, and `cached_tokens` still travels on the row
+     for anyone auditing it later. src/web/live/meter.ts argues the same case
+     from the browser's end. Only understatement is silent; overstatement shows
+     up the moment anybody reconciles. */
+  const inputSplit = usage.inputTextTokens + usage.inputAudioTokens + usage.inputImageTokens;
+  const outputSplit = usage.outputTextTokens + usage.outputAudioTokens;
+  if (inputSplit !== usage.inputTokens || outputSplit !== usage.outputTokens) {
+    return UNPRICED_REALTIME;
+  }
   /* **Fresh means uncached, and the subtraction happens here rather than in
      src/pricing.ts.** That file is arithmetic and must not be the place a
-     negative gets clamped away; by this line `parseRealtimeUsage` has already
-     checked each detail against its parent, so neither of these can go below
-     zero. */
+     negative gets clamped away; by this line `parseRealtimeUsage` has checked
+     each cached detail against the modality total it was cached from, so neither
+     of these can go below zero. */
   const priced = priceRealtimeResponse(
     session.model,
     {

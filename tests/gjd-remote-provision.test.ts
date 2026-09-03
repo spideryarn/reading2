@@ -16,7 +16,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { buildProvisionRunner, cloudInitVerdict, provisionVerdict } from "../scripts/gjd-remote-provision.js";
+import { bootstrapProbeScript, buildProvisionRunner, cloudInitGate, cloudInitVerdict, provisionVerdict } from "../scripts/gjd-remote-provision.js";
 
 const ATTEMPT = "3f1c0b6e-0a4d-4a1e-9f77-2c8b5a0d1e42";
 const SHA = "a".repeat(64);
@@ -152,6 +152,58 @@ describe("cloudInitVerdict", () => {
     const v = cloudInitVerdict("status: running");
     expect(v.ok).toBe(false);
     expect(v.why).toContain("never finished");
+  });
+});
+
+describe("cloudInitGate", () => {
+  // The verdict above reads the FIRST boot, which never changes afterwards. The
+  // real box's first boot ran the old runcmd and recorded "error" for good, and
+  // it has been provisioned several times since — so a gate on the verdict
+  // alone could never pass there, and did not, on 2026-09-03. Provisioning needs
+  // a bootstrapped box, and the probe asks for the artefacts themselves.
+  const OK = "BOOTSTRAP OK\n";
+
+  it("lets a fatal first boot through when the bootstrap artefacts are all there", () => {
+    const v = cloudInitGate("status: error\nrc=1", OK);
+    expect(v.ok).toBe(true);
+    expect(v.why).toContain("error");
+  });
+
+  it("lets a recoverable-errors first boot through on the same evidence", () => {
+    expect(cloudInitGate("status: degraded done\nrc=2", OK).ok).toBe(true);
+  });
+
+  it("still refuses while cloud-init has not finished, artefacts or not", () => {
+    // The wait's other job. A box whose first boot is still running is not one
+    // to build on, and half its artefacts may be there already.
+    const v = cloudInitGate("status: running", OK);
+    expect(v.ok).toBe(false);
+    expect(v.why).toContain("never finished");
+  });
+
+  it("refuses a bad first boot that left artefacts out, and names them", () => {
+    const v = cloudInitGate("status: error\nrc=1", "BOOTSTRAP MISSING: jq flock\n");
+    expect(v.ok).toBe(false);
+    expect(v.why).toContain("jq flock");
+    expect(cloudInitGate("status: error\nrc=1", "").ok).toBe(false);
+  });
+
+  it("wants the verdict line, not the words inside another line", () => {
+    expect(cloudInitGate("status: error\nrc=1", "BOOTSTRAP OK: not really\n").ok).toBe(false);
+    expect(cloudInitGate("status: error\nrc=1", "ssh: BOOTSTRAP OK\n").ok).toBe(false);
+  });
+
+  it("changes nothing about a clean first boot", () => {
+    expect(cloudInitGate("status: done\nrc=0", "")).toEqual(cloudInitVerdict("status: done\nrc=0"));
+  });
+
+  it("probes for exactly what provision.sh checks on its first lines", () => {
+    // One list, in two places, is the drift this guards: provision.sh's own
+    // precondition names these, and the probe must not quietly ask for less.
+    const script = bootstrapProbeScript();
+    for (const c of ["rsync", "curl", "gpg", "jq", "git", "flock"]) expect(script).toContain(c);
+    expect(script).toContain("/etc/gjd-provision.env");
+    expect(script).toContain('echo "BOOTSTRAP OK"');
   });
 });
 

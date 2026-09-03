@@ -58,6 +58,7 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import {
+  providerCost,
   type SpendRecord,
   beginSpend,
   keyFingerprint,
@@ -559,13 +560,13 @@ function record(
       wire: "messages",
       model,
       answeredBy,
-      costNanos: meter.costNanos,
+      /* `provider` or `none`, never `computed`: nothing on this wire prices
+         anything itself. See `SpendProvenance` in src/ai-spend.ts. */
+      cost: providerCost(meter.costNanos),
       upstreamCostNanos: meter.upstreamCostNanos,
-      /* See the same three lines in ai-call.ts: this wire is OpenRouter's
+      /* See the same lines in ai-call.ts: this wire is OpenRouter's
          `/v1/messages`, never `api.anthropic.com`, and OpenRouter prices it. */
       providerAccount: "openrouter",
-      computedCostNanos: null,
-      priceVersion: null,
       generationId: meter.generationId,
       upstream: meter.upstream,
       credentialFingerprint: meter.credentialFingerprint,

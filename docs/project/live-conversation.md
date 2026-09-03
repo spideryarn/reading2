@@ -96,6 +96,20 @@ Four decisions in it are worth knowing before touching any of them:
 - **No cumulative tokens-per-minute ceiling.** Realtime rebills the whole conversation context every
   turn, so cumulative input legitimately outgrows wall-clock — a rate ceiling would start refusing
   true reports exactly as a conversation got long.
+- **A report whose modality splits do not account for its totals is kept and NOT priced.** The
+  parse admits a short split, because OpenAI has shipped `response.done` without the nested
+  breakdown and refusing the row would throw away the evidence that the turn happened. But the rate
+  card is per modality, so pricing such a report multiplies the rates by a split that is short —
+  and in the limiting case, every detail zero and both totals real, by a split that is entirely
+  zero. GPT Sol produced exactly that (`inputTokens=1000, outputTokens=200`) and got a row claiming
+  `$0`. The row now lands `cost_source: 'none'`, which `npm run cost` counts and prints as *short by
+  an unknown amount*. The cached split is exempt: a short one prices that input at the fresh rate,
+  ten times the cached one, so its error runs upward.
+- **A cached token is an input token, so there cannot be more of them than there were.** Nothing
+  related `cachedTextTokens` to `inputTextTokens` until 2026-09-03 — each was bounded only by its
+  own parent — so `inputTextTokens=100, cachedTextTokens=1000` priced *minus* $0.0032. A negative
+  cost is worse than a missing one: it silently subtracts from a total somebody sets a price
+  against. Refused at the parse, and refused again by `ai_calls_costs_not_negative` in Postgres.
 
 **The browser half** is [`src/web/live/meter.ts`](../../src/web/live/meter.ts), driven from
 [`useLiveConversation.ts`](../../src/web/live/useLiveConversation.ts). Four things in it are

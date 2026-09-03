@@ -144,6 +144,23 @@ Two things follow, and both are in
 [infra/hetzner/README.md § Why provisioning is a separate command](../../infra/hetzner/README.md#why-provisioning-is-a-separate-command):
 `cloud-init: done` now means *bootstrapped*, and cloud-init owns the bootstrap dependencies forever,
 because it is baked into the machine at creation and never runs again.
+
+**`cloud-init status` is first-boot history, not news.** It never changes after that boot, and the
+current box's first boot ran the old, pre-split `runcmd` and recorded `error` for good — so a
+provision that waited on cloud-init's verdict alone could never run there, and on 2026-09-03 it
+refused. `gjd-remote provision` now asks the box for the bootstrap artefacts themselves — the
+same list `provision.sh` checks on its first lines — and that outranks the first boot's verdict.
+(Not the provision status file: every run rewrites it as "started", so one failed re-run would
+erase the evidence the next one needed.) Still refused: cloud-init still running, and a bad first
+boot that left artefacts out. `cloudInitGate` in
+[`scripts/gjd-remote-provision.ts`](../../scripts/gjd-remote-provision.ts).
+
+**Steps that run as Greg run in a non-login shell** (`"${AS_USER[@]}"` in `provision.sh`), never
+`su - greg -c`. A login shell runs `~/.bash_logout` on the way out, whose `clear_console -q` fails
+without a console, and under `set -e` that became the step's exit status after the installer had
+already succeeded —
+[260903a-a-logout-hook-decided-the-exit-status.md](../postmortems/260903a-a-logout-hook-decided-the-exit-status.md).
+
 ## Which repo, and where on the box
 
 `gjd-remote` drives **whichever repo you are standing in**, and there is no default repo any more.

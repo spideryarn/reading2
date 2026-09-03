@@ -636,10 +636,59 @@ export function planToForget(
 /* Reading the folder                                                  */
 /* ------------------------------------------------------------------ */
 
-/** The journal at `<folder>/meta/_journal.json`, in the order drizzle reads it. */
+/**
+ * The journal at `<folder>/meta/_journal.json`, in the order drizzle reads it.
+ *
+ * The conflict-marker check earns its place: nearly every change appends to the
+ * same last entry, so this file conflicts more than any other in the repo, and
+ * nothing but tooling ever opens it — so the markers sit there unseen. On
+ * 2026-09-02 they took out every migration command at once, and the parser said
+ * only `Expected ',' or '}' after property value in JSON at position 8151`. An
+ * hour then went into the ledger, which had been correct throughout. Say what it
+ * is, in the first line, before the offset nobody can act on.
+ */
 export function readJournal(folder: string): JournalEntry[] {
-  const text = readFileSync(path.join(folder, "meta", "_journal.json"), "utf8");
+  const file = path.join(folder, "meta", "_journal.json");
+  const text = readFileSync(file, "utf8");
+
+  const conflict = conflictMarker(text);
+  if (conflict) {
+    throw new Error(
+      `${file} line ${conflict.line} begins \`${conflict.marker}\` — an unresolved merge ` +
+        "conflict.\n" +
+        "  Every migration command reads this file, so all of them are blind until it is " +
+        "resolved, and a database can quietly fall behind the code meanwhile.\n" +
+        "  Resolving it is not resolving the fork: git conflicts here because both sides appended " +
+        "an entry, and says nothing about the snapshots, which is the half that matters. Follow " +
+        "docs/project/database.md § Repairing a fork — keep both entries in `when` order, and run " +
+        "`npm run db:chain` before migrating.",
+    );
+  }
+
   return (JSON.parse(text) as { entries: JournalEntry[] }).entries;
+}
+
+/**
+ * The first git conflict marker in `text`, or `undefined`.
+ *
+ * Real lines rather than a multiline regex over the whole string, for two
+ * reasons: JavaScript counts U+2028/U+2029 as line boundaries and JSON permits
+ * them inside a string, so a regex can be tricked by a `tag` a person chose; and
+ * splitting here is what lets a CRLF file report its marker without a trailing
+ * `\r` glued to it.
+ *
+ * `{7,}` rather than exactly seven, and `|||||||` included, because
+ * `conflict-marker-size` is configurable and diff3/zdiff3 emit a base marker
+ * that a half-finished resolution can leave behind on its own.
+ */
+function conflictMarker(text: string): { line: number; marker: string } | undefined {
+  const lines = text.split(/\r?\n/);
+  for (const [i, line] of lines.entries()) {
+    if (/^(?:<{7,}|={7,}|>{7,}|\|{7,})(?: |$)/.test(line)) {
+      return { line: i + 1, marker: line };
+    }
+  }
+  return undefined;
 }
 
 /**
