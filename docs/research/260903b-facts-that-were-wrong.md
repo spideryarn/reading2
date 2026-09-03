@@ -200,8 +200,8 @@ So the answer is Greg's policy **and** a form for it that something checks — n
    spaces), which is the guard earning its first keep.
 2. **A rule with a form, in `AGENTS.md`** — one bullet, replacing the current "One source of
    truth" sentence: a fact the code holds is a citation, not a restatement; an inventory is the
-   command, what it covered, and the date; anything else says who, when, and how sure. Proposed,
-   not made — it is a rule-bearing doc and goes through
+   command, what it covered, and the date; anything else says who, when, and how sure. Made
+   2026-09-03 in Sol's tighter wording, approved by Greg through
    [edit-important-docs.md](../reusable/edit-important-docs.md). GPT Sol's review of the first
    draft caught it carrying a count of its own ("forty of them wrong"), which is the rule failing
    inside its own sentence; the link to this note is the evidence, so the number goes.
@@ -210,7 +210,7 @@ So the answer is Greg's policy **and** a form for it that something checks — n
    dated-future-claim, the absence, and the same-shaped sample; the inventory is their sibling, and
    the fix belongs beside the other three. Scope is not optional — the truncated grep and the sweep
    that skipped `scripts/` were wrong from birth, and command + date alone would reproduce them.
-   Proposed.
+   Made 2026-09-03, kept to the principle at Greg's request.
 4. **Derive lists from the code rather than typing them.** The mode sweeps that hand-listed seven
    of twelve modes; the `MODES`-walking inventory that
    [260902o](../plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md) is
@@ -220,7 +220,8 @@ So the answer is Greg's policy **and** a form for it that something checks — n
    built" and was read as built, so a status word alone is not a prevention. What
    [write-planning-doc.md](../reusable/write-planning-doc.md) could ask for is
    *Status as of <date>: … — evidence: <commit / test / grep>*, and the sentence that a plan is a
-   record of a decision, never evidence that a thing shipped. Lowest value of the five; proposed.
+   record of a decision, never evidence that a thing shipped. Lowest value of the five; made
+   2026-09-03.
    A "settled, don't re-open" section in sweep write-ups was considered and is not proposed: the
    appendix records that wording already failing without a reviewer behind it.
 
