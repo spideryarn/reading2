@@ -1,6 +1,6 @@
 # Glossary "Start again" in Postgres: build the delete, retire the 501
 
-**Status:** plan, revised after GPT Sol's first review returned *not ready*. Awaiting second pass.
+**Status:** reviewed twice by GPT Sol — *not ready*, then **ready to build**. Building.
 **Owner:** this run. **Predecessor:** docs/plans/260903d-improve-the-codebase-second-sweep.md,
 which found the refusal and corrected the sign on it.
 
@@ -323,6 +323,57 @@ that distinction needs a second query anyway, which is where the saving goes.
 So: **transaction, locked read, then the update**, matching `pgVisibilityStore.set`. Flagged for the
 review in case that is the wrong call.
 
+## What the second review settled
+
+**The predicate for "a live job holds a draft"**, which is the whole of the 409 guard, taken from
+Sol's second pass and using the existing `leaseIsLive` (`src/store/job-fence.ts:80`):
+
+```sql
+SELECT 1 FROM jobs j
+  JOIN article_revisions r ON r.id = j.draft_revision_id
+ WHERE r.article_id = $article_id AND r.status = 'draft'
+   AND (j.status = 'queued'
+        OR (j.status = 'running' AND j.attempt_id IS NOT NULL
+            AND j.lease_expires_at > clock_timestamp()))
+ LIMIT 1
+```
+
+**A claimed job with no draft yet is missed on purpose, and that is safe** — the article lock
+decides the order either way. If the delete gets the lock first, the job opens its draft afterwards
+and copies the *nulled* column. If the draft gets it first, the delete sees the committed pointer
+and refuses. **An expired-but-unswept job is excluded** and cannot publish anyway, because the same
+lease boundary fences every write.
+
+Three deterministic cases to add: queued-with-draft, expired-running-with-draft, and
+claimed-without-draft.
+
+**Two more stale comments**, both repeating the same false claim, both corrected here:
+
+- `src/store/pg-revisions.ts:641` — *"`hierarchy`, `arc`, `tweets` and `glossary` update the
+  published revision in place"*, given as the reason `beginDraftIn` must be one transaction. The
+  requirement is right; the reason given for it is not.
+- `src/store/pg.ts:698` — cites *"the importer's in-place update"*. The importer was deleted on
+  2026-09-01.
+
 ## Progress
 
-_(updated at the end of every stage)_
+**Stage 1 — done, 2026-09-03.** `src/store/pg-glossary.ts`, `src/store/require-slug.ts`, wired with
+`guarded`, `SEAM_ASYMMETRIES` entry gone, `pgVisibilityStore.set` guard added, and
+`tests/store-glossary-delete-pg.test.ts` with all ten cases. Every case was watched red first —
+seven against the 501, three on their own assertions, including the `for update` one that renders
+the SQL and the `hasArtefacts`-true-before sanity check. 53 tests green across the four affected
+suites; typecheck clean; `npm run cycles` clean, which is the leaf extraction's own gate.
+
+Two deviations from the brief, both right: `result.rowCount === 1` rather than `rowsOf` (which reads
+`.rows` off a raw `execute` and does not fit a Drizzle `.update()`; `rowCount` is the idiom in
+`pg-revisions.ts:1237` and three other files), and the 409 predicate written as a typed Drizzle join
+rather than raw SQL, using the real `leaseIsLive`.
+
+**Stage 2a — docs, done.** Seven files. It also found **where the false claim came from**:
+`260826e § "A new revision only when the text changes"`, written 2026-08-26 and true then. The
+schema comment restated it, `pg-revisions.ts` cited it as a *reason*, `pg.ts` built on it — and D1b
+changed the implementation without anyone revisiting the sentence. Meanwhile
+`docs/project/database.md:220` had it right all along: *"A `done` ending publishes the draft."*
+
+**Stage 2b — outstanding**: the integration test through the real claim/session path, the remaining
+source comments, and the browser check.
