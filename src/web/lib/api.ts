@@ -761,6 +761,14 @@ const CACHEABLE = [
   "/api/timeline/",
   "/api/quiz/",
   "/api/sketch/",
+  /* **The artefact, and the plates' bytes ride along.** A URL under this prefix
+     is either `/api/illustrated/<slug>` — JSON, cached like its neighbours — or
+     `/api/illustrated/<slug>/<hash>.jpeg`, which `apiFetch` never fetches: the
+     panel pulls a plate through `apiFetch` and makes a blob URL from it
+     (src/web/IllustratedView.tsx), and only 200 JSON responses are written to
+     the offline store. So the prefix is one line and covers both.
+     tests/cacheable-covers-artefact-routes.test.ts derives this list. */
+  "/api/illustrated/",
   "/api/metadata/",
   "/api/tweets/",
   "/api/chat/",

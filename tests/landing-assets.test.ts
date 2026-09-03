@@ -44,7 +44,9 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const PAGE = path.join(ROOT, "src", "web", "LandingPage.tsx");
+/* Since 2026-09-03 the record lives in shots.ts, shared by the landing page
+   and the features page, and this reads that one file. Same guarantee. */
+const PAGE = path.join(ROOT, "src", "web", "shots.ts");
 const TAILWIND = path.join(ROOT, "src", "web", "tailwind.css");
 
 const source = readFileSync(PAGE, "utf8");
@@ -68,7 +70,7 @@ function declaredShots(): { file: string; w: number; h: number }[] {
   const found = [
     ...source.matchAll(/file:\s*"([\w.-]+\.(?:jpe?g|png))",\s*w:\s*(\d+),\s*h:\s*(\d+)/g),
   ].map((m) => ({ file: m[1] as string, w: Number(m[2]), h: Number(m[3]) }));
-  if (found.length === 0) throw new Error("LandingPage.tsx no longer declares any SHOTS");
+  if (found.length === 0) throw new Error("shots.ts no longer declares any SHOTS");
   return found;
 }
 

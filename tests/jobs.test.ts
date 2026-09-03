@@ -784,9 +784,16 @@ describe("running a job", () => {
 
     const finished = await settle(a.id);
     expect(finished.status).toBe("error");
-    // The failure names the article and says what is missing, rather than
-    // arriving as a fetch of the string "undefined".
-    expect(finished.error).toMatch(/No source URL/);
+    /* **The reader is told the step failed and whose problem it is**, not the
+       sentence `requireUrl` throws. That sentence — *"No source URL for
+       'test-jobs-fixture-no-such-article'. Its meta.json has none…"* — names a
+       file and a slug, and since 2026-09-03 it is the diagnostic rather than
+       the copy: docs/project/copy.md § The seam between the two audiences, and
+       tests/step-failure-seam.test.ts for the rule.
+
+       What survives the split is the part that mattered here — the kind. */
+    expect(finished.error).not.toMatch(/meta\.json/);
+    expect(finished.error).toMatch(/\[jb-step-ours\]$/);
     expect(finished.steps[0]?.status).toBe("error");
     // And the record says what kind of failure it was, which is what withholds
     // the Retry button on the card. A retry copies the same absent URL and asks

@@ -30,7 +30,11 @@
  * See docs/project/hierarchy.md#the-budget.
  */
 import { stageFailure } from "./job-failure.js";
-import type { FailureKind } from "./messages.js";
+import {
+  ANSWER_RAN_PAST_ITS_ROOM,
+  ARTICLE_TOO_LONG_FOR_ONE_PASS,
+  type FailureKind,
+} from "./messages.js";
 
 /**
  * The ceiling on a single streamed response.
@@ -117,6 +121,19 @@ export class TooLongForOnePass extends Error {
    */
   readonly failureKind: FailureKind = "blocked";
 
+  /**
+   * **The reader's half**, since the seam split the two audiences on
+   * 2026-09-03. The message below is the developer's: it names two token
+   * figures and a doc section, which is what somebody deciding whether to build
+   * sectioned reading needs, and which a reader can do nothing with. Both are
+   * carried on the same throw and src/jobs.ts persists only this one.
+   *
+   * A field on the class rather than a `stageFailure` call, because this is a
+   * class other code catches by type (`err instanceof TooLongForOnePass`) and
+   * turning it into a plain tagged `Error` would break those.
+   */
+  readonly readerFailure = ARTICLE_TOO_LONG_FOR_ONE_PASS;
+
   constructor(
     readonly stage: string,
     readonly answerTokens: number,
@@ -166,8 +183,13 @@ export function budgetFor(
  * The old message — "Hit max_tokens — the JSON is truncated. Raise it and
  * retry." — was an instruction to a programmer, printed next to a Retry button
  * for a reader, and following it did nothing: Retry re-ran the same call with
- * the same number. This one is addressed to whoever is looking at it, and it
- * carries the two figures that let the constants above be re-tuned.
+ * the same number.
+ *
+ * **This one is for the log, and only for the log**, since `truncationFailure`
+ * below started declaring `ANSWER_RAN_PAST_ITS_ROOM` as the reader's half on
+ * 2026-09-03. So it is free to be what it always wanted to be: addressed to
+ * whoever is re-tuning the constants above, carrying the two figures that let
+ * them do it.
  */
 export function truncatedMessage(
   stage: string,
@@ -231,6 +253,22 @@ export function truncatedMessage(
  * `truncatedMessage` stays exported for the one caller that needs the sentence
  * without the kind: `src/labels.ts` wraps it in a `BatchIncomplete`, which the
  * stage catches and retries itself. See the note at that throw site.
+ *
+ * ## The two audiences, split — 2026-09-03
+ *
+ * `truncatedMessage` was the case docs/project/copy.md recorded and did not fix
+ * (§ "recorded rather than fixed"): it is developer copy — two token figures,
+ * *"see src/token-budget.ts"* — and it reached the reader's screen, because
+ * src/jobs.ts copied a step's `Error.message` onto the job. The note said the
+ * awkwardness was structural rather than a wording slip, because **the same
+ * string has two audiences**, and that splitting them was bigger than a reword.
+ *
+ * It was. That is what stage 2 of
+ * docs/plans/260903c-fix-quiz-build-band-spread-failure-and-lost-quiz-answers.md
+ * built, and this is one line of the result: the arithmetic stays on
+ * `Error.message` for the log, and `ANSWER_RAN_PAST_ITS_ROOM` is what the card
+ * shows. Nothing is lost — whoever is re-tuning the constants still gets both
+ * figures, in the place they were always going to read them.
  */
 export function truncationFailure(
   stage: string,
@@ -240,7 +278,7 @@ export function truncationFailure(
   headroom: number = THINKING_HEADROOM,
 ): Error {
   return stageFailure(
-    "bug",
+    ANSWER_RAN_PAST_ITS_ROOM,
     truncatedMessage(stage, maxTokens, answerTokens, spent, headroom),
   );
 }

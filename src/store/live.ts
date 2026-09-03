@@ -183,11 +183,23 @@ export const SEAM_ASYMMETRIES: Readonly<Record<string, SeamAsymmetry>> = {
   GlossaryStore: {
     missing: "postgres",
     why:
-      "The SQL is trivial; what is not settled is whether it may run at all. " +
-      "deleteGlossary nulls article_revisions.glossary on a PUBLISHED revision, and " +
-      "whether a published revision may be mutated is the open decision step 11 of " +
-      "docs/plans/260826e-postgres-storage-implementation.md owns. Refused rather than " +
-      "made a quiet exception.",
+      "**The decision this was waiting on has been made, and this entry outlived it.** " +
+      "It said the blocker was step 11 of docs/plans/260826e-postgres-storage-implementation.md " +
+      "deciding whether a published revision may be mutated. It decided yes, and the " +
+      "answer is in src/db/schema.ts on article_revisions: 'Immutable in its text' — " +
+      "and glossary is named there as one of the four columns written onto an " +
+      "already-published revision in a single UPDATE, which src/store/artifacts-pg.ts " +
+      "does on every glossary run today. Nulling the column is that same write. " +
+      "So this is no longer refused on principle; it is simply unbuilt. " +
+      "The one thing that looked like it needed settling does not. Nulling the column " +
+      "does not change the step's fingerprint (FINGERPRINT_COLUMNS in src/store/pg.ts " +
+      "hashes the step's INPUTS), so the worry was that revision_step_runs would still " +
+      "say done and 'start again' would delete a glossary nothing regenerates. It would " +
+      "not: hasArtefacts in src/store/artifacts-pg.ts needs BOTH a done row AND every " +
+      "produced kind reading back, and an absent column reads back absent — so has() is " +
+      "false, stepIsDone is false, and an ordinary run rebuilds it. The delete is one " +
+      "UPDATE and must not touch revision_step_runs. Checked by the 2026-09-03 sweep, " +
+      "docs/plans/260903d-improve-the-codebase-second-sweep.md.",
     productionGap:
       "The glossary panel's 'start over' does not work on the deployed app: it answers " +
       "501 and the reader is stuck with the glossary they have.",

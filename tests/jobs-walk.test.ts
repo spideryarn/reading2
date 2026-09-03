@@ -360,7 +360,14 @@ describe("one claim walks the whole job", () => {
     expect(advanced?.done).toBe(true);
     expect(advanced?.ran).toBe("extract");
     expect(advanced?.job.status).toBe("error");
-    expect(advanced?.job.error).toBe("the extractor fell over");
+    /* **Not the words the step threw.** Since 2026-09-03 a step's own message
+       is the diagnostic and never reaches a reader unless the throw site wrote
+       them one — see tests/step-failure-seam.test.ts, which is where that rule
+       is guarded, and docs/project/copy.md § The seam between the two
+       audiences. What is left here is the generic sentence for a failure that
+       declared nothing, and it names the step. */
+    expect(advanced?.job.error).not.toContain("the extractor fell over");
+    expect(advanced?.job.error).toContain("Extracting the article");
     expect(advanced?.job.steps[2]?.status, "and it is still pending, not skipped").toBe("pending");
   });
 

@@ -387,6 +387,7 @@ const REVISION_WRITTEN_ELSEWHERE = [
   "timeline",
   "quiz",
   "sketch",
+  "illustrated",
   "labels",
 ] as const;
 
@@ -460,6 +461,7 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   at("timeline.json", revision.timeline);
   at("quiz.json", revision.quiz);
   at("sketch.json", revision.sketch);
+  at("illustrated.json", revision.illustrated);
   at("labels.json", revision.labels);
 
   if (rows.comments.length) {
@@ -558,6 +560,7 @@ one thing that will make the rest of these files make sense.
       quotes.json          Lines worth keeping.
       timeline.json        When the article says things happened.
       sketch.json          The diagram.
+      illustrated.json     The same argument painted, and where each plate's bytes are.
       quiz.json            Questions generated from the article.
       arc.json             The shape of the argument.
       tweets.json          Short extracts.
@@ -731,6 +734,10 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/timeline.json": "When the article says things happened.",
   "augmentations/quiz.json": "Questions generated from the article.",
   "augmentations/sketch.json": "The diagram.",
+  /* **The brief and the hashes, and not the pictures.** A plate's bytes are
+     a content-addressed object in the blob store, so this file names them
+     rather than carrying them — docs/project/export.md. */
+  "augmentations/illustrated.json": "The same argument painted, and where each plate's bytes are.",
   "augmentations/arc.json": "The shape of the argument.",
   "augmentations/tweets.json": "Short extracts.",
   "augmentations/labels.json": "Section labels.",

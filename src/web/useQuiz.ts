@@ -43,7 +43,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Job, Quiz, QuizQuestionId, QuizResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
-import { useStepJob } from "./useStepJob.js";
+import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 
@@ -157,7 +157,18 @@ export interface UseQuiz {
   /** The job writing this article's questions, if one is. */
   job: Job | null;
   /** Why the job this session started stopped, if it stopped badly. */
-  failed: string | null;
+  failed: StepFailure | null;
+  /**
+   * **The press has gone and the queue has not caught up yet.**
+   *
+   * A pass-through of `StepJob.starting`, and it was missing from this
+   * interface until 2026-09-03 — so `QuizPanel` could not pass it, and between
+   * the press and the first poll the panel drew its run button again and
+   * invited a second press. `JobProgress` even carried a comment saying the
+   * quiz *"watch[es] a job it did not start and has no such gap"*, which was
+   * never true: `write` below starts its own.
+   */
+  starting: boolean;
   /**
    * This tab can see the job on screen and cannot move it. A pass-through:
    * `StepJob.stalled` in src/web/useStepJob.ts carries the reasoning, and
@@ -372,6 +383,7 @@ export function useQuiz(slug: string): UseQuiz {
     error,
     job: queue.job,
     failed: queue.failed,
+    starting: queue.starting,
     stalled: queue.stalled,
     attempt,
     answered,
