@@ -736,9 +736,19 @@ a decision. The report must say **561 words**, not "about a thousand".
       adding lines elsewhere.
 - [x] `npm test` + `npm run typecheck`; `npm run lint` on touched files.
 
-### Stage: Cost-reduction write-up
+### Stage: Cost-reduction write-up ✅ 2026-09-03
 
-- [ ] Turn the appendix candidates into a recommendation ranked by measured saving × ease, each
+- [x] **Done, in the report's § What to do about it**
+      ([cost-per-article-2026-09-03.md](../../evals/results/cost-per-article-2026-09-03.md)) —
+      seven candidates ranked by measured saving against ease, each with its tradeoff named. Two
+      are worth doing now because neither trades against quality: **fix the article-cache
+      breakpoint** (18.6% of a batched job, and a bug rather than a tuning) and **bound reasoning
+      on the tasks that hit the ceiling** ($0.4758 of this sweep, 6.5%, billed in full for nothing).
+      The big one — **effort on the five expensive modes, which are 72% of a long article and where
+      reasoning is 36% of all spend** — is deliberately *not* recommended on cost evidence alone:
+      `effort-vs-quality` covers `arc` and `glossary`, neither of which is on that list. Two
+      candidates are already done, one of them by a peer during this run.
+- [x] Turn the appendix candidates into a recommendation ranked by measured saving × ease, each
       with its tradeoff named; decisions to Greg.
 
 ### Stage (follow-up plan, not this one): Model arms

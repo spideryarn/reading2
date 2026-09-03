@@ -266,6 +266,35 @@ reason given above.
 **One unknown.** `embeddings` reported no cache-read field, so its cache state is *unknown*. It is
 recorded as unknown and not as a cold measurement.
 
+## What to do about it, ranked by measured saving against ease
+
+Every row is priced from this run. The tradeoff column is the point: none of these is free, and
+the ones that touch quality are Greg's call rather than an engineer's.
+
+| # | Change | Measured saving | Ease | Tradeoff |
+|---|---|---|---|---|
+| 1 | **Fix the article-cache breakpoint** so the *reader* marks too ([260903c](../../docs/postmortems/260903c-the-conditional-article-cache-breakpoint-marks-the-writer-but-never-the-reader.md)) | **18.6%** of a batched job — $0.1406 of $0.7558 measured | One condition in `src/jobs.ts`, plus a both-sides test | **None.** The premium is already being paid; today it buys nothing. |
+| 2 | **Keep modes on demand** (status quo) | The modes are 79–90% of a fully-pressed article. Not pressing them is the whole saving | Already true | One eager exception: `arc` auto-fires on owner open (`src/web/useArc.ts`). Changing it costs the L0 column until a press. |
+| 3 | **Effort on the five expensive modes** — sketch, timeline, hierarchy structure, quiz, ideas | Those five are **72% of a long article**. Reasoning is 36% of all spend | A per-stage constant already exists (`STAGE_EFFORT`) | **Quality, unmeasured.** `effort-vs-quality` covers `arc` and `glossary` only — neither is on this list. Measure before turning any dial. |
+| 4 | **Bound reasoning on the tasks that hit the ceiling** | Three paid failures here: $0.2157 + $0.0477 + $0.2124 = **$0.4758 for nothing**, 6.5% of the whole sweep | Ceilings are per-call parameters | Answer depth, and a ceiling that is too low converts a good answer into a truncated one — which is how `hierarchy` got to `medium`. |
+| 5 | **Cheaper models where selection is measurable** | Not measurable yet | Needs the model-arms follow-up plan | Quality. Deferred by design. |
+| 6 | ~~Duplicate embedding purchase~~ | Tiny | **Done** by a peer, 2026-09-03 (`src/similar.ts` onto the `article-vectors.ts` seam) | — |
+| 7 | ~~Duplicate job execution~~ | **$10.47–$10.81 of $31.22 historically** — a third of all spend ever | **Done** 2026-09-02 | — |
+
+**The two that are worth doing now are 1 and 4**, because neither trades against quality. One is a
+bug with a saving attached. The other is money we are demonstrably setting fire to: three
+generations in this run were billed in full and wrote nothing, all by exhausting a reasoning budget
+before producing a first token.
+
+**Number 3 is the big one and it is not an engineering decision.** Reasoning tokens are 36% of
+everything measured — $1.11 of $3.08 — and they are billed as output at $10/MTok and never shown to
+anybody. But the five modes that spend it are the five whose output is hardest to judge, and
+nothing has measured what `medium` does to a sketch or a timeline. The honest next step is
+`effort-vs-quality` for those five, not a dial turned on cost evidence alone.
+
+**What is no longer worth pursuing:** cost per word, as a mental model. A mode's bill tracks what
+it *writes*, and its own shape sets that far more than the article's length does.
+
 ## Two gaps in the corpus, both open decisions for Greg
 
 Named in [`evals/cost/fixtures.ts`](../cost/fixtures.ts) and unchanged by this run.
