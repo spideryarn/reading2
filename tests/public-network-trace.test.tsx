@@ -84,6 +84,15 @@ vi.mock("../src/web/useSession.js", () => ({
   useSession: () => ({ session: null, user: session.user, loading: false }),
 }));
 
+/**
+ * Whoever is listening to auth events — the experimental-features store, which
+ * subscribes here itself (src/web/experimental-store.ts) rather than being told
+ * by an effect in `App.tsx`, so that an account switch cannot draw one frame of
+ * the previous reader's settings. `open()` below delivers the current session
+ * to them, which is what makes `GET /api/reader` happen at all.
+ */
+const authListeners: ((event: string, session: unknown) => void)[] = [];
+
 /* Never reached on the visitor path — which is the point — but `lib/api.ts`
    imports it at module load and would go looking for a project URL. */
 vi.mock("../src/web/lib/supabase.js", () => ({
@@ -91,7 +100,10 @@ vi.mock("../src/web/lib/supabase.js", () => ({
     auth: {
       getSession: async () => ({ data: { session: { access_token: "t" } } }),
       refreshSession: async () => ({ data: { session: { access_token: "t" } } }),
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+      onAuthStateChange: (fn: (event: string, session: unknown) => void) => {
+        authListeners.push(fn);
+        return { data: { subscription: { unsubscribe() {} } } };
+      },
       /* Reached only by the two session-unconfirmed actions below, and they
          `await` it — a mock without this member would make the button throw
          rather than reload, which is the one failure mode those actions were
@@ -488,6 +500,16 @@ async function open(search = "", path = ""): Promise<void> {
   history.replaceState(null, "", `/read/${SLUG}${path}${search}`);
   await act(async () => {
     root.render(createElement(NuqsAdapter, null, createElement(App, null)));
+  });
+  /* **Then the auth event**, which is how the session reaches anything that
+     listens for it — after the render, because the store subscribes on mount.
+     Supabase re-emits the current state rather than only changes, so posing the
+     same reader twice is what really happens and must stay one request. */
+  await act(async () => {
+    const posed = session.user === null ? null : { user: session.user };
+    for (const fn of [...authListeners]) {
+      fn(session.user === null ? "SIGNED_OUT" : "SIGNED_IN", posed);
+    }
   });
   await settle();
 }
@@ -1338,11 +1360,13 @@ describe("when the reader changes underneath the page", () => {
  * finding 7: it says the page reads the same and nothing at all about what the
  * page asked for.
  *
- * ## The one difference that is allowed, and why it is exactly one
+ * ## The one difference about *this article* that is allowed
  *
  * A signed-in reader's two-step asks the owned route first and falls back on a
  * 404. So their trace carries one extra request — `GET /api/article/:slug` —
- * and it must be **one**, and it must be the only difference. Anything else is
+ * and it must be **one**. Two more are theirs rather than this article's, and
+ * each is pinned as exactly-once below: `GET /api/jobs`, their own queue, and
+ * `GET /api/reader`, their own experimental-features switch. Anything else is
  * either a hook that mounted for one reader and not the other, or a public read
  * that quietly went through `apiFetch`.
  */
@@ -1418,7 +1442,41 @@ describe("a signed-in reader who does not own it", () => {
       "one session poll, not a loop",
     ).toHaveLength(1);
 
-    expect(withAnAccount.filter((l) => l !== probe && l !== sessionPoll)).toEqual(stranger);
+    /**
+     * **And the experimental-features switch is asked for by nobody, yet.**
+     *
+     * The switch lives in one store bound to the session since 2026-09-03
+     * (src/web/experimental-store.ts), and the store asks the server only once
+     * something subscribes to it. Through stage 1 the only subscriber is the
+     * settings row on `/profile`, so a reading view reads the switch **not at
+     * all** — the same as before the store existed, which is stage 1's whole
+     * contract: nothing changes on screen and nothing changes on the wire.
+     *
+     * **Stage 2 is when this becomes one**, for a signed-in reader wherever
+     * they are, because `App.tsx` will call `useExperimental()` to hand the
+     * answer to `Dock`. Change the number here when that lands, and keep the
+     * zero below whatever happens.
+     *
+     * That zero is the load-bearing half. `GET /api/reader` is behind the auth
+     * gate, so the old per-component hook got its "off" out of a 401 it caught
+     * as a load error — the right answer for the wrong reason, and the day a
+     * feature went behind the switch it would have turned on for strangers with
+     * nothing to say so. docs/reusable/silent-success.md. A stranger asking for
+     * it *not at all* is the point of the store rather than a side effect of it.
+     */
+    const readerSetting = "GET /api/reader";
+    expect(
+      stranger.filter((l) => l === readerSetting),
+      "a stranger asks nothing about a reader profile",
+    ).toHaveLength(0);
+    expect(
+      withAnAccount.filter((l) => l === readerSetting),
+      "nobody has subscribed to the switch on a reading view yet — stage 2 makes this one",
+    ).toHaveLength(0);
+
+    expect(
+      withAnAccount.filter((l) => l !== probe && l !== sessionPoll && l !== readerSetting),
+    ).toEqual(stranger);
   });
 
   /**
@@ -1500,8 +1558,10 @@ describe("a signed-in reader who does not own it", () => {
     await open();
     /* Clears the two requests a signed-in reader legitimately makes that a
        stranger does not — the owned probe and the job engine's one
-       reconciliation. Pinned as *exactly* those two by the parity test above;
-       here they are simply out of the way before anything is pressed. */
+       reconciliation. Pinned as *exactly* those two by the parity test above,
+       which also pins the experimental-features switch at zero until stage 2
+       subscribes to it; here they are simply out of the way before anything is
+       pressed. */
     trace.length = 0;
 
     const buttons = modeRadios();

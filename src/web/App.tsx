@@ -279,6 +279,30 @@ export function App() {
    */
   useJobSession(user?.id ?? null, session?.access_token ?? null);
 
+  /**
+   * **Nothing here tells the experimental-features store who is reading.** It
+   * used to, from an effect beside this one, and that was a frame too late: a
+   * passive effect runs after its children have rendered, so on an account
+   * switch every `Dock` on the page drew once from the previous account's
+   * snapshot. The store subscribes to `onAuthStateChange` itself now, in the
+   * same notification pass as `useSession` — src/web/experimental-store.ts
+   * § the store listens for it itself.
+   *
+   * **And nothing here wakes it, either.** The store starts listening on its
+   * first subscriber and asks the server for nobody until then, so through
+   * stage 1 a reading view makes no `GET /api/reader` at all — exactly as it
+   * made none before this store existed, because the only component that wanted
+   * the switch lived on `/profile`. That is the whole of stage 1's contract:
+   * nothing changes on screen and nothing changes on the wire.
+   *
+   * A keep-awake subscriber sat here briefly — `subscribe(() => {})`, ignoring
+   * what it heard — so that the switch was read once up front rather than when
+   * a page mounted. It bought a round trip's head start and existed mainly to
+   * keep a trace assertion true, which is the wrong way round; stage 2 gets a
+   * real subscriber here anyway, when this component calls `useExperimental()`
+   * to hand the answer down to `Dock`.
+   */
+
   /* **The callback is answered before the gate**, and it has to be: the reader
      arriving here is by definition not signed in yet, and sending them to the
      sign-in screen would throw away the code they came back with. */

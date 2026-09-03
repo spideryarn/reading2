@@ -17,7 +17,9 @@
  *
  * docs/project/experimental-features.md. The store and the route are covered by
  * tests/store-reader-parity.test.ts and tests/routes.test.ts; this is the half
- * a reader touches.
+ * a reader touches. The client-side store the switch now reads — and what it
+ * does across a sign-in, a sign-out and an account switch — is
+ * tests/experimental-store.test.tsx.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -49,7 +51,36 @@ vi.mock("../src/web/lib/api.js", () => ({
   readJson: () => answer(),
 }));
 
+/**
+ * **The store's own auth listener**, so this file can be the SDK.
+ *
+ * Since 2026-09-03 the store subscribes to `onAuthStateChange` itself rather
+ * than being told by an effect in `App.tsx` — the effect ran a frame after its
+ * children had rendered, which on an account switch is one frame of the last
+ * reader's setting drawn for the next one. tests/experimental-store.test.tsx is
+ * where that lifecycle is covered; here it is only how a session gets posed.
+ */
+const authListeners: ((event: string, session: unknown) => void)[] = [];
+
+vi.mock("../src/web/lib/supabase.js", () => ({
+  supabase: {
+    auth: {
+      getSession: async () => ({ data: { session: null } }),
+      onAuthStateChange: (fn: (event: string, session: unknown) => void) => {
+        authListeners.push(fn);
+        return { data: { subscription: { unsubscribe() {} } } };
+      },
+    },
+  },
+}));
+
 const { SettingsSection } = await import("../src/web/SettingsSection.js");
+const { resetForTests, subscribe } = await import("../src/web/experimental-store.js");
+
+/* The store starts listening on the first `subscribe()`, which in the app is
+   the first component mounting. Standing in for it here means a session can be
+   posed *before* anything renders, which `paint` below needs. */
+subscribe(() => {});
 
 let host: HTMLDivElement;
 let root: Root;
@@ -58,6 +89,18 @@ const box = (): HTMLInputElement => host.querySelector("input[type=checkbox]") a
 const said = (): string => host.textContent ?? "";
 
 function paint(): void {
+  /* **The session starts the load, not the mount.** Since 2026-09-03 the answer
+     lives in one module-level store and a component only subscribes to it
+     (src/web/experimental-store.ts), so a test that never says who is reading
+     gets a switch that is permanently un-loaded — which is correct, and is what
+     a signed-out reader sees.
+
+     Announced here rather than in `beforeEach` for a reason worth keeping: the
+     GET resolves on a microtask, and vitest awaits between hooks and the test
+     body. Announcing in `beforeEach` would let the answer land before the first
+     render, and "cannot be touched until the server has said what it is" would
+     pass without ever having been in the state it is about. */
+  for (const fn of authListeners) fn("SIGNED_IN", { user: { id: "reader-under-test" } });
   act(() => {
     root.render(createElement(SettingsSection));
   });
@@ -77,6 +120,10 @@ beforeEach(() => {
   headers = {};
   held = null;
   answer = () => Promise.resolve({ experimentalSince: null });
+  /* The store is a module singleton, so it keeps whatever the last test
+     announced. Without this, a test inherits the previous one's session and the
+     failure looks like a bug in the code rather than in the harness. */
+  resetForTests();
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -85,6 +132,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  resetForTests();
 });
 
 describe("the experimental-features switch", () => {
@@ -132,7 +180,7 @@ describe("the experimental-features switch", () => {
        whichever order they arrive. Ordering the *responses* cannot help — the
        damage is already stored. So the second click sends nothing, and the
        switch cannot end up showing the opposite of what is in the database.
-       useExperimental.ts § one write at a time. */
+       experimental-store.ts § one write at a time. */
     paint();
     await settle();
     held = [];

@@ -108,6 +108,35 @@ src/web/experimental-store.ts
 `useExperimental()` keeps its name and its returned shape, and reads the store instead of fetching.
 `SettingsSection` needs no change beyond that.
 
+### `Dock` is told the answer; it does not go and get it
+
+The store makes it *safe* for `Dock` to call `useExperimental()` itself — the subscription is the
+store's, not the bar's. It is still the wrong shape, and **Fable arbitrated this fork against the
+first draft**:
+
+> `Dock`'s header and `Props` are explicit that the page owns fetches and the bar is told: `drawer`
+> is a prop precisely so a visit to the metadata page "should not buy a drawer nobody opened", and
+> `signedIn`, `visitor`, `marked` are all handed in. […] A would make `Dock` the first place in that
+> file to subscribe to anything.
+
+So the four pages that mount a `Dock` call `useExperimental()` and hand it down as a **required**
+prop. The compiler then asks at every mount site, the way `ModesMissingFromDock` already asks for a
+row per mode. Three of the four are compile errors if forgotten; the fourth, `tests/dock-fit.test.ts`,
+casts `Dock as any` and would instead throw on a missing field — **so read `experimental.on`, never
+`experimental?.on`.** A silent `undefined` there is a bar that quietly shows every mode.
+
+It is also the better test seam. `tests/modes-that-start-themselves.test.tsx` presses Quotes and
+Timeline and must turn the switch on from stage 2 onwards: as a prop that is one literal, and as a
+store it would be a session announcement plus a `/api/reader` body in a test whose subject is jobs,
+not auth. The fixtures (`EXPERIMENTAL_ON` / `EXPERIMENTAL_OFF`) live in a `tests/` helper — a fixture
+should not ship from `Dock.tsx`.
+
+The honest cost, which Fable named: four call sites can each pass a hand-rolled object, so the
+compiler checks that *a* value arrived and not that it came from the hook. A fifth mount site
+could hand-roll `{ on: true }` and show unfinished modes to strangers. One call inside `Dock` would
+make that impossible by construction. Taken anyway, because the prop is the file's own contract and
+the mistake is visible in review.
+
 **`announceSession` is called in exactly one place** — an effect in `App.tsx` beside the
 `useSession()` it already calls (`src/web/App.tsx:264`). Every page in the app renders inside that
 component, so there is no route that can reach a Dock without passing it.
@@ -157,6 +186,10 @@ it must now pose a signed-in session, and that edit is part of this stage.
   `experimental: boolean` — not an optional flag on five rows. `ModesMissingFromDock` proves each
   mode has a row; only a required field proves each row made the decision, and
   [new-mode.md](../project/new-mode.md) says the author must make it. (Sol, finding 8.)
+- `Dock` gains a **required** `experimental` prop — the narrow slice of `ExperimentalSetting` it
+  actually reads, widened in stage 3 to carry the failure states. `App.tsx`, `Metadata.tsx`,
+  `Tweets.tsx` and `PublicPages.tsx` each call `useExperimental()` and pass it. See § *`Dock` is told
+  the answer* above for why this is a prop rather than a hook call inside the bar.
 - `Dock` draws the non-experimental rows **plus the mode named in the URL**. The second half is not
   politeness: the mode segment is a `role="radiogroup"` and exactly one button must be checked, so
   `?mode=timeline` with the switch off and no Timeline button leaves a radiogroup with nothing
@@ -200,10 +233,14 @@ feature behind it* loses the "before the first gate" paragraph, which this work 
 A button at the end of the bar, after Metadata, **for signed-in readers only**. A toggle, not a link
 to `/profile`: one press, where the effect is.
 
-- **Signed-in comes from the store, not from `Dock`'s `signedIn` prop.** That prop is documented as
-  visitor-copy input and is not passed by `Metadata.tsx:899` or `Tweets.tsx:319`, so a toggle keyed
-  on it would vanish when an owner pressed Metadata. (Sol, finding 2.) The store knows the user id,
-  so `useExperimental()` returns `signedIn` and the question has one answer everywhere.
+- **Signed-in comes from the `experimental` prop, not from `Dock`'s existing `signedIn` prop.** That
+  one is documented as visitor-copy input and is not passed by `Metadata.tsx:899` or
+  `Tweets.tsx:319`, so a toggle keyed on it would vanish when an owner pressed Metadata. (Sol,
+  finding 2; Fable reached the same conclusion independently.) The store knows the user id, so
+  `useExperimental()` returns `signedIn` — added in stage 1 — and the question has one answer
+  everywhere. Two spellings of "is somebody signed in" now sit in one `Props`, which the file already
+  apologises for once (`visitor` vs `drawer.visitor`); say plainly in the prop's doc which question
+  each answers.
 - Not part of the radiogroup — `aria-pressed`, not `aria-checked`. `Dock` already keeps three button
   kinds apart for exactly this reason (`DockLink` / `DockTab` / `DockModes`); this is a fourth and
   gets its own component rather than a flag on one of them.
@@ -252,6 +289,10 @@ arrow-key mode switching was removed on 2026-08-31 — so hiding a button remove
 with it, which is correct.
 
 ## Review
+
+**Fable** arbitrated one fork the plan could not settle from the code alone — whether `Dock` calls
+`useExperimental()` or is handed the answer — and ruled for the prop; § *`Dock` is told the answer*
+records the reasoning and the cost.
 
 GPT Sol reviewed this plan before stage 1 and found seven must-fixes; all seven are folded in above,
 and the review is kept at

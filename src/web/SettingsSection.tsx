@@ -69,9 +69,9 @@ export function SettingsSection() {
                "off" over an "on" we had not read yet — a setting silently
                reset by looking at the page it lives on. */
             /* …and not while a save is in flight, which is the *visible* half
-               of the one-write-at-a-time rule `useExperimental` enforces: two
-               PATCHes racing can leave the switch showing the opposite of what
-               is stored. */
+               of the one-write-at-a-time rule experimental-store.ts enforces:
+               two PATCHes racing can leave the switch showing the opposite of
+               what is stored. */
             disabled={!experimental.loaded || experimental.saving}
             onChange={(e) => experimental.set(e.target.checked)}
           />
@@ -109,9 +109,9 @@ export function SettingsSection() {
           </span>
         ) : experimental.error ? (
           /* Said out loud, and the switch has already sprung back to where it
-             was — see `useExperimental`. A control that keeps the position the
-             reader put it in while the server never heard is the failure this
-             line exists to prevent. */
+             was — see experimental-store.ts. A control that keeps the
+             position the reader put it in while the server never heard is the
+             failure this line exists to prevent. */
           <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
             <TriangleAlert size={12} /> Not saved — {experimental.error}
           </span>
