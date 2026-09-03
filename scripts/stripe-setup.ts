@@ -411,7 +411,7 @@ async function main(): Promise<void> {
 
   /* The account, before anything is created in it. `stripeConfigProblem` checks
      the key's mode; this checks whose account it opens. src/billing/stripe.ts. */
-  const account = await stripeClient().accounts.retrieveCurrent();
+  const account = await (await stripeClient()).accounts.retrieveCurrent();
   const wrongAccount = accountProblem(account.id);
   if (wrongAccount && expectedLivemode()) throw new Error(wrongAccount);
   console.log(`  Account: ${account.id}${wrongAccount ? ` — ⚠ ${wrongAccount}` : ""}`);
