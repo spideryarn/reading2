@@ -797,6 +797,75 @@ arbitrated by Fable, code reviewed by GPT Sol.
 - [x] Turn the appendix candidates into a recommendation ranked by measured saving × ease, each
       with its tradeoff named; decisions to Greg.
 
+### Stage: Act on candidate 3 — effort on hierarchy structure ✅ 2026-09-03 (answered, not settled)
+
+Also not in the original plan. The stage above declined to recommend an effort change on cost
+evidence alone; this is the measurement that declining asked for, taken on the one stage of the five
+where a quality harness already existed. Ideas from Fable and GPT Sol, result reviewed by Sol.
+Write-up: [hierarchy-effort-2026-09-03.md](../../evals/results/hierarchy-effort-2026-09-03.md).
+
+- [x] **The harness could not answer the question and nobody had noticed.**
+      `evals/hierarchy-structure/arms.ts` declared the incumbent at `effort: "high"` while
+      production has run `"medium"` since the max_tokens postmortem, so `smart-low` — the arm whose
+      declared purpose is to isolate the single variable `effort` — was answering high-vs-low. Fixed
+      by importing `PRODUCTION_EFFORT` from [`src/hierarchy.ts`](../../src/hierarchy.ts), so the
+      drift is unrepresentable rather than documented; pinned behind that by
+      `tests/hierarchy-eval-incumbent-parity.test.ts`, seen red first.
+- [x] **A paid call reporting $0 now fails.** `assertCallAccounted`'s own docstring names "a cost
+      that lands as zero, silently" and then guarded `null`. Three `cheap-high` calls booked ~13k
+      output tokens and reported $0.00; `verify-costs.ts` agreed, because $0 ≈ $0. Cause is
+      `is_byok: true` — the quick tier runs on our own OpenAI key, so OpenRouter routes it and does
+      not bill it. `evals/cost` already handled this (its § "PDF extraction is BYOK"); its sibling
+      did not.
+- [x] A long fixture that is actually long: the corpus on disk was stale (`constitution` is 84
+      blocks here against the manifest's 360), so `gwern.html` went through stages 2–3 into
+      `data/gwern-scaling-long` — 184 blocks, 16,846 words, and `incumbent` prices at $0.21/draw
+      against the cost report's $0.2138 median, so the two harnesses agree.
+- [x] 10 `medium` draws and 8 `low`, $3.88 over 31 calls, every one reconciled against the
+      provider's records. **Provisionally keep `medium`:** `low` is 36% cheaper and 47% faster, its
+      trees need 2.6× the boundary repair, and it dropped a proposed section in 3 of 7 draws against
+      0 of 10.
+- [x] **Two of the write-up's own conclusions withdrawn inside it**, both found by Sol's review.
+      The causal story ("`low` invents its own boundaries") was unsound — `sourceHeadingShare`
+      counts all internal nodes rather than depth-1 ones, and `l1OnHeadings` is 96.7% against 95.8%,
+      so `low`'s extra parts *do* start on author headings. The length threshold was confounded: the
+      short and long runs use different articles.
+- [x] The noise-floor method downgraded from a discriminator to an informal comparison, for the
+      reason Sol gave: `|mean(incumbent) − mean(incumbent-repeat)|` is one realisation of a
+      difference whose expected value is zero.
+- [ ] **Not done, and it is the cheapest thing left:** a blind comparison of the trees already saved
+      under each run's `trees/`. Every measure taken is mechanical, no person has looked at a tree,
+      and this is the only step that can turn repair counts into a claim about quality. Costs
+      attention, not money.
+- [ ] Not done: replication on more long articles, and a re-run after the repair work below, which
+      raises `low`'s floor more than `medium`'s.
+
+### Stage (follow-up plan, not this one): hierarchy reliability and efficiency
+
+Ideas gathered 2026-09-03 from Fable and GPT Sol independently; neither built. The two agreed on
+what to reject, which is most of the value: **caching is worth roughly nothing here** (one call per
+article, and the modes run past the TTL), **chunking is a scale design not a cost lever** (186
+blocks against a ~1,976 ceiling), and **the two-pass split should stay**.
+
+- [ ] Make an unresolvable child *end* non-fatal. `planChildRanges` derives every kept child's end
+      from the next sibling's start, so for a child whose start resolves the model's end contributes
+      nothing to its range — and one bad end voids the whole sibling set. Note this **reverses a
+      written decision** (`src/hierarchy.ts` argues the diagnostic is worth more), so it needs Greg.
+- [ ] Checkpoint the validated structure before the label fan-out. Today a label-stage failure
+      re-buys a $0.21 structure *and* invalidates every label checkpoint already paid for, because
+      the new tree has different sections.
+- [ ] `missedHeadingBoundaries` as loud telemetry. The prompt calls every authored heading a hard
+      boundary; the invariants only check the converse, so a tree can merge across one and score
+      valid.
+- [ ] **Sol's biggest cost idea, still unpriced:** the label pass runs on `CAPABLE_MODEL`
+      ([`src/labels.ts`](../../src/labels.ts)) and emits *zero* reasoning tokens. Arithmetic says
+      ~$0.115 → ~$0.012. Needs the Model-arms stage below first — Luna cannot ride the Messages
+      wire — and needs the BYOK fix above, or the bakeoff will score Luna free.
+- [ ] Greg's idea, worth keeping as the target wire format: **NDJSON plus start ordinals**, one line
+      per node. Truncation has bitten this stage three times and today discards the whole paid
+      response; complete lines would survive. Sequence it *after* the measurements, since it
+      invalidates every eval baseline.
+
 ### Stage (follow-up plan, not this one): Model arms
 
 - [ ] A separate plan once the baseline is committed: a per-stage model injection/bypass
