@@ -1549,9 +1549,11 @@ glossary, and three consequences follow from it rather than from taste:
 - **It is in `FORCE_ONLY_WHEN_NAMED` for a third reason the others do not have**,
   and it is about the clock rather than the money: every step self-aborts at 400s
   inside an 800s invocation that must also fit a `hierarchy` measured at 320s. A
-  positional cascade that swept this in beside `hierarchy` would not waste a call, it
-  would run the invocation out of time — and that fails as a platform kill that
-  takes the whole job rather than as a recorded failure.
+  positional cascade that swept this in beside `hierarchy` would not *merely* waste
+  a call, it would run the invocation out of time — and that fails as a platform
+  kill that takes the whole job rather than as a recorded failure. (The *merely*
+  went missing here and nowhere else, which inverted the sentence;
+  `src/pipeline.ts` § `FORCE_ONLY_WHEN_NAMED` has always had it.)
 
 **The first converted step, and for a while the only one.** Writing a file inside
 `run()` works on a laptop and cannot work through a store that puts the artefact
@@ -1861,9 +1863,23 @@ client — puts the ordering in a tab that can be closed halfway through.
 `profile-changed` **re-draw rather than adopt**: `stepIsDone` decides whether the
 Sketch half runs, and the sketch step stamps against the same `sourceHash` and
 `profileHash` the route reports those two states from, so a Sketch the panel
-calls out of date is one the step cannot call current. Forcing would have to name
-`sketch`, and `cascadeForce` sweeps in every step after the first forced one, so
-a Sketch that was genuinely current would be redrawn for nothing.
+calls out of date is one the step cannot call current.
+
+**The reason written here until 2026-09-03 was wrong**, and the correction is
+left visible because two other copies of it were wrong the same way
+([`useIllustrated.ts`](../../src/web/useIllustrated.ts) and a test's own
+docstring). It said *"forcing would have to name `sketch`, and `cascadeForce`
+sweeps in every step after the first forced one, so a Sketch that was genuinely
+current would be redrawn for nothing"*. A force from that button names
+**`illustrated`** — `useStepJob.start` sends `force: [step]`, its own step — and
+`sketch` comes *before* it, while [`cascadeForce`](../../src/jobs.ts) starts at
+the first forced name and looks only at what follows. Nor could it be swept in
+from further back: **both** steps are in `FORCE_ONLY_WHEN_NAMED`. So the Sketch
+half is unforced whatever that button does, and `stepIsDone` is the only thing
+deciding it. What unforced buys is on the painting half instead — `work_key`
+hashes `force` (`workKeyFor`, [`src/jobs.ts`](../../src/jobs.ts)), so a forced
+press and an unforced one are two keys and two $0.27–$0.40 jobs where the queue
+would otherwise collapse them into one. GPT Sol, reviewing stages 2–3.
 
 Stale and wrong-profile are refused for reasons of their own. A picture painted
 from a stale Sketch is **born stale**, because the panel's `stale` covers the

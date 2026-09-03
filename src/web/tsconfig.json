@@ -26,6 +26,20 @@
        See docs/project/typechecking.md. */
     "paths": { "@/*": ["./*"] }
   },
-  "include": [".", "../types.ts"],
+  /* `../*.d.ts` is not the client's own code, and it is here for a reason worth
+     stating: `useStepJob.ts` takes a **type-only** import from `src/pipeline.ts`
+     (§ `StepBefore`, the ordering `precededBy` is checked against). Nothing of
+     that reaches the browser — `import type` is erased — but tsc still walks the
+     module for its types, and the pipeline reaches `src/fetch.ts` and
+     `src/pdf.ts`, whose untyped dependencies are declared in `src/*.d.ts`.
+     Without this glob those three resolve as `any` and the project fails with
+     TS7016 on packages the client never loads. Same reasoning, and the same
+     glob, as tests/tsconfig.json.
+
+     The visible cost is that this project went from 267 files to 346 on
+     2026-09-03: the pipeline's type closure is now checked here as well as by
+     the root project. Measured at the time as 2.5s → 3.2s for the whole of
+     `npm run typecheck`. */
+  "include": [".", "../types.ts", "../*.d.ts"],
   "exclude": []
 }

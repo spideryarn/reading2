@@ -290,9 +290,12 @@ trustworthy signal.
 
 **Stage 2 shipped the chain.** `useStepJob` gained `precededBy`, `useIllustrated` gained
 `drawThenPaint`, and the three refusal branches gained the button. The request is **unforced** on
-purpose: `cascadeForce` sweeps in every step after the first forced one, and neither `sketch` nor
-`illustrated` is in `FORCE_ONLY_WHEN_NAMED` (checked), so forcing would have redrawn a current
-Sketch for nothing. Unforced hands the decision to `stepIsDone`, which is what makes `stale` and
+purpose, though the reason first written here was wrong twice over and GPT Sol caught it. It said a
+force "would name `sketch`" — it would name `illustrated`, the hook's own step — and that neither
+step was in `FORCE_ONLY_WHEN_NAMED`, when **both are**. That second error is worth naming: the set
+spans lines 430–481 of `src/pipeline.ts` and was checked with a 440–470 line window, which clipped
+exactly the tail the two members sit in, and the truncated answer looked complete. Bound a check by
+the construct, never by a line range. Unforced hands the decision to `stepIsDone`, which is what makes `stale` and
 `profile-changed` re-draw rather than adopt — asserted, and it holds *structurally*: the sketch
 stamp is read out of the artefact's own `sourceHash`/`profileHash`, the same two fields the route
 reports those states from, so there is no second copy to drift.
