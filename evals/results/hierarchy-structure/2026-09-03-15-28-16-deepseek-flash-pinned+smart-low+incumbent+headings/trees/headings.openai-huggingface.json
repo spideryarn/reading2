@@ -1,0 +1,1162 @@
+{
+  "version": "headings/1",
+  "generator": "deterministic-headings",
+  "slug": "openai-huggingface",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0003",
+        "n0004",
+        "n0005",
+        "n0006",
+        "n0007",
+        "n0008",
+        "n0009",
+        "n0010",
+        "n0011",
+        "n0012",
+        "n0013",
+        "n0014",
+        "n0015",
+        "n0016",
+        "n0017",
+        "n0018",
+        "n0019",
+        "n0020",
+        "n0021",
+        "n0022",
+        "n0023",
+        "n0024",
+        "n0025",
+        "n0026",
+        "n0027",
+        "n0028",
+        "n0029",
+        "n0030",
+        "n0031",
+        "n0032",
+        "n0033",
+        "n0034",
+        "n0035",
+        "n0036",
+        "n0037",
+        "n0038",
+        "n0039",
+        "n0040",
+        "n0041",
+        "n0042",
+        "n0043",
+        "n0044",
+        "n0045",
+        "n0046",
+        "n0047",
+        "n0048",
+        "n0049",
+        "n0050",
+        "n0051",
+        "n0052",
+        "n0053",
+        "n0054",
+        "n0055",
+        "n0056",
+        "n0057",
+        "n0058",
+        "n0059",
+        "n0060",
+        "n0061",
+        "n0062",
+        "n0063",
+        "n0064",
+        "n0065",
+        "n0066",
+        "n0067",
+        "n0068",
+        "n0069",
+        "n0070",
+        "n0071",
+        "n0072",
+        "n0073",
+        "n0074",
+        "n0075",
+        "n0076",
+        "n0077",
+        "n0078",
+        "n0079",
+        "n0080",
+        "n0081",
+        "n0082",
+        "n0083",
+        "n0084",
+        "n0085",
+        "n0086",
+        "n0087",
+        "n0088",
+        "n0089",
+        "n0090",
+        "n0091",
+        "n0092",
+        "n0093",
+        "n0094",
+        "n0095",
+        "n0096"
+      ],
+      "range": [
+        "spya-cx5k4t",
+        "spya-brgs0b"
+      ],
+      "title": "The Rise and Fall of Agent Civilizations"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-cx5k4t",
+        "spya-cx5k4t"
+      ],
+      "title": "",
+      "navLabel": "The Rise and Fall of Agent Civilizations"
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-gvsujh",
+        "spya-gvsujh"
+      ],
+      "title": ""
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-q62pkz",
+        "spya-q62pkz"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-gb7ze2",
+        "spya-gb7ze2"
+      ],
+      "title": ""
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-c2ck7h",
+        "spya-c2ck7h"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-b0wbhk",
+        "spya-b0wbhk"
+      ],
+      "title": ""
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-ekhrbu",
+        "spya-ekhrbu"
+      ],
+      "title": ""
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-fcu0cb",
+        "spya-fcu0cb"
+      ],
+      "title": ""
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-v9detz",
+        "spya-v9detz"
+      ],
+      "title": ""
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-v43bs7",
+        "spya-v43bs7"
+      ],
+      "title": ""
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-g9tjds",
+        "spya-g9tjds"
+      ],
+      "title": ""
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-pfkdk4",
+        "spya-pfkdk4"
+      ],
+      "title": ""
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-vvkkv7",
+        "spya-vvkkv7"
+      ],
+      "title": ""
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-ms8rup",
+        "spya-ms8rup"
+      ],
+      "title": ""
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-dk4gcf",
+        "spya-dk4gcf"
+      ],
+      "title": ""
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-ugwnw2",
+        "spya-ugwnw2"
+      ],
+      "title": ""
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-bh44xd",
+        "spya-bh44xd"
+      ],
+      "title": ""
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-rzxkcd",
+        "spya-rzxkcd"
+      ],
+      "title": ""
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-s5dpqc",
+        "spya-s5dpqc"
+      ],
+      "title": ""
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-t89gw5",
+        "spya-t89gw5"
+      ],
+      "title": ""
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-cbv8uf",
+        "spya-cbv8uf"
+      ],
+      "title": ""
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-m24kgb",
+        "spya-m24kgb"
+      ],
+      "title": ""
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-k9s755",
+        "spya-k9s755"
+      ],
+      "title": ""
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-c8fcww",
+        "spya-c8fcww"
+      ],
+      "title": ""
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-vqvmhz",
+        "spya-vqvmhz"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-ns5qyb",
+        "spya-ns5qyb"
+      ],
+      "title": ""
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-s9a3he",
+        "spya-s9a3he"
+      ],
+      "title": ""
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-zfbcb4",
+        "spya-zfbcb4"
+      ],
+      "title": ""
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-ast6bs",
+        "spya-ast6bs"
+      ],
+      "title": ""
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-ckcyzp",
+        "spya-ckcyzp"
+      ],
+      "title": ""
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-vfq66b",
+        "spya-vfq66b"
+      ],
+      "title": ""
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-xvkm3j",
+        "spya-xvkm3j"
+      ],
+      "title": ""
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-gy8fb4",
+        "spya-gy8fb4"
+      ],
+      "title": ""
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-d6p0aa",
+        "spya-d6p0aa"
+      ],
+      "title": ""
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-vv9dpj",
+        "spya-vv9dpj"
+      ],
+      "title": ""
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-cc5uhs",
+        "spya-cc5uhs"
+      ],
+      "title": ""
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-w9ctpd",
+        "spya-w9ctpd"
+      ],
+      "title": ""
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-gu6jbj",
+        "spya-gu6jbj"
+      ],
+      "title": ""
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-asbjy9",
+        "spya-asbjy9"
+      ],
+      "title": ""
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-vpd027",
+        "spya-vpd027"
+      ],
+      "title": ""
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-df7qrz",
+        "spya-df7qrz"
+      ],
+      "title": ""
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-z6c3dr",
+        "spya-z6c3dr"
+      ],
+      "title": ""
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-fkg2ny",
+        "spya-fkg2ny"
+      ],
+      "title": ""
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-gj5bbr",
+        "spya-gj5bbr"
+      ],
+      "title": ""
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-acvnjw",
+        "spya-acvnjw"
+      ],
+      "title": ""
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-cx56k0",
+        "spya-cx56k0"
+      ],
+      "title": ""
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-m45y0k",
+        "spya-m45y0k"
+      ],
+      "title": ""
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-c3dppu",
+        "spya-c3dppu"
+      ],
+      "title": ""
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-dgcfnd",
+        "spya-dgcfnd"
+      ],
+      "title": ""
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-krknwc",
+        "spya-krknwc"
+      ],
+      "title": ""
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-f030k3",
+        "spya-f030k3"
+      ],
+      "title": ""
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-qvg86h",
+        "spya-qvg86h"
+      ],
+      "title": ""
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-fhj3z4",
+        "spya-fhj3z4"
+      ],
+      "title": ""
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-j45j9u",
+        "spya-j45j9u"
+      ],
+      "title": ""
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-nakhtw",
+        "spya-nakhtw"
+      ],
+      "title": ""
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-kyxy7b",
+        "spya-kyxy7b"
+      ],
+      "title": ""
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-sjjbur",
+        "spya-sjjbur"
+      ],
+      "title": ""
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-wtguds",
+        "spya-wtguds"
+      ],
+      "title": ""
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-m4gku9",
+        "spya-m4gku9"
+      ],
+      "title": ""
+    },
+    "n0061": {
+      "id": "n0061",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-r4jn5b",
+        "spya-r4jn5b"
+      ],
+      "title": ""
+    },
+    "n0062": {
+      "id": "n0062",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-jauf7s",
+        "spya-jauf7s"
+      ],
+      "title": ""
+    },
+    "n0063": {
+      "id": "n0063",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-vqcwj0",
+        "spya-vqcwj0"
+      ],
+      "title": ""
+    },
+    "n0064": {
+      "id": "n0064",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-nayjhs",
+        "spya-nayjhs"
+      ],
+      "title": ""
+    },
+    "n0065": {
+      "id": "n0065",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-mgjgha",
+        "spya-mgjgha"
+      ],
+      "title": ""
+    },
+    "n0066": {
+      "id": "n0066",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-bgtdqz",
+        "spya-bgtdqz"
+      ],
+      "title": ""
+    },
+    "n0067": {
+      "id": "n0067",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-q33vy8",
+        "spya-q33vy8"
+      ],
+      "title": ""
+    },
+    "n0068": {
+      "id": "n0068",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-fmww2n",
+        "spya-fmww2n"
+      ],
+      "title": ""
+    },
+    "n0069": {
+      "id": "n0069",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-matth4",
+        "spya-matth4"
+      ],
+      "title": ""
+    },
+    "n0070": {
+      "id": "n0070",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-c2bkgz",
+        "spya-c2bkgz"
+      ],
+      "title": ""
+    },
+    "n0071": {
+      "id": "n0071",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-m42hxd",
+        "spya-m42hxd"
+      ],
+      "title": ""
+    },
+    "n0072": {
+      "id": "n0072",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-ddr2ub",
+        "spya-ddr2ub"
+      ],
+      "title": ""
+    },
+    "n0073": {
+      "id": "n0073",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-ebtbnm",
+        "spya-ebtbnm"
+      ],
+      "title": ""
+    },
+    "n0074": {
+      "id": "n0074",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-k8jws5",
+        "spya-k8jws5"
+      ],
+      "title": ""
+    },
+    "n0075": {
+      "id": "n0075",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-khwx0h",
+        "spya-khwx0h"
+      ],
+      "title": ""
+    },
+    "n0076": {
+      "id": "n0076",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-vsujby",
+        "spya-vsujby"
+      ],
+      "title": ""
+    },
+    "n0077": {
+      "id": "n0077",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-peudft",
+        "spya-peudft"
+      ],
+      "title": ""
+    },
+    "n0078": {
+      "id": "n0078",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-chdu2z",
+        "spya-chdu2z"
+      ],
+      "title": ""
+    },
+    "n0079": {
+      "id": "n0079",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-av2uwp",
+        "spya-av2uwp"
+      ],
+      "title": ""
+    },
+    "n0080": {
+      "id": "n0080",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-tq02vk",
+        "spya-tq02vk"
+      ],
+      "title": ""
+    },
+    "n0081": {
+      "id": "n0081",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-h6yxz3",
+        "spya-h6yxz3"
+      ],
+      "title": ""
+    },
+    "n0082": {
+      "id": "n0082",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-td87ke",
+        "spya-td87ke"
+      ],
+      "title": ""
+    },
+    "n0083": {
+      "id": "n0083",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-bpuujn",
+        "spya-bpuujn"
+      ],
+      "title": ""
+    },
+    "n0084": {
+      "id": "n0084",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-hz50qg",
+        "spya-hz50qg"
+      ],
+      "title": ""
+    },
+    "n0085": {
+      "id": "n0085",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-a49xd7",
+        "spya-a49xd7"
+      ],
+      "title": ""
+    },
+    "n0086": {
+      "id": "n0086",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-g5mja3",
+        "spya-g5mja3"
+      ],
+      "title": ""
+    },
+    "n0087": {
+      "id": "n0087",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-rvb47b",
+        "spya-rvb47b"
+      ],
+      "title": ""
+    },
+    "n0088": {
+      "id": "n0088",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-f07bw5",
+        "spya-f07bw5"
+      ],
+      "title": ""
+    },
+    "n0089": {
+      "id": "n0089",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-p0h9g8",
+        "spya-p0h9g8"
+      ],
+      "title": ""
+    },
+    "n0090": {
+      "id": "n0090",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-z83ezv",
+        "spya-z83ezv"
+      ],
+      "title": ""
+    },
+    "n0091": {
+      "id": "n0091",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-qen9hh",
+        "spya-qen9hh"
+      ],
+      "title": ""
+    },
+    "n0092": {
+      "id": "n0092",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-kqgzae",
+        "spya-kqgzae"
+      ],
+      "title": ""
+    },
+    "n0093": {
+      "id": "n0093",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-mdta39",
+        "spya-mdta39"
+      ],
+      "title": ""
+    },
+    "n0094": {
+      "id": "n0094",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-d5w938",
+        "spya-d5w938"
+      ],
+      "title": ""
+    },
+    "n0095": {
+      "id": "n0095",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-rnag5c",
+        "spya-rnag5c"
+      ],
+      "title": ""
+    },
+    "n0096": {
+      "id": "n0096",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-brgs0b",
+        "spya-brgs0b"
+      ],
+      "title": ""
+    }
+  },
+  "provisional": "headings"
+}

@@ -88,6 +88,36 @@ those two rows say nothing. The runs it reads are the six `2026-09-03-09/10-*` d
 The 2026-08-30 runs in that directory are **not** one series with these: their `incumbent` arm was
 `effort: "high"` while production ran `"medium"`, which is the bug this run had to fix first.
 
+## `hierarchy-cheap-models-2026-09-03.md` — can a cheaper model carve an article?
+
+Nine models against production Sonnet on three articles, under a zero-retention routing constraint.
+**The headline is not a model: most failures were caused by the gateway's provider routing rather
+than by the model.** All four DeepSeek failures were served by one upstream (DigitalOcean, returning
+reasoning and no answer) while every other DeepSeek call succeeded, including a direct probe of the
+identical request — so reported as a model failure it would have written off the cheapest model in
+the field. `zdr: true` with no pin load-balances across up to twenty-two upstreams of very uneven
+quality, and pinning has its own cost: the pinned arm got 429s.
+
+**The one finding strong enough to act on is about effort, not about a new vendor.** Sonnet `low`
+and Sonnet `medium` produced a tree equally often here (6/7 each), `low` costs 45% less and runs
+about twice as fast, and `low` was judged better in **eight blind judgements out of eight** across
+this eval and the effort eval above — two arm sets, two judge families, two studies. The named fault
+against `medium` is *welding*: fusing two of the author's own arguments under one title, which is
+valid, silent, and shipped to every reader.
+
+**It also documents its own corrections, which is the part worth reading.** An earlier draft read
+one draw per cell as reliability records; a two-draw panel broke three of those readings, including
+the load-bearing one — production `medium` failed the control article with the *same* error `low` had
+failed on, on a draw where `low` passed. Three arms fail that article by dropping the same 3-block
+tail, so it is a fact about the article. Claude Fable, arbitrating, named that inversion as the
+least-supported claim in the brief before the panel confirmed it.
+
+Do not rank arms by repair count: `gemini-3.8-flash` held the best mechanical scores in the whole
+field — zero repairs, best-balanced carving, 10× cheaper, 8× faster — and was judged **last** by
+both judges, and managed 1 of 3 articles. That is the third time here that the mechanical proxies
+have pointed the wrong way. Judging materials and all four verdicts are under
+[`hierarchy-structure/judging-cheap-2026-09-03/`](hierarchy-structure/judging-cheap-2026-09-03).
+
 ## `prompt-caching-*.md` — the article is really being cached
 
 Written by `npm run eval:caching`, 2026-08-26, against the live API. Three articles, each searched

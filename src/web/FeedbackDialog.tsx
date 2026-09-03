@@ -21,6 +21,15 @@
  * >
  * > Maybe also add toggle for "Bug/problem" vs "Suggestion".
  *
+ * On 2026-09-03 he asked for the *questions* back, without the boxes:
+ *
+ * > The Feedback / Problem dialog box wording should explicitly ask users for:
+ * > Steps to reproduce; What you expected to see; and What you saw instead.
+ *
+ * So they are one sentence above the single box, always visible. They had been
+ * moved into the "Not sure what to write?" disclosure, and a hint nobody opens
+ * is a hint nobody reads.
+ *
  * Three boxes is a form. A form is what you fill in once you have *decided* to
  * file a bug — and the reader this whole feature exists for is the one who was
  * merely annoyed and would otherwise close the tab.
@@ -642,6 +651,15 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
 
         <label className="fb-field">
           <span className="fb-label">What happened, or what would you like?</span>
+          {/* **The three asks, said out loud.** They used to be three boxes, then
+              they were hidden behind "Not sure what to write?", and a hint nobody
+              opens is a hint nobody reads — Greg, 2026-09-03, asked for the
+              dialog to ask for them explicitly. One box still, one sentence
+              above it. */}
+          <span className="fb-hint">
+            If something went wrong: the steps to reproduce it, what you expected to
+            see, and what you saw instead.
+          </span>
           <textarea
             ref={box}
             className="fb-input fb-body"
@@ -683,9 +701,9 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
         {helpOpen ? (
           <div className="fb-help">
             <p>
-              If something went wrong, the three things that help most are what you were
-              doing, what you expected, and what happened instead — in any order, in as
-              few words as you like.
+              Anything you have helps — the page you were on, roughly what you had
+              clicked, anything odd on the screen. In any order, in as few words as you
+              like, and a missing piece is better than a delayed report.
             </p>
             <p>
               Don't polish it. A half-sentence we can ask you about beats a tidy report

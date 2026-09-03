@@ -159,6 +159,16 @@ export type TitleSpec =
    * about nothing else.
    */
   | { kind: "reauth-required" }
+  /**
+   * **An address nobody minted** — NotFoundPage.tsx.
+   *
+   * Its own variant rather than borrowing `error`, which is the neighbouring
+   * shape and says *Couldn't open*. That one is about a fetch that failed and
+   * deliberately does not guess why; this one is a verdict we are certain of,
+   * reached before any request was made. A reader whose tab said *Couldn't
+   * open* would go on believing the address was right.
+   */
+  | { kind: "not-found" }
   | { kind: "profile" }
   | { kind: "design" }
   /** What we do with a reader's data — PrivacyPage.tsx. */
@@ -232,6 +242,14 @@ function segments(spec: TitleSpec): string[] {
        because there is nothing we can honestly say. */
     case "reauth-required":
       return ["Sign in again", APP_NAME];
+
+    /* Two words rather than the page's own heading, which is a whole sentence
+       — *There's nothing at this address* — and a tab has less room than a
+       heading. The same trade the privacy page makes just below. It says
+       nothing about a document, for the reason `not-shared` gives above: the
+       tab must not be what confirms an article exists. */
+    case "not-found":
+      return ["Not found", APP_NAME];
 
     case "profile":
       return ["Profile", APP_NAME];

@@ -205,6 +205,21 @@ describe("the feedback dialog", () => {
     expect(sent.diagnostics).toBeNull();
   });
 
+  /* **The one piece of wording worth a test.** Greg, 2026-09-03: the dialog must
+     "explicitly ask users for: Steps to reproduce; What you expected to see; and
+     What you saw instead". These three spent a day inside the "Not sure what to
+     write?" disclosure, where a reader who never clicks never sees them — so
+     what is pinned is not the phrasing but that they are on screen before
+     anybody clicks anything. */
+  it("asks for the three things without the reader opening anything", () => {
+    mount();
+    const shown = host.textContent ?? "";
+    expect(shown).toMatch(/steps to reproduce/i);
+    expect(shown).toMatch(/what you expected/i);
+    expect(shown).toMatch(/what you saw instead/i);
+    expect(host.querySelector(".fb-help")).toBeNull();
+  });
+
   it("refuses to send when the box is blank", () => {
     mount();
     const button = host.querySelector<HTMLButtonElement>("button.fb-send");

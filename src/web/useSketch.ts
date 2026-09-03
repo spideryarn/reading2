@@ -224,3 +224,70 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
     cancel: queue.cancel,
   };
 }
+
+/**
+ * **The drawn picture's caption, for something that is not the picture.**
+ *
+ * One line of text, no job machinery and no `useAutoRun` — which is the whole
+ * reason this is not `useSketch` with the rest thrown away. A second
+ * `useSketch` on the page would be a second auto-runner: mounted with the
+ * activation token armed, both instances would call `ensure`, and `ensure`
+ * buys a two-minute, $0.20 model call. A hover card must not be able to reach
+ * that.
+ *
+ * The caller is the Sketch chip's hover card in
+ * [`DiagramPanel.tsx`](./DiagramPanel.tsx). Greg asked for the caption there
+ * after meeting it as an SVG `<title>` over the whole picture
+ * (`SketchView.tsx` § no `<title>` here), and a chip on a row the reader is
+ * reading along is the opposite of that: it says what *this* article's picture
+ * turned out to be, once, where the reader is choosing between pictures.
+ *
+ * **Read straight off the wire, not through `readSketch`.** That function's job
+ * is to refuse coordinates and block ids that no longer mean anything against
+ * this article, and it needs the block order to do it; a caption is a sentence
+ * rendered as text by React, so there is nothing here for it to check. Hence
+ * the narrow cast and the `typeof` — the field is `unknown` on the wire and
+ * this is the one thing being asked of it.
+ *
+ * **No `enabled` argument, unlike `useSimilar` and `useProjection`.** Theirs
+ * gate a purchase; there is nothing here to gate. The version that shipped
+ * first took `kind !== "sketch"`, on the reasoning that while Sketch is the
+ * picture on screen `SketchView` is reading the same artefact anyway — and that
+ * bought one duplicate free GET at the price of two real faults: the same chip
+ * gave a different card depending on which picture was up, and the reset below
+ * blanked the caption on the way back, so a card opened in that window grew a
+ * paragraph a moment later. ⟨Fable, code review⟩, 2026-09-03. `useProjection`
+ * § *not cleared when `enabled` goes false* is the same lesson from the other
+ * direction.
+ *
+ * So: one GET per article per Diagram open, and the only thing that clears the
+ * text is arriving at a different article.
+ */
+export function useSketchCaption(slug: string): string | null {
+  const [caption, setCaption] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCaption(null);
+    let live = true;
+    void (async () => {
+      try {
+        const res = await apiFetch(`/api/sketch/${encodeURIComponent(slug)}`);
+        // 404 is the ordinary case — most articles have never had one drawn.
+        if (!live || res.status === 404) return;
+        const loaded = await readJson<SketchResponse>(res);
+        if (!live) return;
+        const drawn = loaded.sketch as { caption?: unknown } | null;
+        const text = typeof drawn?.caption === "string" ? drawn.caption.trim() : "";
+        if (text !== "") setCaption(text);
+      } catch {
+        // A caption on a hover card is a nicety. Nothing is broken without it,
+        // and there is no surface here to say so on.
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [slug]);
+
+  return caption;
+}

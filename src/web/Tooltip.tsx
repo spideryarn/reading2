@@ -295,11 +295,21 @@ export function ControlTip({
   head,
   state,
   what,
+  drawn,
   how,
 }: {
   head: string;
   state?: string | undefined;
   what: string;
+  /**
+   * What this control produced **for the article in front of the reader** —
+   * the Sketch chip's caption, and so far only that (`DiagramPanel.tsx`). It
+   * sits between the two fixed paragraphs because that is where it belongs in
+   * the reading: what the picture is, then what it turned out to be here, then
+   * what it costs. Set apart in the styling, because unlike everything else in
+   * this card it is not the same words for every reader.
+   */
+  drawn?: string | undefined;
   how: string;
 }) {
   return (
@@ -307,6 +317,7 @@ export function ControlTip({
       <div className="tip-soon-head">{head}</div>
       {state && <p>{state}</p>}
       <p>{what}</p>
+      {drawn && <p className="tip-soon-drawn">{drawn}</p>}
       <p className="tip-soon-how">{how}</p>
     </>
   );

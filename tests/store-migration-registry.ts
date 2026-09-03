@@ -425,6 +425,12 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    * **Arrived from `dev` after the registry was written, and the hole check
    * caught it** — which is the whole reason that check re-derives the import
    * graph live rather than reading a stored answer. Named, classified, kept.
+   *
+   * Classified twice, independently, and identically: the registry's owner and
+   * the eval author who added the test both landed on
+   * `shared-mechanism-collateral` / `import-only` / `static-only` within the
+   * same hour, and the merge conflict between them was prose only. Worth a line
+   * because agreement reached separately is the only kind that says anything.
    */
   "tests/hierarchy-eval-incumbent-parity.test.ts": {
     category: "shared-mechanism-collateral",
