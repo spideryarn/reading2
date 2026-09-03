@@ -57,8 +57,21 @@ import { useSlow } from "./useSlow.js";
 import { Dock } from "./Dock.js";
 import { ChatPanel } from "./ChatPanel.js";
 import { useLiveConversation } from "./live/useLiveConversation.js";
-import { GlossaryPanel } from "./GlossaryPanel.js";
-import { QuotesPanel } from "./QuotesPanel.js";
+import {
+  effectiveSort,
+  gateToReveal,
+  GlossaryPanel,
+  PRIORITY_GATE,
+  visibleEntries,
+} from "./GlossaryPanel.js";
+import {
+  barStops,
+  effectiveRank,
+  QUOTE_BAR_DEFAULT,
+  QuotesPanel,
+  snapToStop,
+  visibleQuotes,
+} from "./QuotesPanel.js";
 import { useQuotes } from "./useQuotes.js";
 import { ProseHoverCard } from "./ProseHoverCard.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "./notes-view.js";
@@ -1772,12 +1785,42 @@ function Reader({
    * about.
    */
   const [, setTermId] = useQueryState("term", termParam);
+  /**
+   * And the threshold, for one reason only: **a term the bar is hiding cannot
+   * be opened.**
+   *
+   * Since 2026-09-03 the prioritised glossary hides what is below the gate
+   * rather than grouping it, so pressing "in the glossary" on a low-scoring
+   * term would take the reader to a band with no such row in it — the panel
+   * asked to select something it is not drawing. `gateToReveal` answers the
+   * gate that puts it back, and null when the current one already shows it.
+   *
+   * **Lowered, not cleared**, and not swapped for `document` order: the reader
+   * stays in the order they chose, and the slider visibly moves, so nothing
+   * happens behind their back. Written through the same nuqs setter the band
+   * reads, exactly as `?term=` above is — two setters on one parameter is fine.
+   */
+  const [gate, setGate] = useQueryState("gate", gateParam);
+  /**
+   * And the order, read here for one reason: **a gate nothing is hiding with
+   * must not be lowered.**
+   *
+   * `?sort=document&gate=0.80` is a perfectly ordinary URL — the gate is
+   * dormant, no slider is on screen, and no term is hidden. Lowering it there
+   * would set a threshold the reader never chose and never saw, waiting for
+   * them the next time they picked the prioritised order. So the decision is
+   * `gateToReveal`'s, and it takes the sort. GPT Sol's third finding on the
+   * built code, 2026-09-03.
+   */
+  const [sort] = useQueryState("sort", sortParam);
   const openTermInGlossary = useCallback(
     (id: string) => {
       void setTermId(id);
+      const lowered = gateToReveal(terms, id, sort, gate ?? PRIORITY_GATE);
+      if (lowered !== null) void setGate(lowered);
       void setMode("glossary");
     },
-    [setTermId, setMode],
+    [setTermId, setMode, setGate, gate, sort, terms],
   );
 
   /**
@@ -3940,6 +3983,12 @@ function QuotesBand({
 }
 
 /**
+ * A module constant rather than a fresh `[]`, for the reason `NO_TERMS` is one:
+ * the memos in `useQuotesMode` key on it by identity.
+ */
+const NO_QUOTES: Quote[] = [];
+
+/**
  * **The same panel, for somebody who does not own the article.**
  *
  * No `useQuotes` and therefore no `useJobs`: the list came in the page's own
@@ -3986,13 +4035,38 @@ function useQuotesMode({
   const [quoteId, setQuoteId] = useQueryState("quote", quoteParam);
   const [rank, setRank] = useQueryState("rank", rankParam);
   /* Null is "nobody has touched the bar", which the panel resolves to
-     `PROMOTE_BAR`. Kept as null rather than defaulted here so the default stays
+     `QUOTE_BAR_DEFAULT`. Kept as null rather than defaulted here so the default stays
      one number in one file — see `barParam` in params.ts. */
   const [bar, setBar] = useQueryState("bar", barParam);
 
+  /**
+   * **A quote the bar has hidden cannot stay selected**, which since 2026-09-03
+   * is a state the reader can reach: the prioritised rank hides what is below
+   * the bar rather than grouping it, and `?quote=` resolves against the whole
+   * artefact independently of what the panel is drawing. Without this a raised
+   * bar took the row away and left the line marked in the prose and in the
+   * rail, and lowering the bar later silently reopened a selection the reader
+   * had watched disappear. The same rule search holds at `SearchBand`.
+   *
+   * Scoped to `prioritised`, because that is the only rank with a bar: a
+   * `?bar=` sitting in a URL must not clear a selection in a list nobody is
+   * looking at a threshold for. `snapToStop` first, exactly as the panel does,
+   * or this and the panel would be asking about two different bars.
+   */
+  const all = quotes?.quotes ?? NO_QUOTES;
+  const hiddenSelection = useMemo(() => {
+    if (quoteId === null) return false;
+    if (effectiveRank([...all], rank) !== "prioritised") return false;
+    const at = snapToStop(barStops([...all]), bar ?? QUOTE_BAR_DEFAULT);
+    return !visibleQuotes(all, at).visible.some((q) => q.id === quoteId);
+  }, [all, rank, bar, quoteId]);
+  useEffect(() => {
+    if (hiddenSelection) void setQuoteId(null);
+  }, [hiddenSelection, setQuoteId]);
+
   const selected = useMemo(
-    () => quotes?.quotes.find((q) => q.id === quoteId) ?? null,
-    [quotes, quoteId],
+    () => (hiddenSelection ? null : (all.find((q) => q.id === quoteId) ?? null)),
+    [all, quoteId, hiddenSelection],
   );
 
   const found = useMemo(() => {
@@ -4040,7 +4114,7 @@ function useQuotesMode({
  * and the visitor's glossary drift into two designs for one thing, which a
  * browser pass caught once already in a drawer heading.
  */
-function VisitorGlossaryBand({
+export function VisitorGlossaryBand({
   glossary,
   onJump,
   onSelected,
@@ -4076,12 +4150,54 @@ function useGlossaryMode(
      stays one number in one file — see `gateParam` in params.ts. */
   const [gate, setGate] = useQueryState("gate", gateParam);
 
+  /**
+   * **A term the bar has hidden cannot stay selected.**
+   *
+   * The rule search already held at `SearchBand` below, and it arrived here
+   * with the 2026-09-03 change: the panel resolves `?term=` against the whole
+   * glossary, independently of what it is drawing, so a raised gate used to
+   * take the row away while the term stayed emphasised in the prose — and
+   * lowering the gate later silently reopened a selection the reader had
+   * watched disappear. "Open" is a thing the reader can see, and a hidden one
+   * is a claim about the page that the page is not making.
+   *
+   * **Only the selected emphasis goes.** The dotted underline under every
+   * glossary term is drawn from the full list in every mode (`termSelections`
+   * in `Reader`) and is not the selection. It stays.
+   *
+   * Scoped to prioritised order, because that is the only order with a gate:
+   * `?gate=` sitting in a URL must not clear a selection in a list nobody is
+   * looking at a threshold for.
+   */
+  const order = effectiveSort(entries, sort);
+  const hiddenSelection =
+    termId !== null &&
+    order === "prioritised" &&
+    !visibleEntries(entries, gate ?? PRIORITY_GATE).visible.some((e) => e.id === termId);
+  useEffect(() => {
+    if (hiddenSelection) void setTermId(null);
+  }, [hiddenSelection, setTermId]);
+
   /* `find` returns the entry object out of the list, so its identity is stable
      across renders until the list itself is replaced — which is what keeps the
-     effect below from firing on every render. */
-  const selected = entries.find((e) => e.id === termId) ?? null;
+     effect below from firing on every render. Null in the render itself the
+     moment the bar hides it, rather than a tick later when `?term=` clears:
+     waiting for the parameter would leave a frame with the prose emphasising a
+     term the panel is not showing. */
+  const selected = hiddenSelection ? null : (entries.find((e) => e.id === termId) ?? null);
 
-  useEffect(() => {
+  /* **`useLayoutEffect`, not `useEffect`**, and nulling `selected` above is not
+     enough on its own — which is what the comment there used to claim. The
+     value the prose actually draws from is `Reader`'s own state, and it only
+     gets there through this call: a passive effect runs *after* the browser has
+     had the chance to paint, so the panel could commit without the row while
+     `TableView` still emphasised the term. One frame, and it is the frame in
+     which the page says two different things about what is open.
+
+     The same pairing, for the same reason, as `QuotesBand` above and
+     `SearchBand` below: a layout effect on every change, and an unmount-only
+     clear underneath. GPT Sol's second finding on the built code, 2026-09-03. */
+  useLayoutEffect(() => {
     onSelected(
       selected ? { id: selected.id, forms: formsOf(selected), blocks: selected.blocks } : null,
     );

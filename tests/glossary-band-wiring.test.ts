@@ -24,6 +24,9 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const app = await readFile(path.join(ROOT, "src/web/App.tsx"), "utf8");
+const glossaryPanel = await readFile(path.join(ROOT, "src/web/GlossaryPanel.tsx"), "utf8");
+const quotesPanel = await readFile(path.join(ROOT, "src/web/QuotesPanel.tsx"), "utf8");
+const searchPanel = await readFile(path.join(ROOT, "src/web/SearchPanel.tsx"), "utf8");
 
 describe("the reading view's glossary wiring", () => {
   it("reads the glossary exactly once", () => {
@@ -52,5 +55,137 @@ describe("the reading view's glossary wiring", () => {
     /* The prop or the call, not the word — the comment in `GlossaryBand`
        explaining why the prop is gone would otherwise fail this. */
     expect(app).not.toMatch(/onEntries\s*[=(]/);
+  });
+});
+
+/**
+ * **That the three thresholds are wired the way the shared rule assumes.**
+ *
+ * Same kind of test as the block above, and the same honest label: it reads
+ * source text, so it cannot tell a call in dead code from a call that runs.
+ * What it catches is a class of regression no pure-function test can see,
+ * because the failure is *where* a call is rather than what it returns — a
+ * second filter appearing in a panel, a way back taken off the screen at the
+ * moment it is the only way back, a hover card that opens the band on a row the
+ * bar is hiding.
+ *
+ * docs/plans/260903c-threshold-sliders-hide-below-threshold-items.md § Stage 2.
+ */
+/**
+ * One top-level function out of `App.tsx`, from its `function` line to whatever
+ * comes next at the top level.
+ *
+ * Not `indexOf("\n}")`: a destructured props object closes on its own line, so
+ * that boundary cuts a hook off at its own signature and the assertion under it
+ * passes or fails on nothing.
+ */
+function hookBody(name: string): string {
+  const start = app.indexOf(`function ${name}`);
+  expect(start, `${name} must exist in App.tsx to be checked`).toBeGreaterThan(-1);
+  const ends = ["\n/**", "\nfunction ", "\nexport function "]
+    .map((mark) => app.indexOf(mark, start + 1))
+    .filter((at) => at > -1);
+  return app.slice(start, ends.length > 0 ? Math.min(...ends) : app.length);
+}
+
+describe("the threshold wiring", () => {
+  it("applies the search bar in exactly one place", () => {
+    /* The invariant the whole search feature is built around: what goes to the
+       panel goes to the prose, so a row in the list and a mark on the paragraph
+       can never be a different set. A filter in `SearchPanel` would hide a row
+       and leave its wash on the article. */
+    expect(app.match(/keepAbove\(/g) ?? []).toHaveLength(1);
+    expect(searchPanel).not.toMatch(/keepAbove/);
+  });
+
+  it("lowers the gate before opening a term the bar is hiding, and only then", () => {
+    /* "In the glossary" on a prose hover card is a deliberate request to reveal
+       a term, and it used to write `?term=` and nothing else. Once the gate
+       hides rather than groups, that opens the band on nothing at all.
+
+       **The order goes in with it**, which is the half a source grep is still
+       the only guard for: `gateToReveal` refuses to lower a gate in an order
+       that has no slider (`?sort=document&gate=0.80` is dormant, and lowering
+       it would set a threshold the reader never saw), and it can only do that
+       if the caller hands it the sort. What the function then decides is
+       covered properly in tests/glossary.test.ts § the threshold slider. */
+    const open = app.slice(app.indexOf("const openTermInGlossary"));
+    const body = open.slice(0, open.indexOf("\n  );"));
+    expect(body).toMatch(/gateToReveal\(terms, id, sort,/);
+    expect(body).toMatch(/setGate\(/);
+  });
+
+  it("clears a selection the bar has hidden, in both bands, before the paint", () => {
+    /* A hidden row cannot stay the open one: its emphasis in the prose would be
+       a claim about the page that the page is not making, and lowering the bar
+       later would silently reopen a selection the reader watched disappear.
+
+       **`useLayoutEffect` and not `useEffect`** for the half that reaches the
+       prose. Nulling `selected` during render is not enough on its own: the
+       value the article draws from is `Reader`'s own state, and a passive
+       effect would hand it over only after the browser had had its chance to
+       paint the panel without the row. tests/glossary-band-selection.test.tsx
+       mounts the band and asserts that ordering for real; this is the cheap
+       companion that also covers the quotes band. */
+    expect(app).toMatch(/hiddenSelection[\s\S]{0,400}setTermId\(null\)/);
+    expect(app).toMatch(/hiddenSelection[\s\S]{0,400}setQuoteId\(null\)/);
+    for (const band of ["useGlossaryMode", "useQuotesMode"]) {
+      expect(
+        hookBody(band),
+        `${band} must hand its selection up in a layout effect`,
+      ).toMatch(/useLayoutEffect\(\(\) => \{\s*on(Selected|Found)\(/);
+    }
+  });
+
+  it("keeps the order buttons and the slider on screen when everything is hidden", () => {
+    /* The all-hidden state's only way out is the two controls that caused it,
+       so neither may be rendered from the filtered list. */
+    expect(glossaryPanel).toMatch(/glossary\.entries\.length > 1 && \(\s*<SortBar/);
+    expect(glossaryPanel).toMatch(/glossary && order === "prioritised" && \(\s*<GateSlider/);
+    expect(quotesPanel).toMatch(/quotes\.quotes\.length > 1 && \(\s*<RankBar/);
+    expect(quotesPanel).toMatch(/quotes && rank === "prioritised" && \(\s*<BarSlider/);
+    /* Search reaches the same state through an early return, which is the
+       precedent the other two follow and has to carry both controls with it. */
+    const stranded = searchPanel.slice(searchPanel.indexOf("if (found.length === 0 && all.length"));
+    const branch = stranded.slice(0, stranded.indexOf("if (found.length === 0) {"));
+    expect(branch).toMatch(/<SortBar/);
+    expect(branch).toMatch(/<ConfSlider/);
+  });
+
+  it("prints the foot line unconditionally, wherever the slider is", () => {
+    /* Present wherever the threshold control is, absent wherever it is not. A
+       line that is sometimes missing for a *different* reason teaches the
+       reader nothing, so none of the three may be behind a `note &&`. */
+    expect(glossaryPanel).toMatch(/<p className="gloss-gate-note">\{note\}<\/p>/);
+    expect(quotesPanel).toMatch(/<p className="quotes-bar-note">\{note\}<\/p>/);
+    expect(searchPanel).toMatch(/<p className="srch-gate-note">\{note\}<\/p>/);
+    for (const panel of [glossaryPanel, quotesPanel, searchPanel]) {
+      expect(panel).not.toMatch(/\{note && </);
+    }
+  });
+
+  it("gives each foot line its own noun and the counts from one pass", () => {
+    /* The sentence is shared (threshold.ts § `hiddenNote`) and its wording is
+       covered verbatim in tests/threshold.test.ts. What each panel supplies is
+       the noun and the two numbers — and the numbers must come out of the same
+       result the `N of M` above them does, or the line and the count under the
+       reader's hand can disagree. */
+    for (const [panel, noun] of [
+      [glossaryPanel, "term"],
+      [quotesPanel, "quote"],
+      [searchPanel, "passage"],
+    ] as const) {
+      expect(panel).toMatch(new RegExp(`\\{ one: "${noun}", many: "${noun}s" \\}`));
+      expect(panel).toMatch(/const \{ visible, hiddenCount \} =/);
+      expect(panel).toMatch(/Note\(hiddenCount, /);
+    }
+  });
+
+  it("says 'showing' rather than 'promoting' on every slider", () => {
+    /* An unscored item is shown without being promoted, so the verb would be a
+       small lie in the one place this feature has to be honest. */
+    for (const panel of [glossaryPanel, quotesPanel, searchPanel]) {
+      expect(panel).toMatch(/aria-valuetext=\{`[^`]*showing \$\{count\}/);
+    }
   });
 });

@@ -29,6 +29,7 @@ import {
   safeUrl,
   existingFor,
   idsByTerm,
+  noGlossaryScoreDrops,
   suggestedCount,
 } from "../src/glossary.js";
 import { formsOf, termPattern, termSpans } from "../src/term-match.js";
@@ -38,15 +39,15 @@ import {
   GATE_STEP,
   PRIORITY_GATE,
   canPrioritise,
-  countAbove,
   effectiveSort,
   gateMax,
+  gateTop,
   gateNote,
-  groupEntries,
+  gateToReveal,
   priorityOf,
   rowScores,
   sortEntries,
-  splitsOnPriority,
+  visibleEntries,
   entryProse,
 } from "../src/web/GlossaryPanel.js";
 import { gateParam } from "../src/web/params.js";
@@ -92,6 +93,18 @@ function without(e: GlossaryEntry, key: "senseHere" | "background"): GlossaryEnt
   const copy = { ...e };
   delete copy[key];
   return copy;
+}
+
+/**
+ * The foot line the panel would print, composed the way `GateSlider` composes
+ * it: one `visibleEntries` pass, and the counts out of it handed to `gateNote`.
+ *
+ * A helper rather than a call to `gateNote(list, gate)`, because `gateNote`
+ * deliberately takes counts and not a list — that is what keeps the sentence
+ * and the `N of M` above it from being two passes that could disagree.
+ */
+function noteFor(entries: GlossaryEntry[], gate: number): string {
+  return gateNote(visibleEntries(entries, gate).hiddenCount, entries.length);
 }
 
 const BLOCKS = [
@@ -367,6 +380,112 @@ describe("buildGlossary", () => {
   });
 });
 
+/**
+ * **The scores the prompt requires, and what happened when they did not come.**
+ *
+ * The glossary prompt requires `difficulty` and `centrality` on every entry, so
+ * a missing one is the model disobeying rather than a permitted omission — and
+ * until these counters existed nothing anywhere said so. A model that started
+ * writing `centrality: "high"` would have quietly stopped offering prioritised
+ * order and no log line would have moved. docs/reusable/silent-success.md, and
+ * docs/plans/260903c-threshold-sliders-hide-below-threshold-items.md § Stage 1.
+ *
+ * **Absent and rejected are counted apart** because they are different
+ * failures: absent is a field the model never wrote, rejected is one it wrote
+ * wrong. A counter that only fired inside `score()` would never see the first.
+ */
+describe("buildGlossary score accounting", () => {
+  const opts = { slug: "a-slug", blocks: BLOCKS, sourceHash: "deadbeefdeadbeef", elapsedMs: 1234 };
+
+  it("counts nothing when both scores arrive in range", () => {
+    const scores = noGlossaryScoreDrops();
+    const g = buildGlossary(
+      { entries: [{ name: "Seth", gloss: "The author.", difficulty: 0.4, centrality: 0.9 }] },
+      { ...opts, scores },
+    );
+    expect(scores).toEqual({
+      difficultyAbsent: 0,
+      difficultyRejected: 0,
+      centralityAbsent: 0,
+      centralityRejected: 0,
+    });
+    // Unchanged from today: a good entry keeps both numbers exactly.
+    expect(g.entries[0]?.difficulty).toBe(0.4);
+    expect(g.entries[0]?.centrality).toBe(0.9);
+  });
+
+  it("counts a score the model simply left out", () => {
+    const scores = noGlossaryScoreDrops();
+    const g = buildGlossary(
+      { entries: [{ name: "Seth", gloss: "The author.", difficulty: 0.4 }] },
+      { ...opts, scores },
+    );
+    expect(scores.centralityAbsent).toBe(1);
+    expect(scores.centralityRejected).toBe(0);
+    expect(scores.difficultyAbsent).toBe(0);
+    // Unchanged from today: the entry survives with the half it has.
+    expect(g.entries[0]?.difficulty).toBe(0.4);
+    expect(g.entries[0]?.centrality).toBeUndefined();
+  });
+
+  it("counts a score that was present and refused, separately", () => {
+    const scores = noGlossaryScoreDrops();
+    const g = buildGlossary(
+      { entries: [{ name: "Qualia", gloss: "Raw feels.", difficulty: 7, centrality: "high" }] },
+      { ...opts, scores },
+    );
+    expect(scores.difficultyRejected).toBe(1);
+    expect(scores.centralityRejected).toBe(1);
+    expect(scores.difficultyAbsent).toBe(0);
+    expect(scores.centralityAbsent).toBe(0);
+    // Unchanged from today: out of range is dropped, never clamped.
+    expect(g.entries[0]?.difficulty).toBeUndefined();
+    expect(g.entries[0]?.centrality).toBeUndefined();
+  });
+
+  it("counts nothing for an entry it threw away, and nothing for a previous pass", () => {
+    /* An entry with no name never becomes a row, so it has no missing score —
+       and the entries a second pass inherits were parsed by the run that
+       counted them. Counting either would inflate the number this exists to
+       watch. */
+    const first = buildGlossary(
+      { entries: [{ name: "Seth", gloss: "The author." }] },
+      { ...opts, scores: noGlossaryScoreDrops() },
+    );
+    const scores = noGlossaryScoreDrops();
+    buildGlossary(
+      { entries: [{ name: "", gloss: "no name" }, null, "a bare string"] },
+      { ...opts, existing: first, scores },
+    );
+    expect(scores).toEqual({
+      difficultyAbsent: 0,
+      difficultyRejected: 0,
+      centralityAbsent: 0,
+      centralityRejected: 0,
+    });
+  });
+
+  it("counts what the model returned, before dedupe can borrow a score", () => {
+    /* `dedupe` does `winner.difficulty ?? loser.difficulty`, so two half-scored
+       duplicates merge into one fully-scored entry. Counting after that would
+       report zero for a run in which the model omitted two scores — the exact
+       silence these counters exist to break. */
+    const scores = noGlossaryScoreDrops();
+    const g = buildGlossary(
+      {
+        entries: [
+          { name: "Seth", gloss: "The author.", difficulty: 0.4 },
+          { name: "Seth", senseHere: "The author, again.", centrality: 0.9 },
+        ],
+      },
+      { ...opts, scores },
+    );
+    expect(g.entries).toHaveLength(1);
+    expect(scores.centralityAbsent).toBe(1);
+    expect(scores.difficultyAbsent).toBe(1);
+  });
+});
+
 describe("suggestedCount", () => {
   it("scales with the article and never exceeds one batch", () => {
     expect(suggestedCount(400)).toBe(6);
@@ -555,6 +674,13 @@ describe("priorityOf", () => {
 });
 
 describe("prioritised order", () => {
+  /* Rewritten 2026-09-03. These used to pin the two-group version — a "worth
+     knowing first" heading over the survivors and "the rest" under them. Greg
+     looked at the built thing and said hiding would be clearer, so what they
+     protect now is the same three properties in the new shape: the *rule* is
+     the product and not a sum, the order within what is shown is first use, and
+     the mode cancels itself rather than offering a control that does nothing.
+     docs/plans/260903c-threshold-sliders-hide-below-threshold-items.md. */
   const hard = entry({ name: "hard", difficulty: 0.8, centrality: 0.8 }); // 0.64, in
   const easy = entry({ name: "easy", difficulty: 0.1, centrality: 0.9 }); // 0.09, out
   const fringe = entry({ name: "fringe", difficulty: 0.9, centrality: 0.1 }); // 0.09, out
@@ -562,23 +688,22 @@ describe("prioritised order", () => {
   const bare = entry({ name: "bare" });
   const list = [easy, hard, fringe, alsoHard, bare];
 
-  it("puts the hard-and-central terms first and everything else after", () => {
-    const groups = groupEntries(list, "prioritised");
-    expect(groups.map((g) => g.label)).toEqual(["worth knowing first", "the rest"]);
-    expect(groups[0]?.entries.map((e) => e.name)).toEqual(["hard", "also-hard"]);
-    expect(groups[1]?.entries.map((e) => e.name)).toEqual(["easy", "fringe", "bare"]);
+  it("shows the hard-and-central terms and hides everything scored below", () => {
+    expect(sortEntries(list, "prioritised").map((e) => e.name)).toEqual([
+      "hard",
+      "also-hard",
+      // Unscored, and therefore shown at every position of the bar.
+      "bare",
+    ]);
   });
 
-  it("keeps first use as the order inside each group", () => {
-    // The third thing Greg asked for, and where it actually lives. `easy` is
-    // first in the document and stays first in its group; `hard` precedes
-    // `also-hard` for the same reason and not because it scored higher.
-    const [top, rest] = groupEntries(list, "prioritised");
-    const docIndex = (name: string) => list.findIndex((e) => e.name === name);
-    for (const group of [top, rest]) {
-      const order = group!.entries.map((e) => docIndex(e.name));
-      expect(order).toEqual([...order].sort((a, b) => a - b));
-    }
+  it("keeps first use as the order of what it shows", () => {
+    // The third thing Greg asked for, and where it actually lives. `hard`
+    // precedes `also-hard` because the article introduces it first, not
+    // because it scored higher — 0.64 and 0.42 would sort the same way here,
+    // so the assertion uses a list where the two disagree.
+    const byUse = [alsoHard, hard];
+    expect(sortEntries(byUse, "prioritised").map((e) => e.name)).toEqual(["also-hard", "hard"]);
   });
 
   it("gates on the product, so a high single score is not enough", () => {
@@ -586,64 +711,62 @@ describe("prioritised order", () => {
     // it on purpose. This is the assertion that a sum would fail.
     const nearly = entry({ name: "nearly", difficulty: 0.95, centrality: 0.3 });
     expect(priorityOf(nearly)!).toBeLessThan(PRIORITY_GATE);
-    const groups = groupEntries([hard, nearly], "prioritised");
-    expect(groups[0]?.entries.map((e) => e.name)).toEqual(["hard"]);
+    expect(sortEntries([hard, nearly], "prioritised").map((e) => e.name)).toEqual(["hard"]);
   });
 
-  it("draws no divider when the gate divides nothing", () => {
-    /* The self-cancelling half. An old glossary with no scores, or one where
-       everything is above the gate, or one where nothing is — all three are
-       first-use order in a single unheaded group, which is exactly what the
-       list did before this order existed. A label over any of those would be
-       claiming a judgment nothing supports. */
-    for (const undividable of [
+  it("shows the whole list, unheaded, when the gate hides nothing", () => {
+    /* The self-cancelling half, and what replaced "draws no divider". An old
+       glossary with no scores, or one where everything is above the gate — both
+       are plainly the whole list in first-use order, which is exactly what it
+       did before this order existed. The foot line is what says so now, in
+       words, rather than the absence of a heading. */
+    for (const whole of [
       [bare, entry({ name: "bare2" })],
       [hard, alsoHard],
-      [easy, fringe],
     ]) {
-      expect(splitsOnPriority(undividable)).toBe(false);
-      const groups = groupEntries(undividable, "prioritised");
-      expect(groups).toHaveLength(1);
-      expect(groups[0]?.label).toBeNull();
-      expect(groups[0]?.entries).toEqual(undividable);
+      expect(sortEntries(whole, "prioritised")).toEqual(whole);
+      expect(noteFor(whole, PRIORITY_GATE)).toBe("Nothing is hidden by this threshold.");
     }
   });
 
-  it("leaves the order in force only when there is nothing at all to gate", () => {
+  it("hides everything scored and still shows the unscored", () => {
+    /* Greg's interim rule, at the one bar that tests it: "In the interim,
+       always show them." An entry the model declined to score is not one it
+       scored as trivial, and no position of the slider hides it. */
+    const out = visibleEntries([hard, bare], 1);
+    expect(out.visible.map((e) => e.name)).toEqual(["bare"]);
+    expect(out.hiddenCount).toBe(1);
+    expect(out.unscoredCount).toBe(1);
+  });
+
+  it("stays in prioritised order even when the current gate hides nothing", () => {
     /* The line the slider moved, 2026-08-26, and the reason to have it in a
-       test rather than only in a docstring. A list with no scores cannot be
-       prioritised by anything, so it falls back to first use and the control is
-       not offered. A list *with* scores that the current bar happens not to
-       divide stays in prioritised order — because the bar is now on screen and
-       one drag from dividing it, and cancelling the mode would take the slider
-       away with it and strand the reader at the setting they were adjusting. */
+       test rather than only in a docstring. A glossary no position of the bar
+       could filter cannot be prioritised at all, so it falls back to first use
+       and the control is not offered. A glossary that *can* be filtered but
+       whose current bar happens to hide nothing stays in prioritised order —
+       because the bar is on screen and one drag from hiding something, and
+       cancelling the mode would take the slider away with it and strand the
+       reader at the setting they were adjusting. */
     expect(effectiveSort([bare, entry({ name: "bare2" })], "prioritised")).toBe("document");
     expect(effectiveSort([hard, alsoHard], "prioritised")).toBe("prioritised");
-    expect(effectiveSort([easy, fringe], "prioritised")).toBe("prioritised");
+    expect(sortEntries([hard, alsoHard], "prioritised", 0)).toHaveLength(2);
+    // Two entries with the *same* product: no bar divides them, so no order.
+    expect(effectiveSort([easy, fringe], "prioritised")).toBe("document");
     // And a single term is not a list to prioritise, whatever it scored.
     expect(effectiveSort([hard], "prioritised")).toBe("document");
   });
 
   it("leaves the other three orders alone", () => {
-    expect(splitsOnPriority(list)).toBe(true);
     for (const sort of ["document", "difficulty", "centrality"] as const) {
       expect(effectiveSort(list, sort)).toBe(sort);
-      expect(groupEntries(list, sort)).toHaveLength(1);
-      expect(groupEntries(list, sort)[0]?.label).toBeNull();
+      // And returns every entry: only `prioritised` filters.
+      expect(sortEntries(list, sort)).toHaveLength(list.length);
     }
-  });
-
-  it("flattens to the same thing sortEntries returns", () => {
-    // Two ways of asking what order the list is in must not be able to
-    // disagree, so one is defined as the other.
-    expect(sortEntries(list, "prioritised").map((e) => e.name)).toEqual(
-      groupEntries(list, "prioritised").flatMap((g) => g.entries.map((e) => e.name)),
-    );
   });
 
   it("does not mutate the list it was given", () => {
     const before = list.map((e) => e.name);
-    groupEntries(list, "prioritised");
     sortEntries(list, "prioritised");
     expect(list.map((e) => e.name)).toEqual(before);
   });
@@ -661,56 +784,63 @@ describe("the threshold slider", () => {
   const list = [hard, mid, low, bare];
 
   it("moves the boundary, which is the whole point of it", () => {
-    const names = (gate: number) =>
-      groupEntries(list, "prioritised", gate)[0]?.entries.map((e) => e.name);
-    expect(names(0.5)).toEqual(["hard"]);
-    expect(names(0.64)).toEqual(["hard"]);
-    expect(names(0.3)).toEqual(["hard", "mid"]);
-    expect(names(0.01)).toEqual(["hard", "mid", "low"]);
-    // `bare` never clears any bar: an entry the model declined to score is not
-    // one it scored as trivial, and no position of the slider promotes it.
-    expect(names(0)).toEqual(["hard", "mid", "low"]);
-    // Pushed past the top term there is nothing left to divide, so the divider
-    // goes rather than a group of nothing being drawn under a label. That is
-    // the state `gateNote` exists to put into words.
-    expect(groupEntries(list, "prioritised", 0.7)).toHaveLength(1);
-    expect(groupEntries(list, "prioritised", 0.7)[0]?.label).toBeNull();
+    const names = (gate: number) => sortEntries(list, "prioritised", gate).map((e) => e.name);
+    /* `bare` is in every one of these: an entry the model declined to score is
+       not one it scored as trivial, so no position of the slider hides it.
+       Greg, 2026-09-03 — "in the interim, always show them". */
+    expect(names(0.5)).toEqual(["hard", "bare"]);
+    expect(names(0.64)).toEqual(["hard", "bare"]);
+    expect(names(0.3)).toEqual(["hard", "mid", "bare"]);
+    expect(names(0.01)).toEqual(["hard", "mid", "low", "bare"]);
+    expect(names(0)).toEqual(["hard", "mid", "low", "bare"]);
+    // Pushed past the top term, every scored entry goes and the foot line says
+    // so — this is the state that used to collapse into one unheaded group.
+    expect(names(0.7)).toEqual(["bare"]);
+    expect(noteFor(list, 0.7)).toBe(
+      "3 terms are hidden by this threshold. Drag the slider left to show them.",
+    );
   });
 
   it("defaults to the constant when nobody has set it", () => {
     // Two callers, one default, and the gate the URL leaves out. If these ever
-    // disagree the panel and its own heading are describing different lists.
-    expect(groupEntries(list, "prioritised")).toEqual(
-      groupEntries(list, "prioritised", PRIORITY_GATE),
-    );
+    // disagree the panel and the line under it are describing different lists.
     expect(sortEntries(list, "prioritised")).toEqual(
       sortEntries(list, "prioritised", PRIORITY_GATE),
     );
-    expect(splitsOnPriority(list)).toBe(splitsOnPriority(list, PRIORITY_GATE));
+    expect(noteFor(list, PRIORITY_GATE)).toBe(
+      "1 term is hidden by this threshold. Drag the slider left to show it.",
+    );
   });
 
-  it("counts what clears the bar, inclusively", () => {
-    // `mid` is exactly 0.30 and is in at 0.30. The gate is a floor, not a
-    // fence: the heading says "0.30 or more" and this is that.
-    expect(countAbove(list, 0.3)).toBe(2);
-    expect(countAbove(list, 0.31)).toBe(1);
-    expect(countAbove([], 0.3)).toBe(0);
+  it("counts the survivors and the hidden from one pass, inclusively", () => {
+    /* `mid` is exactly 0.30 and is in at 0.30. The gate is a floor, not a
+       fence: the row shows the numbers and a term that vanished at its own
+       score would read as a bug.
+
+       Asserted as an identity between the parts rather than as three separate
+       numbers, because **a count that disagrees with the list under it** is
+       this feature's worst failure. */
+    const out = visibleEntries(list, 0.3);
+    expect(out.visible.map((e) => e.name)).toEqual(["hard", "mid", "bare"]);
+    expect(out.hiddenCount).toBe(1);
+    expect(out.visible.length + out.hiddenCount).toBe(list.length);
+    expect(visibleEntries(list, 0.31).visible.map((e) => e.name)).toEqual(["hard", "bare"]);
+    expect(visibleEntries([], 0.3)).toEqual({ visible: [], hiddenCount: 0, unscoredCount: 0 });
   });
 
   it("ends the track at the top term's own score, rounded down", () => {
     /* 0.8 × 0.8 is 0.6400000000000001 in binary floating point. Rounding the
-       track's end *up* would put it above every product in the list, so the
-       far right of the slider would promote nothing — the one thing that end
-       must not mean. Down, and the far right promotes exactly the costliest
-       term, which is the most useful thing it can mean. */
+       track's end *up* would put it above every product in the list, so the far
+       right of the slider would hide the costliest term too — the one thing
+       that end must not do, and the property `canPrioritise` leans on. */
     const max = gateMax(list, PRIORITY_GATE);
     expect(max).toBeCloseTo(0.64);
-    expect(countAbove(list, max)).toBe(1);
+    expect(visibleEntries(list, max).visible.map((e) => e.name)).toEqual(["hard", "bare"]);
   });
 
   it("keeps the thumb on the track when a URL asks for more than the data holds", () => {
     // `?gate=0.90` on a glossary whose best term is 0.64. The value stands —
-    // nothing is promoted, which is a true answer — but the track has to reach
+    // every scored term is hidden, which is a true answer — but the track has to reach
     // it or the thumb sits pinned at a number it does not hold.
     expect(gateMax(list, 0.9)).toBeCloseTo(0.9);
     // And a glossary with nothing scored still gets a track rather than a
@@ -718,30 +848,177 @@ describe("the threshold slider", () => {
     expect(gateMax([bare], 0)).toBe(GATE_STEP);
   });
 
-  it("says so when the bar has stopped dividing anything", () => {
+  it("says how many it is holding back, in every state", () => {
     /* The silent-success guard — docs/reusable/silent-success.md. A slider that
-       has merged the two groups looks exactly like a slider that has stopped
-       working, and the difference has to be in words rather than in the
-       absence of a divider. */
-    expect(gateNote(list, 0.3)).toBeNull();
-    expect(gateNote(list, 0.9)).toMatch(/^No term clears/);
-    expect(gateNote([hard, mid], 0.01)).toMatch(/^Every term clears/);
-    // Nothing to say about a list with nothing in it.
-    expect(gateNote([], 0.3)).toBeNull();
+       has stopped hiding anything looks exactly like a slider that has stopped
+       working, so the foot line is present wherever the slider is rather than
+       only at the two ends. The copy is asserted verbatim: it is the reader's
+       one route back, and "clears" is deliberately not in it. */
+    expect(noteFor(list, 0.3)).toBe(
+      "1 term is hidden by this threshold. Drag the slider left to show it.",
+    );
+    expect(noteFor(list, 0.9)).toBe(
+      "3 terms are hidden by this threshold. Drag the slider left to show them.",
+    );
+    expect(noteFor([hard, mid], 0.01)).toBe("Nothing is hidden by this threshold.");
+    expect(noteFor([hard, mid], 0.9)).toBe(
+      "All 2 terms are hidden by this threshold. Drag the slider left to show them.",
+    );
+    // Nothing to hide in a list with nothing in it, and it says so rather than
+    // going quiet — the panel does not draw a slider there anyway.
+    expect(noteFor([], 0.3)).toBe("Nothing is hidden by this threshold.");
   });
 
-  it("offers the order whenever there is anything to gate", () => {
-    /* Deliberately looser than `splitsOnPriority`, and the looseness is the
-       slider's doing. A list the default bar does not divide is one drag from
-       being divided, so refusing to offer the order would hide the fix along
-       with the problem — and the option would appear and vanish under the
-       reader's hand mid-drag. */
+  it("offers the order only when some position of the bar would hide something", () => {
+    /* **Two distinct scored priorities**, which is stricter than the old rule
+       and had to become so when the bar started hiding rather than grouping.
+       With one distinct score every position of the track shows the same list:
+       the track ends at the top term's own product, which therefore always
+       survives, and an unscored entry survives everywhere. `[hard, bare]` is
+       the case the old rule got wrong — it was true then, because `bare` formed
+       "the rest".
+
+       Still deliberately looser than "does the *current* bar hide anything": a
+       bar that hides nothing right now is one drag from hiding something, and
+       the option must not appear and vanish under the reader's hand mid-drag. */
     expect(canPrioritise(list)).toBe(true);
     expect(canPrioritise([hard, mid])).toBe(true);
-    expect(splitsOnPriority([hard, mid], 0.01)).toBe(false);
+    expect(visibleEntries([hard, mid], 0.01).hiddenCount).toBe(0);
+    expect(canPrioritise([hard, bare])).toBe(false);
+    expect(canPrioritise([hard, entry({ name: "twin", difficulty: 0.8, centrality: 0.8 })])).toBe(
+      false,
+    );
     expect(canPrioritise([bare, entry({ name: "bare2" })])).toBe(false);
     expect(canPrioritise([hard])).toBe(false);
     expect(canPrioritise([])).toBe(false);
+  });
+
+  it("keeps the grid honest through binary floating point", () => {
+    /* The slider moves in hundredths, so both ends of the track and every gate
+       written to the URL have to land on one. `x / 0.01` does not: `0.58 / 0.01`
+       is `57.99999999999999`, so a naive floor loses a whole step and answers
+       `0.57`, and `0.57 / 0.01` is `56.99999999999999`, which answers `0.56`.
+
+       Off by a step is not cosmetic at either end. In `gateMax` it shortens the
+       track, and in `gateToReveal` it lowers the gate further than the reader
+       asked; and the two must agree, because `canPrioritise` is derived from
+       the first. */
+    const e58 = entry({ name: "e58", difficulty: 0.58, centrality: 1 });
+    const e57 = entry({ name: "e57", difficulty: 0.57, centrality: 1 });
+    const e30 = entry({ name: "e30", difficulty: 0.3, centrality: 1 });
+    for (const [e, want] of [
+      [e58, 0.58],
+      [e57, 0.57],
+      [e30, 0.3],
+      /* 0.8 x 0.8 is 0.6400000000000001, which must floor *down* to 0.64 — a
+         track ending a whisker above the top term would hide it. */
+      [hard, 0.64],
+    ] as const) {
+      expect(gateMax([e], 0)).toBe(want);
+      /* `low` is along only so the list can be prioritised at all — a glossary
+         with one scored term has no gate to lower, and `gateToReveal` says so
+         by answering null. */
+      expect(gateToReveal([e, low], e.id, "prioritised", 1)).toBe(want);
+      /* The property under both numbers: whatever the grid answers, the term it
+         was computed from survives it. */
+      expect(visibleEntries([e], gateMax([e], 0)).visible).toHaveLength(1);
+    }
+  });
+
+  it("does not offer an order whose slider could not act on the difference", () => {
+    /* The blocker GPT Sol found on the built code. Two distinct scores is not
+       enough on its own, because the *slider* cannot reach between them: the
+       track moves in hundredths and ends at the top score floored to one, so
+       `[0.501, 0.509]` gives a track ending at 0.50 on which every position —
+       0, 0.25, 0.50 — shows both terms. The old rule offered a prioritised
+       order there whose slider visibly did nothing, which is the exact state
+       this predicate exists to prevent.
+
+       So the question is the top of the track, not the raw scores: does the
+       highest position the reader can reach hide anything. */
+    const closeA = entry({ name: "closeA", difficulty: 0.501, centrality: 1 });
+    const closeB = entry({ name: "closeB", difficulty: 0.509, centrality: 1 });
+    expect(canPrioritise([closeA, closeB])).toBe(false);
+    expect(visibleEntries([closeA, closeB], gateMax([closeA, closeB], 0)).hiddenCount).toBe(0);
+    /* One hundredth apart is reachable, and is offered. */
+    expect(canPrioritise([closeA, entry({ name: "closeC", difficulty: 0.52, centrality: 1 })])).toBe(
+      true,
+    );
+    /* Scores under one hundredth are the same case from the other end: they all
+       floor to 0.00, so the data-derived top of the track is 0.00 and every
+       position shows everything. The rendered track still gets its one-step
+       floor (`gateMax`) so the input has a width — that floor is about drawing
+       a slider and must not be what decides the order exists, or a glossary
+       whose scores all round to zero would be offered a bar that can only show
+       all or hide all. */
+    const tiny = entry({ name: "tiny", difficulty: 0.005, centrality: 1 });
+    const tinier = entry({ name: "tinier", difficulty: 0.009, centrality: 1 });
+    expect(canPrioritise([tiny, tinier])).toBe(false);
+    expect(gateTop([tiny, tinier])).toBe(0);
+    expect(gateMax([tiny, tinier], 0)).toBe(GATE_STEP);
+    /* And the same answer for two terms that tie, wherever they tie. */
+    expect(canPrioritise([entry({ name: "z1", difficulty: 0, centrality: 1 }), entry({ name: "z2", difficulty: 0, centrality: 1 })])).toBe(false);
+  });
+
+  it("holds the same property over every list this file offers the order for", () => {
+    /* The invariant the predicate is now written against, asserted rather than
+       described: if the order is offered, the far right of the track hides at
+       least one term. Whatever else changes, this is what "there is something
+       to gate" has to mean. */
+    const lists: GlossaryEntry[][] = [
+      list,
+      [hard, mid],
+      [hard, bare],
+      [hard],
+      [],
+      [
+        entry({ name: "closeA", difficulty: 0.501, centrality: 1 }),
+        entry({ name: "closeB", difficulty: 0.509, centrality: 1 }),
+      ],
+      [
+        entry({ name: "tiny", difficulty: 0.005, centrality: 1 }),
+        entry({ name: "tinier", difficulty: 0.009, centrality: 1 }),
+      ],
+    ];
+    for (const candidate of lists) {
+      const hides = visibleEntries(candidate, gateTop(candidate)).hiddenCount > 0;
+      expect(canPrioritise(candidate)).toBe(hides);
+    }
+  });
+
+  it("leaves a dormant gate alone in the orders that have no slider", () => {
+    /* "In the glossary" lowers the gate so the term it opens is on screen. In
+       any other order there is no gate on screen to lower: `?sort=document`
+       with a stale `?gate=0.80` hides nothing, and rewriting it to 0.04 would
+       set a threshold the reader never chose and never saw — which they would
+       then meet on picking prioritised later. */
+    for (const quiet of ["document", "difficulty", "centrality"] as const) {
+      expect(gateToReveal(list, low.id, quiet, 0.8)).toBeNull();
+    }
+    expect(gateToReveal(list, low.id, "prioritised", 0.8)).toBeCloseTo(0.04);
+    /* And nothing to lower when the list cannot be prioritised at all: the
+       order in the URL is not the order in force (`effectiveSort`), so there is
+       no slider here either. */
+    expect(gateToReveal([hard, bare], hard.id, "prioritised", 0.9)).toBeNull();
+    /* A term the panel has never heard of leaves it alone too. */
+    expect(gateToReveal(list, "spya-nosuch", "prioritised", 0.8)).toBeNull();
+  });
+
+  it("answers the gate that would put a hidden term back on screen", () => {
+    /* "In the glossary" on a prose hover card is a deliberate request to reveal
+       a term, and it writes `?term=`. Without lowering the gate first, pressing
+       it on a below-bar term opens the band on nothing at all. */
+    expect(gateToReveal(list, low.id, "prioritised", PRIORITY_GATE)).toBeCloseTo(0.04);
+    // Floored to the step, never rounded — a gate above the term it was set to
+    // reveal is the one value it must not be. `gateParam` writes two decimals.
+    const p = priorityOf(low)!;
+    const lowered = gateToReveal(list, low.id, "prioritised", PRIORITY_GATE)!;
+    expect(lowered).toBeLessThanOrEqual(p);
+    expect(visibleEntries([low], lowered).visible).toHaveLength(1);
+    // Null when nothing needs doing: the term is already on screen, or it has
+    // no score and is therefore never hidden.
+    expect(gateToReveal(list, hard.id, "prioritised", PRIORITY_GATE)).toBeNull();
+    expect(gateToReveal(list, bare.id, "prioritised", 1)).toBeNull();
   });
 
   it("reads and writes the gate as two decimal places", () => {

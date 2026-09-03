@@ -317,6 +317,25 @@ describe("the money, which is zero and is not free", () => {
     expect(rows[0]?.isByok).toBe(false);
   });
 
+  /**
+   * **The case the test above claims to be and is not.** It supplies
+   * `is_byok: false`, which is the provider answering; this is the provider
+   * saying nothing at all, which is the hole `warnIfPaidLooksFree` was written
+   * for — `isByok` is `boolean | null` and the narrowing is deliberately
+   * `=== true`, so *not told* falls in with *no* and the upstream figure is
+   * dropped either way. GPT Sol spotted that the characterisation was of a
+   * different case, 2026-09-03.
+   */
+  it("drops the upstream figure when the response never mentions is_byok at all", async () => {
+    const { is_byok: _omitted, ...silent } = BYOK_USAGE;
+    const { rows } = await draw(ASK, { body: drawn({ usage: silent }) });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.isByok).toBeNull();
+    expect(rows[0]?.creditsUsedNanos).toBe(0);
+    expect(rows[0]?.costSource).toBe("provider");
+    expect(rows[0]?.byokUpstreamNanos).toBeNull();
+  });
+
   it("says out loud that it is recording a paid plate as a free one", async () => {
     /* The other half of the case above, and the reason it is a separate `it`:
        the row's shape is what the ledger *keeps*, and this is what a person
@@ -383,6 +402,106 @@ describe("the money, which is zero and is not free", () => {
     /* The only handle left on a call that produced no usage object at all. */
     expect(rows[0]?.generationId).toBe("gen-refused");
     expect(report.pending).toHaveLength(0);
+  });
+
+  /**
+   * **A refusal that told us what it cost, and the ledger keeping it.**
+   *
+   * `openRouterImage` used to throw on the status *before* parsing the body, so
+   * a `429` carrying a real `usage` block recorded an unpriced error row for a
+   * plate the provider had already charged for. Nothing about a non-2xx makes
+   * its `usage` less true — GPT Sol, 2026-09-03. The row is still an `error`,
+   * because that is what the call was.
+   */
+  it("keeps the money off a refusal whose body carried usage", async () => {
+    const { result, rows } = await draw(ASK, {
+      status: 429,
+      body: JSON.stringify({
+        error: { message: "rate limited, and here is the plate we already drew" },
+        usage: BYOK_USAGE,
+      }),
+      headers: { "x-generation-id": "gen-priced-refusal" },
+    });
+    expect(result).toBeInstanceOf(ProviderRefused);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.outcome).toBe("error");
+    expect(rows[0]?.costSource).toBe("provider");
+    expect(rows[0]?.creditsUsedNanos).toBe(0);
+    expect(rows[0]?.byokUpstreamNanos).toBe(13_237_000);
+    expect(rows[0]?.reportedInputTokens).toBe(1085);
+    /* And still not a word of the body in what the caller is told. */
+    expect((result as Error).message).not.toContain("plate we already drew");
+  });
+
+  it("records one error row for a 200 whose body is not JSON at all", async () => {
+    /* A gateway that answers `200` with an HTML error page. The parse failure
+       is swallowed — V8 puts a prefix of the input into the `SyntaxError`, and
+       the input wraps a prompt quoted from the article — so what the caller
+       gets is `readPlate`'s own sentence. */
+    const { result, rows } = await draw(ASK, { body: "<html>upstream is having a moment</html>" });
+    expect((result as Error).message).toMatch(/no picture/);
+    expect((result as Error).message).not.toContain("upstream is having a moment");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.outcome).toBe("error");
+    expect(rows[0]?.costSource).toBe("none");
+  });
+
+  it("records the call when the body itself fails to arrive", async () => {
+    /* `response.text()` rejecting is a connection that died mid-body: the
+       request was made and may have been billed, so it is a row. */
+    vi.stubGlobal("fetch", async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      text: async () => {
+        throw new TypeError("terminated");
+      },
+    }));
+    const { report } = await collectSpend(
+      async () => openRouterImage("illustrate", ASK).catch((e: unknown) => e),
+      { attribution: { scopeKind: "cli", ownerId: environmentOwnerId() } },
+    );
+    expect(report.calls).toHaveLength(1);
+    expect(report.calls[0]?.outcome).toBe("error");
+    expect(report.pending).toHaveLength(0);
+  });
+
+  /**
+   * **A signal that was already aborted, characterised rather than blessed.**
+   *
+   * `fetch` rejects immediately, so no request is made — and yet a row is
+   * written, because the meter is constructed before the call. That is the
+   * opposite of the "no attempt, no record" rule the missing-key case below
+   * enforces, and it is left as it is for now: the row says `aborted` and costs
+   * nothing, and `generateIllustrated` no longer hands this seam an
+   * already-aborted signal (src/illustrated.ts § `drawPlates`). If a phantom
+   * row ever matters, the fix is one `if` before `new Meter`.
+   */
+  it("writes an aborted row for a call that never left the process", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    /* `fetch`'s own behaviour, spelled out: an already-aborted signal rejects
+       before a byte goes out. The seam does not check the signal itself, so
+       this is the only thing standing between an aborted run and a real
+       request — worth pinning, because a stub that ignored the signal answered
+       `200` and the row said `ok`. */
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      if (init.signal?.aborted) {
+        const err = new Error("This operation was aborted");
+        err.name = "AbortError";
+        throw err;
+      }
+      return { ok: true, status: 200, headers: new Headers(), text: async () => drawn() } as unknown as Response;
+    });
+    const { report } = await collectSpend(
+      async () =>
+        openRouterImage("illustrate", ASK, { signal: controller.signal }).catch(
+          (e: unknown) => e,
+        ),
+      { attribution: { scopeKind: "cli", ownerId: environmentOwnerId() } },
+    );
+    expect(report.calls).toHaveLength(1);
+    expect(report.calls[0]?.outcome).toBe("aborted");
   });
 
   it("records the call even when the request never connected", async () => {

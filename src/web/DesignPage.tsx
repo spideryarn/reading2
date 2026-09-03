@@ -637,9 +637,35 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
             icon={<Search size={13} />}
             runningLabel="Finding…"
           />
+          {/* **The two failures, and they draw different buttons.** Out of
+              credit is `ours`: another go makes the identical call, so there is
+              no button under it at all and the sentence stands alone — the
+              shelf card's rule, applied here since 2026-09-03. Busy is `retry`,
+              so it gets the Retry the shelf has always had. `retry` is a real
+              function on both because `retryable` is what decides, not whether
+              a callback exists. */}
           <JobProgress
             job={null}
-            failed={providerHttpFailure(402).message}
+            failed={{
+              message: providerHttpFailure(402).message,
+              retryable: false,
+              retry: () => {},
+            }}
+            stalled={false}
+            onRun={async () => {}}
+            onCancel={() => {}}
+            label="Find the terms"
+            step="glossary"
+            icon={<Search size={13} />}
+            runningLabel="Finding…"
+          />
+          <JobProgress
+            job={null}
+            failed={{
+              message: providerHttpFailure(429).message,
+              retryable: true,
+              retry: () => {},
+            }}
             stalled={false}
             onRun={async () => {}}
             onCancel={() => {}}

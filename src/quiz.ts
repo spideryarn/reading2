@@ -140,7 +140,8 @@ import { mintUniqueId } from "./ids.js";
    when it decides whether two spellings name one thing, and a private
    near-duplicate of it here would drift. */
 import { normaliseName } from "./ideas.js";
-import { MODEL_REFUSED } from "./messages.js";
+import { stageFailure } from "./job-failure.js";
+import { MODEL_REFUSED, QUIZ_NOTHING_ANCHORED, quizBandsNotSpread } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
@@ -322,6 +323,19 @@ interface RawEvidence {
 export function missingBandEnds(questions: readonly QuizQuestion[]): QuizBandEnd[] {
   if (questions.length < SPREAD_FROM) return [];
   return SPREAD_ENDS.filter((band) => !questions.some((q) => q.band === band));
+}
+
+/**
+ * How many survivors sit in one band.
+ *
+ * **For the diagnostic only** — the sentence that goes to the log when a batch
+ * is refused, so that the spread we actually got is visible to whoever is
+ * deciding whether the prompt needs changing. The reader is told which end is
+ * missing and never a count per band, because the panel shows neither band nor
+ * value; `missingEndsInReaderWords` below is their half.
+ */
+function countBand(questions: readonly QuizQuestion[], band: QuizBand): number {
+  return questions.filter((q) => q.band === band).length;
 }
 
 /**
@@ -598,7 +612,12 @@ export function buildQuiz(
   const d = opts.dropped;
 
   if (fresh.length === 0) {
-    throw new Error(
+    /* The tally is the diagnostic and `QUIZ_NOTHING_ANCHORED` is the reader's
+       sentence — five drop reasons are what somebody debugging the validator
+       reads and nothing a reader can act on. src/job-failure.ts § Two strings,
+       not one. */
+    throw stageFailure(
+      QUIZ_NOTHING_ANCHORED,
       `The model named ${parsed.questions.length} questions and none of them could be ` +
         "anchored to the article, so there is nothing to write. " +
         `Dropped: ${d.unanchored} with no usable passage, ${d.unknownIds} pieces of evidence ` +
@@ -612,39 +631,28 @@ export function buildQuiz(
      `missingBandEnds` for why the requirement is presence at each end rather
      than a proportion of what survived.
 
-     **This sentence is read by the reader, not by us.** It travels unchanged
-     from here to the screen — src/jobs.ts copies `Error.message` onto
-     `job.error`, and src/web/JobProgress.tsx renders that in red under the run
-     button — so it follows docs/project/copy.md: no file references, no section
-     names, no band as a name, and nothing addressed to whoever tunes the
-     prompt.
-
-     **`fresh.length` is survivors, and the sentence has to say so.** A draft of
-     this said the service "wrote" that number, which is false the moment
-     `toQuestions` drops anything: twelve back with seven unanchored reported
-     that the service wrote five. "Survived checking against it" is both true
-     and the panel's own phrase for the same event
-     (src/web/QuizPanel.tsx § none survived), so a reader who meets both gets
-     one vocabulary. Likewise "cover the full range" rather than "build up from
-     easier to harder": easy-plus-medium with no hard *does* build up, it just
-     stops short. Both were GPT Sol's, reproduced rather than argued.
-
-     Stage 2 of
-     docs/plans/260903c-fix-quiz-build-band-spread-failure-and-lost-quiz-answers.md
-     splits that seam, after which this becomes a `ReaderFacingFailure` with
-     `kind: "retry"` and a bracketed code — which is what copy.md asks for and
-     what this cannot have while it is also `Error.message`. Until then one
-     string has to serve both, and the reader wins the tie. The classification
-     is not wrong meanwhile, only implicit: an uncoded message gives
-     `failureKindOf` undefined, and undefined stays retryable on purpose
-     (src/job-failure.ts). */
+     **The reader's sentence is `quizBandsNotSpread` in src/messages.ts**, which
+     is where it has been since 2026-09-04. It was written inline here the day
+     before, with no bracketed code, because at that moment one string had to
+     serve both audiences and the reader won the tie — see the note in
+     src/messages.ts for the two phrases in it that are load-bearing. Stage 2
+     split the seam, so the wording moved to the file docs/project/copy.md says
+     every reader-facing failure lives in, and the band arithmetic below stays
+     here for the log. */
   const missing = missingBandEnds(fresh);
   const gap = missingEndsInReaderWords(missing);
   if (gap !== null) {
-    throw new Error(
-      `Of the questions written for this article, ${fresh.length} survived checking against it — ` +
-        `but ${gap}, so they would not cover the full range from easier to harder. Writing the ` +
-        "questions again usually gets a better spread.",
+    /* **The diagnostic is what the reader's sentence deliberately withholds**:
+       the counts, the bands as names, and the pointer to the thing to change if
+       this keeps happening. All of it goes to the log and to Sentry, and none
+       of it to the card. */
+    throw stageFailure(
+      quizBandsNotSpread(fresh.length, gap),
+      `quiz band spread: ${fresh.length} of ${parsed.questions.length} survived, missing ` +
+        `${missing.join(" and ")} (easy ${countBand(fresh, "easy")}, medium ` +
+        `${countBand(fresh, "medium")}, hard ${countBand(fresh, "hard")}). If this keeps ` +
+        "landing here, the prompt's spread rule is the thing to change — src/quiz.ts § the " +
+        "generation prompt.",
     );
   }
 
@@ -1062,7 +1070,9 @@ export async function generateQuiz(opts: {
   if (wasRefused(message)) {
     /* `stop_details` is neither thrown nor logged — it is the provider's own
        words about a request that carried the whole article. src/messages.ts. */
-    throw new Error(MODEL_REFUSED.message);
+    throw stageFailure(MODEL_REFUSED, {
+      authored: "the model answered with stop_reason: refusal",
+    });
   }
   if (message.stop_reason === "max_tokens") {
     throw truncationFailure("quiz", maxTokens, ANSWER_TOKENS, {

@@ -35,6 +35,7 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import type { Article } from "./article-input.js";
 import { articleWithIds } from "./article-prompt.js";
 import { isBodyEvidence } from "./block-policy.js";
+import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
@@ -571,7 +572,9 @@ export async function generateSketch(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  if (wasRefused(message)) throw new Error(MODEL_REFUSED.message);
+  if (wasRefused(message)) throw stageFailure(MODEL_REFUSED, {
+      authored: "the model answered with stop_reason: refusal",
+    });
   if (message.stop_reason === "max_tokens") {
     throw truncationFailure("sketch", maxTokens, answerTokens, {
       outputTokens: message.usage.output_tokens,

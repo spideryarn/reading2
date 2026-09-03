@@ -34,6 +34,7 @@ import {
   MAX_QUOTE_CHARS,
   MIN_QUOTE_CHARS,
   noneDropped,
+  noQuoteScoreDrops,
   normaliseQuote,
   place,
   PROMPT_VERSION,
@@ -205,6 +206,107 @@ describe("place", () => {
     expect(got[0]?.importance).toBe(0.8);
     expect(got[0]?.striking).toBeUndefined();
     expect(got[0]?.reason).toBeUndefined();
+  });
+
+  /**
+   * **The scores, counted apart: never written, and written wrong.**
+   *
+   * A missing quote score is by design — the prompt permits it and `priorityOf`
+   * takes a `max` over whichever arrived. A *rejected* one is not: if the model
+   * started answering `"high"` instead of `0.8`, the panel would quietly stop
+   * offering prioritised order and nothing anywhere would say so.
+   * docs/reusable/silent-success.md.
+   */
+  it("counts a score the model left out, apart from one it got wrong", () => {
+    const scores = noQuoteScoreDrops();
+    const got = place(
+      [
+        { text: FIRST, importance: 0.8, striking: 0.2 },
+        { text: SECOND, importance: 0.4 },
+        { text: THIRD, importance: 7, striking: "high" },
+      ],
+      BLOCKS,
+      drops(),
+      scores,
+    );
+    expect(scores.importanceAbsent).toBe(0);
+    expect(scores.strikingAbsent).toBe(1);
+    expect(scores.importanceRejected).toBe(1);
+    expect(scores.strikingRejected).toBe(1);
+    // Unchanged from today: all three survive, with exactly the fields they had.
+    expect(got).toHaveLength(3);
+    expect(got[0]?.importance).toBe(0.8);
+    expect(got[1]?.striking).toBeUndefined();
+    expect(got[2]?.importance).toBeUndefined();
+    expect(got[2]?.striking).toBeUndefined();
+  });
+
+  it("counts nothing on a clean run, and nothing for a quote it threw away", () => {
+    const dropped = drops();
+    const scores = noQuoteScoreDrops();
+    place(
+      [
+        { text: FIRST, importance: 0.8, striking: 0.2 },
+        /* Dropped before any score is read, so it has no missing score: a
+           quote that never became a row cannot be under-scored. */
+        { text: "not in the article at all, and long enough to be looked for" },
+      ],
+      BLOCKS,
+      dropped,
+      scores,
+    );
+    expect(dropped.unfound).toBe(1);
+    expect(scores).toEqual(noQuoteScoreDrops());
+  });
+
+  /**
+   * **The two shapes stay apart.** A score counter is a field the model did not
+   * give us; every `Dropped` counter is a quote that is not in the list, and
+   * `Quotes.discarded` publishes those to a visitor. Merging them would send a
+   * fact about our prompt to a reader and invite somebody to add the two up.
+   */
+  it("keeps the score counters off the shape that rides the artefact", () => {
+    expect(Object.keys(noneDropped()).sort()).toEqual([
+      "malformed",
+      "otherVoice",
+      "overCap",
+      "overlapping",
+      "unfound",
+      "wrongLength",
+    ]);
+    expect(noQuoteScoreDrops()).toEqual({
+      importanceAbsent: 0,
+      importanceRejected: 0,
+      strikingAbsent: 0,
+      strikingRejected: 0,
+    });
+  });
+
+  it("counts through buildQuotes, and stores nothing about it", () => {
+    const scores = noQuoteScoreDrops();
+    const built = buildQuotes(
+      { quotes: [{ text: FIRST, importance: 0.8 }] },
+      {
+        slug: "a-slug",
+        blocks: BLOCKS,
+        sourceHash: "deadbeefdeadbeef",
+        elapsedMs: 1,
+        dropped: drops(),
+        scores,
+      },
+    );
+    expect(scores.strikingAbsent).toBe(1);
+    // Unchanged from today: the artefact carries `discarded` and nothing else.
+    expect(Object.keys(built.discarded).sort()).toEqual([
+      "malformed",
+      "otherVoice",
+      "overCap",
+      "overlapping",
+      "unfound",
+      "wrongLength",
+    ]);
+    expect(built.quotes[0]?.importance).toBe(0.8);
+    expect(built.quotes[0]?.striking).toBeUndefined();
   });
 
   /**

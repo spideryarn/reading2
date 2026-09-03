@@ -110,6 +110,7 @@ import type { Article } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import {
@@ -1295,7 +1296,9 @@ export async function generateTimeline(opts: {
   if (wasRefused(message)) {
     /* `stop_details` is neither thrown nor logged — it is the provider's own
        words about a request that carried the whole article. src/messages.ts. */
-    throw new Error(MODEL_REFUSED.message);
+    throw stageFailure(MODEL_REFUSED, {
+      authored: "the model answered with stop_reason: refusal",
+    });
   }
   if (message.stop_reason === "max_tokens") {
     throw truncationFailure("timeline", maxTokens, ANSWER_TOKENS, {
