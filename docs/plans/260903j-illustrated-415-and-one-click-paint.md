@@ -75,14 +75,58 @@ repo after the 2026-08-27 `curl` that created it with `["application/pdf","text/
 `git log --all -S"storage/v1/bucket"` since 2026-08-28 returns no commits, and no script in the tree
 issues a bucket write at all.
 
-**Confirmation is one read and I cannot do it from this box** — there is no production service key
-here, and the MCP Supabase server is pointed at the *local* project (`get_project_url` →
-`http://127.0.0.1:54361`), which is how a first pass at this mistakenly reported production as
-healthy. Greg runs one command, or pastes the answer:
+### Confirmed on production, 2026-09-03, from the Mac
 
-```bash
-SUPABASE_URL=<prod> SUPABASE_SERVICE_ROLE_KEY=<prod key> npx tsx scripts/check-buckets.ts
+The hypothesis was right. Read-only `GET /storage/v1/bucket` against the project in `.env.prod`:
+
+```json
+{ "id": "sources", "public": false, "file_size_limit": 52428800,
+  "allowed_mime_types": ["application/pdf", "text/html"],
+  "created_at": "2026-08-27T16:56:50.520Z",
+  "updated_at": "2026-08-27T16:56:50.520Z" }
 ```
+
+`bucketDrift` → `bucket "sources" does not accept image/gif, image/jpeg, image/png`.
+
+**The equal `created_at`/`updated_at` is NOT evidence, and was nearly written up as the strong form
+of it.** Supabase Storage does not bump `updated_at` when a bucket is PATCHed. Measured: the *local*
+bucket has demonstrably been modified in place — widened by hand on 2026-08-29, and it reads all five
+types today — yet its timestamps are equal too (`created`/`updated` both `2026-08-26T18:40:49.986Z`,
+a `created_at` that predates the widening, so it was not recreated either). A field that never moves
+and a field that did not move look identical. The drift stands on the directly measured
+`allowed_mime_types`; the reason it happened stands on the repo evidence below.
+
+### The check could not have been pointed at production anyway — and this is why the drift survived
+
+The command this plan told Greg to run **cannot reach production**, on any machine with a
+`.env.local`. `check-buckets.ts` calls `loadEnvLocal()`, and `.env.local` deliberately **beats the
+shell environment** (`src/env.ts`, and the reason is a good one). So the documented invocation, aimed
+at production, does this — measured, not reasoned:
+
+```
+$ SUPABASE_URL=<prod> SUPABASE_SERVICE_ROLE_KEY=<prod key> npx tsx scripts/check-buckets.ts
+[env] .env.local overrode SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from the shell environment.
+Declared: sources
+Running:  sources
+
+✓ every declared bucket matches the running project     # exit 0 — and this is 127.0.0.1:54361
+```
+
+**Anyone who ran the check to see whether production had drifted was told it had not.** The check
+written to catch this class was, itself, an instance of it — a green tick for a question it never
+asked. `check-buckets.ts`'s own header documents that invocation, so the file is wrong about itself.
+
+**This changes `--apply` from a convenience into a hazard.** A `--apply` bolted onto the current
+environment handling would PATCH **the local bucket** while printing that production was repaired —
+the wrong-target write that
+[database.md § `DATABASE_URL=… npm run db:migrate` does not do what it looks like](../project/database.md#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like)
+is about, and the reason AGENTS.md says to read the `Target:` line rather than the success line.
+So the target fix lands **before** the repair path, not after it.
+
+The repo already solved this, twice, and `check-buckets` did not get the fix: `readEnvProd` in
+`src/env.ts` is the shared escape hatch, and `scripts/check-owner-identity.ts` § *"It reads
+`.env.prod`, and that is not the usual arrangement"* documents this precise trap. Reuse it rather
+than inventing a third way.
 
 **And `assets` — which is in `DEFAULT_INGEST_STEPS` — has been failing the same way, silently, on
 every article ingested on production since 2026-08-30** (production ingest was itself broken until
@@ -102,6 +146,12 @@ problem was.
 
 ### What changes
 
+0. **A target you can see, and one you can choose.** `check-buckets.ts` gains `--prod`, reading
+   `.env.prod` through the shared `readEnvProd` and refusing a `localhost`/`127.0.0.1` URL, exactly
+   as `check-owner-identity.ts` does. And it **always prints the project host it actually reached**,
+   above the verdict, so the operator reads a target rather than a tick. This is item 0 because
+   `--apply` without it writes to the wrong project and says it succeeded. The header's broken
+   invocation is corrected in the same edit.
 1. **A repair path.** `scripts/check-buckets.ts` gains `--apply`: it PATCHes the running bucket to
    match `supabase/config.toml`, prints the before and after, and refuses to do anything without the
    flag. Read-only stays the default. The existing doc says repair is deliberately absent because
@@ -111,9 +161,13 @@ problem was.
 2. **A deploy gate.** `scripts/deploy.ts` runs `bucketDrift` against the target project and refuses
    to deploy on drift. `bucketDrift` is already pure and already tested; this is wiring, and it is
    the prevention the last postmortem asked for.
-3. **A test that would have caught it**, red first: the deploy check list must include the bucket
-   check, and `bucketDrift` must report a missing MIME type as drift (assert the case that actually
-   happened, not a synthetic one).
+3. **Tests that would have caught it**, red first: the deploy check list must include the bucket
+   check; `bucketDrift` must report a missing MIME type as drift (assert the case that actually
+   happened — `{pdf, html}` running against the five declared — not a synthetic one); and the
+   target-selection must be tested, because it is now load-bearing for a write.
+5. **`storageErrors` says what failed.** `src/collect-assets.ts:656` pushes `(err as Error).name`,
+   which is `"Error"` for every Storage refusal. It carries the message and the status instead —
+   still no URLs, still nothing sensitive, but enough to tell "the publisher" from "us".
 4. **The postmortem**, `docs/postmortems/260903f-the-bucket-allowlist-drifted-again-on-production.md`,
    written *before* the fix lands and naming the class: **a declaration that no running system
    reads.** Its recommendations are ranked, and the top-ranked one is stage 1 itself.
@@ -178,10 +232,12 @@ when the server's `STEP_ORDER` already does it correctly for free.
 
 Each ends green and committable.
 
-1. **Postmortem + the bucket gate.** Postmortem written; `--apply` added to `check-buckets`;
-   `bucketDrift` wired into `scripts/deploy.ts`; tests red-then-green; docs updated
-   (`deployment.md`, the `blobs.ts` comment, `260828a`'s "what would have caught it"). Greg runs the
-   read-only check against production and, if it drifts, `--apply`.
+1. **Postmortem + the bucket gate.** Postmortem written; `--prod` and `--apply` added to
+   `check-buckets` (in that order — see item 0); `bucketDrift` wired into `scripts/deploy.ts`;
+   `storageErrors` carries the real message; tests red-then-green; docs updated (`deployment.md`,
+   the `blobs.ts` comment, `260828a`'s "what would have caught it"). Then the production bucket is
+   repaired with `--apply` — Greg approved this on 2026-09-03, after being shown the confirmed
+   drift, on the condition that it is tested locally and the before/after shown first.
 2. **One-click chain.** `useStepJob` preceding steps; `IllustratedView` refusal branches gain the
    button and the combined price; tests for all three refusal kinds and for the in-flight state.
 3. **Browser + docs.** Drive a real browser on this box (Playwright, per `browser-control.md`):
