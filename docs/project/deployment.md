@@ -829,10 +829,38 @@ seven hours, during which every HTML fetch threw a 415 that nobody saw. Read
 [260828a-the-config-file-is-not-the-bucket.md](../postmortems/260828a-the-config-file-is-not-the-bucket.md) before
 changing a bucket setting, or before trusting one.
 
-**`npx tsx scripts/check-buckets.ts` is what says whether they still agree.** Read-only, one
-`GET /storage/v1/bucket`, non-zero when they differ, and pointing it at production is the intended
-use. It does not repair the drift: widening an allowlist is a security decision, not a side effect
-of running a check.
+**`npx tsx scripts/check-buckets.ts --prod` is what says whether they still agree.** Read-only, one
+`GET /storage/v1/bucket`, non-zero when they differ, and it prints the project it reached above the
+verdict — read that line, not the tick.
+
+```
+npx tsx scripts/check-buckets.ts                  # the local project
+npx tsx scripts/check-buckets.ts --prod           # production, read-only
+npx tsx scripts/check-buckets.ts --prod --apply   # production, repaired
+```
+
+**`--prod` is the only way to reach production, and until 2026-09-03 there was none.** This
+paragraph used to say "pointing it at production is the intended use" and the script's own header
+gave `SUPABASE_URL=<remote> … npx tsx scripts/check-buckets.ts`. That command cannot work:
+`loadEnvLocal()` lets `.env.local` beat the shell, deliberately
+([`src/env.ts`](../../src/env.ts)), so it read the Docker container, printed
+`✓ every declared bucket matches the running project` and exited 0. Anybody who ran it to ask
+whether production had drifted was told it had not, while production had been refusing every image
+upload with a 415 since 2026-08-29 —
+[260903f](../postmortems/260903f-the-bucket-allowlist-drifted-again-on-production.md).
+
+**`--apply` repairs it**, printing the bucket before and after and reading it back. Read-only is
+still the default: this file used to say repair was absent because widening an allowlist is a
+security decision rather than a side effect of running a check, which is still true — and a flag
+somebody types **is** that decision, while the alternative is a `curl` reconstructed from the
+paragraph below under pressure, which is how these settings drifted twice. A repair that would
+*take something away* — a MIME type removed, the size limit lowered, `public` changed either way —
+needs `--allow-narrowing` too, because in that direction the file is as likely to be the stale side
+as the bucket.
+
+**And `npm run deploy` now refuses on drift**, before it touches the schema, using the same
+judgement (`bucketDrift`) and the same `.env.prod` target. It runs whether or not anybody
+remembered, which is the part that was missing.
 
 > **It exists on the remote as of 2026-08-27**, and it did not until then: `GET /storage/v1/bucket`
 > on the production project returned `[]`, an empty list, on the day this paragraph had been warning
