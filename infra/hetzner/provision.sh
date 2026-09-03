@@ -510,6 +510,14 @@ chmod 0644 /etc/profile.d/editor.sh
 update-alternatives --set editor /usr/bin/emacs
 run 30 "git editor" su - "$GJD_USERNAME" -c 'git config --global core.editor "emacs -nw"'
 
+echo "=== python ==="
+# Ubuntu 24.04 ships python3 3.12 but neither pip nor the venv module, so
+# `python3 -m venv .venv` fails on a stock box -- for hellozenno's venv
+# (docs/plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md).
+# Installed here rather than in cloud-init.yaml for the reason the emacs block
+# above spells out: this is the file that reaches boxes that already exist.
+run 300 "install python3-venv" bash -c 'apt-get -o DPkg::Lock::Timeout=600 -y install python3-venv python3-pip'
+
 echo "=== git ==="
 # Identity, so commits from the box are attributed like commits from the laptop.
 run 30 "git identity" su - "$GJD_USERNAME" -c '

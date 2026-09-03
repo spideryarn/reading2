@@ -27,8 +27,18 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 **The CLI**
 
 - [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) — all of it: `ls`, `new-claude`,
-  `new-shell`, `resume`, `resume-all`, `kill`, `doctor`, `provision`, `clone`, `push-env`, `ssh`,
-  `tunnel`, `forget-key`. `--help` is long on purpose.
+  `new-shell`, `resume`, `resume-all`, `kill`, `doctor`, `provision`, `clone`, `push-env`, `resolve`,
+  `ssh`, `tunnel`, `forget-key`. `--help` is long on purpose.
+- [`scripts/gjd-remote-repo.ts`](../../scripts/gjd-remote-repo.ts) — which repo you are standing in,
+  and which directory on the box is that same repo. The box-side inventory script and its
+  fail-closed parse live here too. See [Which repo, and where on the box](#which-repo-and-where-on-the-box)
+  and [`tests/gjd-remote-repo.test.ts`](../../tests/gjd-remote-repo.test.ts).
+- [`scripts/gjd-remote-flow.ts`](../../scripts/gjd-remote-flow.ts) — the decisions about clones,
+  configs and setup runs, as pure functions and as generated shell: the box-read protocol, the setup
+  specification two machines are compared on, both gates, and the locked clone transaction. Split
+  out because `gjd-remote.ts` calls `main()` on import, so none of it could be tested where it was —
+  [`tests/gjd-remote-flow.test.ts`](../../tests/gjd-remote-flow.test.ts) runs the real scripts
+  against temporary git repositories. See [Cloning, and why it is one transaction](#cloning-and-why-it-is-one-transaction).
 - [`scripts/gjd-remote-provision.ts`](../../scripts/gjd-remote-provision.ts) — whether provisioning
   actually succeeded, which is not the same question as whether it exited 0. Split out for the same
   reason as the rest: [`tests/gjd-remote-provision.test.ts`](../../tests/gjd-remote-provision.test.ts).
@@ -134,6 +144,160 @@ Two things follow, and both are in
 [infra/hetzner/README.md § Why provisioning is a separate command](../../infra/hetzner/README.md#why-provisioning-is-a-separate-command):
 `cloud-init: done` now means *bootstrapped*, and cloud-init owns the bootstrap dependencies forever,
 because it is baked into the machine at creation and never runs again.
+## Which repo, and where on the box
+
+`gjd-remote` drives **whichever repo you are standing in**, and there is no default repo any more.
+The rules, in order:
+
+1. **Identity is the git origin** of the cwd's toplevel, lower-cased to `owner/name` — never a
+   folder name. So `reading2` on the laptop and `spideryarn2` on the box are one repo, a worktree is
+   the same repo as its parent, and two repos may share a basename without colliding. Outside git,
+   inside a submodule, or with an origin that is not GitHub, it refuses and offers `--repo
+   owner/name` or `--dir`.
+2. **The box is asked what is under `~/code`** — every entry, symlinks not followed, each with its
+   realpath, whether it is a checkout, its origin and whether `HEAD` resolves. The reply is strict:
+   a row count and a `GJDOK` sentinel, and anything short of that is a failure rather than an empty
+   box. One directory with that origin is the answer. None is `absent`, two is `ambiguous`, and
+   anything else in the way is `blocked` with a reason (`non-checkout`, `incomplete-checkout`,
+   `symlink`, `unreadable`, `unrecognised-origin`, `other-repo`). Only `found` starts anything.
+3. **`--dir` wins over both** and is an explicitly arbitrary path on the box — `-d ~` is the home
+   directory and no repo at all, which is why it prints `repo: unknown`. For `push-env` it must be
+   this repo's checkout, verified by origin, because that command carries this repo's credentials.
+
+`GJD_REMOTE_REPO` still works and is **deprecated**: it is an alias for `--dir`, it says so every
+time, and it refuses if the directory it names is not the repo you are standing in. An env var must
+not quietly steer one repo's work into another repo's tree.
+
+The repo and the box directory are printed before anything happens. `gjd-remote resolve` prints just
+those and stops — one round trip, nothing created — which is what to run when a command refuses.
+
+Three roots, and they are not the same directory:
+
+| root | holds | resolved from |
+|---|---|---|
+| tool root | Terraform state, `provision.sh`, `remote-smoke-browser.mjs` | this checkout, from the script's own location |
+| local target | the `.env.local` that `push-env` reads | the toplevel of the repo you are in |
+| remote target | the session's cwd, `push-env`'s destination, the `.mcp.json` `doctor` checks | the verified checkout on the box |
+
+`gjd-remote doctor` is two halves for the same reason: the box's checks belong to no repo, and the
+repo's checks — its checkout on the box, whether the box can still fetch it, its `.mcp.json`, what
+setting it up would run — need to know which repo. Outside a repo it runs the box half and names the
+ones it skipped. `--box-only` asks for that on purpose. `doctor --dir` takes a box path and verifies
+it the way `push-env` does — same origin, not a symlink, a HEAD that resolves — before checking it.
+
+**`push-env` takes one of two paths, and which one is decided by the slug.** Spideryarn's keys come
+off the reviewed allowlist in [`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) — a list
+of key *names*, with the reason for each written beside it, and no prompt. Every other repo gets a
+checklist: the names are read out of that repo's `.env.local`, the **capable** model sorts them, and
+its answer is the checklist's starting state for a key you have not answered for before. Names only —
+**a value is never sent to the model and never written to the ledger**, and the keys you tick are of
+course sent to the box, which is the whole point. The capable model was chosen over the cheap one
+knowing it costs eighteen times more, because the cheap one left a quarter of each file `unknown` and
+twice missed a token that can delete the box
+([260902b-env-key-proposal-spike.md](../research/260902b-env-key-proposal-spike.md)). **Both answers
+are remembered** in `~/.config/gjd-remote/repos/` — the file records every name you decided about and
+which of them you approved — so the next push starts from your answers, a key you unticked stays
+unticked whatever a later model thinks of it, and no model is asked about a key you have already
+decided. Two guards cannot be ticked past on either path: the two names that can delete
+infrastructure, and any value that is a database URL not pointing at a loopback host — by value, so a
+production database under a name nothing here has heard of is caught too.
+[`scripts/gjd-remote-envpolicy.ts`](../../scripts/gjd-remote-envpolicy.ts) holds the whole of it,
+`pushEnvPlan` included — the CLI is glue, so that one test can put a sentinel value in at the top and
+check every sink it could come out of.
+
+**That model call is billed to Spideryarn wherever you ran it from.** The OpenRouter key and the
+ledger it is written to both come from *this* repo's configuration, resolved from the tool's own
+location rather than the cwd ([`src/env.ts`](../../src/env.ts), [`src/cli-ledger.ts`](../../src/cli-ledger.ts)) —
+so proposing keys for hellozenno spends Spideryarn's credit and shows up in `npm run cost` here,
+under the `env-proposal` job ([ai-gateway.md](ai-gateway.md)). That is what makes the tool work from
+a repo that has never heard of OpenRouter, and it is worth knowing before the invoice.
+
+**A repo the box has never had is offered a clone and a setup**, and only by `new-claude` and
+`new-shell` — one question, defaulting to No, naming the directory and the exact command; off a
+terminal it refuses and names `gjd-remote clone` and `gjd-remote setup` instead. The command in the
+question is the *laptop's* copy, because that is the one you can see, and **after the clone it is
+re-read from the cloned commit**: a different answer asks again, and no setup command at all leaves
+the clone in place with no session. **The session is created only for a `success` status file from
+the attempt you just watched**, so `--no-attach` starts the setup and stops.
+
+For a checkout that *is* there, the setup status is printed whenever it is not `success` — a yellow
+line, and the session starts anyway, because `~/code/spideryarn2` was set up by hand long before this
+tool existed and ten live sessions work in it. The plan's end state is to refuse anything but
+`success`, held back by that one case; the policy is `foundGateDecision()` in
+[`scripts/gjd-remote-flow.ts`](../../scripts/gjd-remote-flow.ts), so flipping it is one edit. The
+hard refusals are a status file nobody can read, a box with no `flock`, a status about some other
+tree, and a setup that is running right now and holding the lock.
+
+**A session in a repo checkout is created on the box under that same setup lock**, against the very
+bytes of the status file the decision was read from — so it cannot start in a tree a setup took over
+while the question was on screen. `--dir` is the exception it always is: an arbitrary path is not a
+repo and has no status to be admitted against.
+
+The plan is
+[../plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md](../plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md).
+
+### Setting a repo up: `gjd-remote setup`
+
+One command, the repo's own, run inside its checkout **on the box** — from `.gjd-remote/config.toml`,
+or an executable `.gjd-remote/setup`, or `npm ci && npm run setup` when the `package.json` has a
+`setup` script. A repo with none of those is refused rather than called set up.
+
+Three things about it are worth knowing before you read
+[`scripts/gjd-remote-setup.ts`](../../scripts/gjd-remote-setup.ts), which is where the design is
+written down:
+
+- **The config that runs is the box's copy, not the one on your laptop.** Both are read and a
+  disagreement refuses, naming each — because the two differ whenever a change is uncommitted,
+  unpushed or unpulled, which is most of the time while somebody is editing one.
+- **Readiness is the status file, never the checkout's presence.** A failed setup leaves a perfectly
+  ordinary-looking directory behind. `~/gjd-remote/setup/<owner>--<name>.json` records which attempt
+  wrote it and a hash of the whole specification below — not of the two command strings — so a cut
+  stream cannot read as success and a repo whose setup changed since, *in the file behind the command
+  as much as in the command*, is `config-changed` rather than ready. `gjd-remote setup --status`
+  reads it, and `doctor`'s `setup status` check is the same question.
+- **It is a tmux job under a per-repo `flock`**, because `npm ci` plus Docker pulls outlive an ssh
+  from a laptop that sleeps. You are attached so you can watch, and detaching leaves it running.
+  **The lock's lifetime is the work, not the pane**: the job closes fd 9 before it `exec`s the login
+  shell that keeps the session readable, so a held lock means a setup is genuinely running. It did
+  not until 2026-09-02, and the pane holding the lock after finishing made the next run fail as
+  "the job did not survive starting" — the plan's Log has it.
+- **A box with no `flock` refuses every run**, rather than starting a job that dies with exit 78 in
+  a pane that then vanishes. There is no serialising to be had there, and two setups in one checkout
+  is what the lock exists to prevent.
+
+**What the two machines are compared on is a specification, not a command string.** `gjd-remote
+setup` refuses when the box's copy of a repo and your laptop's disagree — and the comparison covers
+the setup command, where it came from, the `check`, the warnings, the **sha256 of
+`.gjd-remote/setup`** when a script is what runs, and the **`package.json` `scripts.setup` body**
+when the convention is. Two entirely different setup scripts resolve to the same eight characters,
+`./.gjd-remote/setup`, so comparing commands alone said they agreed. **The script's hash and the
+package body travel whether or not `source` says they are what runs**, because a config may spell
+out the same path the convention would have found. That one specification, hashed by
+`setupFingerprint()`, is what the prompt, the status file, `--status`, `doctor` and the session gate
+all ask their question of — and the setup job re-derives both file facts *inside the lock* before it
+runs anything, so a `git pull` between the question and the job cannot slip different bytes past the
+answer.
+
+### Cloning, and why it is one transaction
+
+`gjd-remote clone` — and the automatic clone inside `new-claude`/`new-shell` — is a single locked
+script on the box, not a sequence of round trips. It takes a per-destination `flock`, **re-resolves
+the destination under that lock**, reserves the staging name with `mkdir` (atomic, so a success is
+proof we made it, which is what makes the one `rm -rf` in the tool safe), clones, verifies the
+recorded origin and that `HEAD` resolves, renames with no-clobber, and **compares the `.git` inode
+across the rename** — a rename that declined is otherwise a success with somebody else's checkout at
+the end of it. A fresh checkout also **archives the setup status of whatever used to be at that
+path**, because an old success names the same repo and the same directory.
+
+Readiness is bound to the tree, not just the path: the status file records the checkout's `.git`
+inode, so deleting a checkout and cloning it again at the same path makes the old success read as
+`wrong-checkout` rather than as ready. Both guards were exercised on the box on 2026-09-02.
+
+The decisions, the generated shell and its parser live in
+[`scripts/gjd-remote-flow.ts`](../../scripts/gjd-remote-flow.ts), away from the CLI, because
+`gjd-remote.ts` calls `main()` on import and so nothing in it can be unit-tested;
+[`tests/gjd-remote-flow.test.ts`](../../tests/gjd-remote-flow.test.ts) runs the real scripts against
+temporary git repositories.
 
 ## A change to the box is a change to a file
 
@@ -192,13 +356,20 @@ a `cat >` would eat it on a re-run — at the one moment nobody is looking.
 ## What `gjd-remote ls` is telling you
 
 ```
-NAME                                     AGE   ATT  STATE          TITLE
-gjd-remote-ls-status-indicators          17m   yes  ? needs you    gjd-remote ls status indicators
-worktrees-migration-history              3h    yes  - idle         Worktrees migration history
-database-move-completion                 18h   yes  * working      Database move completion
-run-git-commit-changes-md-then-pull      20m    no  z waits 3h39m  (no title yet)
+NAME                                     REPO                 AGE   ATT  STATE          TITLE
+gjd-remote-ls-status-indicators          spideryarn/reading2  17m   yes  ? needs you    gjd-remote ls status indicators
+worktrees-migration-history              spideryarn/reading2  3h    yes  - idle         Worktrees migration history
+database-move-completion                 gregdetre/hellozenno 18h   yes  * working      Database move completion
+run-git-commit-changes-md-then-pull      (unknown)            20m    no  z waits 3h39m  (no title yet)
 — 1 needs you · 2 idle · 5 working · 1 waiting to start
 ```
+
+**`REPO` is what the launcher pinned into the session, not a guess from its directory.** One repo is
+`reading2` on the laptop and `spideryarn2` on the box, so the path cannot answer the question. It is
+dimmed and reads `(unknown)` for two kinds of session: one started with `--dir`, which is an
+arbitrary path and belongs to no repo, and one started before this metadata existed at all. A
+session that carries *half* the metadata is not shown as either — the whole listing is refused,
+naming the session and the variable, because a partial list is one whose absences get reasoned from.
 
 **The rows are sorted by who is being waited on**, not alphabetically. `needs you` is a session
 parked on a permission prompt or a question, going nowhere until somebody answers it, and it costs
@@ -473,8 +644,13 @@ product decision, not an optimisation, and it is still open.
 
 ## Getting the app running on a new box
 
-`gjd-remote clone` deliberately runs nothing, so a fresh checkout is code and no database. Three
-commands from there, and the middle one is the whole of it:
+`gjd-remote clone` with no argument clones **the repo you are standing in**, found by its git origin;
+give it `owner/name` for one you are not. It clones to a staging name beside the destination and
+renames it into place only once the origin and HEAD check out, so an interrupted clone leaves nothing
+at the destination rather than a half-made checkout.
+
+It deliberately runs nothing, so a fresh checkout is code and no database. Three commands from there,
+and the middle one is the whole of it:
 
 ```
 gjd-remote push-env                 # from the laptop: .env.local, allowlisted keys only

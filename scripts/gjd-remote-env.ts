@@ -42,6 +42,28 @@ import { isLocalDatabaseUrl } from "../src/db/ssl.js";
  * passwordless sudo, so "on the box" means "reachable by all of them".
  */
 /**
+ * **The two names that may never travel, whoever asks.**
+ *
+ * The reasoning is in the docblock above — each of these can destroy
+ * infrastructure, and the box is shared by autonomous agents running as one
+ * user with passwordless sudo. Written down as a value, rather than left as
+ * prose plus an absence from `ALLOWLIST`, because Spideryarn's allowlist is not
+ * the only consumer any more: `gjd-remote push-env` from a repo with no typed
+ * allowlist builds its checklist from whatever is in that repo's `.env.local`,
+ * and needs to know which rows can never be ticked
+ * (scripts/gjd-remote-envpolicy.ts). An absence cannot be imported.
+ *
+ * A hard guard, not a default: `applyGuards` re-checks it after the user has
+ * made their selection, so a tick on one of these is refused by name rather
+ * than merely discouraged in the UI. Greg's product call, 2026-09-02, recorded
+ * in docs/plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md.
+ */
+export const FORBIDDEN_NAMES: readonly string[] = [
+  "HETZNER_CLOUD_API_TOKEN",
+  "SUPABASE_ACCESS_TOKEN",
+];
+
+/**
  * Allowlisted keys whose VALUE must point at the throwaway container, not just
  * whose name is on the list above.
  *
@@ -60,6 +82,55 @@ import { isLocalDatabaseUrl } from "../src/db/ssl.js";
  * loopback address hidden in a password (src/db/ssl.ts).
  */
 export const MUST_BE_LOCAL: readonly string[] = ["DATABASE_URL", "SUPABASE_URL", "VITE_SUPABASE_URL"];
+
+/**
+ * Is this value a postgres connection string at all?
+ *
+ * Asked separately from `isLocalDatabaseUrl`, which answers "yes" only for a
+ * loopback host and fails closed on everything else — including "this is not a
+ * URL", "this is an API key" and "this is the word `true`". Feeding every value
+ * in a `.env.local` straight to that function would therefore report the whole
+ * file as production. So the question is split in two: **is this a database
+ * URL**, and only then, **does it point at the throwaway container**.
+ *
+ * Only the scheme is read, and the value is never returned or logged.
+ */
+export function isPostgresUrl(value: string): boolean {
+  try {
+    const scheme = new URL(value).protocol;
+    return scheme === "postgres:" || scheme === "postgresql:";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * **The one locality rule**, asked by name AND by value.
+ *
+ * Two callers, and they must not be able to disagree: `buildEnvPayload` below
+ * refuses a payload with it, and `push-env`'s checklist greys a row out with it
+ * (`valueGuard` in scripts/gjd-remote.ts). A checklist that let a row be ticked
+ * and a payload that then refused it would be the same rule written twice, and
+ * the reader would meet it for the first time after answering the questions.
+ *
+ * Two ways in, because either alone has a hole. **By NAME** is Spideryarn's
+ * `MUST_BE_LOCAL`, which catches `SUPABASE_URL` — an http URL that
+ * `isPostgresUrl` will never recognise. **By VALUE** is the hard guard the plan
+ * asks for on repos that have no typed list at all: hellozenno spells its
+ * production database `DATABASE_URL_PROD`, and no name list this repo writes
+ * will ever have heard of it. A postgres URL is a postgres URL whatever it is
+ * called.
+ *
+ * `"not-applicable"` rather than `"local"` for a value that is neither, so a
+ * caller cannot read "this is not a database URL" as "this database URL is
+ * fine".
+ */
+export function localityVerdict(name: string, value: string): "not-applicable" | "local" | "not-local" {
+  const byName = MUST_BE_LOCAL.includes(name);
+  const byValue = isPostgresUrl(value);
+  if (!byName && !byValue) return "not-applicable";
+  return isLocalDatabaseUrl(value) ? "local" : "not-local";
+}
 
 export const ALLOWLIST: readonly string[] = [
   "OPENROUTER_API_KEY",
@@ -248,6 +319,9 @@ export function serialiseValue(value: string): string {
 export type EnvPayload = {
   /** The exact bytes to write on the box. */
   text: string;
+  /** Where the list of names came from, for a message that has to say. Copied
+   *  off the allowance, so a refusal cannot name the wrong list. */
+  sourceOfNames: string;
   /** Allowlisted keys that were present locally, in allowlist order. */
   pushed: Map<string, string>;
   /** Present locally, not on the allowlist — reported, never sent. */
@@ -289,12 +363,47 @@ export function supabaseJwtIssuer(value: string): string {
   return typeof iss === "string" ? iss : "unreadable";
 }
 
-export function buildEnvPayload(localText: string): EnvPayload {
+/**
+ * **Which names may travel, and the one line of the banner that says so.**
+ *
+ * The list used to be `ALLOWLIST`, full stop, and that was Spideryarn's: a list
+ * of key NAMES, where another repo's `DATABASE_URL` is not this one's. There
+ * are two sources for it now and the file on the box has to say which one it
+ * was built from, because "only allowlisted keys are here" is a false claim
+ * about a file whose keys came off a checklist somebody ticked.
+ *
+ * `SPIDERYARN_ALLOWANCE` below is the typed one. The other is assembled by
+ * `push-env` from the names the reader approved
+ * (scripts/gjd-remote-envpolicy.ts), and its `source` names the policy file.
+ */
+export type EnvAllowance = {
+  /** The names that may be written, in the order they should be written in. */
+  names: readonly string[];
+  /** How the banner finishes the sentence "Only the keys … are here". */
+  source: string;
+};
+
+/** This repo's own policy: the hand-written list at the top of this file. */
+export const SPIDERYARN_ALLOWANCE: EnvAllowance = {
+  names: ALLOWLIST,
+  source: "on the allowlist in scripts/gjd-remote-env.ts",
+};
+
+/**
+ * Build the bytes for the box, from a local `.env.local` and an allowance.
+ *
+ * The allowance is a REQUIRED argument rather than a default, deliberately.
+ * Defaulting it to Spideryarn's list would mean a caller that forgot it pushed
+ * another repo's file under this repo's policy — which is silent, wrong, and
+ * exactly the accident the per-repo work exists to prevent. There is no reading
+ * of "no allowance given" that is safe enough to guess at.
+ */
+export function buildEnvPayload(localText: string, allowance: EnvAllowance): EnvPayload {
   const { values: local, problems } = scanEnv(localText);
-  const allowed = new Set(ALLOWLIST);
+  const allowed = new Set(allowance.names);
   const pushed = new Map<string, string>();
   const missing: string[] = [];
-  for (const key of ALLOWLIST) {
+  for (const key of allowance.names) {
     const value = local.get(key);
     if (value === undefined) missing.push(key);
     else pushed.set(key, value);
@@ -337,28 +446,43 @@ export function buildEnvPayload(localText: string): EnvPayload {
     }
   }
 
-  for (const key of MUST_BE_LOCAL) {
-    const value = pushed.get(key);
-    if (value !== undefined && !isLocalDatabaseUrl(value)) {
-      problems.push(
-        `${key} does not point at the local stack, and this only ever sends local ones. ` +
-          `Point it back at 127.0.0.1, or edit MUST_BE_LOCAL in scripts/gjd-remote-env.ts on purpose.`,
-      );
-    }
+  /* By name for the three Spideryarn spells out, and BY VALUE for everything
+     else — a postgres URL under a name no list here has heard of is still a
+     postgres URL. That second arm is what makes this rule mean anything for a
+     repo with no typed allowlist: hellozenno's production database is called
+     DATABASE_URL_PROD, which `MUST_BE_LOCAL` will never match and a reader
+     might well tick. `localityVerdict` is the one rule; the checklist greys the
+     row out with the same call. */
+  for (const [key, value] of pushed) {
+    if (localityVerdict(key, value) !== "not-local") continue;
+    problems.push(
+      MUST_BE_LOCAL.includes(key)
+        ? `${key} does not point at the local stack, and this only ever sends local ones. ` +
+            `Point it back at 127.0.0.1, or edit MUST_BE_LOCAL in scripts/gjd-remote-env.ts on purpose.`
+        : `${key} is a database URL that does not point at 127.0.0.1, and only local ones go on ` +
+            `the box. (Its host, not its value, is what was read.)`,
+    );
   }
 
   // No timestamp in the banner: it would make every push a change even when
   // nothing changed, and the file's mtime already says when.
   const header = [
     `# Written by \`gjd-remote push-env\` from the laptop's ${ENV_BASENAME}.`,
-    `# Only the keys on the allowlist in scripts/gjd-remote-env.ts are here, and`,
+    `# Only the keys ${allowance.source} are here, and`,
     `# every Supabase target in them is the LOCAL stack — checked, not assumed.`,
     `# Paid model-provider keys ARE here; what is absent is production data.`,
     `# Edits made on the box are overwritten by the next push.`,
     ``,
   ];
   const body = [...pushed].map(([k, v]) => `${k}=${serialiseValue(v)}`);
-  return { text: `${[...header, ...body].join("\n")}\n`, pushed, skipped, missing, problems };
+  return {
+    text: `${[...header, ...body].join("\n")}\n`,
+    sourceOfNames: allowance.source,
+    pushed,
+    skipped,
+    missing,
+    problems,
+  };
 }
 
 /** Compared, never printed. A short value would not survive being shown as a

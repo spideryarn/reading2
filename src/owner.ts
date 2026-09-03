@@ -194,23 +194,6 @@ export function inRequest(): boolean {
 }
 
 /**
- * The signed-in owner if we are serving a request, and `null` if we are not.
- *
- * **The difference between "filter this" and "do not filter this".** A route
- * handler must only ever see its own reader's jobs; the housekeeping sweep that
- * deletes finished ones has to see everybody's, or a job belonging to a real
- * user could never be tidied away by a process that is not that user.
- *
- * So the question is not "who is the owner" — `currentOwnerId()` answers that
- * and throws outside a request — but "is there a reader to answer to". Inside a
- * request there is; on a timer, in the CLI, in the pipeline, there is not.
- * src/jobs.ts is the one caller.
- */
-export function requestOwner(): OwnerId | null {
-  return scope.getStore()?.owner ?? null;
-}
-
-/**
  * Run something as a named owner, in a scope of its own.
  *
  * For **work that outlives the request that asked for it**. An

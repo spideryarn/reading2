@@ -418,13 +418,19 @@ authorization was already on file — made the repo visible immediately. So when
 Vercel says it cannot see a repo, check `githubLogin` before you go looking at
 permissions.
 
-### The build is two commands, and the second one is the point
+### The build is two passes, and the second one is the point
 
 ```
-npm run build && npx vite build --config vite.api.config.ts
+npm run build          # = build:client, then build:api
 ```
 
-The first builds the client into `dist/`. The second compiles the API into
+**One command since 2026-09-03**, and the reason it is one is that it used to be
+two: the full recipe lived here and in `vercel.json` and nowhere a developer ran,
+so `npm run build` on a laptop meant something narrower than `npm run build` on
+Vercel. `npm run build:client` and `npm run build:api` are still there
+separately for when you want one of them.
+
+The first pass builds the client into `dist/`. The second compiles the API into
 `api-dist/vercel.js`, and [vite.api.config.ts](../../vite.api.config.ts) explains
 at length why it has to exist: Vercel compiles TypeScript under `api/` with this
 repo's **TypeScript 7**, which its builder cannot drive, and then *reports
@@ -574,7 +580,7 @@ is read by nothing.
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | **set on Production, 2026-08-27 — and they are read at BUILD time**, which is the part to remember. Vite compiles them into the bundle, so setting them after a deploy changes nothing until the next build. Missing means [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) throws at module load and the site is a **blank page** — which is what `www.spideryarn.com` was for a few hours that day. **Set on Preview too, 2026-08-27** — until then a preview was a blank page for this reason and no other, which looks identical to a build that never ran. Note that Preview builds predating that setting keep the missing values baked in; only a new build picks them up. The values came from `.env.prod`, where the publishable key lives under the legacy name `SUPABASE_ANON_KEY` and its value is an `sb_publishable_…`. [auth.md](auth.md), [260826ae-auth-ui-and-production.md § The release fence](../plans/260826ae-auth-ui-and-production.md#the-release-fence) |
 | `STRIPE_SECRET_KEY` | **not set yet — payments are not live.** When it is, it must be the **live** key here and nowhere else. A production deployment on `sk_test_…` takes test cards, writes `active` subscription rows and grants real quota, while every "is it set" check stays green; [`src/billing/stripe.ts`](../../src/billing/stripe.ts) refuses to construct a client in that state and `/api/health` warns. Absent is fine and means everybody is on the free tier. [billing.md](billing.md) |
 | `STRIPE_WEBHOOK_SECRET` | the signing secret of the **dashboard** webhook endpoint, which is a different value from the one `stripe listen` mints locally — that is why this is not on the `gjd-remote push-env` allowlist. Unset refuses every delivery rather than skipping verification, deliberately: the alternative turns one missing variable into an endpoint that grants subscriptions to anyone who can POST JSON |
-| `STRIPE_PRICE_READER`, `STRIPE_PRICE_RESEARCHER` | the `price_…` each paid tier is sold at, one variable per tier. **Not secrets** — they are in the Checkout URL every customer sees. Each price carries USD, GBP and EUR and Checkout picks by location. Test and live mode have different ids, so the live ones are created at go-live by `scripts/stripe-setup.ts` and set here. A new tier adds a variable: [billing.md § Adding a tier or a currency](billing.md#adding-a-tier-or-a-currency) |
+| ~~`STRIPE_PRICE_*`~~ | **Gone, deliberately.** Tiers and their Stripe price ids live in the `billing_tiers` table since 2026-09-02, so they can be changed without a deploy and without pasting an id onto every machine. `npx tsx scripts/stripe-setup.ts --apply` reads the rows, makes Stripe match, and writes the id back. [billing.md](billing.md#adding-a-tier-or-a-currency) |
 | `SPIDERYARN_OWNER_ID` | the uuid in `auth.users` that rows are stamped with **when there is no signed-in reader** — the CLI and the pipeline. Inside a request the session user wins and this is ignored, and that ordering is load-bearing: were it the other way round, setting this here would have handed every signed-in stranger Greg's own shelf and every query would have matched. Unset in production is a thrown error rather than a default. [`src/owner.ts`](../../src/owner.ts), [auth.md](auth.md) |
 | `LOG_LEVEL=info` | [logging.md](logging.md) |
 

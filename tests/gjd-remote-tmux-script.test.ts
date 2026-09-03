@@ -104,13 +104,17 @@ const UUIDS = [
  * The rows carry a real trailing newline, exactly as tmux prints them, because
  * the bug under test is about what happens to that newline.
  */
-function stubTmux(n: number): void {
+function stubTmux(n: number, meta: Record<string, string> = {}): void {
   const rows = Array.from({ length: n }, (_, i) => `$${i}|178819033${i}|0|1|session-${i}`).join("\\n");
   const panes = Array.from({ length: n }, (_, i) => `$${i} ${1000 + i}`).join("\\n");
   // One uuid per line, so the stub can look one up by session index with sed
   // rather than this file having to build a shell array.
   const ids = path.join(dir, "ids.txt");
   writeFileSync(ids, `${UUIDS.join("\n")}\n`);
+  // A variable this stub is not given answers the way tmux answers for one it
+  // has never been set: nothing on stdout and a complaint on stderr. That is
+  // what every session on the box looked like before the metadata existed.
+  const metaCases = Object.entries(meta).map(([k, v]) => `      ${k}) echo "${k}=${v}" ;;`);
   stub(
     "tmux",
     [
@@ -123,11 +127,21 @@ function stubTmux(n: number): void {
       `    case "$4" in`,
       `      CLAUDE_SESSION_ID) echo "CLAUDE_SESSION_ID=$(sed -n "$((idx + 1))p" ${ids})" ;;`,
       `      GJD_PROVISIONAL) echo "GJD_PROVISIONAL=0" ;;`,
+      ...metaCases,
+      `      *) echo "unknown variable: $4" >&2; exit 1 ;;`,
       `    esac ;;`,
       `esac`,
     ].join("\n"),
   );
 }
+
+/** The four variables a session started by the current gjd-remote carries. */
+const METADATA = {
+  GJD_METADATA_VERSION: "1",
+  GJD_KIND: "claude",
+  GJD_REPO: "gregdetre/reading2",
+  GJD_REMOTE_DIR: "/home/greg/code/spideryarn2",
+};
 
 /**
  * A whole-process snapshot, as `ps -eo pid=,ppid=,etimes=,args=` prints it:
@@ -386,6 +400,63 @@ describe.skipIf(!CAN_RUN)("the remote script, actually run", () => {
     expect(agents).toBeNull();
     expect(agentsWhy).toBeNull();
     expect(sessions).toHaveLength(1);
+  });
+
+  /**
+   * The metadata, through the shell rather than through a fixture string.
+   *
+   * The four `show-environment` calls and the four extra printf fields are a
+   * seam like every other one in this file, and the fixture tests next door
+   * cannot see it: they assert on a record this file is the only thing that
+   * actually produces.
+   */
+  it("carries a session's repo and checkout through the wire format", () => {
+    stubTmux(1, METADATA);
+    stubPsIdle();
+    stubClaude("[]");
+    const { sessions, failure } = parseSessions(run());
+    expect(failure).toBeNull();
+    expect(sessions[0]?.meta).toEqual({
+      version: 1,
+      kind: "claude",
+      repo: "gregdetre/reading2",
+      dir: "/home/greg/code/spideryarn2",
+    });
+  });
+
+  /** Every session already on the box has none of these, and must still list. */
+  it("reads a session with none of the metadata as one that predates it", () => {
+    stubTmux(1);
+    stubPsIdle();
+    stubClaude("[]");
+    const { sessions, failure } = parseSessions(run());
+    expect(failure).toBeNull();
+    expect(sessions[0]?.meta).toEqual({ version: "legacy" });
+  });
+
+  /** Which is why the directory travels base64: a path may contain the
+   *  separator, and `~/code/a|b` would otherwise shift every field after it. */
+  it("survives a checkout path containing the field separator", () => {
+    stubTmux(1, { ...METADATA, GJD_REMOTE_DIR: "/home/greg/code/a|b" });
+    stubPsIdle();
+    stubClaude("[]");
+    expect(parseSessions(run()).sessions[0]?.meta).toMatchObject({ dir: "/home/greg/code/a|b" });
+  });
+
+  /**
+   * Half the metadata is the state the version exists to make visible: without
+   * it, a session that lost its repo on the way looks exactly like one started
+   * before the repo was ever recorded, and `ls` would print `(unknown)` beside
+   * a session whose repo the box knows perfectly well.
+   */
+  it("refuses the whole listing when the box reports only half the metadata", () => {
+    stubTmux(1, { GJD_REPO: "gregdetre/reading2" });
+    stubPsIdle();
+    stubClaude("[]");
+    const { sessions, failure } = parseSessions(run());
+    expect(sessions).toEqual([]);
+    expect(failure).toContain("GJD_METADATA_VERSION");
+    expect(failure).toContain("session-0");
   });
 
   /** A session name with the field separator in it, through the real base64. */

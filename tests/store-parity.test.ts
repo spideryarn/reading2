@@ -22,8 +22,8 @@
  *
  * ## The corpus is loaded through the real write path, from nothing
  *
- * This used to call `importArticle`, and `db:import` is being deleted
- * (docs/plans/260827aa-delete-the-importer.md § C7). The replacement is not a smaller
+ * This used to call `importArticle`; `db:import` and src/store/import.ts went on
+ * 2026-09-01 (docs/plans/260827aa-delete-the-importer.md § C7). The replacement is not a smaller
  * importer: `loadArticleIntoPg` drives the *production* seam — `storeRawSource`,
  * a fenced `jobs` row, `openOrBeginJobDraft`, `beginStep`/`write`/`finishStep`
  * per step, then `publishRevision` with its guards run rather than routed

@@ -9,11 +9,16 @@
  *
  * 1. `freeSlug` (src/jobs.ts) believes the slug is unclaimed and hands it out.
  * 2. The pipeline runs, and is paid for.
- * 3. `importArticle` derives `articleId = derivedUuid("article", slug)`, which
- *    resolves to the **article that was already there**.
- * 4. Same owner ⇒ the owner check passes, and the import replaces that article
- *    and deletes-then-reinserts its reader state — comments, chat threads,
- *    saved searches, glossary lookups. Every write reports success.
+ * 3. The job settles, and `publishRevisionIn` (src/store/pg-revisions.ts)
+ *    resolves the slug through `ownedSlug`, so it lands on the **article that
+ *    was already there**.
+ * 4. Same owner ⇒ the lock finds that row, and its current revision is moved to
+ *    the document just fetched. Every write reports success.
+ *
+ * Steps 3–4 were `importArticle` until src/store/import.ts was deleted on
+ * 2026-09-01, and it was worse: it derived `articleId` from the slug and then
+ * deleted and reinserted the article's reader state as well — comments, chat
+ * threads, saved searches, glossary lookups.
  *
  * That is silent data loss, and this file is the test for it: with the Postgres
  * store live and **no `data/<slug>/` directory anywhere**, both functions must

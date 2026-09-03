@@ -90,9 +90,16 @@ fixed. If `npm run check` exited non-zero for those, its exit code would be igno
 tests, the production build, and cycles.
 
 `npm run build` is a gate because a typecheck does not prove Vite can resolve, bundle and parse the
-CSS. Before it was here, that class of failure was only ever discovered by a deploy.
+CSS. Before it was here, that class of failure was only ever discovered by a deploy. **It runs above
+the test gate**, because `tests/pdf-bundle-trace.test.ts` inspects the built API bundle and fails
+loudly when it is missing — with the order the other way round, `npm run check` was red on every
+clean checkout, which is this section's own rule breaking on this section's own command.
 
 A check earns promotion from advisory to gate on the day its findings reach zero, and not before.
+**`committed` is the first one to have earned it**: it landed advisory because `HEAD` had five
+errors, with its exit condition written into `scripts/check.ts`, and became a gate on 2026-09-03 when
+that condition was met. Writing the condition down is what made the promotion a two-line change
+rather than an argument.
 
 **The test gate runs under `REQUIRE_POSTGRES=1`.** About seventy test files turn themselves into
 `describe.skip` when Postgres is unreachable, so `npm test` is green having run none of them — and
