@@ -17,18 +17,21 @@ three later stages consume it**:
 
 ```
 A (store inventory) → B0 → T-B (factory) → T-C (lanes) → T-D (activation) → T-E (pollution)
-  → C → B → D → D′1b → D′3 → E → F (hinge) → G → H → I
+  → C → B → D → E → F (hinge) → G → H → I
 ```
 
 The `pdf` spike is independent and can happen any time before E.
+**All of D′ is off the list: D′1 is landed, D′2 was scheduled twice, D′3 is cancelled.**
 
-**Two corrections that review made to our own draft of this order:**
+**Three corrections to our own draft of this order, two from review and one from the tree moving:**
 
 1. **D′2 is gone, because it was scheduled twice.** 260903e's Stage D *is* the suite-registration
    abstraction D′2 was going to build. Absorbing one and keeping the other would have built it
    twice — exactly the duplication the absorption was meant to prevent.
 2. **B0 moves ahead of T.** It is cheap, independently measured, and needs nothing from the test
    database.
+3. **D′3 is cancelled**, because somebody built the Postgres glossary delete while this was being
+   written. Decision 1 is overtaken rather than reversed, and there is now nothing to remove.
 
 **And B does not run in parallel with T**, which was the tempting shortcut: B needs *a* database,
 not an isolated one, so it looks parallelisable. But B's whole deliverable is **per-suite mutation
@@ -163,7 +166,7 @@ because the last two were handed back rather than answered.
 
 | # | decision | by |
 |---|---|---|
-| 1 | **Drop *"start over"* from the glossary** rather than build a Postgres `deleteGlossary` | Greg |
+| 1 | **Drop *"start over"* from the glossary** rather than build a Postgres `deleteGlossary` — **overtaken the same day: somebody built it, see D′3** | Greg |
 | 2 | **Move the stage CLIs to Postgres** rather than delete them | Greg |
 | 3 | **Absorb [260903e](260903e-a-private-test-database-so-the-suite-stops-racing-dev-servers.md)** into this plan rather than depend on it or duplicate it | Greg — see stage T |
 | 4 | **Retire `npm run labels`** | Greg delegated; settled with Sol — see stage E |
@@ -692,7 +695,29 @@ errors** — the durable fix from
 would have built the same thing twice. See § *Making the database required*. The numbering is left
 alone so that the two Sol reviews, which discuss D′2 by name, still read.
 
-**D′3 — remove the glossary's *"start over"***, per decision 1.
+**D′3 — cancelled. Decision 1 was overtaken by events on the same day.**
+
+Greg chose to drop *"start over"* from the alpha rather than build a Postgres `deleteGlossary`.
+**Somebody built it instead**, on `worktree-glossary-delete-pg`, and it merged to `dev` hours later:
+[`src/store/pg-glossary.ts`](../../src/store/pg-glossary.ts) and
+[260903e-glossary-delete-in-postgres.md](260903e-glossary-delete-in-postgres.md). The seam is
+symmetrical, the 501 is gone, and the button works — so there is nothing to remove and nothing to
+ask. The decision's *reason* has expired, not been reversed.
+
+**Do not re-derive the old refusal from a stale docstring.** This plan already warned about that once
+for a different reason (§ *The decisions*, note under decision 1); it now applies to the feature
+itself.
+
+**And its arrival broke D′1b's rule within the hour**, which is the more useful finding.
+`pgGlossaryStore` was wrapped at its *selection* in `index.ts`, not at its export — the exact
+arrangement [database.md](../project/database.md) had just stopped describing — and
+**`tests/store-guarded.test.ts` stayed green**, because an exact list catches a store that *stops*
+being guarded and never one that **never was**. That asymmetry is a guard agreeing with the bug.
+The store is now guarded at its export (eighteen), and the test asks the question from the other end
+as well: **every `export const pgX` under `src/store/` is guarded at its export or is one of two
+declared exceptions** — `pgCostStore`, guarded in the `ai-calls.ts` leaf to avoid an import cycle,
+and `pgPublicReader`, which scrubs its own. Discovery by shape, so a nineteenth adapter joins the
+check by being written rather than by somebody remembering.
 
 ### E — the stage CLIs move to Postgres, **before** the hinge
 
