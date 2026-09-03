@@ -2919,10 +2919,20 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    * `"ours"`: a retry skips the steps that finished and would find the identical
    * missing Sketch, so offering the button would be a lie.
    *
-   * **Not `enqueue(["sketch", "illustrated"])`**, which is the tempting version
-   * and is worse. It turns one press into a hidden $0.20 charge and a
-   * three-minute wait that nothing warned about, and Sketch's own empty state
-   * exists precisely to name that price before the press.
+   * **The client may name both steps, and since 2026-09-03 it does.** This
+   * paragraph used to say *"not `enqueue(["sketch", "illustrated"])`, which is
+   * the tempting version and is worse — it turns one press into a hidden $0.20
+   * charge and a three-minute wait that nothing warned about"*. Greg asked for
+   * the one press anyway, and the objection was to the **hiding** rather than to
+   * the chain: `IllustratedView`'s refusal branches now offer it with both
+   * prices and both waits on the button before it is pressed
+   * (docs/project/diagram.md § Illustrated).
+   *
+   * **Nothing changes on this side of the seam.** The step still refuses rather
+   * than pulling its own prerequisite in; what makes the chain safe is that
+   * `STEP_ORDER` sequences one job and `stepIsDone` decides whether the Sketch
+   * half runs at all — so a stale Sketch is re-drawn and a current one is
+   * adopted, without this step knowing who asked.
    *
    * ## 2. Its fingerprint is the Sketch, not the article
    *
