@@ -666,7 +666,11 @@ export function buildQuotes(
  */
 export function isStale(
   quotes: Quotes,
-  blocks: BlockFingerprint[],
+  /* `readonly`, like `inputFingerprint` above and like the same parameter in
+     ideas, timeline, quiz, sketch and arc. Nothing here mutates the array, and
+     a caller holding a `readonly BlockFingerprint[]` was the one thing that
+     made this signature different from its five peers'. */
+  blocks: readonly BlockFingerprint[],
   tree: Tree,
   meta: MetaFingerprint | null,
 ): boolean {
@@ -881,7 +885,7 @@ ${PROFILE_RULES}`;
  */
 /* Exported for tests/profile-prompts.test.ts, which pins the two things a
    profile must do here: arrive when there is one, and leave no trace when there
-   is not. Same reason src/glossary.ts and src/summarise.ts export theirs. */
+   is not. Same reason src/glossary.ts and src/tweets.ts export theirs. */
 export function renderPrompt(opts: {
   tree: Tree;
   count: number;

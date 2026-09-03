@@ -142,11 +142,6 @@ export function noteSlug(id: string, slug: string): Promise<void> {
   return store.noteSlug(id, slug);
 }
 
-/** Every record, newest first. For the sweep, and for tests. */
-export function listUploads(): Promise<UploadRecord[]> {
-  return store.list();
-}
-
 /** Forget one attempt entirely. The staging object is left alone — see the sweep. */
 export function forgetUpload(id: string): Promise<void> {
   return store.forget(id);

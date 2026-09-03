@@ -39,13 +39,12 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { declaredFetch, withDeclaredExternalCall } from "../declared-spend.js";
-import { isStructural } from "../../src/block-policy.js";
 import { MESSAGES_PROVIDER, wasRefused } from "../../src/messages-stream.js";
 import { parseJsonFrom, stripFence } from "../../src/parse-json.js";
 import { appendSupplement, splitBlocks } from "../../src/supplement.js";
 import { buildTree, structureRequest, type BuildReport, type ModelNode } from "../../src/hierarchy.js";
 import { assertTreeSound } from "../../src/tree-invariants.js";
-import type { Block, Tree, TreeNode } from "../../src/types.js";
+import type { Block, Tree } from "../../src/types.js";
 import type { ArmSpec, CallSpec } from "./arms.js";
 import { buildHeadingTree } from "../../src/heading-tree.js";
 
@@ -455,19 +454,6 @@ export function parseStructureResponse(
     "the structure-arm response",
   );
   return assembleTree(root, blocks, slug, report);
-}
-
-/**
- * True for the leaves the pipeline would label. Exported for run.ts's stats
- * only; kept beside the executor so nothing re-derives it differently.
- */
-export function structuralLeaves(tree: Tree, blocks: Block[]): TreeNode[] {
-  const byId = new Map(blocks.map((b) => [b.id, b]));
-  return Object.values(tree.nodes).filter((n) => {
-    if (n.children.length > 0) return false;
-    const block = byId.get(n.range[0]);
-    return !!block && isStructural(block);
-  });
 }
 
 /* ----------------------------------------------------- waves and revise -- */

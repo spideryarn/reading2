@@ -418,13 +418,19 @@ authorization was already on file — made the repo visible immediately. So when
 Vercel says it cannot see a repo, check `githubLogin` before you go looking at
 permissions.
 
-### The build is two commands, and the second one is the point
+### The build is two passes, and the second one is the point
 
 ```
-npm run build && npx vite build --config vite.api.config.ts
+npm run build          # = build:client, then build:api
 ```
 
-The first builds the client into `dist/`. The second compiles the API into
+**One command since 2026-09-03**, and the reason it is one is that it used to be
+two: the full recipe lived here and in `vercel.json` and nowhere a developer ran,
+so `npm run build` on a laptop meant something narrower than `npm run build` on
+Vercel. `npm run build:client` and `npm run build:api` are still there
+separately for when you want one of them.
+
+The first pass builds the client into `dist/`. The second compiles the API into
 `api-dist/vercel.js`, and [vite.api.config.ts](../../vite.api.config.ts) explains
 at length why it has to exist: Vercel compiles TypeScript under `api/` with this
 repo's **TypeScript 7**, which its builder cannot drive, and then *reports

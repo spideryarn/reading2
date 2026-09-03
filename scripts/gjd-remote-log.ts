@@ -26,9 +26,46 @@
  */
 
 import path from "node:path";
+import { isRepoValue } from "./gjd-remote-repo.js";
 
-/** Bumped when the shape below changes in a way a reader must know about. */
+/**
+ * Bumped when the shape below changes in a way a reader must know about.
+ *
+ * STILL 1 AFTER `repo`, `attempt` AND `outcome` ARRIVED, and that is a decision
+ * rather than an oversight — GPT Sol (finding 10) asked for the version handling
+ * to be settled deliberately instead of leaving readers to shrug at a field they
+ * do not know. The rule the number carries is "a reader that does not understand
+ * this line would answer WRONGLY from it", and none of the three does that:
+ *
+ *  - Nothing in `verdict()` reads them, so an older gjd-remote gives exactly the
+ *    answers it gives today about every launch line, with or without a repo.
+ *  - A line with no `repo` still means what it always meant — the repo was not
+ *    recorded — so old lines and new ones can sit in one file.
+ *  - A `setup` line is not a launch: `gjd-remote log` selects `cmd === "new-claude"`,
+ *    so an older reader ignores it rather than misreading it.
+ *
+ * Bumping instead would have made every one of Greg's checkouts that is behind
+ * count every new line as unreadable, which is loud about nothing. The bump is
+ * owed the day a new field changes what an EXISTING field means.
+ */
 export const LOG_SCHEMA = 1;
+
+/** What became of one setup attempt. `started` is written before the work, the
+ *  other two after it, so an attempt that died mid-flight is visible as a
+ *  `started` with nothing after it. */
+export type SetupOutcome = "started" | "success" | "failed";
+
+const SETUP_OUTCOMES: readonly SetupOutcome[] = ["started", "success", "failed"];
+
+/**
+ * An attempt id: lower-case, starts alphanumeric, no dots and no slashes.
+ *
+ * Bounded and path-shaped on purpose. Sol's design for setup has the box keep a
+ * status file per attempt under `~/gjd-remote/`, so this string becomes part of
+ * a path on a machine with passwordless sudo. A `..` that reaches the log is a
+ * `..` somebody joins onto a directory later.
+ */
+const ATTEMPT_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 /**
  * One line of the log. `cmd` is the only required discriminator; everything
@@ -38,7 +75,9 @@ export const LOG_SCHEMA = 1;
  * rather than an oversight: a prompt is prose that may contain anything, the
  * repo forbids logging article content (docs/project/logging.md), and a
  * redaction step is a thing that can be got wrong later. A field that is never
- * passed in cannot leak.
+ * passed in cannot leak — and `formatLine` writes an ALLOWLIST rather than the
+ * object it was given, so a field that IS passed in, by a caller spreading its
+ * own object into `appendLog`, cannot leak either. See `LAUNCH_FIELDS`.
  *
  * **But this file is not free of the prompt, and saying it was would be a lie.**
  * An unnamed session's name is `slugify(first five words of the prompt)` —
@@ -78,6 +117,21 @@ export type LogRecord = {
   /** About the prompt, never its text. */
   promptBytes?: number;
   promptPath?: string;
+  /**
+   * `owner/name` for the repo this was for, lower-cased, or `unknown` for a
+   * session started against an arbitrary directory.
+   *
+   * NOT DERIVABLE FROM `dir`, which is why it is here: this repo is `reading2`
+   * on the laptop and `spideryarn2` on the box, and a second checkout of one
+   * repo would have a third path. Validated on the way in and on the way out
+   * against the same rule the tmux listing uses — `isRepoValue` — so the two
+   * records of "which repo" cannot drift apart.
+   */
+  repo?: string;
+  /** The setup attempt this line is about. `cmd: "setup"` only. */
+  attempt?: string;
+  /** What became of it. `cmd: "setup"` only. */
+  outcome?: SetupOutcome;
 };
 
 /**
@@ -138,19 +192,99 @@ export const LOG_FILE = "gjd-remote.ndjson";
 export const logPath = (env: NodeJS.ProcessEnv, home: string) => path.join(logDir(env, home), LOG_FILE);
 
 /**
+ * WHAT A LINE MAY CARRY, listed rather than inherited — the enforcement behind
+ * the "no prompt, no argv" claim above.
+ *
+ * The first version built the line by spreading the whole record, and GPT Sol
+ * (Stage 1, finding 11) pointed out that the claim was then a comment rather
+ * than a rule: `LogRecord` forbids a `prompt` field only in a fresh object
+ * literal, and `appendLog` in scripts/gjd-remote.ts spreads a caller's object
+ * into it. Anything a caller happened to be carrying — the prompt, the argv, a
+ * token — rode straight through `JSON.stringify` into a 0600 file nobody reads
+ * until months later. So the fields are named here and everything else is
+ * dropped, which costs one array and makes the boundary real.
+ *
+ * The two shapes are genuinely different records. A `setup` line is not a
+ * launch: it has no session and no wait, and it has three fields a launch never
+ * has. `kill`, `ls` and the rest share the launch shape because they are about
+ * a session too.
+ */
+const LAUNCH_FIELDS = [
+  "v",
+  "t",
+  "ms",
+  "cmd",
+  "name",
+  "id",
+  "dir",
+  "waitSeconds",
+  "waitUntilMs",
+  "host",
+  "promptBytes",
+  "promptPath",
+  "repo",
+] as const satisfies readonly (keyof LogRecord)[];
+
+const SETUP_FIELDS = ["v", "t", "ms", "cmd", "dir", "host", "repo", "attempt", "outcome"] as const satisfies readonly (
+  | keyof LogRecord
+)[];
+
+/** The three that are description rather than identity, so they are trimmed
+ *  rather than refused — see MAX_FIELD. */
+const CLIPPED_FIELDS: ReadonlySet<keyof LogRecord> = new Set(["name", "dir", "promptPath"]);
+
+function serialise(rec: LogRecord, fields: readonly (keyof LogRecord)[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const field of fields) {
+    const value = rec[field];
+    // Undefined fields are dropped rather than written as null, so a reader can
+    // tell "there was no wait" from "the wait was recorded as nothing".
+    if (value === undefined) continue;
+    out[field] = typeof value === "string" && CLIPPED_FIELDS.has(field) ? clip(value) : value;
+  }
+  return out;
+}
+
+/**
  * Build the line. One JSON object, one `\n`, no pretty-printing.
  *
- * Undefined fields are dropped rather than written as null, so a reader can
- * tell "there was no wait" from "the wait was recorded as nothing".
+ * Only the fields named above are written, whatever the object handed in
+ * happens to hold.
  */
 export function formatLine(rec: LogRecord): string {
-  const clipped: LogRecord = {
-    ...rec,
-    ...(rec.name === undefined ? {} : { name: clip(rec.name) }),
-    ...(rec.dir === undefined ? {} : { dir: clip(rec.dir) }),
-    ...(rec.promptPath === undefined ? {} : { promptPath: clip(rec.promptPath) }),
-  };
-  const line = `${JSON.stringify(clipped)}\n`;
+  // THROWN, NOT CLIPPED. The three fields below are identity rather than
+  // description: something will group by them later, and this file is
+  // append-only, so there is no pass afterwards in which a malformed value gets
+  // fixed. A caller that cannot say which repo it is launching for should pass
+  // nothing, which reads as "not recorded", rather than something that reads as
+  // a repo and is not one.
+  if (rec.repo !== undefined && !isRepoValue(rec.repo)) {
+    throw new Error(`log: repo '${rec.repo}' is not an owner/name slug (nor 'unknown')`);
+  }
+  if (rec.attempt !== undefined && !ATTEMPT_ID.test(rec.attempt)) {
+    throw new Error(`log: attempt '${rec.attempt}' is not an attempt id`);
+  }
+  if (rec.outcome !== undefined && !SETUP_OUTCOMES.includes(rec.outcome)) {
+    throw new Error(`log: outcome '${rec.outcome}' is not one of ${SETUP_OUTCOMES.join(", ")}`);
+  }
+  // The discriminator this type cannot express: `cmd` is a free string, so the
+  // rule that these two belong to a setup line is checked here instead. An
+  // outcome on a launch line is a record two readers would disagree about.
+  if ((rec.attempt !== undefined || rec.outcome !== undefined) && rec.cmd !== "setup") {
+    throw new Error(`log: attempt and outcome belong to a setup line, not to '${rec.cmd}'`);
+  }
+  // And the other direction. A setup line with no outcome would be read as an
+  // attempt still running; one with no attempt id cannot be joined to the box's
+  // status file at all; one with no repo says nothing about which repo was set
+  // up. All three are worse than refusing to write the line, because the reader
+  // months later cannot tell an incomplete record from a true one.
+  if (rec.cmd === "setup") {
+    if (rec.id !== undefined) throw new Error("log: a setup line is not a launch, so it carries no session id");
+    for (const field of ["repo", "attempt", "outcome"] as const) {
+      if (rec[field] === undefined) throw new Error(`log: a setup line needs ${field}`);
+    }
+  }
+  const line = `${JSON.stringify(serialise(rec, rec.cmd === "setup" ? SETUP_FIELDS : LAUNCH_FIELDS))}\n`;
   const size = Buffer.byteLength(line, "utf8");
   if (size > MAX_LINE_BYTES) {
     // Unreachable with the caps above, and it throws rather than writing
@@ -194,11 +328,15 @@ export function parseLine(line: string): LogRecord | null {
   const num = (k: string): number | undefined =>
     typeof o[k] === "number" && Number.isFinite(o[k]) ? (o[k] as number) : undefined;
 
+  const identity = readIdentity(o);
+  if (identity === null) return null;
+
   return {
     v: o.v,
     t: o.t,
     ms: o.ms,
     cmd: o.cmd,
+    ...identity,
     ...(str("name") === undefined ? {} : { name: str("name") as string }),
     ...(str("id") === undefined ? {} : { id: str("id") as string }),
     ...(str("dir") === undefined ? {} : { dir: str("dir") as string }),
@@ -207,6 +345,43 @@ export function parseLine(line: string): LogRecord | null {
     ...(num("promptBytes") === undefined ? {} : { promptBytes: num("promptBytes") as number }),
     ...(str("host") === undefined ? {} : { host: str("host") as string }),
     ...(str("promptPath") === undefined ? {} : { promptPath: str("promptPath") as string }),
+  };
+}
+
+/**
+ * The three fields that say WHICH REPO and WHICH ATTEMPT, or null if any of
+ * them is not what it claims to be.
+ *
+ * A FIELD DROPPED IS A CLAIM MADE, which is why these are not read the way
+ * `waitSeconds` is. Dropping a malformed `waitSeconds` keeps a record that
+ * still says a launch happened, and that is true. Dropping a malformed `repo`
+ * produces a record that reads as a launch from before repos were recorded —
+ * a different statement, and a false one. So the line is unreadable instead,
+ * where `parseLog` counts it out loud.
+ *
+ * The last clause is the discriminator `LogRecord` cannot express: `cmd` is a
+ * free string, so "these two belong to a setup line" is checked rather than
+ * typed, at both seams.
+ */
+function readIdentity(o: Record<string, unknown>): Pick<LogRecord, "repo" | "attempt" | "outcome"> | null {
+  const repo = typeof o.repo === "string" && isRepoValue(o.repo) ? o.repo : undefined;
+  if (o.repo !== undefined && repo === undefined) return null;
+  const attempt = typeof o.attempt === "string" && ATTEMPT_ID.test(o.attempt) ? o.attempt : undefined;
+  if (o.attempt !== undefined && attempt === undefined) return null;
+  const outcome = SETUP_OUTCOMES.find((x) => x === o.outcome);
+  if (o.outcome !== undefined && outcome === undefined) return null;
+  if ((attempt !== undefined || outcome !== undefined) && o.cmd !== "setup") return null;
+  // The same shape rule `formatLine` enforces on the way out, checked again on
+  // the way in — a hand-edited file, or a line from a gjd-remote that predates
+  // the rule, must not read as a complete setup record when it is not one.
+  if (o.cmd === "setup") {
+    if (o.id !== undefined) return null;
+    if (repo === undefined || attempt === undefined || outcome === undefined) return null;
+  }
+  return {
+    ...(repo === undefined ? {} : { repo }),
+    ...(attempt === undefined ? {} : { attempt }),
+    ...(outcome === undefined ? {} : { outcome }),
   };
 }
 

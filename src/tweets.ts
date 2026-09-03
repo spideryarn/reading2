@@ -248,7 +248,7 @@ ${PROFILE_RULES}`;
  */
 /* Exported for tests/profile-prompts.test.ts, which pins the two things a
    profile must do here: arrive when there is one, and leave no trace when
-   there is not. Same reason src/summarise.ts exports its own. */
+   there is not. Same reason src/glossary.ts and src/quotes.ts export theirs. */
 export function renderPrompt(opts: {
   meta: Meta | null;
   tree: Tree;

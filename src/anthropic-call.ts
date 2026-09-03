@@ -1,9 +1,11 @@
 /**
  * Turn a failure from the Anthropic SDK's own request into a safe,
  * reader-facing `Error` — the request-failure analogue of `providerRefused`
- * in src/openrouter-stream.ts, for the six pipeline stages that talk to the
- * SDK directly (arc, labels, summarise, hierarchy, glossary, tweets) rather than
- * through OpenRouter.
+ * in src/openrouter-stream.ts, for the ten pipeline stages that talk to the
+ * SDK directly (arc, glossary, hierarchy, ideas, labels, quiz, quotes, sketch,
+ * timeline, tweets) rather than through OpenRouter. The list is whatever
+ * `grep -rn anthropicCallFailed src/` says: it read "six" and named a deleted
+ * `summarise` until 2026-09-03, and the counts below reason from it.
  *
  * ## Why this exists
  *
@@ -15,12 +17,12 @@
  * (`node_modules/@anthropic-ai/sdk/core/error.js`, `APIError.makeMessage`):
  * **`Error.message` on a thrown `APIError` is built directly from the
  * upstream response body** — `${status} ${error.message}`, or the whole body
- * JSON-stringified if there is no `.message` on it. Nothing in these six
+ * JSON-stringified if there is no `.message` on it. Nothing in these ten
  * stages caught that. It propagated to src/jobs.ts, which both logs it
  * (`errorFields` keeps `message` and `stack` on the thrown value — see
  * docs/project/logging.md) and stores it on the job, and
  * src/web/AddArticle.tsx renders `step.error` straight onto the screen. What
- * every one of these six requests carries is the whole article, so an
+ * every one of these ten requests carries is the whole article, so an
  * upstream that echoes any of it back in an error body has a direct line to
  * both the log and the reader.
  *

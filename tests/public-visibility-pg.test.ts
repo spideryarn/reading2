@@ -1385,8 +1385,10 @@ when("sharing one article", { timeout: 60_000 }, () => {
    * has, and GPT Sol's finding 2 caught it the same day: the log exists for the
    * complaint that arrives *after* a takedown, so cascade erased the record at
    * exactly the moment somebody would need it. The comment defending the cascade
-   * also claimed nothing deletes an article, which was false —
-   * `src/store/import.ts` deletes orphans.
+   * also claimed nothing deletes an article, which was false at the time —
+   * `src/store/import.ts` deleted orphans, until it went on 2026-09-01. Nothing
+   * outside tests deletes one today, which makes this case the only place the
+   * destructive path is exercised at all.
    *
    * Deleted for real here rather than archived, because archiving is not the
    * case: the shelf's `archived_at` leaves the row in place and nothing about

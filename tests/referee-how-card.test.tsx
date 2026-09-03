@@ -94,7 +94,7 @@ function useStore(store: Storage | undefined): void {
 /**
  * `RefereeBand`'s three lines, and nothing else.
  *
- * The band renders the button in `.gloss-head` and the card in `.ref-panel`,
+ * The band renders the button in `.band-head` and the card in `.ref-panel`,
  * which is two places in a component this file cannot mount; what is testable
  * about them is that they are driven by one hook, which is what this is.
  */
@@ -228,7 +228,7 @@ describe("a browser that will not keep the bit", () => {
 });
 
 describe("where the band puts it", () => {
-  /* **`RefereeBand`'s own body**, not the whole file: `gloss-head` is every
+  /* **`RefereeBand`'s own body**, not the whole file: `band-head` is every
      band's title row and there are a dozen of them above this one. */
   const whole = readFileSync("src/web/App.tsx", "utf8");
   const app = whole.slice(whole.indexOf("function RefereeBand("));
@@ -256,7 +256,7 @@ describe("where the band puts it", () => {
 
   it("puts the reopen button in the mode header", () => {
     const head = app.slice(
-      app.indexOf('className="gloss-head"'),
+      app.indexOf('className="band-head"'),
       app.indexOf('className="ref-brief"'),
     );
     expect(head.includes("RefereeHowButton"), "there is no way back to the card").toBe(true);

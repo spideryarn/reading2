@@ -19,7 +19,7 @@ serves the client *and* the API as Vite middleware — and one Vercel project fe
 | `npm install`, then `npm run dev` | Vite + the API middleware, <http://localhost:5273>. **The port has to be 5273** — the auth allow-list names it |
 | `npm run dev:pretty` | the same, through `pino-pretty`, for a human |
 | `npm test` · `npm run typecheck` · `npm run lint` | when you finish a change, not just before you commit |
-| `npm run build` | production bundle into `dist/` |
+| `npm run build` | production bundle — the client into `dist/`, **then** the API into `api-dist/`. The same command Vercel runs; `build:client` and `build:api` are the halves |
 | `npm run setup` | **a fresh checkout, in one command** — Docker up, migrations, accounts seeded, a shelf you can open. A new box wants this |
 | `npm run db:start` · `db:status` · `db:stop` · `db:reset` | the local Supabase stack in Docker. Engine first: `open -a OrbStack` |
 | `npm run db:migrate` · `db:generate` | apply `drizzle/`; regenerate after a schema edit. **Migrate after every reset** |

@@ -1131,10 +1131,13 @@ describe("the source URL a stranger receives", () => {
    * **A host a stranger could not have reached anyway.**
    *
    * Stage 1 refuses to *fetch* a private destination and resolves the name to do
-   * it (`guardAddress`, src/fetch.ts) — but `src/store/import.ts` writes a
-   * revision without going through stage 1, so a `final_url` of
-   * `http://10.0.0.5/token` can exist in the database and this boundary is what
-   * would hand it out. Raised by GPT Sol, 2026-08-30.
+   * it (`guardAddress`, src/fetch.ts). The path that went around stage 1 and put
+   * an unfetched `final_url` in the database was `src/store/import.ts`, and that
+   * file was deleted on 2026-09-01 — so `http://10.0.0.5/token` reaching a row
+   * is no longer a demonstrated path, only an unproven absence. This boundary is
+   * what would hand one out if it did, and it is a pure shape test that costs
+   * nothing. Raised by GPT Sol, 2026-08-30; the rule itself is `publishableHost`
+   * in src/urls.ts.
    *
    * The rule is a shape rule, because a DTO has no DNS: any IP literal, any host
    * with no dot, and the three private suffixes. A public name pointing inward

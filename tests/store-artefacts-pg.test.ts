@@ -8,12 +8,13 @@
  * ## The oracle is written-out fixtures, and the first plan had that wrong
  *
  * The obvious test is *import an article and read it back*. It proves nothing
- * worth having. It would compare the adapter against `src/store/import.ts`,
+ * worth having. It would have compared the adapter against `src/store/import.ts`,
  * so the claim would be "importer-plus-adapter behave consistently" — and the
- * importer is known to be wrong in three ways this adapter must not copy: it
- * stores `extractedHtml: null`, it stamps every inferred step with the same
- * fingerprint where `ideas` hashes blocks *and* tree, and it holds no source
- * reference at all.
+ * importer was known to be wrong in three ways this adapter must not copy: it
+ * stored `extractedHtml: null`, it stamped every inferred step with the same
+ * fingerprint where `ideas` hashes blocks *and* tree, and it held no source
+ * reference at all. (That file was deleted on 2026-09-01, which is the landing
+ * this file was written for; the reason for the oracle outlives it.)
  *
  * So the fixtures below are **column values written by hand**. Every expected
  * result is a literal. A literal cannot agree with a bug in the code it is
@@ -1209,9 +1210,10 @@ when("writing artefacts into a draft", () => {
   });
 
   it("deletes every block when it is handed none", async () => {
-    /* **The decision, and it is the opposite of what the importer does.**
-       `src/store/import.ts` puts its delete inside `if (blocks.length)`, so an
-       empty array leaves the inherited rows in place: the stage returns
+    /* **The decision, and it is the opposite of what the importer did.**
+       `src/store/import.ts` (deleted 2026-09-01) put its delete inside
+       `if (blocks.length)`, so an
+       empty array left the inherited rows in place: the stage returns
        nothing, the old article survives, and the run reports done. Watched red
        by moving this delete back inside the same condition. */
     await withClaim(async (tx, claimed) => {

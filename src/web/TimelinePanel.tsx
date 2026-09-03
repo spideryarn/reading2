@@ -276,7 +276,7 @@ interface Props {
   /**
    * **Owner only, and there is no visitor half.**
    *
-   * `src/web/visitor.ts` names `timeline` in `COSTS`, so a visitor pressing the
+   * `src/web/visitor.ts` gives `timeline` an `owners-only` policy, so a visitor pressing the
    * button gets a boundary they can read rather than this panel. That is stated
    * there rather than left to the fail-closed fall-through — see the comment on
    * the entry. Making it shareable is a follow-up that wants a general answer
@@ -335,8 +335,8 @@ export function TimelinePanel({
 
   return (
     <aside className="mode-band gloss timeline" aria-label="Timeline">
-      <div className="gloss-head">
-        <Clock size={14} className="gloss-head-icon" />
+      <div className="band-head">
+        <Clock size={14} className="band-head-icon" />
         <h2>Timeline</h2>
         {timeline && (
           <span className="gloss-count">

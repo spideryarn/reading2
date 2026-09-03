@@ -38,6 +38,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import type { Job, Timeline, TimelineResponse } from "../types.js";
+import { useOrderedRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
@@ -99,9 +100,16 @@ export function useTimeline(slug: string): UseTimeline {
   const [outdated, setOutdated] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  /**
+   * The read itself — the parse, the 404 branch and the error copy, which are
+   * this mode's own. `current()` after every `await`, before any state is
+   * set: false means this reply is about an article, or an artefact, the hook
+   * has since moved on from. See src/web/useOrderedRead.ts.
+   */
+  const load = useCallback(async (current: () => boolean) => {
     try {
       const res = await apiFetch(`/api/timeline/${encodeURIComponent(slug)}`);
+      if (!current()) return;
       if (res.status === 404) {
         /* The ordinary case, not a fault, and here it is the *commonest* case
            by some distance: most articles have no timeline because nobody has
@@ -114,12 +122,14 @@ export function useTimeline(slug: string): UseTimeline {
         return;
       }
       const loaded = await readJson<TimelineResponse>(res);
+      if (!current()) return;
       setTimeline(loaded.timeline);
       setStale(loaded.stale);
       setOutdated(loaded.outdated);
       setError(null);
       setStatus("ready");
     } catch (err) {
+      if (!current()) return;
       setError((err as Error).message);
       /* **A failed revalidation must not take the list away.** `load` is not
          only the opening read — `onFinished` below calls it again every time a
@@ -132,14 +142,21 @@ export function useTimeline(slug: string): UseTimeline {
     }
   }, [slug]);
 
+  /* **The ordering is not this hook's**: an ordinary `reload` joins the read
+     already in flight, a post-job `refresh` trails it rather than racing it, and
+     only the newest reply may commit. src/web/useOrderedRead.ts, shared with the
+     seven other artefact readers — this one lost that race until 2026-09-02
+     (tests/artefact-read-race.test.tsx). */
+  const { reload, refresh } = useOrderedRead(load);
+
   useEffect(() => {
-    void load();
-  }, [load]);
+    void reload();
+  }, [reload]);
 
   /* The job half — the poll, the running job, and what a refused or dead run
      says to the reader — is src/web/useStepJob.ts, shared with the glossary,
      the summaries and the ideas. */
-  const queue = useStepJob(slug, "timeline", load);
+  const queue = useStepJob(slug, "timeline", refresh);
 
   /* Two verbs, split on `force`. See the interface above, and useIdeas.ts. */
   const ensure = useCallback(async () => {
@@ -149,9 +166,9 @@ export function useTimeline(slug: string): UseTimeline {
     await queue.start({ force: true });
   }, [queue]);
 
-  /* `load` is the way out of a failed read — useAutoRun.ts § A failed read is
-     not an answer. */
-  const auto = useAutoRun(slug, "timeline", status, ensure, load);
+  /* `reload` is the way out of a failed read — useAutoRun.ts § A failed read is
+     not an answer, and useIdeas.ts says why it is `reload` and not `load`. */
+  const auto = useAutoRun(slug, "timeline", status, ensure, reload);
 
   return {
     status,

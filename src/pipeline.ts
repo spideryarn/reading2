@@ -148,7 +148,7 @@ export type { StepName };
  * docs/plans/260825g-tweet-thread-page.md#the-one-real-snag-stated-precisely and
  * docs/project/glossary.md.
  */
-export const STEP_ORDER: StepName[] = [
+export const STEP_ORDER = [
   "fetch",
   "extract",
   "blocks",
@@ -197,7 +197,36 @@ export const STEP_ORDER: StepName[] = [
      is the slowest single model call in the app at 121–194 seconds measured.
      docs/project/diagram.md § Sketch. */
   "sketch",
-];
+] as const satisfies readonly StepName[];
+
+/**
+ * **Every `StepName` that `STEP_ORDER` above does not list.** Always `never`.
+ *
+ * Add a step to `StepName` (src/types.ts) and forget the row above, and this
+ * line goes red naming the step you forgot: `T extends never` is a constraint,
+ * and the default it is checked against stops being `never` the moment a name
+ * is missing. That is the check the plain `StepName[]` annotation could not
+ * make — it widened the tuple away and said only that each entry *is* a step,
+ * never that every step *is* an entry.
+ *
+ * The consequences of a gap are not cosmetic: `orderSteps` sorts by `indexOf`,
+ * so an unlisted step gets `-1` and runs before `fetch`; `isStepName` rejects
+ * it over HTTP; and tests/db-step-constraint.test.ts derives the SQL CHECK from
+ * this array, so a name missing here is a name the database refuses to store.
+ *
+ * **Exported only so it survives.** `noUnusedLocals` deletes an unreferenced
+ * type alias, which would take the check with it; nothing imports this and
+ * nothing should — which is why it is tagged `@public`, so knip does not list
+ * it as an unused export and nobody tidies the check away.
+ *
+ * tests/jobs.test.ts is the runtime half, and it is the one that catches a
+ * duplicate or a wrong order — a union discards both.
+ *
+ * @public
+ */
+export type StepsMissingFromOrder<
+  T extends never = Exclude<StepName, (typeof STEP_ORDER)[number]>,
+> = T;
 
 /**
  * What "add this URL" runs: every step that makes the article readable.
@@ -1001,14 +1030,19 @@ export async function assertProduced(
  *
  * 1. `freeSlug` believes the slug is unclaimed and hands it out.
  * 2. The pipeline runs, and is paid for.
- * 3. `importArticle` (src/store/import.ts) derives its article id from the slug,
- *    so it resolves to the article that was **already there**.
- * 4. Different owner ⇒ the import refuses, at the end, after the money.
- * 5. **Same owner ⇒ it replaces that article and deletes-then-reinserts its
- *    reader state** — comments, chat threads, saved searches, glossary
- *    lookups — and every write reports success.
+ * 3. The job settles, and `publishRevisionIn` (src/store/pg-revisions.ts)
+ *    resolves the slug through `ownedSlug`, so it lands on the article that was
+ *    **already there**.
+ * 4. Different owner ⇒ nothing is found and the publication refuses, at the
+ *    end, after the money.
+ * 5. **Same owner ⇒ that article's current revision is moved to the document
+ *    just fetched**, and every write reports success.
  *
- * Case 5 is silent data loss, and it is what asking the live store fixes.
+ * Case 5 is silent data loss, and it is what asking the live store fixes. Steps
+ * 3–5 were `importArticle` (src/store/import.ts) until that file was deleted on
+ * 2026-09-01, and it was worse: it deleted and reinserted the article's reader
+ * state as well — comments, chat threads, saved searches, glossary lookups. The
+ * importer has gone; the collision it made expensive has not.
  *
  * ## Owner-scoped, deliberately, and what that leaves open
  *
@@ -1719,7 +1753,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * block-**range** pair (`buildArcColumn` in src/web/tree.ts), and an entry
      * whose range matches no node is dropped from the reading view without a
      * word. A rebuilt tree may legitimately choose different boundaries, and
-     * `arc` has no stamp at all, so it stays "done" and simply loses entries.
+     * `arc` never gets the chance to notice: `cascadeForce` (src/jobs.ts) only
+     * names steps **already in the job**, so a job of `steps: ["hierarchy"]` does
+     * not run `arc` at all — and a stamp that is never consulted is no defence.
+     * (This paragraph said *"`arc` has no stamp at all"* when it was written on
+     * 2026-08-27, in `414f3f96`. `arc` gained one two days later, in the
+     * `StepDefinition` below; the hazard survived the fix, for the reason just
+     * given, so the decision here is unchanged and only its reason is.)
      *
      * The tree's own comment in src/web/tree.ts has said as much all along:
      * *"ids are positional and a re-run of `npm run hierarchy` renumbers them"*.
@@ -2749,5 +2789,5 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
  * several layers from the request that caused it. Covered by tests/jobs.test.ts.
  */
 export function isStepName(value: unknown): value is StepName {
-  return typeof value === "string" && (STEP_ORDER as string[]).includes(value);
+  return typeof value === "string" && (STEP_ORDER as readonly string[]).includes(value);
 }

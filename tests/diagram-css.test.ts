@@ -266,13 +266,13 @@ describe("the Force picture's five kinds of line", () => {
 });
 
 describe("the heading row that carries the caveat cannot grow a second line", () => {
-  /* The scatter's caveat is an icon in `.diag-head` rather than a strip of
+  /* The scatter's caveat is an icon in `.band-head` rather than a strip of
      prose above the picture, and the whole case for putting it there is that
      the row costs no vertical space. That case was made three times and was
      wrong twice — `margin-left: auto` right-aligns on whichever line the item
      lands on, and `flex-wrap: nowrap` on a rebuilt `.diag-opts` only changed
      *which* item took the new line. Both were true about the thing they named.
-     The third route is not a flex line at all: `.diag-head h2` is `flex: 1`,
+     The third route is not a flex line at all: `.band-head h2` is `flex: 1`,
      and a flexible item that runs out of room wraps its own text, which makes
      the row taller by exactly as much.
 
@@ -286,10 +286,10 @@ describe("the heading row that carries the caveat cannot grow a second line", ()
      found — the test agreed with the bug because it was reading the sentence
      about the bug. */
   const bare = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
-  const head = /\.diag-head h2\s*\{([\s\S]*?)\}/.exec(bare)?.[1];
+  const head = /\.band-head h2\s*\{([\s\S]*?)\}/.exec(bare)?.[1];
 
   it("declares the four properties that keep the heading on one line", () => {
-    expect(head, "`.diag-head h2` has no rule at all").toBeTruthy();
+    expect(head, "`.band-head h2` has no rule at all").toBeTruthy();
     /* `min-width: 0` is listed first because it is the one whose absence does
        nothing visible: without it the item's automatic minimum is its longest
        word, `text-overflow` never gets to act, and the other three read as
@@ -300,7 +300,7 @@ describe("the heading row that carries the caveat cannot grow a second line", ()
       /text-overflow:\s*ellipsis\b/,
       /white-space:\s*nowrap\b/,
     ]) {
-      expect(head, `\`.diag-head h2\` is missing ${decl.source}`).toMatch(decl);
+      expect(head, `\`.band-head h2\` is missing ${decl.source}`).toMatch(decl);
     }
   });
 

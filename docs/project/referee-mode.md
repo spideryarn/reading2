@@ -119,9 +119,10 @@ which this repo has already paid a rename to get out of once
 ([`src/modes.ts`](../../src/modes.ts) on `toc`/`hierarchy`,
 [260831ak-rename-the-toc-step-to-hierarchy-everywhere.md](../plans/260831ak-rename-the-toc-step-to-hierarchy-everywhere.md)).
 `referee` is also what journals call the person, so it is the plainer word as well as the free one.
-Greg had not seen the name when the plan was written; the button's word is one string in
-`MODE_LABEL` ([`src/title-text.ts`](../../src/title-text.ts)) and one in `MODES_UI`
-([`src/web/Dock.tsx`](../../src/web/Dock.tsx)) if he wants "Reviewer" there instead.
+Greg had not seen the name when the plan was written; the button's word is **one** string in
+`MODE_LABEL` ([`src/title-text.ts`](../../src/title-text.ts)) if he wants "Reviewer" there instead.
+It was three until 2026-09-02 — the dock and the visitor's owners-only sentence each kept their own
+copy — and now everything that names a mode reads that record.
 
 ## The four sub-modes
 

@@ -601,6 +601,27 @@ through `claim`, and it passes its own cap on every call rather than leaning on 
 suite-wide number would make the two cases that are *about* the cap pass for the same reason as the
 forty that are not.
 
+**Its own cap does not make it immune, and the three cases about the cap are not safe.** The count
+is of every `running` row there is, so a real ingest on this laptop fills a slot in whatever number
+the caller passed. Measured 2026-09-02, one dev-server ingest running: three or four of these cases
+red per run — `refuses a claim that would put the machine over its cap`, `frees the running slot
+once a claimant has stopped answering`, and neighbours — all of them `expected 'busy' to be
+'claimed'`, all of them green in the same tree once the ingest finished. **Look for a `running` row
+before believing a claim case.**
+
+**There is a fourth, and no fixture can hide from it: the expiry sweep is unscoped.**
+`advanceJobWith` opens with `store.settleExpired()` — no owner, no slug, the whole table
+([`src/jobs.ts`](../../src/jobs.ts)) — so one dev server mid-ingest settles *any* row that is
+`running` with a lapsed lease, whoever wrote it. A suite whose case is about an expired lease is
+therefore holding a fixture anybody may lawfully take away, and the failure arrives as `expected
+null to be true`: the row is still there, and `attempt_id` and `lease_expires_at` are gone.
+Reproduced on 2026-09-02 by running the sweep from a second connection while
+[`tests/store-jobs-parity.test.ts`](../../tests/store-jobs-parity.test.ts) slept on its own expired
+row, which is what it had been doing for two seconds. The cooperation is to **expire the lease as
+late as possible** — do the waiting first, then write a lease already in the past — which makes the
+window two statements rather than two seconds. Nothing closes it: a lapsed `running` row is exactly
+what the sweep is for.
+
 **The lock and the retry are both needed, and they cover different things.** `takeRunLock` is a
 session advisory lock taken at module load and held to teardown, so it serialises whole *files* —
 which is the only thing that helps when two copies of one file share fixed fixture slugs. But a lock
