@@ -310,12 +310,19 @@ describe("no Postgres store is selected without a guard", () => {
    */
   it("and it really did find the guarded exports", async () => {
     const guarded = await guardedAtExport();
-    /* **Eighteen, written out.** It was two until 2026-09-03 — the two stores
-       from the accident above — while db-errors.ts and docs/project/database.md
-       both said *every* Postgres store was wrapped at its export. The other
-       fifteen were wrapped at the selection in src/store/index.ts instead, so
-       the sentence was true of two and the list said so. It is now true of all
-       of them, and the list is the thing that says which.
+    /* **Written out, not counted** — and deliberately without a total in this
+       sentence, because there was one until 2026-09-03 and it was wrong within
+       a day. It said "eighteen" over an array of twenty-one: `59f01c9d` added
+       two factories and a store and left the prose alone. A number here is a
+       second copy of the array that nothing checks, which is the failure the
+       paragraph below is about, one level up.
+
+       It was two until 2026-09-03 — the two stores from the accident above —
+       while db-errors.ts and docs/project/database.md both said *every*
+       Postgres store was wrapped at its export. The rest were wrapped at the
+       selection in src/store/index.ts instead, so the sentence was true of two
+       and the list said so. It is now true of all of them, and the list is the
+       thing that says which.
 
        Spelt out rather than counted, for the reason the docstring above gives:
        an empty set vouches for nobody, and so does a length. A store that
@@ -367,12 +374,12 @@ describe("no Postgres store is selected without a guard", () => {
    * describing. Everything above stayed green.
    *
    * So this asks the question from the other end: **every `export const pgX`
-   * under `src/store/` is guarded at its export, or is one of two exceptions
+   * under `src/store/` is guarded at its export, or is one of three exceptions
    * that says here why.** Discovery is by shape rather than by list, so a
-   * sixteenth adapter joins the check by being written.
+   * new adapter joins the check by being written.
    */
   it("so every exported Postgres store is guarded at its export, or declared here", async () => {
-    /* The two that are deliberately not, each for a reason in its own file. */
+    /* The three that are deliberately not, each for a reason in its own file. */
     const EXCEPTIONS = new Map([
       [
         "pgCostStore",
