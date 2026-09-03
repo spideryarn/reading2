@@ -58,7 +58,7 @@
  * document position — and tests/quiz.test.ts asserts the case that gets it
  * wrong.
  *
- * ## The quota, and what happens on a short article
+ * ## Both ends, and what happens on a short article
  *
  * A batch is required to use both ends of the band scale, because asking nicely
  * does not work — that is what the spike measured. But "at least three easy and
@@ -66,17 +66,34 @@
  * that only supports four questions, and padding here produces a question about
  * nothing rather than a weak one the reader can skip.
  *
- * **So the quota scales with the batch and is enforced against what survived**:
- * `bandQuota` is `min(3, floor(n / 4))`, which asks three of each end of a full
- * twelve, two of an eight, one of a four, and nothing at all of a batch of
- * three. A full batch that came back all-`medium` is a failed generation and
- * throws; a genuinely short article cannot fail on bands. The count rule is
- * unchanged and is a ceiling rather than a floor: **up to twelve, fewer where
- * the article does not support twelve.**
+ * **So the requirement is presence at each end, enforced against what
+ * survived**: `missingBandEnds` asks for one `easy` and one `hard` from any
+ * batch of `SPREAD_FROM` or more, and nothing at all below that. A batch that
+ * came back all-`medium` is a failed generation and throws; a genuinely short
+ * article cannot fail on bands. The count rule is separate and is a ceiling
+ * rather than a floor: **up to twelve, fewer where the article does not support
+ * twelve.**
  *
- * That was the open decision the plan left for this stage, and it is recorded
- * here rather than in the plan because the arithmetic is the thing a future
- * reader will want to see.
+ * **The prompt asks for more than the gate demands, and that is deliberate.**
+ * It asks for three of each end of a full batch; the gate refuses only a batch
+ * missing an end outright. A target and a floor are different things, and
+ * lowering the prompt's ask to one would make the emergency floor the normal
+ * distribution.
+ *
+ * ### It used to be a proportion, and that was the bug
+ *
+ * Until 2026-09-03 this was `bandQuota` = `min(3, floor(n / 4))`, and a
+ * production build failed after 36 seconds and $0.06 because nine survivors
+ * carrying one `hard` question owed two. The batch satisfied the invariant the
+ * ordering actually needs — it used both ends — and was thrown away anyway.
+ *
+ * The interesting part is not the boundary but the representation. The code's
+ * own error message said the batch "has to carry both ends", which is a floor
+ * of one; the arithmetic demanded a proportion. **A number is what let the
+ * prose and the rule drift apart while both looked right**, so the number is
+ * gone rather than retuned: a helper that answers *which ends are missing*
+ * cannot quietly grow back into a quota while still sounding like a presence
+ * check. docs/plans/260903c-fix-quiz-build-band-spread-failure-and-lost-quiz-answers.md.
  *
  * ## What the stage refuses
  *
@@ -178,13 +195,40 @@ export const MAX_QUESTIONS = 12;
  */
 export const MAX_EVIDENCE = 3;
 
-/** The most of each end of the band scale a batch is ever required to carry. */
-export const BAND_QUOTA_CAP = 3;
+/**
+ * **The smallest batch that has to carry both ends of the band scale.**
+ *
+ * Four, and it is named rather than left to fall out of arithmetic. The rule it
+ * replaced was `min(3, floor(n / 4))`, whose boundary was wherever `floor()`
+ * happened to put it — nobody could see it, and nobody challenged it. This
+ * constant is the same boundary stated on purpose: the old quota first asked
+ * for something at four, and that behaviour is worth keeping.
+ *
+ * Below it, nothing is asked. Demanding a spread from a three-question article
+ * is an instruction to pad, which docs/plans/260831al-review-quiz-sub-mode.md
+ * decided against: a padded question is a question about nothing, which is
+ * worse than a weak one the reader can skip. A short piece gets a short quiz,
+ * and that is a correct answer rather than a failed generation.
+ *
+ * The consequence, stated honestly because the plan's first draft got it wrong:
+ * the rule is monotonic only among batches of four or more. Three `medium`
+ * questions pass and a fourth `medium` fails. That is the price of the
+ * exemption and it is worth paying.
+ */
+export const SPREAD_FROM = 4;
 
 const BANDS: ReadonlySet<string> = new Set<QuizBand>(["easy", "medium", "hard"]);
 
-/** The two ends the quota is about. `medium` is what is left over. */
-const QUOTA_BANDS: readonly QuizBand[] = ["easy", "hard"];
+/**
+ * The two ends a batch has to carry. `medium` is what is left over.
+ *
+ * A type rather than a subset of `QuizBand` by convention, so that
+ * `missingBandEnds` cannot be read as possibly returning `medium` and nothing
+ * downstream has to write a dead branch for a case that cannot arise.
+ */
+export type QuizBandEnd = Extract<QuizBand, "easy" | "hard">;
+
+const SPREAD_ENDS: readonly QuizBandEnd[] = ["easy", "hard"];
 
 /** Where a band sorts. Lower is earlier. */
 const BAND_ORDER: Record<QuizBand, number> = { easy: 0, medium: 1, hard: 2 };
@@ -259,33 +303,54 @@ interface RawEvidence {
 }
 
 /**
- * **How many of each end a batch of this size has to carry.**
+ * **Which ends of the band scale this batch does not reach at all.**
  *
- * `min(3, floor(n / 4))` — three of each end of a full twelve, two of an eight,
- * one of a four, none of a batch of three. See the header for why this scales
- * rather than being a flat three: a flat quota on a short article is an
- * instruction to pad, and the count rule is a ceiling rather than a floor.
+ * Empty is the pass. The rule is presence, not proportion — a batch with one
+ * `easy` and one `hard` among twelve is unbalanced but it still runs from one
+ * end of the scale to the other, which is the only thing `orderQuestions` needs
+ * from it. Below `SPREAD_FROM` nothing is asked; see that constant for why.
+ *
+ * **It returns bands rather than counts on purpose.** The predecessor returned
+ * `{ band, want, have }` and drifted from its own prose within one commit — the
+ * header has the story. There is no number here to tune, so there is no number
+ * to get quietly wrong.
  *
  * Measured against what **survived** validation, not against what the model
- * returned. A batch whose three `easy` questions were all dropped as unanchored
- * is a batch with no easy questions in it, whatever the model intended.
+ * returned. A batch whose only `easy` question was dropped as unanchored is a
+ * batch with no easy questions in it, whatever the model intended.
  */
-export function bandQuota(kept: number): number {
-  return Math.min(BAND_QUOTA_CAP, Math.floor(Math.max(0, kept) / 4));
+export function missingBandEnds(questions: readonly QuizQuestion[]): QuizBandEnd[] {
+  if (questions.length < SPREAD_FROM) return [];
+  return SPREAD_ENDS.filter((band) => !questions.some((q) => q.band === band));
 }
 
-/** Which ends of the scale this batch is short of, and by how much. */
-export function quotaShortfall(
-  questions: readonly QuizQuestion[],
-): { band: QuizBand; want: number; have: number }[] {
-  const want = bandQuota(questions.length);
-  if (want === 0) return [];
-  const out: { band: QuizBand; want: number; have: number }[] = [];
-  for (const band of QUOTA_BANDS) {
-    const have = questions.filter((q) => q.band === band).length;
-    if (have < want) out.push({ band, want, have });
-  }
-  return out;
+/**
+ * The same gap, said to somebody who has never heard of a band — and `null`
+ * when there is no gap.
+ *
+ * `easy` / `medium` / `hard` are the model's vocabulary and ours; the panel
+ * never puts any of the three on the screen (src/web/QuizPanel.tsx orders by
+ * band and shows neither it nor the value). So a failure that quoted the word
+ * `"hard"` at a reader would be handing them a token with nothing behind it,
+ * which is the same mistake as quoting a file path at them —
+ * docs/project/copy.md rule 1. The words `easy` and `hard` still appear,
+ * unquoted and doing ordinary work in an English sentence; what does not is the
+ * band as a *name*.
+ *
+ * **Total, and `null` is why.** An earlier draft took the missing ends and
+ * assumed there was at least one, which is true of every call it has but is not
+ * true of every call it could have: `missingEndsInReaderWords([])` said there
+ * was no hard question. Returning `null` for the passing case makes the caller
+ * handle it, so the branch cannot be forgotten and the guard is not written
+ * twice in two places that could disagree.
+ */
+function missingEndsInReaderWords(missing: readonly QuizBandEnd[]): string | null {
+  const noEasy = missing.includes("easy");
+  const noHard = missing.includes("hard");
+  if (noEasy && noHard) return "they all came out at the same middling level";
+  if (noEasy) return "there is no easy one among them to start on";
+  if (noHard) return "there is no hard one among them to finish on";
+  return null;
 }
 
 /**
@@ -424,7 +489,26 @@ export function toQuestions(
     });
     /* **The cap is enforced here, not merely requested in the prompt.** Nothing
        makes the model obey a number, and everything else in this file believes
-       as little as possible of what came back. */
+       as little as possible of what came back.
+
+       **It can manufacture a spread failure, and that is a known deferral.**
+       The cap keeps the *first* twelve survivors in the model's own order,
+       which is not the band order the reader eventually meets. So thirteen
+       valid questions whose only `hard` one came back thirteenth lose it here,
+       and `buildQuiz`'s spread gate then refuses the batch for missing an end
+       that the model did supply — GPT Sol reproduced exactly that
+       (docs/plans/260903c-stage1-review-sol.md § 3). Over-cap is meant to
+       degrade, not to fail.
+
+       Deferred rather than fixed, 2026-09-03. It needs the model to overshoot a
+       cap the prompt already asks it to respect, and a fix is not a smaller
+       edit than the bug: moving the gate above this loop would pass a batch
+       whose stored twelve still lack an end, so the cap would have to *choose*
+       its twelve — keeping one of each end and dropping the least central
+       middle — which is a selection rule and a new set of decisions about what
+       to sacrifice. "Simplest version first": it waits for something to show it
+       is needed. What would show it is `dropped.overCap` being non-zero on a
+       run that also failed on bands. */
     if (out.length === MAX_QUESTIONS) {
       dropped.overCap += Math.max(0, raws.length - i - 1);
       break;
@@ -525,16 +609,42 @@ export function buildQuiz(
 
   /* **Structural, because a nagging sentence in the prompt could not achieve
      it.** The spike asked for a spread twice and got 2–4 both times. See
-     `bandQuota` for why the requirement scales with what survived rather than
-     being a flat three. */
-  const short = quotaShortfall(fresh);
-  if (short.length > 0) {
+     `missingBandEnds` for why the requirement is presence at each end rather
+     than a proportion of what survived.
+
+     **This sentence is read by the reader, not by us.** It travels unchanged
+     from here to the screen — src/jobs.ts copies `Error.message` onto
+     `job.error`, and src/web/JobProgress.tsx renders that in red under the run
+     button — so it follows docs/project/copy.md: no file references, no section
+     names, no band as a name, and nothing addressed to whoever tunes the
+     prompt.
+
+     **`fresh.length` is survivors, and the sentence has to say so.** A draft of
+     this said the service "wrote" that number, which is false the moment
+     `toQuestions` drops anything: twelve back with seven unanchored reported
+     that the service wrote five. "Survived checking against it" is both true
+     and the panel's own phrase for the same event
+     (src/web/QuizPanel.tsx § none survived), so a reader who meets both gets
+     one vocabulary. Likewise "cover the full range" rather than "build up from
+     easier to harder": easy-plus-medium with no hard *does* build up, it just
+     stops short. Both were GPT Sol's, reproduced rather than argued.
+
+     Stage 2 of
+     docs/plans/260903c-fix-quiz-build-band-spread-failure-and-lost-quiz-answers.md
+     splits that seam, after which this becomes a `ReaderFacingFailure` with
+     `kind: "retry"` and a bracketed code — which is what copy.md asks for and
+     what this cannot have while it is also `Error.message`. Until then one
+     string has to serve both, and the reader wins the tie. The classification
+     is not wrong meanwhile, only implicit: an uncoded message gives
+     `failureKindOf` undefined, and undefined stays retryable on purpose
+     (src/job-failure.ts). */
+  const missing = missingBandEnds(fresh);
+  const gap = missingEndsInReaderWords(missing);
+  if (gap !== null) {
     throw new Error(
-      `The batch does not use both ends of the band scale, so the reader would meet ${fresh.length} ` +
-        "questions in an order that means nothing. " +
-        short.map((s) => `wanted ${s.want} "${s.band}", got ${s.have}`).join("; ") +
-        ". A batch of this size has to carry both ends — src/quiz.ts § bandQuota. " +
-        "Run it again; if it keeps landing here, the prompt's spread rule is the thing to change.",
+      `Of the questions written for this article, ${fresh.length} survived checking against it — ` +
+        `but ${gap}, so they would not cover the full range from easier to harder. Writing the ` +
+        "questions again usually gets a better spread.",
     );
   }
 
@@ -601,6 +711,32 @@ export interface QuizRun {
  * named rather than gestured at. Several rules here are the fix for something
  * the spike actually produced on `data/noema-mythology-of-conscious-ai`, and
  * those are the ones tests/quiz.test.ts pins by name.
+ *
+ * **The 2026-09-03 edit to THE SPREAD IS NOT OPTIONAL deleted a sentence and
+ * added nothing**, and both halves of that are deliberate.
+ *
+ * What went was *"is thrown away whole and the article is asked again"*. The
+ * second clause was simply false — nothing retries, at any layer — and the
+ * first became false the same day, when the gate stopped refusing a full batch
+ * for having two of an end instead of three. A prompt that describes our
+ * machinery is a prompt that goes stale when the machinery moves, and this one
+ * did, within a day of being written.
+ *
+ * **The gate's actual floor is not stated here on purpose.** GPT Sol's
+ * argument, which I accept: "three of each" and "one of each end is enough to
+ * pass" are two definitions of *not optional* sitting in one paragraph, and
+ * publishing the lower one invites the model to aim at it. The prompt states
+ * the target; `missingBandEnds` enforces the floor; the reader is who the
+ * difference is for, and the model cannot see it either way.
+ *
+ * **No `PROMPT_VERSION` bump**, recorded because it is the kind of call that
+ * otherwise gets made silently. The contract above is "changes what a
+ * *question* is", and the questions asked for — the count, the bands, the
+ * distribution — did not move; only a false claim about failure handling went.
+ * Bumping would mark every existing quiz `outdated`, which does not rebuild
+ * anything on its own but does put a "Write them again" button in front of
+ * every reader who has one (src/web/QuizPanel.tsx), inviting a paid rebuild
+ * apiece for a wording fix.
  */
 export const QUIZ_SYSTEM = `You are setting short-answer questions on an article, for the person who has
 just read it.
@@ -729,8 +865,7 @@ Not how clever the reader is. How the answer is got to:
 
 THE SPREAD IS NOT OPTIONAL
 
-A full batch must contain at least three "easy" and at least three "hard". A
-batch that does not is thrown away whole and the article is asked again, so this
+A full batch must contain at least three "easy" and at least three "hard". This
 is not a target to aim near — it is a condition.
 
 It is here because it does not happen by itself. Asked politely for a spread, a

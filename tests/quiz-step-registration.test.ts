@@ -118,11 +118,11 @@ function ctxFor(): StepContext {
  * What the stubbed model answers: **four questions**, each anchored to a real
  * block with a real quote, one of them `easy` and one `hard`.
  *
- * Four rather than one, and the bands rather than whatever: `bandQuota` is
- * `min(3, floor(kept / 4))`, so a batch of four is required to carry one of
- * each end and `buildQuiz` throws otherwise. Reaching that requirement here
- * rather than dodging it is deliberate — the artefact this file stamps is one a
- * real run could have produced.
+ * Four rather than one, and the bands rather than whatever: `SPREAD_FROM` is
+ * four, so a batch of four is required to carry one of each end and `buildQuiz`
+ * throws otherwise. Reaching that requirement here rather than dodging it is
+ * deliberate — the artefact this file stamps is one a real run could have
+ * produced.
  */
 async function script(): Promise<void> {
   const article = await readArticle(SLUG, store);
