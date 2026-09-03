@@ -169,6 +169,9 @@ export const PATHS: {
   sketch: {
     sketch: (at) => path.join(at.dir, "sketch.json"),
   },
+  illustrated: {
+    illustrated: (at) => path.join(at.dir, "illustrated.json"),
+  },
 };
 
 
@@ -261,6 +264,12 @@ const DECODERS: Record<ArtifactKind, Decoder> = {
      it is well under the others because a picture that needs a megabyte of
      geometry is not a picture anybody can read. */
   sketch: { maxBytes: 4 * MiB, decode: json("sketch") },
+  /* Four plates, each a composition of at most 8,000 characters and up to
+     fourteen vignettes — the caps are in src/illustrated-plate.ts and multiply
+     out to well under a megabyte. **The pictures are not in here**: a plate
+     holds a hash and its dimensions, and the bytes are objects in the blob
+     store. If this ever needs raising, that is the thing to check first. */
+  illustrated: { maxBytes: 4 * MiB, decode: json("illustrated") },
   /* Far smaller than a glossary in practice — three to ten ideas rather than a
      hundred terms — but the same ceiling, because the cap is a guard against a
      corrupt or hostile file rather than a size estimate. */

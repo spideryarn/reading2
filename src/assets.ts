@@ -287,6 +287,102 @@ export function matchesMagic(bytes: Uint8Array, magic: readonly (number | null)[
 }
 
 /* ------------------------------------------------------------------ *
+ * How big the picture is
+ * ------------------------------------------------------------------ */
+
+/**
+ * **What a picture says its own size is, read out of its header** — or `null`
+ * when the bytes do not say, which is *we do not know* rather than *zero*.
+ *
+ * Hand-written header reads, no library and no native dependency, which is the
+ * choice `SIGNATURES` above already made and gives its reasons for: `image-size`
+ * has two unpatched advisories against `<= 2.0.2` and an archived repository,
+ * and `@napi-rs/canvas` would decode the whole picture — width × height × 4
+ * bytes — to answer a question the first few dozen bytes already answer.
+ *
+ * Tested against the real plates in `evals/results/illustrated-2026-09-03b/`,
+ * which is the only way to know a marker walk is right.
+ *
+ * This lives here, beside `sniffImage`, because there are now two callers:
+ * `readPlate` in src/ai-call.ts, whose private `pngDimensions` this replaces at
+ * its own invitation — *"if a second ever wants it, that is where it should
+ * move"* — and `storePlateImage` in src/illustrated-image.ts, which needs the
+ * numbers for the artefact rather than for a bound.
+ */
+export function imageDimensions(bytes: Uint8Array): { width: number; height: number } | null {
+  const sniffed = sniffImage(bytes);
+  if (!sniffed) return null;
+  if (sniffed.ext === "png") return pngDimensions(bytes);
+  if (sniffed.ext === "jpeg") return jpegDimensions(bytes);
+  return null;
+}
+
+/**
+ * A PNG's stated dimensions.
+ *
+ * IHDR is the first chunk and its two big-endian `uint32`s sit at a fixed
+ * offset, so this is a read rather than a parse — no loop, nothing to run away
+ * with.
+ */
+function pngDimensions(bytes: Uint8Array): { width: number; height: number } | null {
+  /* 8 signature bytes + 4 length + 4 type + 8 of IHDR. */
+  if (bytes.length < 24) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return { width: view.getUint32(16), height: view.getUint32(20) };
+}
+
+/**
+ * A JPEG's dimensions, from the first Start-Of-Frame marker.
+ *
+ * Unlike PNG this is a **walk**, because a JPEG's SOF sits after however many
+ * APPn, DQT and COM segments the encoder felt like emitting — 20 bytes into the
+ * plates OpenRouter returns, 600-odd into one carrying an ICC profile. Three
+ * things make the walk safe rather than a place to run away with:
+ *
+ *  - every step moves forward by at least one byte, and the loop is bounded by
+ *    the buffer's own length;
+ *  - a segment length under 2 is refused rather than treated as a delta, or a
+ *    stream of `FF C0 00 00` would advance by nothing forever;
+ *  - anything it cannot follow returns `null`, which the caller reads as *we do
+ *    not know*.
+ *
+ * `0xFF` is also the fill byte, so a run of them between segments is skipped
+ * rather than parsed. `0xD0`–`0xD9` (restart markers, SOI, EOI) and `0x01` are
+ * standalone and carry no length. `0xC4`, `0xC8` and `0xCC` sit inside the
+ * `C0`–`CF` range and are *not* frame headers — DHT, JPG and DAC — which is the
+ * one thing a naive `>= 0xC0 && <= 0xCF` test gets wrong, and it gets it wrong
+ * by reading a Huffman table's first bytes as a picture's size.
+ */
+function jpegDimensions(bytes: Uint8Array): { width: number; height: number } | null {
+  let at = 2; // past SOI, which `sniffImage` has already vouched for
+  while (at + 3 < bytes.length) {
+    if (bytes[at] !== 0xff) return null;
+    let marker = bytes[at + 1] as number;
+    /* Fill bytes: any number of extra `FF`s may precede the marker itself. */
+    while (marker === 0xff && at + 2 < bytes.length) {
+      at += 1;
+      marker = bytes[at + 1] as number;
+    }
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd9)) {
+      at += 2;
+      continue;
+    }
+    const length = ((bytes[at + 2] as number) << 8) | (bytes[at + 3] as number);
+    if (length < 2) return null;
+    const isFrame = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+    if (isFrame) {
+      /* marker(2) + length(2) + precision(1) + height(2) + width(2) */
+      if (at + 9 > bytes.length) return null;
+      const height = ((bytes[at + 5] as number) << 8) | (bytes[at + 6] as number);
+      const width = ((bytes[at + 7] as number) << 8) | (bytes[at + 8] as number);
+      return { width, height };
+    }
+    at += 2 + length;
+  }
+  return null;
+}
+
+/* ------------------------------------------------------------------ *
  * Looking one up
  * ------------------------------------------------------------------ */
 

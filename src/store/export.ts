@@ -442,6 +442,8 @@ export async function exportArticle(
   if (revision.timeline) await put("article_revisions", "timeline.json", revision.timeline);
   if (revision.quiz) await put("article_revisions", "quiz.json", revision.quiz);
   if (revision.sketch) await put("article_revisions", "sketch.json", revision.sketch);
+  if (revision.illustrated)
+    await put("article_revisions", "illustrated.json", revision.illustrated);
   if (revision.labels) await put("article_revisions", "labels.json", revision.labels);
 
   written.push(...(await writeRawDocument(dir, slug, revision, sources)));

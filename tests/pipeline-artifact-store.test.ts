@@ -45,6 +45,11 @@ import {
   PROMPT_VERSION as SKETCH_VERSION,
 } from "../src/sketch.js";
 import {
+  inputFingerprint as illustratedFingerprint,
+  PROMPT_VERSION as ILLUSTRATED_VERSION,
+} from "../src/illustrated.js";
+import type { Sketch } from "../src/sketch-scene.js";
+import {
   inputFingerprint as timelineFingerprint,
   PROMPT_VERSION as TIMELINE_VERSION,
 } from "../src/timeline.js";
@@ -409,19 +414,59 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });
-  await writeJson(pathFor(at, "sketch", "sketch"), {
+  await writeJson(pathFor(at, "sketch", "sketch"), SKETCH);
+  /* **The one artefact here whose fingerprint is not the article's**, and the
+     fixture has to say so or it says nothing. `illustrated` hashes the *Sketch*
+     — src/illustrated.ts § `inputFingerprint` — so `SKETCH` above is written
+     first and this is stamped against exactly those bytes. `profileHash` is
+     `null` because it is INHERITED from that Sketch, which is `null` too; a
+     fixture that took the context's profile instead would report the step
+     not-done however complete it was.
+
+     `plates` must be non-empty, because `SHAPE.illustrated` in
+     src/store/artifacts.ts refuses a set of pictures with no pictures in it —
+     the same rule `quotes`, `quiz` and `sketch` meet above. The plate carries
+     no `image`: a plate whose call failed is still a plate, and the store must
+     accept the artefact a partly-failed run writes. */
+  await writeJson(pathFor(at, "illustrated", "illustrated"), {
     generator: CAPABLE_MODEL,
+    illustrator: "openai/gpt-image-2",
     slug: SLUG,
-    sourceHash: SKETCH_SOURCE_HASH,
+    sourceHash: illustratedFingerprint(SKETCH),
     profileHash: null,
-    version: SKETCH_VERSION,
-    title: "A picture",
-    caption: "What it claims.",
-    scenes: [{ id: "overview", title: "Overview", height: 400, items: [] }],
+    version: ILLUSTRATED_VERSION,
+    style: "An illuminated page.",
+    plates: [
+      {
+        sceneId: "overview",
+        title: "Overview",
+        prompt: "One vellum page, top to bottom.",
+        vignettes: [],
+        failed: "the images endpoint answered with no picture in it",
+      },
+    ],
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });
 }
+
+/**
+ * The Sketch this fixture writes — a `const` rather than an object literal at
+ * the call site, because the illustration above is stamped against **these
+ * bytes** and a second copy would drift from them silently.
+ */
+const SKETCH = {
+  generator: CAPABLE_MODEL,
+  slug: SLUG,
+  sourceHash: SKETCH_SOURCE_HASH,
+  profileHash: null,
+  version: SKETCH_VERSION,
+  title: "A picture",
+  caption: "What it claims.",
+  scenes: [{ id: "overview", title: "Overview", height: 400, items: [] }],
+  generatedAt: new Date().toISOString(),
+  elapsedMs: 1,
+} as unknown as Sketch;
 
 async function writeJson(file: string, value: unknown): Promise<void> {
   await writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
