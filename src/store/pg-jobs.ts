@@ -62,6 +62,7 @@ import { and, desc, eq, inArray, isNull, lte, or, type SQL, sql } from "drizzle-
 import { getDb } from "../db/client.js";
 import { guardDbStore, lockUnavailable, violatesConstraint } from "./db-errors.js";
 import { leaseIsOver, liveAttempt } from "./job-fence.js";
+import { releaseReservations, settleReservation } from "./pg-billing.js";
 import { jobs, queueState } from "../db/schema.js";
 import { INTERRUPTED } from "../messages.js";
 import type { FailureKind } from "../messages.js";
@@ -90,15 +91,26 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
  * artefact *write*, and the difference is worth saying. An artefact write is
  * several statements that must land together, so a default executor there would
  * make forgetting the caller's transaction both compile and succeed. A job
- * transition is one fenced `UPDATE`: it is atomic on its own, which is why
- * `rawPgJobStore` may keep passing the pool. It only needs a transaction when
- * something *else* — the artefacts and the publication — has to land with it.
+ * transition is **one fenced `UPDATE` and nothing else only while it does not
+ * end the job**, and every caller in this file that can end one now opens a
+ * transaction. What is left on the bare pool is `noteProgress`, whose statement
+ * really is the whole operation.
  *
- * **`claim` stopped being one of them on 2026-08-30.** It now opens a
- * transaction of its own, because the global cap is a count that has to be taken
- * inside the `queue_state` lock; the `UPDATE` is still one fenced statement, but
- * it is no longer the whole of what has to be atomic. Every other transition here
- * is unchanged.
+ * **`claim` stopped being one of them on 2026-08-30.** It opens a transaction of
+ * its own, because the global cap is a count that has to be taken inside the
+ * `queue_state` lock.
+ *
+ * **`finish` and `releaseStep` stopped being ones on 2026-09-03**, and that is
+ * the correction this note is really about — it used to say a job transition was
+ * atomic on its own "which is why `rawPgJobStore` may keep passing the pool",
+ * and that stopped being true the moment a terminal transition also had to
+ * settle the job's quota slot in `ingest_events`. GPT Sol counted the paths
+ * (2026-09-03, docs/plans/260902i-settlement-code-review-sol.md finding 1); see
+ * `settlingIfTerminal` below.
+ *
+ * The parameter stays wide, because `settleIn` (src/store/pg-session.ts) passes
+ * the *publication's* transaction into `finishIn` and `releaseStepIn` and those
+ * two must not open one of their own.
  */
 type Executor = Db | Tx;
 
@@ -151,6 +163,44 @@ function toJob(row: Row): Job {
   };
 }
 
+/** What a retry needs to know about the attempt it is repeating. */
+export interface IngestProvenance {
+  /** The slot that attempt spent, or null when it spent none. */
+  readonly ingestEventId: string | null;
+  /** The article it was for, for the new reservation's diagnostic slug. */
+  readonly slug: string;
+}
+
+/**
+ * **Did this job carry a quota slot?** — the question `POST /api/jobs/:id/retry`
+ * has to answer before it decides whether to reserve one.
+ *
+ * `Job.url` cannot answer it. A step re-run on an article already on the shelf
+ * has a URL too, filled in from the article by `enqueue`, so "it has an address"
+ * matches the free shape as readily as the paid one. The provenance column is
+ * the fact itself, which is why it exists.
+ *
+ * **Not on `Job` and not on the `JobStore` interface**, deliberately. `Job` is
+ * serialised to the browser by `publicJob` (src/jobs.ts) and a ledger id is not
+ * the reader's business; the interface is shared with the filesystem adapter,
+ * where quota does not exist (docs/project/billing.md). So this is a Postgres
+ * read with one Postgres-only caller — src/billing/admission.ts, which is
+ * already behind that flag.
+ *
+ * Owner-scoped, like `get`: somebody else's job is one that is not there.
+ */
+export async function ingestProvenanceOf(
+  id: string,
+  owner: OwnerId,
+): Promise<IngestProvenance | undefined> {
+  const [row] = await getDb()
+    .select({ ingestEventId: jobs.ingestEventId, slug: jobs.slug })
+    .from(jobs)
+    .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner)))
+    .limit(1);
+  return row;
+}
+
 /** One insert-or-look. `null` means the holder finished in between; ask again. */
 async function tryEnqueue(job: Job, ticket: EnqueueTicket): Promise<EnqueueOutcome | null> {
   const db = getDb();
@@ -171,6 +221,12 @@ async function tryEnqueue(job: Job, ticket: EnqueueTicket): Promise<EnqueueOutco
       workKey: ticket.workKey,
       reservesName: ticket.reservesName,
       urlKey: ticket.urlKey ?? null,
+      /* **In this row's own INSERT**, which is the whole of why the link points
+         this way: the job and the slot it is spending become true in one
+         statement, so there is no moment where a job exists and nothing knows to
+         charge for it. src/db/schema.ts § `ingest_events`, *Provenance lives on
+         the job*. Null for everything that spends no quota. */
+      ingestEventId: ticket.ingestEventId ?? null,
       createdAt: new Date(job.createdAt),
       url: job.url ?? null,
       title: job.title ?? null,
@@ -543,6 +599,57 @@ function settledSteps(cancelled: SQL) {
 }
 
 /**
+ * Run a transition of this file's own, and **give the quota slot back if it
+ * ended the job**.
+ *
+ * `finish` and `releaseStep` are the sixth and seventh places a job can become
+ * terminal, and until 2026-09-03 they were the two that settled nothing — so a
+ * job ended through either of them left its reservation `in_flight` for ever,
+ * and `forget`/`trimFinished` could then delete the row carrying the only record
+ * of which slot it was. There is no caller in `src/` that takes this route, but
+ * it is the advertised `JobStore` API and the stage claimed every terminal
+ * transition settles. GPT Sol, 2026-09-03,
+ * docs/plans/260902i-settlement-code-review-sol.md finding 1.
+ *
+ * **Here and not in `finishIn`/`releaseStepIn`.** Those two are shared with
+ * `settleIn` (src/store/pg-session.ts), which calls them inside the publication
+ * transaction and settles for itself immediately afterwards — with the charge,
+ * on the one path that may charge. Settling inside the primitives would make
+ * every one of those a double settlement.
+ *
+ * **It releases and never charges, including for a `done`.** This path moves the
+ * job row and nothing else: no publication, no revision, nothing the reader
+ * receives. Charging for that would be a debit for an article nobody got, and
+ * the only transition entitled to charge is the one that publishes in the same
+ * transaction.
+ *
+ * The status is read off the row the statement returned rather than predicted
+ * from the method's name: `releaseStepIn` answers `cancelled` or `queued`
+ * depending on a flag it reads for itself, and only one of those is an ending.
+ */
+async function settlingIfTerminal(transition: (tx: Tx) => Promise<Job>): Promise<Job> {
+  /* Pinned rather than inherited, for the reason `settleExpired` below gives. */
+  return await getDb().transaction(
+    async (tx) => {
+      const after = await transition(tx);
+      if (!(TERMINAL as readonly string[]).includes(after.status)) return after;
+      /* Off the row this transaction has just written and still holds, the same
+         read `settleIn` does and for the same reason: `Job` deliberately does
+         not carry the ledger id, and widening it to would push a Postgres-only
+         column through an interface the filesystem store shares. */
+      const [row] = await tx
+        .select({ ingestEventId: jobs.ingestEventId })
+        .from(jobs)
+        .where(eq(jobs.id, after.id))
+        .limit(1);
+      await settleReservation(tx, row?.ingestEventId ?? null, "released");
+      return after;
+    },
+    { isolationLevel: "read committed" },
+  );
+}
+
+/**
  * The store itself, **not exported** — see `pgJobStore` at the foot of this file.
  *
  * Private so that there is no unguarded spelling of it for anybody to import by
@@ -750,16 +857,22 @@ const rawPgJobStore: JobStore = {
   },
 
 
+  /**
+   * **Terminal only sometimes** — `releaseStepIn`'s own `case when cancelling`
+   * decides — so the settlement follows the status the statement chose. See
+   * `settlingIfTerminal`.
+   */
   releaseStep(id: string, attempt: string, steps: JobStep[], outcome: StepOutcome): Promise<Job> {
-    return releaseStepIn(getDb(), id, attempt, steps, outcome);
+    return settlingIfTerminal((tx) => releaseStepIn(tx, id, attempt, steps, outcome));
   },
 
+  /** Always terminal, so this always settles. See `settlingIfTerminal`. */
   finish(id: string, attempt: string, ending: JobEnding): Promise<Job> {
-    return finishIn(getDb(), id, attempt, ending);
+    return settlingIfTerminal((tx) => finishIn(tx, id, attempt, ending));
   },
 
   /**
-   * **One statement, and it decides which kind of ending this is** — the same
+   * **One statement decides which kind of ending each of these is** — the same
    * shape `requestCancel` has, and for the same reason.
    *
    * A row carrying `cancelling` is a reader who pressed Stop and whose claimant
@@ -769,80 +882,116 @@ const rawPgJobStore: JobStore = {
    * failure are **cleared** rather than left: a job that failed a step and was
    * then stopped would otherwise carry the old sentence under a `cancelled`
    * status. GPT Sol, 2026-09-01.
+   *
+   * **And it gives each settled job's quota slot back, in the same
+   * transaction.** This is one of the two sites that end a job with *nobody
+   * inside it* — the claimant is gone, so no session will ever run for these
+   * rows and `settleIn` will never see them. Missing it leaks a slot every time
+   * a reader closes the tab mid-ingest, and an unsettled reservation counts
+   * against its owner for ever (there is deliberately no expiry:
+   * src/db/schema.ts § `ingest_events`). The transaction is what the reservation
+   * buys: it used to be a bare `UPDATE` on the pool.
    */
   async settleExpired(now?: Date, owner?: OwnerId): Promise<ExpirySettlement[]> {
     const db = getDb();
-    const settled = await db
-      .update(jobs)
-      .set({
-        status: sql`case when ${jobs.cancelling} then 'cancelled' else 'error' end`,
-        /* The same `case` the status is chosen by, so the step's ending and the
-           job's cannot disagree: `pending` and silent for a Stop, `error` and
-           INTERRUPTED for an interruption nobody asked for. */
-        steps: settledSteps(sql`${jobs.cancelling}`),
-        attemptId: null,
-        leaseExpiresAt: null,
-        cancelling: false,
-        finishedAt: sql`now()`,
-        /* **The draft goes with the claim, and a terminal job may not keep a
-           pointer.** `sweepAbandonedDrafts` spares a revision that *any* job
-           row names, terminal ones included — so a job settled here while
-           holding a pointer is a draft nothing will ever publish and nothing
-           will ever reclaim. The path is ordinary rather than exotic: a step
-           releases, the next advance never comes, the lease lapses, and this
-           statement is what ends the job. GPT Sol, 2026-08-30,
-           docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 1. */
-        draftRevisionId: null,
-        /* Nulled on the cancelled branch rather than left alone, so the field
-           always describes *this* ending — the same rule `finishIn` follows.
-           A stale sentence under a `cancelled` status is a job telling the
-           reader something that did not happen. */
-        error: sql`case when ${jobs.cancelling} then null else ${INTERRUPTED.message}::text end`,
-        /* `retry`, said out loud rather than left to the absent-means-yes rule.
-           Both offer the button; only one of them says why, and a kind that is
-           merely missing is indistinguishable from a failure nobody classified.
-           An interrupted job really is worth another go — `stepIsDone` derives
-           what is finished from the artefacts, so a retry resumes. */
-        failureKind: sql`case when ${jobs.cancelling} then null else ${INTERRUPTED.kind}::text end`,
-      })
-      .where(
-        and(
-          eq(jobs.status, "running"),
-          /* **This reader's, when a reader is asking**, and the whole table
-             when the advance path is. `listJobs` calls this from inside a
-             request, so an unscoped sweep there would be one reader's page load
-             ending another reader's import — the same predicate `list` itself
-             is scoped by, in the same statement rather than in a filter
-             afterwards, so there is no moment at which the wrong row is
-             locked. GPT Sol, 2026-09-01, answer 7. */
-          owner === undefined ? undefined : eq(jobs.ownerId, owner),
-          /* **Database time, unless a test says otherwise.** The lease is
-             written by `claim` as `clock_timestamp() + leaseMs` on this same
-             clock, so the deadline is one clock's arithmetic end to end. It
-             used to be `Date.now()` at both ends, which is fine on a laptop
-             and is a different clock from the one holding the row the moment
-             there are two instances.
+    /* Pinned rather than inherited, as src/store/pg-billing.ts and
+       src/store/pg-session.ts both pin theirs: a `default_transaction_isolation`
+       set on the role would otherwise change what two concurrent settlements of
+       one reservation do — zero rows and a log at `read committed`, an
+       uncaught 40001 that takes the whole sweep down above it. */
+    return await db.transaction(async (tx) => {
+      const settled = await tx
+        .update(jobs)
+        .set({
+          status: sql`case when ${jobs.cancelling} then 'cancelled' else 'error' end`,
+          /* The same `case` the status is chosen by, so the step's ending and the
+             job's cannot disagree: `pending` and silent for a Stop, `error` and
+             INTERRUPTED for an interruption nobody asked for. */
+          steps: settledSteps(sql`${jobs.cancelling}`),
+          attemptId: null,
+          leaseExpiresAt: null,
+          cancelling: false,
+          finishedAt: sql`now()`,
+          /* **The draft goes with the claim, and a terminal job may not keep a
+             pointer.** `sweepAbandonedDrafts` spares a revision that *any* job
+             row names, terminal ones included — so a job settled here while
+             holding a pointer is a draft nothing will ever publish and nothing
+             will ever reclaim. The path is ordinary rather than exotic: a step
+             releases, the next advance never comes, the lease lapses, and this
+             statement is what ends the job. GPT Sol, 2026-08-30,
+             docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 1. */
+          draftRevisionId: null,
+          /* Nulled on the cancelled branch rather than left alone, so the field
+             always describes *this* ending — the same rule `finishIn` follows.
+             A stale sentence under a `cancelled` status is a job telling the
+             reader something that did not happen. */
+          error: sql`case when ${jobs.cancelling} then null else ${INTERRUPTED.message}::text end`,
+          /* `retry`, said out loud rather than left to the absent-means-yes rule.
+             Both offer the button; only one of them says why, and a kind that is
+             merely missing is indistinguishable from a failure nobody classified.
+             An interrupted job really is worth another go — `stepIsDone` derives
+             what is finished from the artefacts, so a retry resumes. */
+          failureKind: sql`case when ${jobs.cancelling} then null else ${INTERRUPTED.kind}::text end`,
+        })
+        .where(
+          and(
+            eq(jobs.status, "running"),
+            /* **This reader's, when a reader is asking**, and the whole table
+               when the advance path is. `listJobs` calls this from inside a
+               request, so an unscoped sweep there would be one reader's page load
+               ending another reader's import — the same predicate `list` itself
+               is scoped by, in the same statement rather than in a filter
+               afterwards, so there is no moment at which the wrong row is
+               locked. GPT Sol, 2026-09-01, answer 7. */
+            owner === undefined ? undefined : eq(jobs.ownerId, owner),
+            /* **Database time, unless a test says otherwise.** The lease is
+               written by `claim` as `clock_timestamp() + leaseMs` on this same
+               clock, so the deadline is one clock's arithmetic end to end. It
+               used to be `Date.now()` at both ends, which is fine on a laptop
+               and is a different clock from the one holding the row the moment
+               there are two instances.
 
-             **The exact expression the fence refuses on**, imported rather
-             than written again: what `liveAttempt` will no longer let a
-             claimant write to is precisely what this may settle, with no
-             instant in between where a job is neither. That includes the
-             NULL-lease row `jobs_running_is_fenced` makes impossible — see
-             src/store/job-fence.ts for why *over* is the better answer for a
-             state that cannot happen. */
-          now === undefined
-            ? leaseIsOver
-            : or(isNull(jobs.leaseExpiresAt), lte(jobs.leaseExpiresAt, now)),
-        ),
-      )
-      .returning({ id: jobs.id, status: jobs.status });
-    /* What the statement already returns, and both fields of it. `RETURNING`
-       hands back the row *after* the update, so the status here is the ending
-       the `case` chose rather than the one it started from. */
-    return settled.map((row) => ({
-      id: row.id,
-      status: row.status as ExpirySettlement["status"],
-    }));
+               **The exact expression the fence refuses on**, imported rather
+               than written again: what `liveAttempt` will no longer let a
+               claimant write to is precisely what this may settle, with no
+               instant in between where a job is neither. That includes the
+               NULL-lease row `jobs_running_is_fenced` makes impossible — see
+               src/store/job-fence.ts for why *over* is the better answer for a
+               state that cannot happen. */
+            now === undefined
+              ? leaseIsOver
+              : or(isNull(jobs.leaseExpiresAt), lte(jobs.leaseExpiresAt, now)),
+          ),
+        )
+        .returning({ id: jobs.id, status: jobs.status, ingestEventId: jobs.ingestEventId });
+
+      /* **One statement over the whole set**, and it used to be one per settled
+         job. The loop held every ended job's row lock — taken by the `UPDATE`
+         above and held to commit — across N sequential settlements, and the
+         comment that justified it said the sweep runs over "usually none,
+         occasionally one". That was not a property of the code: this is capped
+         by how many jobs can be `running` at once, which is
+         `SPIDERYARN_JOB_CONCURRENCY` and takes any positive integer. GPT Sol,
+         2026-09-03, finding 5.
+
+         `releaseReservations` (src/store/pg-billing.ts) is still the only place
+         the rule about a release that moved nothing is written down —
+         `settleReservation`'s tolerant half delegates to it — so there is no
+         second copy of it here. Nulls are dropped there too, which is most jobs:
+         only a new ingest carries a reservation. */
+      await releaseReservations(
+        tx,
+        settled.map((row) => row.ingestEventId),
+      );
+
+      /* What the statement already returns, and both fields of it. `RETURNING`
+         hands back the row *after* the update, so the status here is the ending
+         the `case` chose rather than the one it started from. */
+      return settled.map((row) => ({
+        id: row.id,
+        status: row.status as ExpirySettlement["status"],
+      }));
+    }, { isolationLevel: "read committed" });
   },
 
   async noteProgress(id: string, attempt: string, steps: JobStep[]): Promise<Job> {
@@ -887,6 +1036,15 @@ const rawPgJobStore: JobStore = {
      * Not fenced: the reader pressing Stop is not a claimant, and a Stop that
      * needed the running attempt's token could only be pressed by the process
      * it is meant to interrupt.
+     *
+     * **The two branches that end the job give the quota slot back**, in the
+     * transaction the `UPDATE` now runs in. This is the second of the two sites
+     * where a job ends with nobody inside it, and it is the everyday one: Stop
+     * on a job no claimant has picked up yet. Without it a reader who changes
+     * their mind twice has spent two of three lifetime ingests on nothing. The
+     * **asking** branch releases nothing, because it has not ended anything —
+     * the claimant is still inside the job and `settleIn` is what will settle
+     * it.
      */
     /* **The two branches that end the job, as one condition.** They settle
        identically, and writing the condition once is what stops the seven
@@ -903,47 +1061,60 @@ const rawPgJobStore: JobStore = {
        machinery that already exists. GPT Sol raised it, 2026-09-01;
        src/store/job-fence.ts carries the reasoning. */
     const over = sql`(${jobs.status} = 'queued' or ${leaseIsOver})`;
-    const [row] = await db
-      .update(jobs)
-      .set({
-        status: sql`case when ${over} then 'cancelled' else ${jobs.status} end`,
-        /* Every step is settled on the branches that end the job, so a stopped
-           job never keeps a spinner. On the *asking* branch the steps are the
-           claimant's to write and this leaves them alone. */
-        /* **`pending`, always, on this path.** Every branch that ends a job
-           here ends it as *cancelled* — the reader asked — so the step gets no
-           sentence. `settleExpired` is the path that can also end a job nobody
-           asked to stop, and there the step ends `error`. */
-        steps: sql`case when ${over} then ${settledSteps(sql`true`)} else ${jobs.steps} end`,
-        cancelling: sql`not ${over}`,
-        attemptId: sql`case when ${over} then null else ${jobs.attemptId} end`,
-        leaseExpiresAt: sql`case when ${over} then null else ${jobs.leaseExpiresAt} end`,
-        /* **Only on the branches that end the job**, and that asymmetry is the
-           whole of it. A queued job — or one whose claimant is provably gone —
-           is terminal one statement later, and a terminal job holding a pointer
-           is a draft `sweepAbandonedDrafts` spares for ever, since it treats any
-           job's pointer as ownership. A *live* claimant's pointer belongs to the
-           claimant that is still inside a step: taking it away here would leave
-           its next fenced write refused for a reason nothing could explain, and
-           it is the one that disposes of the draft when its release resolves to
-           a cancellation (src/store/pg-session.ts, case 4). The pointer really
-           can be set on a queued job: `releaseStepIn` leaves it alone
-           deliberately, so the next request continues into the same draft.
-           GPT Sol, 2026-08-30, docs/plans/260827aa-delete-the-importer-d1b-sol.md
-           finding 1; Fable, 2026-09-01, on the lapsed branch needing the same
-           field set rather than the running one's. */
-        draftRevisionId: sql`case when ${over} then null else ${jobs.draftRevisionId} end`,
-        /* Cleared, so a `cancelled` job never carries the sentence of a failure
-           it recovered from. A job that failed a step, was retried and is then
-           stopped would otherwise say why it failed under a status saying the
-           reader stopped it. GPT Sol, 2026-09-01. */
-        error: sql`case when ${over} then null else ${jobs.error} end`,
-        failureKind: sql`case when ${over} then null else ${jobs.failureKind} end`,
-        finishedAt: sql`case when ${over} then now() else ${jobs.finishedAt} end`,
-      })
-      .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner), inArray(jobs.status, ACTIVE)))
-      .returning();
-    return row ? toJob(row) : undefined;
+    /* Pinned rather than inherited, for the reason `settleExpired` above gives. */
+    return await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(jobs)
+        .set({
+          status: sql`case when ${over} then 'cancelled' else ${jobs.status} end`,
+          /* Every step is settled on the branches that end the job, so a stopped
+             job never keeps a spinner. On the *asking* branch the steps are the
+             claimant's to write and this leaves them alone. */
+          /* **`pending`, always, on this path.** Every branch that ends a job
+             here ends it as *cancelled* — the reader asked — so the step gets no
+             sentence. `settleExpired` is the path that can also end a job nobody
+             asked to stop, and there the step ends `error`. */
+          steps: sql`case when ${over} then ${settledSteps(sql`true`)} else ${jobs.steps} end`,
+          cancelling: sql`not ${over}`,
+          attemptId: sql`case when ${over} then null else ${jobs.attemptId} end`,
+          leaseExpiresAt: sql`case when ${over} then null else ${jobs.leaseExpiresAt} end`,
+          /* **Only on the branches that end the job**, and that asymmetry is the
+             whole of it. A queued job — or one whose claimant is provably gone —
+             is terminal one statement later, and a terminal job holding a pointer
+             is a draft `sweepAbandonedDrafts` spares for ever, since it treats any
+             job's pointer as ownership. A *live* claimant's pointer belongs to the
+             claimant that is still inside a step: taking it away here would leave
+             its next fenced write refused for a reason nothing could explain, and
+             it is the one that disposes of the draft when its release resolves to
+             a cancellation (src/store/pg-session.ts, case 4). The pointer really
+             can be set on a queued job: `releaseStepIn` leaves it alone
+             deliberately, so the next request continues into the same draft.
+             GPT Sol, 2026-08-30, docs/plans/260827aa-delete-the-importer-d1b-sol.md
+             finding 1; Fable, 2026-09-01, on the lapsed branch needing the same
+             field set rather than the running one's. */
+          draftRevisionId: sql`case when ${over} then null else ${jobs.draftRevisionId} end`,
+          /* Cleared, so a `cancelled` job never carries the sentence of a failure
+             it recovered from. A job that failed a step, was retried and is then
+             stopped would otherwise say why it failed under a status saying the
+             reader stopped it. GPT Sol, 2026-09-01. */
+          error: sql`case when ${over} then null else ${jobs.error} end`,
+          failureKind: sql`case when ${over} then null else ${jobs.failureKind} end`,
+          finishedAt: sql`case when ${over} then now() else ${jobs.finishedAt} end`,
+        })
+        .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner), inArray(jobs.status, ACTIVE)))
+        .returning();
+      if (!row) return undefined;
+      /* **The status the `case` chose, not the branch we hoped it took.**
+         `RETURNING` hands back the row after the update, and `cancelled` is the
+         only status either terminal branch can write — so this asks the one
+         question that matters here, *did this statement end the job*, of the
+         value the database actually settled on. The asking branch comes back
+         `running` and releases nothing. */
+      if (row.status === "cancelled") {
+        await settleReservation(tx, row.ingestEventId, "released");
+      }
+      return toJob(row);
+    }, { isolationLevel: "read committed" });
   },
 
   async forget(id: string, owner: OwnerId): Promise<boolean> {

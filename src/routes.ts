@@ -268,6 +268,18 @@ import { ADMIN_FEEDBACK_DEFAULT_LIMIT, decodeFeedbackCursor } from "./types.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
 import { placingFailed, UPLOAD_MISSING, UPLOAD_UNAVAILABLE } from "./messages.js";
 import { WEBHOOK_PATH, serveStripeWebhook } from "./billing/webhook.js";
+import {
+  confirmCheckout,
+  openPortal,
+  parseCheckoutRequest,
+  startCheckout,
+} from "./billing/checkout.js";
+import {
+  refuseUploadWithoutQuota,
+  withIngestSlot,
+  withRetrySlot,
+  type IngestSlot,
+} from "./billing/admission.js";
 import { isPublicNamespace, servePublicApi } from "./public/routes.js";
 import { currentOwnerId, runInRequest, setRequestOwner } from "./owner.js";
 import {
@@ -4428,6 +4440,12 @@ async function mintAnUpload(body: unknown): Promise<{
   const wrong = uploadProblem({ name: claim.filename, type: "", size: claim.bytes });
   if (wrong) throw httpError(413, wrong);
 
+  /* **Asks, and takes nothing.** An account at its ceiling is told at the door
+     rather than after transferring 11 MB — the same reason `uploadProblem` runs
+     up here. The gate that actually decides is `POST /api/jobs`, which is
+     serialised per owner; this one is allowed to be a moment out of date. */
+  await refuseUploadWithoutQuota(owner);
+
   const minted = await mintUpload({ ...claim, owner }, (key) => grants.sign(key), stagingKey);
   return {
     uploadId: minted.record.id,
@@ -4468,7 +4486,7 @@ function publicUpload(record: UploadRecord): Record<string, unknown> {
  * article that claim produced and hands back its job. Only a claim with nothing
  * to show for it is an error.
  */
-async function queueAnUpload(uploadId: string): Promise<UploadOutcome> {
+async function queueAnUpload(uploadId: string, slot: IngestSlot): Promise<UploadOutcome> {
   const owner = currentOwnerId();
   const record = await readUpload(uploadId, owner);
   if (!record) throw httpError(404, "No such upload");
@@ -4517,6 +4535,12 @@ async function queueAnUpload(uploadId: string): Promise<UploadOutcome> {
   const job = await enqueue({
     slug: candidate,
     upload: { id: uploadId, filename: claim.record.filename },
+    /* The quota slot, spread onto the request so it rides the job's own INSERT.
+       Empty when nothing was reserved — src/billing/admission.ts. Every earlier
+       exit from this function leaves without a job, and none of them has to do
+       anything about the slot: the caller releases on every path, and the
+       ledger's own `not exists` is what decides whether that frees anything. */
+    ...slot,
   });
   /* **Immediately**, so that `GET /api/uploads/:id` can say which article this
      file became rather than only which one it might.
@@ -6213,6 +6237,29 @@ export async function serveAuthenticatedApi(
   const job = /^\/api\/jobs\/([\w.%-]+)$/.exec(path);
   const jobAction = /^\/api\/jobs\/([\w.%-]+)\/(cancel|retry)$/.exec(path);
   const jobAdvance = /^\/api\/jobs\/([\w.%-]+)\/advance$/.exec(path);
+  /**
+   * **The three billing routes, and every one of them is a POST behind the
+   * gate.** No slug and no id in any path: each is about the reader who is
+   * signed in, and the only route that takes an identifier at all takes a
+   * Checkout Session id in its *body*, where it is proved to be theirs before
+   * anything is done with it (src/billing/checkout.ts).
+   *
+   * They are exact paths, like the shelf's, so `/api/billing/anything` is a 404
+   * rather than a quiet match — and none of them is a namespace, for the same
+   * reason `/api/webhooks/stripe` is not: a namespace is somewhere a later
+   * endpoint gets added without anybody re-reading the ordering rules that make
+   * checkout safe.
+   *
+   * **POST rather than GET, including the one that only reads.** Two of them
+   * create a Stripe object — a Checkout Session is a real, chargeable thing —
+   * and a GET is something a browser prefetches, a crawler follows and a cache
+   * may keep. `confirm` creates nothing; it is a POST because it *writes*, being
+   * the thing that syncs a subscription into `billing_accounts`.
+   * docs/project/billing.md.
+   */
+  const billingCheckout = path === "/api/billing/checkout";
+  const billingPortalRoute = path === "/api/billing/portal";
+  const billingConfirm = path === "/api/billing/confirm";
 
     /* **The second gate, and it guards a prefix rather than a route.**
        Everything under `/api/admin/` is refused to everybody but the one
@@ -7058,10 +7105,17 @@ export async function serveAuthenticatedApi(
       // body is the receipt to poll, which is the only thing there is to say
       // about a job that has not started.
       const request = parseJobRequest(await readBody(req));
-      if (request.uploadId !== undefined) {
+      const uploadId = request.uploadId;
+      if (uploadId !== undefined) {
         /* No other field survives `checkUploadOrigin`, so there is nothing to
-           forward: an upload is always the default ingest. */
-        const outcome = await queueAnUpload(request.uploadId);
+           forward: an upload is always the default ingest.
+
+           **A new ingest, so it takes a quota slot** — and no slug to name the
+           reservation with, because the article's name comes from the upload
+           record's filename inside `queueAnUpload`. */
+        const outcome = await withIngestSlot({ ownerId: currentOwnerId() }, (slot) =>
+          queueAnUpload(uploadId, slot),
+        );
         /* **200, not 202**: nothing has been accepted, because there is nothing
            left to do. The file became this article a while ago and its job
            record has since been trimmed — `queueAnUpload` for why the record
@@ -7092,7 +7146,23 @@ export async function serveAuthenticatedApi(
           ? null
           : await resolveProfile(request.slug);
       const { useProfile: _asked, ...work } = request;
-      send(res, 202, publicJob(await enqueue({ ...work, ...(profile ? { profile } : {}) })));
+      const queue = (slot: IngestSlot) =>
+        enqueue({ ...work, ...(profile ? { profile } : {}), ...slot });
+      /**
+       * **A URL is a new ingest and spends a slot; a bare slug is a re-run and
+       * is free.** The two shapes arrive at the same endpoint and are told apart
+       * only here — by the time `enqueue` has them, a re-run's job carries a URL
+       * too, read off the article it names.
+       *
+       * That is the whole of docs/project/billing.md § *The quota*: a slot is
+       * one successful **new** ingest, and asking for a glossary, a set of ideas
+       * or a quiz on an article already on the shelf costs nothing.
+       */
+      const job =
+        request.url === undefined
+          ? await queue({})
+          : await withIngestSlot({ ownerId: currentOwnerId(), slug: request.slug }, queue);
+      send(res, 202, publicJob(job));
       return;
     }
     if (job && req.method === "GET") {
@@ -7108,7 +7178,16 @@ export async function serveAuthenticatedApi(
     }
     if (jobAction && req.method === "POST") {
       const [id, action] = [part(jobAction, 1), part(jobAction, 2)];
-      const result = action === "cancel" ? await cancelJob(id) : await retryJob(id);
+      /* **Retry is the second front door to a new ingest**, and it never passes
+         through the handler above: a check bolted on there alone would leave a
+         failed ingest retryable free for ever. `withRetrySlot` reserves only
+         when the attempt being repeated spent a slot — src/billing/admission.ts. */
+      const result =
+        action === "cancel"
+          ? await cancelJob(id)
+          : await withRetrySlot({ jobId: id, ownerId: currentOwnerId() }, (slot) =>
+              retryJob(id, slot),
+            );
       if (!result) throw httpError(404, "No such job");
       send(res, action === "cancel" ? 200 : 202, publicJob(result));
       return;
@@ -7137,6 +7216,60 @@ export async function serveAuthenticatedApi(
       const advanced = await advanceJob(part(jobAdvance, 1));
       if (!advanced) throw httpError(404, "No such job");
       send(res, 200, advanced);
+      return;
+    }
+
+    /**
+     * **Start a subscription — or, if they already have one, manage it.**
+     *
+     * The whole handler is one call, and that is deliberate: the order of
+     * operations inside `startCheckout` is what stops a paying customer arriving
+     * at a webhook that cannot find them, and it is written out once in
+     * src/billing/checkout.ts rather than spread across a route.
+     *
+     * The reply carries `kind` as well as `url` so the browser knows which door
+     * it is being sent through — the two look identical to `location.assign`,
+     * and a reader who pressed *Upgrade* and landed in the Portal deserves to be
+     * told why by the page rather than by Stripe.
+     *
+     * **200, not 302.** A redirect would be answered by `fetch` before the page
+     * could say anything, and the client is an SPA that navigates itself.
+     */
+    if (billingCheckout && req.method === "POST") {
+      const asked = parseCheckoutRequest(await readBody(req));
+      send(res, 200, await startCheckout(currentOwnerId(), asked));
+      return;
+    }
+
+    /* The hosted place to see invoices, change a card, or cancel — none of which
+       this app implements, on purpose (docs/project/billing.md § *We never touch
+       a card*). No body at all: the only thing it could carry is a customer id,
+       and that comes from the reader's own row. */
+    if (billingPortalRoute && req.method === "POST") {
+      send(res, 200, await openPortal(currentOwnerId()));
+      return;
+    }
+
+    /**
+     * The return path from a completed Checkout.
+     *
+     * It takes **only** a session id, and `confirmCheckout` proves the session
+     * is this reader's before it syncs anything — a callback that synced
+     * whatever id it was handed would let one reader make this server work on
+     * another's subscription, and would answer the question *did that person
+     * subscribe?*.
+     *
+     * It is a convenience rather than the mechanism: the webhook is what makes a
+     * subscription real, and this exists so the reader landing back on
+     * `/profile` a second after paying sees their new plan.
+     */
+    if (billingConfirm && req.method === "POST") {
+      const body = fields(await readBody(req));
+      const sessionId = body.sessionId;
+      if (typeof sessionId !== "string" || sessionId === "") {
+        throw httpError(400, "Expected { sessionId } from the Checkout return URL");
+      }
+      send(res, 200, await confirmCheckout(currentOwnerId(), sessionId));
       return;
     }
 
