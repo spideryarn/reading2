@@ -1649,6 +1649,7 @@ export const OWNED_ARTEFACT = {
   ideas: "your list of ideas",
   quotes: "your set of quotes",
   sketch: "your sketch diagram",
+  illustrated: "your illustrated diagram",
   /* `satisfies`, not an annotation. `Partial<Record<StepName, string>>` as the
      declared type makes every value `string | undefined`, and the coverage
      check in tests/messages.test.ts would then be unsatisfiable without a cast

@@ -341,6 +341,32 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      for a batch of three separate articles, which is the trap this table's
      header warns about from the other direction. */
   sketch: 240_000,
+  /* **MEASURED**, three runs over two articles on 2026-09-03
+     (evals/results/illustrated-2026-09-03b/README.md): the brief call took 175s,
+     223s and **334s**, and the three plates behind each took 83s at worst. So
+     the worst run so far is **417s**, and a fourth plate — `MAX_PLATES` is 4,
+     src/illustrated-plate.ts — puts the worst case at about **450s**.
+     Sequential by design: bounded parallelism here would multiply against the
+     three-job concurrency above.
+
+     **600s, and it is a ceiling rather than a rounding.** Every other row here
+     rounds up hard, usually to twice the worst — this one cannot. Twice 450s is
+     900s, and the deadline a claimant works to is `LEASE_MS - DEADLINE_MARGIN_MS`
+     = 740s, so a budget over that is a step that never fits in a fresh claim and
+     therefore never starts at all: the job would sit `queued` for ever with
+     nothing failing. 600s is the largest round number that leaves the claimant
+     its 140s of unwind, and it is 1.3x the worst measured rather than 2x. The
+     honest reading of that is that **this step is the one with the least
+     headroom in the table**, and the brief call is 86-89% of it.
+
+     **So `MAX_PLATES` and this number move together, and neither alone.**
+     Raising the cap to 5 costs another ~35s of plate and eats the margin;
+     raising this past 740s needs `LEASE_MS` raised first, which needs
+     `vercel.json`'s `maxDuration` — 800s today — raised before it, and
+     tests/jobs-lease-budget.test.ts is what refuses the pair being broken.
+     If the brief ever needs to be longer, the lever the plan names is the
+     prompt: cap the vignette count and the length of the compositions. */
+  illustrated: 600_000,
 };
 
 /**

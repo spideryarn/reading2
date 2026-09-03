@@ -296,6 +296,15 @@ export const REVISION_CARRY_POLICY: Record<
      The `sourceHash` on the artefact is what tells the panel the article moved
      underneath them — carrying is not a claim that they are still current. */
   quiz: "carry",
+  /* Carries like the seven above, and it is the one where carrying costs
+     nothing at all: the plates are content-addressed objects in the blob store
+     and the column holds only their hashes, so a new draft inherits pictures
+     that are still there rather than references to something deleted.
+     Staleness is answered at read time from `sourceHash` — against the
+     **Sketch** rather than the article, src/illustrated.ts § `inputFingerprint`
+     — so a re-ingest that moves the article leaves the picture carried, drawn,
+     and honestly labelled until somebody redraws the Sketch. */
+  illustrated: "carry",
 };
 
 const MINTED = new Set(
