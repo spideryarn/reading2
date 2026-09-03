@@ -44,7 +44,7 @@ import { billingAccounts } from "../db/schema.js";
 import { log } from "../log.js";
 import { chooseSubscription } from "./subscription.js";
 import { assertLivemode, stripeClient } from "./stripe.js";
-import { isEntitledStatus } from "./tiers.js";
+import { choiceRules } from "./tiers.js";
 
 const logger = log("store");
 
@@ -139,16 +139,21 @@ export async function syncSubscriptionFromStripe(customerId: string): Promise<Sy
         }
       }
 
-      const chosen = chooseSubscription(subscriptions, isEntitledStatus, (priceId) =>
-        tiers.some((t) => t.stripePriceId === priceId),
-      );
+      /* One instant for the whole choice, read here rather than inside, so the
+         decision that governs entitlement stays a pure function of its inputs.
+         What the tier table answers is `choiceRules` in ./tiers.ts. */
+      const chosen = chooseSubscription(subscriptions, choiceRules(tiers, new Date()));
       for (const note of chosen.notes) {
         logger.warn({ customerId, ownerId: row.ownerId, note }, "reading a Stripe subscription");
       }
       if (chosen.anomaly) {
         logger.error(
           { customerId, ownerId: row.ownerId },
-          "this customer has more than one live subscription and may be paying twice",
+          /* **Non-terminal, not live.** The count behind this is subscriptions
+             Stripe may still collect on — an `active` beside an `unpaid` is two
+             collectable invoices — so saying "live" would send whoever reads
+             this looking at the wrong list. The note beside it names them. */
+          "this customer has more than one non-terminal subscription and may be paying twice",
         );
       }
 

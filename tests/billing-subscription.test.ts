@@ -14,8 +14,9 @@
 import type Stripe from "stripe";
 import { describe, expect, it } from "vitest";
 
+import type { ChoiceRules } from "../src/billing/subscription.js";
 import { chooseSubscription, readSubscription } from "../src/billing/subscription.js";
-import { isEntitledStatus } from "../src/billing/tiers.js";
+import { isEntitledStatus, isTerminalStatus } from "../src/billing/tiers.js";
 
 const SEPT = Math.floor(Date.parse("2026-09-01T00:00:00Z") / 1000);
 const OCT = Math.floor(Date.parse("2026-10-01T00:00:00Z") / 1000);
@@ -265,9 +266,31 @@ describe("a cancellation Stripe expresses as a timestamp", () => {
   });
 });
 
+/**
+ * **The instant every period test below is made against.** `now` is passed into
+ * `chooseSubscription` rather than read off the clock, so these fixtures do not
+ * quietly change meaning on 1 October — which is what would have happened to the
+ * default SEPT..OCT period a fortnight after it was written.
+ */
+const NOW = new Date("2026-09-15T00:00:00Z");
+
+/** What the two tiers sell, as `billing_tiers` would answer it. */
+const ALLOWANCES: Record<string, number> = { price_reader: 20, price_researcher: 150 };
+
+/** The tier-table and clock questions `chooseSubscription` asks, with the real answers. */
+function rules(over: Partial<ChoiceRules> = {}): ChoiceRules {
+  return {
+    entitled: isEntitledStatus,
+    terminal: isTerminalStatus,
+    allowanceFor: (priceId: string) => ALLOWANCES[priceId] ?? null,
+    now: NOW,
+    ...over,
+  };
+}
+
 describe("choosing among a customer's subscriptions", () => {
   it("keeps the mapping and stores nothing when there are none", () => {
-    expect(chooseSubscription([], isEntitledStatus)).toEqual({
+    expect(chooseSubscription([], rules())).toEqual({
       state: null,
       notes: [],
       anomaly: false,
@@ -275,7 +298,7 @@ describe("choosing among a customer's subscriptions", () => {
   });
 
   it("takes the one live subscription", () => {
-    const chosen = chooseSubscription([subscription({ id: "sub_live" })], isEntitledStatus);
+    const chosen = chooseSubscription([subscription({ id: "sub_live" })], rules());
     expect(chosen.state?.subscriptionId).toBe("sub_live");
     expect(chosen.anomaly).toBe(false);
   });
@@ -288,7 +311,7 @@ describe("choosing among a customer's subscriptions", () => {
   it("stores a cancelled subscription so we can say what happened", () => {
     const chosen = chooseSubscription(
       [subscription({ id: "sub_gone", status: "canceled" })],
-      isEntitledStatus,
+      rules(),
     );
     expect(chosen.state?.status).toBe("canceled");
     expect(chosen.anomaly).toBe(false);
@@ -300,23 +323,25 @@ describe("choosing among a customer's subscriptions", () => {
    * quietly, and never by list order.
    */
   it("flags two live subscriptions and takes the most recent period", () => {
+    /* Same tier both times, so the allowance cannot separate them and the
+       tie-break — later period start — is what is under test. */
     const older = subscription({ id: "sub_old", items: [item({ start: SEPT - 86400 * 60 })] });
     const newer = subscription({ id: "sub_new" });
-    const chosen = chooseSubscription([older, newer], isEntitledStatus);
+    const chosen = chooseSubscription([older, newer], rules());
     expect(chosen.state?.subscriptionId).toBe("sub_new");
     expect(chosen.anomaly).toBe(true);
-    expect(chosen.notes.join(" ")).toMatch(/2 live subscriptions/);
+    expect(chosen.notes.join(" ")).toMatch(/2 subscriptions Stripe may still collect on/);
 
     /* And the same answer whichever order Stripe listed them in — the rule
        reads the data rather than trusting the array. */
-    const reversed = chooseSubscription([newer, older], isEntitledStatus);
+    const reversed = chooseSubscription([newer, older], rules());
     expect(reversed.state?.subscriptionId).toBe("sub_new");
   });
 
   it("does not call one live subscription an anomaly just because a dead one exists", () => {
     const chosen = chooseSubscription(
       [subscription({ id: "sub_dead", status: "canceled" }), subscription({ id: "sub_live" })],
-      isEntitledStatus,
+      rules(),
     );
     expect(chosen.state?.subscriptionId).toBe("sub_live");
     expect(chosen.anomaly).toBe(false);
@@ -325,18 +350,218 @@ describe("choosing among a customer's subscriptions", () => {
   it("notes each subscription it could not read, rather than dropping it silently", () => {
     const chosen = chooseSubscription(
       [subscription({ id: "sub_weird", items: [item(), item()] }), subscription({ id: "sub_ok" })],
-      isEntitledStatus,
+      rules(),
     );
     expect(chosen.state?.subscriptionId).toBe("sub_ok");
     expect(chosen.notes.join(" ")).toContain("sub_weird");
+    /* And it still counts towards the anomaly: a shape we cannot read is not a
+       reason to believe nobody is being charged for it. */
+    expect(chosen.anomaly).toBe(true);
   });
 
   it("falls to free when every subscription is unreadable", () => {
     const chosen = chooseSubscription(
       [subscription({ id: "sub_a", items: [] }), subscription({ id: "sub_b", items: [] })],
-      isEntitledStatus,
+      rules(),
     );
     expect(chosen.state).toBeNull();
-    expect(chosen.notes).toHaveLength(2);
+    expect(chosen.notes).toHaveLength(3);
+    expect(chosen.anomaly).toBe(true);
+  });
+});
+
+/**
+ * **Which of two subscriptions the reader is metered on.**
+ *
+ * Holding two at once is an accident the checkout gate leaves open on purpose
+ * (docs/project/billing.md § *Subscribing twice*). When it happens the reader is
+ * paying for both, so the allowance should be the larger of the two — the cost
+ * of the accident belongs with us. But only among subscriptions whose period
+ * contains now, because an expired-but-still-`active` one would otherwise win
+ * for ever and lock the account out at 503 rather than merely under-serving it.
+ */
+describe("the strongest current subscription wins", () => {
+  /** Unix seconds, `days` from NOW. */
+  const day = (days: number) => Math.floor(NOW.getTime() / 1000) + days * 86400;
+
+  /** Current: a period containing NOW. */
+  const researcher = () =>
+    subscription({
+      id: "sub_researcher",
+      items: [item({ priceId: "price_researcher", start: day(-10), end: day(20) })],
+    });
+  const reader = () =>
+    subscription({
+      id: "sub_reader",
+      items: [item({ priceId: "price_reader", start: day(-9), end: day(21) })],
+    });
+
+  it("meters a reader who holds both tiers on the researcher's allowance", () => {
+    /* The Reader was bought *second* — a second Checkout tab, completed after
+       the Researcher one — so the old newest-first rule handed them 20. */
+    const chosen = chooseSubscription([researcher(), reader()], rules());
+    expect(chosen.state?.priceId).toBe("price_researcher");
+    expect(chosen.anomaly).toBe(true);
+  });
+
+  it("gives the same answer whichever order Stripe listed them in", () => {
+    expect(chooseSubscription([reader(), researcher()], rules()).state?.priceId).toBe(
+      "price_researcher",
+    );
+  });
+
+  /**
+   * **The case that breaks *both* rules — the one this replaced and the naive
+   * fix that nearly replaced it** — and the reason the period test comes before
+   * the ranking.
+   *
+   * A subscription whose invoice cannot be *finalised* stays `active` with a
+   * period that has ended: it never enters dunning. Ranked on allowance alone it
+   * beats a current Reader for ever; `entitlementFromRow` then calls the stored
+   * row stale, admission resyncs, this function picks the same row again, and the
+   * reader is refused at 503 instead of getting the 20 they pay for.
+   *
+   * **And a stale subscription can have started *later* than the current one**,
+   * which is why `newest()` was not quietly getting this right either. Stripe's
+   * own shape, from GPT Sol, 2026-09-03: a Reader runs the 1st to the 1st; a
+   * Researcher bought on the 20th with a billing anchor on the 25th gets a short
+   * initial period, the 20th to the 25th. If that first invoice cannot be
+   * finalised it goes stale on the 25th — with a period start five days *newer*
+   * than the Reader's. The days below are that scenario, relative to NOW.
+   */
+  it("will not let a stale active researcher beat a current reader", () => {
+    /* The short initial period: started after the reader's, already over. */
+    const staleAndNewer = subscription({
+      id: "sub_stale_researcher",
+      status: "active",
+      items: [item({ priceId: "price_researcher", start: day(-8), end: day(-3) })],
+    });
+    const chosen = chooseSubscription([staleAndNewer, reader()], rules());
+    expect(chosen.state?.subscriptionId).toBe("sub_reader");
+    expect(chosen.state?.priceId).toBe("price_reader");
+
+    /* And the ordinary lapsed one, which only the ranking could have picked. */
+    const staleAndOlder = subscription({
+      id: "sub_stale_researcher",
+      status: "active",
+      items: [item({ priceId: "price_researcher", start: day(-70), end: day(-40) })],
+    });
+    expect(chooseSubscription([staleAndOlder, reader()], rules()).state?.subscriptionId).toBe(
+      "sub_reader",
+    );
+  });
+
+  /**
+   * The other half of that: a price no tier sells cannot win however new it is.
+   * Without this filter an active Reader beside a newer subscription on some
+   * hand-made price lost, and `tierForPrice` then returned null for the winner —
+   * dropping a paying customer to free. GPT Sol, 2026-09-02.
+   */
+  it("will not let a price no tier sells beat one that a tier does", () => {
+    const mystery = subscription({
+      id: "sub_mystery",
+      items: [item({ priceId: "price_handmade", start: day(-1), end: day(29) })],
+    });
+    const chosen = chooseSubscription([mystery, reader()], rules());
+    expect(chosen.state?.subscriptionId).toBe("sub_reader");
+
+    /* And when the unrecognised one is *all* there is, it is stored with a note
+       rather than ranked — the row is diagnostic, and `entitlementFromRow` will
+       find no tier for the price and fall to free. */
+    const alone = chooseSubscription([mystery], rules());
+    expect(alone.state?.subscriptionId).toBe("sub_mystery");
+    expect(alone.notes.join(" ")).toMatch(/no.*price this build sells/);
+  });
+
+  /**
+   * **The period is half-open, `start <= now < end`** — the same interval
+   * `entitlementFromRow` (src/store/pg-billing.ts) calls stale, and the same one
+   * the usage query counts by. Three rules that must agree about the instant a
+   * period rolls over, or an ingest is counted twice, or a subscription is
+   * current here and stale there.
+   */
+  it("treats the period as half-open, at both ends", () => {
+    const startsNow = subscription({
+      id: "sub_starts_now",
+      items: [item({ priceId: "price_reader", start: day(0), end: day(30) })],
+    });
+    const endsNow = subscription({
+      id: "sub_ends_now",
+      items: [item({ priceId: "price_researcher", start: day(-30), end: day(0) })],
+    });
+    /* The researcher's larger allowance would win if `end` were inclusive. */
+    const chosen = chooseSubscription([endsNow, startsNow], rules());
+    expect(chosen.state?.subscriptionId).toBe("sub_starts_now");
+
+    /* And the one that ends at this instant is not current on its own either. */
+    const alone = chooseSubscription([endsNow], rules());
+    expect(alone.notes.join(" ")).toMatch(/period containing/);
+  });
+
+  /**
+   * **The ranking key is deliberately mutable, and this is the pin that says
+   * so.** `billing_tiers.ingests_per_period` is a column somebody can `UPDATE`,
+   * so an edit to the tier table changes which subscription a double-subscribed
+   * reader is metered on. Accepted rather than overlooked — the reasoning, and
+   * the rejection of `sort_order` as an alternative, is in the header of
+   * src/billing/subscription.ts. If this test ever has to change, that decision
+   * is being reversed.
+   */
+  it("follows the allowance table when it changes, rather than the tier's name", () => {
+    /* The reader subscription is the *older* of the two here, so nothing but
+       the allowance can make it win. */
+    const olderReader = subscription({
+      id: "sub_reader",
+      items: [item({ priceId: "price_reader", start: day(-20), end: day(10) })],
+    });
+    const newerResearcher = subscription({
+      id: "sub_researcher",
+      items: [item({ priceId: "price_researcher", start: day(-1), end: day(29) })],
+    });
+    expect(chooseSubscription([olderReader, newerResearcher], rules()).state?.priceId).toBe(
+      "price_researcher",
+    );
+
+    const swapped = rules({
+      allowanceFor: (priceId: string) =>
+        ({ price_reader: 200, price_researcher: 150 })[priceId] ?? null,
+    });
+    const chosen = chooseSubscription([olderReader, newerResearcher], swapped);
+    expect(chosen.state?.priceId).toBe("price_reader");
+  });
+
+  /**
+   * **Diagnosis, not entitlement.** When nothing has a current period there is
+   * no good answer, and the least-bad one is a row `/profile` can talk about.
+   * The note is the only thing that says the stored row entitles nothing.
+   */
+  it("stores the most recent when nothing has a period containing now, and says so", () => {
+    const stale = subscription({
+      id: "sub_stale",
+      status: "active",
+      items: [item({ priceId: "price_reader", start: day(-70), end: day(-40) })],
+    });
+    const chosen = chooseSubscription([stale], rules());
+    expect(chosen.state?.subscriptionId).toBe("sub_stale");
+    expect(chosen.notes.join(" ")).toMatch(/period containing 2026-09-15/);
+    expect(chosen.notes.join(" ")).toMatch(/entitles nothing/);
+    expect(chosen.anomaly).toBe(false);
+  });
+
+  /**
+   * **The anomaly counts what checkout would have refused to sell beside**, not
+   * what we entitle. `unpaid` carries no entitlement, but Stripe has not
+   * finished with it either: this is two collectable invoices, and counting only
+   * the entitled ones said nothing at all about it.
+   */
+  it("counts an unpaid subscription beside an active one as an anomaly", () => {
+    const chosen = chooseSubscription(
+      [subscription({ id: "sub_active" }), subscription({ id: "sub_unpaid", status: "unpaid" })],
+      rules(),
+    );
+    expect(chosen.anomaly).toBe(true);
+    expect(chosen.notes.join(" ")).toContain("sub_unpaid");
+    /* And the entitled one is still what gets stored. */
+    expect(chosen.state?.subscriptionId).toBe("sub_active");
   });
 });

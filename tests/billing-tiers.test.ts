@@ -24,6 +24,7 @@ import {
   ENTITLED_STATUSES,
   FREE,
   FREE_LIFETIME_INGESTS,
+  choiceRules,
   currenciesOffered,
   entitlementForTier,
   isEntitledStatus,
@@ -141,6 +142,47 @@ describe("entitlementForTier", () => {
   it("gives the free tier no period at all, rather than an empty one", () => {
     expect(FREE).toEqual({ tier: "free", limit: FREE_LIFETIME_INGESTS });
     expect(Object.keys(FREE)).not.toContain("periodStart");
+  });
+});
+
+/**
+ * **The value that crosses the seam.** `chooseSubscription` ranks on whatever
+ * number `allowanceFor` hands it, and it cannot tell which column that came
+ * from: wired to `sortOrder` it would still rank, still be deterministic, and
+ * still pass every test in tests/billing-subscription.test.ts — while metering a
+ * double-subscribed reader on a display-ordering number. The fixture's tier has
+ * `ingestsPerPeriod: 20` and `sortOrder: 10` precisely so the two can be told
+ * apart here.
+ */
+describe("what the tier table answers when a subscription is chosen", () => {
+  const NOW = new Date("2026-09-15T00:00:00Z");
+  const TIERS = [
+    tier(),
+    tier({
+      id: "researcher",
+      stripePriceId: "price_researcher",
+      ingestsPerPeriod: 150,
+      sortOrder: 20,
+    }),
+  ];
+
+  it("ranks on the allowance the reader bought, not on the display order", () => {
+    const rules = choiceRules(TIERS, NOW);
+    expect(rules.allowanceFor("price_reader")).toBe(20);
+    expect(rules.allowanceFor("price_researcher")).toBe(150);
+  });
+
+  it("says null for a price no tier sells, which is what makes it a recognition test too", () => {
+    expect(choiceRules(TIERS, NOW).allowanceFor("price_handmade")).toBeNull();
+  });
+
+  /* Both allowlists come from this file, so the choice and the checkout gate
+     cannot drift apart about what "still collectable" means. */
+  it("hands over this file's own status allowlists, and the instant it was given", () => {
+    const rules = choiceRules(TIERS, NOW);
+    expect([rules.entitled("past_due"), rules.entitled("unpaid")]).toEqual([true, false]);
+    expect([rules.terminal("canceled"), rules.terminal("unpaid")]).toEqual([true, false]);
+    expect(rules.now).toBe(NOW);
   });
 });
 

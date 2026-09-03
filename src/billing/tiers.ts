@@ -28,6 +28,8 @@
  * subscription statuses, and for the same reason.
  */
 
+import type { ChoiceRules } from "./subscription.js";
+
 /** A tier's id, as typed by whoever wrote the row. `free` is not one of these. */
 export type TierId = string;
 
@@ -146,6 +148,30 @@ export function tierForPrice(
 ): TierRow | null {
   if (!priceId) return null;
   return tiers.find((t) => t.stripePriceId === priceId) ?? null;
+}
+
+/**
+ * The answers `chooseSubscription` (./subscription.ts) needs about the tiers.
+ *
+ * **The bridge lives on the side that knows the data.** `subscription.ts` is
+ * deliberately free of the tier table, so it asks its questions through
+ * callbacks; this is where those callbacks are filled in, once, rather than at
+ * each call site — and it is the piece that decides that the ranking key is the
+ * **allowance** rather than, say, `sortOrder`, which is a display column that
+ * nothing constrains to ascend with what a tier actually sells. The reasoning
+ * for that choice is in the header of ./subscription.ts.
+ *
+ * `now` is a parameter because the caller is what knows when it is asking.
+ */
+export function choiceRules(tiers: readonly TierRow[], now: Date): ChoiceRules {
+  return {
+    entitled: isEntitledStatus,
+    terminal: isTerminalStatus,
+    /* `tierForPrice` matches retired tiers too, which is the whole point of
+       retiring being a flag rather than a delete. */
+    allowanceFor: (priceId) => tierForPrice(priceId, tiers)?.ingestsPerPeriod ?? null,
+    now,
+  };
 }
 
 /** What that tier allows over the period Stripe says the subscription is in. */
