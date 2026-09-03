@@ -23,6 +23,15 @@ that is **a problem, a suggestion, or nothing at all** (Greg: *"don't default to
 null/unknown"*), a line of thanks above it, a "Not sure what to write?" disclosure below it, and a
 microphone — [dictation.md](dictation.md), the same three lines as every other box.
 
+The three questions themselves survived the boxes and sit above the one box, always visible:
+
+> The Feedback / Problem dialog box wording should explicitly ask users for: Steps to reproduce;
+> What you expected to see; and What you saw instead.
+>
+> — Greg, 2026-09-03
+
+They had spent a day inside the disclosure, and a hint nobody opens is a hint nobody reads.
+
 The three old columns were backfilled into `body` under their old headings and **dropped**, so there
 is one shape in the table rather than two. The route still accepts the old three from a tab loaded
 before the deploy and folds them into `body` the same way; sending both shapes at once is refused.
