@@ -57,7 +57,7 @@ import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
 import { Plans } from "./Plans.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { FEATURES_HREF, PRIVACY_HREF } from "./router.js";
+import { FEATURES_HREF, PRICING_HREF, PRIVACY_HREF } from "./router.js";
 import { SHOTS } from "./shots.js";
 import { SignInControls } from "./SignInControls.js";
 import { Feature, H2, Shot } from "./SiteBits.js";
@@ -243,6 +243,14 @@ export function LandingPage() {
 
       <H2>Plans</H2>
       <Plans />
+      {/* [tissue] The same three rows are on `/pricing`; this is the address to
+          send somebody who asked what it costs, rather than a page with more on
+          it. Same shape as the features link above. */}
+      <p className="tw:mt-6">
+        <Link href={PRICING_HREF} className="tw:text-highlight tw:no-underline tw:hover:underline">
+          Pricing, and what a month's allowance means →
+        </Link>
+      </p>
 
       <section className="tw:mt-14 tw:rounded-lg tw:border tw:border-border tw:bg-card/50 tw:p-6">
         <p className="tw:mb-5 tw:text-sm">
@@ -259,6 +267,10 @@ export function LandingPage() {
         <p className="tw:mt-2 tw:mb-0">
           <Link href={FEATURES_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
             Features
+          </Link>
+          {" · "}
+          <Link href={PRICING_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
+            Pricing
           </Link>
           {" · "}
           <Link href={PRIVACY_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
