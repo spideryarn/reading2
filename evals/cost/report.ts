@@ -216,7 +216,21 @@ export type FindingKind =
   | "duplicate-execution"
   | "gateway-failure"
   | "call-count"
-  | "unexpected-paid-step";
+  | "unexpected-paid-step"
+  /** The earliest call of a step read a cache it was supposed to be cold of. */
+  | "warm-first-call"
+  /** A per-mode draw read a cache at all, and it sent no breakpoint for one to exist. */
+  | "warm-mode-call"
+  /**
+   * A required step or `AiJob` bought nothing, **and the job's own step statuses
+   * say why** — the step that would have bought it failed, or never ran because
+   * something before it did. See `stoppedAtOrBefore`.
+   */
+  | "explained-absence"
+  /** A call reported no cache-read count, so there is no evidence it was cold. */
+  | "unknown-cache-telemetry"
+  /** A job that was supposed to adopt an article minted a fresh one instead. */
+  | "not-adopted";
 
 export interface Finding {
   kind: FindingKind;
@@ -235,6 +249,12 @@ export interface Finding {
    *   accept "unknown" as its answer, and `allowUnpriced` is the deliberate
    *   override;
    * - a ledger that is short of what the step said it bought.
+   *
+   * **The second and the fourth are not the same absence**, and the difference
+   * is the point of `stoppedAtOrBefore`: a row that is missing because the step
+   * that would have bought it failed is a paid failure to be counted, not a lost
+   * row, and it is reported loudly and non-fatally so the sweep can go on
+   * counting. Only an absence nothing explains stops the run.
    *
    * Everything else is reported beside the numbers and the run carries on — a
    * duplicate execution is a *finding about production*, not a broken harness.
@@ -266,6 +286,69 @@ export interface StepObservation {
   writeFailures: number;
 }
 
+/**
+ * **What the job said one of its steps did** — the fact that tells an absence
+ * apart from a loss.
+ *
+ * Structurally what `Draw.steps` already holds in run.ts, narrowed to the two
+ * fields this file may reason about. `status` is the job's own word
+ * (`StepStatus` in src/types.ts: pending, running, done, skipped, error) and is
+ * typed as a string here because report.ts is pure arithmetic over what it is
+ * handed and has no business importing the pipeline's vocabulary.
+ */
+export interface StepOutcome {
+  name: string;
+  status: string;
+}
+
+/**
+ * The statuses that mean the pipeline stopped here. `bug` is not a `StepStatus`
+ * production writes today, and it is in the set because `outcomeOf` in run.ts
+ * counts it as a failure — the two lists disagreeing is the kind of drift that
+ * makes one summary contradict the other.
+ */
+const STOPPED = new Set(["error", "bug", "failed"]);
+
+/**
+ * **The judgement this whole distinction hangs on: which absences are explained.**
+ *
+ * A required step or `AiJob` with no priced row is either a *lost row* — money
+ * really spent and the ledger short of it, the class that cost this project a
+ * silent $0.0333 run — or a *paid failure*, where the step that would have
+ * bought it never got the chance. The two look identical from the ledger, and
+ * only the job's own step statuses can separate them.
+ *
+ * The rule is **at or before**, and the direction matters both ways. Walking the
+ * steps in pipeline order, anything from the first failure onwards never
+ * completed, so an absence there is explained. A failure *after* `producedBy`
+ * explains nothing about it: `hierarchy` finishing and `arc` blowing up leaves a
+ * missing `labels` row exactly as lost as it ever was.
+ *
+ * Found by evals/results/cost/2026-09-03-04-59-07-1bpfhts0-long-html: draw 2's
+ * `hierarchy` was billed $0.2124 and then failed its own range check, so the
+ * label fan-out — which runs only after hierarchy succeeds — bought nothing, and
+ * the fatal `no-spend` stopped a sweep whose purpose was to count how often that
+ * happens. Draws 3 and 4 never ran.
+ *
+ * `undefined` when nothing explains it, which keeps the finding fatal. A run
+ * that supplies no statuses gets the old behaviour: no explanation is not an
+ * explanation.
+ */
+function stoppedAtOrBefore(
+  steps: readonly StepOutcome[] | undefined,
+  producedBy: string,
+): StepOutcome | undefined {
+  if (!steps) return undefined;
+  const at = steps.findIndex((s) => s.name === producedBy);
+  /* A step the job never listed cannot be explained by this job's failures.
+     Whatever went wrong there is a different bug, and it stays fatal. */
+  if (at === -1) return undefined;
+  for (const step of steps.slice(0, at + 1)) {
+    if (STOPPED.has(step.status)) return step;
+  }
+  return undefined;
+}
+
 export interface ColdExpectation {
   /** Steps that must have recorded non-zero spend for this run to be cold. */
   mustPay: readonly string[];
@@ -289,6 +372,22 @@ export interface ColdExpectation {
   /** What each step's collector saw, to reconcile against the rows that survived. */
   observed?: readonly StepObservation[];
   /**
+   * **What the job recorded for each of its steps, in pipeline order** — the
+   * only evidence that can turn a fatal missing row into a counted paid failure.
+   *
+   * Passed in rather than read: this file is pure, and `Draw.steps` in run.ts is
+   * where the job's own answer lives. Omit it and every absence stays fatal,
+   * which is what every caller got before 2026-09-03.
+   */
+  stepStatuses?: readonly StepOutcome[];
+  /**
+   * Which step each `AiJob` in `mustPayJobs` runs inside, for the two whose
+   * names differ from their step's — `AI_JOB_STEP` in harness.ts holds them and
+   * says why there are only two. Anything not in the map is looked up under its
+   * own name.
+   */
+  aiJobStep?: Readonly<Record<string, string>>;
+  /**
    * Accept a required step whose entire bill is unknown, as a note rather than
    * a stop. Deliberate, and it makes the run's headline number short by an
    * unknown amount — which the report then has to say.
@@ -303,17 +402,46 @@ export interface ColdExpectation {
  * `AiJob` cut. `what` names the namespace so a finding says which cut it is
  * about — "labels" is not a step and a message that implied it was would send
  * the next reader to `STEP_ORDER`.
+ *
+ * `stepOf` maps the required name onto the pipeline step that would have bought
+ * it, which is the identity for the step cut and `AI_JOB_STEP` for the job cut.
  */
 function checkMustPay(
   groups: readonly StepSpend[],
   required: readonly string[],
   what: "step" | "AI job",
   allowUnpriced: boolean,
+  expect: ColdExpectation,
+  stepOf: (name: string) => string,
 ): Finding[] {
   const byName = new Map(groups.map((s) => [s.step, s]));
   const findings: Finding[] = [];
   for (const name of required) {
     const group = byName.get(name);
+    if (group && moneyTotalNanos(group.money) > 0) continue;
+
+    /* **Asked before any of the three fatals below.** All three are ways of
+       saying "this bought nothing", and every one of them is the *expected*
+       shape of a draw whose pipeline stopped short — so the explanation is a
+       property of the absence rather than of which flavour of absence it is. */
+    const stopped = stoppedAtOrBefore(expect.stepStatuses, stepOf(name));
+    if (stopped) {
+      findings.push({
+        kind: "explained-absence",
+        step: name,
+        fatal: false,
+        message:
+          `PAID FAILURE — ${what} ${name} bought nothing` +
+          (group ? ` beyond ${group.calls} unpaid call(s)` : " and has no ledger row") +
+          `, and step ${stopped.name} is ${stopped.status}: it never ran, so this is an absence ` +
+          "the job's own status explains rather than a row that was lost. The draw's money was " +
+          "really spent and is not the price of anything — it is kept out of every headline " +
+          "figure and listed beside them. The run carries on: a sweep that measures how often " +
+          "this happens cannot stop the first time it does.",
+      });
+      continue;
+    }
+
     if (!group) {
       findings.push({
         kind: "no-spend",
@@ -323,7 +451,6 @@ function checkMustPay(
       });
       continue;
     }
-    if (moneyTotalNanos(group.money) > 0) continue;
     if (group.money.unpriced > 0) {
       findings.push({
         kind: "unpriced",
@@ -403,10 +530,18 @@ export function checkCold(rows: readonly AiCallRow[], expect: ColdExpectation): 
   const allowed = new Set([...expect.mustPay, ...(expect.mayPay ?? [])]);
   const allowUnpriced = expect.allowUnpriced ?? false;
 
-  findings.push(...checkMustPay(steps, expect.mustPay, "step", allowUnpriced));
-  /* The second namespace, and the one that can see a missing label fan-out. */
+  findings.push(...checkMustPay(steps, expect.mustPay, "step", allowUnpriced, expect, (n) => n));
+  /* The second namespace, and the one that can see a missing label fan-out. Its
+     names are not step names, so it needs the map to ask the step question. */
   findings.push(
-    ...checkMustPay(aggregateByAiJob(rows), expect.mustPayJobs ?? [], "AI job", allowUnpriced),
+    ...checkMustPay(
+      aggregateByAiJob(rows),
+      expect.mustPayJobs ?? [],
+      "AI job",
+      allowUnpriced,
+      expect,
+      (n) => expect.aiJobStep?.[n] ?? n,
+    ),
   );
   if (expect.observed) findings.push(...checkLedgerComplete(rows, expect.observed));
 
@@ -459,6 +594,538 @@ export function checkCold(rows: readonly AiCallRow[], expect: ColdExpectation): 
   return findings;
 }
 
+/* ------------------------------------------ the all-modes sweep's checks -- */
+
+/**
+ * Which part of an all-modes sweep a draw is, and therefore what it means.
+ *
+ * - `ingest` — the fixture through the ingest queue under a fresh slug. Mints an
+ *   article; hierarchy and its label fan-out are what it buys.
+ * - `mode` — one on-demand mode as its own job against the **adopted** article
+ *   the ingest draw made. This is the number "what does pressing Ideas cost".
+ * - `batched` — several modes in one job, `--against` an article that already
+ *   exists. A different number, deliberately, and **it must never be aggregated
+ *   with the per-mode ones**: modes sharing a job share a cached article prefix,
+ *   so all but the first read warm. That is what makes it worth measuring —
+ *   `sharesArticleCache` has never been priced — and what makes it a separate
+ *   scenario.
+ */
+export type DrawPhase = "ingest" | "mode" | "batched";
+
+/**
+ * **A draw's coldness, made falsifiable — and the two rules are different
+ * strengths for a reason.**
+ *
+ * The sweep ingests once and then runs each mode as its own job against the
+ * adopted article, rather than paying for a fresh ingest per mode (~$3.40 of
+ * scaffolding per mode on `long-html`). That is only a *cold* per-mode number if
+ * a later job cannot read the cached article prefix an earlier one wrote. The
+ * argument that it cannot is in the plan — `runStep` marks the article only when
+ * a **later step of the same job** will read it (src/pipeline.ts §
+ * `sharesArticleCache`), a single-mode job's `later` list is empty, and
+ * Anthropic's cache is explicit-only so nothing warms implicitly.
+ *
+ * All of which is an argument. These are the measurements.
+ *
+ * **A per-mode draw: no cache read at all, on any call.** Every one of the eight
+ * modes gates its only `cache_control` on `opts.cacheArticle` (src/arc.ts,
+ * tweets.ts, glossary.ts, quotes.ts, ideas.ts, timeline.ts, quiz.ts,
+ * sketch.ts), and a single-mode job leaves that false — so no breakpoint is
+ * sent, and Anthropic can neither write nor read one. A read of *any* size is
+ * therefore anomalous, not merely a warm first call, and the weaker
+ * earliest-call rule would let it through.
+ *
+ * **An ingest draw: the earliest call by `startedAt` of each step must be
+ * cold.** Earliest, not any, because within-run caching here is deliberate and
+ * is part of what production pays: hierarchy's label fan-out shares
+ * `stepName: "hierarchy"` with the structure call and legitimately reads off it,
+ * and a rule of "no cache read anywhere" would fail every fan-out whose write
+ * premium we choose to pay.
+ *
+ * **Per step, not per draw, and this is the finding Sol's review turned up.**
+ * An earlier version returned early for every non-mode draw, which left the two
+ * paths where implicit provider caching is actually possible with no gate at
+ * all: PDF extraction is `PDF_READER_MODEL` (an OpenAI model — src/models.ts),
+ * and OpenAI caches a repeated prefix automatically, across jobs and without a
+ * breakpoint. The fixture bytes and the prompt are byte-identical between runs,
+ * so a rerun inside the cache lifetime would report a discounted `extract` as
+ * cold ingest. Dictation is `DICTATION_MODEL`, a Gemini model, and Gemini caches
+ * implicitly by default — the same trap, on the interactions side.
+ *
+ * **Not under `--batched-modes` and not on a batched draw**, where the warm read
+ * is the thing being measured.
+ */
+export function checkColdDraw(
+  rows: readonly AiCallRow[],
+  opts: { phase: DrawPhase; batchedModes: boolean },
+): Finding[] {
+  if (opts.phase === "batched" || opts.batchedModes) return [];
+  if (rows.length === 0) return [];
+  return opts.phase === "mode" ? modeDrawIsCold(rows) : eachStepStartsCold(rows);
+}
+
+/**
+ * **Unknown is fatal, and the message has to say which kind of fatal.**
+ *
+ * A coerced `cacheReadTokens ?? 0` passed the guard with no evidence at all: a
+ * provider or a fallback that omits the field would read as proof of coldness.
+ * For a sweep whose numbers get published, no telemetry means the draw cannot be
+ * called cold — which is a different sentence from "it was warm", and a reader
+ * who is told the wrong one goes looking for the wrong thing.
+ */
+function noCacheTelemetry(row: AiCallRow, what: string): Finding {
+  return {
+    kind: "unknown-cache-telemetry",
+    step: row.stepName,
+    fatal: true,
+    message:
+      `${what} reported no cache-read count at all (${row.requestedModel} via ` +
+      `${row.upstream ?? "an upstream that did not say"}), so there is no evidence it was cold. ` +
+      "Fatal because it is unknown, not because it is warm: coercing the absent field to zero " +
+      "is what let a guard with nothing under it pass.",
+  };
+}
+
+function modeDrawIsCold(rows: readonly AiCallRow[]): Finding[] {
+  const findings: Finding[] = [];
+  for (const row of rows) {
+    if (row.cacheReadTokens === null) {
+      findings.push(noCacheTelemetry(row, "A call of this per-mode draw"));
+      continue;
+    }
+    if (row.cacheReadTokens === 0) continue;
+    findings.push({
+      kind: "warm-mode-call",
+      step: row.stepName,
+      fatal: true,
+      message:
+        `A call of this per-mode draw read ${row.cacheReadTokens} cached token(s). A single-mode ` +
+        "job sends no `cache_control` breakpoint at all — every mode gates its only one on " +
+        "`opts.cacheArticle` — so there is nothing here that should be readable, at any size. " +
+        "Either a breakpoint has appeared or a later job is reading a prefix an earlier one " +
+        "wrote, and every per-mode number after the first would be a warm read priced as cold.",
+    });
+  }
+  return findings;
+}
+
+function eachStepStartsCold(rows: readonly AiCallRow[]): Finding[] {
+  const findings: Finding[] = [];
+  const byStep = new Map<string, AiCallRow[]>();
+  for (const r of rows) {
+    const bucket = byStep.get(r.stepName ?? NO_STEP);
+    if (bucket) bucket.push(r);
+    else byStep.set(r.stepName ?? NO_STEP, [r]);
+  }
+  for (const [step, group] of byStep) {
+    /* **By the clock, not by the array.** `forJob` comes back ordered by
+       `started_at` today, so "the first row" and "the earliest call" happen to
+       agree — and a check that relies on that would go quietly wrong the day the
+       ordering changed, asking about a call that is not the one the argument is
+       about. Ties are taken as a group: two rows can share a millisecond, and
+       picking whichever arrived first would make the verdict depend on an order
+       the reader cannot see. */
+    const earliestAt = Math.min(...group.map((r) => Date.parse(r.startedAt)));
+    for (const row of group.filter((r) => Date.parse(r.startedAt) === earliestAt)) {
+      if (row.cacheReadTokens === null) {
+        findings.push(noCacheTelemetry(row, `The earliest call of step ${step}`));
+        continue;
+      }
+      if (row.cacheReadTokens === 0) continue;
+      findings.push({
+        kind: "warm-first-call",
+        step: row.stepName,
+        fatal: true,
+        message:
+          `The earliest call of step ${step} read ${row.cacheReadTokens} cached token(s), so ` +
+          "this step did not start cold. On an OpenAI or Gemini model there need be no " +
+          "breakpoint for that: both cache a repeated prefix implicitly, and this eval resends " +
+          "byte-identical committed bytes. A discounted rerun reported as a cold first " +
+          "generation is the wrong number, not a cheap one.",
+      });
+    }
+  }
+  return findings;
+}
+
+/**
+ * Whether `enqueue` took the article we named or made a new one.
+ *
+ * A union rather than a boolean, because the interesting case has to say *what*
+ * it got instead — a mint whose slug you cannot see is a mint you cannot chase.
+ */
+export type Adoption =
+  | { kind: "adopted"; slug: string; articleId: string }
+  | {
+      kind: "minted";
+      requested: string;
+      got: string;
+      /** Which of the two observations noticed — the slug moved, or the article id did. */
+      why: string;
+    };
+
+/**
+ * **A mode job that minted is a cold ingest wearing the mode's name**, and
+ * nothing else in this file would notice.
+ *
+ * A job arriving with neither a URL nor an upload is `{kind: "adopted"}`
+ * (src/jobs.ts § `enqueue`), so the sweep's mode jobs pass none. If that ever
+ * stops being true — a changed default, a URL that creeps in, a slug the queue
+ * steps aside from — the job ingests a fresh empty article, pays for the whole
+ * pipeline, and reports the total under `ideas`. Every other check passes: it
+ * spent money, in the eval scope, on the step it was asked for.
+ *
+ * An ingest draw is *expected* to mint, so it is not asked.
+ */
+export function checkAdoption(adoption: Adoption, phase: DrawPhase): Finding[] {
+  if (phase === "ingest" || adoption.kind === "adopted") return [];
+  return [
+    {
+      kind: "not-adopted",
+      step: null,
+      fatal: true,
+      message:
+        `This draw asked for "${adoption.requested}" and the queue gave it ` +
+        `"${adoption.got}" (${adoption.why}) — the job minted a fresh article instead of ` +
+        "adopting the one the sweep ingested, so what it measures is a whole cold ingest " +
+        "filed under a mode's name.",
+    },
+  ];
+}
+
+/* --------------------------------------------------- observed variation -- */
+
+/**
+ * One draw, reduced to the two facts a variation summary needs.
+ *
+ * **`succeeded` is the stage/job outcome, not the gateway's.** `outcome: "ok"`
+ * on a ledger row only means the wire returned; a truncated hierarchy is a `bug`
+ * failure with a perfectly ok row beside it (src/token-budget.ts,
+ * docs/postmortems/260826a-toc-max-tokens.md). Counting the gateway's word
+ * would report zero failures over a run of them.
+ */
+export interface DrawOutcome {
+  label: string;
+  totalNanos: number;
+  succeeded: boolean;
+  /** Why it failed, when it did — `truncated`, `bug`, whatever the stage said. */
+  failure?: string;
+}
+
+/**
+ * What a set of repeated draws actually showed. **Never a tail probability and
+ * never a standard deviation** — the plan's Principles forbid both, and over
+ * four draws either would be a number with no evidence under it.
+ *
+ * `null` rather than `0` for the middle and the ends of an empty set, because a
+ * zero there reads as "these draws cost nothing".
+ */
+export interface ObservedVariation {
+  draws: number;
+  median: number | null;
+  min: number | null;
+  max: number | null;
+  /** `max − min`, and the whole of what we claim about spread. */
+  range: number | null;
+  succeeded: number;
+  failures: number;
+  /** Failures by what the stage said went wrong, so truncation can be told from a bug. */
+  failureKinds: Record<string, number>;
+  /** The middle of the draws that worked — the number a reader would be quoted. */
+  medianGivenSuccess: number | null;
+  /** Every nano the set was billed, **failures included**: a stop is not a refund. */
+  totalPaidNanos: number;
+}
+
+function median(values: readonly number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  /* An even count has no middle element, so the two either side of the gap are
+     averaged — the ordinary definition, written out because the alternative
+     (taking the upper of the two) is a silent bias on a four-draw set. */
+  return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+}
+
+export function observedVariation(draws: readonly DrawOutcome[]): ObservedVariation {
+  const costs = draws.map((d) => d.totalNanos);
+  const ok = draws.filter((d) => d.succeeded);
+  const failureKinds: Record<string, number> = {};
+  for (const d of draws) {
+    if (d.succeeded) continue;
+    const kind = d.failure ?? "unknown";
+    failureKinds[kind] = (failureKinds[kind] ?? 0) + 1;
+  }
+  const min = costs.length === 0 ? null : Math.min(...costs);
+  const max = costs.length === 0 ? null : Math.max(...costs);
+  return {
+    draws: draws.length,
+    median: median(costs),
+    min,
+    max,
+    range: min === null || max === null ? null : max - min,
+    succeeded: ok.length,
+    failures: draws.length - ok.length,
+    failureKinds,
+    medianGivenSuccess: median(ok.map((d) => d.totalNanos)),
+    totalPaidNanos: costs.reduce((n, c) => n + c, 0),
+  };
+}
+
+/** The failure kinds as `2 truncated, 1 hierarchy error`, or "" when none failed. */
+function namedFailures(v: ObservedVariation): string {
+  return Object.entries(v.failureKinds)
+    .map(([kind, n]) => `${n} ${kind}`)
+    .join(", ");
+}
+
+/**
+ * The variation summary as a paragraph, with the words the plan chose.
+ *
+ * It says *observed variation* rather than anything that sounds like a
+ * distribution, and it names the failure kinds rather than folding them into the
+ * median — a run whose cheapest two draws were truncations is not a cheap run.
+ *
+ * **And a set where nothing succeeded gets a different paragraph**, because the
+ * ordinary one is a confident-looking cost line built entirely out of failures:
+ * "median $0.21, range $0.20–$0.22" reads as the price of an article, and it is
+ * the price of not getting one. The numbers are still printed — what four
+ * failures cost is worth knowing — under a heading that says what they are.
+ * Every draw of a set failing is not hypothetical: it is the neighbouring case
+ * to the run that prompted all this
+ * (evals/results/cost/2026-09-03-04-59-07-1bpfhts0-long-html), where the sweep
+ * stopped rather than going on to find out.
+ */
+export function formatVariation(what: string, v: ObservedVariation): string {
+  if (v.draws === 0) return `  ${what}: no draws.`;
+  const tail =
+    "    Observed variation only. No tail probability and no standard deviation: over this " +
+    "many draws either would be a number with no evidence under it.";
+  if (v.succeeded === 0) {
+    return [
+      `  ${what}: ${v.draws} draw(s) and NOT ONE produced its artefact (${namedFailures(v)}) — ` +
+        "there is no cost to quote here.",
+      `    Every figure that follows is the price of failing, not the price of the thing: ` +
+        `median ${formatNanos(v.median ?? 0)}, range ${formatNanos(v.min ?? 0)}–` +
+        `${formatNanos(v.max ?? 0)} (spread ${formatNanos(v.range ?? 0)}).`,
+      `    Total paid across every draw, all of them failures: ${formatNanos(v.totalPaidNanos)}.`,
+      tail,
+    ].join("\n");
+  }
+  const lines = [
+    `  ${what}: ${v.draws} draw(s), observed variation — ` +
+      `median ${formatNanos(v.median ?? 0)}, range ${formatNanos(v.min ?? 0)}–` +
+      `${formatNanos(v.max ?? 0)} (spread ${formatNanos(v.range ?? 0)}).`,
+    `    ${v.succeeded} succeeded, ${v.failures} failed` +
+      (v.failures > 0 ? ` (${namedFailures(v)})` : "") +
+      `; median given success ${v.medianGivenSuccess === null ? "—" : formatNanos(v.medianGivenSuccess)}.`,
+    `    Total paid across every draw, failures included: ${formatNanos(v.totalPaidNanos)}.`,
+    tail,
+  ];
+  return lines.join("\n");
+}
+
+/* ------------------------------------------------------- what may be quoted -- */
+
+/** A draw that was billed and did not produce the thing it was billed for. */
+export interface PaidFailure {
+  label: string;
+  /** Really spent. A stop is not a refund, and the money has to appear somewhere. */
+  nanos: number;
+  /** What the stage said went wrong — `hierarchy bug`, `truncated`, `error`. */
+  failure: string;
+}
+
+/**
+ * **The headline figure and the money that must not be inside it.**
+ *
+ * A mode that is billed and then fails parsing or validation has a perfectly
+ * real bill and no artefact. Quoting that as "Ideas costs $X" is the failure
+ * mode this whole eval exists to avoid — a plausible wrong number — and folding
+ * it into "whole article" is the same mistake one level up. So the two are
+ * separated here, in the same shape `observedVariation` already uses for the
+ * repeated draws: **cost conditional on success is the number, total paid is
+ * reported beside it**, and the failures are named rather than counted.
+ *
+ * `gateway ok` is not the question. `DrawOutcome.succeeded` is the stage/job
+ * outcome — a truncated generation has an `outcome: "ok"` row beside it.
+ */
+export interface HeadlineTotal {
+  /** How many of the draws produced what they were billed for. */
+  succeeded: number;
+  draws: number;
+  /** The sum over the successful draws, and the only figure that may be quoted. */
+  nanos: number;
+  /** Billed, and not a price for anything. */
+  paidFailures: PaidFailure[];
+  /** Every nano the set was billed, failures included. */
+  totalPaidNanos: number;
+  /**
+   * Whether `nanos` is a complete answer to "what does this set cost". False as
+   * soon as one draw failed: the successful ones still cost what they cost, but
+   * the set is missing a price for the part that failed.
+   */
+  complete: boolean;
+}
+
+export function headlineTotal(draws: readonly DrawOutcome[]): HeadlineTotal {
+  const ok = draws.filter((d) => d.succeeded);
+  const paidFailures = draws
+    .filter((d) => !d.succeeded)
+    .map((d) => ({ label: d.label, nanos: d.totalNanos, failure: d.failure ?? "unknown" }));
+  return {
+    succeeded: ok.length,
+    draws: draws.length,
+    nanos: ok.reduce((n, d) => n + d.totalNanos, 0),
+    paidFailures,
+    totalPaidNanos: draws.reduce((n, d) => n + d.totalNanos, 0),
+    complete: paidFailures.length === 0 && draws.length > 0,
+  };
+}
+
+/** The paid failures as their own block, so their money is visible and separate. */
+export function formatPaidFailures(t: HeadlineTotal): string {
+  if (t.paidFailures.length === 0) return "";
+  const lines = t.paidFailures.map(
+    (f) => `    ${f.label}: ${formatNanos(f.nanos)} spent, ${f.failure} — no artefact.`,
+  );
+  return [
+    `  Paid failures (${t.paidFailures.length}), excluded from every figure above and ` +
+      "really spent:",
+    ...lines,
+  ].join("\n");
+}
+
+/* ------------------------------------------------ cold and warm, per round -- */
+
+/**
+ * One call's cache telemetry, in the order the calls were made.
+ *
+ * Deliberately not `AiCallRow`: the interactions runner reads its calls off the
+ * live collector, where a `SpendRecord` carries `ms` and no start time (the
+ * timestamps are derived at row-write time, src/ai-spend.ts § `write`). So the
+ * ordering here is the caller's to supply and to justify — see `roundCache`.
+ */
+export interface CacheCall {
+  cacheRead: number | null;
+  cacheWrite: number | null;
+}
+
+/**
+ * What a round's calls say about the cache, as four outcomes rather than a
+ * boolean.
+ *
+ * `within-round` is the one a boolean loses, and it is the common case: chat's
+ * tool loop makes a second call that reads the prefix the first call wrote.
+ * That is a cold turn — the round arrived with nothing cached — and treating it
+ * as warm would suppress the most interesting ratio in the set.
+ */
+export type RoundCache =
+  | { kind: "no-calls" }
+  /** No cache-read count on some call, so nothing here is established either way. */
+  | { kind: "unknown"; why: string }
+  /** Nothing was read that this round had not written itself. */
+  | { kind: "cold"; readWithinRound: number }
+  /** A call read a cache no earlier call in this round wrote — it was already there. */
+  | { kind: "warm"; read: number };
+
+/**
+ * **Cold or warm, read off the calls rather than off the round's position.**
+ *
+ * The rule: walking the calls in order, a read is *pre-existing* if no earlier
+ * call in this round has written any cache. That is the earliest-call rule
+ * generalised — the first call has no predecessor, so any read by it is
+ * pre-existing — and it also catches the case the earliest-call rule alone
+ * misses, where a cheap first call writes nothing and the second reads a prefix
+ * from an earlier round.
+ *
+ * **Order is the caller's claim, and the failure direction is safe.** These come
+ * off the collector in the order the calls were *recorded*, which is the order
+ * they finished; every function driven by evals/cost/interactions.ts awaits its
+ * calls one at a time, so finishing order is calling order. If that ever stops
+ * being true, a concurrent pair can look like a read before its own write —
+ * which reports a warm round and withholds a ratio, rather than printing one
+ * that is wrong.
+ *
+ * A `null` cache-write is read as zero: not knowing whether this round wrote a
+ * cache is not evidence that it did.
+ */
+export function roundCache(calls: readonly CacheCall[]): RoundCache {
+  if (calls.length === 0) return { kind: "no-calls" };
+  let written = 0;
+  let readWithinRound = 0;
+  for (const call of calls) {
+    if (call.cacheRead === null) {
+      return {
+        kind: "unknown",
+        why: "a call reported no cache-read count, so whether it was cold is unknown rather than " +
+          "established — and unknown is not evidence of coldness",
+      };
+    }
+    if (call.cacheRead > 0) {
+      if (written === 0) return { kind: "warm", read: call.cacheRead };
+      readWithinRound += call.cacheRead;
+    }
+    written += call.cacheWrite ?? 0;
+  }
+  return { kind: "cold", readWithinRound };
+}
+
+/** One measured round, reduced to what decides whether a ratio may be printed. */
+export interface RoundForRatio {
+  expected: "cold" | "warm";
+  nanos: number;
+  /** Calls that reported no cost. A total carrying them is short by an unknown amount. */
+  unpriced: number;
+  /** The round threw. What it bought is what it bought before failing. */
+  failed: boolean;
+  cache: RoundCache;
+}
+
+/**
+ * **"cache worth 2.5×" or nothing, and nothing is a fine answer.**
+ *
+ * The ratio was being printed from two rounds labelled cold and warm by their
+ * position in the loop, which is not an observation. Chat's tool loop can read
+ * cache on a later call when the first was cold; chat may invoke passage search
+ * before the standalone search task, warming a round still labelled cold; a
+ * failed round's number is what it bought before it fell over; and an unpriced
+ * round's number is short by an unknown amount. Any of those makes the quotient
+ * a wrong number wearing a plausible one's clothes.
+ *
+ * So it is printed only when both rounds succeeded, both were priced, and each
+ * one's observed cache state is the state it was labelled with.
+ */
+export function cacheRatio(
+  cold: RoundForRatio,
+  warm: RoundForRatio,
+): { kind: "ratio"; ratio: number } | { kind: "none"; why: string } {
+  for (const [what, round] of [["cold", cold], ["warm", warm]] as const) {
+    if (round.failed) return { kind: "none", why: `the ${what} round failed` };
+    if (round.unpriced > 0) {
+      return { kind: "none", why: `the ${what} round has ${round.unpriced} unpriced call(s)` };
+    }
+    if (round.nanos <= 0) return { kind: "none", why: `the ${what} round recorded no cost` };
+    if (round.cache.kind === "unknown") {
+      return { kind: "none", why: `the ${what} round's cache state is unknown: ${round.cache.why}` };
+    }
+    if (round.cache.kind === "no-calls") {
+      return { kind: "none", why: `the ${what} round made no calls` };
+    }
+    if (round.cache.kind !== round.expected) {
+      return {
+        kind: "none",
+        why:
+          `the ${what} round was labelled ${round.expected} and read ` +
+          (round.cache.kind === "warm"
+            ? `${round.cache.read} pre-existing cached token(s)`
+            : "no pre-existing cache"),
+      };
+    }
+  }
+  return { kind: "ratio", ratio: cold.nanos / warm.nanos };
+}
+
 /* -------------------------------------------------------------- printing -- */
 
 const seconds = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
@@ -501,9 +1168,22 @@ export function formatStepTable(steps: readonly StepSpend[]): string {
 /**
  * The findings, fatal ones first and labelled, so that a run whose numbers look
  * plausible cannot be read past a leak.
+ *
+ * **Three ranks, not two.** An explained absence is not fatal — the run has to
+ * carry on past it, or a sweep counting semantic failures stops at the first one
+ * — but it is not an aside either: it says this draw was billed and produced
+ * nothing, which is the one thing a reader must not miss while scanning a page
+ * of dollars. So it sorts above the ordinary notes, and its message leads with
+ * the words rather than relying on the label, because the same text is what a
+ * later reader finds in `run.json`.
  */
+function findingRank(f: Finding): number {
+  if (f.fatal) return 0;
+  return f.kind === "explained-absence" ? 1 : 2;
+}
+
 export function formatFindings(findings: readonly Finding[]): string {
   if (findings.length === 0) return "";
-  const ordered = [...findings].sort((a, b) => Number(b.fatal) - Number(a.fatal));
+  const ordered = [...findings].sort((a, b) => findingRank(a) - findingRank(b));
   return ordered.map((f) => `  ${f.fatal ? "FATAL" : "note "} ${f.message}`).join("\n");
 }
