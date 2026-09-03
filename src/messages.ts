@@ -1495,19 +1495,55 @@ export const SHARING_ON = "Anyone with the link can read this, without signing i
  */
 export const SHARING_BADGE = "Shared";
 
-/** What a visitor gets, in one line, on the card rather than behind a hover. */
-/* **"and whatever the model has written about it" was added 2026-09-02**, and
-   it is a correction rather than a flourish. Since slice 1b a shared link has
-   carried the glossary, the ideas, the quotes and the tweet thread, and this
-   sentence still named only the article and its tree — true, and true by
-   omission of the four things an owner would most want to have been told. On
-   the owner's card it now sits directly above the itemised list
-   (src/web/shared-inventory.ts), where the omission was visible. */
-export const SHARING_WHAT_VISITORS_SEE =
-  "A visitor sees the article, its table of contents, every zoom level, and the reading aids " +
-  "written for it — the summaries, the glossary, the ideas, the quotes. They never see your " +
-  "comments, your conversations, your searches or your notes, and nothing they do costs a model " +
-  "call.";
+/**
+ * **What a shared link carries, in one line** — for the owner on a shared
+ * article's card, and for the visitor on the page a shared link reaches.
+ *
+ * *"and whatever the model has written about it" was added 2026-09-02*, and it
+ * is a correction rather than a flourish. Since slice 1b a shared link has
+ * carried the glossary, the ideas, the quotes and the tweet thread, and this
+ * sentence still named only the article and its tree — true, and true by
+ * omission of the four things an owner would most want to have been told.
+ *
+ * ## Two things were wrong with it as a constant, and they had the same cause
+ *
+ * It was one string for two audiences, written for neither.
+ *
+ * **It was drawn on a *private* article's card**, in the present indicative,
+ * directly under *"Only you can read this."* — two paragraphs contradicting
+ * each other on a skim, on the one control in this app where a state that looks
+ * wrong is worth most. Greg, 2026-09-03: *"That's a fair description of what
+ * would be true IF it was Public-readable. But it's not."* It is now drawn only
+ * where it is true. A private article's owner is told what publishing would do
+ * in the confirmation box, which says it as a list — `SHARED_HEADING` and the
+ * two below it, itemised by [shared-inventory.ts](web/shared-inventory.ts), with
+ * `NOT_SHARED_NOTE` as the one-line summary. That is the same fact more
+ * precisely, so the box does not also get the sentence.
+ *
+ * **And the visitor was reading the owner's second person about themselves** —
+ * *"They never see **your** comments"*, on a page whose reader has none.
+ *
+ * ## Why a branch and not two constants
+ *
+ * The owner's side and the visitor's side of one fact are supposed to be
+ * different sentences — `SHARING_BADGE` above says why, and `VIEW_ONLY` is the
+ * other half of it. But two *constants* for one fact is the near-miss pair this
+ * repo has drifted into before (the dock's tooltip against the band's,
+ * [visitor.ts § markedModes](web/visitor.ts)). One body, one branch, and the
+ * only words that differ are the ones that have to.
+ *
+ * The cost clause is the owner's alone, deliberately. *Nothing a visitor does
+ * costs a model call* answers a question only somebody paying can have.
+ */
+export function sharedLinkCarries(audience: "owner" | "visitor"): string {
+  const carries =
+    "A shared link carries the article, its table of contents, every zoom level, and the reading " +
+    "aids written for it — the summaries, the glossary, the ideas, the quotes. It never carries ";
+  return audience === "owner"
+    ? `${carries}your comments, your conversations, your searches or your notes, and nothing a ` +
+        "visitor does costs a model call."
+    : `${carries}the comments, conversations, searches or notes of whoever added it.`;
+}
 
 /**
  * **The honest limit, and we are the only ones saying it.**

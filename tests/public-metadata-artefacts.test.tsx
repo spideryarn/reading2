@@ -163,3 +163,30 @@ describe("what a visitor is told has been built", () => {
     },
   );
 });
+
+/**
+ * **"What a shared link carries", written to the person reading it.**
+ *
+ * This page and the owner's Access & Sharing card drew one constant between
+ * them, and it was the owner's sentence: *"They never see **your** comments,
+ * **your** conversations…"*, shown to a visitor who has none, about themselves
+ * in the third person. Found while fixing the tense on the owner's card,
+ * 2026-09-03.
+ *
+ * `sharedLinkCarries` takes the audience for exactly this, and the two callers
+ * are the two audiences. One sentence with a branch rather than two constants:
+ * the same fact told twice in two places is the near-miss pair this repo has
+ * been bitten by before — src/messages.ts § SHARING_BADGE.
+ */
+describe("what a visitor is told a shared link carries", () => {
+  it("does not describe the visitor's own comments as theirs", async () => {
+    await visitor(ALL);
+    const text = host.textContent ?? "";
+
+    expect(text).toContain("A shared link carries the article");
+    expect(text).toContain("whoever added it");
+    /* The owner's second person, on a page no owner is reading. */
+    expect(text).not.toContain("your comments");
+    expect(text).not.toContain("your conversations");
+  });
+});

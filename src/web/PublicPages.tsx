@@ -19,7 +19,7 @@ import { ArrowLeft, ExternalLink } from "lucide-react";
 
 import type { Article } from "../types.js";
 import type { PublicArtefacts, PublicTweets } from "../public-types.js";
-import { SHARING_WHAT_VISITORS_SEE } from "../messages.js";
+import { sharedLinkCarries } from "../messages.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { carriedSearch, readHref, type ArticleView } from "./router.js";
@@ -162,7 +162,13 @@ export function PublicMetadataPage({
           <h2 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">
             What a shared link carries
           </h2>
-          <p className="tw:m-0 tw:text-sm tw:text-ink-faint">{SHARING_WHAT_VISITORS_SEE}</p>
+          {/* **`"visitor"`, and it is the reader of this page.** The sentence
+              was one constant shared with the owner's card until 2026-09-03,
+              which meant this page told a visitor that a shared link never
+              carries *"your comments, your conversations"* — the owner's second
+              person, about a reader who has none. src/messages.ts §
+              sharedLinkCarries. */}
+          <p className="tw:m-0 tw:text-sm tw:text-ink-faint">{sharedLinkCarries("visitor")}</p>
         </section>
       </main>
       <VisitorDock slug={slug} view="metadata" available={available} signedIn={signedIn} />

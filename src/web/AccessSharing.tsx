@@ -55,7 +55,7 @@ import {
   sharingPersonalisedList,
   SHARING_RIGHTS_CONFIRM,
   SHARING_UNKNOWN,
-  SHARING_WHAT_VISITORS_SEE,
+  sharedLinkCarries,
   SHARED_HEADING,
   SHARING_INVENTORY_UNKNOWN,
   SHARED_IF_BUILT_HEADING,
@@ -339,10 +339,21 @@ export function AccessSharing({
             {shared ? <Globe size={14} /> : <Lock size={14} />}
             {shared ? SHARING_ON : SHARING_OFF}
           </p>
-          <p className="tw:m-0 tw:mb-3 tw:text-ink-faint">{SHARING_WHAT_VISITORS_SEE}</p>
 
           {shared && (
             <>
+              {/* **Inside this branch since 2026-09-03**, and it used to sit
+                  above it, drawn in both states. Under *"Only you can read
+                  this."* it stated in the present indicative what a stranger
+                  sees — a description of a state this article is not in, on the
+                  card whose whole job is to say which state it is in.
+                  src/messages.ts § sharedLinkCarries.
+
+                  Nothing replaces it on the private card. What publishing would
+                  do is the confirmation box's question, and the box answers it
+                  as an itemised list; a conditional-voice copy of that list up
+                  here would be the same fact a third time. */}
+              <p className="tw:m-0 tw:mb-3 tw:text-ink-faint">{sharedLinkCarries("owner")}</p>
               <CopyLink link={link} />
               {publicAt && (
                 <p className="tw:m-0 tw:mb-3 tw:text-xs tw:text-ink-faint">

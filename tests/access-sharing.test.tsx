@@ -575,3 +575,45 @@ describe("turning it off", () => {
     expect(host.textContent).not.toContain("Anyone with the link can read this");
   });
 });
+
+/**
+ * **What a shared link carries is a fact about a shared link**, and the card
+ * stated it in the present indicative directly under *"Only you can read
+ * this."*
+ *
+ * Greg, 2026-09-03, on a private article's Access & Sharing card:
+ *
+ * > That's a fair description of what would be true IF it was Public-readable.
+ * > But it's not.
+ *
+ * Two paragraphs contradicting each other on a skim, on the one control in this
+ * app where a state that looks wrong matters most. Where a private article's
+ * owner is told what publishing would do is the confirmation box, and it says
+ * it as a list rather than as a sentence — src/web/shared-inventory.ts.
+ */
+describe("what a shared link carries", () => {
+  it("says it on a shared article, where it is true", async () => {
+    await mount(SHARED);
+
+    expect(host.textContent).toContain("A shared link carries the article");
+    /* The owner's second person. The visitor's copy of this sentence says
+       "whoever added it" instead, and tests/public-metadata-page.test.tsx is
+       what holds the two apart. */
+    expect(host.textContent).toContain("your comments");
+  });
+
+  it("does not say it on a private one, where it is not", async () => {
+    await mount(PRIVATE);
+
+    expect(host.textContent).toContain("Only you can read this");
+    /* **The list of aids, which is the clause both wordings share.** Asserting
+       on the new sentence alone would have passed against the old one — the
+       first draft of this test did, and green on a bug is worth less than no
+       test at all. docs/reusable/silent-success.md. */
+    expect(host.textContent).not.toContain("the summaries, the glossary, the ideas, the quotes");
+    /* Not reworded into a conditional and left where it was, either: it
+       describes a state this article is not in, and the owner's route to that
+       state is the button, which opens the box that itemises the whole thing. */
+    expect(host.textContent).not.toContain("carries the article");
+  });
+});
