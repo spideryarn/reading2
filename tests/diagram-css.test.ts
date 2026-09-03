@@ -80,8 +80,28 @@ describe("the diagram's font sizes are declared in both files and match", () => 
 describe("the diagram's colours go through the palette rather than naming one", () => {
   /* Comments stripped first — this block explains at length why an `oklch()`
      fallback is wrong, and a check that reads its own explanation as a
-     violation is a check nobody keeps. */
-  const BLOCK = CSS.slice(CSS.indexOf("§ diagram mode")).replace(/\/\*[\s\S]*?\*\//g, "");
+     violation is a check nobody keeps.
+
+     **Bounded at the next section, which it was not until 2026-09-03.** The
+     slice ran from `§ diagram mode` to the end of the file, so this test — whose
+     whole subject is *the diagram's* colours — was reading every rule below it
+     as well. The signed-out marketing redesign landed two brand hexes and some
+     `#000` mask stencils further down and turned it red, on `dev`, for everyone.
+     A `#000` inside `-webkit-mask: linear-gradient(#000 0 0)` is a stencil
+     rather than a colour at all, which is the clearest sign the reach was
+     accidental.
+
+     **Whether the marketing CSS should name a hex is a separate question and
+     this test is not the one asking it.** Narrowing here hides nothing it was
+     built to catch; it restores it. If the palette rule ought to cover the whole
+     stylesheet, that wants its own check and its own argument —
+     docs/project/design-css-overview.md. */
+  const FROM = CSS.indexOf("§ diagram mode");
+  const NEXT = CSS.slice(FROM).search(/\n\/\* -{8,}[^\n]*§/);
+  const BLOCK = (NEXT < 0 ? CSS.slice(FROM) : CSS.slice(FROM, FROM + NEXT)).replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
 
   it("uses the shared --cat-* slots and never a literal colour", () => {
     /* The eight hues live in styles/colourscales.css, where the reasoning about

@@ -30,11 +30,12 @@
  * `articles.current_revision_id` — so a draft opened *before* the delete still
  * passes `publishRevisionIn`'s exact-base guard and publishes its copied,
  * non-null glossary over the top. The reader's deletion would be silently
- * undone by a job they never thought about, possibly their own retry. Three
+ * undone by a job they never thought about, possibly their own retry. Four
  * cases below pin exactly which jobs count: queued-with-a-draft does,
- * expired-running-with-a-draft does not (it cannot publish anyway), and
- * claimed-without-a-draft does not (the article lock decides the order either
- * way).
+ * running-inside-a-live-lease-with-a-draft does — the case the guard exists
+ * for, and the commonest one — expired-running-with-a-draft does not (it cannot
+ * publish anyway), and claimed-without-a-draft does not (the article lock
+ * decides the order either way).
  *
  * ## Why the fixture is built by hand rather than through the pipeline
  *
@@ -436,6 +437,36 @@ when("deleting the glossary in Postgres", () => {
     await giveItAGlossaryAgain();
     const draft = await aDraft();
     const job = await aJob({ status: "queued", draftRevisionId: draft });
+    try {
+      await expect(deleteMine(MINE)).rejects.toMatchObject({ status: 409 });
+      expect(await glossaryColumn(myRevisionId), "and it is still there").not.toBeNull();
+    } finally {
+      await forget(job, draft);
+    }
+  }, 30_000);
+
+  /**
+   * **The case the guard exists for**, and the one the other three do not
+   * cover: a job actually working on this article right now, holding a draft,
+   * inside a live lease. It is the ordinary state of an article while any
+   * pipeline job runs, so it is what a reader pressing *Start again* at the
+   * wrong moment will hit.
+   *
+   * It was also the one this file could most easily be missing without anybody
+   * noticing: while it was absent, deleting the whole `running` arm of
+   * `liveJobHoldingADraftQuery` left every other case here green — the queued
+   * case does not reach that arm, and the two "goes ahead" cases *want* the
+   * predicate not to match. GPT Sol found the hole in the built code; the arm
+   * was then deleted for real and this case watched red before it was kept.
+   *
+   * The glossary is asserted still present afterwards, not just the status: a
+   * 409 thrown after the `UPDATE` had already committed would satisfy the
+   * first expectation and lose the reader's list anyway.
+   */
+  it("refuses with a 409 while a running job with a live lease holds a draft", async () => {
+    await giveItAGlossaryAgain();
+    const draft = await aDraft();
+    const job = await aJob({ status: "running", draftRevisionId: draft });
     try {
       await expect(deleteMine(MINE)).rejects.toMatchObject({ status: 409 });
       expect(await glossaryColumn(myRevisionId), "and it is still there").not.toBeNull();

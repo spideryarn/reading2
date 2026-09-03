@@ -1,0 +1,270 @@
+{
+  "startedAt": "2026-09-03T09:08:15.860Z",
+  "commit": "380753b90604aad3f60ab6f94ca088fb89b98087",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "headings",
+      "kind": "headings",
+      "comparison": "baseline"
+    }
+  ],
+  "results": [
+    {
+      "arm": "headings",
+      "comparison": "baseline",
+      "slug": "constitution",
+      "run": 1,
+      "callOrder": 1,
+      "blocksSha256": {
+        "measured": "0001e71193a64eb566ceca1285cdb2a7580916f4bcd95a2a5810d964c6902db5",
+        "manifest": "58dd654c87248ce4fc966ad83074b7b6cdaf6569e36ae477e09d28803afdec5f",
+        "matchesManifest": false
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "constitution",
+        "blocks": 84,
+        "bodyBlocks": 84,
+        "headingBlocks": 10,
+        "fragmentBlocks": 1,
+        "validity": {
+          "gistProblems": 9,
+          "otherProblems": 0,
+          "advice": 75
+        },
+        "parts": {
+          "count": 8,
+          "words": [
+            323,
+            655,
+            1050,
+            246,
+            447,
+            902,
+            68,
+            1106
+          ],
+          "balanceCv": 0.6074107364757598
+        },
+        "depth": {
+          "maxInternal": 1,
+          "minLeaf": 2,
+          "maxLeaf": 2,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 10.222222222222221,
+          "max": 34,
+          "within5to9": 0.4444444444444444
+        },
+        "headings": {
+          "boundaries": 7,
+          "boundariesOnHeadings": 1,
+          "headingsCut": 0.7777777777777778,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.8888888888888888,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 33,
+            "words": 1101
+          }
+        },
+        "titles": {
+          "count": 9,
+          "meanWords": 4,
+          "within2to6": 0.8888888888888888,
+          "copiedHeadings": 9,
+          "retention": null
+        },
+        "gists": {
+          "count": 0,
+          "coverage": 0,
+          "meanWords": 0,
+          "multiSentence": null,
+          "templateRepetition": null,
+          "retention": null
+        }
+      },
+      "sectionLevel": 3,
+      "flat": false,
+      "vsDisk": {
+        "partCountA": 8,
+        "partCountB": 2,
+        "l1Boundaries": 0.14285714285714285,
+        "allBoundaries": 0.5454545454545454,
+        "boundaryDistance": {
+          "mean": 3.1176470588235294,
+          "within1Block": 0.7058823529411765
+        }
+      }
+    },
+    {
+      "arm": "headings",
+      "comparison": "baseline",
+      "slug": "noema-mythology-of-conscious-ai",
+      "run": 1,
+      "callOrder": 2,
+      "blocksSha256": {
+        "measured": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "manifest": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "noema-mythology-of-conscious-ai",
+        "blocks": 141,
+        "bodyBlocks": 141,
+        "headingBlocks": 9,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 11,
+          "otherProblems": 0,
+          "advice": 108
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            655,
+            1296,
+            4673,
+            999,
+            660
+          ],
+          "balanceCv": 0.92172431404891
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.5531914893617021
+        },
+        "fanout": {
+          "mean": 13.727272727272727,
+          "max": 26,
+          "within5to9": 0.18181818181818182
+        },
+        "headings": {
+          "boundaries": 8,
+          "boundariesOnHeadings": 1,
+          "headingsCut": 1,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.9090909090909091,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 25,
+            "words": 1749
+          }
+        },
+        "titles": {
+          "count": 11,
+          "meanWords": 4.090909090909091,
+          "within2to6": 1,
+          "copiedHeadings": 11,
+          "retention": null
+        },
+        "gists": {
+          "count": 0,
+          "coverage": 0,
+          "meanWords": 0,
+          "multiSentence": null,
+          "templateRepetition": null,
+          "retention": null
+        }
+      },
+      "sectionLevel": 2,
+      "flat": false,
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 5,
+        "l1Boundaries": 1,
+        "allBoundaries": 0.4,
+        "boundaryDistance": {
+          "mean": 2.607142857142857,
+          "within1Block": 0.5714285714285714
+        }
+      }
+    },
+    {
+      "arm": "headings",
+      "comparison": "baseline",
+      "slug": "writes",
+      "run": 1,
+      "callOrder": 3,
+      "blocksSha256": {
+        "measured": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "manifest": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "writes",
+        "blocks": 19,
+        "bodyBlocks": 19,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 1,
+          "otherProblems": 0,
+          "advice": 17
+        },
+        "parts": {
+          "count": 0,
+          "words": [],
+          "balanceCv": 0
+        },
+        "depth": {
+          "maxInternal": 0,
+          "minLeaf": 1,
+          "maxLeaf": 1,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 19,
+          "max": 19,
+          "within5to9": 0
+        },
+        "headings": {
+          "boundaries": 0,
+          "boundariesOnHeadings": null,
+          "headingsCut": null,
+          "l1OnHeadings": null,
+          "sourceHeadingShare": 0,
+          "sourceHeadingValid": null,
+          "longestHeadinglessRun": {
+            "blocks": 18,
+            "words": 558
+          }
+        },
+        "titles": {
+          "count": 1,
+          "meanWords": 3,
+          "within2to6": 1,
+          "copiedHeadings": 1,
+          "retention": null
+        },
+        "gists": {
+          "count": 0,
+          "coverage": 0,
+          "meanWords": 0,
+          "multiSentence": null,
+          "templateRepetition": null,
+          "retention": null
+        }
+      },
+      "sectionLevel": null,
+      "flat": true,
+      "vsDisk": {
+        "partCountA": 0,
+        "partCountB": 4,
+        "l1Boundaries": 0,
+        "allBoundaries": 0,
+        "boundaryDistance": null
+      }
+    }
+  ]
+}

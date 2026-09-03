@@ -54,11 +54,12 @@ import { MAX_PROFILE_CHARS, type LibraryEntry } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { PRIVACY_HREF, readHref } from "./router.js";
+import { readHref } from "./router.js";
 import { AccountSection } from "./AccountSection.js";
 import { BillingSection } from "./BillingSection.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { SettingsSection } from "./SettingsSection.js";
+import { SiteFooter } from "./SiteFooter.js";
 import { useProfile } from "./useProfile.js";
 import { useSlow } from "./useSlow.js";
 
@@ -388,13 +389,14 @@ export function ProfilePage() {
           never see that again. Here rather than in the masthead because it is
           not something anybody needs mid-article — it is a thing you go and
           look up, and this is the page you already come to for "what does this
-          know about me". */}
-      <p className="tw:mt-10 tw:mb-0 tw:border-t tw:border-border tw:pt-5 tw:text-xs tw:text-ink-faint">
-        <Link href={PRIVACY_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
-          Privacy
-        </Link>{" "}
-        — what we keep, and who it goes to.
-      </p>
+          know about me".
+
+          It was a hand-written Privacy link until 2026-09-03 and is now the
+          same row every other page carries (SiteFooter.tsx). The sentence it
+          used to end with — *"what we keep, and who it goes to"* — went with
+          it: the row is four links across every page, and one of them wearing a
+          gloss the others do not have reads as a different kind of thing. */}
+      <SiteFooter />
     </main>
   );
 }

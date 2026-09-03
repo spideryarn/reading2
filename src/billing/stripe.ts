@@ -198,6 +198,49 @@ export async function stripeClient(): Promise<Stripe> {
  * it happens in practice is a webhook endpoint left pointed at the wrong
  * deployment, and then the payload is the only thing that knows.
  */
+/**
+ * **The account Spideryarn sells from**, live and sandbox.
+ *
+ * `stripeConfigProblem()` above checks the key's *mode* and nothing else, so a
+ * live key for a **different account** passes every guard we had: it is live,
+ * the deployment expects live, and `livemode` on everything it returns is
+ * `true`. Greg has another live account — `acct_1GHoSxLZ0dGTJEEP`, which bills
+ * his consulting work — and its key is the same shape as this one. Put that in
+ * `.env.prod` and `stripe-setup --apply` creates Spideryarn's products there
+ * and writes those price ids into Spideryarn's production database, which is
+ * the original accident with a different first step. GPT Sol, 2026-09-03.
+ *
+ * Constants rather than a check against `.env.prod`, because the file is the
+ * thing being doubted. Read back on 2026-09-03 by `npm run stripe:check`;
+ * docs/project/billing.md § Which account.
+ */
+export const SPIDERYARN_ACCOUNTS = {
+  live: "acct_1UBW3NLv4piDbwcb",
+  test: "acct_1UBW3ULUG7Oye8CX",
+} as const;
+
+/**
+ * What is wrong with the account this key reaches, in a sentence, or `null`.
+ *
+ * **Only enforced for live**, and the asymmetry is deliberate: live is where
+ * the money is and there is exactly one right answer, while sandboxes are
+ * disposable and Greg may well make another. A surprising *test* account is
+ * worth reporting and not worth refusing.
+ */
+export function accountProblem(accountId: string): string | null {
+  if (!expectedLivemode()) {
+    return accountId === SPIDERYARN_ACCOUNTS.test
+      ? null
+      : `this is ${accountId}, not the sandbox this repo knows (${SPIDERYARN_ACCOUNTS.test}) — fine if you made a new one`;
+  }
+  if (accountId === SPIDERYARN_ACCOUNTS.live) return null;
+  return (
+    `this key reaches ${accountId}, which is not Spideryarn's live account ` +
+    `(${SPIDERYARN_ACCOUNTS.live}). Selling from the wrong account writes its price ids ` +
+    `into Spideryarn's database.`
+  );
+}
+
 export function assertLivemode(livemode: boolean, what: string): void {
   const expected = expectedLivemode();
   if (livemode !== expected) {

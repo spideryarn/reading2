@@ -152,10 +152,12 @@ interface ListRow {
 /**
  * A row as a report.
  *
- * The three casts are the honest ones `pg-feedback.ts` also makes: `route_kind`,
- * `environment` and `kind` are `text` columns with CHECK constraints built from
- * the same arrays the TypeScript unions come from, so a value outside the union
- * cannot be in the column.
+ * The casts are the honest ones `pg-feedback.ts` also makes: `environment` and
+ * `kind` are `text` columns with CHECK constraints built from the same arrays
+ * the TypeScript unions come from, so a value outside the union cannot be in the
+ * column. `route_kind` was a third of them until 2026-09-02, when it became the
+ * whole `url` — which has no union to cast to, and is checked by `isWebUrl` and
+ * a length cap at the route instead. docs/project/feedback.md.
  */
 function toListed(row: ListRow): AdminFeedbackReport {
   return {
@@ -163,11 +165,13 @@ function toListed(row: ListRow): AdminFeedbackReport {
     ownerId: row.ownerId,
     reporterEmail: row.reporterEmail,
     body: row.body,
-    /* The same honest cast `routeKind` and `environment` get below, and for the
-       same reason: the column is `text` with a CHECK built from the very array
-       the union comes from (src/types.ts § FEEDBACK_KINDS), so a value outside
-       it cannot be in the column. `null` passes through as itself — it means
-       *they did not say*, which is a real answer. */
+    /* The same honest cast `environment` gets below, and for the same reason:
+       the column is `text` with a CHECK built from the very array the union
+       comes from (src/types.ts § FEEDBACK_KINDS), so a value outside it cannot
+       be in the column. `null` passes through as itself — it means *they did
+       not say*, which is a real answer. (This named `routeKind` as the third
+       such cast until 2026-09-03; that column became `url` on 2026-09-02 and
+       has no union to cast to.) */
     kind: row.kind as FeedbackKind | null,
     consented: row.consented,
     url: row.url,

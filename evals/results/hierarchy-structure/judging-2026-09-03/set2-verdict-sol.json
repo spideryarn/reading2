@@ -1,0 +1,31 @@
+{
+  "ranking": ["B", "D", "A", "C"],
+  "unusable": [],
+  "boundaryFaults": {
+    "A": [
+      "\"Appendix\" welds the agency argument in \"It From Byte\" to the unrelated \"Backlinks\", \"Similar Links\", and \"Bibliography\" end matter."
+    ],
+    "B": [
+      "\"Appendix\" / \"End Matter\" cuts the end matter between \"Backlinks\" and \"Similar Links\", leaving Backlinks welded to the agency appendix."
+    ],
+    "C": [
+      "\"Prospects and Critics\" welds the distinct arguments titled \"Prospects\" and \"Critiquing The Critics\"."
+    ],
+    "D": [
+      "\"Appendix\" welds the agency argument in \"It From Byte\" to the unrelated \"Backlinks\", \"Similar Links\", and \"Bibliography\" end matter."
+    ]
+  },
+  "missingCuts": [],
+  "titles": {
+    "A": "generic",
+    "B": "names",
+    "C": "names",
+    "D": "names"
+  },
+  "gists": {
+    "A": "claims",
+    "B": "claims",
+    "C": "claims",
+    "D": "none"
+  }
+}

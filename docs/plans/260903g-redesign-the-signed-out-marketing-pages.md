@@ -126,6 +126,35 @@ object against the page. `npm test`, `npm run typecheck`, and `tests/landing-ass
 green — it reads `shots.ts` and checks every declared size against the bytes on disk, so a retaken
 screenshot with new dimensions fails it until the record is updated.
 
+## What actually happened
+
+Measured the same way, at 1440 wide, when the work landed:
+
+| | Before | After | Aim |
+|---|---|---|---|
+| Home | 4,872px | 7,244px | — |
+| Features | 11,042px | 11,698px | ~5,500px |
+| Product image above the fold | none | the outline shot | yes |
+| Landscape shot drawn at | 768px (53% scale) | 1152px (80%) | legible |
+
+**The height goal was missed, and not narrowly.** Two of the three claims above are met and this one
+is not, so it is worth saying why rather than quietly dropping it.
+
+Regrouping the features page did save height — the six tall band shots went from six stacked
+full-width figures to two rows of three. **Widening the pictures gave it all back and more.** A
+landscape shot went from 768px wide to 1152px, which is half as tall again, seven times over.
+
+That trade was made deliberately, part-way through, on seeing the first build: at 689px in a
+two-column row the app's own prose rendered at 48% — legible as a texture and not as words. A page
+whose argument is that you should read carefully cannot show unreadable reading, so **legibility won
+and length lost.** Retaking the four worst shots and tightening the rhythm took about 700px back;
+the honest summary is that `/features` is as long as it was and the pictures on it are now worth
+looking at.
+
+**If length is worth more than this**, the lever is demoting two or three of the seven `/features`
+showcases to `Tile`s — the page would lose those pictures rather than shrink them, which is the
+trade that was actually available and was not taken.
+
 ---
 
 Up: [docs/plans/](.)

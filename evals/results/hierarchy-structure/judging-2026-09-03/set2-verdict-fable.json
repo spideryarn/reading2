@@ -1,0 +1,27 @@
+{
+  "ranking": ["B", "D", "A", "C"],
+  "unusable": [],
+  "boundaryFaults": {
+    "A": [
+      "'Blessings Of Scale' | 'Why Does Pretraining Work?' — the article's distinct Scaling Hypothesis statement (blocks 35-37, 'The strong scaling hypothesis is that...') is buried at the tail of 'Blessings Of Scale' with no cut of its own",
+      "'Critiquing The Critics' | 'Appendix' — after this last cut, one node welds the It-From-Byte agency argument to Backlinks, Bibliography, and ~40 footnote blocks, roughly half the article with no further boundary",
+      "'GPT-3 Overview' | 'Scaling Evidence' — the first node silently absorbs the article's own Meta-Learning and Flexing GPT sections (blocks 2-7), so the reader can't jump to the meta-learning demonstration"
+    ],
+    "B": [
+      "'Appendix' | 'End Matter' — End Matter opens at '[Similar links by topic]' (block 140), one section too late: the Backlinks section (blocks 137-138) lands inside the Appendix's agency argument"
+    ],
+    "C": [
+      "'Prospects and Critics' welds the forward-looking arms-race analysis (blocks 68-79) to the retrospective takedown of expert forecasting (blocks 80-94) — two different arguments the article itself separates at 'Prospects' | 'Critiquing The Critics', and the gist admits it is two things",
+      "'Blessings of Scale' | 'Why Does Pretraining Work?' — as in A, the Scaling Hypothesis statement (blocks 35-37) gets no cut and is hidden inside 'Blessings of Scale'"
+    ],
+    "D": [
+      "'Critiquing The Critics' | 'Appendix' — the final node runs from block 95 to 183: the whole emergent-agency argument (with its own h3-h6 substructure), Backlinks, Similar Links, Bibliography, and ~40 footnotes, nearly half the blocks under one flat title"
+    ]
+  },
+  "missingCuts": [
+    "'Why Does Pretraining Work?' spans ~30 blocks (38-67) in every tree with no internal cut — the turn at 'Reasons for doubt' (block 58), where the piece switches from making the pretraining case to doubting it, needed a boundary",
+    "No tree exposes the Appendix's own substructure (It From Byte / All Is Atoms & Void / Cellular Automatons / Turing Machine / Ambient Agency, blocks 96-136), a 40-block argument left as an undifferentiated lump everywhere"
+  ],
+  "titles": { "A": "generic", "B": "names", "C": "names", "D": "names" },
+  "gists": { "A": "claims", "B": "claims", "C": "claims", "D": "none" }
+}

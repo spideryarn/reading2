@@ -38,13 +38,13 @@ import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { Plans } from "./Plans.js";
 import { SHOTS } from "./shots.js";
+import { SiteFooter } from "./SiteFooter.js";
 import {
   Gallery,
   H2,
   Portrait,
   SHELL,
   Showcase,
-  SiteFooter,
   SiteNav,
   Tile,
 } from "./SiteBits.js";
@@ -100,8 +100,9 @@ export function FeaturesPage() {
         </Showcase>
         {/* Alone rather than in a Gallery: one portrait in a three-column grid
             sits in the left third with two empty cells beside it, which reads as
-            a layout that lost something. */}
-        <div className="site-reveal tw:my-12 tw:max-w-sm">
+            a layout that lost something. Centred for the same reason — hard
+            left, it strands two thirds of the row. */}
+        <div className="site-reveal tw:mx-auto tw:my-12 tw:max-w-sm">
           {/* Greg, 2026-08-26, the diagram request, trimmed, and 2026-09-03
               for Illustrated. The five names are DIAGRAMS in src/web/diagram.ts
               and the picture is the first of them. Counted in the code: this
@@ -277,7 +278,12 @@ export function FeaturesPage() {
           </a>
         </p>
 
-        <SiteFooter here="features" />
+        {/* No `here`: this page's route says `features`, so the row drops its
+            own link without being told. Only the two pages `App.tsx` uses as
+            fallbacks have to declare themselves — SiteFooter.tsx § `here`. */}
+        <SiteFooter variant="marketing">
+          Spideryarn Reading — beta. Every screenshot is of a real article read in Spideryarn.
+        </SiteFooter>
       </main>
     </div>
   );

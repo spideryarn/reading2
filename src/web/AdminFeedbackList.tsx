@@ -289,10 +289,13 @@ export function FeedbackCard({ report, now }: { report: AdminFeedbackReport; now
       </div>
 
       <div className="tw:mt-1 tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
-        {/* A closed vocabulary and a validated slug — never the URL the reader
-            was on, which in this app carries `?q=`, `?find=` and whole
-            third-party addresses. docs/project/feedback.md § What is
-            deliberately NOT here. */}
+        {/* The kind, the environment, the slug — and, below, the whole address
+            the reader was on. This comment said "never the URL" while sitting
+            directly above the element that renders it, from 2026-09-02 until a
+            cross-family review found it on 2026-09-03. The address does carry
+            `?q=`, `?find=` and whole third-party addresses, which is why storing
+            it was a decision Greg made out loud and why the reader is told —
+            docs/project/feedback.md § The one rule. */}
         <Kind kind={report.kind} />
         <span>{report.environment}</span>
         {/* **The address, as text and not a link.** It is a value a browser

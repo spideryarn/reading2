@@ -1,7 +1,8 @@
 /**
  * Is this Stripe account actually ready to take money?
  *
- *     npx tsx scripts/stripe-check.ts
+ *     npm run stripe:check              # the sandbox, and this laptop
+ *     npm run stripe:check -- --prod    # LIVE, and the production database
  *
  * **Read-only.** It creates nothing, changes nothing, and charges nothing —
  * which is the point: it is the thing you run against *live* before trusting it,
@@ -31,18 +32,22 @@
  * It builds its client through [`src/billing/stripe.ts`](../src/billing/stripe.ts)
  * like everything else, so a live key needs `VERCEL_ENV=production` and a test
  * key needs the absence of it. That is deliberate friction: reaching live is
- * meant to be a thing you typed on purpose.
+ * meant to be a thing you typed on purpose, and `--prod` is that thing — it
+ * loads the live key and sets `VERCEL_ENV` in one move, so there is no second
+ * value to get wrong. Set them by hand and they can still disagree, which the
+ * mode guard then refuses. scripts/stripe-target.ts.
  */
 import type Stripe from "stripe";
 
 import { PUBLIC_ORIGIN } from "../src/urls.js";
 import { HANDLED_EVENTS, WEBHOOK_PATH } from "../src/billing/webhook.js";
-import { expectedLivemode, stripeClient, stripeConfigProblem } from "../src/billing/stripe.js";
+import { accountProblem, expectedLivemode, stripeClient, stripeConfigProblem } from "../src/billing/stripe.js";
 import type { TierRow } from "../src/billing/tiers.js";
 import { offerableTiers } from "../src/billing/tiers.js";
-import { loadEnvLocal } from "../src/env.js";
 import { isMain } from "../src/is-main.js";
 import { readTiers } from "../src/store/pg-tiers.js";
+
+import { aimAtTarget, refuseUnknownArgs, targetLine } from "./stripe-target.js";
 
 /** One line of the report. `bad` is what decides the exit code. */
 interface Check {
@@ -106,6 +111,17 @@ async function checkAccount(stripe: Stripe): Promise<Check[]> {
 
   if (expectedLivemode() && !account.charges_enabled) {
     checks.push(bad("charges", "this account cannot take payments — finish activation"));
+  }
+
+  /* **Whose account, not just which mode.** The key guard checks live-vs-test;
+     Greg has a second live account for his consulting work, and its key passes
+     every other check here while being the wrong place to sell from.
+     src/billing/stripe.ts § SPIDERYARN_ACCOUNTS. */
+  const wrongAccount = accountProblem(account.id);
+  if (wrongAccount) {
+    checks.push(expectedLivemode() ? bad("identity", wrongAccount) : warn("identity", wrongAccount));
+  } else {
+    checks.push(ok("identity", "this is Spideryarn's own account"));
   }
   return checks;
 }
@@ -229,12 +245,19 @@ async function checkWebhook(stripe: Stripe): Promise<Check[]> {
 }
 
 async function main(): Promise<void> {
-  loadEnvLocal();
+  /* Before anything reads the environment — it decides which Stripe account and
+     which database everything below reaches. scripts/stripe-target.ts. */
+  refuseUnknownArgs(process.argv, ["--prod"]);
+  aimAtTarget(process.argv.includes("--prod"));
+
+  /* Printed before the configuration check, so a run that is about to fail
+     still says what it was aimed at. */
+  console.log(`\nStripe check — ${expectedLivemode() ? "LIVE" : "test"} mode. Reads only; changes nothing.`);
+  console.log(`  ${targetLine()}\n`);
+
   const problem = stripeConfigProblem();
   if (problem) throw new Error(problem);
   const stripe = await stripeClient();
-
-  console.log(`\nStripe check — ${expectedLivemode() ? "LIVE" : "test"} mode. Reads only; changes nothing.\n`);
 
   const checks: Check[] = [...(await checkAccount(stripe))];
   const tiers = offerableTiers(await readTiers());

@@ -504,6 +504,45 @@ describe("assertCallAccounted", () => {
     ).toThrow(/must not score as free/);
   });
 
+  /**
+   * The failure this whole function's docstring names — "a cost that lands as
+   * zero, silently... a free arm that was not free" — and the version it
+   * shipped did not catch it. `null` was refused; `0` walked through, and then
+   * walked through verify-costs.ts too, because $0 and $0 agree to within any
+   * tolerance you like.
+   *
+   * Observed 2026-09-03: three `cheap-high` calls booked 12,465 / 13,053 /
+   * 10,713 output tokens and reported `costUsd: 0`. The reconciler agreed —
+   * `$0.000000 ≈ $0.000000 ✓` for all three — because the generation record
+   * really does say `total_cost: 0`. It also says `is_byok: true`: the quick
+   * tier resolves to an OpenAI model reached on our own OpenAI key, which
+   * OpenRouter routes without billing. src/models.ts prices it at $0.20/M in
+   * and $1.20/M out, so about $0.018 a call, invoiced somewhere this repo does
+   * not look.
+   *
+   * Cents — but the arm was about to be scored free against a Sonnet arm at
+   * $0.13, and that comparison is the entire question the harness exists for.
+   */
+  it("fails loudly when a paid call reports exactly zero - free is a claim, not a default", () => {
+    expect(() => assertCallAccounted(stats({ costUsd: 0, providerCostUsd: null }), "t")).toThrow(
+      /reported \$0/,
+    );
+    expect(() => assertCallAccounted(stats({ costUsd: null, providerCostUsd: 0 }), "t")).toThrow(
+      /reported \$0/,
+    );
+    /* Both zero is the case that got through: it satisfies "a source answered"
+       and then agrees with itself perfectly. */
+    expect(() => assertCallAccounted(stats({ costUsd: 0, providerCostUsd: 0 }), "t")).toThrow(
+      /reported \$0/,
+    );
+  });
+
+  it("still passes a real cost that is merely small", () => {
+    expect(() =>
+      assertCallAccounted(stats({ costUsd: 0.000_02, providerCostUsd: 0.000_02 }), "t"),
+    ).not.toThrow();
+  });
+
   it("fails loudly when the two cost sources disagree beyond 10%", () => {
     // 0.24 vs 0.30 is a 20% gap against the provider's number.
     expect(() => assertCallAccounted(stats({ costUsd: 0.24, providerCostUsd: 0.3 }), "t")).toThrow(

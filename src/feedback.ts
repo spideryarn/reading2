@@ -159,9 +159,12 @@ function message(report: FeedbackReport): string {
 /**
  * What the issue list may be filtered by. **Ours, every one of them.**
  *
- * Not the reader's words and not a value off the request: a route kind from a
- * closed vocabulary, a validated slug, a build stamp, and three facts about the
- * report's own shape. `report_id` is deliberately not here — it goes on the
+ * Not the reader's words: a validated address, a validated slug, a build stamp,
+ * and three facts about the report's own shape. The first of those used to be a
+ * route kind from a closed vocabulary, and this comment went on saying so after
+ * Greg's call of 2026-09-02 to store the whole URL — the address is checked by
+ * `isWebUrl` and capped rather than enumerated, and the reader is told it goes
+ * (docs/project/privacy.md § What a bug report carries). `report_id` is deliberately not here — it goes on the
  * scope beside the user, because those two are the fields that join this event
  * to a row and to a person, and they are set at the one seam that knows both.
  *

@@ -57,6 +57,7 @@ import { describe, expect, it } from "vitest";
 
 import { ChatConflict } from "../src/chat.js";
 import { ProductRefused } from "../src/store/artifacts.js";
+import { MissingAttempt } from "../src/store/contracts.js";
 import { guardDbStore, isGuardedStore } from "../src/store/db-errors.js";
 import { CheckpointRequestError } from "../src/store/checkpoints.js";
 import { StaleAttemptError } from "../src/store/jobs.js";
@@ -123,6 +124,52 @@ describe("the stores selected outside src/store/index.ts", () => {
   });
 });
 
+/**
+ * **And every other Postgres store, by the name its log lines print.**
+ *
+ * The discovery test in section 2 reads the *source* for `= guardDbStore(`; this
+ * reads the **objects**, which is the only thing that can say a store really
+ * arrived wrapped, and it is the only place the seam names are written down as
+ * an assertion. They are not decoration: `guardDbStore` builds every diagnostic's
+ * `where` as `<seam>.<method>`, so `reader.loadArticle` is what somebody greps
+ * for, and a rename here is a rename of the log.
+ *
+ * Fifteen of these were wrapped at the *selection* in src/store/index.ts until
+ * 2026-09-03, which meant the guard depended on that one file remembering.
+ * `pgArticleReader` is the sharpest case: src/store/pg-shelf.ts imports it
+ * directly and never goes near index.ts.
+ *
+ * Imported one module at a time rather than through src/store/index.ts, which
+ * would drag in the filesystem store and half the app for no gain. No database:
+ * every one of these calls `getDb()` inside its methods.
+ */
+describe("every Postgres store, asked for the seam it was guarded under", () => {
+  const seams: ReadonlyArray<readonly [string, string, string]> = [
+    ["../src/store/pg.js", "pgArticleReader", "reader"],
+    ["../src/store/pg-chat.js", "pgChatStore", "chat"],
+    ["../src/store/pg-searches.js", "pgSearchStore", "searches"],
+    ["../src/store/pg-comments.js", "pgCommentStore", "comments"],
+    ["../src/store/pg-shelf.js", "pgShelfStore", "shelf"],
+    ["../src/store/pg-shelf.js", "pgLibrarySearch", "library"],
+    ["../src/store/pg-reader.js", "pgReaderStore", "reader-profile"],
+    ["../src/store/pg-source.js", "pgSourceStore", "source"],
+    ["../src/store/pg-referee-criteria.js", "pgRefereeCriteriaStore", "referee-criteria"],
+    ["../src/store/pg-referee-claims.js", "pgRefereeClaimsStore", "referee-claims"],
+    ["../src/store/pg-lookups.js", "pgGlossaryLookupStore", "glossary-lookup"],
+    ["../src/store/pg-admin.js", "pgAdminStore", "admin"],
+    ["../src/store/pg-visibility.js", "pgVisibilityStore", "visibility"],
+    ["../src/store/pg-feedback.js", "pgFeedbackStore", "feedback"],
+    ["../src/store/realtime-sessions-pg.js", "pgRealtimeSessionStore", "realtime-sessions"],
+  ];
+
+  for (const [module, name, seam] of seams) {
+    it(`${name} is guarded as "${seam}"`, async () => {
+      const exports = (await import(module)) as Record<string, unknown>;
+      expect(isGuardedStore(exports[name])).toBe(seam);
+    });
+  }
+});
+
 /* --------------------------------------------------- 2. the static guard -- */
 
 describe("no Postgres store is selected without a guard", () => {
@@ -185,6 +232,24 @@ describe("no Postgres store is selected without a guard", () => {
            types every match index as possibly undefined — see typechecking.md. */
         if (m[1]) names.add(m[1]);
       }
+      /* **A factory counts as guarded when its body returns a guarded store.**
+         Three of them do — `createPgCheckpointStore`, `createPgSourceStore` and
+         `pgStoreSession` — and the first version of this scan saw none, because
+         it looked only for `export const X = guardDbStore(`. That made the
+         companion check below report three false offenders and hid the one real
+         one among them.
+
+         **Bounded to this declaration**, not to a character count, so that a
+         `guardDbStore` in some *later* function cannot vouch for this one. A
+         fixed window was the first attempt and it was wrong in the direction
+         that matters: `pgStoreSession` guards on its last line, 450 lines below
+         its signature, so a 400-character window called it unguarded. */
+      for (const m of code.matchAll(/export\s+function\s+([A-Za-z_$][\w$]*)\s*\(/g)) {
+        const rest = code.slice(m.index + m[0].length);
+        const next = rest.search(/\nexport\s+(?:const|function|class|async)\s/);
+        const body = next < 0 ? rest : rest.slice(0, next);
+        if (m[1] && /return\s+guardDbStore\(/.test(body)) names.add(m[1]);
+      }
     }
     return names;
   }
@@ -245,7 +310,114 @@ describe("no Postgres store is selected without a guard", () => {
    */
   it("and it really did find the guarded exports", async () => {
     const guarded = await guardedAtExport();
-    expect([...guarded].sort()).toEqual(["pgJobStore", "pgUploadStore"]);
+    /* **Eighteen, written out.** It was two until 2026-09-03 — the two stores
+       from the accident above — while db-errors.ts and docs/project/database.md
+       both said *every* Postgres store was wrapped at its export. The other
+       fifteen were wrapped at the selection in src/store/index.ts instead, so
+       the sentence was true of two and the list said so. It is now true of all
+       of them, and the list is the thing that says which.
+
+       Spelt out rather than counted, for the reason the docstring above gives:
+       an empty set vouches for nobody, and so does a length. A store that
+       stops being guarded has to delete its own name from here, which is a
+       line a reviewer sees. */
+    expect([...guarded].sort()).toEqual([
+      /* The three **factories**, which the first version of the discovery could
+         not see at all: it scanned `export const X = guardDbStore(` and a
+         factory returns its guarded store from a body instead. GPT Sol found
+         `createPgSourceStore` unguarded behind that blind spot, 2026-09-03. */
+      "createPgCheckpointStore",
+      "createPgSourceStore",
+      "pgAdminStore",
+      "pgArticleReader",
+      "pgChatStore",
+      "pgCommentStore",
+      "pgFeedbackStore",
+      "pgGlossaryLookupStore",
+      "pgGlossaryStore",
+      "pgJobStore",
+      "pgLibrarySearch",
+      "pgReaderStore",
+      "pgRealtimeSessionStore",
+      "pgRefereeClaimsStore",
+      "pgRefereeCriteriaStore",
+      "pgSearchStore",
+      "pgShelfStore",
+      "pgSourceStore",
+      /* The third factory, and the one that proved a fixed-size window wrong:
+         it guards on its last line, 450 below its signature. */
+      "pgStoreSession",
+      "pgUploadStore",
+      "pgVisibilityStore",
+    ]);
+  });
+
+  /**
+   * **The hole the list above cannot see, and it was open within an hour.**
+   *
+   * An exact list catches a store that *stops* being guarded — its name has to
+   * be deleted, where a reviewer sees it. It cannot catch a store that **never
+   * was**, because a new adapter simply is not in the list and the assertion
+   * goes on passing. That is a guard agreeing with the bug.
+   *
+   * It is not hypothetical. `pgGlossaryStore` (src/store/pg-glossary.ts) landed
+   * on `dev` from another worktree on 2026-09-03, minutes after the fifteen were
+   * moved, wrapped at its *selection* in src/store/index.ts and not at its
+   * export — the exact arrangement docs/project/database.md had just stopped
+   * describing. Everything above stayed green.
+   *
+   * So this asks the question from the other end: **every `export const pgX`
+   * under `src/store/` is guarded at its export, or is one of two exceptions
+   * that says here why.** Discovery is by shape rather than by list, so a
+   * sixteenth adapter joins the check by being written.
+   */
+  it("so every exported Postgres store is guarded at its export, or declared here", async () => {
+    /* The two that are deliberately not, each for a reason in its own file. */
+    const EXCEPTIONS = new Map([
+      [
+        "pgCostStore",
+        "guarded in the leaf src/store/ai-calls.ts, which is where the ledger is selected — " +
+          "index.ts cannot see it without closing an import cycle",
+      ],
+      [
+        "pgPublicReader",
+        "scrubs its own, deliberately and more narrowly, because its import graph is closed " +
+          "and walked by tests/public-imports.test.ts",
+      ],
+      [
+        "pgArtifactsIn",
+        "not a store anybody selects: it is built per transaction inside pgStoreSession, whose " +
+          "own returned object IS guarded, so every escape route from it already goes through " +
+          "the wrapper. Wrapping it again per transaction would allocate a proxy for each of " +
+          "its methods on every step. Listed rather than fixed, and it is the one entry here " +
+          "that would have to change if it ever gained a caller outside pg-session.ts",
+      ],
+    ]);
+
+    const guarded = await guardedAtExport();
+    const exported: string[] = [];
+    for (const file of await sourcesUnder(root)) {
+      const code = strip(await readFile(file, "utf8"));
+      /* **`function` as well as `const`, and `createPgX` as well as `pgX`.** The
+         first version scanned `export const pg[A-Z]` only, and GPT Sol found the
+         hole within the hour: `createPgSourceStore` is an exported *factory*
+         returning a live `SourceStore`, four tests call it directly, and it was
+         unguarded while the singleton beside it was wrapped. A shape check is
+         only as good as the shapes it knows, so this one names both spellings
+         and the assertion below counts what it found. */
+      for (const m of code.matchAll(/export\s+(?:const|function)\s+((?:create)?[Pp]g[A-Z][\w$]*)/g)) {
+        if (m[1]) exported.push(m[1]);
+      }
+    }
+
+    /* The control. A regex that found nothing would leave `unguarded` empty and
+       vouch for every store in the repo — the same failure this whole file is
+       about. Twenty exported adapters as of 2026-09-03; the floor is deliberately
+       loose, because the exact number is the thing that keeps changing. */
+    expect(exported.length).toBeGreaterThan(15);
+
+    const unguarded = exported.filter((n) => !guarded.has(n) && !EXCEPTIONS.has(n)).sort();
+    expect(unguarded).toEqual([]);
   });
 });
 
@@ -331,6 +503,34 @@ describe("the errors the guard must not eat", () => {
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ProductRefused);
     expect((err as Error).message).toContain("missing arc");
+  });
+
+  /**
+   * **A fenced write that arrived without its fence, and the reason it is here.**
+   *
+   * `SearchStore.finish`, `CommentStore.patch`, `ChatStore.finish` and
+   * `RefereeCriteriaStore.finish` each refuse one, and until 2026-09-03 all four
+   * threw a bare `Error`. Through `src/store/index.ts` the store was already
+   * guarded, so in production the refusal has always read *"this app asked its
+   * database for something it would not do"* — which drops the entire content of
+   * it, namely **what the caller forgot**. The two suites covering it passed
+   * because they import the adapter directly, back when the adapter's export was
+   * unguarded: coverage that existed and proved nothing, exactly as in
+   * docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md.
+   *
+   * Guarding all fifteen at their exports is what made it visible. This test is
+   * the cheap pin, and it needs no database.
+   */
+  it("lets a missing attempt through, naming what the caller forgot", async () => {
+    const err = await throwing(new MissingAttempt("SearchStore.finish", "begin()"))
+      .go()
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(MissingAttempt);
+    expect((err as Error).message).toContain("needs the attempt that begin() returned");
+    /* **And no slug in it**, which is what lets it onto the allowlist at all:
+       src/store/db-errors.ts refuses any candidate whose message can carry a
+       URL, and a slug is a URL path segment derived from a title. */
+    expect((err as Error).message).not.toMatch(/"[^"]*"/);
   });
 
   /** The one that was already on the list, kept honest. */
