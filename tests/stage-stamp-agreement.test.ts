@@ -318,10 +318,10 @@ function scriptFor(stage: Stage, article: Article): string[] {
       ];
     case "quiz":
       /* **One question**, anchored to a real block with a real quote, and one
-         question only. `bandQuota` is `min(3, floor(kept / 4))`, so a batch of
-         one is required to carry no particular band and this stub cannot fail
-         on a spread rule that has nothing to do with hashing — see
-         tests/quiz.test.ts, which asks the quota itself.
+         question only. The spread rule starts at `SPREAD_FROM` questions, so a
+         batch of one is required to carry no particular band and this stub
+         cannot fail on a spread rule that has nothing to do with hashing — see
+         tests/quiz.test.ts, which asks the rule itself.
 
          The question still has to survive `toQuestions`, and that is deliberate
          rather than incidental: `buildQuiz` throws when nothing is left, so a

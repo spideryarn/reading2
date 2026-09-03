@@ -96,7 +96,7 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * literal that has to be edited on every bump — a fixture that hardcodes the
  * version tests the fixture.
  */
-export const PROMPT_VERSION = "quotes/1";
+export const PROMPT_VERSION = "quotes/2";
 
 /** The most quotes one call may return. A piece does not have forty good lines. */
 export const MAX_QUOTES = 16;
@@ -853,7 +853,9 @@ absent reason is a real answer.
 WRITING
 
 - "text": the article's words, verbatim, nothing else.
-- "reason": one plain sentence, or absent. No Markdown.
+- "reason": one plain sentence, or absent. No Markdown. Ordinary words, with the
+  article's own for the things it names: plainer than the article, never further
+  from it.
 
 OUTPUT
 

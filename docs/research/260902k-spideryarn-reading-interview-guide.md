@@ -35,7 +35,10 @@ reading for people who need to actually understand."*
 **Ask.** If someone at a dinner asked what Spideryarn Reading is, what do you say — the one sentence,
 before you explain anything?
 
-**Answer.**
+**Answer.** Greg, 2026-09-03:
+
+> helps you read deeply & efficiently, a companion not a replacement — highlights/annotates/orients/
+> explains, but keeps you in the text itself
 
 ## 2. The problem it is for
 
@@ -52,7 +55,22 @@ bullets, done. Great for triage. Corrosive for understanding."*
 **Ask.** What goes wrong when a clever person reads a hard piece with ChatGPT open beside it? What
 do they walk away without?
 
-**Answer.**
+**Answer.** Greg, 2026-09-03:
+
+> Spideryarn keeps bringing you back to (an improved interface on) the original text itself, not an
+> LLM-rewritten-version (that may or may not capture the author's full intent). Spideryarn also
+> helps you fight cognitive surrender. it's like reading a dog-eared copy of a book where a clever
+> friend has highlighted the best bits and scribbled in the margins to help with the difficult bits,
+> based on your background/interests/needs, rather than reading the Reader's Digest version
+>
+> oh and the Public-readable versions share the expensive AI annotations so that everyone can
+> benefit from them
+
+*Interviewer's note.* Three things arrived here that were not in the brief: **"cognitive surrender"**
+as the name of the enemy; the **dog-eared copy with a clever friend's marginalia** as the image of
+the product, against the Reader's Digest version; and **shared annotations on public articles** —
+the 2025 "centaur-sourcing" idea, alive again and now built as public-readable articles. That last
+one belongs in § 13 too.
 
 ## 3. Who it is for
 
@@ -64,7 +82,19 @@ scientific papers, philosophy, policy, long essays (2026-09-02).
 **Ask.** Picture the one reader you most want to find this. What are they reading, why, and what
 are they doing the moment before they would reach for Spideryarn?
 
-**Answer.**
+**Answer.** Greg, 2026-09-03:
+
+> people who read difficult materials and think professionally, e.g. scientists, researchers,
+> academics
+>
+> they open up a long, deep, important article that they want to understand/digest/internalise/
+> critique/remember, and reflexively wish it was in Spideryarn to help them do that more effectively
+> and efficiently
+
+*Interviewer's note.* "Read difficult materials and think professionally" is the audience in seven
+words, wider than academia without naming a lawyer or an analyst. The five verbs are now his:
+**understand, digest, internalise, critique, remember.** And the moment is the *reflexive wish* —
+the article is already open.
 
 ## 4. The core move — zoom
 
@@ -81,7 +111,36 @@ down is where you are in the piece."*
 **Ask.** Describe zoom to someone who has never seen it, as a feeling rather than a layout. What is
 it like to read a piece this way, compared with scrolling a page?
 
-**Answer.**
+**Answer.** Greg, 2026-09-03:
+
+> it's like a constantly evolving table of contents that gives you a sense of the overall landscape
+> and where you are in the grand scheme of things, providing more detail for the current and nearby
+> sections, like a semantic fisheye lens
+>
+> [though this isn't necessarily the only/main/core thing any more]
+
+*Interviewer's note.* Two changes to the brief. The description is of the **fisheye** — detail near
+where you are, the landscape further out — rather than of the tabular "every level at once" view the
+landing page leads with; [column-context.md](../project/column-context.md) is the doc. And zoom is
+**no longer the one thing the product is a bet on**: the site should not build the whole homepage
+around it. The 2026-08-27 page-title note said the same ("named one feature as though it were the
+product").
+
+**Follow-up.** If zoom is no longer the one core thing, what is? What is on the first screenshot?
+
+> maybe the first thing is the semantic-fisheye (aka Outline mode)
+>
+> or the glossary? (notes in the margin that explain & remind you about anything you might find
+> tricky)
+>
+> [i'm not sure what to emphasise first]
+>
+> — Greg, 2026-09-03
+
+*Interviewer's note.* Open, and it is the one call that shapes the homepage. Two candidates: the
+Outline (fisheye) or the glossary-as-marginalia. The dog-eared-copy image from § 2 argues for the
+glossary: it *is* the clever friend's notes in the margin. Worth deciding after the rest of the
+interview, not now.
 
 ## 5. Staying oriented
 

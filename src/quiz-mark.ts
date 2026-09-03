@@ -299,6 +299,10 @@ FORMAT
 Plain prose paragraphs separated by blank lines. No lists, no headings, no
 preamble.
 
+Plain words too: the article's own for the things it names — those are the words
+the reader will meet again on the page — and ordinary words for everything else.
+Plainer than the article, never further from it.
+
 BEFORE YOU SEND IT, TWO CHECKS
 
 These are last because they are the two things that go wrong most, and they go

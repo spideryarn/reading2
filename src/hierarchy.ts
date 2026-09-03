@@ -55,7 +55,7 @@ import { withLedger } from "./cli-ledger.js";
 
 /* Bumped to 2 when the nav labels moved out to src/labels.ts: this prompt no
    longer asks for them, and a tree written by toc/1 is a different artefact. */
-const PROMPT_VERSION = "toc/2";
+const PROMPT_VERSION = "toc/3";
 
 /**
  * How hard the model thinks before it starts writing.
@@ -128,6 +128,8 @@ TITLES (internal nodes)
   UNCHANGED and repeat it in "sourceHeading". Rewrite it ONLY if it shares no
   content word with its section body, or is a stock label ("Introduction",
   "Background", "Part Two"). Rewriting should be rare.
+- A title you write yourself uses the article's own words for what it names and
+  ordinary words for the rest. A heading you copy is copied unchanged.
 - No trailing punctuation.
 
 GISTS (internal nodes)
@@ -135,6 +137,9 @@ GISTS (internal nodes)
 - Exactly ONE sentence. This is what the reader sees at the zoom level above.
 - It must be a CLAIM or a MOVE, not a topic label.
 - Write a parent's gist from its children, not from the raw text.
+- Keep the article's own words for the things it names — those are the reader's
+  handholds — and ordinary words for everything else. A gist is read at a glance
+  and has to land first time: plainer than the article, never further from it.
 
 OUTPUT
 
