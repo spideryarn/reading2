@@ -1758,10 +1758,12 @@ since 2026-09-03, because it used to be derived from the path by a binary test
 that would have recorded every plate as a chat call.
 
 **The brief call is the bill and the pictures are not**, which is the opposite of
-every intuition about this feature: measured at **$0.27–$0.40 an article, 86–89%
-of it the brief**, against Sketch's $0.20. Worst case 417 s inside a 760 s lease.
-The numbers, per article and per plate, are in
-[`evals/results/illustrated-2026-09-03b/README.md`](../../evals/results/illustrated-2026-09-03b/README.md).
+every intuition about this feature: measured across three articles at **$0.23–$0.38
+an article, 80–88% of it the brief**, against Sketch's $0.20. Worst case 417 s
+inside a 760 s lease. The numbers, per article and per plate, are in
+[`evals/results/illustrated-v2b/README.md`](../../evals/results/illustrated-v2b/README.md),
+and the before-and-after of the prompt that produced them is
+[§ Tuning the prompt](../plans/260903c-illustrated-diagram-sub-mode.md#tuning-the-prompt-illustrated2).
 
 Plates are asked for as JPEG (`output_format`, which the model honours despite not
 advertising it) and stored content-addressed in the blob store, never base64 in
