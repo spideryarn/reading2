@@ -1,6 +1,11 @@
 # Illustrated: a fifth diagram sub-mode, drawn by an image model from Sketch's data
 
-Status: **planned**, being built 2026-09-03 in worktree `illustrated-260903`.
+Status: **stages 1–3 built, reviewed and on `dev`**; stage 4 (the client) in progress, stage 5 (docs
+and the final review) after it. Built 2026-09-03 in worktree `illustrated-260903`.
+
+**A reader cannot see this yet.** Everything below the chip exists — the wire, the two calls, the
+validator, the artefact, the migration, the routes — and nothing renders it until stage 4 lands. The
+way to look at what it produces today is `evals/results/illustrated-2026-09-03b/`.
 
 > Let's take the Diagram Sketch sub-mode and try and create another sub-mode called "Illustrated"
 > … It should use the latest OpenAI Images image-generation model to generate a more engaging
