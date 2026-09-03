@@ -468,7 +468,19 @@ export interface JobStore {
   forget(id: string, owner: OwnerId): Promise<boolean>;
 
   /**
-   * Keep the newest `keep` finished jobs for this owner and delete the rest.
+   * Keep `keep` finished jobs for this owner and delete the rest.
+   *
+   * **Which `keep`** is the interesting part, and it is written out once in
+   * src/store/pg-jobs.ts § `trimFinished`: each kind ranked by when it
+   * finished, and the slots filled by taking one from each side in turn, so
+   * neither successes nor failures can starve the other out.
+   *
+   * **Something outside the store depends on that.** The client learns a job
+   * finished by polling for a terminal row (`recordCompletions`,
+   * src/web/jobEngine.ts), and `noteEnded` trims immediately after every
+   * ending — so the newest-finished job of each kind has to survive its own
+   * sweep or no completion is ever announced. That was not true until
+   * 2026-09-03: docs/postmortems/260903e-successes-deleted-before-failures-so-no-job-is-ever-announced-done.md.
    *
    * Retention is on the contract rather than left to a caller because a store
    * that grows without limit is not a detail: `list` reads all of them, and it

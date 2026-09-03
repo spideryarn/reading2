@@ -1,0 +1,380 @@
+{
+  "startedAt": "2026-09-03T09:46:34.043Z",
+  "commit": "2568d142e0d3aeef0703c231f30032586ef87451",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "incumbent",
+      "kind": "one-call",
+      "comparison": "baseline",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "medium"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "incumbent-repeat",
+      "kind": "one-call",
+      "comparison": "noise-floor",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "medium"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-low",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    }
+  ],
+  "results": [
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 1,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 134
+        },
+        "parts": {
+          "count": 7,
+          "words": [
+            1385,
+            871,
+            1532,
+            2511,
+            1553,
+            1692,
+            3093
+          ],
+          "balanceCv": 0.38359828573016475
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 5.46875,
+          "max": 42,
+          "within5to9": 0.28125
+        },
+        "headings": {
+          "boundaries": 23,
+          "boundariesOnHeadings": 0.5652173913043478,
+          "headingsCut": 0.5416666666666666,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.4375,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 32,
+          "meanWords": 2.65625,
+          "within2to6": 0.8125,
+          "copiedHeadings": 15,
+          "retention": 0.6862745098039216
+        },
+        "gists": {
+          "count": 32,
+          "coverage": 1,
+          "meanWords": 22.96875,
+          "multiSentence": 0,
+          "templateRepetition": 0.09375,
+          "retention": 0.5372356584976153
+        }
+      },
+      "calls": [
+        {
+          "ms": 138043,
+          "inputTokens": 28625,
+          "outputTokens": 14787,
+          "reasoningTokens": 11279,
+          "generationId": "gen-1788428794-IK357DSazF7OFcWqYqUF",
+          "costUsd": 0.20512,
+          "providerCostUsd": 0.20512
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root",
+          "root > child 1",
+          "root > child 1 > child 1",
+          "root > child 2",
+          "root > child 3",
+          "root > child 4 > child 1",
+          "root > child 4 > child 2",
+          "root > child 4 > child 3",
+          "root > child 4 > child 4",
+          "root > child 4 > child 5",
+          "root > child 4 > child 6",
+          "root > child 5 > child 1",
+          "root > child 5 > child 2",
+          "root > child 5 > child 3",
+          "root > child 5 > child 4",
+          "root > child 6 > child 1",
+          "root > child 6 > child 2",
+          "root > child 6 > child 3"
+        ]
+      }
+    },
+    {
+      "arm": "incumbent-repeat",
+      "comparison": "noise-floor",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 2,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 134
+        },
+        "parts": {
+          "count": 7,
+          "words": [
+            1385,
+            871,
+            1532,
+            2511,
+            3245,
+            3075,
+            18
+          ],
+          "balanceCv": 0.6104570284104256
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 5.766666666666667,
+          "max": 16,
+          "within5to9": 0.3333333333333333
+        },
+        "headings": {
+          "boundaries": 21,
+          "boundariesOnHeadings": 0.8095238095238095,
+          "headingsCut": 0.7083333333333334,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.6,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 30,
+          "meanWords": 2.7333333333333334,
+          "within2to6": 0.8333333333333334,
+          "copiedHeadings": 17,
+          "retention": 0.7115384615384616
+        },
+        "gists": {
+          "count": 30,
+          "coverage": 1,
+          "meanWords": 19.933333333333334,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.5205193907399789
+        }
+      },
+      "calls": [
+        {
+          "ms": 125096,
+          "inputTokens": 28625,
+          "outputTokens": 14078,
+          "reasoningTokens": 10508,
+          "generationId": "gen-1788428933-0etmM6L3jfYGtZjFdIpn",
+          "costUsd": 0.19803,
+          "providerCostUsd": 0.19803
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root",
+          "root > child 1",
+          "root > child 1 > child 1",
+          "root > child 2",
+          "root > child 3",
+          "root > child 4 > child 1",
+          "root > child 4 > child 2",
+          "root > child 4 > child 3",
+          "root > child 4 > child 4",
+          "root > child 4 > child 5",
+          "root > child 5",
+          "root > child 7"
+        ]
+      }
+    },
+    {
+      "arm": "smart-low",
+      "comparison": "isolated",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 3,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 134
+        },
+        "parts": {
+          "count": 12,
+          "words": [
+            899,
+            166,
+            320,
+            659,
+            212,
+            1343,
+            189,
+            2511,
+            1553,
+            1692,
+            3080,
+            13
+          ],
+          "balanceCv": 0.9097976702855017
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 3.508771929824561,
+          "max": 15,
+          "within5to9": 0.17543859649122806
+        },
+        "headings": {
+          "boundaries": 43,
+          "boundariesOnHeadings": 0.37209302325581395,
+          "headingsCut": 0.6666666666666666,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.3684210526315789,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 57,
+          "meanWords": 2.7719298245614037,
+          "within2to6": 0.8596491228070176,
+          "copiedHeadings": 21,
+          "retention": 0.6782407407407408
+        },
+        "gists": {
+          "count": 57,
+          "coverage": 1,
+          "meanWords": 17.75438596491228,
+          "multiSentence": 0,
+          "templateRepetition": 0.05263157894736842,
+          "retention": 0.5058688190989533
+        }
+      },
+      "calls": [
+        {
+          "ms": 110089,
+          "inputTokens": 28625,
+          "outputTokens": 11550,
+          "reasoningTokens": 5465,
+          "generationId": "gen-1788429058-WVoSK7LhwzeStFcJ1GAM",
+          "costUsd": 0.17275,
+          "providerCostUsd": 0.17275
+        }
+      ],
+      "repaired": {
+        "ranges": 8,
+        "blocks": 14,
+        "largest": 3,
+        "where": [
+          "root > child 5 (overlap, 1)",
+          "root > child 12 (gap, 2)",
+          "root > child 11 > child 4 (overlap, 1)",
+          "root > child 11 > child 5 (gap, 1)",
+          "root > child 11 > child 6 (gap, 3)",
+          "root > child 11 > child 6 (short, 2)",
+          "root > child 12 > child 2 (overlap, 2)",
+          "root > child 12 > child 2 (short, 2)"
+        ],
+        "droppedChildren": [
+          "root > child 12 > child 3"
+        ],
+        "droppedHeadings": [
+          "root > child 11 > child 5",
+          "root > child 12 > child 1",
+          "root > child 12 > child 2"
+        ]
+      }
+    }
+  ]
+}

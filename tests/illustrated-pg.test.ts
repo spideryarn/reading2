@@ -37,7 +37,7 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { articles, jobs } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { inputFingerprint as illustratedFingerprint } from "../src/illustrated.js";
-import type { Illustrated } from "../src/illustrated-plate.js";
+import { ILLUSTRATED_VERSION, type Illustrated } from "../src/illustrated-plate.js";
 import { inputFingerprint as sketchFingerprint } from "../src/sketch.js";
 import type { Sketch } from "../src/sketch-scene.js";
 import type { Block, Meta, Tree } from "../src/types.js";
@@ -148,7 +148,7 @@ function sketchFixture(
  */
 function illustratedFor(sketch: Sketch): Illustrated {
   return {
-    version: "illustrated/1",
+    version: ILLUSTRATED_VERSION,
     generator: "claude-opus-5",
     illustrator: "openai/gpt-image-2",
     slug: SLUG,

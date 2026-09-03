@@ -84,11 +84,11 @@ function faded(job: Job, now: number): boolean {
  * A successful job leaves after eight seconds (`KEEP_DONE_MS` above) because
  * the article it made is on the shelf directly below. **A failed one has never
  * left at all** — deliberately, since the card is the only account of what went
- * wrong — and the server keeps fifty of those per reader, preferring failures
- * when it prunes (`KEEP_FINISHED` in src/jobs.ts). So the box that is meant to
- * say "here is what is happening now" was showing every import that had ever
- * gone wrong, oldest at the bottom, above a shelf that was the actual point of
- * the page.
+ * wrong — and the server keeps fifty finished jobs per reader, favouring
+ * failures over successes where the two compete for a slot (`KEEP_FINISHED` in
+ * src/jobs.ts). So the box that is meant to say "here is what is happening now"
+ * was showing every import that had ever gone wrong, oldest at the bottom,
+ * above a shelf that was the actual point of the page.
  *
  * **Module scope, not a mount, and that is the load-bearing part.** Adding an
  * article navigates to `/add/<url>`, and coming home remounts this component —

@@ -7,7 +7,7 @@ what they found.
 
 **Landed in the working tree:** D′1a (`guardDbStore` is idempotent) and stage A's witness 1
 ([`scripts/store-migration-candidates.ts`](../../scripts/store-migration-candidates.ts)).
-**Prototyped, not landed:** stage E's [`scripts/stage.ts`](../../scripts/stage.ts).
+**Prototyped, not landed:** stage E's `scripts/stage.ts`.
 
 **This plan absorbed [260903e](260903e-a-private-test-database-so-the-suite-stops-racing-dev-servers.md)
 on Greg's decision** — see stage T. That is the largest change to its shape since it was written.
@@ -879,7 +879,7 @@ artefact write is fenced on a running `jobs` row and a draft revision (`requireL
 imports `blocks.ts`. A `main()` reaching for the queue from inside a stage closes a cycle, and
 `npm run check` gates on cycles. **So stage E is six `main()`s deleted and one script written**, not
 six files edited. The spike's working prototype is
-[`scripts/stage.ts`](../../scripts/stage.ts): `npx tsx scripts/stage.ts <step> <slug> [--force]`,
+`scripts/stage.ts`: `npx tsx scripts/stage.ts <step> <slug> [--force]`,
 with `package.json` keeping the six old names.
 
 **Verified against local Postgres**, on a scratch clone of the `writes` corpus:
