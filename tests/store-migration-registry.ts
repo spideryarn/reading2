@@ -945,6 +945,17 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
 
   /* ---- Static-only: the dynamic witness never saw these three ------------- */
 
+  "tests/an-upload-is-queued-only-once-its-bytes-arrive.test.ts": {
+    category: "database-integration",
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran. The readiness gate: `POST /api/jobs {uploadId}` must HEAD " +
+      "the staging object before it claims anything, because the reader now reaches " +
+      "`/add/upload/<id>` at byte zero and a reload of it used to queue a job over a file that " +
+      "was not there — which `acquireUpload` refuses terminally. It drives the real route, the " +
+      "real upload records and the real blob store, so it moves with `src/upload-records.ts` and " +
+      "`src/store/blobs.ts` and needs neither changed.",
+  },
   "tests/article-cache-call-site.test.ts": {
     category: "database-integration",
     evidence: "static-only",
