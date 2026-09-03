@@ -214,7 +214,7 @@ export function Showcase({
 }) {
   const Heading = under ? "h3" : "h2";
   return (
-    <section className={`site-reveal ${under ? "tw:my-12" : "tw:my-20"}`}>
+    <section className={`site-reveal ${under ? "tw:my-10" : "tw:my-16"}`}>
       {/* Indented, not right-aligned. A ragged LEFT edge on a five-line
           paragraph costs the reader the one fixed point their eye returns to on
           every line, which is a strange thing to do on a page about reading. */}
@@ -270,7 +270,7 @@ export function Portrait({
  */
 export function Gallery({ children }: { children: ReactNode }) {
   return (
-    <div className="site-reveal tw:my-12 tw:grid tw:gap-7 tw:sm:grid-cols-2 tw:lg:grid-cols-3">
+    <div className="site-reveal tw:my-10 tw:grid tw:gap-7 tw:sm:grid-cols-2 tw:lg:grid-cols-3">
       {children}
     </div>
   );
@@ -279,7 +279,7 @@ export function Gallery({ children }: { children: ReactNode }) {
 /** A heading, at the one size these pages use for them. */
 export function H2({ children, eyebrow }: { children: ReactNode; eyebrow?: string }) {
   return (
-    <div className="site-reveal tw:mt-24 tw:mb-6">
+    <div className="site-reveal tw:mt-20 tw:mb-5">
       {eyebrow ? <p className="site-eyebrow tw:mb-3">{eyebrow}</p> : null}
       <h2 className="site-h2">{children}</h2>
     </div>

@@ -132,6 +132,22 @@ decisions rather than taste, and are the ones to preserve:
 drawn 689px wide renders the app's own prose at 48% — legible as a texture, not as words. A page
 selling careful reading cannot show unreadable reading.
 
+### The reduced-motion guard here is its own, and testing it needs care
+
+`tailwind.css`'s global guard sets `animation-duration: 0.01ms !important`, which is the right
+instrument for a time-driven animation and **does nothing whatever to a scroll-driven one**: CSS
+Animations Level 2 treats a time duration on a scroll-progress timeline as `auto`, so the scroller
+still drives it. The site block therefore carries its own `prefers-reduced-motion` block that turns
+the animations *off*. Found by a cross-family review, 2026-09-03; the guard was present, documented,
+and missed every piece of motion on the page.
+
+The obvious check passes either way, which is the part worth remembering. Reading back
+`animation-duration` returns `0.01ms` whether or not the animation is still running. **Assert on
+`animation-name` and on `transform` instead**, in a Playwright context with
+`reducedMotion: 'reduce'` — and assert that a `no-preference` context *differs*, or the check is
+green for the wrong reason. Verified that way on 2026-09-03: `none` for tilt, reveal and nav under
+`reduce`, and `site-untilt` / `site-rise` / `site-nav-settle` without it.
+
 ## The copy is not yours to write
 
 Every sentence on both pages carries a comment naming its source, or `[tissue]` for the connecting
