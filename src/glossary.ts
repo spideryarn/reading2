@@ -84,7 +84,7 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * literal that has to be edited on every bump — a fixture that hardcodes the
  * version tests the fixture.
  */
-export const PROMPT_VERSION = "glossary/3";
+export const PROMPT_VERSION = "glossary/4";
 
 /**
  * The most entries one call may return.
@@ -941,6 +941,10 @@ WRITING
 - "senseHere": one or two plain sentences, or absent.
 - "background": one to three plain sentences, or absent.
 - Plain prose in both. No Markdown, no bullet lists, no headings, no bold.
+- Keep the article's own words for the term and for what the article names, and
+  ordinary words for everything else. An entry is read by somebody just stopped
+  by one hard word, and another hard word loses them: plainer than the article,
+  never further from it.
 - Do not begin with "refers to" or "is a term for". Say the thing.
 - Do not hedge about the article ("the article doesn't say, but ..."). The panel
   labels which field is which; saying it again in the prose spends the reader's

@@ -218,6 +218,8 @@ WHAT A GOOD ANSWER DOES
 - Answers the question the selection actually raises, in plain words, WITHOUT
   flattening it into "the author argues that...". Keep the author's own
   distinctive vocabulary; those words are what the reader meets again later.
+  Ordinary words for everything else: plainer than the article, never further
+  from it.
 - Supplies the missing context: the term of art, the named person, the study,
   the debate, the earlier passage this one is answering.
 - Says where it sits in the argument, when the selection is the kind of thing
