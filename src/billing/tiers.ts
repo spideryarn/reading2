@@ -100,6 +100,33 @@ export function isEntitledStatus(status: string | null | undefined): boolean {
 }
 
 /**
+ * The statuses that mean a subscription is **over**, so another may be sold.
+ *
+ * A different question from entitlement and a much shorter list. `unpaid` and
+ * `past_due` are absent on purpose: both are subscriptions Stripe still holds and
+ * may still collect on, so selling a second one beside them charges the reader
+ * twice. `incomplete` is absent for the same reason — the first payment may still
+ * land — and `incomplete_expired` is here because it never can.
+ *
+ * Read as an allowlist over raw text, like `ENTITLED_STATUSES`, and a status this
+ * file has never heard of counts as **not** terminal: the cost of being wrong
+ * that way is a reader sent to the Portal to look at what they have, and the
+ * other way is a second subscription nobody asked for.
+ */
+export const TERMINAL_STATUSES: readonly string[] = ["canceled", "incomplete_expired"];
+
+/**
+ * Is this subscription finished, so checkout may sell another?
+ *
+ * **A null status is not terminal.** That is a row nothing has synced, and the
+ * safe reading of "I do not know what this subscription is doing" is to send the
+ * reader to the Portal rather than to sell them a second one.
+ */
+export function isTerminalStatus(status: string | null | undefined): boolean {
+  return status !== null && status !== undefined && TERMINAL_STATUSES.includes(status);
+}
+
+/**
  * Which tier a Stripe price sells, or `null` for a price we do not recognise.
  *
  * `null` rather than a throw or a default: an unrecognised price is a real

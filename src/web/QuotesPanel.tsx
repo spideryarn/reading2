@@ -50,6 +50,7 @@ import { Info, Quote as QuoteIcon, RotateCcw, Sparkles, TriangleAlert } from "lu
 import type { BlockId, Job, Quote, QuoteDrops } from "../types.js";
 import type { QuoteRank } from "./params.js";
 import type { UseQuotes } from "./useQuotes.js";
+import type { StepFailure } from "./useStepJob.js";
 import { BlockRef } from "./BlockRef.js";
 import { ScoreBars } from "./ScoreBars.js";
 import { Tooltip } from "./Tooltip.js";
@@ -952,7 +953,7 @@ function Foot({
 function Progress(props: {
   job: Job | null;
   starting: boolean;
-  failed: string | null;
+  failed: StepFailure | null;
   stalled: boolean;
   onRun(): Promise<void>;
   onCancel(id: string): void;

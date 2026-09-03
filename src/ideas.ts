@@ -60,6 +60,7 @@ import type { Article } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import {
@@ -93,7 +94,7 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * literal that has to be edited on every bump — a fixture that hardcodes the
  * version tests the fixture.
  */
-export const PROMPT_VERSION = "ideas/1";
+export const PROMPT_VERSION = "ideas/2";
 
 /** The most ideas one call may return. A piece does not have forty. */
 export const MAX_IDEAS = 10;
@@ -725,6 +726,9 @@ WRITING
   something the reader is looking at. Say the idea; they can see the article.
   This applies to "whyYouNeedIt" as much as to "statement".
 - Plain prose. No Markdown, no bullets, no headings, no bold.
+- The article's own words for the things it names, ordinary words for everything
+  else. An idea stated in harder language than the piece uses has not been named,
+  only re-encoded: plainer than the article, never further from it.
 
 "analogy" — OPTIONAL, and it is YOURS rather than the author's. A concrete
 everyday thing this idea works like. The reader will be told it is yours. Only
@@ -987,7 +991,9 @@ export async function generateIdeas(opts: {
   if (wasRefused(message)) {
     /* `stop_details` is neither thrown nor logged — it is the provider's own
        words about a request that carried the whole article. src/messages.ts. */
-    throw new Error(MODEL_REFUSED.message);
+    throw stageFailure(MODEL_REFUSED, {
+      authored: "the model answered with stop_reason: refusal",
+    });
   }
   if (message.stop_reason === "max_tokens") {
     throw truncationFailure("ideas", maxTokens, answerTokens, {

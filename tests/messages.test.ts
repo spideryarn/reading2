@@ -22,6 +22,8 @@ import {
   ingestQuotaReached,
   type ReaderFacingFailure,
   saidNothing,
+  stepGaveUp,
+  quizBandsNotSpread,
   tookTooLong,
   wentQuiet,
 } from "../src/messages.js";
@@ -63,10 +65,26 @@ const FROM_FACTORIES: ReaderFacingFailure[] = [
   saidNothing(null),
   saidNothing("content_filter"),
   saidNothing("length"),
-  /* Both branches: the free tier has no reset date and the paid tier does, and
-     they are different sentences with different codes. */
+  /* All three branches: the free tier has no reset date, the paid tier does, and
+     a lapsed subscriber gets neither sentence — three codes, three sentences. */
   ingestQuotaReached({ limit: 3 }),
   ingestQuotaReached({ limit: 100, resetAt: new Date("2026-10-01T00:00:00Z") }),
+  ingestQuotaReached({ limit: 3, lapsed: true }),
+  /* All four kinds, because `stepGaveUp` is a total map over `FailureKind` and
+     a branch missing from here is a sentence that has been through none of the
+     invariants below — which is the shape that let `NO_RESPONSE` and
+     `TOOL_CALL_LOST` ship unchecked. The step label is the one the reader would
+     actually see. */
+  ...(["retry", "ours", "bug", "blocked"] as const).map((kind) =>
+    stepGaveUp(kind, "Writing the questions"),
+  ),
+  /* **One call, not one per missing end.** This list is one entry per *code*,
+     which the "gives each distinct message its own code" invariant below
+     enforces — two calls differing only in their arguments read as two
+     sentences sharing a code and fail it, exactly as `tookTooLong(60)` would if
+     it appeared twice with two numbers. The production case: nine survivors,
+     no hard one. tests/quiz.test.ts covers the wording of every `gap` clause. */
+  quizBandsNotSpread(9, "there is no hard one among them to finish on"),
 ];
 
 const EVERY: ReaderFacingFailure[] = [...CONSTANTS, ...FROM_FACTORIES];
@@ -290,5 +308,35 @@ describe("naming what was written for your reader profile", () => {
     expect(sharingPersonalisedList(["glossary", "ideas", "sketch"])).toMatch(
       /^your glossary, your list of ideas and your sketch diagram —/,
     );
+  });
+});
+
+describe("the subscription allowance", () => {
+  /**
+   * **A lapsed subscriber is refused, and the sentence must not read as a bug.**
+   *
+   * The free count is lifetime and includes paid months, so somebody who took
+   * forty articles on a paid plan and cancelled is past the free allowance for
+   * good — Greg's decision, 2026-09-03, taken over tier-scoping the count. It is
+   * the copy that has to carry it: *"you have added all 3 articles a free
+   * account can add"*, to a reader looking at forty of them, reads as arithmetic
+   * going wrong rather than as a policy.
+   */
+  it("names the ended plan rather than counting past the free limit", () => {
+    const lapsed = ingestQuotaReached({ limit: 3, lapsed: true });
+    expect(lapsed.kind).toBe("blocked");
+    expect(lapsed.message).toMatch(/subscription has ended/i);
+    /* The way back, named where it is rather than as an instruction to go and
+       find it — the same rule the free sentence follows. */
+    expect(lapsed.message).toMatch(/resubscrib/i);
+    /* And the promise this product makes about money: reading is never gated. */
+    expect(lapsed.message).toMatch(/reading is never limited/);
+  });
+
+  it("keeps the ordinary free refusal for somebody who never subscribed", () => {
+    /* The discriminator is `lapsed` off the billing row, not `used > limit` — so
+       the plain refusal has to stay plain when the flag is absent. */
+    expect(ingestQuotaReached({ limit: 3 }).message).toMatch(/\[pay-free\]$/);
+    expect(ingestQuotaReached({ limit: 3, lapsed: true }).message).toMatch(/\[pay-lapsed\]$/);
   });
 });

@@ -53,6 +53,7 @@ import type { Article } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
@@ -84,7 +85,7 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * literal that has to be edited on every bump — a fixture that hardcodes the
  * version tests the fixture.
  */
-export const PROMPT_VERSION = "glossary/3";
+export const PROMPT_VERSION = "glossary/4";
 
 /**
  * The most entries one call may return.
@@ -1035,6 +1036,10 @@ WRITING
 - "senseHere": one or two plain sentences, or absent.
 - "background": one to three plain sentences, or absent.
 - Plain prose in both. No Markdown, no bullet lists, no headings, no bold.
+- Keep the article's own words for the term and for what the article names, and
+  ordinary words for everything else. An entry is read by somebody just stopped
+  by one hard word, and another hard word loses them: plainer than the article,
+  never further from it.
 - Do not begin with "refers to" or "is a term for". Say the thing.
 - Do not hedge about the article ("the article doesn't say, but ..."). The panel
   labels which field is which; saying it again in the prose spends the reader's
@@ -1446,7 +1451,9 @@ export async function generateGlossary(opts: {
        provider's own words about a request that carried the whole article,
        and this error is copied onto the job and shown on the progress card.
        See MODEL_REFUSED in src/messages.ts. */
-    throw new Error(MODEL_REFUSED.message);
+    throw stageFailure(MODEL_REFUSED, {
+      authored: "the model answered with stop_reason: refusal",
+    });
   }
   if (message.stop_reason === "max_tokens") {
     throw truncationFailure("glossary", maxTokens, answerTokens, {

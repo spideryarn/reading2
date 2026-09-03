@@ -55,7 +55,6 @@ import {
   sharingPersonalisedList,
   SHARING_RIGHTS_CONFIRM,
   SHARING_UNKNOWN,
-  SHARING_WHAT_VISITORS_SEE,
   SHARED_HEADING,
   SHARING_INVENTORY_UNKNOWN,
   SHARED_IF_BUILT_HEADING,
@@ -339,8 +338,25 @@ export function AccessSharing({
             {shared ? <Globe size={14} /> : <Lock size={14} />}
             {shared ? SHARING_ON : SHARING_OFF}
           </p>
-          <p className="tw:m-0 tw:mb-3 tw:text-ink-faint">{SHARING_WHAT_VISITORS_SEE}</p>
 
+          {/* **No prose sentence about what a shared link carries, in either
+              state, since 2026-09-03.** It used to be drawn here, above this
+              branch, so a *private* article's card stated in the present
+              indicative what a stranger sees — directly under "Only you can
+              read this", on the card whose whole job is to say which state the
+              article is in.
+
+              And it is not merely moved into the `shared` branch, which was the
+              first fix: there it sat immediately above `Inventory`, which says
+              the same thing itemised, with `NOT_SHARED_NOTE` as its summary.
+              The list is the better answer — it is derived from the modes rather
+              than written, so it cannot fall behind — and one fact belongs on
+              this card once. The sentence survives for the visitor, who has no
+              list: src/messages.ts § SHARED_LINK_CARRIES.
+
+              What a private article's owner is told about publishing is the
+              confirmation box's question, and the box answers it with the same
+              `Inventory`. */}
           {shared && (
             <>
               <CopyLink link={link} />

@@ -77,6 +77,7 @@ import type { Article } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
@@ -96,7 +97,7 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * literal that has to be edited on every bump — a fixture that hardcodes the
  * version tests the fixture.
  */
-export const PROMPT_VERSION = "quotes/1";
+export const PROMPT_VERSION = "quotes/2";
 
 /** The most quotes one call may return. A piece does not have forty good lines. */
 export const MAX_QUOTES = 16;
@@ -972,7 +973,9 @@ absent reason is a real answer.
 WRITING
 
 - "text": the article's words, verbatim, nothing else.
-- "reason": one plain sentence, or absent. No Markdown.
+- "reason": one plain sentence, or absent. No Markdown. Ordinary words, with the
+  article's own for the things it names: plainer than the article, never further
+  from it.
 
 OUTPUT
 
@@ -1206,7 +1209,9 @@ export async function generateQuotes(opts: {
     /* `stop_details` is deliberately neither thrown nor logged — it is the
        provider's own words about a request that carried the whole article, and
        this error is copied onto the job and shown on the progress card. */
-    throw new Error(MODEL_REFUSED.message);
+    throw stageFailure(MODEL_REFUSED, {
+      authored: "the model answered with stop_reason: refusal",
+    });
   }
   if (message.stop_reason === "max_tokens") {
     throw truncationFailure("quotes", maxTokens, answerTokens, {

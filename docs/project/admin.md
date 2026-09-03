@@ -171,13 +171,21 @@ report, so a field added to a report does not reach this page until somebody dec
 and `tests/admin-feedback-store.test.ts` pins the exact set of keys that comes back.
 
 The metadata is exact and worth listing rather than gesturing at: the account **id**, the **email
-address**, and the **providers** GoTrue records for it (`google`, `email`). Everything else on the
-page is a number or a date.
+address**, the **providers** GoTrue records for it (`google`, `email`), whether that address is
+**confirmed**, and — since 2026-09-03 — whether the account **can reach these pages**, which is
+`isAdmin(id)` computed in the browser from the id already in the row rather than anything new from
+the server. Everything else on the page is a number or a date.
 
 **Money is the one thing on the page that is not a count of the reader's own things**, and it is
 still a fact about the account rather than about their reading: what their model calls cost us, over
 a stated month, with no article, model or job named. See
 [The spend column](#the-spend-column-and-the-two-things-that-keep-it-honest).
+
+**The plan is the same kind of thing**, added 2026-09-03: which tier the account is entitled to, the
+raw Stripe subscription status beside it, and how many ingests of the allowance are gone. A tier id
+and a subscription status are facts about the account in exactly the way "how many articles" is, and
+neither names anything anybody read. See
+[The plan and ingest columns](#the-plan-and-ingest-columns).
 
 How many articles somebody has is a fact about their account. *Which* articles they are is their
 reading, and it does not leave their session. That line is the one paragraph to re-read before
@@ -360,11 +368,18 @@ means "email *or* phone was confirmed", and the page prints "email unconfirmed" 
 address, so the wrong one labels a phone-confirmed account the opposite of the truth. Sol found that
 in the query; it is pinned again against the API.
 
-The counts are **six grouped aggregates, run together and joined by a `Map`** — one per table, not
-one per user. A fixed six statements however many accounts there are, issued alongside the account
+The counts are **seven grouped aggregates, run together and joined by a `Map`** — one per table, not
+one per user. A fixed seven statements however many accounts there are, issued alongside the account
 listing rather than after it, and the join is a pure function (`mergeUsers`) so the arithmetic can
 be tested with two owners and no database. The sixth is money, and it came with the spend column
-below.
+below; the seventh is the ingest ledger, and it came with the plan columns, along with two reads
+that are not aggregates — every `billing_accounts` row, and the tier table (cached, so usually not a
+query at all).
+
+**Nine things now wait on a pool of five** ([`src/db/client.ts`](../../src/db/client.ts)), which is
+still one round trip's worth of latency rather than several, on a page one person opens a few times
+a day. But it is the point at which "add another aggregate" stops being free: the next column should
+read something already here rather than making it ten.
 
 **One grep guards the exception.** `tests/owner-isolation.test.ts` asserts that no file under
 `src/store/` except `pg-admin.ts` writes `groupBy(….ownerId)` — the shape of a question asked
@@ -490,6 +505,45 @@ The wider version of the same numbers — by category, with a median/p95/max spr
 account — is `npm run cost -- --owners`:
 [ai-gateway.md § The pricing report](ai-gateway.md#the-pricing-report-per-owner-by-category-with-the-spread).
 
+## The plan and ingest columns
+
+Added 2026-09-03 beside spend, because "who is paying" and "who is expensive" are two halves of one
+question. **Plan** is the tier id or `free`, with Stripe's own status underneath; **Ingests** is
+`4 / 20` against the allowance. [billing.md](billing.md) is where the quota itself is explained.
+
+Three things keep them honest, and each is a way the column could have been quietly wrong:
+
+- **Entitlement is decided by `entitlementFromRow`** — the same function `reserveIngest` decides
+  with under its lock, not a second reading of the same columns. So a row this page draws as
+  *reader, 4 of 20* is a row the wall would admit, and one it draws as free is one refused at three.
+  The case that proves it matters is `past_due`, which is **entitled on purpose**: an admin page
+  with its own opinion would show that account as free and send somebody to fix a thing that is
+  working as designed.
+- **The window is named on every cell**, as the spend column's period is, because the two allowances
+  are measured over different spans — a paid one over the Stripe billing period, the free one over
+  the account's lifetime. A column of `4 / 20` and `2 / 3` is two different questions in one list
+  unless each cell says which it is answering. A subscription whose stored period has run out shows
+  the **lifetime** count with the tier's limit, because there is no current period to count inside;
+  the raw status beside it is the tell.
+- **The administrator's own row draws an em dash**, not a count. The exemption is total — no slot is
+  reserved at all, so an administrator's ingests are legitimately absent from `ingest_events`, and
+  any figure would be a count of something that was never counted. The page asks `isAdmin`, which is
+  the gate's own question and is already in the browser bundle for the `admin` marker.
+
+**The status is shown raw** rather than translated into a word of ours, for the reason
+`billing_accounts.status` is `text`: entitlement is decided by an allowlist, and a status Stripe adds
+next year should show itself here rather than be flattened into whichever of ours it least resembles.
+`free` over `canceled` is a lapsed subscriber, which is exactly what somebody holding a support email
+needs to see.
+
+It cost more than the plan expected — four fields on `AdminUser`, two columns, and three reads rather
+than one statement. The reasons are on `AdminUser` in [`src/admin.ts`](../../src/admin.ts); the short
+version is that a plan with no usage figure does not answer the operational question, a usage figure
+with no limit has no scale, and the limit is a database row somebody may raise at any time.
+[`tests/billing-admin-plan.test.ts`](../../tests/billing-admin-plan.test.ts) holds the arithmetic
+without a database; the aggregate itself is checked against a real one in
+[`tests/billing-usage-route.test.ts`](../../tests/billing-usage-route.test.ts).
+
 ## The page itself
 
 `/admin` is an index with one entry. It exists rather than redirecting straight to the users table
@@ -511,6 +565,34 @@ asked for.
 There are two date columns and they are not the same question: a session lasts weeks, so **a recent
 sign-in is not evidence anybody has read anything**. `Last read` is the most recent open across
 their own articles.
+
+### The count above the table counts the table
+
+Greg, 2026-09-03, of production:
+
+> it says "2 accounts", but only lists one! … whatever the answer is, the number of rows and the
+> number in the text above should match! And also indicate if a row is an admin user or not.
+
+So the number is now counted off `sorted` — the list the table is drawn from — rather than off the
+list the request returned. There is no second number left to disagree with it.
+
+**No mechanism was found by which the old page could print a number larger than its rows.** The
+investigation is in [260903c](../plans/260903c-admin-users-count-disagrees-with-rows.md): a real
+browser eight times over, React measured to render every row even on a duplicate or missing key,
+TanStack's row models read rather than assumed, production's own bundle fetched and found to hold
+this same logic, and a cross-family review sent looking for a path and finding none. **No root cause
+is claimed**, and the report has not been explained.
+
+Two things follow from that. `sorted.length` is what is handed to the renderer and not what the DOM
+holds, so the invariant is asserted a step further out as well — a test reads the number back out of
+the rendered words and compares it with the `<tr>` count. That covers structure, not visibility;
+nothing here can see a row that renders and cannot be seen. And the administrator's own row now
+carries an `admin` marker, which is the other half of what Greg asked for: it is `isAdmin`, the
+gate's own question, so an unmarked row is an account this page would refuse.
+
+Fixed on the way, on its own merits: the line under an address no longer hides `email unconfirmed`
+when no provider is recorded — it used to sit behind `providers.length > 0`, which hid it on exactly
+the account with least else to say.
 
 ## How it is checked
 
@@ -547,7 +629,18 @@ automation reported a resize it did not perform. Written down rather than assume
 That pass also photographed *"6 accounts"* above five rows — during a spell when another agent's
 hot-reloads were breaking the page mid-render. The honest answer to a screenshot is a test, so
 there is now one: six accounts, one of them with no sortable date, must draw six distinct rows. It
-passes, so the page was right and the picture was a casualty of the reload.
+passes, so the page was right and the picture was blamed on the reload.
+
+**That conclusion was too comfortable, and it was worth exactly one week.** On 2026-09-03 Greg saw
+the same shape on production, where nothing hot-reloads. The re-investigation
+([260903c](../plans/260903c-admin-users-count-disagrees-with-rows.md)) still found no way for the
+page to draw fewer rows than it counts — this time by measuring React, TanStack and the deployed
+bundle rather than by trusting a passing test — and the count now comes off the list the table is
+built from, which removes the divergence a *source* reading could have. It does not make the
+symptom impossible: a CSS problem, a transient render or anything else visual could still put a
+number over a table that does not look like it. The lesson is the smaller one: *"the test passes, so
+the screenshot was wrong"* explains a screenshot away rather than explaining it, and the same
+picture came back.
 
 ## What it cannot do, and what is not built
 
@@ -561,8 +654,11 @@ passes, so the page was right and the picture was a casualty of the reload.
 - **Soft-deleted accounts are filtered out**, on `auth.users.deleted_at`. The row survives a
   deletion in Supabase's schema; a deleted user in a list of users is wrong in the direction nobody
   checks.
-- **Accounts with no email address are filtered out.** They cannot sign in here at all — the gate
-  refuses them by name, `[auth-noemail]` — so they own nothing and have nothing to show.
+- **Accounts with no email address are filtered out.** They cannot sign in here — the gate refuses
+  them by name, `[auth-noemail]` — and a row whose first column is blank is a blank line rather than
+  a fact, on a table led by the address. **It does not follow that they own nothing**: this is a
+  Supabase project shared with an older app, so such an account may belong to a person and have rows
+  against its id, and this page would not count them. GPT Sol, 2026-09-03.
 
 ## See also
 

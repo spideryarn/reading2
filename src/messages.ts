@@ -285,6 +285,34 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      an interrupted job resumes from its artefacts rather than starting again,
      so another go is both allowed and cheap. See `INTERRUPTED`. */
   "jb-gone": "retry",
+  /* **The four generic step failures**, `stepGaveUp` above — one per kind, and
+     that is why there are four rather than one. The kind is what decides
+     whether a Retry appears, and a single sentence would have had to either
+     promise a retry under a failure stored as `bug` or withhold one under a
+     blip. Registered like everything else here, because `readerFailureOf`
+     (src/job-failure.ts) is not the only reader: `monitoring-scrub.ts` uses
+     this table to decide whether a sentence is provably ours and may go to
+     Sentry, and an unregistered code is withheld. */
+  "jb-step-again": "retry",
+  "jb-step-ours": "ours",
+  "jb-step-bug": "bug",
+  "jb-step-no": "blocked",
+  /* Not a failure at all — the reader pressed Stop. `retry` because a stopped
+     job resumes from its artefacts, the same reason `jb-gone` is. See
+     `STEP_STOPPED`. */
+  "jb-stopped": "retry",
+  /* The two token-budget failures, split from their own diagnostics on
+     2026-09-03. `ai-too-long` is arithmetic done before the call and
+     `ai-over-room` is the call coming back cut off; both withhold the button,
+     for the reasons at `TooLongForOnePass` and `truncationFailure` in
+     src/token-budget.ts. */
+  "ai-too-long": "blocked",
+  "ai-over-room": "bug",
+  /* Writing quiz questions, `quiz-`. Both are `retry` and both mean it: the
+     batch is written afresh on every call, so a second one genuinely can come
+     out better. See `quizBandsNotSpread` and `QUIZ_NOTHING_ANCHORED`. */
+  "quiz-spread": "retry",
+  "quiz-unanchored": "retry",
   /* Not a model call. `db-` rather than `ai-` so that a reader quoting four
      characters, and whoever they quote them to, can tell the two apart at a
      glance — see `STORAGE_BUSY`. */
@@ -352,8 +380,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      docs/project/feedback.md. */
   "fb-send": "retry",
   "fb-store": "ours",
-  /* The subscription allowance, `pay-`. All three are registered rather than
-     left to fall through, and the two `blocked` ones are the reason: an
+  /* The subscription allowance, `pay-`. All six are registered rather than
+     left to fall through, and the four `blocked` ones are the reason: an
      unrecognised code means *offer another go*, so "you have used all three of
      your free articles" would have arrived with a Retry button beside it —
      pressing it does not move the count, and a button that cannot work is the
@@ -362,7 +390,16 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      docs/project/billing.md. */
   "pay-free": "blocked",
   "pay-limit": "blocked",
+  "pay-lapsed": "blocked",
   "pay-off": "ours",
+  /* Pressing *Manage billing* with nothing to manage. `blocked` for the same
+     reason as the three above: another press gives the same answer, so a Retry
+     button beside it would be a button that cannot work. */
+  "pay-none": "blocked",
+  /* Stripe had a bad minute. The one `pay-` code where another go is exactly
+     the right thing to offer — see `BILLING_UNREACHABLE`, and note it is a
+     different situation from `pay-off`, which is a deployment with no Stripe. */
+  "pay-down": "retry",
 };
 
 
@@ -645,6 +682,225 @@ export const UNEXPECTED_FAILURE: ReaderFacingFailure = {
     "Something went wrong inside this app while handling that request, and it was not something the " +
     "app knew how to explain. It has been recorded, and it needs fixing here rather than by you. " +
     "[ai-unexpected]",
+};
+
+/* ------------------------------------------------------- a step that gave up -- */
+
+/**
+ * **What the reader is told when a pipeline step failed and nobody wrote them a
+ * sentence about it.**
+ *
+ * The safety net on the seam described in docs/project/copy.md § The seam
+ * between the two audiences. A step throws; src/jobs.ts copies something onto
+ * `step.error` and `job.error`; those are persisted and rendered. Until
+ * 2026-09-03 what it copied was `Error.message`, so a step's *diagnostic* was
+ * published — which had already leaked provider prose through six stages, a
+ * `src/token-budget.ts` reference through eight, and a source-file reference
+ * plus band arithmetic through the quiz.
+ *
+ * **So the default is generic, and a useful sentence has to be declared.** The
+ * alternative considered and rejected was an allowlist of steps trusted to
+ * write their own: one new `throw` inside an approved step leaks immediately,
+ * and nothing goes red. The cost is honest — an unmigrated failure says less
+ * than its diagnostic did — and it is recoverable, because the diagnostic still
+ * reaches **the log**. Publishing an unaudited internal string is neither.
+ * ⟨Sol, 2026-09-03⟩
+ *
+ * The log and not Sentry: Sentry withholds any message it cannot prove we wrote
+ * every word of, which a step's free-text diagnostic is not. That cost, and the
+ * tempting fix that must not be taken, are in src/job-failure.ts § The log, and
+ * not Sentry.
+ *
+ * **There is no type-level way to do better**, written down so the next person
+ * does not spend an afternoon finding out: TypeScript has no checked
+ * exceptions, so `PipelineStep.run()`'s signature (src/pipeline.ts) cannot
+ * constrain what is thrown through it. A `Result` return could, and would still
+ * need this net for the exceptions nobody planned — which is most of them.
+ *
+ * **Total over `FailureKind`, so a fifth kind is a red compile** rather than a
+ * quiet fall-through — the shape `RETRYABLE` above and `KNOWN_KINDS` in
+ * src/job-failure.ts already keep, for the same reason.
+ *
+ * `step` is the step's own **label** — "Fetching the page", "Writing the
+ * questions" — which is the word the reader is already watching on the card and
+ * in the band. Naming the step is the one thing this sentence knows about the
+ * failure, and it is the rule ingest already follows: each step is named, not
+ * counted.
+ */
+const STEP_GAVE_UP: Record<FailureKind, (step: string) => string> = {
+  retry: (step) =>
+    `${step} did not finish. What went wrong has been recorded for whoever supports this app, ` +
+    `and a step that stops like this often comes out differently on a second attempt — so ` +
+    `trying again is worth a go. [jb-step-again]`,
+  ours: (step) =>
+    `${step} did not finish, and the reason is something about how this app is set up rather ` +
+    `than anything about the article or about you. Nothing you can do from here will change ` +
+    `that, and trying again will not help until somebody fixes it. [jb-step-ours]`,
+  bug: (step) =>
+    `${step} did not finish, and it stopped on a defect in this app rather than on anything you ` +
+    `did. It has been recorded, it needs fixing here, and trying again will not help until it ` +
+    `is. [jb-step-bug]`,
+  /* **No remedy, because a total fallback has none to offer.** This ended *"A
+     shorter piece sometimes gets through"* for six hours, borrowed from the
+     `blocked` messages that really are about size. It is not true of every
+     `blocked` step: `RawDocumentUnavailable` and `NoBlocksProduced`
+     (src/pipeline.ts) have nothing to do with length, and pointing a reader at
+     a shorter article would send them off doing the wrong thing — the exact
+     cost docs/project/copy.md's opening paragraph names. The only claim a
+     sentence standing in for *every* blocked failure can make is that repeating
+     the identical request will not change it. ⟨Sol, 2026-09-03⟩ A step that has
+     a real way out should declare its own message and say so. */
+  blocked: (step) =>
+    `${step} could not be done for this article as it stands, and asking for it again unchanged ` +
+    `would most likely come back the same way. [jb-step-no]`,
+};
+
+/**
+ * The generic sentence for one kind of failure of one named step.
+ *
+ * Read through `readerFailureOf` in src/job-failure.ts rather than called
+ * directly: that is where "nobody said, so offer the retry" lives, and it
+ * belongs in one place.
+ */
+export function stepGaveUp(kind: FailureKind, step: string): ReaderFacingFailure {
+  return { kind, message: STEP_GAVE_UP[kind](step) };
+}
+
+/**
+ * **The reader stopped it**, which is not a failure and must not read as one.
+ *
+ * A cancel unwinds through `runStep`'s catch like everything else, so for the
+ * first six hours of the seam's life it was handed `stepGaveUp`'s copy — which
+ * says the problem *has been recorded* on a branch that deliberately skips
+ * Sentry, and which inherits the *kind* of whatever was in flight when Stop
+ * landed. A refusal racing a Stop therefore left *asking again will be refused*
+ * on a step of a job that was about to be marked retryable. GPT Sol's stage 2
+ * review; src/jobs.ts § the catch in `runStep`.
+ *
+ * `retry`, and it means it: Retry skips every step that finished, so a stopped
+ * job really does pick up rather than start over. That is `INTERRUPTED`'s
+ * promise too, and this is deliberately **not** that message — an interruption
+ * is *nobody came back*, and telling somebody who pressed Stop that something
+ * went wrong is the app not listening (src/job-state.ts § the eight states).
+ *
+ * The step is not named here, unlike `stepGaveUp`: the shelf card draws this
+ * directly under `step.label`, and the band does not draw it at all.
+ */
+export const STEP_STOPPED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "You stopped this before it finished. Whatever had already been done is kept, so starting it " +
+    "again picks up from there rather than beginning over. [jb-stopped]",
+};
+
+/* ----------------------------------------------------- more than one response -- */
+
+/**
+ * **The article needs more room than one model response has**, worked out
+ * before the call rather than discovered by it — `TooLongForOnePass` in
+ * src/token-budget.ts.
+ *
+ * The developer half is the exception's own message, which names the two token
+ * figures and the doc; it stays on `Error.message`, goes to the log, and is
+ * what somebody re-tuning the constants needs. This half is what the reader
+ * gets, and it deliberately says nothing about tokens: they did not choose a
+ * number and cannot change one.
+ *
+ * `blocked` rather than `bug`, matching the exception's own declared kind and
+ * for its stated reason — a request that cannot pass a size boundary, where the
+ * reader's move is a shorter piece.
+ */
+export const ARTICLE_TOO_LONG_FOR_ONE_PASS: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "This article is longer than this step can handle in one go, and reading a long piece in " +
+    "sections is not built yet. Trying again will not help — the article is the same length each " +
+    "time — but a shorter piece will work. [ai-too-long]",
+};
+
+/**
+ * **The answer ran past the room it was given and arrived unfinished**, which
+ * is a budget in this app set wrongly rather than anything about the article —
+ * `truncationFailure` in src/token-budget.ts.
+ *
+ * The two audiences docs/project/copy.md recorded and did not split are split
+ * here: `truncatedMessage` keeps the arithmetic — how much of the spend went on
+ * the answer and how much on the reasoning, which is the thing that took a bug
+ * two six-minute runs to work out — and travels on `Error.message` to the log.
+ * This sentence is what reaches the card.
+ *
+ * `bug`, the kind the exception already declared, and the wording keeps its
+ * hedge: the model's output varies between calls, so *unlikely* rather than
+ * *cannot*. The button is hidden either way, and a hidden button under a claim
+ * of certainty is the pair that has to stay honest.
+ */
+export const ANSWER_RAN_PAST_ITS_ROOM: ReaderFacingFailure = {
+  kind: "bug",
+  message:
+    "The AI service was given less room than this article's answer needed, so what came back was " +
+    "cut off and could not be used. That is a limit set wrongly in this app rather than anything " +
+    "about the article or about you: it has been recorded, it needs fixing here, and trying again " +
+    "is unlikely to help until it is. [ai-over-room]",
+};
+
+/* ------------------------------------------------------------------------ quiz -- */
+
+/**
+ * **The batch came back without both ends of the scale.**
+ *
+ * Written inline at its throw site on 2026-09-03 and moved here the next day —
+ * inline because at that moment one string had to be both the reader's sentence
+ * and the developer's, and the reader won the tie. With the seam split it can
+ * be what it should have been: a `ReaderFacingFailure` with a kind and a code,
+ * while the band arithmetic goes to the log.
+ *
+ * The wording is unchanged from the reviewed version, and two phrases in it are
+ * load-bearing:
+ *
+ * - **"survived checking against it"** rather than "the AI service wrote", with
+ *   `survived` the count of what got through validation. A draft said "wrote",
+ *   which is false the moment anything is dropped: twelve back with seven
+ *   unanchored reported that the service wrote five. It is also the panel's own
+ *   phrase for the same event (src/web/QuizPanel.tsx), so a reader who meets
+ *   both gets one vocabulary. ⟨Sol⟩
+ * - **"cover the full range"** rather than "build up from easier to harder":
+ *   easy-plus-medium with no hard *does* build up, it just stops short, and a
+ *   claim the reader can see is false costs the rest of the sentence. ⟨Sol⟩
+ *
+ * `gap` is `missingEndsInReaderWords` (src/quiz.ts) — the missing end said to
+ * somebody who has never heard of a band. The words `easy` and `hard` appear in
+ * it doing ordinary work in an English sentence; the band as a *name* never
+ * does, because the panel shows neither band nor value.
+ */
+export function quizBandsNotSpread(survived: number, gap: string): ReaderFacingFailure {
+  return {
+    kind: "retry",
+    message:
+      `Of the questions written for this article, ${survived} survived checking against it — but ` +
+      `${gap}, so they would not cover the full range from easier to harder. Writing the ` +
+      `questions again usually gets a better spread. [quiz-spread]`,
+  };
+}
+
+/**
+ * **Every question named a passage the article does not contain.**
+ *
+ * The other way the quiz build refuses a paid answer, and it had the same
+ * fault: its sentence was a tally of drop reasons — unanchored, unknown ids,
+ * unquoted, malformed, duplicates — which is exactly what somebody debugging
+ * the validator wants and exactly nothing a reader can act on. The tally stays
+ * on `Error.message`.
+ *
+ * `retry`, and honestly so: the questions are written afresh each time, and a
+ * batch that anchored to nothing is the kind of answer a second call usually
+ * does better on.
+ */
+export const QUIZ_NOTHING_ANCHORED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "None of the questions written for this article could be tied back to a passage in it, so " +
+    "there was nothing to check your answers against. Writing the questions again usually " +
+    "works. [quiz-unanchored]",
 };
 
 /* ---------------------------------------------------------- placing passages -- */
@@ -1495,19 +1751,56 @@ export const SHARING_ON = "Anyone with the link can read this, without signing i
  */
 export const SHARING_BADGE = "Shared";
 
-/** What a visitor gets, in one line, on the card rather than behind a hover. */
-/* **"and whatever the model has written about it" was added 2026-09-02**, and
-   it is a correction rather than a flourish. Since slice 1b a shared link has
-   carried the glossary, the ideas, the quotes and the tweet thread, and this
-   sentence still named only the article and its tree — true, and true by
-   omission of the four things an owner would most want to have been told. On
-   the owner's card it now sits directly above the itemised list
-   (src/web/shared-inventory.ts), where the omission was visible. */
-export const SHARING_WHAT_VISITORS_SEE =
-  "A visitor sees the article, its table of contents, every zoom level, and the reading aids " +
-  "written for it — the summaries, the glossary, the ideas, the quotes. They never see your " +
-  "comments, your conversations, your searches or your notes, and nothing they do costs a model " +
-  "call.";
+/**
+ * **What a shared link carries, in one line, for the visitor** — the reader of
+ * the page a shared link actually reaches.
+ *
+ * *"and whatever the model has written about it" was added 2026-09-02*, and it
+ * is a correction rather than a flourish. Since slice 1b a shared link has
+ * carried the glossary, the ideas, the quotes and the tweet thread, and this
+ * sentence still named only the article and its tree — true, and true by
+ * omission of the four things an owner would most want to have been told.
+ *
+ * ## It used to be drawn on the owner's card as well, and both problems with
+ * ## that had one cause: it was written for two audiences and fitted neither
+ *
+ * **It appeared on a *private* article's card**, in the present indicative,
+ * directly under *"Only you can read this."* — two paragraphs contradicting
+ * each other on a skim, on the one control in this app where a state that looks
+ * wrong is worth most. Greg, 2026-09-03: *"That's a fair description of what
+ * would be true IF it was Public-readable. But it's not."*
+ *
+ * **And on the shared card it was redundant**, sitting immediately above the
+ * itemised list that says the same thing better: `SHARED_HEADING` and the two
+ * below it, swept from the modes by
+ * [shared-inventory.ts](web/shared-inventory.ts) so it cannot fall behind them,
+ * with `NOT_SHARED_NOTE` as the one-line summary. The same list is what the
+ * confirmation box answers *"what would publishing do?"* with, so the box does
+ * not get the sentence either. One fact, on that card, once.
+ *
+ * **What was lost with it, stated rather than glossed:** *"nothing they do
+ * costs a model call"*, which the inventory only implies by listing Chat,
+ * Search, Remember and Referee as owner-only. It is said outright to the person
+ * who meets it — `visitorSentence` (web/visitor.ts) — and no longer to the
+ * owner. Worth a line back if an owner ever asks whether a link can spend their
+ * money.
+ *
+ * ## Why the visitor's copy is the one that survived
+ *
+ * Because it is the audience with no list to read. And the sentence it was
+ * given was the owner's: *"They never see **your** comments, **your**
+ * conversations"*, on a page whose reader has none, describing themselves in
+ * the third person. The owner's side and the visitor's side of one fact are
+ * meant to be **different sentences** — `SHARING_BADGE` above says why, and
+ * `VIEW_ONLY` is the other half of it — and the way that goes wrong is two
+ * constants drifting a few words apart, as the dock's tooltip did against the
+ * band's ([visitor.ts § markedModes](web/visitor.ts)). One audience, one
+ * sentence, nothing to keep in step.
+ */
+export const SHARED_LINK_CARRIES =
+  "A shared link carries the article, its table of contents, every zoom level, and the reading " +
+  "aids written for it — the summaries, the glossary, the ideas, the quotes. It never carries the " +
+  "comments, conversations, searches or notes of whoever added it.";
 
 /**
  * **The honest limit, and we are the only ones saying it.**
@@ -1603,6 +1896,7 @@ export const OWNED_ARTEFACT = {
   ideas: "your list of ideas",
   quotes: "your set of quotes",
   sketch: "your sketch diagram",
+  illustrated: "your illustrated diagram",
   /* `satisfies`, not an annotation. `Partial<Record<StepName, string>>` as the
      declared type makes every value `string | undefined`, and the coverage
      check in tests/messages.test.ts would then be unsatisfiable without a cast
@@ -2168,7 +2462,17 @@ export const FEEDBACK_NOT_AVAILABLE: ReaderFacingFailure = {
  * the thing `kind` is actually consulted for — should we offer another go —
  * gives the same answer either way.
  *
- * **Both sentences end by saying reading is unaffected**, which is the one thing
+ * **The third sentence is for somebody whose plan has ended**, and it exists
+ * because the other two would lie to them. The free count is lifetime and
+ * includes paid months, so a reader who took forty articles on Reader and
+ * cancelled is past the free allowance permanently — that is the policy Greg
+ * chose on 2026-09-03, over tier-scoping the count or granting a fresh
+ * allowance on cancel. What it must not do is *read* as a policy failure:
+ * "you have added all 3 articles a free account can add", to somebody who has
+ * added forty, looks like arithmetic going wrong. So the ended plan is named,
+ * resubscribing is the way back, and the numbers stay out of it.
+ *
+ * **All three sentences end by saying reading is unaffected**, which is the one thing
  * a reader will actually be worried about and the one promise this product makes
  * about money (Greg, 2026-09-02: *"if a user has hit their quota, they should
  * still be able to read their existing and Public-readable articles"*). Neither
@@ -2185,9 +2489,27 @@ export function ingestQuotaReached(quota: {
   limit: number;
   /** When the allowance resets. Absent for the free tier, whose limit is lifetime. */
   resetAt?: Date;
+  /**
+   * This account had a subscription and no longer has an entitled one.
+   *
+   * From the billing row rather than from the numbers — `Refused.lapsed` in
+   * src/store/pg-billing.ts.
+   */
+  lapsed?: boolean;
 }): ReaderFacingFailure {
   const kept =
     "Everything you have already added stays exactly where it is — reading is never limited.";
+
+  if (quota.lapsed) {
+    return {
+      kind: "blocked",
+      message:
+        `Your subscription has ended, so this account is back to the free allowance of ` +
+        `${quota.limit} articles — and those are already spent. Trying again will not help; ` +
+        `resubscribing from the Upgrade button on your profile page is what adds more. ${kept} ` +
+        "[pay-lapsed]",
+    };
+  }
 
   if (!quota.resetAt) {
     return {
@@ -2217,6 +2539,46 @@ export function ingestQuotaReached(quota: {
 }
 
 /**
+ * The three codes `ingestQuotaReached` can end with — *the wall said no*.
+ *
+ * A list rather than a prefix test, and the difference is the point: `pay-off`,
+ * `pay-down` and `pay-none` are also `pay-` codes and none of them is a quota
+ * refusal. A deployment with no Stripe configured, a bad minute at Stripe, and
+ * a Portal press with nothing to manage are all things a reader can do nothing
+ * about by subscribing, and offering them an Upgrade link would be an offer
+ * that leads nowhere.
+ *
+ * **Kept beside the function that produces them**, so a fourth refusal added
+ * above is one line away from the list that decides what is drawn around it —
+ * and `tests/billing-plan.test.ts` asserts the two agree, by building all three
+ * messages and comparing their codes against this array.
+ */
+export const QUOTA_CODES: readonly string[] = ["pay-free", "pay-limit", "pay-lapsed"];
+
+/**
+ * **Is this failure the quota refusing an ingest?**
+ *
+ * The one question `QuotaNotice` (src/web/QuotaNotice.tsx) asks before putting a
+ * link to `/profile` beside a sentence.
+ *
+ * Asked of the **message**, because that is all a client has where these are
+ * read: `readJson` throws the server's own sentence and the code is the last
+ * thing in it. Reading the code rather than matching the prose is the rule
+ * `kindOfMessage` already follows — the wording is free to be reworded, and a
+ * classifier built out of prose silently reclassifies everything the day
+ * somebody improves a sentence.
+ *
+ * The 402 would work too, and is not used: `statusOf` is available at the fetch
+ * but not from the durable `lastFailure` string the add page keeps, and one
+ * question with two spellings is one place for them to disagree.
+ */
+export function isQuotaRefusal(message: string | null | undefined): boolean {
+  if (!message) return false;
+  const code = codeOfMessage(message);
+  return code !== null && QUOTA_CODES.includes(code);
+}
+
+/**
  * Billing is configured wrongly, or not at all, on this deployment.
  *
  * `ours` rather than `retry` or `blocked`: nothing the reader does changes it,
@@ -2233,4 +2595,48 @@ export const BILLING_NOT_AVAILABLE: ReaderFacingFailure = {
     "Subscriptions are not set up on this copy of the app, so there is nothing to buy here just " +
     "now. Trying again will not help — it needs somebody to configure it. Nothing you have is " +
     "affected, and reading carries on as normal. [pay-off]",
+};
+
+/**
+ * Stripe itself refused or could not be reached.
+ *
+ * **Different from `BILLING_NOT_AVAILABLE`, and the difference is what the
+ * reader should do.** That one is a deployment with no Stripe configured, which
+ * no amount of trying will change. This one is a bad minute at Stripe — a
+ * timeout, a rate limit, a 500 from their side — so `retry` is honest and a
+ * Retry button beside it can work.
+ *
+ * It exists because without it every Stripe SDK failure left this app answering
+ * **500 with Stripe's own sentence in it** (GPT Sol, 2026-09-03). That breaks two
+ * rules at once: copy.md's *never show the provider's words*, and the one about
+ * a status meaning what it says — a failure at Stripe is not a fault in this
+ * server's arithmetic.
+ */
+export const BILLING_UNREACHABLE: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "We could not reach Stripe just now, so there is nothing to send you to yet. Nothing has " +
+    "been charged and nothing has changed. Try again in a minute. [pay-down]",
+};
+
+/**
+ * They asked for the billing portal and have never subscribed.
+ *
+ * `blocked` rather than `bug`: nothing is broken and the reader has not done
+ * anything wrong — there is simply no billing history to manage, because the
+ * Stripe customer that would hold one is created by the *first* checkout.
+ *
+ * **It has to say out loud that asking again gives the same answer**, and that
+ * is a rule rather than a flourish: `tests/messages.test.ts` fails a `blocked`
+ * message that does not. The first draft of this one did not, and the test
+ * caught it. It names the way forward, as the `pay-` messages do, and it ends
+ * where they all end: nothing about reading changes.
+ */
+export const NOTHING_TO_MANAGE: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "There is no billing to manage on this account yet — billing details only exist once you " +
+    "have subscribed at least once, so asking again will give the same answer. The Upgrade " +
+    "button on your profile page is where that starts. Everything you have already added stays " +
+    "exactly where it is, and reading is never limited. [pay-none]",
 };

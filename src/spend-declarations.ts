@@ -58,6 +58,15 @@ export const PAID_ENDPOINT_PATHS: readonly string[] = [
      or not something currently uses it that way. */
   "/v1/audio/speech",
   "/v1/embeddings",
+  /* Pictures, added 2026-09-03 with the Illustrated sub-mode's wire. About
+     $0.013 a plate, which is more than a whole quiz costs — the only reason it
+     reads as small is that it is a fraction of a cent per *token* nowhere. It
+     goes through the owned seam (`openRouterImage`, src/ai-call.ts), so there
+     is no `Declaration` and no `UNMETERED_SPEND` entry for it and there must
+     not be: either would be this register claiming a hole that does not exist.
+     What the path buys is the scan — a source file that names it is a source
+     file that can spend, whether or not anything uses it that way today. */
+  "/v1/images",
 ];
 
 export interface Declaration {

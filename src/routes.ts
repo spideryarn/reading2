@@ -84,6 +84,10 @@
  *   POST   /api/jobs/:id/cancel
  *   POST   /api/jobs/:id/retry   the same steps again, skipping what succeeded
  *   POST   /api/jobs/:id/advance run the next step this job has not done yet
+ *   GET    /api/billing/usage    which plan, how much of it is used, what may be bought
+ *   POST   /api/billing/checkout { tierId, currency? } → a hosted Checkout, or the Portal
+ *   POST   /api/billing/portal   → a hosted Customer Portal session
+ *   POST   /api/billing/confirm  { sessionId } → prove a finished Checkout is yours, then sync
  *
  * The job routes return immediately; the work happens on the queue in
  * src/jobs.ts. See docs/project/comments.md, docs/project/library.md and
@@ -120,6 +124,7 @@ import {
   loadArc,
   loadIdeas,
   loadQuotes,
+  loadIllustrated,
   loadSketch,
   loadQuiz,
   loadTimeline,
@@ -187,7 +192,8 @@ import { isStorableColour } from "./searches.js";
 /* The one media type this route serves, from the file that names it for the
    writer too — so what goes into the bucket and what comes out of it cannot be
    described two different ways. */
-import { CONTENT_TYPE } from "./store/blobs.js";
+import type { IllustratedImage } from "./illustrated-plate.js";
+import { blobStore, CONTENT_TYPE } from "./store/blobs.js";
 /* The download's two halves: the zip itself, and the one error a route has to
    turn into a 404 rather than let travel to the catch-all as a 500. Both come
    straight from the store, so this file adds no data model of its own. */
@@ -268,6 +274,19 @@ import { ADMIN_FEEDBACK_DEFAULT_LIMIT, decodeFeedbackCursor } from "./types.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
 import { placingFailed, UPLOAD_MISSING, UPLOAD_UNAVAILABLE } from "./messages.js";
 import { WEBHOOK_PATH, serveStripeWebhook } from "./billing/webhook.js";
+import {
+  confirmCheckout,
+  openPortal,
+  parseCheckoutRequest,
+  startCheckout,
+} from "./billing/checkout.js";
+import { readBillingSummary } from "./billing/summary.js";
+import {
+  refuseUploadWithoutQuota,
+  withIngestSlot,
+  withRetrySlot,
+  type IngestSlot,
+} from "./billing/admission.js";
 import { isPublicNamespace, servePublicApi } from "./public/routes.js";
 import { currentOwnerId, runInRequest, setRequestOwner } from "./owner.js";
 import {
@@ -278,7 +297,7 @@ import {
   withSpendAttribution,
 } from "./ai-spend.js";
 import { costStore } from "./store/ai-calls.js";
-import { stagingKey } from "./source.js";
+import { canonicalKey, stagingKey } from "./source.js";
 import { uploadGrants } from "./store/blobs.js";
 import { uploadProblem } from "./uploads.js";
 import {
@@ -292,6 +311,7 @@ import {
   type UploadRecord,
 } from "./upload-records.js";
 import { errorFields, log, since } from "./log.js";
+import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
 import { isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
@@ -326,6 +346,7 @@ import type {
   IdeasResponse,
   QuizFound,
   QuotesResponse,
+  IllustratedResponse,
   SketchResponse,
   RememberStance,
   ThreadKind,
@@ -513,6 +534,80 @@ async function sendSource(res: ServerResponse, slug: string): Promise<void> {
      number whenever both exist, and the one that is true when they are not. */
   res.setHeader("Content-Length", String(source.bytes.byteLength));
   res.end(Buffer.from(source.bytes));
+}
+
+/**
+ * **One plate of an Illustrated diagram, as bytes** —
+ * docs/project/diagram.md § Illustrated.
+ *
+ * The only binary route in this file besides `sendSource`, and it is the one
+ * with a rule that has to be stated rather than followed by habit:
+ *
+ * > **The key is rebuilt from the artefact, never taken from the path.**
+ *
+ * Plates live in a **content-addressed store shared by every article and every
+ * reader** — `sha256/<hash>.jpeg`, the same bucket the articles' own figures
+ * are in. So a route that concatenated the caller's string into a blob key
+ * would be an arbitrary-object read: name any hash you can guess or have seen
+ * and get the object, whoever owns the article it belongs to. That is the rule
+ * docs/project/security.md owns, and it is why the hash in the path is used
+ * **only to look a plate up in this article's own artefact**. What reaches the
+ * store is `canonicalKey(plate.image.sha256, "jpeg")`, built here from the
+ * value we wrote.
+ *
+ * Two consequences worth keeping:
+ *
+ *  - a hash that is a real plate of **somebody else's** article is a 404, not a
+ *    picture, even though the object exists and the key is well-formed;
+ *  - a hash that is a plate of an **older revision** of this article is a 404
+ *    too, because `loadIllustrated` reads the current revision. That is right:
+ *    the panel only ever asks for hashes it has just been given.
+ *
+ * Ownership is checked the way `sendSource` checks it — `shelfStore.read`,
+ * which is the same owner-filtered lookup every other article route goes
+ * through, and which throws the same 404. It is asked as a question and its
+ * answer discarded.
+ *
+ * `blobStore()` and **not** `postgresBlobStore()`, for the reason
+ * src/fetch.ts § *Why `blobStore()`* gives about the raw document: the bytes
+ * were *written* through `blobStore()` (src/illustrated-image.ts), so selecting
+ * differently here would be a split brain by construction — the process that
+ * painted and the process that serves looking in two different buckets.
+ *
+ * **Immutable, and it can be**: the URL contains the hash of its own contents,
+ * so the bytes at it can never change. `private` because the article is one
+ * reader's — a shared cache must not hold it.
+ */
+async function sendPlate(res: ServerResponse, slug: string, hash: string): Promise<void> {
+  /* Ownership first, before the artefact is read and long before a byte moves —
+     `sendSource`'s rule, and the failure it was written after. */
+  await shelfStore.read(slug);
+
+  const found = await loadIllustrated(slug);
+  const plates = (found.illustrated as { plates?: { image?: IllustratedImage }[] }).plates ?? [];
+  /* **The stored record, not the caller's string.** Everything below is built
+     from `plate.image`; `hash` is never used again after this line. */
+  const image = plates.find((p) => p.image?.sha256 === hash)?.image;
+  if (!image) throw httpError(404, "No such plate.");
+
+  const bytes = await blobStore().get(canonicalKey(image.sha256, image.ext));
+  if (!bytes) {
+    /* The artefact names an object the store has not got. A 500 rather than a
+       404, on `sendSource`'s reasoning: telling a reader their picture does not
+       exist because a bucket is misconfigured is the wrong sentence, and this
+       is a dangling reference rather than an absence. */
+    throw httpError(500, "That plate's picture could not be read back.");
+  }
+
+  res.statusCode = 200;
+  res.setHeader("Content-Type", CONTENT_TYPE[image.ext]);
+  res.setHeader("Content-Length", String(bytes.byteLength));
+  /* A stranger's model drew these bytes and they are served from our origin —
+     the one place a wrong content type becomes script. Same reason
+     `sendSource` sets it. */
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+  res.end(Buffer.from(bytes));
 }
 
 /**
@@ -935,8 +1030,16 @@ export function heartbeat(
 /**
  * Server-sent events on a response that is otherwise a plain Node one.
  *
- * Shared by chat and by comments, which are the only two things in this app a
- * reader waits on. Extracted from `streamChat`, where every line of it was
+ * Shared by chat and by comments, which were the only two things in this app a
+ * reader waited on when this was extracted. **Six callers now** — add
+ * meaning-search, quiz marking, both referee runs and the mirror — so "the only
+ * two" stopped being true without anyone noticing, which is the ordinary way a
+ * count in prose goes wrong. Corrected 2026-09-03; if you add a seventh, this
+ * sentence is the one to fix. Note that `streamChat` writes its own SSE headers
+ * rather than coming through here, so a grep for callers of this function
+ * undercounts the streams in this file by one.
+ *
+ * Extracted from `streamChat`, where every line of it was
  * already written — see the note on `res.on("close")` there for the one trap it
  * carries.
  */
@@ -1728,7 +1831,39 @@ interface Live {
   attempt: string;
 }
 
-const streaming = new Map<string, Live>();
+/**
+ * **Two jobs, and only one of them has a durable half.**
+ *
+ * The one that is easy to see: `liveMessages` turns this into the `keep` set for
+ * `ChatStore.sweepPending`, and `SweepOptions` (src/store/contracts.ts) is
+ * explicit that `keep` alone is a cross-process bug and that something durable
+ * must speak for every other process. That half is fine, and it is why a sweep
+ * of this file's registries can wrongly conclude this one is safe.
+ *
+ * The one that has nothing behind it: **this map is also where each live
+ * stream's `AbortController` and `done` promise live**, and there is no second
+ * copy of those anywhere. `settleThread` aborts superseded streams through it,
+ * and the stop route finds the stream to abort through it. So on a module
+ * re-evaluation — same process, second copy, request still running — a reader
+ * pressing **Stop** reaches an empty map, is told `{ stopped: false }`, and the
+ * paid model call keeps running and keeps being billed. A retry or an edit
+ * likewise supersedes nothing and writes over a row a live stream still holds.
+ *
+ * Found by GPT Sol reviewing docs/plans/260903d-improve-the-codebase-second-sweep.md,
+ * which had checked the `keep` role, found it protected, and called the whole
+ * registry clean. **Checking the role a comment names is not checking the
+ * object** — see that plan's § T2.1.
+ *
+ * Preserving it is the right shape rather than a workaround: the old copy's
+ * `AbortController` still aborts the real call and its `done` still settles,
+ * because a re-evaluation replaces the module and not the running request
+ * ([src/process-state.ts](process-state.ts)).
+ */
+const streaming = processSingleton<Map<string, Live>>(
+  "routes.streaming",
+  "2026-09-03-live",
+  () => new Map(),
+);
 
 /**
  * One turn at a time per conversation, across deciding *and* writing it.
@@ -1755,12 +1890,31 @@ const streaming = new Map<string, Live>();
  * Per process, like everything else here. Two servers on one `data/` directory
  * remains the unfixed problem in docs/plans/260826a-chat-mode.md § What is still open.
  *
+ * **"Per process" is what this has to mean, and a plain module-scope `Map` did
+ * not deliver it.** Saving any server module makes Vite re-evaluate every one of
+ * them *inside the same process*, without cancelling the request in flight — so
+ * for the length of that request there were two maps, and a turn arriving
+ * through the second copy did not wait for the one running in the first.
+ * Reproduced in tests/turn-order-across-reload.test.ts, which was red before
+ * this line and is the only reason it is here. `processSingleton` is the
+ * one-process answer ([src/process-state.ts](process-state.ts)); the
+ * two-*servers* problem above is a different one and is still open.
+ *
+ * This is a narrower hole than it sounds, and worth saying so rather than
+ * letting the next reader assume the cost storm: the lock is released before the
+ * model is called, so what could interleave is a settle and a write, not an
+ * eight-minute answer.
+ *
  * Exported for its tests and for nothing else. The wiring — that every write in
  * `streamChat` and the thread DELETE go through it — is checked by reading;
  * what tests/turn-order.test.ts checks is that the thing they go through
  * actually excludes, actually keeps its order, and actually survives a throw.
  */
-const turnOrder = new Map<string, Promise<void>>();
+const turnOrder = processSingleton<Map<string, Promise<void>>>(
+  "routes.turnOrder",
+  "2026-09-03-map",
+  () => new Map(),
+);
 
 export async function inTurnOrder<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const before = turnOrder.get(key) ?? Promise.resolve();
@@ -4428,6 +4582,12 @@ async function mintAnUpload(body: unknown): Promise<{
   const wrong = uploadProblem({ name: claim.filename, type: "", size: claim.bytes });
   if (wrong) throw httpError(413, wrong);
 
+  /* **Asks, and takes nothing.** An account at its ceiling is told at the door
+     rather than after transferring 11 MB — the same reason `uploadProblem` runs
+     up here. The gate that actually decides is `POST /api/jobs`, which is
+     serialised per owner; this one is allowed to be a moment out of date. */
+  await refuseUploadWithoutQuota(owner);
+
   const minted = await mintUpload({ ...claim, owner }, (key) => grants.sign(key), stagingKey);
   return {
     uploadId: minted.record.id,
@@ -4468,7 +4628,7 @@ function publicUpload(record: UploadRecord): Record<string, unknown> {
  * article that claim produced and hands back its job. Only a claim with nothing
  * to show for it is an error.
  */
-async function queueAnUpload(uploadId: string): Promise<UploadOutcome> {
+async function queueAnUpload(uploadId: string, slot: IngestSlot): Promise<UploadOutcome> {
   const owner = currentOwnerId();
   const record = await readUpload(uploadId, owner);
   if (!record) throw httpError(404, "No such upload");
@@ -4517,6 +4677,12 @@ async function queueAnUpload(uploadId: string): Promise<UploadOutcome> {
   const job = await enqueue({
     slug: candidate,
     upload: { id: uploadId, filename: claim.record.filename },
+    /* The quota slot, spread onto the request so it rides the job's own INSERT.
+       Empty when nothing was reserved — src/billing/admission.ts. Every earlier
+       exit from this function leaves without a job, and none of them has to do
+       anything about the slot: the caller releases on every path, and the
+       ledger's own `not exists` is what decides whether that frees anything. */
+    ...slot,
   });
   /* **Immediately**, so that `GET /api/uploads/:id` can say which article this
      file became rather than only which one it might.
@@ -6103,6 +6269,17 @@ export async function serveAuthenticatedApi(
      POST /api/jobs { slug, steps: ["sketch"] }, which is also how "draw it
      again" is spelled, because the step replaces rather than appends. */
   const sketch = /^\/api\/sketch\/([\w.%-]+)$/.exec(path);
+  /* Illustrated — docs/project/diagram.md § Illustrated. GET only, like Sketch
+     above and for the same reason: painting one is
+     POST /api/jobs { slug, steps: ["illustrated"] }.
+
+     **Two routes, and the second is the only one in this file that serves bytes
+     an artefact points at.** The hash is spelled out as 64 hex characters here
+     rather than as a loose capture — not because `sendPlate` trusts it (it does
+     not; see that function) but because a pattern that accepts anything invites
+     the next reader to think the capture is a key. */
+  const illustrated = /^\/api\/illustrated\/([\w.%-]+)$/.exec(path);
+  const illustratedPlate = /^\/api\/illustrated\/([\w.%-]+)\/([0-9a-f]{64})\.jpeg$/.exec(path);
   /* The arc on its own. It also travels inside `/api/article/:slug`, and this is
      not a second way to do the same thing — since 2026-08-29 the arc is not built
      by every ingest, so a reader can arrive without one, ask for one, and need to
@@ -6213,6 +6390,32 @@ export async function serveAuthenticatedApi(
   const job = /^\/api\/jobs\/([\w.%-]+)$/.exec(path);
   const jobAction = /^\/api\/jobs\/([\w.%-]+)\/(cancel|retry)$/.exec(path);
   const jobAdvance = /^\/api\/jobs\/([\w.%-]+)\/advance$/.exec(path);
+  /**
+   * **The four billing routes.** No slug and no id in any path: each is about
+   * the reader who is signed in, and the only one that takes an identifier at
+   * all takes a Checkout Session id in its *body*, where it is proved to be
+   * theirs before anything is done with it (src/billing/checkout.ts).
+   *
+   * They are exact paths, like the shelf's, so `/api/billing/anything` is a 404
+   * rather than a quiet match — and none of them is a namespace, for the same
+   * reason `/api/webhooks/stripe` is not: a namespace is somewhere a later
+   * endpoint gets added without anybody re-reading the ordering rules that make
+   * checkout safe.
+   *
+   * **Three POSTs and one GET, and the split is not about which of them writes.**
+   * `checkout` and `portal` each *create a Stripe object* — a Checkout Session
+   * is a real, chargeable thing — and `confirm` retrieves one and then **writes
+   * a subscription into `billing_accounts`**. A GET is something a browser
+   * prefetches, a crawler follows and a cache may keep, and none of those three
+   * should be. `usage` reads four of our own tables, writes nothing and never
+   * touches the network, so asking for it twice costs nothing and means nothing:
+   * that is a GET.
+   * docs/project/billing.md.
+   */
+  const billingCheckout = path === "/api/billing/checkout";
+  const billingPortalRoute = path === "/api/billing/portal";
+  const billingConfirm = path === "/api/billing/confirm";
+  const billingUsage = path === "/api/billing/usage";
 
     /* **The second gate, and it guards a prefix rather than a route.**
        Everything under `/api/admin/` is refused to everybody but the one
@@ -6573,6 +6776,37 @@ export async function serveAuthenticatedApi(
           ),
         );
       }
+      return;
+    }
+    if (illustrated && req.method === "GET") {
+      {
+        const at = slugPart(illustrated, 1);
+        /* Shaped exactly like `sketch` above, including the cast, which is only
+           about reaching `profileHash` — the client parses the plates itself on
+           arrival (IllustratedResponse in src/types.ts).
+
+           **`profileChanged` is about the profile the SKETCH was drawn for**,
+           because that is what this artefact inherits (src/illustrated.ts). The
+           comparison is the same one either way; what differs is where the hash
+           came from, and it came from the Sketch. */
+        send(
+          res,
+          200,
+          await withProfileChanged<IllustratedResponse>(
+            at,
+            () => loadIllustrated(at),
+            (found) => found.illustrated as { profileHash?: string | null },
+          ),
+        );
+      }
+      return;
+    }
+    if (illustratedPlate && req.method === "GET") {
+      /* `slugPart` on the slug for the reason the `source` route gives — the
+         pattern allows `%` and `.` — and `part` is not used at all on the hash,
+         which is already narrowed to hex by the pattern and is in any case only
+         ever compared, never joined onto anything. */
+      await sendPlate(res, slugPart(illustratedPlate, 1), part(illustratedPlate, 2));
       return;
     }
     /* Read only, like the ideas above and for the same reason: running the step
@@ -7058,10 +7292,17 @@ export async function serveAuthenticatedApi(
       // body is the receipt to poll, which is the only thing there is to say
       // about a job that has not started.
       const request = parseJobRequest(await readBody(req));
-      if (request.uploadId !== undefined) {
+      const uploadId = request.uploadId;
+      if (uploadId !== undefined) {
         /* No other field survives `checkUploadOrigin`, so there is nothing to
-           forward: an upload is always the default ingest. */
-        const outcome = await queueAnUpload(request.uploadId);
+           forward: an upload is always the default ingest.
+
+           **A new ingest, so it takes a quota slot** — and no slug to name the
+           reservation with, because the article's name comes from the upload
+           record's filename inside `queueAnUpload`. */
+        const outcome = await withIngestSlot({ ownerId: currentOwnerId() }, (slot) =>
+          queueAnUpload(uploadId, slot),
+        );
         /* **200, not 202**: nothing has been accepted, because there is nothing
            left to do. The file became this article a while ago and its job
            record has since been trimmed — `queueAnUpload` for why the record
@@ -7092,7 +7333,23 @@ export async function serveAuthenticatedApi(
           ? null
           : await resolveProfile(request.slug);
       const { useProfile: _asked, ...work } = request;
-      send(res, 202, publicJob(await enqueue({ ...work, ...(profile ? { profile } : {}) })));
+      const queue = (slot: IngestSlot) =>
+        enqueue({ ...work, ...(profile ? { profile } : {}), ...slot });
+      /**
+       * **A URL is a new ingest and spends a slot; a bare slug is a re-run and
+       * is free.** The two shapes arrive at the same endpoint and are told apart
+       * only here — by the time `enqueue` has them, a re-run's job carries a URL
+       * too, read off the article it names.
+       *
+       * That is the whole of docs/project/billing.md § *The quota*: a slot is
+       * one successful **new** ingest, and asking for a glossary, a set of ideas
+       * or a quiz on an article already on the shelf costs nothing.
+       */
+      const job =
+        request.url === undefined
+          ? await queue({})
+          : await withIngestSlot({ ownerId: currentOwnerId(), slug: request.slug }, queue);
+      send(res, 202, publicJob(job));
       return;
     }
     if (job && req.method === "GET") {
@@ -7108,7 +7365,16 @@ export async function serveAuthenticatedApi(
     }
     if (jobAction && req.method === "POST") {
       const [id, action] = [part(jobAction, 1), part(jobAction, 2)];
-      const result = action === "cancel" ? await cancelJob(id) : await retryJob(id);
+      /* **Retry is the second front door to a new ingest**, and it never passes
+         through the handler above: a check bolted on there alone would leave a
+         failed ingest retryable free for ever. `withRetrySlot` reserves only
+         when the attempt being repeated spent a slot — src/billing/admission.ts. */
+      const result =
+        action === "cancel"
+          ? await cancelJob(id)
+          : await withRetrySlot({ jobId: id, ownerId: currentOwnerId() }, (slot) =>
+              retryJob(id, slot),
+            );
       if (!result) throw httpError(404, "No such job");
       send(res, action === "cancel" ? 200 : 202, publicJob(result));
       return;
@@ -7137,6 +7403,80 @@ export async function serveAuthenticatedApi(
       const advanced = await advanceJob(part(jobAdvance, 1));
       if (!advanced) throw httpError(404, "No such job");
       send(res, 200, advanced);
+      return;
+    }
+
+    /**
+     * **Start a subscription — or, if they already have one, manage it.**
+     *
+     * The whole handler is one call, and that is deliberate: the order of
+     * operations inside `startCheckout` is what stops a paying customer arriving
+     * at a webhook that cannot find them, and it is written out once in
+     * src/billing/checkout.ts rather than spread across a route.
+     *
+     * The reply carries `kind` as well as `url`, so a client *can* tell which
+     * door it is being sent through — the two look identical to
+     * `location.assign`. **Ours does not use it**, and that was a decision
+     * rather than an omission: it navigates immediately, and a sentence rendered
+     * for the half-second before a navigation is a sentence nobody reads. What
+     * the page does instead is not offer Upgrade to an account whose press would
+     * only reach the Portal (`canCheckout`, src/billing-plan.ts), which removes
+     * the case rather than explaining it. The field stays because the two
+     * outcomes really are different and a caller that wanted to wait could say
+     * so. This comment claimed the client explained it; it did not.
+     * GPT Sol, 2026-09-03.
+     *
+     * **200, not 302.** A redirect would be answered by `fetch` before the page
+     * could say anything, and the client is an SPA that navigates itself.
+     */
+    if (billingCheckout && req.method === "POST") {
+      const asked = parseCheckoutRequest(await readBody(req));
+      send(res, 200, await startCheckout(currentOwnerId(), asked));
+      return;
+    }
+
+    /* The hosted place to see invoices, change a card, or cancel — none of which
+       this app implements, on purpose (docs/project/billing.md § *We never touch
+       a card*). No body at all: the only thing it could carry is a customer id,
+       and that comes from the reader's own row. */
+    if (billingPortalRoute && req.method === "POST") {
+      send(res, 200, await openPortal(currentOwnerId()));
+      return;
+    }
+
+    /**
+     * The return path from a completed Checkout.
+     *
+     * It takes **only** a session id, and `confirmCheckout` proves the session
+     * is this reader's before it syncs anything — a callback that synced
+     * whatever id it was handed would let one reader make this server work on
+     * another's subscription, and would answer the question *did that person
+     * subscribe?*.
+     *
+     * It is a convenience rather than the mechanism: the webhook is what makes a
+     * subscription real, and this exists so the reader landing back on
+     * `/profile` a second after paying sees their new plan.
+     */
+    if (billingConfirm && req.method === "POST") {
+      const body = fields(await readBody(req));
+      const sessionId = body.sessionId;
+      if (typeof sessionId !== "string" || sessionId === "") {
+        throw httpError(400, "Expected { sessionId } from the Checkout return URL");
+      }
+      send(res, 200, await confirmCheckout(currentOwnerId(), sessionId));
+      return;
+    }
+
+    /**
+     * **What plan this reader is on, and what they have used.** The one billing
+     * route that is a read.
+     *
+     * It never reaches Stripe — see src/billing/summary.ts. A stored period that
+     * has run out comes back as *we cannot say*, rather than as a guess or as
+     * the 503 admission answers, because nothing is being decided here.
+     */
+    if (billingUsage && req.method === "GET") {
+      send(res, 200, await readBillingSummary(currentOwnerId()));
       return;
     }
 

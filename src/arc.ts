@@ -56,7 +56,7 @@ import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from 
  * free to drift, and the drift shows up as an artefact that never regenerates —
  * which is the reason `tweets` and `glossary` export theirs as well.
  */
-export const PROMPT_VERSION = "arc/2";
+export const PROMPT_VERSION = "arc/3";
 
 const SYSTEM = `You are writing the leftmost, coarsest column of a reading view for a long
 article. The reader sees, side by side: your column, then a one-sentence gist
@@ -101,7 +101,9 @@ RULES
 - The first part's sentence says what is at stake and unsettled. The last
   part's says what has been settled and what deliberately has not.
 - Use the author's own distinctive vocabulary. Those words are the reader's
-  handholds.
+  handholds. Ordinary words for everything else — a sentence the reader has to
+  read twice has failed, however exactly it names the state of the argument.
+  Plainer than the article, never further from it.
 - No empty meta-narration: never "this section explores", "the author then
   turns to", "we are told that", "then", "next", "goes on to". Naming the state
   of the argument is the job; narrating the prose is not.
@@ -433,7 +435,9 @@ export async function generateArc(opts: {
        provider's own words about a request that carried the whole article,
        and this error is copied onto the job and shown on the progress card.
        See MODEL_REFUSED in src/messages.ts. */
-    throw new Error(MODEL_REFUSED.message);
+    throw stageFailure(MODEL_REFUSED, {
+      authored: "the model answered with stop_reason: refusal",
+    });
   }
   if (message.stop_reason === "max_tokens") {
     throw truncationFailure("arc", maxTokens, answerTokens, {

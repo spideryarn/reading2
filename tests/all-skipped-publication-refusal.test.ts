@@ -577,17 +577,38 @@ when("a claim where every step skips and the publication does not happen", () =>
     expect(advanced?.done, "the job has to be over, in this request").toBe(true);
     expect(advanced?.ran, "nothing ran: every step skipped").toBeNull();
     expect(advanced?.job.status).toBe("error");
+    /* **The publication sentence, not the refusal's own words.** This asserted
+       `/Refusing to publish/` until 2026-09-03, on the reasoning that the
+       refusal's message is ours and therefore the better thing to show. It is
+       ours and it is developer copy: the reasons name block hashes and end with
+       *"re-run hierarchy"*, addressed to somebody who cannot run anything. It
+       was the last raw diagnostic on a reader-facing field after the stage 2
+       seam closed (docs/project/copy.md § The seam between the two audiences),
+       and the reasons are on the log line now.
+
+       What this still has to prove is that the ending is *this* door's and not
+       a generic interruption, which is what the original assertion was really
+       protecting — so it matches `COULD_NOT_PUBLISH`'s own words rather than
+       merely being non-empty. */
     expect(
       advanced?.job.error,
-      "the reader gets the refusal's own words, not a generic interruption",
-    ).toMatch(/Refusing to publish/);
+      "the reader gets the publication failure, not a generic interruption",
+    ).toMatch(/putting the finished article on your shelf/);
+    expect(
+      advanced?.job.error,
+      "the refusal's internal reasons reached the reader",
+    ).not.toMatch(/Refusing to publish|re-run hierarchy/);
 
     /* The row, because the answer above is in memory and the next request reads
        this. `draft_revision_id` cleared is what stops `sweepAbandonedDrafts`
        treating this draft as owned for ever. */
     const row = await jobRow(jobId);
     expect(row?.status, "the job was left running until its lease lapsed").toBe("error");
-    expect(row?.error).toMatch(/Refusing to publish/);
+    expect(row?.error).toMatch(/putting the finished article on your shelf/);
+    /* The persisted half, said separately: the band renders `job.error` off the
+       row on the next request, so a leak that only reached the row would be
+       invisible to the in-memory assertion above. */
+    expect(row?.error).not.toMatch(/Refusing to publish|re-run hierarchy/);
     expect(row?.draftRevisionId, "the draft pointer is still held").toBeNull();
 
     /* The draft is disposed of the same way a last-step refusal disposes of it:

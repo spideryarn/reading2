@@ -76,6 +76,15 @@ import {
 } from "./quiz.js";
 import { stageFailure } from "./job-failure.js";
 import {
+  generateIllustrated,
+  inputFingerprint as illustratedFingerprint,
+  PROMPT_VERSION as ILLUSTRATED_PROMPT_VERSION,
+} from "./illustrated.js";
+import { storePlateImage } from "./illustrated-image.js";
+import { isStale as sketchIsStale } from "./sketch.js";
+import { type IllustratedPlate, plateDrawn, plateFailed } from "./illustrated-plate.js";
+import type { Sketch } from "./sketch-scene.js";
+import {
   generateSketch,
   inputFingerprint as sketchFingerprint,
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
@@ -85,7 +94,7 @@ import type { CheckpointStore } from "./store/checkpoints.js";
 import { log } from "./log.js";
 import { ARTICLE_RENDERER, type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
 import { articleFingerprint, hashBlocks } from "./source-hash.js";
-import { hashProfile } from "./profile.js";
+import { hashProfile, profileIsStale } from "./profile.js";
 import { type RejectReason, looksLikePdf, MAX_UPLOAD_BYTES, rejectionFailure, stagingKey } from "./source.js";
 import { readUpload, rejectUpload, settleUpload } from "./upload-records.js";
 import { fsLocations } from "./store/artifacts-fs.js";
@@ -193,10 +202,17 @@ export const STEP_ORDER = [
      over the whole article and it is a thing somebody asks for.
      docs/plans/260831al-review-quiz-sub-mode.md. */
   "quiz",
-  /* Last, and off `DEFAULT_INGEST_STEPS`: nothing reads what it writes, and it
-     is the slowest single model call in the app at 121–194 seconds measured.
-     docs/project/diagram.md § Sketch. */
+  /* Off `DEFAULT_INGEST_STEPS`: nothing reads what it writes except the one
+     below, and it is the slowest single model call in the app at 121–194
+     seconds measured. docs/project/diagram.md § Sketch. */
   "sketch",
+  /* **Last, and after `sketch` for a reason no other pair here has**: this is
+     the only step whose input is another step's artefact. The order does not
+     *pull* the Sketch in — `useStepJob` posts `steps: [step]` and nothing puts
+     a prerequisite in front of it — so the step refuses instead. What the order
+     buys is that a run naming both draws before it paints.
+     docs/project/diagram.md § Illustrated. */
+  "illustrated",
 ] as const satisfies readonly StepName[];
 
 /**
@@ -386,6 +402,11 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      would run the invocation out of time, and the way that fails is a platform
      kill that takes the whole job rather than a recorded failure. */
   "sketch",
+  /* All three of `sketch`'s reasons and it is dearer than any of them: $0.27 to
+     $0.40 an article measured, of which 86–89% is the brief call, plus one
+     image call per plate. A positional cascade that swept this in would spend
+     that on somebody who pressed a button one band along. */
+  "illustrated",
 ]);
 
 export interface StepContext {
@@ -1253,7 +1274,10 @@ async function acquireUpload(
   const refuse = async (reason: RejectReason): Promise<never> => {
     await rejectUpload(upload.id, reason);
     const failure = rejectionFailure(reason);
-    throw stageFailure(failure.kind, failure.message);
+    /* The whole `ReaderFacingFailure`, not its two halves passed separately:
+       `rejectionFailure` already wrote the reader a sentence per reason, and
+       that sentence is what src/jobs.ts persists. src/job-failure.ts. */
+    throw stageFailure(failure);
   };
 
   const store = blobStore();
@@ -2796,7 +2820,227 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       };
     },
   },
+  /**
+   * **The same argument painted** — docs/project/diagram.md § Illustrated,
+   * docs/plans/260903c-illustrated-diagram-sub-mode.md.
+   *
+   * **The only step here whose input is another step's artefact**, which brings
+   * two obligations nothing else in this table has.
+   *
+   * ## 1. It refuses to run without a current Sketch, and does not fetch one
+   *
+   * `useStepJob` posts `steps: [step]` and pipeline order does **not** pull
+   * prerequisites in, so an Illustrated run on an article whose Sketch is
+   * absent, stale, or drawn for a different profile would either crash or —
+   * worse — quietly paint an argument the reader is not looking at.
+   *
+   * So `run` throws a sentence naming the Sketch chip, with `stageFailure`'s
+   * `"ours"`: a retry skips the steps that finished and would find the identical
+   * missing Sketch, so offering the button would be a lie.
+   *
+   * **Not `enqueue(["sketch", "illustrated"])`**, which is the tempting version
+   * and is worse. It turns one press into a hidden $0.20 charge and a
+   * three-minute wait that nothing warned about, and Sketch's own empty state
+   * exists precisely to name that price before the press.
+   *
+   * ## 2. Its fingerprint is the Sketch, not the article
+   *
+   * src/illustrated.ts § `inputFingerprint` has the reasoning. The consequence
+   * for this table is that `stamp` reads the *sketch* rather than the article:
+   * a forced Sketch redraw changes the scene with every article byte identical,
+   * and an article-shaped stamp would leave a stale illustration reporting
+   * itself current.
+   *
+   * **And `profileHash` is inherited from the Sketch**, not taken from
+   * `ctx.profile`. A picture drawn for a reader's profile must not quietly
+   * become an impersonal one because they cleared their box between the two
+   * presses — and the comparison has to be against what the illustration will
+   * *be* stamped with, which is what `generateIllustrated` is handed.
+   */
+  illustrated: {
+    name: "illustrated",
+    label: "Painting the argument",
+    outputs: (ctx) => [path.join(ctx.dir, "illustrated.json")],
+    produces: ["illustrated"],
+    /**
+     * The Sketch, this stage's prompt, and the model that writes the brief.
+     *
+     * **No blocks, no tree, no metadata**, unlike every other stamp here, and
+     * that is the whole point rather than an omission: what this was drawn from
+     * is the scene. The article reaches the comparison one hop away — change it
+     * and the Sketch goes stale, redraw the Sketch and this hash moves.
+     *
+     * `null` when there is no usable Sketch, which is "we cannot tell" and
+     * therefore not-current — the same answer `tryReadArticle` gives its
+     * neighbours, and it makes the step run, which is where the refusal is.
+     */
+    stamp: async (ctx, store) => {
+      const sketch = await store.read(ctx.slug, "sketch", "sketch");
+      if (!usableSketch(sketch)) return null;
+      return {
+        inputHash: illustratedFingerprint(sketch),
+        promptVersion: ILLUSTRATED_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+        /* **The Sketch's, never `ctx.profile`.** The stamp has to predict what
+           the artefact will carry, and `run` below hands `generateIllustrated`
+           the Sketch's profile. Taking the reader's current one here would mark
+           every illustration stale the moment they edited their profile box,
+           and re-drawing it would then stamp the Sketch's anyway — a stage that
+           never reports itself done and pays $0.30 an open to find out. */
+        profileHash: sketch.profileHash ?? null,
+      };
+    },
+    async run(ctx, store) {
+      const sketch = await store.read(ctx.slug, "sketch", "sketch");
+      /* **`ours` on every one of these, and the sentence names the chip rather
+         than the step**, because it is read by somebody looking at a band and
+         not at a pipeline. `ours` rather than `retry`: a retry skips the steps
+         that finished, so it would find the identical Sketch and fail
+         identically — offering the button would be a lie. */
+      const refuse = (why: string): never => {
+        throw stageFailure("ours", `${why} Draw the Sketch first — it is the chip one to the left — and then press this one again.`);
+      };
+      if (!usableSketch(sketch)) {
+        refuse(`There is no sketch of "${ctx.slug}" to illustrate.`);
+        throw new Error("unreachable");
+      }
+
+      const article = await readArticle(ctx.slug, store);
+      /* **A stale Sketch is refused rather than painted, and the reason is the
+         reader's money.** `loadIllustrated` reports `stale` when the Sketch has
+         gone stale as well as when the plates have (src/store/pg.ts), so a
+         picture painted from a superseded scene is **born stale**: $0.30 and
+         three minutes for something the panel labels out of date the moment it
+         lands. This is the whole of what the plan means by refusing rather than
+         quietly illustrating an argument the reader is not looking at.
+
+         It is checked here and NOT in `stamp`, which is the difference between
+         *would we paint this again* and *may we paint it now*. A finished
+         illustration whose Sketch has since drifted stays `done`, so nothing
+         re-runs on its own and this sentence only ever appears when somebody
+         actually asked. Both stores agree, because `stamp` is untouched. */
+      if (sketchIsStale(sketch, article.blocks, article.tree, article.meta ?? null)) {
+        refuse("The sketch of this article is out of date — the article has moved underneath it.");
+      }
+      /* **And a Sketch drawn for somebody else's profile.** Without this the
+         panel loops: the picture inherits the Sketch's `profileHash`, the route
+         answers `profileChanged: true` against the reader's current profile,
+         the panel offers to paint again, and the next paint inherits the same
+         hash and reports the same thing — one press of a $0.30 button per
+         circuit, for ever. `profileIsStale` is the three-state rule
+         (src/profile.ts): an artefact written deliberately without a profile,
+         and a reader who has since cleared theirs, are both *not* a mismatch. */
+      if (profileIsStale(sketch.profileHash, ctx.profile ? hashProfile(ctx.profile) : null)) {
+        refuse("The sketch of this article was drawn for a different reader profile.");
+      }
+
+      const run = await generateIllustrated({
+        article,
+        sketch,
+        /* **`null`, and not `ctx.profile`, and the honest reading is that the
+           personalisation is already in the scene.** The Sketch was drawn for a
+           profile; this stage paints that scene, so the picture inherits the
+           personalisation transitively and the artefact records whose it was —
+           `profileHash`, set from the Sketch a few lines down and compared by
+           `stamp` above.
+
+           Handing the *brief* prompt `ctx.profile` as well was considered and
+           not done: the stamp has to name one profile, and two sources for it
+           (the reader's now, the Sketch's then) is a field that means different
+           things on different runs. If the register a brief chooses should
+           depend on the reader as well as on the scene, that is a product
+           decision with a stamp question attached, not a parameter to add
+           here. Plan § Profile, and who may see it. */
+        profile: null,
+        onProgress: ctx.report,
+        signal: ctx.signal,
+        cacheArticle: ctx.cacheArticle,
+      });
+
+      /* **Written here rather than in `generateIllustrated`**, which writes
+         nothing on purpose (its header says why): the hash of the Sketch is a
+         store-shaped fact, and a stage that stamped itself could not be
+         re-rendered from a saved brief by the eval. */
+      run.illustrated.sourceHash = illustratedFingerprint(sketch);
+      run.illustrated.profileHash = sketch.profileHash ?? null;
+
+      /* **The bytes, one plate at a time, and a failure here is that plate's
+         alone.** The blob store is content-addressed and create-only, so a run
+         that stores two plates and then fails leaves two orphans — accepted,
+         and no sweep is built (src/illustrated-image.ts § Orphans). Throwing
+         the whole run away instead would discard pictures already paid for. */
+      let stored = 0;
+      const settled: IllustratedPlate[] = [];
+      for (const [i, plate] of run.illustrated.plates.entries()) {
+        const draw = run.draws[i];
+        if (!draw?.image) {
+          settled.push(plate);
+          continue;
+        }
+        try {
+          const image = await storePlateImage({
+            image: draw.image,
+            ...(draw.mediaType ? { mediaType: draw.mediaType } : {}),
+          });
+          stored += 1;
+          settled.push(plateDrawn(plate, image));
+        } catch (err) {
+          /* **A store failure is that plate's alone**, and it reads to the panel
+             exactly like a failed image call: this plate has no picture.
+             `plateFailed` is what builds that state — the three states are a
+             union and neither field can be assigned. */
+          settled.push(plateFailed(plate, err instanceof Error ? err.message : String(err)));
+        }
+      }
+      run.illustrated.plates = settled;
+
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "illustrated",
+          model: run.model,
+          imageModel: run.imageModel,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          briefMs: run.briefMs,
+          ms: run.elapsedMs,
+          plates: run.illustrated.plates.length,
+          stored,
+          /* The two numbers that say whether the prompt has drifted off the
+             article — `faults` rising is the signal the plan names. Never the
+             vignettes themselves: `quote` is the article's own prose and
+             `depicts` is a model's description of it. docs/project/logging.md. */
+          faults: run.report.faults.length,
+          written: run.report.written,
+          kept: run.report.kept,
+        },
+        `illustrated ${ctx.slug}: ${stored} of ${run.illustrated.plates.length} plate(s) drawn`,
+      );
+
+      const missing = run.illustrated.plates.length - stored;
+      return {
+        parts: { illustrated: run.illustrated },
+        detail:
+          `${stored} plate(s) painted` + (missing > 0 ? `, ${missing} failed` : "") +
+          ` — ${run.illustrated.style}`,
+      };
+    },
+  },
 };
+
+/**
+ * Is this a Sketch there is any point illustrating?
+ *
+ * **An empty scene list counts as no sketch**, the same rule `loadSketch`,
+ * `sketchIsCurrent` and `readSketchFile` all keep: a column or a file can hold
+ * `{"scenes": []}` from an import or a hand edit, and painting it would spend
+ * $0.30 on a picture of nothing.
+ */
+function usableSketch(sketch: Sketch | null): sketch is Sketch {
+  return sketch !== null && Array.isArray(sketch.scenes) && sketch.scenes.length > 0;
+}
 
 /**
  * Validate a step name that arrived over HTTP.

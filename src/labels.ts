@@ -38,6 +38,7 @@ import { stageCli } from "./cli-ledger.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL } from "./models.js";
 import { loadEnvLocal } from "./env.js";
+import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { parseJsonFrom, stripFence } from "./parse-json.js";
@@ -54,7 +55,7 @@ import { hashBlocks, structureHash } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Block, NodeId, Tree, TreeNode } from "./types.js";
 
-const PROMPT_VERSION = "labels/1";
+const PROMPT_VERSION = "labels/2";
 
 /**
  * A batch that did not come back whole — worth one more try.
@@ -663,6 +664,9 @@ WRITE ONE LABEL PER NUMBERED PARAGRAPH.
   good — it is worse, because the reader is scanning for the word they read.
   If the paragraph says "technorati", your label says "technorati", not
   "technologists". If it says "confabulate", do not write "make things up".
+- Ordinary words for everything else. A label is read at a glance while the
+  reader is scrolling, so it has to land first time — plainer than the article,
+  never further from it.
 - A paragraph marked HEADING gets its heading text copied EXACTLY, and nothing
   else. No prefix, no "Heading:", no "Title:", no rewording, no punctuation you
   did not find there.
@@ -1640,7 +1644,9 @@ async function runBatch(
        provider's own words about a request that carried the whole article,
        and this error is copied onto the job and shown on the progress card.
        See MODEL_REFUSED in src/messages.ts. */
-    throw new Error(MODEL_REFUSED.message);
+    throw stageFailure(MODEL_REFUSED, {
+      authored: "the model answered with stop_reason: refusal",
+    });
   }
   if (message.stop_reason === "max_tokens") {
     /**
