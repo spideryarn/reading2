@@ -27,6 +27,7 @@ import {
   loadGlossary,
   loadArc,
   loadIdeas,
+  loadIllustrated,
   loadQuiz,
   loadQuotes,
   loadSketch,
@@ -120,6 +121,7 @@ export const fsArticleReader: ArticleReader = {
   loadTimeline,
   loadQuiz,
   loadSketch,
+  loadIllustrated,
   loadSource,
 };
 

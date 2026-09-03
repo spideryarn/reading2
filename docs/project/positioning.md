@@ -94,11 +94,46 @@ is [260902k-spideryarn-reading-interview-guide.md](../research/260902k-spideryar
 Voice, as far as it is decided: closest to confident and plain, short sentences, the author's words
 on the page; not the warm "we understand how frustrating" register of the 2025 guidelines.
 
+## The principle behind the copy
+
+The line between augmenting and automating, and why the site never sells ease. From notes Greg
+dictated before 2026-09-03, stored in full in
+[260902k-greg-notes-the-edge-between-ease-and-difficulty.md](../research/260902k-greg-notes-the-edge-between-ease-and-difficulty.md):
+
+> it's always going to be tempting to move towards automation. And that's always going to be easier
+> for the human, easier indeed for the product designer, and tempting. I guess we want to hold some
+> kind of line. … The best one I have in my mind is: **what will help the human to best form their
+> own rich updated internal representations?**
+>
+> you can go to the gym or you can buy a forklift truck to lift the weights. But if you buy the
+> forklift truck that lifts the weights, then you atrophy.
+>
+> if I had 1 guiding hunch, it's that we want to be at a kind of edge between ease and difficulty
+> where things are difficult enough that they have to work, but not so difficult that they give up
+> or fail. … our goal is to make things easier where we can, but not too easy.
+>
+> — Greg, dictated before 2026-09-03
+
+For the copy this means: the promise is never "less effort". It is effort spent where it counts —
+the drudge made cheap so that the understanding gets more of you — and a product that does not lift
+the weights for you. "A companion, not a replacement" is this principle in five words.
+
+## What has been built from it
+
+As of 2026-09-03, after four of the fourteen interview questions: the homepage
+([`LandingPage.tsx`](../../src/web/LandingPage.tsx)) rewritten in Greg's words, and a features page
+at `/features` ([`FeaturesPage.tsx`](../../src/web/FeaturesPage.tsx)) with a screenshot of every
+mode and the plans. Each sentence in both files carries a comment naming its source or marking it
+as tissue. The plan, with the lead-shot call and the simpler options passed over, is
+[260902k-website-copy-homepage-and-features.md](../plans/260902k-website-copy-homepage-and-features.md);
+the site-text rules are in [website-text.md](website-text.md).
+
 ## What is still open
 
-The taglines themselves, the price, the page list, and the whole of the copy — all waiting on the
-interview above. When the interview has happened, its answers go here and the placeholders on the
-landing page go.
+The strapline (the page uses *"Read deeply & efficiently"*, the 2025 tagline file's first line,
+until Greg answers question 14), the ten unanswered interview questions, and a waitlist that is
+more than a `mailto:`. When the interview resumes, its answers go here and the `[tissue]` lines
+on the pages go.
 
 ---
 

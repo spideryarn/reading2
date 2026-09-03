@@ -22,6 +22,8 @@ import {
   ingestQuotaReached,
   type ReaderFacingFailure,
   saidNothing,
+  stepGaveUp,
+  quizBandsNotSpread,
   tookTooLong,
   wentQuiet,
 } from "../src/messages.js";
@@ -68,6 +70,21 @@ const FROM_FACTORIES: ReaderFacingFailure[] = [
   ingestQuotaReached({ limit: 3 }),
   ingestQuotaReached({ limit: 100, resetAt: new Date("2026-10-01T00:00:00Z") }),
   ingestQuotaReached({ limit: 3, lapsed: true }),
+  /* All four kinds, because `stepGaveUp` is a total map over `FailureKind` and
+     a branch missing from here is a sentence that has been through none of the
+     invariants below — which is the shape that let `NO_RESPONSE` and
+     `TOOL_CALL_LOST` ship unchecked. The step label is the one the reader would
+     actually see. */
+  ...(["retry", "ours", "bug", "blocked"] as const).map((kind) =>
+    stepGaveUp(kind, "Writing the questions"),
+  ),
+  /* **One call, not one per missing end.** This list is one entry per *code*,
+     which the "gives each distinct message its own code" invariant below
+     enforces — two calls differing only in their arguments read as two
+     sentences sharing a code and fail it, exactly as `tookTooLong(60)` would if
+     it appeared twice with two numbers. The production case: nine survivors,
+     no hard one. tests/quiz.test.ts covers the wording of every `gap` clause. */
+  quizBandsNotSpread(9, "there is no hard one among them to finish on"),
 ];
 
 const EVERY: ReaderFacingFailure[] = [...CONSTANTS, ...FROM_FACTORIES];

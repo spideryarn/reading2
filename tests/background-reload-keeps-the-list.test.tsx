@@ -350,7 +350,7 @@ describe("a job the server received and refused", () => {
       await ideasHook?.regenerate();
     });
 
-    expect(ideasHook?.failed).toBe("You are out of credit for today.");
+    expect(ideasHook?.failed?.message).toBe("You are out of credit for today.");
   });
 
   it("falls back to a sentence of its own when the queue has no message", async () => {
@@ -363,6 +363,6 @@ describe("a job the server received and refused", () => {
       await ideasHook?.regenerate();
     });
 
-    expect(ideasHook?.failed).toBe("Couldn't start the job.");
+    expect(ideasHook?.failed?.message).toBe("Couldn't start the job.");
   });
 });

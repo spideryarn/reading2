@@ -225,6 +225,83 @@ Avoid: "Oops", "Something went wrong" (says nothing), "Please try again later"
 (how much later?), exclamation marks, and apologising. A failure that explains
 itself does not need to apologise.
 
+## The seam between the two audiences
+
+A pipeline step's failure has two readers and they want different sentences.
+Until 2026-09-03 it had one string for both, and that string was
+`Error.message`: [`src/jobs.ts`](../../src/jobs.ts) copied it onto `step.error`
+and `job.error`, which are persisted, read back unchanged, and rendered — the
+job's on the band ([`JobProgress.tsx`](../../src/web/JobProgress.tsx)), the
+step's on the shelf card ([`AddArticle.tsx`](../../src/web/AddArticle.tsx)).
+
+**Whatever a step happened to put in an exception was published.** That is not a
+risk, it is a count: six pipeline stages threw `Model refused: ${…stop_details}`
+until 2026-08-26 (`MODEL_REFUSED` in [`src/messages.ts`](../../src/messages.ts));
+`truncatedMessage` in [`src/token-budget.ts`](../../src/token-budget.ts) put two
+token figures and *"see src/token-budget.ts"* on a reader's screen, and was
+recorded here as *"the same string has two audiences"* and left; and on
+2026-09-03 the quiz showed Greg a source-file reference and an instruction
+addressed to whoever tunes its prompt. Three write-ups, one shape.
+
+So the seam is split rather than the sentences reworded:
+
+- **`Error.message` is the diagnostic.** It goes to the log. It may carry
+  arithmetic, a file reference, a section name. It is still held to
+  [logging.md](logging.md) — *safe to log* is not *anything at all*, and a
+  provider's error body is out on both counts.
+- **A `ReaderFacingFailure` is the reader's**, declared at the throw site with
+  `stageFailure(failure, detail)` ([`src/job-failure.ts`](../../src/job-failure.ts)),
+  and it is the only thing `src/jobs.ts` persists — from the step catch, from a
+  refused publication, and from a run the reader stopped.
+- **Anything undeclared gets generic copy** — `stepGaveUp` in `src/messages.ts`,
+  one sentence per `FailureKind`, naming the step and nothing else. An allowlist
+  of trusted steps was rejected: one new `throw` inside an approved step leaks
+  immediately and nothing goes red. Type-level enforcement is not available at
+  all — TypeScript has no checked throws, so `PipelineStep.run()` cannot
+  constrain what comes through it.
+
+The cost is real and was accepted knowingly: **an unmigrated failure says less
+than its diagnostic did.** That is temporary and recoverable; publishing an
+unaudited internal string is neither. Migrate a failure by declaring it, which
+is one line at the throw site — and prefer the shared constructors, where one
+line covers ten stages (`anthropicCallFailed`, `truncationFailure`).
+
+There is a **second cost, and it is not the reader's**: a diagnostic reaches the
+log and **not Sentry**. `authored` in
+[`src/monitoring-scrub.ts`](../../src/monitoring-scrub.ts) forwards a message
+only when it ends in a registered code, because a code is the one proof
+available that we wrote every word — and a diagnostic is free text a step wrote.
+The event still arrives with its exception name, its frames and a
+`message_withheld` marker; the sentence does not.
+
+**The tempting fix is the one that must not be taken.** Appending the reader
+sentence's code to *every* diagnostic so it looks authored was in the tree for
+six hours on 2026-09-03, and it lets *any* text buy that proof —
+`stageFailure(MODEL_REFUSED, "<a stretch of the article>")` arrived at Sentry
+intact. Found by GPT Sol, reproduced, and now pinned by a test that drives
+`sanitise` itself.
+
+**The channel that is allowed is an explicit claim**, not a suffix: a second
+form of the argument, `stageFailure(failure, { authored: "…" })`, in which the
+throw site says it wrote every character and none of it arrived from a provider,
+a document or a reader. The code goes on and the sentence travels. Two places
+have earned it — `anthropicCallFailed`, whose diagnostic is a fixed sentence and
+a status the SDK handed over as a number, and the ten `MODEL_REFUSED` throw
+sites — and there the split costs nothing. It is one word so that grepping
+`authored:` returns every claim ever made; what it must never wrap is an
+interpolation of anything from outside.
+
+That code is not only about Sentry. `tests/stop-details.test.ts` reads it off
+the **log** line, because absence proves nothing on its own: a stage that died
+before it ever reached a model contains no sentinel either, and the code is what
+tells the two apart.
+
+`tests/step-failure-seam.test.ts` is the guard. It inspects **both** persisted
+fields — the band and the card deliberately render different ones — reads them
+back off the file the queue wrote rather than off an in-memory clone, and covers
+the two writers of `job.error` that are not the step catch: a refused
+publication, and a run the reader stopped.
+
 ## What this does not cover yet
 
 **One near-miss first**, because it is the kind of thing this section exists to
@@ -233,24 +310,6 @@ stop being invisible: `"Couldn't start the job."` lives in `Tweets.tsx`,
 message the reader sees, so by the rule above it belongs here — it says nothing
 about what happened, nothing about whose problem it is, and has no code. It has
 not moved yet.
-
-**A second one, recorded rather than fixed.** `truncatedMessage` in
-[`src/token-budget.ts`](../../src/token-budget.ts) ends *"Whichever of those two
-overran is the one to change — see src/token-budget.ts"*, and it names two token
-figures. That is developer copy, and it reaches the **reader's** screen: a step's
-error is copied onto the job and the job card renders it. By rule 1 above it
-should say what happened in words that assume none of this, and by rule 3 it
-should say what the reader can do — which is nothing, so it should say that
-instead of naming a file they cannot open.
-
-It has not been rewritten, on purpose, because the awkwardness is structural
-rather than a wording slip: **the same string has two audiences.** Whoever is
-re-tuning the constants needs the two figures — working them out by hand cost
-that bug a second six-minute run — and the reader needs neither. Fixing it
-properly means two sentences with two destinations (the log and the card), which
-is a bigger change than a reword. Noted 2026-08-26, alongside the work that
-stopped the card offering Retry underneath it
-([ingest-queue.md](ingest-queue.md#the-failures-retry-is-not-offered-under)).
 
 Otherwise: only the model-call failures are written down here. The rest of the interface —
 empty states, button labels, the panel headings — is still written wherever it is

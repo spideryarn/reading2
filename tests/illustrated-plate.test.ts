@@ -1,5 +1,5 @@
 /**
- * The Illustrated brief's reader — src/illustrated-plate.ts.
+ * The Illustrated brief's two readers — src/illustrated-plate.ts.
  *
  * The brief is the only thing between a model's free text and a *second*
  * model's prompt, and between a model's claim and a row the reader is invited
@@ -8,21 +8,29 @@
  * (docs/reusable/silent-success.md).
  *
  * The rule under test throughout is `readSketch`'s: **a vignette survives
- * intact or it is dropped and counted.** Nothing is repaired.
+ * intact or it is dropped and counted.** Nothing is repaired silently.
  *
- * The case that matters most is `a quote lifted from another block` — the
- * correction GPT Sol made to the plan on 2026-09-03. The 2026-09-03 spike
- * searched the whole article, which accepts a quote from somewhere the vignette
- * does not claim to be about, and the reader would then be shown a real
- * sentence beside a jump to a block that does not contain it.
+ * Two cases matter more than the rest, and both came from GPT Sol:
+ *
+ *  - **`a quote lifted from another block`** (2026-09-03, on the plan). The
+ *    spike searched the whole article, which accepts a quote from somewhere the
+ *    vignette does not claim to be about, and the reader would then be shown a
+ *    real sentence beside a jump to a block that does not contain it.
+ *  - **`a brief may not name an image`** (2026-09-03, on the code). `sha256`
+ *    addresses a blob in a store shared by every article, so a reader that let
+ *    a model write one let a prompt-injected brief claim somebody else's
+ *    picture. That is why there are two readers rather than one.
  */
 import { describe, expect, it } from "vitest";
 
 import {
   ILLUSTRATED_VERSION,
-  MAX_DEPICTS_CHARS,
-  readIllustrated,
   type Illustrated,
+  MAX_DEPICTS_CHARS,
+  MAX_PLATES_READ,
+  MAX_VIGNETTES,
+  readModelBrief,
+  readStoredIllustrated,
 } from "../src/illustrated-plate.js";
 import type { BlockId } from "../src/types.js";
 
@@ -40,7 +48,15 @@ const BLOCKS = new Map<BlockId, string>([
   ["spya-cccccc", JAR],
 ]);
 
-const OPTS = { blockText: BLOCKS };
+const OPTS = { blockText: BLOCKS, sceneIds: ["overview", "zoom-1"] };
+
+const IMAGE = {
+  sha256: "a".repeat(64),
+  ext: "jpeg",
+  bytes: 74_000,
+  width: 1024,
+  height: 1536,
+} as const;
 
 /** A vignette that passes every check, so a case can vary exactly one thing. */
 function good(over: Record<string, unknown> = {}): Record<string, unknown> {
@@ -68,9 +84,12 @@ function brief(vignettes: unknown[], over: Record<string, unknown> = {}): unknow
   };
 }
 
-describe("readIllustrated", () => {
+/** The scenes a one-plate brief is read against. */
+const ONE = { blockText: BLOCKS, sceneIds: ["overview"] };
+
+describe("readModelBrief", () => {
   it("keeps a vignette whose quote really is in the block it names", () => {
-    const { illustrated, report } = readIllustrated(brief([good()]), OPTS);
+    const { illustrated, report } = readModelBrief(brief([good()]), ONE);
     expect(report.faults).toEqual([]);
     expect(report.written).toBe(1);
     expect(report.kept).toBe(1);
@@ -84,13 +103,10 @@ describe("readIllustrated", () => {
   });
 
   it("drops a vignette whose block the article has not got", () => {
-    const { illustrated, report } = readIllustrated(
-      brief([good({ block: "spya-zzzzzz" })]),
-      OPTS,
-    );
-    expect(illustrated.plates[0]?.vignettes).toEqual([]);
+    const { illustrated, report } = readModelBrief(brief([good({ block: "spya-zzzzzz" })]), ONE);
+    /* The plate goes with it: nothing anchors it in the article any more. */
+    expect(illustrated.plates).toEqual([]);
     expect(report.kept).toBe(0);
-    expect(report.faults).toHaveLength(1);
     expect(report.faults[0]?.what).toContain("spya-zzzzzz");
   });
 
@@ -100,27 +116,55 @@ describe("readIllustrated", () => {
    * from the one the vignette names. An article-wide search passes it.
    */
   it("drops a quote that is in the article but not in the block it names", () => {
-    const lifted = good({
-      block: "spya-aaaaaa",
-      quote: "what it is like to be the cup",
-    });
+    const lifted = good({ block: "spya-aaaaaa", quote: "what it is like to be the cup" });
     // The premise: this really is somewhere in the article.
     expect(BLOCKS.get("spya-bbbbbb")).toContain("what it is like to be the cup");
 
-    const { report } = readIllustrated(brief([lifted]), OPTS);
+    const { report } = readModelBrief(brief([lifted]), ONE);
     expect(report.kept).toBe(0);
     expect(report.faults[0]?.what).toBe("quote is not in block spya-aaaaaa");
   });
 
-  it("drops a quote under the floor, so \"the\" cannot match everything", () => {
-    const { report } = readIllustrated(
+  /**
+   * **`"spaced"` and not `"forgiving"`, proved by the case that separates
+   * them.** `findQuote`'s forgiving pass deletes whitespace, so *fall a part*
+   * would match an article saying *fall apart* — a model that approximated the
+   * text, passing as a model that copied it. Change the mode in
+   * src/illustrated-plate.ts and this test is the one that goes red; nothing
+   * else in this file distinguishes them.
+   */
+  it("refuses a quote the model re-spaced rather than copied", () => {
+    const blocks = new Map<BlockId, string>([
+      ["spya-eeeeee", "The consensus was always going to fall apart under its own weight."],
+    ]);
+    const { report } = readModelBrief(
+      brief([good({ block: "spya-eeeeee", quote: "going to fall a part under its own weight" })]),
+      { blockText: blocks, sceneIds: ["overview"] },
+    );
+    expect(report.kept).toBe(0);
+    expect(report.faults[0]?.what).toBe("quote is not in block spya-eeeeee");
+  });
+
+  it('drops a quote under the floor, so "the" cannot match everything', () => {
+    const { report } = readModelBrief(
       brief([good({ quote: "the" }), good({ quote: "at the top and" })]),
-      OPTS,
+      ONE,
     );
     expect(report.written).toBe(2);
     expect(report.kept).toBe(0);
-    expect(report.faults).toHaveLength(2);
-    for (const f of report.faults) expect(f.what).toContain("floor");
+    /* Five: both vignettes, then the plate that had nothing left anchoring it,
+       then the scene that ended up with no plate, then the empty plate set. */
+    expect(report.faults).toHaveLength(5);
+    expect(report.faults[0]?.what).toContain("floor");
+    expect(report.faults[1]?.what).toContain("floor");
+  });
+
+  /** The prompt asks for 4–20 words. A "quote" that is a paragraph is not one. */
+  it("drops a quote over the twenty words the prompt asks for", () => {
+    const long = LADDER.split(/\s+/).slice(0, 21).join(" ");
+    const { report } = readModelBrief(brief([good({ quote: long })]), ONE);
+    expect(report.kept).toBe(0);
+    expect(report.faults[0]?.what).toContain("over the 20");
   });
 
   /**
@@ -133,30 +177,127 @@ describe("readIllustrated", () => {
     const blocks = new Map<BlockId, string>([
       ["spya-dddddd", "The brain’s own account — tie‑breakers and all — is late."],
     ]);
-    const { report } = readIllustrated(
-      brief([
-        good({
-          block: "spya-dddddd",
-          quote: "The brain's own account - tie‑breakers and all",
-        }),
-      ]),
-      { blockText: blocks },
+    const { report } = readModelBrief(
+      brief([good({ block: "spya-dddddd", quote: "The brain's own account - tie‑breakers and all" })]),
+      { blockText: blocks, sceneIds: ["overview"] },
     );
     expect(report.faults).toEqual([]);
     expect(report.kept).toBe(1);
   });
 
   it("drops a depicts over the cap or carrying a bidi override", () => {
-    const { report } = readIllustrated(
+    const { report } = readModelBrief(
       brief([
         good({ depicts: "x".repeat(MAX_DEPICTS_CHARS + 1) }),
         good({ depicts: "A ladder‮ and then the reversed part." }),
       ]),
-      OPTS,
+      ONE,
     );
     expect(report.kept).toBe(0);
     expect(report.faults[0]?.what).toContain("over the");
     expect(report.faults[1]?.what).toContain("control or bidi");
+  });
+
+  /**
+   * `U+061C` ARABIC LETTER MARK sits outside every range the other bidi
+   * controls are in and does the same job as `U+200F`. It passed until the
+   * 2026-09-03 review went looking for it.
+   */
+  it("drops the one bidi control that used to get through", () => {
+    const { report } = readModelBrief(brief([good({ depicts: "A ladder؜ reversed." })]), ONE);
+    expect(report.kept).toBe(0);
+    expect(report.faults[0]?.what).toContain("control or bidi");
+  });
+
+  /** `node` is optional; rubbish in it is not "optional", it is rubbish. */
+  it("drops a vignette whose node id is not one", () => {
+    const { report } = readModelBrief(brief([good({ node: "n".repeat(200) })]), ONE);
+    expect(report.kept).toBe(0);
+    expect(report.faults[0]?.what).toContain("node is");
+  });
+
+  it("drops the same vignette written twice", () => {
+    const { illustrated, report } = readModelBrief(brief([good(), good()]), ONE);
+    expect(illustrated.plates[0]?.vignettes).toHaveLength(1);
+    expect(report.written).toBe(2);
+    expect(report.kept).toBe(1);
+    expect(report.faults[0]?.what).toContain("the same vignette again");
+  });
+
+  /**
+   * **The finding that made this two functions.** Both fields are storage's,
+   * and `sha256` names a blob in a store shared by every article this app has
+   * ever drawn.
+   */
+  it("refuses a brief that claims an image or a failure, and loses the whole plate", () => {
+    for (const forged of [{ image: IMAGE }, { failed: "anything" }, { image: IMAGE, failed: "x" }]) {
+      const { illustrated, report } = readModelBrief(brief([good()], forged), ONE);
+      expect(illustrated.plates).toEqual([]);
+      expect(report.faults.map((f) => f.what)).toContain(
+        "a brief may not name an image or a failure — the whole plate is dropped",
+      );
+    }
+  });
+
+  /**
+   * **The anchor floor.** This mode's whole claim is that the picture comes
+   * from the article; a plate whose every anchor was dropped is a picture of
+   * nothing, and drawing it spends money to find that out.
+   */
+  it("does not draw a plate every one of whose vignettes was dropped", () => {
+    const { illustrated, report } = readModelBrief(brief([good({ block: "spya-nope00" })]), ONE);
+    expect(illustrated.plates).toEqual([]);
+    expect(report.faults.map((f) => f.what)).toContain("no vignette survived — nothing anchors this plate");
+  });
+
+  it("faults a brief with no plates in it at all", () => {
+    const { report } = readModelBrief({ style: "An illuminated page.", plates: [] }, ONE);
+    expect(report.faults.map((f) => f.what)).toContain(
+      "no plate survived — there is nothing to draw",
+    );
+  });
+
+  /**
+   * **Order is the Sketch's.** Given the model's list in the wrong order the
+   * overview would otherwise be drawn second — and the *zoom* plate would become
+   * the style reference every later plate is drawn against, which is a silent
+   * reordering of the whole run.
+   */
+  it("puts the plates back in the Sketch's order, whatever order the model wrote them in", () => {
+    const raw = {
+      style: "An illuminated page.",
+      plates: [
+        { sceneId: "zoom-1", title: "Half", prompt: "The second page.", vignettes: [good()] },
+        { sceneId: "overview", title: "All", prompt: "The first page.", vignettes: [good()] },
+      ],
+    };
+    const { illustrated, report } = readModelBrief(raw, OPTS);
+    expect(illustrated.plates.map((p) => p.sceneId)).toEqual(["overview", "zoom-1"]);
+    expect(report.faults).toEqual([]);
+  });
+
+  it("drops a plate for a scene the Sketch has not got, and says which", () => {
+    const raw = {
+      style: "An illuminated page.",
+      plates: [
+        { sceneId: "overview", title: "All", prompt: "The first page.", vignettes: [good()] },
+        { sceneId: "zoom-9", title: "Nowhere", prompt: "A page of nothing.", vignettes: [good()] },
+      ],
+    };
+    const { illustrated, report } = readModelBrief(raw, OPTS);
+    expect(illustrated.plates.map((p) => p.sceneId)).toEqual(["overview"]);
+    expect(report.faults.map((f) => f.what)).toContain(
+      'no scene in the Sketch has the id "zoom-9" — not drawn',
+    );
+    /* And the scene nothing was written for is a fault of its own. */
+    expect(report.faults.map((f) => f.where)).toContain("zoom-1");
+    /* The report is reconcilable against what came back — the vignette on the
+       dropped plate is `written` and not `kept`. */
+    expect(report.written).toBe(2);
+    expect(report.kept).toBe(1);
+    expect(report.kept).toBe(
+      illustrated.plates.reduce((n, p) => n + p.vignettes.length, 0),
+    );
   });
 
   it("counts what it dropped and what it kept, per plate and per vignette", () => {
@@ -171,11 +312,11 @@ describe("readIllustrated", () => {
         },
         // No prompt: nothing to draw, so the plate goes and its vignettes with it.
         { sceneId: "zoom-1", title: "Half of it", vignettes: [good()] },
-        // A second plate of a scene already drawn.
+        // A second plate of a scene already read.
         { sceneId: "overview", title: "Again", prompt: "A second vellum page.", vignettes: [] },
       ],
     };
-    const { illustrated, report } = readIllustrated(raw, OPTS);
+    const { illustrated, report } = readModelBrief(raw, OPTS);
     expect(report.platesWritten).toBe(3);
     expect(report.platesKept).toBe(1);
     /* Four, not three: `written` is what the model wrote, and the vignette on
@@ -190,23 +331,60 @@ describe("readIllustrated", () => {
       "plate[0].vignettes[2]",
       "plate[1]",
       "plate[2]",
+      /* The scene the model wrote a plate for and then lost it. */
+      "zoom-1",
     ]);
+  });
+
+  /** A title is decoration, so it does not cost the plate — and the repair is reported. */
+  it("keeps a plate with an unusable title, and says the title went", () => {
+    const { illustrated, report } = readModelBrief(
+      brief([good()], { title: "t".repeat(500) }),
+      ONE,
+    );
+    expect(illustrated.plates[0]?.title).toBe("");
+    expect(report.faults[0]?.what).toContain("the plate is nameless");
   });
 
   it("hands back an empty brief rather than throwing on rubbish", () => {
     for (const raw of [null, 42, "a string", []]) {
-      const { illustrated, report } = readIllustrated(raw, OPTS);
+      const { illustrated, report } = readModelBrief(raw, ONE);
       expect(illustrated.plates).toEqual([]);
       expect(report.faults.length).toBeGreaterThan(0);
     }
   });
 
   /**
-   * A stored artefact goes back through the same reader the fresh answer did —
-   * that is what makes the browser's revalidation the same check as the
-   * server's, rather than a second, looser one.
+   * **A cap on the work, not only on the output.** Parsing runs `findQuote`
+   * over every vignette of every plate, and it runs in the browser. A stored
+   * artefact claiming thousands of either would otherwise be an afternoon's
+   * work before a single one was rejected.
    */
-  it("round-trips a stored artefact, keeping its image record and provenance", () => {
+  it("stops reading long before a hostile artefact stops offering", () => {
+    const plates = Array.from({ length: MAX_PLATES_READ + 3 }, (_, i) => ({
+      sceneId: i === 0 ? "overview" : `zoom-${i}`,
+      title: "A plate",
+      prompt: "A vellum page.",
+      vignettes: Array.from({ length: MAX_VIGNETTES + 5 }, (_, j) => good({ node: `n${j}` })),
+    }));
+    const { report } = readModelBrief({ style: "A page.", plates }, ONE);
+    expect(report.faults.map((f) => f.what)).toContain(
+      `3 plate(s) past the ${MAX_PLATES_READ} cap were not read`,
+    );
+    expect(report.faults.map((f) => f.what)).toContain(
+      `5 vignette(s) past the ${MAX_VIGNETTES} cap were not read`,
+    );
+  });
+});
+
+describe("readStoredIllustrated", () => {
+  /**
+   * A stored artefact goes back through a reader with the same checks — that is
+   * what makes the browser's revalidation the same check as the server's,
+   * rather than a second, looser one. What differs is only what a model may
+   * say.
+   */
+  it("round-trips an artefact, keeping its image record and provenance", () => {
     const stored: Illustrated = {
       version: ILLUSTRATED_VERSION,
       generator: "anthropic/claude-sonnet-5",
@@ -221,22 +399,66 @@ describe("readIllustrated", () => {
           title: "All of it",
           prompt: "A vellum page.",
           vignettes: [good() as never],
-          image: { sha256: "a".repeat(64), ext: "jpeg", bytes: 74_000, width: 1024, height: 1536 },
+          image: IMAGE,
         },
         {
           sceneId: "zoom-1",
           title: "Half of it",
           prompt: "Another vellum page.",
-          vignettes: [],
+          vignettes: [good() as never],
           failed: "the illustrator could not be reached",
         },
       ],
     };
-    const { illustrated, report } = readIllustrated(stored, OPTS);
+    const { illustrated, report } = readStoredIllustrated(stored, OPTS);
     expect(report.faults).toEqual([]);
-    expect(illustrated.plates[0]?.image?.sha256).toBe("a".repeat(64));
+    expect(illustrated.plates[0]?.image?.sha256).toBe(IMAGE.sha256);
     expect(illustrated.plates[1]?.failed).toBe("the illustrator could not be reached");
     expect(illustrated.profileHash).toBeNull();
     expect(illustrated.generator).toBe("anthropic/claude-sonnet-5");
+  });
+
+  /** A state no run produces. The picture claim is the dangerous half. */
+  it("drops the picture from a plate that claims both a picture and a failure", () => {
+    const { illustrated, report } = readStoredIllustrated(
+      brief([good()], { image: IMAGE, failed: "the illustrator could not be reached" }),
+      ONE,
+    );
+    expect(illustrated.plates[0]?.image).toBeUndefined();
+    expect(illustrated.plates[0]?.failed).toBe("the illustrator could not be reached");
+    expect(report.faults[0]?.what).toContain("the picture is dropped");
+  });
+
+  it("refuses an image record whose numbers are not numbers of a picture", () => {
+    for (const image of [
+      { ...IMAGE, width: 1024.5 },
+      { ...IMAGE, height: 40_000 },
+      { ...IMAGE, bytes: 64 * 1024 * 1024 },
+      { ...IMAGE, sha256: "not-a-hash" },
+      { ...IMAGE, ext: "png" },
+    ]) {
+      const { illustrated, report } = readStoredIllustrated(brief([good()], { image }), ONE);
+      expect(illustrated.plates[0]?.image, JSON.stringify(image)).toBeUndefined();
+      expect(report.faults[0]?.what).toContain("the image record is not one");
+    }
+  });
+
+  /**
+   * **The one place the two readers disagree about dropping.** Block ids move
+   * under an artefact when an article is re-extracted, and a picture that was
+   * paid for and exists must not disappear because a quote stopped matching —
+   * it loses its rows, and the fault says so.
+   */
+  it("keeps a paid-for plate whose anchors have stopped matching", () => {
+    const { illustrated, report } = readStoredIllustrated(
+      brief([good({ block: "spya-nope00" })], { image: IMAGE }),
+      ONE,
+    );
+    expect(illustrated.plates).toHaveLength(1);
+    expect(illustrated.plates[0]?.vignettes).toEqual([]);
+    expect(illustrated.plates[0]?.image?.sha256).toBe(IMAGE.sha256);
+    expect(report.faults.map((f) => f.what)).toContain(
+      "no vignette survived — the picture has no rows under it",
+    );
   });
 });

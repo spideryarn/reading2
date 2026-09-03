@@ -50,6 +50,7 @@ import { Info, Quote as QuoteIcon, RotateCcw, Sparkles, TriangleAlert } from "lu
 import type { BlockId, Job, Quote, QuoteDrops } from "../types.js";
 import type { QuoteRank } from "./params.js";
 import type { UseQuotes } from "./useQuotes.js";
+import type { StepFailure } from "./useStepJob.js";
 import { BlockRef } from "./BlockRef.js";
 import { ScoreBars } from "./ScoreBars.js";
 import { Tooltip } from "./Tooltip.js";
@@ -57,6 +58,7 @@ import { builtButEmpty } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
 import { useRenderCount } from "./perf.js";
+import { applyThreshold, hiddenNote, type ThresholdResult } from "./threshold.js";
 
 /**
  * **The owner's half of this panel** — the read's status, the job choosing the
@@ -97,7 +99,7 @@ interface Props {
   onRank(rank: QuoteRank): void;
   /**
    * Where the reader has put the bar, or null for "hasn't touched it" — which
-   * is `PROMOTE_BAR`. The distinction is kept all the way from the URL
+   * is `QUOTE_BAR_DEFAULT`. The distinction is kept all the way from the URL
    * (`barParam` in params.ts) so that the default stays one number in one file.
    */
   bar: number | null;
@@ -121,7 +123,7 @@ interface Props {
    **These two are separate reasons to keep a line.** A product gets that
    backwards: it would push the essay's thesis sentence below the fold for being
    plainly written, and drop the line you would tattoo on your arm for being an
-   aside. `max` promotes a quote for being strongly one thing, which is what a
+   aside. `max` keeps a quote for being strongly one thing, which is what a
    quote is for.
 
    > what this gets right: a line can earn its place for ONE good reason.
@@ -134,68 +136,74 @@ interface Props {
  * `0.70` where the glossary's `PRIORITY_GATE` is `0.30`, and the difference is
  * arithmetic rather than taste: **a product of two 0–1 scores clusters low and
  * a maximum clusters high.** Two scores of 0.7 make 0.49 under a product and
- * 0.70 under a maximum, so a bar copied across from the glossary would promote
- * nearly everything and the divider would say nothing.
+ * 0.70 under a maximum, so a bar copied across from the glossary would hide
+ * nothing at all.
  *
  * **`0.70` was a guess with nothing behind it**, which GPT Sol was right to
  * press on. There is now one measurement, and it moved the number.
  *
  * The first real run — `data/openai-huggingface`, 4,192 words, five quotes kept
  * — came back with `max(importance, striking)` of `0.70`, `0.75`, `0.75`,
- * `0.85` and `0.90`. At `0.70` **every quote cleared the bar**, so the default
- * divided nothing and the panel opened on a `barNote` apologising for it. The
- * clustering is exactly what the argument above predicts and the starting
- * position was simply too low for it.
+ * `0.85` and `0.90`. At `0.70` **every quote survived the bar**, so the default
+ * hid nothing and the panel opened on a note saying so. The clustering is
+ * exactly what the argument above predicts and the starting position was simply
+ * too low for it.
  *
- * `0.80` promotes two of those five, which is the size of top group this is
- * for. **It is one article**, so this is a better-supported guess rather than a
+ * `0.80` keeps two of those five, which is the size of list this is for. **It
+ * is one article**, so this is a better-supported guess rather than a
  * measurement — and it stays a guess in the same way `0.30` next door does,
  * because the slider under it is the feedback loop. What is no longer true is
  * that nothing had ever been looked at.
  *
  * `snapToStop` resolves a tie **downwards**, towards the lower score and so
- * towards promoting more. That is the safer direction for a reference list: a
- * slightly generous top group costs a reader a glance, where an empty one costs
- * them the feature.
+ * towards showing more. That is the safer direction for a reference list: a
+ * slightly generous list costs a reader a glance, where an empty one costs them
+ * the feature.
  */
-export const PROMOTE_BAR = 0.8;
+export const QUOTE_BAR_DEFAULT = 0.8;
 
 /**
- * **The positions the bar can take: nothing, then every score the list actually
- * contains.**
+ * **The positions the bar can take: every score the list actually contains.**
  *
  * A discrete track rather than a continuous one, and it replaced a `0.05`-step
  * slider after GPT Sol showed the continuous version could not keep its own
  * promises. Three failures, all the same thing — a track whose positions are
  * arithmetic rather than data:
  *
- *  1. **The right-hand end promoted a *band*, not the top.** It was the top
- *     score rounded down to the step, so priorities of `.62`, `.61` and `.20`
- *     gave an end of `.60` — which promotes two quotes that are not tied and
- *     calls them the top-scored ones.
+ *  1. **The right-hand end kept a *band*, not the top.** It was the top score
+ *     rounded down to the step, so priorities of `.62`, `.61` and `.20` gave an
+ *     end of `.60` — which keeps two quotes that are not tied and calls them
+ *     the top-scored ones.
  *  2. **`?bar=0.63` was accepted against a `step=0.05` track**, so a link could
  *     put the thumb where it could not be dragged.
  *  3. **Most positions changed nothing.** Between two real scores there is
- *     nothing to promote, so most of a drag was dead travel with a number
- *     moving over it.
+ *     nothing to hide, so most of a drag was dead travel with a number moving
+ *     over it.
  *
- * Every stop here divides the list somewhere no other stop does, so dragging is
- * always doing something and both ends mean exactly what they say: the left
- * promotes everything, the right promotes the quotes tied at the top score and
- * nothing else.
+ * **The synthetic `0` went on 2026-09-03, and it is the subtle half of that
+ * change.** While the bar grouped, `0` was a real position: it emptied "the
+ * rest" into the top group. Now that it hides, `0` and the *lowest real score*
+ * show exactly the same list — every score is `>= 0`, and the unscored survive
+ * everywhere — so the first step of the drag would have been the no-op this
+ * function exists to prevent. The list's own scores are the whole track, and
+ * every adjacent pair of stops therefore differs by at least the quote (or
+ * quotes) sitting on the lower one.
  *
- * Ascending with `0` first — the bar reads as *how high*, so left is low.
- * `barStops` is exported because the panel, the slider and `canPrioritise` all
- * ask it, and three copies of "which positions exist" is how the count under
- * the reader's hand comes to disagree with the groups under it.
+ * `[0]` when nothing is scored, so the input still has a track to render;
+ * `canPrioritise` is false there and the slider is not drawn anyway.
+ *
+ * Ascending — the bar reads as *how high*, so left is low. `barStops` is
+ * exported because the panel, the slider and `canPrioritise` all ask it, and
+ * three copies of "which positions exist" is how the count under the reader's
+ * hand comes to disagree with the list under it.
  */
 export function barStops(quotes: Quote[]): number[] {
-  const seen = new Set<number>([0]);
+  const seen = new Set<number>();
   for (const quote of quotes) {
     const p = priorityOf(quote);
     if (p !== undefined) seen.add(p);
   }
-  return [...seen].sort((a, b) => a - b);
+  return seen.size === 0 ? [0] : [...seen].sort((a, b) => a - b);
 }
 
 /**
@@ -226,10 +234,10 @@ export function snapToStop(stops: number[], bar: number): number {
  * **A missing score is skipped rather than read as zero, and under `max` that
  * is safe in a way it is not under a product.** A maximum over a subset can only
  * be *lower* than the maximum over both — so a quote scored on one axis can be
- * under-promoted and can never be over-promoted, which is the direction an
+ * ranked below where it belongs and never above it, which is the direction an
  * honest default has to fail in. (Under a product a missing factor is fatal
- * rather than conservative, which is why the glossary drops those entries to
- * the lower group instead of computing round them.)
+ * rather than conservative, which is why the glossary computes nothing at all
+ * for a half-scored entry and lets `survivesThreshold` show it — threshold.ts.)
  */
 export function priorityOf(quote: Quote): number | undefined {
   const scores = [quote.importance, quote.striking].filter(
@@ -238,48 +246,46 @@ export function priorityOf(quote: Quote): number | undefined {
   return scores.length === 0 ? undefined : Math.max(...scores);
 }
 
-/** How many quotes clear a given bar. The number under the reader's hand. */
-export function countAbove(quotes: Quote[], bar: number): number {
-  let n = 0;
-  for (const quote of quotes) {
-    const p = priorityOf(quote);
-    if (p !== undefined && p >= bar) n += 1;
-  }
-  return n;
+/**
+ * The bar applied to the list, once: the quotes to draw, and how many went.
+ *
+ * **Everything the panel prints comes out of this one result** — the list, the
+ * `N of M` beside the slider, the foot line, and whether the list is empty. A
+ * count that disagrees with the list under it is the failure the shared module
+ * exists to make impossible; see threshold.ts for the argument and for why an
+ * unscored quote survives every position of the bar.
+ */
+export function visibleQuotes(
+  quotes: readonly Quote[],
+  bar: number,
+): ThresholdResult<Quote> {
+  return applyThreshold(quotes, bar, priorityOf);
 }
 
 /**
  * Can this list be prioritised **at all** — is there anything to bar?
  *
- * One quote with a score and something to compare it against. Note what this is
- * *not*: it is not "does the current bar divide the list", which is
- * `splitsOnBar` and is a question about one position of the slider rather than
- * about the artefact. Offering the order is the first question; drawing a
- * divider is the second.
+ * **Two distinct scored priorities**, which is exactly `barStops(quotes).length
+ * >= 2`: the stops *are* the distinct scores, so the question "is there more
+ * than one position of the slider" and the question "does any position hide
+ * something" are the same question. With one stop, the bar sits on the lowest
+ * score, every scored quote is at or above it, and the unscored survive
+ * anyway — nothing the reader can do would change the list.
+ *
+ * It used to be *some stop splits the list*, over a track that began at a
+ * synthetic `0`. That was the right question while the bar grouped, and it
+ * gives the wrong answer now in one specific place: `[0.90, unscored]` split at
+ * `0.90` because the unscored quote formed *"the rest"*, so the order was
+ * offered — but once the unscored quote always survives, no position hides
+ * anything and the mode would advertise an order that visibly does nothing.
+ *
+ * Note what this is *not*: it is not "does the current bar hide anything",
+ * which is a question about one position of the slider. Offering the order is
+ * the first question — and a bar that hides nothing right now is one drag from
+ * hiding something, which is why `effectiveRank` does not fall back on it.
  */
 export function canPrioritise(quotes: Quote[]): boolean {
-  /* **A reachable split, not merely a score.** Having scores is not enough:
-     a list where every quote scores `0.5` has one stop above nothing and that
-     stop promotes all of them — so the order would be offered, the slider
-     drawn, and no position on it would ever divide anything. The all-zero case
-     is the same shape and is the one GPT Sol named. Asking the stops directly
-     is one question with one answer, where "are there scores" was a proxy that
-     happened to be right most of the time. */
-  if (quotes.length <= 1) return false;
-  return barStops(quotes).some((bar) => splitsOnBar(quotes, bar));
-}
-
-/**
- * Does the bar actually divide this list in two?
- *
- * Not "are there scores" — **are there quotes on both sides**. A two-group list
- * where every quote is in one of the groups is first-appearance order wearing a
- * label that claims a judgment was made, so when this is false the panel draws
- * one unheaded group and says so in words (`barNote`).
- */
-export function splitsOnBar(quotes: Quote[], bar = PROMOTE_BAR): boolean {
-  const above = countAbove(quotes, bar);
-  return above > 0 && above < quotes.length;
+  return barStops(quotes).length > 1;
 }
 
 /**
@@ -291,11 +297,12 @@ export function splitsOnBar(quotes: Quote[], bar = PROMOTE_BAR): boolean {
  * judgment nothing supports, so it falls back to `document` and `RankBar` does
  * not offer the control.
  *
- * **A list that has scores but whose current bar does not divide it does NOT
- * fall back**, which is the glossary's own hard-won rule (`effectiveSort`):
+ * **A list that has scores but whose current bar hides nothing does NOT fall
+ * back**, which is the glossary's own hard-won rule (`effectiveSort`):
  * cancelling would take the slider away with it and strand a reader mid-drag,
- * and an undivided list here is not silent — the bar is on screen with its
- * number and its count and `barNote` says in words what happened.
+ * and a list nothing is hidden from is not silent — the bar is on screen with
+ * its number and its count and the foot line says how many are hidden,
+ * including when the answer is none.
  */
 export function effectiveRank(quotes: Quote[], rank: QuoteRank): QuoteRank {
   if (rank !== "prioritised") return rank;
@@ -303,18 +310,25 @@ export function effectiveRank(quotes: Quote[], rank: QuoteRank): QuoteRank {
 }
 
 /**
- * What to say when the bar divides nothing, and nothing when it does.
+ * The foot line: how many quotes the bar is holding back, and the way back.
  *
- * A control that visibly does nothing is the failure this codebase keeps
- * writing down (docs/reusable/silent-success.md). Drag the bar to the floor and
- * the two groups merge into one, which looks exactly like a broken slider
- * unless something says otherwise. This is that something.
+ * Greg's call of 2026-09-03, applied here as well as next door: the bar hides
+ * rather than groups, and it says how many. **Never null** — the old `barNote`
+ * spoke only at the two ends, which made an absent line ambiguous; this one is
+ * present wherever the slider is, saying "Nothing is hidden" when that is the
+ * answer. A control that visibly does nothing is the failure this codebase
+ * keeps writing down (docs/reusable/silent-success.md).
+ *
+ * **It takes the counts, not the list**, so the sentence and the `N of M` above
+ * it come out of the same `visibleQuotes` call rather than two passes that
+ * could disagree.
+ *
+ * Note that dragging cannot reach the all-hidden state here: the top stop is a
+ * real quote's score, and that quote therefore always survives. The sentence
+ * exists anyway, because `?bar=` is a number in a URL.
  */
-export function barNote(quotes: Quote[], bar = PROMOTE_BAR): string | null {
-  if (quotes.length === 0 || splitsOnBar(quotes, bar)) return null;
-  return countAbove(quotes, bar) > 0
-    ? "Every quote clears this bar, so they are all in the order the piece says them."
-    : "No quote clears this bar, so they are all in the order the piece says them.";
+export function barNote(hidden: number, total: number): string {
+  return hiddenNote(hidden, total, { one: "quote", many: "quotes" });
 }
 
 /**
@@ -356,14 +370,6 @@ export function discardedNote(drops: QuoteDrops | undefined): string | null {
   return parts.length === 0 ? null : `${parts.join(", and ")}.`;
 }
 
-/** A run of quotes under one heading. `label: null` is the whole list, unheaded. */
-export interface QuoteGroup {
-  key: string;
-  label: string | null;
-  title?: string;
-  quotes: Quote[];
-}
-
 /**
  * The list in one flat order.
  *
@@ -374,12 +380,15 @@ export interface QuoteGroup {
  * the model declined to score is not one it scored as trivial, and treating the
  * two the same is the small lie that makes a sort untrustworthy.
  *
- * `prioritised` is the groups below, flattened, so the two can never disagree
- * about what order the list is in.
+ * **`prioritised` is the one that returns fewer quotes than it was given.** It
+ * is not a rank at all any more: it is the article's own order with what is
+ * below the bar taken out, which is the whole of the 2026-09-03 change. One
+ * call to `visibleQuotes`, so what this returns and what the count beside the
+ * slider says cannot come apart.
  */
-export function rankQuotes(quotes: Quote[], rank: QuoteRank, bar = PROMOTE_BAR): Quote[] {
+export function rankQuotes(quotes: Quote[], rank: QuoteRank, bar = QUOTE_BAR_DEFAULT): Quote[] {
   if (rank === "document") return quotes;
-  if (rank === "prioritised") return groupQuotes(quotes, rank, bar).flatMap((g) => g.quotes);
+  if (rank === "prioritised") return visibleQuotes(quotes, bar).visible;
   const value = (quote: Quote): number | undefined =>
     rank === "importance" ? quote.importance : quote.striking;
   return [...quotes]
@@ -393,45 +402,6 @@ export function rankQuotes(quotes: Quote[], rank: QuoteRank, bar = PROMOTE_BAR):
       return b.score === a.score ? a.i - b.i : b.score - a.score;
     })
     .map((x) => x.quote);
-}
-
-/**
- * The list as the panel renders it: one group, or two with a divider.
- *
- * Every rank but `prioritised` is a single unheaded group, so the DOM for them
- * is what it always was. `prioritised` is two, **each in the order the article
- * says them** — which is where "in order" survives even inside the ranked view,
- * and which means the model has chosen nothing within a group.
- *
- * A quote the model scored on neither axis cannot clear the bar and lands in
- * the lower group. That is not scoring it as zero — nothing here compares it to
- * anything — it is the same rule the other ranks follow.
- */
-export function groupQuotes(quotes: Quote[], rank: QuoteRank, bar = PROMOTE_BAR): QuoteGroup[] {
-  const one = (list: Quote[]): QuoteGroup[] => [{ key: "all", label: null, quotes: list }];
-  if (rank !== "prioritised") return one(rankQuotes(quotes, rank));
-  if (!splitsOnBar(quotes, bar)) return one(quotes);
-
-  const top: Quote[] = [];
-  const rest: Quote[] = [];
-  for (const quote of quotes) {
-    const p = priorityOf(quote);
-    (p !== undefined && p >= bar ? top : rest).push(quote);
-  }
-  return [
-    {
-      key: "top",
-      label: "worth keeping",
-      title: `The model called these at least ${bar.toFixed(2)} on one of its two judgments — either the argument rests on them or they are well put, and one is enough. In the order the piece says them, like the rest.`,
-      quotes: top,
-    },
-    {
-      key: "rest",
-      label: "the rest",
-      title: "Everything else it picked out, in the order the piece says them.",
-      quotes: rest,
-    },
-  ];
 }
 
 /** One number to put on a row, with the name of what it is. */
@@ -489,12 +459,12 @@ export function QuotesPanel({
   /* **Snapped to a stop the list actually has**, so the groups, the count and
      the thumb can never disagree — and so a `?bar=` from a link, from a hand,
      or from a different article opens on a division that exists. */
-  const bar = snapToStop(barStops(all), chosenBar ?? PROMOTE_BAR);
-  /* `effectiveRank` and not `chosenRank`: everything below — the groups, the
+  const bar = snapToStop(barStops(all), chosenBar ?? QUOTE_BAR_DEFAULT);
+  /* `effectiveRank` and not `chosenRank`: everything below — the list, the
      RankBar's pressed state, the numbers on each row — has to agree about what
      order the list is actually in. One call, one answer, passed down. */
   const rank = effectiveRank(all, chosenRank);
-  const groups = quotes ? groupQuotes(all, rank, bar) : [];
+  const shown = quotes ? rankQuotes(all, rank, bar) : [];
   /* From the LIST, not from the owner hook — so the sentence appears for a
      visitor as well, which is what makes "the reader is told" true rather than
      true for whoever happens to own the article. */
@@ -633,39 +603,35 @@ export function QuotesPanel({
             </p>
           )}
 
+          {/* One list again, in every rank. It was two headed groups from
+              2026-08-31 until 2026-09-03, when the bar started hiding what is
+              below it instead of grouping it — with nothing to contrast,
+              "worth keeping" was a heading over the whole list. */}
           <div className="quotes-list">
-            {groups.map((group) => (
-              <section key={group.key} className="quotes-group">
-                {/* The rule that promoted this group, named. A threshold with no
-                    visible divider is a judgment made silently, which is the
-                    thing the condition on these scores is against. */}
-                {group.label && (
-                  <h3 className="quotes-group-head" title={group.title}>
-                    {group.label}
-                    <span className="quotes-group-count">{group.quotes.length}</span>
-                  </h3>
-                )}
-                <ol className="quotes-group-list">
-                  {group.quotes.map((quote) => (
-                    <QuoteRow
-                      key={quote.id}
-                      quote={quote}
-                      selected={quote.id === quoteId}
-                      scores={rowScores(quote, rank)}
-                      onSelect={() => {
-                        // Pressing the selected quote again clears it, which is
-                        // what takes the mark back out of the prose. A selection
-                        // you cannot cancel is a mode inside a mode.
-                        if (quote.id === quoteId) return onQuote(null);
-                        onQuote(quote.id);
-                        onJump(quote.blockId);
-                      }}
-                      onJump={onJump}
-                    />
-                  ))}
-                </ol>
-              </section>
-            ))}
+            <ol className="quotes-list-items">
+              {shown.map((quote) => (
+                <QuoteRow
+                  key={quote.id}
+                  quote={quote}
+                  selected={quote.id === quoteId}
+                  scores={rowScores(quote, rank)}
+                  /* An unscored quote got here without clearing anything, and
+                     in an unheaded list a row with no numbers otherwise reads
+                     as though it had. A `title` and nothing visible — the same
+                     call the glossary makes, for the same reason. */
+                  unscored={rank === "prioritised" && priorityOf(quote) === undefined}
+                  onSelect={() => {
+                    // Pressing the selected quote again clears it, which is
+                    // what takes the mark back out of the prose. A selection
+                    // you cannot cancel is a mode inside a mode.
+                    if (quote.id === quoteId) return onQuote(null);
+                    onQuote(quote.id);
+                    onJump(quote.blockId);
+                  }}
+                  onJump={onJump}
+                />
+              ))}
+            </ol>
           </div>
 
           {owner?.quotes && (
@@ -693,16 +659,16 @@ function RankBar({
       label: "in order",
       title: "In the order the article says them — the default, and the reader's own order",
     },
-    /* Offered when this list has anything to bar. A control that would visibly
-       do nothing is worse than one that is not there — the same rule the two
-       score ranks below follow. */
+    /* Offered when some position of the bar would hide something. A control
+       that would visibly do nothing is worse than one that is not there — the
+       same rule the two score ranks below follow. */
     ...(canPrioritise(quotes)
       ? [
           {
             key: "prioritised" as const,
             label: "prioritised",
             title:
-              "The lines that score high on either judgment first, then the rest — each in the order the article says them",
+              "Only the lines that score high on either judgment, in the order the article says them — the bar below decides how many",
           },
         ]
       : []),
@@ -761,11 +727,12 @@ function RankBar({
  * - **the number is on screen**, because a thumb position is not a number
  *   anybody can read;
  * - **the count is on screen**, `5 of 14`, which is what the reader is aiming
- *   at and the only feedback that survives a drag that promotes nobody;
- * - **every stop is a real division** (`barStops`), so no part of the track is
- *   dead and both ends mean what they say;
- * - **it says when it has divided nothing** (`barNote`), which is the
- *   silent-success failure this codebase keeps catching itself in.
+ *   at and the only feedback that survives a drag that hides nobody;
+ * - **every adjacent pair of stops shows a different list** (`barStops`), so no
+ *   part of the track is dead and both ends mean what they say;
+ * - **it says how many it is holding back** (`hiddenNote`), in every state
+ *   including none, which is the silent-success failure this codebase keeps
+ *   catching itself in.
  *
  * A native `<input type="range">` rather than anything built: draggable,
  * arrow-key steppable, announced by screen readers and touch-friendly for free.
@@ -782,9 +749,12 @@ function BarSlider({
   onBar(bar: number | null): void;
 }) {
   const stops = barStops(quotes);
-  const promoted = countAbove(quotes, bar);
-  const note = barNote(quotes, bar);
-  const count = `${promoted} of ${quotes.length}`;
+  /* **One pass, and every number here comes out of it.** The list above, the
+     `N of M` and the foot line have to agree, and the way they cannot disagree
+     is for there to be one result rather than a filter beside a counter. */
+  const { visible, hiddenCount } = visibleQuotes(quotes, bar);
+  const note = barNote(hiddenCount, quotes.length);
+  const count = `${visible.length} of ${quotes.length}`;
 
   return (
     <div className="quotes-bar">
@@ -801,8 +771,8 @@ function BarSlider({
           <button
             type="button"
             className="quotes-bar-reset"
-            title={`Back to ${PROMOTE_BAR.toFixed(2)}`}
-            aria-label={`Reset the bar to ${PROMOTE_BAR.toFixed(2)}`}
+            title={`Back to ${QUOTE_BAR_DEFAULT.toFixed(2)}`}
+            aria-label={`Reset the bar to ${QUOTE_BAR_DEFAULT.toFixed(2)}`}
             onClick={() => onBar(null)}
           >
             <RotateCcw size={11} />
@@ -812,7 +782,7 @@ function BarSlider({
       {/* **The track is an INDEX into `stops`, not the score itself.** A range
           input needs a uniform step, and this list's scores are not uniformly
           spaced — so the thumb walks the positions and the value is read out of
-          the array. That is what makes every drag change the groups, and it is
+          the array. That is what makes every drag change the list, and it is
           why `?bar=` still carries the score rather than the index: an index is
           meaningless against a re-run list, where a score is still a score. */}
       <input
@@ -823,14 +793,18 @@ function BarSlider({
         max={Math.max(stops.length - 1, 0)}
         step={1}
         value={Math.max(stops.indexOf(bar), 0)}
-        title="How high the bar is for the top group: the higher of the model's two judgments, so either reason is enough. Every stop is a score this list actually contains — left promotes everything, right promotes only the top-scored."
+        title="How high a quote has to score to stay on screen: the higher of the model's two judgments, so either reason is enough. Every stop is a score this list actually contains — left shows everything, right shows only the top-scored."
         /* The thumb's position is a number nobody can hear. This is what makes
            it audible, and it is the count rather than the score because the
-           count is what the reader is aiming at. */
-        aria-valuetext={`${bar.toFixed(2)}, promoting ${count} quotes`}
+           count is what the reader is aiming at. **"showing", not
+           "promoting"** — an unscored quote is shown without being promoted. */
+        aria-valuetext={`${bar.toFixed(2)}, showing ${count} quotes`}
         onChange={(e) => onBar(stops[Number.parseInt(e.target.value, 10)] ?? 0)}
       />
-      {note && <p className="quotes-bar-note">{note}</p>}
+      {/* Always, never conditionally: present wherever the slider is, absent
+          wherever it is not. A line that is sometimes missing for a *different*
+          reason teaches the reader nothing. */}
+      <p className="quotes-bar-note">{note}</p>
     </div>
   );
 }
@@ -847,12 +821,23 @@ function QuoteRow({
   quote,
   selected,
   scores,
+  unscored,
   onSelect,
   onJump,
 }: {
   quote: Quote;
   selected: boolean;
   scores: RowScore[];
+  /**
+   * This row survived the bar without being scored, so say so — quietly.
+   *
+   * A `title` and nothing visible, the same call the glossary makes. It reveals
+   * no composite, so the rule that only the model's raw numbers reach the
+   * screen still holds. The quotes prompt explicitly permits omitting both
+   * scores, so unlike next door this state is by design rather than a model
+   * disobeying — which is a reason to name it, not to shout about it.
+   */
+  unscored: boolean;
   onSelect(): void;
   onJump(id: BlockId): void;
 }) {
@@ -869,7 +854,12 @@ function QuoteRow({
   const [why, setWhy] = useState(false);
 
   return (
-    <li className={`quotes-row${selected ? " on" : ""}`}>
+    <li
+      className={`quotes-row${selected ? " on" : ""}`}
+      {...(unscored && {
+        title: "Not scored for prioritising — shown regardless of the threshold",
+      })}
+    >
       <button
         type="button"
         className="quotes-quote"
@@ -963,7 +953,7 @@ function Foot({
 function Progress(props: {
   job: Job | null;
   starting: boolean;
-  failed: string | null;
+  failed: StepFailure | null;
   stalled: boolean;
   onRun(): Promise<void>;
   onCancel(id: string): void;

@@ -36,7 +36,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Job, Quotes, QuotesResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
-import { useStepJob } from "./useStepJob.js";
+import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
@@ -69,7 +69,7 @@ export interface UseQuotes {
   /** The job choosing this article's quotes, if one is. */
   job: Job | null;
   /** Why the job this session started stopped, if it stopped badly. */
-  failed: string | null;
+  failed: StepFailure | null;
   /**
    * This tab can see the job on screen and cannot move it. A pass-through:
    * `StepJob.stalled` in src/web/useStepJob.ts carries the reasoning, and

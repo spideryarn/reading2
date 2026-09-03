@@ -271,6 +271,126 @@ trigger to watch for: `dropped.overCap` non-zero on a run that also failed on ba
 
 Done: as stage 1, plus the leak test red before the change.
 
+#### What stage 2 actually landed, 2026-09-03
+
+**The seam.** `stageFailure` gained a second form — `stageFailure(failure, detail)`, taking a whole
+`ReaderFacingFailure` — and `readerFailureOf(err, stepLabel)` is what `src/jobs.ts` now writes onto
+`step.error`, `job.error` and a cancelled job's error. The fallback is `stepGaveUp` in
+[`src/messages.ts`](../../src/messages.ts): a total map over `FailureKind`, four sentences, each
+naming the failed step and nothing else. `Error.message` is untouched and goes to the log — and to
+Sentry only where a throw site has claimed it, which is the subject of the next-but-one paragraph.
+
+**Migrated, so they keep their copy across the seam:** `anthropicCallFailed` (ten stages),
+`truncationFailure` (eight), the ten `MODEL_REFUSED` throw sites, `TooLongForOnePass`, the upload
+refusals in `src/pipeline.ts`, and both of the quiz's own refusals — the band spread as
+`quizBandsNotSpread` with `[quiz-spread]`, and the every-question-unanchored case as
+`QUIZ_NOTHING_ANCHORED` with `[quiz-unanchored]`. The quiz wording is unchanged from stage 1's
+reviewed version.
+
+**One thing the plan did not anticipate, whose first fix was worse than the problem.**
+`authored` in [`src/monitoring-scrub.ts`](../../src/monitoring-scrub.ts) sends an `Error.message` to
+Sentry **only** when `kindOfMessage` finds a registered bracketed code at the end of it. Moving the
+reader sentence off `Error.message` therefore moved the code off it too — so every migrated
+failure's diagnostic is withheld from Sentry, which is the surface that exists for failures nobody
+is watching.
+
+The first fix appended the reader sentence's code to the diagnostic, so it would look authored. That
+was wrong, and the way it was wrong is the thing to remember: **`authored` does not ask "is there a
+code", it treats a registered code as proof that we wrote the whole string**, which is why
+`sanitise` then forwards it verbatim. Appending one lets any text buy that proof, and a step's
+detail is free text — the place a provider body or a stretch of the article turns up. GPT Sol
+reproduced `stageFailure(MODEL_REFUSED, "ARTICLE_SENTINEL: private prose")` arriving at Sentry
+intact. So a correct near-miss was closed by opening a wider hole, in the one file the codebase has
+for exactly this.
+
+**The append is gone**, and `tests/job-failure.test.ts` now drives `sanitise` itself with an article
+sentinel — because a test of `kindOfMessage` would have passed the whole time the hole was open.
+
+**Then the loss turned out to be bigger than "no Sentry", which is what forced the right fix.**
+Removing the append made ten tests fail — `tests/anthropic-call.test.ts` and
+`tests/stop-details.test.ts`, both deterministic, both pre-dating this work. They pin the bracketed
+code on the **log** line, and `stop-details.test.ts` says why in its own comment: *absence proves
+nothing* — a stage that died on a missing file before it ever called a model contains no sentinel
+either, and the code is the only thing that tells a refusal apart from it. So the code was never
+only a Sentry token; it was the identity of the failure in the log, and the first draft of this
+paragraph ("accepted knowingly") was written without knowing that.
+
+So the channel Sol named is built after all, and it is small: **`stageFailure(failure, { authored })`**
+— a second form of the argument in which the throw site claims it wrote every character and that
+none of it arrived from a provider, a document or a reader. The code goes on; the sentence travels.
+`anthropicCallFailed` earns it (a fixed sentence and a status the SDK handed over as a *number*) and
+so do the ten `MODEL_REFUSED` sites. Free-text `detail` is unchanged and still withheld, which is
+most diagnostics and all the dangerous ones.
+
+The distinction is the entire point, so it is pinned in one test asserting **both** forms of the
+same words side by side — free text withheld, `{ authored }` forwarded. Written that way on purpose:
+apart, the plain case looks redundant next to the authored one and the obvious tidy-up is to
+collapse them, which hands every step's free text the certificate again. It is one word at the throw
+site so that grepping `authored:` returns every claim ever made, which is the list an audit wants.
+
+**The client half took a different shape from the one asked for**, and the reasoning is worth the
+paragraph. The plan said *make `retryable` a required prop on `JobProgress`*, so that the compiler
+produces the list of bands to wire. What landed instead is `StepFailure` —
+`{ message, retryable, retry }` — as the type of the existing `failed` prop. It produces the same
+compiler-made list (thirteen call sites), and it removes a hazard the plan's shape would have
+introduced: a boolean beside a string is precisely the arrangement
+[`useStepJob.ts`](../../src/web/useStepJob.ts) already warns against in its own `postFailure`
+comment — *"the failure and its reason are one value … so no later edit can set one and forget the
+other"*. A panel cannot now wire the sentence and forget the judgement, because there is nothing to
+forget. `retry` is separate from `retryable` because they answer different questions: whether
+another go could work, and whether there is a job to point it at.
+
+**`JobProgress` draws no button under a failure another go cannot change**, rather than falling back
+to its ordinary run button — the shelf card's rule, and the one
+[ingest-queue.md](../project/ingest-queue.md#the-failures-retry-is-not-offered-under) already
+records. A retryable failed job gets **Retry**, which is `POST /api/jobs/:id/retry` and skips the
+steps that finished. The run button comes back only where there is something new to ask for.
+
+#### What the stage 2 review changed, 2026-09-03
+
+[260903c-stage2-review-sol.md](260903c-stage2-review-sol.md). It confirmed the shape —
+`failureKindOf` over `reader.kind`, the `StepFailure` type, no button under a non-retryable
+empty-state failure, `stepGaveUp`'s totality, the step labels as reader-visible orientation, and
+every deferral above. Six things changed:
+
+1. **The Sentry append was removed** — see the paragraph above, which is the whole of it.
+2. **The seam did not close.** `endAsStorageFailure` copied `PublishRefused.message` straight onto
+   `job.error`, and that message names block hashes and ends *"re-run hierarchy"*. The exception had
+   looked safe because the message *is* ours; being ours and being fit to show a reader are
+   different things. The door already had good copy (`COULD_NOT_PUBLISH`) and now uses it, with the
+   refusal's reasons on the log line instead. Sol found it by looking for **writers of the field**
+   rather than for throwers — the same *grep the genre, not the list* the whole seam exists for,
+   applied to the fix itself.
+3. **A cancel was being handed a failure's sentence.** `readerFailureOf` ran before the abort
+   branch, so a stopped step could be told the problem *"has been recorded"* on the one branch that
+   skips Sentry — and a refusal racing with Stop left *asking again will be refused* on a step of a
+   job that was about to be marked retryable. Cancellation now chooses `STEP_STOPPED` before
+   anything is persisted.
+4. **The generic `blocked` copy over-promised.** *"A shorter piece sometimes gets through"* is not
+   true of `RawDocumentUnavailable` or `NoBlocksProduced`; a total fallback may only make the
+   universal claim, which is that repeating the unchanged request will not change it.
+5. **The seam test proved less than it looked.** It injected only into `STEPS.fetch.run`, so it
+   structurally could not have caught (2), and it read `getJob`, which under the filesystem store
+   returns a clone of the in-memory index rather than reloading the file. It now covers both other
+   writers of `job.error` and reads the persisted pair back off disk.
+6. A stale comment in `src/job-failure.ts` still describing the pre-split mechanism.
+
+**Deliberately not done**, so it is not rediscovered as a mystery:
+
+- **The thread page still does not pass `starting`.** `JobProgress`'s comment claimed both the quiz
+  and the thread "watch a job they did not start"; that was false of both. The quiz is wired and
+  tested; the thread needs the prop threaded through four more component prop types in a file this
+  change was not otherwise touching. Recorded at the prop.
+- **Several failures keep the generic copy** rather than being migrated: Readability's refusal and
+  `NoBlocksProduced` (extract), the PDF page cap and chunk size, and the missing-artefact
+  `stageFailure("ours", …)` calls. The PDF page cap is the one worth doing next — *"this PDF has 900
+  pages and the limit is 400"* is genuinely reader-actionable — and each is one line at its throw
+  site.
+- **`anthropicCallFailed` still does not repeat the SDK's config error** even as a diagnostic. It
+  was tried; `tests/anthropic-call.test.ts` has pinned since it was written that those words do not
+  travel, and with the code now on the diagnostic they would reach Sentry too — a wider audience
+  than that argument was ever made about.
+
 ### Stage 3 — the answer the quiz forgot: its own plan
 
 **Not a regression. Attempts were never stored**, by an explicit decision in

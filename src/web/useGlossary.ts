@@ -26,7 +26,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Glossary, GlossaryEntry, GlossaryLookup, GlossaryResponse, Job } from "../types.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
-import { useStepJob } from "./useStepJob.js";
+import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { apiFetch, fetchOk, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
 
@@ -354,7 +354,7 @@ export interface UseGlossary {
   /** The job writing this article's glossary, if one is. Null otherwise. */
   job: Job | null;
   /** Why the job this session started stopped, if it stopped badly. */
-  failed: string | null;
+  failed: StepFailure | null;
   /**
    * This tab can see the job on screen and cannot move it. A pass-through:
    * `StepJob.stalled` in src/web/useStepJob.ts carries the reasoning, and

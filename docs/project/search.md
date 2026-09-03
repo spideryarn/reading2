@@ -755,16 +755,28 @@ means *more likely than not*: this confidence is
 [not a probability](#what-the-number-means-which-printing-it-does-not-say), and a starting position
 described as one would be the flattering reading the hover card was rewritten to avoid.
 
-**It hides rather than groups, and that is the one place it departs from the glossary it is modelled
-on.** A prioritised glossary shows every term and lifts the ones that clear the bar to the top,
-because a glossary is a reference list and a term you cannot find is a term you have lost. A search
-is the opposite errand: the reader is hunting, and what they want done with a weak match is for it
-to go away. (The prompt does tell the model to leave weak matches out, so this is not a claim that
-the matcher is careless — it is that *the model's* bar and *this reader's* bar are different
-bars, and only one of them can be moved.) It also fits *"orders by place"* better than grouping
-does: two groups is not place order, it is group order with place inside it. The phrase is
-ambiguous and this is a reading of it rather than the only one — GPT's review, which agreed with
-the call, was right that the first draft of this paragraph overstated that.
+**It hid where the glossary grouped, and since 2026-09-03 all three thresholds hide.** This one was
+the odd one out and is now the model the other two follow —
+[glossary.md § It hides what is below it](glossary.md#it-hides-what-is-below-it-since-2026-09-03)
+has Greg's words and the shared rule, [`src/web/threshold.ts`](../../src/web/threshold.ts). What
+changed with them is that this panel gained the **foot line** saying how many are hidden, which it
+did not have and which was the only thing Greg asked for that it was missing.
+
+**The reference-list argument this section used to make did not survive contact**, and it is worth
+naming rather than quietly deleting. It ran: a glossary shows every term and lifts the ones that
+clear the bar to the top, because a glossary is a reference list and *a term you cannot find is a
+term you have lost*; a search is the opposite errand, where the reader is hunting and what they want
+done with a weak match is for it to go away. It treated hiding as loss. The bar is on screen with
+its number, the foot line says how many it is holding back, and dragging it left is one gesture — a
+result is not lost when the control that hid it is the control in your hand.
+
+What the argument got right, and what still holds, is that hiding is worth *more* here than next
+door. (The prompt does tell the model to leave weak matches out, so this is not a claim that the
+matcher is careless — it is that *the model's* bar and *this reader's* bar are different bars, and
+only one of them can be moved.) It also fits *"orders by place"* better than grouping does: two
+groups is not place order, it is group order with place inside it. The phrase is ambiguous and this
+is a reading of it rather than the only one — GPT's review, which agreed with the call, was right
+that the first draft of this paragraph overstated that.
 
 **And hiding buys something a list cannot show.** The dropped results lose their marks in the prose
 too, because [`App.tsx`](../../src/web/App.tsx) computes one array and hands it to both the panel and
@@ -783,8 +795,11 @@ A threshold can swallow the reader's results and look like an ordinary empty lis
   was opened there. Absent is not low — the same rule `orderFound` already followed when it sorted a
   literal match as certain. It is one line, `clears` in [`search-hits.ts`](../../src/web/search-hits.ts),
   and it has a test of its own.
-- **The count says `3 of 11`, never `3`.** A filter that hides eight things must not look like a
-  search that found three.
+- **The count says `3 of 11`, never `3`**, and under the track a line says *"8 passages are hidden by
+  this threshold. Drag the slider left to show them."* A filter that hides eight things must not look
+  like a search that found three. Both come out of one pass over the list (`applyConf` in
+  [`search-hits.ts`](../../src/web/search-hits.ts)), because a count that disagrees with the list
+  under it is the worst thing this feature can do.
 - **"Nothing matched" is not printed when the reader hid it all.** That empty state would have taken
   the slider off the screen along with the results, leaving no way back. The zero case keeps the
   slider and says what actually happened.
@@ -796,12 +811,15 @@ A threshold can swallow the reader's results and look like an ordinary empty lis
   threshold in a different unit from the numbers it hides would be that bug wearing a slider.
 
 The slider is the glossary's `GateSlider` in every respect that can be shared: the number on screen,
-the count on screen, a track that ends where the data does so no part of it is dead, a note in words
-when it has divided nothing, and a reset that only appears once there is something to reset.
+the count on screen, the foot line in every state including none and all, and a reset that only
+appears once there is something to reset. Its track is the exception — a fixed 0–100, because that
+is the unit the rows print, where the glossary's ends where its data does.
 
-**Not the default.** The glossary's prioritised order is its default; this one is not, and
-deliberately: the glossary's default reorders, and this one would hide. A reader who has not asked
-for a filter should not have results kept from them.
+**Not the default**, and it stayed that way when the glossary started hiding too. The reason given
+in 2026-08-26 was that the glossary's default only reordered while this one would hide; since
+2026-09-03 both hide, and what is left is the better half of it anyway — **a reader who has not
+asked for a filter should not have results kept from them.** A glossary is a list of the article's
+terms, there before the reader asked anything; these are the answer to a question they just typed.
 
 ### What this removed
 

@@ -190,6 +190,12 @@ export function QuizPanel({
   const run = (label: string) => (
     <JobProgress
       job={owner.job}
+      /* Between the press and the first poll there is no job yet, and without
+         this the button comes straight back and invites a second press —
+         `JobProgress` § `starting`. The quiz went without it until 2026-09-03
+         because a comment there said this panel only ever watches jobs it did
+         not start, which was never true of it. */
+      starting={owner.starting}
       failed={owner.failed}
       stalled={owner.stalled}
       onRun={() => owner.write()}
