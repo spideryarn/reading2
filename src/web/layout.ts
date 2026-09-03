@@ -68,6 +68,45 @@ export const GIST_MIN = 176; // 11rem — the narrowest a gist still reads at
 export const PROSE_MIN = 544; // 34rem — the narrowest the reading column may be
 
 /**
+ * **The widest the reading column goes when it is the only column there is —
+ * in rem, because it is a measure of type rather than of screen.**
+ *
+ * Everywhere else the detail column takes whatever the gists and the band have
+ * left, and there is always something beside it to take the rest. In Plain
+ * there is nothing: the article had the whole window and sat hard against the
+ * left of it, with 800px of empty page to its right on a 1600px screen. Greg,
+ * 2026-09-03: *"In Plain mode, can you centre the text on the page?"* Capping
+ * the column is what leaves a margin for `styles.css` § plain, centred to
+ * divide between the two sides.
+ *
+ * **The condition is "no other column", not "Plain".** The same thing is true
+ * of Hierarchy with `?cols=` set to nothing, and of an article whose tree has
+ * no gist depths at all — the mode is not what makes the page lopsided, being
+ * alone is. Keeping it that way is also what keeps this file free of mode
+ * names, which is the point of `plainCols` in App.tsx.
+ *
+ * 50rem is `--reading-measure` (65ch, ≈46rem in the reading face) plus the text
+ * cell's own `--text-pad-l` and `--text-pad-r`, rounded up to something round.
+ * The rounding runs upwards on purpose: `.prose` keeps its own clamp, so slack
+ * here is a few pixels of margin inside the column rather than a clipped
+ * measure.
+ *
+ * **Rem, and this is the second time that has mattered in this file.** `SPINE_W`
+ * above records the same lesson from the other side: nothing in this app locks
+ * the root font size, and a px constant standing in for a rem-relative length is
+ * only correct at 16px. Everything this number stands for scales with the root —
+ * `--reading-size` is `1.0625rem`, `ch` scales with the font size, and both pads
+ * are rem — so a reader whose browser default is 20px would have had the cap
+ * clip their measure from 65ch to about 51ch, which is the one thing the cap
+ * must never do. GPT Sol, 2026-09-03. `fitView` multiplies by the root size the
+ * page is actually painted at; see `FitInput.rootFontPx`.
+ */
+export const PROSE_ALONE_MAX_REM = 50;
+
+/** The root font size everything not told otherwise assumes. */
+export const DEFAULT_ROOT_PX = 16;
+
+/**
  * The **mode band** — the strip between the spine and the prose when the middle
  * is something other than the table of contents (chat, and whatever comes after
  * it). See docs/plans/260826a-chat-mode.md, and note what it replaces: in a mode, the
@@ -115,6 +154,20 @@ export interface Fit extends Layout {
    * if what you want to know is whether a band is open.
    */
   modeW: number;
+  /**
+   * **The article is the only thing on this page** — no gist column, no band,
+   * just the prose across the whole window. Plain reaches it by handing
+   * `fitView` no columns to fit, and it is where `PROSE_ALONE_MAX_REM` and the auto
+   * margins in styles.css § plain, centred come in.
+   *
+   * **Not the same question as `table.only-prose`**, which TableView asks to
+   * decide whether the table head is worth its 40px, and which a band mode also
+   * answers yes to: there the prose is the table's only column but it is not
+   * alone on the page, and the band already takes the space this would centre
+   * into. Two facts, deliberately two names — `inMode` and `bandOpen` in
+   * App.tsx are the same care.
+   */
+  alone: boolean;
 }
 
 /**
@@ -179,6 +232,17 @@ export interface FitInput {
    * about the spine.
    */
   showSpine?: boolean | null;
+  /**
+   * The root font size this page is painted at, in px — `useRootFontPx()` in
+   * App.tsx, `DEFAULT_ROOT_PX` for anything that has no DOM to ask.
+   *
+   * Only `PROSE_ALONE_MAX_REM` needs it, and only because that one number is a
+   * measure of type rather than of screen. Every other constant in this file is
+   * a *screen* width — how narrow a gist still reads at, how much room a chat
+   * answer needs — and those are px on purpose, because they are compared with
+   * a window measured in px.
+   */
+  rootFontPx?: number;
 }
 
 export function fitView({
@@ -189,6 +253,7 @@ export function fitView({
   chosen,
   modeBand = false,
   showSpine = null,
+  rootFontPx = DEFAULT_ROOT_PX,
 }: FitInput): Fit {
   /* A mode owns the middle band, so there are no gist columns to fit and no
      choice for the reader to have made about them. Handled first and returned
@@ -325,7 +390,25 @@ export function fitView({
    */
   const detailW = Math.max(Math.min(detailMin, avail), avail - fixedCount * gistW);
 
-  const widths = [...Array<number>(fixedCount).fill(gistW), detailW];
+  /**
+   * **When the prose is the only column, it stops growing at the measure.**
+   *
+   * Everything above is a negotiation between columns, and with one column
+   * there is nothing to negotiate: `detailW` came out as the whole window, and
+   * a 1588px cell holding a 738px measure is 850px of empty page rather than a
+   * wide reading column. See `PROSE_ALONE_MAX_REM` for why the cap is phrased as
+   * "alone" rather than "Plain", and styles.css § plain, centred for the auto
+   * margins that put the leftover on both sides instead of one.
+   *
+   * Outline mode is excluded by `showText`: its lone column is nav labels, not
+   * prose, and `--reading-measure` has nothing to say about those.
+   */
+  const alone = fixedCount === 0 && showText;
+  const columnW = alone
+    ? Math.min(detailW, Math.round(PROSE_ALONE_MAX_REM * rootFontPx))
+    : detailW;
+
+  const widths = [...Array<number>(fixedCount).fill(gistW), columnW];
   const tableW = widths.reduce((a, b) => a + b, 0);
 
   return {
@@ -340,6 +423,7 @@ export function fitView({
     minWidth: spineWidth(spine) + tableW,
     spine,
     modeW: 0,
+    alone,
   };
 }
 
@@ -430,6 +514,10 @@ function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
       minWidth: spineWidth(spine) + avail,
       spine,
       modeW: 0,
+      /* A band is open — it is covering the article rather than sitting beside
+         it, but it is there, and nothing about this page is the article on its
+         own. See `Fit.alone`. */
+      alone: false,
     };
   }
 
@@ -446,5 +534,6 @@ function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
     minWidth: spineWidth(spine) + modeW + proseW,
     spine,
     modeW,
+    alone: false,
   };
 }

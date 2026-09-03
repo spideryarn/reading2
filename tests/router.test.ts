@@ -22,6 +22,7 @@ import {
   canonicalAddHref,
   carriedSearch,
   PRIVACY_HREF,
+  FEATURES_HREF,
   parseRoute,
   readHref,
 } from "../src/web/router.js";
@@ -168,6 +169,24 @@ describe("the admin routes", () => {
     expect(parseRoute(ADMIN_HREF)).toEqual({ kind: "admin", page: "home" });
     expect(parseRoute(ADMIN_USERS_HREF)).toEqual({ kind: "admin", page: "users" });
     expect(parseRoute(ADMIN_FEEDBACK_HREF)).toEqual({ kind: "admin", page: "feedback" });
+  });
+});
+
+describe("the features route", () => {
+  it("parses, with and without a trailing slash, and from its own constant", () => {
+    expect(parseRoute("/features")).toEqual({ kind: "features" });
+    expect(parseRoute("/features/")).toEqual({ kind: "features" });
+    expect(parseRoute(FEATURES_HREF)).toEqual({ kind: "features" });
+  });
+
+  it("is not a prefix: an address under it is nobody's", () => {
+    expect(parseRoute("/features/zoom")).toEqual({ kind: "library" });
+  });
+
+  /* A static page must survive the boot-time address settling untouched, or a
+     stranger following the landing page's link is rewritten to the shelf. */
+  it("is left alone by settleAddress", () => {
+    expect(settleAddress("/features", "", "")).toBeNull();
   });
 });
 
