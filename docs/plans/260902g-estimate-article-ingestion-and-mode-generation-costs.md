@@ -291,7 +291,7 @@ The runner design has to answer three couplings before any money moves (Sol bloc
 
 </details>
 
-### 🚧 Blocked: the local database cannot be migrated, by anybody
+### ✅ Was blocked: the local database could not be migrated, by anybody — cleared 2026-09-02
 
 **Found 2026-09-02 by the feasibility dry pass; verified independently.** `npm run db:migrate`
 refuses:
@@ -315,6 +315,10 @@ The consequence is wider than this plan: **`byok_upstream_nanos` cannot be appli
 `runStep`'s own `jobSpend` errors on every job. **Nobody's ledger row needs deleting** — the fix
 is to push `540927f` to `dev`, after which the journal reconciles. Until then the paid runs cannot
 start and neither can the cost-tracking plan's stage 1b.
+
+**Cleared**, and the second, worse recurrence of it is written up in the v1 runner stage below —
+including what actually caused both, which was not the ledger. `npm run db:migrate` now says
+*"Nothing pending — the database is in step with the journal."*
 
 ### Stage: Fixture corpus — three articles, held constant ✅ 2026-09-02 (with two gaps)
 
@@ -479,13 +483,34 @@ free, which was checked in the code before running rather than assumed.
       - **This is `silent-success.md` with a receipt.** The run reported `job done`, `status: done`,
         and a published revision. Only `aiCostStatus: "unavailable"` and two warning lines said the
         money had vanished, and nothing was watching either.
-- [ ] **Blocked again, and worse than before.** `npm run db:migrate` now reports **three** ledger
-      rows belonging to no migration and **two migrations that can never be applied** — they are
-      stamped earlier than the newest ledger row, and drizzle only applies entries after it. So
-      `ai_calls` is short the realtime columns, and on this box **every paid call by anybody is
-      currently recorded nowhere**. Not this plan's to untangle: working out what three unknown
-      rows did is the job of whoever wrote them.
-- [ ] Re-run on the short HTML fixture once the ledger holds rows again. Commit the result.
+- [x] **Blocked again, and the ledger was never the problem.** `db:migrate` reported three ledger
+      rows belonging to no migration and two migrations that could never be applied. Every part of
+      that was a symptom. The fault was **unresolved merge-conflict markers in
+      [`drizzle/meta/_journal.json`](../../drizzle/meta/_journal.json)**, left by a half-finished
+      merge in the shared primary, so `readJournal` threw a `SyntaxError` at a byte offset and every
+      migration command in the repo went blind at once. `ai_calls` stayed short the realtime
+      columns, and on this box **every paid call by anybody was recorded nowhere** for hours.
+      - The three "orphans" were **hash-matched to real migrations** — `0052_per_article_job_queue`,
+        `20260902161529_feedback_body_and_kind`, `20260902161553_feedback_one_body` — by sha256ing
+        every `.sql` across the main tree and all worktrees. A wrong attribution here sends somebody
+        to delete the right ledger row, so this was worth the hour it cost.
+      - Resolved by keeping both sides, then checked the resolution was **byte-identical to
+        `origin/dev`** rather than trusting my own judgement of somebody else's merge.
+      - **The fix that stops the class**, since the diagnosis was the whole cost: `readJournal` now
+        refuses a journal with a conflict marker in it and says so in its first line, naming the
+        file, the marker and the resolution rule (keep both sides — an entry records that a
+        migration exists, it is never a choice between two). `tests/migration-journal.test.ts`,
+        watched red against the real `Expected ',' or ']' … at position 123` first.
+      - The class: **a machine-read file a human merge can corrupt, whose reader reports the
+        corruption in its own vocabulary rather than the one the reader needs.** `_journal.json` is
+        this repo's worst case — nearly every change appends to the same last entry, and nothing but
+        tooling ever opens it.
+- [x] **Re-ran on the short HTML fixture, 2026-09-03, and the ledger kept the rows.** $0.0434 over
+      2 calls for 561 words / 19 blocks / 12 sections: hierarchy $0.0332 (1 call, 29.4s) and its
+      label fan-out $0.0102 (1 call, 6.0s), 4,559 in / 3,431 out / 1,652 reasoning, no cache on a
+      cold draw. `evals/results/cost/2026-09-03-00-48-40-b9mpo2v8-short-html/run.json`.
+      Calls-made against rows-kept reconciled, so this is the first draw whose product actually
+      exists.
 
 ### Stage: All modes, all three articles, with repeats where variance lives
 
