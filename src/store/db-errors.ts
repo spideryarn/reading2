@@ -351,16 +351,51 @@ function framesOf(err: unknown): string | undefined {
  * tests/store-guard-idempotent.test.ts holds both.
  *
  * A symbol rather than `err.name === "StoreFailure"`, because `name` is writable
- * and a thrower could set it: this mark can only be put here.
+ * and a thrower could set it by accident.
+ *
+ * ## What this mark does and does not promise, since the first draft overclaimed
+ *
+ * It said *"this mark can only be put here"*, and that is **false**:
+ * `Symbol.for` is a process-global registry, so any code in this process can
+ * look the key up and plant it. GPT Sol demonstrated it, 2026-09-03, planting
+ * both this and `GUARDED` without touching the repo and getting a raw error with
+ * its stack straight through.
+ *
+ * **`Symbol.for` is still the right primitive, and the reason is module
+ * duplication rather than security.** A private `WeakSet` would be unforgeable
+ * and would break the moment this module exists twice — which is not
+ * hypothetical here: a dev-server reload makes a second live copy of every
+ * server module, and that duplication is the entire subject of
+ * `tests/store-fs-write-chains.test.ts`. Under a `WeakSet` a store guarded by
+ * copy A would be re-wrapped by copy B, which is exactly the double-diagnostic
+ * bug the early return in `guardDbStore` was written to remove. A registry
+ * symbol survives duplication; private state does not.
+ *
+ * So the honest statement is: **this mark defends against accident, not against
+ * hostile code in our own process** — and against hostile code in our own
+ * process there is nothing to defend, since it could read the article directly.
+ * What *was* worth fixing is the check below, which used `in` and therefore
+ * accepted a mark **inherited from a prototype**. It now asks for an own
+ * property, so a class whose prototype happens to carry the key cannot launder
+ * every instance through the boundary.
  */
 const SCRUBBED = Symbol.for("spideryarn.scrubbedDbError");
+
+/** The mark, as an **own** property — never inherited. See `SCRUBBED`. */
+function carriesMark(value: unknown, mark: symbol): boolean {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    Object.prototype.hasOwnProperty.call(value, mark)
+  );
+}
 
 /** May this error go out as it is? See the header — it is an allowlist. */
 function mayPassThrough(err: unknown): boolean {
   /* Something this file already scrubbed, coming back through a second guard —
      see `SCRUBBED` above. It is safe by construction and its diagnostic has
      been written, so passing it keeps one failure to one log line. */
-  if (err !== null && typeof err === "object" && SCRUBBED in (err as object)) return true;
+  if (carriesMark(err, SCRUBBED)) return true;
   if (err instanceof ChatConflict) return true;
   /* The checkpoint store refusing its own arguments — a bad key, the wrong
      slug, a value that will not serialise. None of these reached the database,
@@ -445,7 +480,11 @@ const GUARDED = Symbol.for("spideryarn.guardedDbStore");
 
 /** Whether this object came out of `guardDbStore`, and under what name. */
 export function isGuardedStore(store: unknown): string | undefined {
-  if (store === null || typeof store !== "object") return undefined;
+  /* An **own** property, never an inherited one — see `SCRUBBED` above for why
+     that distinction is the half of this worth defending. A store whose
+     prototype carried the key would otherwise report every instance as guarded
+     and `guardDbStore` would hand each one straight back unwrapped. */
+  if (!carriesMark(store, GUARDED)) return undefined;
   const mark = (store as Record<symbol, unknown>)[GUARDED];
   return typeof mark === "string" ? mark : undefined;
 }

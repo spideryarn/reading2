@@ -440,6 +440,64 @@ guarding against.
   in the registry's docstring to mean *"it belongs on Postgres — the work is getting it there, or
   removing the filesystem half it still carries"*, and says so.
 
+#### The stage-end review found four things, and three of them were real holes
+
+[The review](260903f-delete-the-spideryarn-store-flag-stage-a-review-sol.md), 2026-09-03, with
+reproductions rather than readings. **Everything below is fixed.**
+
+**1 — "every Postgres store is guarded at its export" was still too strong.** `createPgSourceStore`
+is an exported **factory** returning a live `SourceStore`, four tests call it directly, and it was
+unguarded while the singleton beside it was wrapped. The shape check could not see it because it
+scanned `export const pgX` and **a factory is neither**. Widening it to cover
+`export function` and `createPgX` then found **four** candidates, of which three were guarded all
+along and invisible to the *discovery* half for the same reason.
+
+**A fixed-size window was the wrong bound, and wrong in the direction that matters.** The first
+attempt looked 400 characters past a signature for `return guardDbStore(`; `pgStoreSession` guards on
+its last line, **450 lines below**, so it was reported unguarded. It is now bounded to the
+declaration. **`pgArtifactsIn` is the one genuine remainder** and is a declared exception: it is
+built per transaction inside `pgStoreSession`, whose returned object *is* guarded, so every escape
+route already goes through a wrapper — verified by checking it has no caller outside `pg-session.ts`.
+
+**2 — both marks are forgeable, and we said otherwise. `Symbol.for` stays anyway.** The docstring
+claimed *"this mark can only be put here"*; `Symbol.for` is a process-global registry and the
+reviewer planted both marks without touching the repo, getting a raw error and its stack straight
+through. **We did not switch to a private `WeakSet`, and the reason is module duplication rather than
+security**: a dev-server reload makes a second live copy of every server module — that duplication is
+the entire subject of `tests/store-fs-write-chains.test.ts` — and under a `WeakSet` a store guarded by
+copy A would be re-wrapped by copy B, which is exactly the double-diagnostic bug D′1a removed. A
+registry symbol survives duplication; private state does not. Against hostile in-process code there
+is nothing to defend, since it could read the article directly. **What was worth fixing is the check**:
+it used `in`, which accepts a mark **inherited from a prototype**, and now asks for an own property.
+The docstring says what the mark actually promises.
+
+**3 — the witness had a second blind spot, and it had produced a false negative.** *"The instrument
+records calls, not reads."* A test importing a non-function export and merely reading it executes
+nothing the proxy observes — `store-artefacts-pg` reads `PATHS` from `artifacts-fs` and was filed
+under **"ran and touched nothing"**. We had told the reviewer there was one blind spot; there were
+two, and the claim was in the JSON.
+
+**The class was then bounded statically rather than by re-running**: a sweep for runtime imports of a
+condemned module across every test file found **exactly one member**, now classified. The JSON
+records both blind spots, says plainly that **`ranAndTouchedNothing` is not proof on its own**, and
+the guard asserts both survive an edit.
+
+**4 — two collateral verdicts broke the category's own promise.** `a-claim-that-lost-its-draft` and
+`claim-session-postgres` both import `DATA_ROOT_ENV` **from `data-root.ts`**, so stage G cannot
+delete that module without editing them — and `shared-mechanism-collateral` means *"some other stage
+resolves this without anybody editing this file"*. Their store *use* really is incidental (the second
+asserts its scratch roots are **still empty**, which is the opposite of a dependency), so a new
+`condemned-symbol-import` mechanism records the exception rather than a fourth category papering over
+it. The second file's assertions are load-bearing: **with no filesystem store there is no root to
+prove empty**, so G must re-express them rather than drop them.
+
+**And the count was 92, not 93.** Ours was miscounted off a grep that included the type declaration.
+
+**One thing the review confirmed rather than corrected**, worth recording because it was a judgement
+call: removing the slug from the seven refusal messages is right — *"they are title-derived reader
+data, while the caller/request context already identifies the article."* As is keeping `guarded()`
+redundant until the hinge, and removing it with the selector.
+
 **The instrument is kept, not thrown away.** `vitest.witness.config.ts` and `tests/setup/fs-store-witness*.ts`
 are listed in `tsconfig.json` beside 260903e's spike config and are **not** wired into
 `vitest.config.ts`, so `npm test` never loads them. Witness 2 is a measurement with a date on it and

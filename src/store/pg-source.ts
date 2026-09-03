@@ -135,7 +135,19 @@ function matchingBucket(): RawSourceStore {
  * find, and neither should need a Supabase container running to exercise.
  */
 export function createPgSourceStore(sources: () => RawSourceStore = matchingBucket): SourceStore {
-  return {
+  /* **Guarded here, not only on the singleton below**, because this factory is
+     an importable unguarded spelling and that is precisely what guarding at the
+     export was meant to leave nowhere. `tests/source-store.test.ts` calls it
+     four times to inject a bucket without Supabase, so before this the suite was
+     exercising a store shape production never has. Found by GPT Sol reviewing
+     stage D′1, 2026-09-03: the shape check in tests/store-guarded.test.ts scanned
+     `export const pgX` and a factory is neither.
+
+     Wrapping twice is free — `guardDbStore` hands an already-guarded store back
+     unchanged (tests/store-guard-idempotent.test.ts) — so the singleton's own
+     `guardDbStore` below stays, and says the same thing where a reader of that
+     line is looking. */
+  return guardDbStore("source", {
     async readPdf(slug: string): Promise<SourcePdf | null> {
       const [row] = await sourceReferenceQuery(getDb(), slug);
       /* Not yours, not there, or never published. All three are `null`: the
@@ -183,7 +195,7 @@ export function createPgSourceStore(sources: () => RawSourceStore = matchingBuck
          above says why the fallback went with it. */
       return null;
     },
-  };
+  });
 }
 
 /**
