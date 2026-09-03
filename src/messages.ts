@@ -1495,19 +1495,56 @@ export const SHARING_ON = "Anyone with the link can read this, without signing i
  */
 export const SHARING_BADGE = "Shared";
 
-/** What a visitor gets, in one line, on the card rather than behind a hover. */
-/* **"and whatever the model has written about it" was added 2026-09-02**, and
-   it is a correction rather than a flourish. Since slice 1b a shared link has
-   carried the glossary, the ideas, the quotes and the tweet thread, and this
-   sentence still named only the article and its tree — true, and true by
-   omission of the four things an owner would most want to have been told. On
-   the owner's card it now sits directly above the itemised list
-   (src/web/shared-inventory.ts), where the omission was visible. */
-export const SHARING_WHAT_VISITORS_SEE =
-  "A visitor sees the article, its table of contents, every zoom level, and the reading aids " +
-  "written for it — the summaries, the glossary, the ideas, the quotes. They never see your " +
-  "comments, your conversations, your searches or your notes, and nothing they do costs a model " +
-  "call.";
+/**
+ * **What a shared link carries, in one line, for the visitor** — the reader of
+ * the page a shared link actually reaches.
+ *
+ * *"and whatever the model has written about it" was added 2026-09-02*, and it
+ * is a correction rather than a flourish. Since slice 1b a shared link has
+ * carried the glossary, the ideas, the quotes and the tweet thread, and this
+ * sentence still named only the article and its tree — true, and true by
+ * omission of the four things an owner would most want to have been told.
+ *
+ * ## It used to be drawn on the owner's card as well, and both problems with
+ * ## that had one cause: it was written for two audiences and fitted neither
+ *
+ * **It appeared on a *private* article's card**, in the present indicative,
+ * directly under *"Only you can read this."* — two paragraphs contradicting
+ * each other on a skim, on the one control in this app where a state that looks
+ * wrong is worth most. Greg, 2026-09-03: *"That's a fair description of what
+ * would be true IF it was Public-readable. But it's not."*
+ *
+ * **And on the shared card it was redundant**, sitting immediately above the
+ * itemised list that says the same thing better: `SHARED_HEADING` and the two
+ * below it, swept from the modes by
+ * [shared-inventory.ts](web/shared-inventory.ts) so it cannot fall behind them,
+ * with `NOT_SHARED_NOTE` as the one-line summary. The same list is what the
+ * confirmation box answers *"what would publishing do?"* with, so the box does
+ * not get the sentence either. One fact, on that card, once.
+ *
+ * **What was lost with it, stated rather than glossed:** *"nothing they do
+ * costs a model call"*, which the inventory only implies by listing Chat,
+ * Search, Remember and Referee as owner-only. It is said outright to the person
+ * who meets it — `visitorSentence` (web/visitor.ts) — and no longer to the
+ * owner. Worth a line back if an owner ever asks whether a link can spend their
+ * money.
+ *
+ * ## Why the visitor's copy is the one that survived
+ *
+ * Because it is the audience with no list to read. And the sentence it was
+ * given was the owner's: *"They never see **your** comments, **your**
+ * conversations"*, on a page whose reader has none, describing themselves in
+ * the third person. The owner's side and the visitor's side of one fact are
+ * meant to be **different sentences** — `SHARING_BADGE` above says why, and
+ * `VIEW_ONLY` is the other half of it — and the way that goes wrong is two
+ * constants drifting a few words apart, as the dock's tooltip did against the
+ * band's ([visitor.ts § markedModes](web/visitor.ts)). One audience, one
+ * sentence, nothing to keep in step.
+ */
+export const SHARED_LINK_CARRIES =
+  "A shared link carries the article, its table of contents, every zoom level, and the reading " +
+  "aids written for it — the summaries, the glossary, the ideas, the quotes. It never carries the " +
+  "comments, conversations, searches or notes of whoever added it.";
 
 /**
  * **The honest limit, and we are the only ones saying it.**

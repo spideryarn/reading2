@@ -163,3 +163,31 @@ describe("what a visitor is told has been built", () => {
     },
   );
 });
+
+/**
+ * **"What a shared link carries", written to the person reading it.**
+ *
+ * This page and the owner's Access & Sharing card drew one constant between
+ * them, and it was the owner's sentence: *"They never see **your** comments,
+ * **your** conversations…"*, shown to a visitor who has none, about themselves
+ * in the third person. Found while fixing the tense on the owner's card,
+ * 2026-09-03.
+ *
+ * `SHARED_LINK_CARRIES` is now written to this page's reader and drawn nowhere
+ * else. The owner's card says the same thing as an itemised list and dropped the
+ * sentence, which is what leaves one audience and one wording with nothing to
+ * keep in step — src/messages.ts § SHARED_LINK_CARRIES, and § SHARING_BADGE for
+ * why the owner's side and the visitor's side of one fact are meant to differ.
+ */
+describe("what a visitor is told a shared link carries", () => {
+  it("does not describe the visitor's own comments as theirs", async () => {
+    await visitor(ALL);
+    const text = host.textContent ?? "";
+
+    expect(text).toContain("A shared link carries the article");
+    expect(text).toContain("whoever added it");
+    /* The owner's second person, on a page no owner is reading. */
+    expect(text).not.toContain("your comments");
+    expect(text).not.toContain("your conversations");
+  });
+});

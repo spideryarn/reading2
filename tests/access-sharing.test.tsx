@@ -575,3 +575,61 @@ describe("turning it off", () => {
     expect(host.textContent).not.toContain("Anyone with the link can read this");
   });
 });
+
+/**
+ * **The prose sentence about what a shared link carries is gone from this card,
+ * in both states**, and it went in two steps on 2026-09-03.
+ *
+ * Greg, on a *private* article's card, where it sat under *"Only you can read
+ * this."* in the present indicative:
+ *
+ * > That's a fair description of what would be true IF it was Public-readable.
+ * > But it's not.
+ *
+ * Two paragraphs contradicting each other on a skim, on the one control in this
+ * app where a state that looks wrong matters most. Taking it off the *shared*
+ * card too is the second step, and the argument is redundancy rather than
+ * truth: there it sat directly above the Inventory, which itemises the same
+ * fact — `ALWAYS_SHARED` and the swept modes on one side, `NEVER_SHARED` and
+ * the rest of the sweep on the other, with `NOT_SHARED_NOTE` as the one-line
+ * summary. src/web/shared-inventory.ts.
+ *
+ * So this card now says what a shared link carries **as a list, once**. The
+ * sentence survives for the one audience with no list to read: the visitor,
+ * in tests/public-metadata-artefacts.test.tsx.
+ */
+describe("what a shared link carries", () => {
+  /* Both states, because the sentence had a different reason for going in each
+     one and either reason coming undone should be a red test. `it.each` over
+     the two rather than two bodies, so a third state cannot be added here
+     without deciding what it says. */
+  it.each([
+    ["private", PRIVATE],
+    ["shared", SHARED],
+  ] as const)("does not draw the prose sentence on a %s article", async (_name, state) => {
+    await mount(state);
+
+    /* **The clause every wording of it has shared**, rather than any one
+       phrasing. The first draft of this test asserted the *new* wording, which
+       the old sentence did not contain — so it passed against the bug it was
+       written for. Green on a bug is worth less than no test.
+       docs/reusable/silent-success.md. */
+    expect(host.textContent).not.toContain("the summaries, the glossary, the ideas, the quotes");
+    expect(host.textContent).not.toContain("carries the article");
+    expect(host.textContent).not.toContain("A visitor sees the article");
+  });
+
+  /**
+   * **And the fact itself did not go with it.** Removing a sentence because a
+   * list says the same thing is only right while the list is there, so this
+   * pins the half that has to survive: on a shared article the owner can still
+   * read what goes out and what does not.
+   */
+  it("still says it as a list, on the shared card", async () => {
+    await mount(SHARED);
+
+    expect(host.textContent).toContain("Anyone with the link gets these");
+    expect(host.textContent).toContain("These stay with you");
+    expect(host.textContent).toContain("never your own work on it");
+  });
+});
