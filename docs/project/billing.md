@@ -30,6 +30,11 @@ lose £90 a month per user. Reader dropped to 20. Greg, 2026-09-02:
 > it can cost £1 to fully process an article, so let's say that the $10 plan gets you 20 articles
 > (which we can always increase later)
 
+**Measured since, and the estimate holds**: an ingest is $0.03–$0.39 depending on length, and an
+article with every mode generated is $0.35–$1.55 —
+[cost-per-article-2026-09-03.md](../../evals/results/cost-per-article-2026-09-03.md), which also
+says which parts of that are the expensive ones.
+
 **Raising a quota is one `UPDATE`** — no deploy, no Stripe object, no migration. That asymmetry is
 deliberate and worth preserving: we can be generous later cheaply, and being generous now is the
 expensive mistake to unwind.

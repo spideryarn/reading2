@@ -537,7 +537,7 @@ free, which was checked in the code before running rather than assumed.
       Calls-made against rows-kept reconciled, so this is the first draw whose product actually
       exists.
 
-### Stage: All modes, all three articles, with repeats where variance lives
+### Stage: All modes, all three articles, with repeats where variance lives ✅ 2026-09-03
 
 **Design settled 2026-09-03** with Fable, then each load-bearing claim re-checked against the code
 by the orchestrator (two of them moved). Greg authorised up to **$20**; the plan below spends
@@ -566,24 +566,24 @@ because the cache is marked *per job*, and there is no entry for a later job to 
   `{kind: "adopted"}` ([`src/jobs.ts`](../../src/jobs.ts) § `enqueue`), whose docstring says
   several such jobs queuing on one article "is the whole of what Greg asked for".
 
-- [ ] **`--all-modes`**: per fixture, one ingest draw, then eight single-mode jobs (`arc`,
+- [x] **`--all-modes`**: per fixture, one ingest draw, then eight single-mode jobs (`arc`,
       `tweets`, `glossary`, `quotes`, `ideas`, `timeline`, `quiz`, `sketch`) against the adopted
       article. One `run.json`, one cleanup. Plus article embeddings and referee stored artefacts.
-- [ ] **`--against <slug>`**: a job on an article that already exists, for the batched-mode
+- [x] **`--against <slug>`**: a job on an article that already exists, for the batched-mode
       scenario. A mode already generated on that article **skips** on its `stepIsDone` stamp
       ([`src/pipeline.ts`](../../src/pipeline.ts)), which the existing fatal `no-spend` finding
       turns into a stop rather than a wrong number — so batched draws must target articles where
       those modes have never run.
-- [ ] **A finding that tests the coldness rather than arguing it.** On a per-mode draw, the
+- [x] **A finding that tests the coldness rather than arguing it.** On a per-mode draw, the
       **earliest call by `startedAt`** having `cacheReadTokens > 0` is **fatal** — allowed under
       `--batched-modes`, where a warm read is the point. Earliest, not any: a later call in the
       same step reading off the first is within-run caching, which Principles keeps as part of
       production cost. This is the whole argument above, made falsifiable.
-- [ ] **Long-article hierarchy: 4 cold draws** — the `--all-modes` ingest is draw 1, plus
+- [x] **Long-article hierarchy: 4 cold draws** — the `--all-modes` ingest is draw 1, plus
       `--repeat 3`. Report median, range, truncation/semantic-failure count, cost conditional on
       success and total paid cost, as *observed variation* (Principles). A fifth draw only if the
       range exceeds ~30% of the median.
-- [ ] **Per-interaction unit costs: driven live, in a new `evals/cost/interactions.ts`** — chat
+- [x] **Per-interaction unit costs: driven live, in a new `evals/cost/interactions.ts`** — chat
       turn, Remember turn, quiz marking, explain, glossary term lookup, search, all four referee
       tasks, dictation, cold and warm reported separately. **Twelve tasks as of 2026-09-03**,
       which is the whole of the Principles inventory: Remember, the glossary lookup and the
@@ -602,7 +602,57 @@ because the cache is marked *per job*, and there is no entry for a later job to 
       `withLedger("eval", () => runAsOwner(EVAL_OWNER_ID, …))` records eval-scoped rows.
       **Correcting the review again**: request-path calls send no effort parameter at all, so the
       moved-constant trap does not literally apply to them — the other three grounds stand.
-- [ ] Run over all three fixtures. Stop & review with Greg: the range, ranked expensive bits.
+- [x] **Ran over all three fixtures, 2026-09-03. $7.35 against $20 authorised, every line at or
+      near its estimate.** The report is
+      [`evals/results/cost-per-article-2026-09-03.md`](../../evals/results/cost-per-article-2026-09-03.md).
+      **An article costs $0.03–$0.39 to ingest and $0.35–$1.55 with every mode generated** — which
+      confirms, from measurement, the estimate the Reader tier was priced against
+      ([billing.md](../project/billing.md)).
+      - **The ingest-once shape held**, and was checked rather than trusted: every per-mode draw
+        recorded `0 cache-read`, on all three fixtures.
+      - **PDF `extract` proved the risk was real.** It read 14,683 cached tokens across its six
+        chunk calls — OpenAI's implicit cache, working. The earliest-call rule allowed the
+        within-run warming and would have stopped a cross-run one, which is the case the shape
+        depended on and could not have argued its way out of.
+      - **Where the money goes is not where the plan expected.** Ingest is 10–21% of a used
+        article; the eight modes are the rest. Ranked on `long-html`: sketch 19%, timeline 16%,
+        hierarchy structure 14%, quiz 12%, ideas 11%. **Output tokens are 61% of all spend and
+        reasoning alone is 36%** — $1.11 of the $3.08 across the three per-mode runs bought
+        thinking nobody sees.
+      - **Cost is strongly sublinear.** 30× the words for 4.5× the cost; the 561-word article is
+        ~3× dearer per word to ingest and ~7× dearer with every mode pressed. A mode's cost tracks
+        what it *writes*, which its own shape sets far more than the article's length does —
+        `sketch` emits 12,973 output tokens on 561 words against 22,845 on 16,855.
+      - **Long-article hierarchy: seven cold draws, six produced a tree.** Cost conditional on
+        success median $0.2138, range $0.2071–$0.2453 (18% spread, inside the ~30% trigger, so four
+        repeats were enough). Recorded as **an observed count and never a rate** — draws 2 and 3
+        were the first two taken and on their own read as 50%.
+      - **The prompt cache is worth more than the appendix said**, everywhere: explain 8.0×,
+        quiz-marking 9.0×, chat 5.7×, remember 5.4×, search 5.2×, against 2.5× and 7× in the
+        historical rows. Those rows straddled the 2026-08-26 breakpoint bug, which is exactly why
+        this stage measured live instead of harvesting them.
+      - **Two guards caught real contamination in flight.** A standalone `--task chat` validation
+        run warmed the cache, so the twelve-task run's "cold" chat round read 43,053 pre-existing
+        tokens; the runner refused the ratio and named the reason, where the unfixed version would
+        have published "cache worth 1.2×". `embeddings` came back **unknown** rather than cold —
+        Voyage reports no cache field.
+      - **Three paid failures, none of them a price.** `referee-claims` $0.2157 and
+        `referee-criterion` $0.0477 both hit `ai-no-room` — reasoning budget exhausted, nothing
+        written — and one hierarchy draw failed at $0.2124. Same family as the hierarchy ceiling:
+        money spent, no artefact.
+- [x] **And it found a live cost bug, which is the thing the eval was for.** The three
+      batched-mode pairs showed the writer paying a cache-write premium (25,428 / 25,428 / 27,239
+      tokens) and the reader reading **zero**, on all three cache groups —
+      [260903c](../postmortems/260903c-the-conditional-article-cache-breakpoint-marks-the-writer-but-never-the-reader.md).
+      `sharesArticleCache` is true only for a step with a *later* sharer, so the **last member of a
+      group — the reader — sends no breakpoint and performs no lookup.** Introduced by `24335207`,
+      *"Only pay to cache the article when somebody is coming to read it"*: the fix for the
+      previous instance of this class created this one. Invisible to every check, and three things
+      were nominally watching — `tests/article-cache-group.test.ts` **asserts the bug as correct**,
+      `evals/prompt-caching.ts` prints the instruction that would have found it, and
+      `evals/cost/report.ts` states the mechanism and applies it to the wrong case. **Fix
+      described, deliberately not applied — Greg's call**; worth $0.1406 of $0.7558 (18.6%), which
+      is 3.6× what deleting the optimisation would save.
 
 #### Code review, GPT Sol: *"not ready for the paid sweep"* — no P0s, five P1s
 
@@ -677,14 +727,14 @@ presses two buttons at once actually pays, against two separate presses. It has 
 would be new material, and [`fixtures.ts`](../../evals/cost/fixtures.ts) says what gets measured is
 a decision. The report must say **561 words**, not "about a thousand".
 
-### Stage: Committed report + docs
+### Stage: Committed report + docs ✅ 2026-09-03
 
-- [ ] `evals/results/cost-per-article-<date>.md`: per-article × per-step table, range,
+- [x] `evals/results/cost-per-article-<date>.md`: per-article × per-step table, range,
       cost-per-1k-words, per-interaction table, variation for long hierarchy, ranked expensive
       bits, exact reproduction command.
-- [ ] Update [`evals/README.md`](../../evals/README.md); check where evals are signposted before
+- [x] Update [`evals/README.md`](../../evals/README.md); check where evals are signposted before
       adding lines elsewhere.
-- [ ] `npm test` + `npm run typecheck`; `npm run lint` on touched files.
+- [x] `npm test` + `npm run typecheck`; `npm run lint` on touched files.
 
 ### Stage: Cost-reduction write-up
 
