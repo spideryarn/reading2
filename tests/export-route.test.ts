@@ -153,11 +153,22 @@ const BLOCK_ID = "spya-exprt2";
  * half: every assertion about them is about this article being invisible, and
  * none of them can pass by their own article turning up instead.
  *
- * Not a row in `auth.users` and it does not need to be — `articles.owner_id`
- * references that table, so seeding a *second* real owner would mean driving
- * GoTrue's admin API and would make this suite fail whenever auth was down
- * rather than whenever isolation broke. The same reasoning, and the same shape,
- * as `OUTSIDER` in tests/owner-isolation.test.ts.
+ * Not a row in `auth.users`, and it does not need to be. **The reason this
+ * comment used to give was wrong**: it said seeding a second owner would mean
+ * driving GoTrue's admin API and would tie this suite to auth being up. It
+ * would not — tests/helpers/seed-auth-user.ts inserts the row directly, over
+ * the same connection as everything else, and touches no service. GPT Sol,
+ * 2026-09-03.
+ *
+ * The real reason is that a foreign key is checked on **write**, and nothing
+ * here writes under `OUTSIDER`: it is only ever the `sub` of a request, so
+ * every query that mentions it has it in a `where` clause. And the 404 is not
+ * this file's only evidence of isolation — the owner goes through the same path
+ * for a 200, and removing the ownership predicate was watched answering 200 for
+ * the outsider too. So a seeded row would neither strengthen nor weaken the
+ * claim. The same shape as `OUTSIDER` in tests/owner-isolation.test.ts, and
+ * both pairs are recorded with their reasons in
+ * tests/store-migration-registry.ts § `OWNER_AUDIT`.
  */
 const OUTSIDER = "0e5c0001-0000-4000-8000-0000000000b9" as OwnerId;
 
