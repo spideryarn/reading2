@@ -616,11 +616,14 @@ function gatesAt(sha: string): void {
       symlinkSync(path.join(ROOT, "node_modules"), path.join(wt, "node_modules"));
     }
 
-    const client = run("npm", ["run", "--silent", "build"], { cwd: wt, env: BUILD_ENV });
-    const api = client.code
-      ? { code: 1, out: "" }
-      : run("npx", ["vite", "build", "--config", "vite.api.config.ts"], { cwd: wt, env: BUILD_ENV });
-    gate("build", client.code === 0 && api.code === 0, () => explainBuildFailure(client.out || api.out));
+    /* One command, because `npm run build` **is** both passes as of 2026-09-03
+       — `build:client` then `build:api`, the same order and the same recipe
+       Vercel's `buildCommand` runs. This used to spell the API build out a
+       second time here, which was the only place a developer could see the
+       whole recipe; now there is one of it and this reads it rather than
+       repeating it. */
+    const built = run("npm", ["run", "--silent", "build"], { cwd: wt, env: BUILD_ENV });
+    gate("build", built.code === 0, () => explainBuildFailure(built.out));
 
     /* Only the tests need the personal state, so only they get it. */
     const envLocal = path.join(ROOT, ".env.local");

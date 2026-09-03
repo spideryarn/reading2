@@ -235,11 +235,22 @@ export function publicSourceUrl(value: string): string | null {
  *
  * Stage 1 already refuses to *fetch* a private destination — `guardAddress` in
  * src/fetch.ts resolves the name and checks every address, which is the real
- * SSRF guard and is far stronger than anything here. But `src/store/import.ts`
- * writes a revision without going through stage 1, so a `final_url` of
- * `http://10.0.0.5/token` or `http://localhost/private` can exist in the
+ * SSRF guard and is far stronger than anything here. But not every revision is
+ * written by stage 1: `copyArtefacts` (src/store/copy-artefacts.ts) copies a
+ * manifest's `url` verbatim, with no fetch and so no `guardAddress`, and
+ * `scripts/db-seed-dev.ts` drives it on every `npm run setup`. So a `final_url`
+ * of `http://10.0.0.5/token` or `http://localhost/private` can exist in a
  * database, and this is the boundary that would publish it to the world. Raised
  * by GPT Sol, 2026-08-30.
+ *
+ * **The writer it was written about has been replaced by a narrower one, and
+ * the reason survived the replacement.** The original was `src/store/import.ts`,
+ * which took any `DATABASE_URL` — production included — and was deleted on
+ * 2026-09-01 (`b73ad746`). Its successor reaches only a local database
+ * (`isLocalDatabaseUrl` in scripts/db-reown-rules.ts) and only the committed
+ * fixture corpus, so what stands between here and a bad URL in a reader's
+ * database is now two guards rather than one. That is a smaller hole, not a
+ * closed one, and it is why this function is still here.
  *
  * **A shape rule, not an address rule**, and deliberately the blunter of the
  * two. The honest version needs DNS — a public name can resolve to 10.0.0.5 —
@@ -255,8 +266,8 @@ export function publicSourceUrl(value: string): string | null {
  *  - **`.local`, `.localhost`, `.internal`**, which have dots and are not public.
  *
  * What it does **not** catch is a public name pointing inward. That is the
- * narrower hole and it is stage 1's to close for everything except an import;
- * saying so here is better than a comment implying this function is a security
+ * narrower hole and it is stage 1's to close for everything it fetches; saying
+ * so here is better than a comment implying this function is a security
  * boundary it cannot be.
  */
 function publishableHost(url: URL): boolean {

@@ -3,8 +3,9 @@
  *
  * ## Why this is not `importArticle`
  *
- * `db:import` is being deleted (docs/plans/260827aa-delete-the-importer.md § C7), and
- * three suites used it purely as a fixture loader. The replacement is not a
+ * `db:import` and src/store/import.ts were deleted on 2026-09-01
+ * (docs/plans/260827aa-delete-the-importer.md § C7), and
+ * three suites had used it purely as a fixture loader. The replacement is not a
  * smaller importer — that would be a second files → Postgres implementation,
  * exercised only by tests and therefore free to drift from the path production
  * actually runs. It is the *real* write path, driven over a fixture:

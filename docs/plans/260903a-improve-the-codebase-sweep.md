@@ -98,12 +98,36 @@ says it every single time, which is precisely the failure
 **The fix, and the simpler option it passes over.** The simple option is to add an api-build step to
 `check.ts` before the test gate. The one chosen instead is to make `npm run build` *be* the whole
 build — both passes, in order — because the full recipe currently lives in `vercel.json` and in a doc
-and nowhere that a developer runs, which is two-ways-to-do-one-thing on the thing that ships. Then
-`vercel.json` reduces to `npm run build`, `check.ts` moves `build` above `test`, and the recipe has
-one home.
+and nowhere that a developer runs, which is two-ways-to-do-one-thing on the thing that ships:
 
-**Risk**: `npm run build` gets slower for everyone who runs it by hand, and `--fast` currently skips
-it. Both acceptable; `--fast` already declares it is not the gate.
+```json
+"build:client": "vite build",
+"build:api": "vite build --config vite.api.config.ts",
+"build": "npm run build:client && npm run build:api"
+```
+
+Then `vercel.json` reduces to `npm run build`, `check.ts` moves `build` above `test`, and the recipe
+has one home.
+
+**The caller the first draft of this missed** — found by the review, and it is the reason the named
+component scripts are there rather than a bare `&&`: `scripts/deploy.ts:619-623` already runs
+`npm run build` and *then* the api build as a separate `run("npx", ["vite", "build", "--config", …])`.
+Left alone it would build the API twice. It collapses to one `run("npm", ["run", "--silent",
+"build"])` and one gate.
+
+**Verified before proposing**: the two builds run clean in this worktree, the api pass takes 402 ms,
+and `tests/pdf-bundle-trace.test.ts` goes 2/2 green with `api-dist/` present. Ordering is sound —
+`readClientShell` needs the client first, both stamps resolve the same commit from `git rev-parse
+HEAD`, Sentry still gets client maps then API maps, and `no-secrets-in-bundle` stays scoped to the
+browser bundle.
+
+**Risk**: `npm run build` gets slower for everyone who runs it by hand (by 400 ms), and `--fast`
+skips it. Both acceptable; `--fast` already declares it is not the gate.
+
+**Also in this stage, because they define `npm run build` as client-only in prose**:
+`docs/project/dev-and-deployment-overview.md`, `docs/project/setup-dev.md`,
+`docs/project/deployment.md`, and the error messages in `scripts/client-shell.ts` that say
+"Run `npm run build` first — the API build compiles dist/index.html into the function".
 
 ---
 
@@ -128,8 +152,16 @@ green.
 
 ## T1.2 · `articleIdFor` is copied six times and one copy has already dropped a check
 
-**Evidence: reproduced** — the six declarations, and the missing call, both re-grepped against this
-tree.
+**Evidence: proved from the code** — the six declarations and the missing call were re-grepped
+against this tree, but nobody has driven a malformed slug through `pg-comments.ts` and watched the
+status come back wrong. The review was right to downgrade this: re-grepping is not reproducing.
+**The stage closes the gap** by writing that red test first —
+
+```ts
+await expect(pgCommentsStore.load("not a slug")).rejects.toMatchObject({ status: 400 });
+```
+
+— watching it fail before the extraction and pass after.
 
 ```
 src/store/pg-chat.ts:105             throwing variant, calls requireSlug
@@ -159,7 +191,7 @@ different-contract copies stay exactly where they are. `lockArticle` goes to the
 **Deletion test**: passes — six callers collapse onto one primitive that lives beside the three
 helpers it composes, and the interface gets smaller, not larger.
 
-## T1.3 · Seven transactions do not pin their isolation level, and nothing would catch an eighth
+## T1.3 · Seventeen transactions do not pin their isolation level, and nothing would catch an eighteenth
 
 **Evidence: proved from the code** for the absence; **hypothesis** for whether it currently misfires.
 
@@ -222,6 +254,25 @@ exposure is a developer's own `data/_ai-calls.jsonl` interleaving after a dev-se
 The reason to do it anyway is that it is a two-line change into machinery that already exists, and
 leaving a named, diagnosed instance of a class the repo has fixed twice is how the third one gets
 written.
+
+### The count, which the first draft of this finding did not do
+
+improve-the-codebase.md says **count every instance before you plan the fix**, and this finding
+arrived as "one variable". The review caught it. `git grep -nE 'let (writing|queue): Promise<.*> =
+Promise\.resolve\(\)' -- src` gives **ten**:
+
+| | |
+|---|---|
+| `src/store/ai-calls-fs.ts:80` | `writing` — **in scope** |
+| `src/store/realtime-sessions-fs.ts:76` | `writing`, the identical append-mutex shape — **in scope**, added after the review |
+| `src/chat.ts:68`, `comments.ts:47`, `glossary-lookups.ts:69`, `profile.ts:317`, `referee-claims-store.ts:60`, `referee-criteria-store.ts:57`, `searches.ts:198`, `shelf.ts:68` | eight `queue` read-modify-write chains — **deferred to [260831b](260831b-finish-the-database-move.md)**, being the filesystem store that move deletes |
+| `src/web/mic-lock.ts:63` | client-side; no module reload, not this class |
+
+Plus the six module-local liveness and locking registries in `src/routes.ts` that a previous sweep
+already named and deferred behind the route split.
+
+**This paragraph exists so nobody reads T1.4 and believes the module-reload class was swept and
+closed.** Two of ten are fixed here; fourteen sites in two named groups are deferred with a reason.
 
 ## T1.5 · A test that would pass a query attributing every comment to every owner
 
@@ -318,7 +369,6 @@ rather than trusting this list.
 | `structuralLeaves` | `evals/hierarchy-structure/model-arms.ts:464` | ~8 | its own comment says "exported for run.ts's stats"; `run.ts` never calls it |
 | `requestOwner` | `src/owner.ts:209` | ~3 | **plus a false comment** naming `src/jobs.ts` as its one caller; `jobs.ts` uses `currentOwnerId()` at 9 sites and this at none |
 | `listUploads` | `src/upload-records.ts:146` | ~3 | **plus a false comment** — "for the sweep, and for tests", neither exists |
-| dead re-exports | `src/store/export.ts:63,64,68` | ~3 | every consumer imports `readRawDocument` / `CorruptRawObject` / `MissingRawObject` / `ArticleNotFound` from the defining module |
 
 **Explicitly not proposed, and why** — so the next sweep does not re-find them:
 
@@ -427,23 +477,53 @@ The cost-tracking work that landed since ([260902g](260902g-cost-tracking-that-c
 built pricing and reporting, but not this.
 
 **Bar it has to clear** (from improve-the-codebase.md): show it would have fired on the actual
-incident, and that it is bounded against alert fatigue. It clears both — one grouped
-`count(distinct run_id)` over `(job_id, step)` on a table of hundreds of rows, printed in
-`npm run cost`, would have shown eleven runs of one `hierarchy` step in the same run that produced
-them. It is a report line, not an alert, so there is no fatigue to bound.
+incident, and that it is bounded against alert fatigue. It clears both — grouping by
+`(job_id, step_name)` and reporting any group with more than one distinct `run_id` would have shown
+eleven runs of one `hierarchy` step in the same run that produced them. It is a report line, not an
+alert, so there is no fatigue to bound.
 
-## T2.2 · What is the SSRF boundary in `src/urls.ts` actually defending against now?
+**A pure fold, not a store query** — the review's correction, and it matters: **the incident lived in
+the filesystem ledger**, so a Postgres-only grouped query would not have fired on it. `npm run cost`
+already loads `AiCallRow[]` into memory, so the right shape is a pure function over the rows, called
+from the existing report before any early return:
 
-**Evidence: hypothesis — and it is a question, not a finding.**
+```ts
+export function duplicateJobSteps(rows: readonly AiCallRow[]) { … }
+```
 
-`src/urls.ts:238` justifies a URL shape rule by saying stage 1's `guardAddress` is far stronger *but*
-`src/store/import.ts` writes a revision without going through stage 1. That file is deleted. So
-either some other path still writes a revision without stage 1 — in which case this boundary needs
-its real reason written down — or nothing does, and the rule is defending against a threat that no
-longer exists.
+Two cases pin it, and the second is what stops it being noise: two rows sharing `jobId`+`stepName`
+with **different** `runId` are reported; two sharing the `runId` as well are **not**, because a step
+legitimately fans out into several calls inside one run.
 
-**This one needs an answer before its comment is edited**, and the answer is a small piece of work
-rather than a text fix. Do not fold it into the T1.6 comment sweep.
+## T2.2 · ~~What is the SSRF boundary in `src/urls.ts` defending against now?~~ — answered, and fixed
+
+**Evidence: proved from the code.** **Answered and applied during this run.**
+
+The question was: `src/urls.ts` justifies a URL shape rule by saying stage 1's `guardAddress` is far
+stronger *but* `src/store/import.ts` writes a revision without going through stage 1 — and that file
+was deleted on 2026-09-01. So either the rule was still load-bearing for a reason nobody had written
+down, or it was defending against a threat that no longer existed.
+
+**It is still load-bearing. The writer moved and got narrower.** Every current writer of
+`article_revisions.finalUrl` was traced back to an entry point:
+
+| writer | entry point | through `guardAddress`? |
+|---|---|---|
+| `fetchDocument` (`src/pipeline.ts`, stage 1) | `POST /api/jobs`, the pipeline CLIs | **yes** — `src/fetch.ts`, and re-checked on every redirect hop |
+| `acquireUpload` (`src/pipeline.ts`, stage 1) | PDF upload | n/a — the manifest carries no URL, deliberately |
+| `copyArtefacts` (`src/store/copy-artefacts.ts`) | `tests/helpers/load-article.ts` → **`scripts/db-seed-dev.ts`**, on every `npm run setup` | **no** — it copies a manifest's `url` verbatim, with no fetch |
+
+**`scripts/` is where the caller was**, which is the trap improve-the-codebase.md names in as many
+words and which four previous audits in this repo have fallen into.
+
+**Not a live defect**: `db-seed-dev.ts` refuses anything but a local database
+(`isLocalDatabaseUrl`, plus a hard refusal on `NODE_ENV=production` / `VERCEL`) and loads only the
+committed fixture corpus, so nothing reader-facing is exposed. The deleted `src/store/import.ts` had
+neither guard and would take any `DATABASE_URL`, production included. So the hole is smaller than it
+was, and not closed — which is exactly why the function stays.
+
+The comment in `src/urls.ts` now says this, and the trailing sentence that said the narrower hole is
+"stage 1's to close for everything except an import" now says "for everything it fetches".
 
 ## T2.3 · Seven streaming handlers hand-roll the same stall timer
 
@@ -460,19 +540,31 @@ src/converse.ts:1335-1373         (+ a per-round variant at 1511-1516)
 Each builds `AbortSignal.timeout(deadline)`, a second `stall` controller restarted by a `touch()`
 closure, and `AbortSignal.any([...])` — same variable names, near-verbatim comments.
 
-The reason this is worth doing rather than tolerating is written in one of the copies.
-`src/explain.ts:494-500` records that the *request / status / spend* half of exactly this was already
-consolidated into `src/ai-call.ts`, and why:
+The argument *for* doing it is written in one of the copies. `src/explain.ts:494-500` records that
+the *request / status / spend* half of exactly this was already consolidated into `src/ai-call.ts`:
 
 > six callers each keeping their own copy … is how three of them ended up differing
 
-That consolidation stopped one layer short of the timer. **Deletion test**: passes — seven callers,
-one helper (`withStallTimeout(timeoutMs, stallMs, signal?) → {signal, touch}`), and the concept gets a
-name where `ai-call.ts` already owns the invariant.
+## …and it is **deferred**, on the review's argument, which is better than mine
 
-**Tier 2 rather than Tier 1** because it is an extraction across seven request paths: it gets a
-characterisation test *before* the extraction, extraction and behaviour change in separate commits,
-and its own review.
+I asked for this one explicitly, and the answer was no. Three reasons, all of which I accept:
+
+1. **No drift.** Seven stable copies are not evidence for an abstraction. The adjacent transport
+   code's *historical* drift is not evidence that this timer idiom has drifted — and the sweep's own
+   rule is that copies stable for months are usually honest, and merging them couples things that
+   were independent.
+2. **My proposed signature was wrong**, which is the tell. `withStallTimeout(…) → {signal, touch}`
+   gives no way to clear the live timeout. Every current caller has a `finally { clearTimeout(…) }`;
+   removing that without a `dispose()` leaks the timer and can hold the process open. The honest
+   minimum is `streamClocks({timeoutMs, stallMs, signal}) → {signal, touch, dispose}` — and it must
+   *also* expose the deadline and stall signals separately, because callers use them to classify
+   which kind of failure they had.
+3. That is already enough interface for the YAGNI test to fail today. **A helper that has to hand
+   back four things is not concentrating complexity behind a smaller interface; it is relocating it.**
+
+**Revisit when there is a first behaviour change to make, or the first actual drift.** Recorded here
+so the next sweep finds the rejection rather than re-proposing it — which is the whole point of
+writing down what we decided not to do.
 
 ---
 
@@ -545,9 +637,10 @@ Each ends committable, green and deployable. Parallel stages are constrained by
 ### Stage 1 — the gates (serial, first)
 
 T0.1, T1.1, T1.7 and the code half of T1.10. Files: `scripts/check.ts`, `package.json`,
-`vercel.json`, `knip.jsonc`, `docs/project/static-analysis.md`,
-`docs/project/code-quality-overview.md`, `docs/project/deployment.md`,
-`docs/project/version-control.md`.
+`vercel.json`, `knip.jsonc`, **`scripts/deploy.ts`** (the double-build the review found),
+`scripts/client-shell.ts` (two error messages), `docs/project/static-analysis.md`,
+`docs/project/deployment.md`, `docs/project/dev-and-deployment-overview.md`,
+`docs/project/setup-dev.md`, `docs/project/version-control.md`.
 
 **Done looks like**: `npm run check` exits 0 on a clean tree with `committed` as a gate, knip's four
 self-inflicted findings are gone, and `check-staged-revert` is a named npm script referenced from
@@ -555,54 +648,111 @@ the commit recipe. This goes first because every later stage's evidence is a `ch
 
 ### Stage 2 — three lanes in parallel
 
+The review rejected the first cut of this table: it assigned `src/store/ai-calls-fs.ts` to two lanes
+at once and swallowed 2b's natural test file inside a `tests/store-*.test.ts` wildcard. **No lane
+owns a wildcard. Every file is named, and every file appears exactly once.**
+
 | lane | items | files |
 |---|---|---|
-| **2a — store** | T1.2, T1.3 | `src/store/pg.ts`, `pg-comments.ts`, `pg-chat.ts`, `pg-searches.ts`, `pg-referee-claims.ts`, `pg-referee-criteria.ts`, `pg-lookups.ts`, `pg-revisions.ts`, `pg-visibility.ts`, `pg-jobs.ts`, `tests/store-*.test.ts`, the new isolation test |
-| **2b — the ledger, the tautology, the target** | T1.4, T1.5, T2.1, T1.11 | `src/store/ai-calls-fs.ts`, `src/process-state.ts`, `tests/admin-queries.test.ts`, `scripts/ai-cost.ts`, `src/cost-report.ts`, `scripts/db-reown.ts`, `scripts/db-seed-dev.ts`, `scripts/db-migrate.ts`, `scripts/db-check.ts`, `scripts/db-corpus-readiness.ts`, `scripts/db-repair-migration-ledger.ts` |
-| **2c — dead code and false comments** | T1.8, T1.6 | `src/owner.ts`, `src/upload-records.ts`, `src/web/perf.ts`, `src/anthropic-call.ts`, `evals/hierarchy-structure/model-arms.ts`, `src/notes.ts`, `src/messages-stream.ts`, `src/pipeline.ts` (comments only), `src/web/Masthead.tsx`, `src/web/Metadata.tsx`, `src/db/schema.ts`, `src/library-scalars.ts`, `src/parse-json.ts`, `src/urls.ts` (T2.2 only — see below), `docs/project/design-css-overview.md`, `docs/reusable/rename-or-move.md` |
+| **2a — store** | T1.2, T1.3 | `src/store/pg.ts`, `pg-comments.ts`, `pg-chat.ts`, `pg-searches.ts`, `pg-referee-claims.ts`, `pg-referee-criteria.ts`, `pg-lookups.ts`, `pg-revisions.ts`, `pg-visibility.ts`, `pg-jobs.ts`, `src/store/export.ts` (citations only), `docs/project/sql.md`; tests: the new isolation test, the new `pg-comments` slug test, and any existing `tests/store-*.test.ts` **it names before starting** |
+| **2b — the ledger, the tautology, the target** | T1.4, T1.5, T2.1, T1.11 | `src/store/ai-calls-fs.ts`, `src/store/realtime-sessions-fs.ts`, `src/process-state.ts`, `src/ai-spend.ts`, `src/cost-report.ts`, `scripts/ai-cost.ts`, `scripts/db-reown.ts`, `scripts/db-seed-dev.ts`, `scripts/db-migrate.ts`, `scripts/db-check.ts`, `scripts/db-corpus-readiness.ts`, `scripts/db-repair-migration-ledger.ts`, `scripts/db-reown-rules.ts`; tests: `tests/admin-queries.test.ts` and the new lock test |
+| **2c — dead code and false comments** | T1.8, T1.6 | `src/owner.ts`, `src/upload-records.ts`, `src/web/perf.ts`, `src/anthropic-call.ts`, `evals/hierarchy-structure/model-arms.ts`, `src/notes.ts`, `src/messages-stream.ts`, `src/pipeline.ts` (comments only), `src/web/Masthead.tsx`, `src/web/Metadata.tsx`, `src/db/schema.ts`, `src/library-scalars.ts`, `src/parse-json.ts` |
 
-**Overlaps, and how they are resolved.** Non-overlapping file sets is the constraint, not
-independent ideas:
+**The rules that make the three safe to run at once:**
 
-- 2c's citation sweep touches `src/store/pg.ts`, `pg-revisions.ts`, `artifacts-pg.ts`, `export.ts`
-  and `data-root.ts`, which 2a and 2b also edit. **2a owns every file under `src/store/` for the
-  duration.** 2c produces the store-file citation list and hands it to 2a to apply; 2c edits nothing
-  under `src/store/`. That also moves T1.8's `src/store/export.ts` re-export deletion into 2a.
-- 2b owns every `scripts/db-*.ts`; 2c owns none.
+- **2c edits nothing under `src/store/`.** Its citation sweep reaches `pg.ts`, `pg-revisions.ts`,
+  `artifacts-pg.ts`, `export.ts` and `data-root.ts`; it produces that list and hands it to 2a, which
+  applies it. `src/store/ai-calls-fs.ts` and `realtime-sessions-fs.ts` belong to **2b alone** —
+  2a does not open them.
+- **2b owns every `scripts/db-*.ts`**; neither other lane touches `scripts/`.
+- **`src/urls.ts` (T2.2) belongs to no lane** — the orchestrator did it, before the lanes ran.
+- Each lane **names every test file it will edit** before it starts, rather than claiming a glob.
 
-### Stage 3 — the extraction, the tidyups, and the question
+### Stage 3 — the client tidyups
 
-T2.3 (the stall-timer extraction, with its characterisation test and its own review), T1.9, and
-T2.2 — the SSRF question, which needs an answer before an edit and may end as a finding rather than
-a change.
+T1.9 only. `src/web/ChatDialog.tsx`, `AnnotateDialog.tsx`, `CommentDialog.tsx`, `App.tsx`,
+`Dock.tsx`, `params.ts`. T2.3 is deferred (see above) and T2.2 is done.
 
 ### Deferred for Greg — questions, not work
 
-Per the run's instruction to defer anything needing a decision rather than guess:
+Per the run's instruction to defer anything needing a decision rather than guess. The review added
+the first item's scope: **the important-doc process covers more than CLAUDE.md.** Per CLAUDE.md, it
+is *"this file above all, the seven entry points, anything in `docs/reusable/`"*.
 
-1. **The CLAUDE.md line for T1.10.** CLAUDE.md's wording is a rule, so it goes through
-   [edit-important-docs.md](../reusable/edit-important-docs.md) with the before and after shown, one
-   approved change. Everything else in T1.10 lands without it.
+1. **The doc edits whose wording is a rule.** Prepared as exact before/after proposals, **written
+   but not committed**, for one approved set:
+   - `CLAUDE.md` — the `check-staged-revert` line in the commit recipe (T1.10)
+   - `docs/reusable/rename-or-move.md` — the deletion case (T1.6)
+   - `docs/project/code-quality-overview.md` — `committed` moving from advisory to gate (T1.1)
+   - `docs/project/design-css-overview.md` — the "~1200 lines" correction (T1.6). The bare number is
+     a factual fix; the closing open question it appears inside is closer to intent, so both go in
+     the proposal.
+
+   The corresponding code stages **may not claim docs-complete** while these are pending, and the
+   plan says so rather than quietly landing them.
 2. **`DELETE /api/glossary/:slug`** — the "start again" button is a 501 on the deployed app, tracked
    and tested, blocked on whether a published revision may be mutated
    ([260826e](260826e-postgres-storage-implementation.md)). A product decision.
 3. **T3.2, `styles.css` at 12,830 lines.** The doc already calls this open; the sweep found no drift
    inside it. Not an engineering defect.
 
+### What the review says this sweep could not see
+
+Recorded so the next run starts here rather than rediscovering it. **Module re-evaluation during a
+live request** is the shape this sweep called "sound" in the request path without carrying forward
+the qualification the cost-storm postmortem already made about `routes.ts`'s registries and the
+filesystem queues (see T1.4's count). The adversarial test nobody has written is a
+`vi.resetModules()` case that *begins* work through one module copy and *retries or stops* through
+another. That belongs in its own plan, not this one.
+
+The other admitted blind spots stand and static reading cannot clear any of them: overlapping
+database transactions, provider streams that end without throwing, the behaviour of generated and
+deployed artefacts, and anything visible only in a browser.
+
 ### Not doing, and why
 
 - The 230 over-exported symbols (T1.8): mechanical, zero line count, high diff noise.
+- **`src/store/export.ts`'s re-exports** — the first draft called these dead and **it was wrong**.
+  `tests/store-export-raw.test.ts` pulls `MissingRawObject` and `CorruptRawObject` out of
+  `export.js` by *dynamic* destructured import, which the audit's grep did not see. `export.ts`'s own
+  comment names that test file. Two of the four (`readRawDocument`, `ArticleNotFound`) genuinely have
+  no importer, but dropping an export keyword for no line count is the work this plan declines
+  everywhere else. **Left alone.**
+- The stall-timer extraction (T2.3): deferred, with the argument recorded above.
 - Splitting `styles.css` or `App.tsx`: T3.2, T3.3 — one is Greg's call, one is already refused.
 - Deleting any `*-fs.ts` adapter: blocked behind 260831b Stage D, for a stated reason.
+- The eight `queue` read-modify-write chains and the six `routes.ts` registries (T1.4's count):
+  deferred to the database move and the route split respectively, both already-named plans.
 - Any change to the remote database: out of scope for an unattended run, by CLAUDE.md.
 
 ---
 
 ## Progress
 
-- [ ] Plan reviewed by GPT Sol
+- [x] Plan reviewed by GPT Sol — **"not ready"**, and right on both counts. Re-cut below.
+- [x] T2.2 — the SSRF question: answered, and the comment corrected
 - [ ] Stage 1 — gates
 - [ ] Stage 2a — store
 - [ ] Stage 2b — ledger, tautology, target
 - [ ] Stage 2c — dead code and false comments
-- [ ] Stage 3 — stall timer, client tidyups, SSRF question
+- [ ] Stage 3 — client tidyups
+- [ ] The four important-doc edits, prepared and awaiting Greg
+
+## What the review changed
+
+`260903a-improve-the-codebase-sweep-review-sol.md`. It returned **not ready** and the two reasons it
+gave were both real, so this section records what moved rather than burying it:
+
+| | |
+|---|---|
+| **T1.8 would have deleted live exports** | `tests/store-export-raw.test.ts` imports two of them dynamically. Dropped from the plan. The audit grep missed a destructured `await import(...)` — and `export.ts`'s own comment names that test file, so the codebase said so and we still missed it. |
+| **Stage 2's lanes collided** | `src/store/ai-calls-fs.ts` was in two lanes; a `tests/store-*.test.ts` wildcard swallowed another lane's test. Re-cut with every file named once and no globs. |
+| **T1.4 counted one instance of a ten-instance idiom** | The sweep's own "count every instance" rule, broken by the sweep. Now counted: two fixed, fourteen deferred with reasons. |
+| **T1.3's heading said seven, its own list said seventeen** | Heading corrected. |
+| **T1.2's evidence state was overstated** | Re-grepping is not reproducing. Downgraded, and the stage now writes the red test that would earn the word. |
+| **T2.1 would not have caught its own incident** | The incident was in the *filesystem* ledger; a Postgres query would have missed it. Now a pure fold over `AiCallRow[]`. |
+| **T0.1's fix missed a caller** | `scripts/deploy.ts` already runs both builds, so the naive change would build the API twice. |
+| **T2.3 should not be built** | Accepted — see the argument above, which is better than the one I had for doing it. |
+| **The approval scope was too narrow** | Four important docs, not one. |
+
+Findings I checked and did not act on: none — every one of the nine held up against the tree.

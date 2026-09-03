@@ -387,9 +387,13 @@ function scrubReserved(root: ParentNode): void {
  *
  * `src/blocks.ts` (see the loop over `authored`, around the `renamed` map) is
  * the authority on this rule and states it in the same words. It is duplicated
- * here — and in `src/web/internal-links.ts` and `src/graph.ts` — because each
- * reads a different shape of input; that duplication is what produced the bug,
- * and unifying it is a change to four call sites rather than to this stage.
+ * here and in `src/web/internal-links.ts`, which gets it from `querySelector`
+ * returning the first match rather than from a loop, because each reads a
+ * different shape of input; that duplication is what produced the bug, and
+ * unifying it is a change to three call sites rather than to this stage.
+ * (This used to name a fourth, `src/graph.ts`. No such file has ever existed —
+ * `git log --all` is empty for it — and `src/web/graph.ts` is about tf-idf
+ * edges, not fragments. Corrected 2026-09-03.)
  */
 function indexTargets(doc: Document): Map<string, Element> {
   const byName = new Map<string, Element>();

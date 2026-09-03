@@ -25,9 +25,10 @@
  *     host (src/urls.ts). Before 2026-08-30 it was wider still: no visitor
  *     received a `url` at all, so *every* shared web article would have told a
  *     stranger it was uploaded.
- *  2. **For an owner.** `src/api.ts` tolerates a missing `meta.json` and
- *     `src/store/import.ts` accepts a revision with no URL in the metadata or
- *     the manifest, either of which is an ordinary web article with no address.
+ *  2. **For an owner.** `src/api.ts` tolerates a missing `meta.json` and a
+ *     revision may be published with neither `requested_url` nor `final_url`
+ *     (src/db/schema.ts), either of which is an ordinary web article with no
+ *     address.
  *     GPT Sol found this one after the first version had shipped past it.
  *
  * So the mark says "uploaded" on the evidence of `meta.source === "pdf"` and
@@ -175,9 +176,10 @@ describe("the mark beside the title", () => {
 
   /**
    * **"No URL" is not "uploaded", even for an owner**, and this is the case that
-   * first version got wrong. `src/api.ts` tolerates a missing `meta.json` and
-   * `src/store/import.ts` takes a revision with no URL in metadata or manifest,
-   * either of which hands an owner an ordinary web article with no address. The
+   * first version got wrong. `src/api.ts` tolerates a missing `meta.json` and a
+   * revision may be published with neither `requested_url` nor `final_url`
+   * (src/db/schema.ts), either of which hands an owner an ordinary web article
+   * with no address. The
    * mark used to tell them they had uploaded it — a claim about something they
    * did, made out of a gap in our own files. GPT Sol, 2026-08-30.
    */
