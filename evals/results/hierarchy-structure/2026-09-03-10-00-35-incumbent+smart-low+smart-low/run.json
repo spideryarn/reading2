@@ -1,0 +1,290 @@
+{
+  "startedAt": "2026-09-03T10:00:36.287Z",
+  "commit": "2568d142e0d3aeef0703c231f30032586ef87451",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "incumbent",
+      "kind": "one-call",
+      "comparison": "baseline",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "medium"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-low",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-low",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    }
+  ],
+  "results": [
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 1,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 136
+        },
+        "parts": {
+          "count": 7,
+          "words": [
+            1385,
+            871,
+            1532,
+            2511,
+            1553,
+            1692,
+            3093
+          ],
+          "balanceCv": 0.38359828573016475
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 5.085714285714285,
+          "max": 10,
+          "within5to9": 0.5428571428571428
+        },
+        "headings": {
+          "boundaries": 26,
+          "boundariesOnHeadings": 0.5769230769230769,
+          "headingsCut": 0.625,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.34285714285714286,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 35,
+          "meanWords": 3.6285714285714286,
+          "within2to6": 0.8571428571428571,
+          "copiedHeadings": 12,
+          "retention": 0.717391304347826
+        },
+        "gists": {
+          "count": 35,
+          "coverage": 1,
+          "meanWords": 25.4,
+          "multiSentence": 0,
+          "templateRepetition": 0.05714285714285714,
+          "retention": 0.5583338455372762
+        }
+      },
+      "calls": [
+        {
+          "ms": 145820,
+          "inputTokens": 28625,
+          "outputTokens": 16492,
+          "reasoningTokens": 11971,
+          "generationId": "gen-1788429636-VTgi9kT97BBRggqyCKiv",
+          "costUsd": 0.22217,
+          "providerCostUsd": 0.22217
+        }
+      ],
+      "repaired": {
+        "ranges": 5,
+        "blocks": 6,
+        "largest": 2,
+        "where": [
+          "root > child 2 > child 2 (overlap, 1)",
+          "root > child 7 > child 1 (gap, 1)",
+          "root > child 7 > child 2 (gap, 1)",
+          "root > child 7 > child 4 (gap, 2)",
+          "root > child 7 > child 7 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      }
+    },
+    {
+      "arm": "smart-low",
+      "comparison": "isolated",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 2,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "threw",
+      "error": "The node at root > child 7 > child 1 has a range that runs backwards — its start block comes 1 block(s) after its end block in the article.",
+      "calls": [
+        {
+          "ms": 78125,
+          "inputTokens": 28625,
+          "outputTokens": 7823,
+          "reasoningTokens": 4624,
+          "generationId": "gen-1788429785-mJkpL7ncSN9zhEIK2ZiK",
+          "costUsd": 0.13548,
+          "providerCostUsd": 0.13548
+        }
+      ],
+      "repaired": {
+        "ranges": 4,
+        "blocks": 6,
+        "largest": 2,
+        "where": [
+          "root > child 7 (gap, 2)",
+          "root > child 6 > child 2 (gap, 1)",
+          "root > child 6 > child 4 (gap, 1)",
+          "root > child 6 > child 4 (short, 2)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      }
+    },
+    {
+      "arm": "smart-low",
+      "comparison": "isolated",
+      "slug": "gwern-scaling-long",
+      "run": 1,
+      "callOrder": 3,
+      "blocksSha256": {
+        "measured": "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+        "manifest": null,
+        "matchesManifest": null
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "gwern-scaling-long",
+        "blocks": 184,
+        "bodyBlocks": 143,
+        "headingBlocks": 24,
+        "fragmentBlocks": 6,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 134
+        },
+        "parts": {
+          "count": 7,
+          "words": [
+            1385,
+            871,
+            1532,
+            2511,
+            3245,
+            3076,
+            17
+          ],
+          "balanceCv": 0.6106765687671675
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 5.612903225806452,
+          "max": 15,
+          "within5to9": 0.3225806451612903
+        },
+        "headings": {
+          "boundaries": 22,
+          "boundariesOnHeadings": 0.6818181818181818,
+          "headingsCut": 0.625,
+          "l1OnHeadings": 0.8333333333333334,
+          "sourceHeadingShare": 0.3870967741935484,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 29,
+            "words": 2507
+          }
+        },
+        "titles": {
+          "count": 31,
+          "meanWords": 2.5806451612903225,
+          "within2to6": 0.8064516129032258,
+          "copiedHeadings": 13,
+          "retention": 0.7592592592592592
+        },
+        "gists": {
+          "count": 31,
+          "coverage": 1,
+          "meanWords": 20.580645161290324,
+          "multiSentence": 0,
+          "templateRepetition": 0.06451612903225806,
+          "retention": 0.5488734743900529
+        }
+      },
+      "calls": [
+        {
+          "ms": 65960,
+          "inputTokens": 28625,
+          "outputTokens": 6716,
+          "reasoningTokens": 3577,
+          "generationId": "gen-1788429863-QzDDvNPKetIaTUDEzkjp",
+          "costUsd": 0.12441,
+          "providerCostUsd": 0.12441
+        }
+      ],
+      "repaired": {
+        "ranges": 8,
+        "blocks": 8,
+        "largest": 1,
+        "where": [
+          "root > child 4 (gap, 1)",
+          "root > child 7 (gap, 1)",
+          "root > child 3 > child 2 (short, 1)",
+          "root > child 6 > child 1 (gap, 1)",
+          "root > child 6 > child 2 (gap, 1)",
+          "root > child 6 > child 6 (short, 1)",
+          "root > child 7 > child 2 (gap, 1)",
+          "root > child 7 > child 3 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 7 > child 1",
+          "root > child 7 > child 2",
+          "root > child 7 > child 3"
+        ]
+      }
+    }
+  ]
+}
