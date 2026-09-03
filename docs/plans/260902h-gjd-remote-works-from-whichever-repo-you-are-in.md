@@ -771,3 +771,17 @@ into its own repo · per-session worktrees on the box · a second Unix user.
   from before today left 23 staged `.env.local` copies under `$TMPDIR/gjd-remote-env-*` (15 from
   2026-08-31 with real local-dev credentials, 8 from today's throwaway runs with fake values) — the
   bug is fixed; the leftovers are Greg's to delete.
+- 2026-09-03 — **Post-landing review and the road to Stage 5.** hellozenno's `main` pushed
+  (`62e7c54`); the 23 staged env copies deleted; the primary checkout pulled and `npm install`ed,
+  so the shim is the new tool (`gjd-remote resolve` → `spideryarn/reading2`, found by origin).
+  GPT Sol reviewed the landing fixes (`…-stage4-fixes-review-sol.md`): **go**, with two
+  should-fixes, both confirmed and fixed here — the model was still asked about every name when
+  one was undecided (now only the undecided, unblocked ones, unless `--propose`), and a failed
+  `scp` inside `sendEnvPayload` skipped the `finally` because `die()` is `process.exit`
+  (`stageAndSend` now returns the failure and dies after the cleanup). Sol's third, low finding —
+  no injected-transport test for `sendEnvPayload` itself — is deferred: it lives in the
+  `main()`-on-import file. Then `gjd-remote provision` refused: cloud-init's first-boot status on
+  the box is `error` for ever (the pre-split `runcmd`), and the wait gate added on 2026-09-01 had
+  never been run against this box. `cloudInitGate` now reads the provision status file as a second
+  witness — tests red first, then green;
+  [hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md) says why.

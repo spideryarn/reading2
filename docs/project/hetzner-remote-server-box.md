@@ -144,6 +144,16 @@ Two things follow, and both are in
 [infra/hetzner/README.md § Why provisioning is a separate command](../../infra/hetzner/README.md#why-provisioning-is-a-separate-command):
 `cloud-init: done` now means *bootstrapped*, and cloud-init owns the bootstrap dependencies forever,
 because it is baked into the machine at creation and never runs again.
+
+**`cloud-init status` is first-boot history, not news.** It never changes after that boot, and the
+current box's first boot ran the old, pre-split `runcmd` and recorded `error` for good — so a
+provision that waited on cloud-init's verdict alone could never run there, and on 2026-09-03 it
+refused. `gjd-remote provision` now reads the status file as a second witness: a `PROVISION OK`
+written after the boot proves the box was bootstrapped enough for the script to reach its last
+line, and that outranks the first boot's verdict. Still refused: cloud-init still running, and a
+bad first boot with no completed provision behind it. `cloudInitGate` in
+[`scripts/gjd-remote-provision.ts`](../../scripts/gjd-remote-provision.ts).
+
 ## Which repo, and where on the box
 
 `gjd-remote` drives **whichever repo you are standing in**, and there is no default repo any more.

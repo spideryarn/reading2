@@ -102,6 +102,37 @@ export function cloudInitVerdict(output: string): Verdict {
 }
 
 /**
+ * Whether the box is bootstrapped enough to provision — the wait's verdict, read
+ * against what provision.sh has recorded since.
+ *
+ * `cloud-init status` reports the FIRST boot and never changes afterwards. The
+ * real box's first boot ran the old, pre-split runcmd and recorded `error` for
+ * good, and provision.sh has completed on it since — so a gate on the verdict
+ * alone could never pass there, and on 2026-09-03 it did not. What provisioning
+ * needs is a bootstrapped box, and a `PROVISION OK` written after the boot is
+ * the proof of one: the script could not have got to its last line otherwise.
+ *
+ * Two refusals survive on purpose: cloud-init still running (the wait's other
+ * job, and a status file says nothing about *this* boot's progress), and a bad
+ * first boot with no completed provision behind it.
+ */
+export function cloudInitGate(output: string, priorReport: string): Verdict {
+  const v = cloudInitVerdict(output);
+  if (v.ok) return v;
+  const finished = /rc=\d+\s*$/.test(output.trim());
+  if (!finished) return v;
+  if (!/^PROVISION OK$/m.test(priorReport)) return v;
+  const ranAt = /^ran:\s*(\S+)/m.exec(priorReport)?.[1] ?? "an unrecorded date";
+  const status = /status:\s*(\S+)/.exec(output)?.[1] ?? "error";
+  return {
+    ok: true,
+    why:
+      `cloud-init's first boot ended in "${status}", but provision.sh has completed on this box since ` +
+      `(${ranAt}) — that record, not first-boot history, is what says it is bootstrapped`,
+  };
+}
+
+/**
  * The root shell that installs the script and runs it.
  *
  * Built here rather than inline because it is the most quoting-dense thing in

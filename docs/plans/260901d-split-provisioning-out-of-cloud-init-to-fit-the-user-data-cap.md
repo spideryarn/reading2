@@ -83,6 +83,11 @@ one box.
      reachability retry first — refusing immediately on a changed host key or an auth failure rather
      than retrying — and only then `cloud-init status --wait`. Its exit codes carry meaning: `0` is
      done, `2` is "done, with recoverable errors" and is a refusal here, and a timeout is a refusal.
+     *Amended 2026-09-03:* the verdict describes the first boot for ever, and the box this was
+     built for had already recorded `error` on its first boot before the split — so a bad verdict
+     is overridden by a `PROVISION OK` in the status file written since (`cloudInitGate`);
+     "still running" and "bad boot, never provisioned" stay refusals.
+     [hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md#building-a-box).
    - **Stage in `/tmp`, install to `/usr/local/sbin`, run from there.** Not from `/home`:
      `provision.sh` bind-mounts the volume over `/home` partway through its own run, so a script
      executing from under `/home/greg` would have `$0` change meaning underneath it. It would also

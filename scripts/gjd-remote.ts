@@ -59,7 +59,7 @@ import {
   sessionRepo,
   sessionState,
 } from "./gjd-remote-tmux.js";
-import { buildProvisionRunner, cloudInitVerdict, provisionVerdict } from "./gjd-remote-provision.js";
+import { buildProvisionRunner, cloudInitGate, provisionVerdict } from "./gjd-remote-provision.js";
 import { declaredServers, mcpVerdict } from "./gjd-remote-mcp.js";
 import { parseDuration, sshInvocation, waitPreamble } from "./gjd-remote-run.js";
 import {
@@ -2781,12 +2781,19 @@ function sendEnvPayload(target: Target, local: string, payload: EnvPayload): voi
   // copy is unavoidable; leaving it in /tmp until the next reboot is not. The
   // `finally` removes the directory this call created and nothing else, by the
   // name `mkdtempSync` returned.
+  //
+  // The failure comes back as a value and dies AFTER the `finally`, because
+  // `die()` is `process.exit`, and `process.exit` does not run `finally` blocks
+  // — so a `die()` inside the `try` left the staged copy behind on exactly the
+  // path that was meant to be covered (GPT Sol, post-landing review, finding 2).
   const stage = mkdtempSync(path.join(tmpdir(), STAGE_PREFIX));
+  let failure: string | undefined;
   try {
-    stageAndSend(stage, payload, dir, dest);
+    failure = stageAndSend(stage, payload, dir, dest);
   } finally {
     rmSync(stage, { recursive: true, force: true });
   }
+  if (failure !== undefined) die(failure);
 
   // BYTES first, meaning second. The readback used to go straight through the
   // parser, which is the one comparison that cannot see what the parser
@@ -2826,7 +2833,12 @@ const STAGE_PREFIX = "gjd-remote-env-";
 /** Write the payload into `stage` and get it onto the box, atomically. Split out
  *  only so that the removal of `stage` can be a `finally` around the whole of
  *  it — including the `die` paths, which throw. */
-function stageAndSend(stage: string, payload: EnvPayload, dir: string, dest: string): void {
+/**
+ * Stage the file and move it into place on the box. Returns the failure rather
+ * than dying on it, so the caller's `finally` gets to remove the staged copy
+ * first: nothing in here may call `die()` or an `ssh()` that does.
+ */
+function stageAndSend(stage: string, payload: EnvPayload, dir: string, dest: string): string | undefined {
   const staged = path.join(stage, ".env.local");
   writeFileSync(staged, payload.text, { encoding: "utf8", mode: 0o600 });
 
@@ -2836,16 +2848,22 @@ function stageAndSend(stage: string, payload: EnvPayload, dir: string, dest: str
   // whereas chmod-after-scp leaves a window in which a world-readable copy of
   // every credential is sitting in the repo. The chmod after the copy is belt
   // and braces, not the mechanism.
-  ssh(`umask 077 && : > ${shq(tmp)}`);
+  const made = sshRun(`umask 077 && : > ${shq(tmp)}`);
+  if (made.status !== 0) return `ssh failed (${made.status}): ${lastWords(made.stderr)}`;
   const sent = spawnSync("scp", ["-q", ...SSH_OPTS, ...sshMasterOpts(), staged, `${HOST()}:${tmp}`], { encoding: "utf8" });
   if (sent.status !== 0) {
     ssh(`rm -f ${shq(tmp)}`, { check: false });
-    die(`scp failed: ${(sent.stderr || "").trim()}`);
+    return `scp failed: ${(sent.stderr || "").trim()}`;
   }
   // One command: chmod, then rename over the destination. rename(2) within a
   // directory is atomic, so a reader on the box sees the old file or the new
   // one and never a half-written one.
-  ssh(`chmod 600 ${shq(tmp)} && mv -f ${shq(tmp)} ${shq(dest)}`);
+  const moved = sshRun(`chmod 600 ${shq(tmp)} && mv -f ${shq(tmp)} ${shq(dest)}`);
+  if (moved.status !== 0) {
+    ssh(`rm -f ${shq(tmp)}`, { check: false });
+    return `ssh failed (${moved.status}): ${lastWords(moved.stderr)}`;
+  }
+  return undefined;
 }
 
 /**
@@ -4800,7 +4818,11 @@ function waitForCloudInit(seconds: number): void {
     encoding: "utf8",
     timeout: (seconds + 30) * 1000,
   });
-  const verdict = cloudInitVerdict(`${r.stdout ?? ""}`);
+  // The status file is the second witness: cloud-init reports the first boot
+  // for ever, and this box's first boot went wrong before provision.sh was
+  // split out of it. See cloudInitGate.
+  const prior = ssh(`sudo cat /var/log/gjd-provision-status 2>/dev/null || true`, { check: false });
+  const verdict = cloudInitGate(`${r.stdout ?? ""}`, prior);
   if (verdict.ok) {
     console.log(green(`✓ ${verdict.why}`));
     return;
