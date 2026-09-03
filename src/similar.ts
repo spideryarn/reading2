@@ -47,6 +47,7 @@ import { dot, EMBEDDING_MODEL, embedAll, normalise } from "./embeddings.js";
 import { isEmbeddable } from "./block-policy.js";
 import { hashBlocks, structureHash } from "./source-hash.js";
 import { log } from "./log.js";
+import { processSingleton } from "./process-state.js";
 
 /**
  * How many pairs to send back — **the best ones in the article, globally.**
@@ -181,8 +182,25 @@ const RECIPE = `v3:${EMBEDDING_MODEL}:${MIN_WORDS}:${MAX_BLOCKS}:${MAX_CHARS}:${
 
 /** `${slug}:${recipe}:${blocks}:${structure}` → the answer. */
 const CACHE = new Map<string, SimilarResponse>();
-/** The same key → the request in flight, so N readers do not buy N copies. */
-const INFLIGHT = new Map<string, Promise<SimilarResponse>>();
+/**
+ * The same key → the request in flight, so N readers do not buy N copies.
+ *
+ * **Kept on the process rather than the module, because that sentence is about
+ * money.** A Vite reload re-evaluates every server module inside the *same*
+ * process without cancelling the request in flight
+ * ([process-state.ts](process-state.ts)), so a plain module-scope map is empty
+ * in the second copy and the next reader buys a second set of embeddings while
+ * the first is still being paid for. `CACHE` above stays module-scope on
+ * purpose: a duplicated cache is a cold cache, which costs a lookup, not a call.
+ *
+ * Found by GPT Sol reviewing
+ * docs/plans/260903d-improve-the-codebase-second-sweep.md § T2.2.
+ */
+const INFLIGHT = processSingleton<Map<string, Promise<SimilarResponse>>>(
+  "similar.inflight",
+  "2026-09-03-map",
+  () => new Map(),
+);
 /**
  * How many articles' answers to keep.
  *
