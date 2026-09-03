@@ -1313,6 +1313,111 @@ for (const adapter of ADAPTERS) {
       expect((await store.get(alive.id, OWNER))?.status).toBe("running");
     });
 
+    /* ------------------------------------------ and it does not always end -- */
+
+    /**
+     * **A lapsed claim with budget left goes back to the queue on its own row.**
+     *
+     * The Postgres answer to `sweepStopped`, which has always made a dev-server
+     * restart a *pause* rather than an abandoned ingest. Postgres had no
+     * equivalent, so on the store we actually ship a deploy landing mid-ingest
+     * ended the reader's job — and sent them to a Retry that, until 2026-09-03,
+     * minted a new article and threw away every chunk they had paid for.
+     *
+     * **The same job id, and that is the assertion under all the others.** The
+     * row keeps its slug, so it keeps its article, so it keeps the article's
+     * checkpoints (src/store/checkpoints.ts). A new job could not.
+     *
+     * **The default is unchanged**, which is why every case around this one
+     * passes no budget and still asserts an ending: a caller that has not asked
+     * for a resumption gets exactly what it always got.
+     */
+    it("gives a lapsed claim another go on the same row, while it has budget", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
+      const attempt = mintAttempt();
+      expectClaimed(await store.claim(job.id, OWNER, attempt, LEASE, CAP));
+      /* A step actually in flight, so the *steps* half of the transition is
+         exercised rather than assumed. `aJob`'s step starts `pending`, and a
+         requeue that left a `running` step behind would draw a spinner on a card
+         that is waiting its turn. */
+      await store.noteProgress(job.id, attempt, [
+        { ...job.steps[0]!, status: "running", startedAt: new Date().toISOString() },
+      ]);
+      await adapter.expire(job.id);
+
+      expect(await store.settleExpired(undefined, undefined, 2)).toEqual([
+        { id: job.id, status: "queued" },
+      ]);
+      const back = await store.get(job.id, OWNER);
+      expect(back?.status).toBe("queued");
+      expect(back?.slug, "the requeue moved the job to a different article").toBe(job.slug);
+      /* Nothing failed, so the record must not say anything did — and
+         `failureKind` under a `queued` status is a Retry rule reading a state
+         that is not an ending. */
+      expect(back?.error).toBeUndefined();
+      expect(back?.failureKind).toBeUndefined();
+      expect(back?.finishedAt).toBeUndefined();
+      expect(back?.steps[0]?.status, "a requeued job left a step spinning").toBe("pending");
+      expect(back?.steps[0]?.error).toBeUndefined();
+
+      /* And it is claimable again, which is the whole of what "back in the
+         queue" has to mean. */
+      expectClaimed(await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP));
+    });
+
+    /**
+     * **And it stops.** Without a cap a job that overruns every lease requeues
+     * for ever, buying model calls nobody is waiting for — which is the same
+     * failure this whole area is about, wearing a different hat.
+     *
+     * A budget of one, so the case is two sweeps rather than four: the first is
+     * the resumption, the second is the ending. `INTERRUPTED` and `retry`, so the
+     * reader gets the button and the sentence — a new job with a fresh budget is
+     * exactly what pressing it makes, which is the point of the human being the
+     * outer loop.
+     */
+    it("stops giving a job that always overruns another go, rather than looping for ever", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
+      expectClaimed(await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP));
+      await adapter.expire(job.id);
+      expect(await store.settleExpired(undefined, undefined, 1)).toEqual([
+        { id: job.id, status: "queued" },
+      ]);
+
+      expectClaimed(await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP));
+      await adapter.expire(job.id);
+      expect(await store.settleExpired(undefined, undefined, 1)).toEqual([
+        { id: job.id, status: "error" },
+      ]);
+      const over = await store.get(job.id, OWNER);
+      expect(over?.status).toBe("error");
+      expect(over?.failureKind).toBe("retry");
+      expect(over?.error).toBe(INTERRUPTED.message);
+    });
+
+    /**
+     * **A reader who pressed Stop gets their stop, whatever the budget says.**
+     *
+     * Resuming what somebody stopped is the app not listening — the same rule
+     * `settleExpired` already follows in choosing `cancelled` over `error` for
+     * these rows, and the reason the requeue is excluded from them by predicate
+     * rather than by luck.
+     */
+    it("never resumes a job the reader stopped, however much budget is left", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, { workKey: "k1", reservesName: false });
+      expectClaimed(await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP));
+      expect((await store.requestCancel(job.id, OWNER))?.cancelling).toBe(true);
+      await adapter.expire(job.id);
+
+      expect(await store.settleExpired(undefined, undefined, 3)).toEqual([
+        { id: job.id, status: "cancelled" },
+      ]);
+      expect((await store.get(job.id, OWNER))?.status).toBe("cancelled");
+    });
+
     /**
      * **The sweep, scoped to one person, because `listJobs` calls it.**
      *

@@ -99,14 +99,24 @@ describe("the filesystem store still answers from meta.json", () => {
    * **The upload half of this file went with `freeUploadSlug`, 2026-08-31.**
    *
    * It tested that an uploaded article's slug came back to the upload that made
-   * it, so a retry did not pay for the transcription twice. That question no
+   * it, so a retry did not pay for the transcription twice. The *mechanism* no
    * longer exists: every new slug carries a globally unique short id
-   * (src/ingest.ts § `slugWithShortId`), so a retry mints a fresh name rather
-   * than finding its own occupied and stepping aside from itself.
-   * `freeUploadSlug` and `slugIsSpokenFor` are deleted, and the manifest read
-   * that made them work — the one that had to go through the artefact seam —
-   * went with them. docs/plans/260831b-finish-the-database-move.md § Stage 3
-   * item 0.
+   * (src/ingest.ts § `slugWithShortId`), so nothing collides and nothing has to
+   * step aside from itself. `freeUploadSlug` and `slugIsSpokenFor` are deleted,
+   * and the manifest read that made them work — the one that had to go through
+   * the artefact seam — went with them.
+   * docs/plans/260831b-finish-the-database-move.md § Stage 3 item 0.
+   *
+   * **The *question* came back, and this note used to say it had not.** It read
+   * "so a retry mints a fresh name", which was a correct account of the code on
+   * 2026-08-31 and became a bug on 2026-09-01, when per-chunk checkpoints landed
+   * keyed on the **article** — so a retry that mints a fresh name is a retry
+   * that re-buys every chunk, and a long PDF that overruns one lease can never
+   * finish. A retry now keeps the failed attempt's own name, through
+   * `slugForRetry` (src/jobs.ts), which is where the reversal and its reasoning
+   * are written down. Nothing in this file asserts either way; the note is
+   * corrected because it is the record somebody would find.
+   * docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md § Stage 3.
    *
    * What is left in this file is the pair the header names, and it still
    * matters: `articleExists` and `urlForSlug` must answer from `meta.json` on

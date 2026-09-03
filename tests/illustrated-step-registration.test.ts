@@ -31,6 +31,7 @@ import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { readArticle } from "../src/article-input.js";
+import { readerFailureOf } from "../src/job-failure.js";
 import { isBodyEvidence } from "../src/block-policy.js";
 import { inputFingerprint as illustratedFingerprint } from "../src/illustrated.js";
 import { hashProfile, profileIsStale } from "../src/profile.js";
@@ -288,13 +289,37 @@ beforeEach(async () => {
 
 /* ------------------------------------------------------------ the refusal -- */
 
+/** Run something that must throw, and hand back what it threw. */
+async function threw(run: () => unknown): Promise<unknown> {
+  try {
+    await run();
+  } catch (err) {
+    return err;
+  }
+  throw new Error("expected that to fail, and it did not");
+}
+
+/**
+ * **What the band actually shows**, which is not `Error.message`.
+ *
+ * The three refusals below were written for a reader — the comment at their
+ * throw site says so, and says the sentence names the chip rather than the step
+ * *"because it is read by somebody looking at a band and not at a pipeline"*.
+ * It reached the reader as `stepGaveUp`'s generic copy until 2026-09-03, since
+ * the form it was thrown through treats its argument as a log-only diagnostic,
+ * and asserting on what was thrown could not see that.
+ * docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md § Bug 1.
+ */
+const shownFor = async (run: () => unknown): Promise<string> =>
+  readerFailureOf(await threw(run), "Painting the argument").message;
+
 describe("the step refuses rather than illustrating the wrong argument", () => {
   it("says which chip to press when there is no Sketch at all", async () => {
     await writeSketch(null);
     await script();
-    await expect(STEPS.illustrated.run(ctxFor(), store, nullCheckpointStore())).rejects.toThrow(
-      /Draw the Sketch first/,
-    );
+    expect(
+      await shownFor(() => STEPS.illustrated.run(ctxFor(), store, nullCheckpointStore())),
+    ).toMatch(/Draw the Sketch first/);
     /* **And nothing was spent finding out.** A stage that refused *after* the
        brief call would have cost $0.30 to say "press the other button". */
     expect(briefCalls, "the refusal must come before the brief call").toBe(0);
@@ -304,9 +329,9 @@ describe("the step refuses rather than illustrating the wrong argument", () => {
   it("refuses a Sketch with an empty scene list, which a hand edit can produce", async () => {
     await writeSketch({ ...sketchFixture(), scenes: [] });
     await script();
-    await expect(STEPS.illustrated.run(ctxFor(), store, nullCheckpointStore())).rejects.toThrow(
-      /Draw the Sketch first/,
-    );
+    expect(
+      await shownFor(() => STEPS.illustrated.run(ctxFor(), store, nullCheckpointStore())),
+    ).toMatch(/Draw the Sketch first/);
     expect(briefCalls).toBe(0);
   });
 
@@ -318,9 +343,9 @@ describe("the step refuses rather than illustrating the wrong argument", () => {
        the moment it lands. */
     await writeSketch({ ...sketchFixture(), sourceHash: "a-hash-of-some-other-article" });
     await script();
-    await expect(STEPS.illustrated.run(ctxFor(), store, nullCheckpointStore())).rejects.toThrow(
-      /out of date/,
-    );
+    expect(
+      await shownFor(() => STEPS.illustrated.run(ctxFor(), store, nullCheckpointStore())),
+    ).toMatch(/out of date/);
     expect(briefCalls, "the refusal must come before the brief call").toBe(0);
   });
 
@@ -333,7 +358,7 @@ describe("the step refuses rather than illustrating the wrong argument", () => {
     await writeSketch({ ...sketchFixture(), profileHash: hashProfile("somebody else") });
     await script();
     const ctx = { ...ctxFor(), profile: "I am a different reader" };
-    await expect(STEPS.illustrated.run(ctx, store, nullCheckpointStore())).rejects.toThrow(
+    expect(await shownFor(() => STEPS.illustrated.run(ctx, store, nullCheckpointStore()))).toMatch(
       /different reader profile/,
     );
     expect(briefCalls).toBe(0);

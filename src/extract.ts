@@ -389,6 +389,33 @@ export function publicationDate(raw: Maybe): string | undefined {
 }
 
 /**
+ * **Readability looked at the page and found no article in it.**
+ *
+ * A type rather than a sentence, since 2026-09-03. The pipeline has to classify
+ * this — it is `blocked`, because Retry never re-runs the step that fetched the
+ * bytes, so the second attempt hands Readability byte-for-byte the page it has
+ * already refused — and it recognised it by matching
+ * `/^Readability could not parse this page\./` against `err.message`. That
+ * worked, and it was the wrong shape twice over: a prose match rots the day
+ * somebody rewords the sentence, and, being a **prefix**, it could not prove
+ * that the whole of a matching message came from here. The pipeline then wanted
+ * to forward that message to Sentry as ours, and could not honestly say so.
+ * docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md § Readability
+ * is the exception.
+ *
+ * The message stays what it was, because the log is still where it is read and
+ * tests/job-failure.test.ts still asserts a diagnostic that names the library.
+ * What the reader is shown is `PAGE_HAS_NO_ARTICLE` in src/messages.ts, which
+ * says none of this.
+ */
+export class ReadabilityRefused extends Error {
+  constructor() {
+    super("Readability could not parse this page.");
+    this.name = "ReadabilityRefused";
+  }
+}
+
+/**
  * Stage 2 over already-fetched HTML — **and it writes nothing.**
  *
  * It took `outFile` and `dataDir` until 2026-08-31 and wrote the page and
@@ -432,7 +459,7 @@ export async function runExtract(opts: {
      rather than ours. See docs/project/logging.md. */
   const { article, notes, callouts } = readArticle(opts.html, opts.url);
   if (!article) {
-    throw new Error("Readability could not parse this page.");
+    throw new ReadabilityRefused();
   }
 
   /* The metadata is the article's identity — the only place the source URL, the
