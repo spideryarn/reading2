@@ -59,6 +59,7 @@ import type { LabelsFile } from "../labels.js";
 import type { RawManifest } from "../fetch.js";
 import type { Assets } from "../assets.js";
 import type { Sketch } from "../sketch-scene.js";
+import type { Illustrated } from "../illustrated-plate.js";
 
 /**
  * Every kind of thing the pipeline durably produces.
@@ -90,7 +91,8 @@ export type ArtifactKind =
   | "quotes"
   | "timeline"
   | "quiz"
-  | "sketch";
+  | "sketch"
+  | "illustrated";
 
 /**
  * Each kind, and the TypeScript type of the thing itself.
@@ -153,6 +155,19 @@ export interface ArtifactMap {
    */
   quiz: Quiz;
   sketch: Sketch;
+  /**
+   * The same argument painted — `Illustrated`, src/illustrated-plate.ts,
+   * written by the `illustrated` step. docs/project/diagram.md § Illustrated.
+   *
+   * **The brief and where the pictures are, never the pictures.** Each plate
+   * holds an `IllustratedImage` — a sha256, an extension and the dimensions —
+   * and the bytes themselves are content-addressed objects in the blob store,
+   * put there by `storePlateImage` (src/illustrated-image.ts). Base64 in here
+   * would be about 200 KB a plate dragged along by every read of the revision
+   * that named this column, which is the same call `assets` made one field up
+   * and for the same reason.
+   */
+  illustrated: Illustrated;
 }
 
 /** Some or all of one step's artefacts, handed to `write` in one call. */
@@ -287,6 +302,16 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      rule, at the store boundary, so a hand-written or imported file cannot get
      round it either. */
   sketch: { field: "scenes", ok: (v) => isArray(v) && (v as unknown[]).length > 0 },
+  /* **`plates`, and an empty one is NOT usable**, for the same reason as
+     `sketch` directly above: a set of pictures with no pictures in it is not a
+     thing, and the step throws rather than write one. Note this checks the
+     plates rather than the images — a plate whose own image call failed is
+     still a plate, carrying its brief and its `failed` sentence so the panel
+     can say which picture is missing (plan § Two hazards). A run where every
+     plate failed is a usable artefact that honestly reports four failures, and
+     collapsing that into "no artefact" would make the reader press the button
+     again and pay for the brief a second time. */
+  illustrated: { field: "plates", ok: (v) => isArray(v) && (v as unknown[]).length > 0 },
 };
 
 /**
@@ -706,6 +731,7 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
      kind with no row precisely so that nothing can half-inherit. */
   quiz: "quiz",
   sketch: "sketch",
+  illustrated: "illustrated",
 };
 
 /**

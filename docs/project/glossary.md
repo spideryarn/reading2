@@ -28,8 +28,10 @@ until you know what they are for.
  │  ▇▇         ├─────────────────────┤   is like to be an      │
  │  ▇▇▇▇       │ threshold 0·30 · 6 of 24  organism …          │
  │             │ ──────●────────────  ← the bar, and the       │
- │             ├─────────────────────┤   reader's hand on it   │
- │             │ WORTH KNOWING FIRST 6│                        │
+ │             │ 18 terms are hidden    reader's hand on it    │
+ │             │ by this threshold.  │                         │
+ │             │ Drag the slider left│                         │
+ │             │ to show them.       │                         │
  │             ├─────────────────────┤                         │
  │             │ nonreductive  d·72   │ … the nonreductive case│
  │             │ explanation   c·85   │   ┈┈┈┈┈┈┈┈┈┈┈┈          │
@@ -50,10 +52,6 @@ until you know what they are for.
  │             │ ▸ used in 3 places   │                         │
  │             │   k3m9qt qw82nf      │                         │
  │             │ interoception d·66 c·61                        │
- │             ├─────────────────────┤                         │
- │             │ THE REST         18 │                         │
- │             ├─────────────────────┤                         │
- │             │ blindsight    d·40 c·15                        │
  │             │ …                   │                         │
  │             ├─────────────────────┤                         │
  │             │ Find more · Start   │                         │
@@ -64,11 +62,11 @@ until you know what they are for.
  The bar's five modes, with Glossary lit. Questions, Tweets and Metadata sit
  off the right of this box and are elided — see ../plans/260825c-bottom-bar.md.
 
- The two headings are the whole of "prioritised": difficulty × centrality
- decides which side of the divider a term is on, and NOTHING else. Inside
- each group the order is first use — the reader's own order through the
- piece — so within a group the model has chosen nothing. Both numbers are
- on every row; the product they were gated on never is.
+ The bar is the whole of "prioritised": difficulty × centrality decides
+ whether a term is on screen at all, and NOTHING else. The order is first
+ use — the reader's own order through the piece — so of the list itself the
+ model has chosen nothing. Both numbers are on every row; the product they
+ were gated on never is.
 
  The two labelled sections under an open term are the provenance, and they
  are the whole answer to "which bits are and are not from the article": all
@@ -86,9 +84,10 @@ until you know what they are for.
  looks identical to a broken tool.
 
  The threshold row is where that product's one free number lives. Drag it
- left and the top group swallows the list; drag it right and it narrows to
- the single costliest term. It reads out both what it is set to and how
- many terms that promotes, because the second is what you are aiming at.
+ left and the whole list comes back; drag it right and it narrows to the
+ single costliest term. It reads out what it is set to and how many terms
+ that shows, because the second is what you are aiming at — and under the
+ track, always, how many it is holding back and the way to get them.
 ```
 
 Code: [`src/glossary.ts`](../../src/glossary.ts) (stage 5d — the model call, the dedup, the
@@ -619,6 +618,21 @@ never sort by them silently.** So:
 `?sort=` is in the URL like everything else ([url-state.md](url-state.md)), and it pushes history
 because reordering a list is a deliberate act on the view.
 
+### The scores the prompt required, and did not get
+
+The prompt **requires** both scores on every entry, so a missing one is the model disobeying rather
+than taking an offer — unlike quotes, where omitting one is allowed. Until 2026-09-03 nothing
+counted either that or a score `score()` refused for being the wrong type or out of range, so a model
+that started answering `"high"` for `0.8` would have quietly stopped the panel offering *prioritised*
+order with no log line moving ([silent-success.md](../reusable/silent-success.md)).
+
+`GlossaryScoreDrops` in [glossary.ts](../../src/glossary.ts) counts four things —
+`difficultyAbsent`, `difficultyRejected`, `centralityAbsent`, `centralityRejected` — per field, in
+`toEntries`, over the entries it kept and before `dedupe` can borrow a missing score off a duplicate.
+It does **not** ride the artefact and is shown to no reader: it is a fact about our prompt, not about
+their article. Logged at the end of the stage in [pipeline.ts](../../src/pipeline.ts). The quotes'
+twin is [quotes.md § The scores are counted too](quotes.md#the-scores-are-counted-too-and-nobody-is-told).
+
 ### Prioritised, which is now the default
 
 The first clause of that condition — *the list arrives in document order* — lasted a day. On
@@ -644,23 +658,35 @@ distraction a priority list exists to keep off the top. A product sends both to 
 
 **The product gates, it does not rank.** Two noisy 0–1 model scores multiplied together separate the
 clear top from the rest and say nothing trustworthy about the middle, so it decides one thing —
-`difficulty × centrality ≥ 0.30`, in or out — and produces **two groups with a labelled divider**.
-Inside a group the order is **first use**, which is where the third thing Greg asked for lives, and
+`difficulty × centrality` against `PRIORITY_GATE`, in or out — and produces **one list of what is
+in**, with the rest hidden and counted ([below](#it-hides-what-is-below-it-since-2026-09-03)).
+The order is **first use**, which is where the third thing Greg asked for lives, and
 which means the model has chosen nothing there. Both raw numbers are on every row; the product never
 is, because that is our arithmetic dressed as the model's judgment and a number the reader can
 neither interpret nor check.
 
-**It cancels itself when it cannot help.** If nothing clears the gate, or everything does, no
-divider is drawn and no group is labelled: the list is one unheaded group in first-use order, exactly
-what it did before. If the scores are not there **at all**, the order falls back to first use and the
-control is not offered — the same rule the score sorts already followed, one step on: *do not offer
-an order that would visibly do nothing.* Old glossaries with no scores see no change whatsoever.
+**It cancels itself when it cannot help**, and the question it asks is *does the top of the track
+hide anything* — `canPrioritise` in [`GlossaryPanel.tsx`](../../src/web/GlossaryPanel.tsx), which
+answers yes when some score sits **strictly below the top stop**. Not *are there two distinct
+scores*: that was the first spelling and it is wrong about the slider's own grid, because the bar
+only stops on hundredths and the track ends at the top score floored to one of them, so `0.501` and
+`0.509` differ while every position the reader can reach shows both (GPT Sol, 2026-09-03). Where
+nothing is offered the order falls back to first use and the control is not drawn — the same rule
+the score sorts already followed, one step on: *do not offer an order that would visibly do nothing.*
+
+**There are no old glossaries with no scores**, and this doc said for a week that there were.
+`difficulty` and `centrality` arrived in `bf5a91e3`, the commit that created the glossary, and have
+been optional every day since — so an unscored entry is not a legacy era but
+[the model disobeying a prompt that requires it](#the-scores-the-prompt-required-and-did-not-get),
+and none was found in any data we could inspect. The fallback stays because the model can still
+disobey.
 
 `PRIORITY_GATE` is an **absolute** threshold rather than a relative "top third", and the reason is
 what each does when it is wrong. An absolute gate that misfires degenerates to plain first-use order.
-A relative one would promote exactly a third whatever the scores said — inventing a ranking that is
+A relative one would keep exactly a third on screen whatever the scores said — inventing a ranking that is
 not in the data and putting a confident label over it, which is the failure this whole feature has
-been shaped to avoid. `0.30` is a guess; on `data/writes` it promotes two terms of eleven.
+been shaped to avoid. Its starting value is a guess; on `data/writes` it leaves two terms of eleven
+on screen.
 
 ### The threshold, and whose it is
 
@@ -678,24 +704,53 @@ about it are decisions rather than details:
 - **The track ends where the data does**, not at 1.00. Real products cluster low — two scores of 0.7
   make 0.49 — so a fixed 0–1 track would be two thirds dead and every glossary would be adjusted in
   the same narrow strip at the left. Ending it at the top term's own score makes both ends mean
-  something: hard left promotes everything, hard right promotes exactly the costliest term.
-- **It says when it has divided nothing.** Drag the bar to the floor and the two groups merge, which
-  looks exactly like a slider that has stopped working — the
-  [silent-success](../reusable/silent-success.md) failure this codebase keeps catching itself in. So
-  a sentence appears saying every term (or no term) cleared the bar.
-- **The order no longer cancels itself just because the bar divides nothing.** It used to. The slider
+  something: hard left shows everything, hard right shows exactly the costliest term (plus any the
+  model did not score, which survive everywhere).
+- **It says how many it is holding back.** A line under the track, in every state including none and
+  all: *"18 terms are hidden by this threshold. Drag the slider left to show them."* Present
+  wherever the slider is and absent wherever it is not, because a line that goes missing for a
+  *different* reason teaches the reader nothing, and an empty list under a bar is otherwise
+  ambiguous between *there is nothing here* and *you have hidden it all* —
+  [silent-success](../reusable/silent-success.md), which this codebase keeps catching itself in.
+  `hiddenNote` in [`src/web/threshold.ts`](../../src/web/threshold.ts) writes it for all three
+  sliders.
+- **The order no longer cancels itself just because the bar hides nothing.** It used to. The slider
   reverses that argument twice over: cancelling would take the slider away with it and strand the
-  reader mid-adjustment, and an undivided list here is not silent — the bar is on screen with its
-  number and its count, and nothing claims a judgment was made. What still falls back is a glossary
-  with no scores at all, which has nothing to gate under any setting.
+  reader mid-adjustment, and a list with nothing hidden here is not silent — the bar is on screen
+  with its number and its count, and the foot line says so in words. What still falls back is a
+  glossary nothing on the track can divide, which is the `canPrioritise` question above.
 - **The default stays absent from the URL.** `?gate=` has no default of its own, so "absent" keeps
   meaning *nobody has touched this* — which matters, because the whole condition on these scores is
   about the difference between a number the reader chose and one that simply arrived.
 
 This is an **override of the condition above, not an exception it allows for** — a default ranking is
 in the letter the model's prioritising arriving unasked. What survives is the half that was actually
-being objected to: the order is named in a control that shows as selected, the divider says what
-promoted the group under it, the numbers are on every row, and *first use* is one tap away.
+being objected to: the order is named in a control that shows as selected, the foot line says how
+many the bar is holding back, the numbers are on every row, and *first use* is one tap away.
+
+#### It hides what is below it, since 2026-09-03
+
+> In Glossary / Prioritised mode, we have a threshold slider. Right now, if I set the threshold
+> high, it shows the highest-priority first, and then all the rest just below. I think it would be
+> clearer if it only showed the stuff above threshold (with an indication below perhaps that "N
+> hidden because they're below the X threshold" (or something along those lines).
+>
+> And there are other modes with thresholds - they should work the same way.
+>
+> — Greg, 2026-09-03
+
+So the second group headed *"the rest"* is gone, and the *"worth knowing first"* heading over what
+remained went with it: a heading with nothing to contrast is not a heading. [quotes.md](quotes.md)
+and [search.md](search.md) now do the same thing in the same words, and the rule they share lives
+once, in [`src/web/threshold.ts`](../../src/web/threshold.ts) — including **an unscored entry
+surviving every position of the bar**, which is Greg's *"in the interim, always show them"*.
+
+That reverses an argument this repo had written down and defended, in
+[search.md § Prioritised](search.md#prioritised-place-order-with-a-bar-under-it): *a glossary is a
+reference list, and a term you cannot find is a term you have lost.* It did not survive contact.
+The bar is on screen with its number, the foot line says how many it is holding back, and dragging
+it left is one gesture — a term is not lost when the control that hid it is the control in your
+hand. [260903c](../plans/260903c-threshold-sliders-hide-below-threshold-items.md).
 
 ## Finding more, and starting again
 

@@ -16,7 +16,7 @@
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   DRIVER_STALLED,
@@ -28,6 +28,7 @@ import {
 } from "../src/job-state.js";
 import type { Job, JobStep } from "../src/types.js";
 import { JobProgress } from "../src/web/JobProgress.js";
+import type { StepFailure } from "../src/web/useStepJob.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -79,18 +80,27 @@ function job(over: Partial<Job> = {}, step: Partial<JobStep> = {}): Job {
 /** Every id `onCancel` was called with, so Stop is a fact rather than a shape. */
 let stopped: string[] = [];
 
+/** Every press of the ordinary run button, for the same reason as `stopped`. */
+let ran = 0;
+/** Every press of Retry. */
+let retried = 0;
+
 function render(
   j: Job | null,
-  extra: { failed?: string; stalled?: boolean } = {},
+  extra: { failed?: StepFailure; stalled?: boolean } = {},
 ): void {
   stopped = [];
+  ran = 0;
+  retried = 0;
   act(() =>
     root.render(
       <JobProgress
         job={j}
         failed={extra.failed ?? null}
         stalled={extra.stalled ?? false}
-        onRun={async () => undefined}
+        onRun={async () => {
+          ran += 1;
+        }}
         onCancel={(id) => stopped.push(id)}
         label="Draw the argument"
         step="sketch"
@@ -100,6 +110,21 @@ function render(
     ),
   );
 }
+
+/** A failed run of the shape `useStepJob` hands over. */
+function failure(over: Partial<StepFailure> = {}): StepFailure {
+  return {
+    message: "The AI service is busy right now. [ai-busy]",
+    retryable: true,
+    retry: () => {
+      retried += 1;
+    },
+    ...over,
+  };
+}
+
+const button = (text: string): HTMLButtonElement | undefined =>
+  [...host.querySelectorAll("button")].find((b) => b.textContent?.includes(text));
 
 it("says how long the step has been going", () => {
   render(job());
@@ -139,8 +164,7 @@ it("says a queued run is waiting to continue", () => {
 it("says when a run has gone past what it usually takes", () => {
   render(job({}, { startedAt: ago(20 * 60_000) }));
   expect(host.textContent).toContain(TAKING_LONGER);
-  const stop = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Stop"));
-  expect(stop?.disabled, "the Stop button was disabled on a slow run").toBe(false);
+  expect(button("Stop")?.disabled, "the Stop button was disabled on a slow run").toBe(false);
 });
 
 it("says what Stop is waiting for", () => {
@@ -202,6 +226,67 @@ it("does not call a run unusual when nothing measured what usual is", () => {
   expect(host.textContent, "claimed to know what an unmeasured step usually takes").not.toContain(
     TAKING_LONGER,
   );
+});
+
+/**
+ * **What the band offers after a failure**, which until 2026-09-03 was the
+ * ordinary run button and nothing else — under every failure, including the
+ * ones another go cannot change. The shelf card next door had been asking
+ * `jobWorthRetrying` since August, so one job could offer a button on one
+ * surface and withhold it on the other, and the band is the surface a reader
+ * inside a mode actually has.
+ *
+ * The three cases below are the whole rule. They assert **which** button, not
+ * only that a button exists — a test that counted buttons would have passed on
+ * the old behaviour throughout.
+ * docs/plans/260903c-fix-quiz-build-band-spread-failure-and-lost-quiz-answers.md § Stage 2.
+ */
+describe("after a run that failed", () => {
+  it("offers Retry, and retries the job rather than starting a new one", () => {
+    render(null, { failed: failure() });
+    expect(host.textContent, "the reason has to be on screen too").toContain("[ai-busy]");
+    expect(button("Draw the argument"), "the ordinary run button is a second way in").toBeUndefined();
+
+    const retry = button("Retry");
+    expect(retry, "no Retry under a failure worth another go").toBeDefined();
+    act(() => retry?.click());
+    /* `POST /api/jobs/:id/retry` skips the steps that finished; `onRun` would
+       queue a fresh job and pay for them again. The shelf's action, not a
+       second pattern. */
+    expect(retried).toBe(1);
+    expect(ran, "pressing Retry started a new job instead").toBe(0);
+  });
+
+  it("offers no button at all when another go cannot come out differently", () => {
+    /* The mistake docs/postmortems/260826a-toc-max-tokens.md is about, on the
+       other surface. Nothing takes the button's place — the sentence already
+       says why, and a second widget repeating it is the app talking over
+       itself (docs/project/ingest-queue.md § The failures Retry is not offered
+       under). */
+    render(null, {
+      failed: failure({
+        message: "This article is longer than this step can handle in one go. [ai-too-long]",
+        retryable: false,
+      }),
+    });
+    expect(host.textContent, "the explanation goes when the button does").toContain("[ai-too-long]");
+    expect(button("Retry")).toBeUndefined();
+    expect(button("Draw the argument")).toBeUndefined();
+  });
+
+  it("keeps the run button when the request never became a job", () => {
+    /* A POST the server refused. There is no id to retry, so the ordinary run
+       button *is* the retry — and withholding it would leave the reader with a
+       message and no way to act on it. */
+    render(null, {
+      failed: failure({ message: "Couldn't start the job.", retry: null }),
+    });
+    expect(button("Retry")).toBeUndefined();
+    const run = button("Draw the argument");
+    expect(run).toBeDefined();
+    act(() => run?.click());
+    expect(ran).toBe(1);
+  });
 });
 
 /*

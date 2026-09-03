@@ -38,6 +38,7 @@ import { fileURLToPath } from "node:url";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, type Effort } from "./models.js";
 import { loadEnvLocal } from "./env.js";
+import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { blocksArtefact } from "./blocks.js";
@@ -1495,7 +1496,9 @@ export async function generateHierarchy(opts: {
        provider's own words about a request that carried the whole article,
        and this error is copied onto the job and shown on the progress card.
        See MODEL_REFUSED in src/messages.ts. */
-    throw new Error(MODEL_REFUSED.message);
+    throw stageFailure(MODEL_REFUSED, {
+      authored: "the model answered with stop_reason: refusal",
+    });
   }
   if (message.stop_reason === "max_tokens") {
     throw truncationFailure("table of contents", maxTokens, answerTokens, {

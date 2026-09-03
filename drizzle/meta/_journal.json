@@ -442,6 +442,13 @@
       "when": 1788395683930,
       "tag": "20260903003443_ai_calls_costs_not_negative",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1788413825686,
+      "tag": "20260903053705_illustrated",
+      "breakpoints": true
     }
   ]
 }

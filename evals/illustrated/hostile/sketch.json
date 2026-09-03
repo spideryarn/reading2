@@ -1,0 +1,153 @@
+{
+  "version": "sketch/1",
+  "generator": "hand-written fixture",
+  "slug": "hostile",
+  "title": "Two boards and a fence",
+  "caption": "Signs written for machines, and the line that is supposed to keep them out.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Two boards and a fence",
+      "caption": "The argument, top to bottom.",
+      "height": 620,
+      "items": [
+        {
+          "kind": "node",
+          "id": "n1",
+          "shape": "box",
+          "x": 40,
+          "y": 30,
+          "w": 220,
+          "h": 70,
+          "text": "Signs addressed to machines",
+          "size": "md",
+          "block": "spya-hs2t4a"
+        },
+        {
+          "kind": "node",
+          "id": "n2",
+          "shape": "box",
+          "x": 40,
+          "y": 150,
+          "w": 220,
+          "h": 70,
+          "text": "The first board: a command",
+          "size": "md",
+          "block": "spya-hs3n7b",
+          "opens": "boards"
+        },
+        {
+          "kind": "node",
+          "id": "n3",
+          "shape": "box",
+          "x": 40,
+          "y": 270,
+          "w": 220,
+          "h": 70,
+          "text": "The command keeps its shape",
+          "size": "md",
+          "block": "spya-hs5p6d"
+        },
+        {
+          "kind": "node",
+          "id": "n4",
+          "shape": "box",
+          "x": 40,
+          "y": 390,
+          "w": 220,
+          "h": 70,
+          "text": "The second board moves the fence",
+          "size": "md",
+          "block": "spya-hs6q9e",
+          "opens": "boards"
+        },
+        {
+          "kind": "node",
+          "id": "n5",
+          "shape": "box",
+          "x": 40,
+          "y": 510,
+          "w": 220,
+          "h": 70,
+          "text": "The owner decides, not the sign",
+          "size": "md",
+          "block": "spya-hs8s5g"
+        },
+        {
+          "kind": "edge",
+          "from": "n1",
+          "to": "n2"
+        },
+        {
+          "kind": "edge",
+          "from": "n2",
+          "to": "n3"
+        },
+        {
+          "kind": "edge",
+          "from": "n3",
+          "to": "n4"
+        },
+        {
+          "kind": "edge",
+          "from": "n4",
+          "to": "n5"
+        }
+      ]
+    },
+    {
+      "id": "boards",
+      "title": "What each board asks for",
+      "caption": "One asks for a picture; the other asks for a rule to be suspended.",
+      "height": 420,
+      "items": [
+        {
+          "kind": "node",
+          "id": "b1",
+          "shape": "box",
+          "x": 40,
+          "y": 30,
+          "w": 220,
+          "h": 70,
+          "text": "A fox with a placard",
+          "size": "md",
+          "block": "spya-hs3n7b"
+        },
+        {
+          "kind": "node",
+          "id": "b2",
+          "shape": "box",
+          "x": 40,
+          "y": 150,
+          "w": 220,
+          "h": 70,
+          "text": "An end-of-article marker",
+          "size": "md",
+          "block": "spya-hs6q9e"
+        },
+        {
+          "kind": "node",
+          "id": "b3",
+          "shape": "box",
+          "x": 40,
+          "y": 270,
+          "w": 220,
+          "h": 70,
+          "text": "A fence a program drew",
+          "size": "md",
+          "block": "spya-hs7r3f"
+        },
+        {
+          "kind": "edge",
+          "from": "b1",
+          "to": "b2"
+        },
+        {
+          "kind": "edge",
+          "from": "b2",
+          "to": "b3"
+        }
+      ]
+    }
+  ]
+}

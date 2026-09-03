@@ -39,6 +39,7 @@ import type {
 } from "../types.js";
 import type { HitOrder } from "./params.js";
 import { valenceDirection, valenceRgbToken } from "./valence.js";
+import { applyThreshold, type ThresholdResult } from "./threshold.js";
 
 /**
  * Shorter than this and a literal search matches most of the article.
@@ -856,29 +857,39 @@ export function orderFound(found: Found[], order: HitOrder): Found[] {
    > Glossary) that orders by place but thresholds by confidence, and a
    > threshold slider to the UI
 
-   It is the glossary's prioritised order with one deliberate difference, and
-   the difference is the whole of the design here.
+   It is the glossary's prioritised order, and since 2026-09-03 it is that
+   without qualification: **all three thresholds hide what is below them and
+   say how many.** The shared rule is in threshold.ts, and this file keeps only
+   the unit (0–100 confidence), the track and the copy.
 
-   **The glossary groups; this hides.** A prioritised glossary shows every term
-   and puts the ones that clear the bar at the top, because a glossary is a
-   reference list and a term you cannot find is a term you have lost. A search
-   is the opposite errand: the reader is hunting, the meaning matcher answers
-   generously, and the thing they want done with a weak match is for it to go
-   away. Hiding is also the only reading of "orders by place" that is true —
-   two groups is not place order, it is group order with place inside it.
+   **This comment used to argue the opposite, and the reversal is worth
+   naming.** It said *"the glossary groups; this hides"* — that a glossary is a
+   reference list, a term you cannot find is a term you have lost, and only a
+   search is the kind of errand where a weak answer should go away. Greg looked
+   at the built thing and disagreed:
 
-   **And hiding is worth more here than a list can show**, which is the reason
-   it is the right call rather than merely a defensible one: the results the
-   panel drops lose their marks in the prose too. `App.tsx` computes one array
-   and hands it to both, so the threshold declutters the article as well as the
-   list. Grouping would leave every weak wash exactly where it was.
+   > I think it would be clearer if it only showed the stuff above threshold
+   > (with an indication below perhaps that "N hidden…"). And there are other
+   > modes with thresholds - they should work the same way.
+   >
+   > — Greg, 2026-09-03
+
+   The reference-list argument did not survive contact, and the reason is that
+   it treated hiding as loss. The bar is on screen with its number, the foot
+   line says how many it is holding back, and dragging it left is one gesture:
+   **a term is not lost when the control that hid it is the control in your
+   hand.** What the argument got right, and what remains true, is that hiding
+   is worth *more* here than next door — the results the panel drops lose their
+   marks in the prose too, because `App.tsx` computes one array and hands it to
+   both. Hiding is also the only reading of "orders by place" that is true: two
+   groups is not place order, it is group order with place inside it.
 
    **The cost is that a filter can silently swallow everything**, which is the
    failure this codebase keeps catching itself in
    (docs/reusable/silent-success.md). So nothing here is allowed to be quiet:
-   `confNote` says in words when the bar has hidden all of them or none of
-   them, the count beside the slider is `N of M` rather than `N`, and the
-   panel's own header keeps reporting the unfiltered total. */
+   the foot line (`hiddenNote`) says how many are hidden in every state
+   including none and all, the count beside the slider is `N of M` rather than
+   `N`, and the panel's own header keeps reporting the unfiltered total. */
 
 /**
  * The bar's **starting** position, on the 0–100 scale the rows print.
@@ -906,11 +917,12 @@ export const PRIORITY_CONF = 50;
 export const CONF_STEP = 1;
 
 /**
- * Does this result survive the bar?
+ * The bar applied to a list of results — the survivors, and how many went.
  *
- * **A result with no confidence always survives**, and this is the one line in
- * the feature that must not be got wrong. Two different things arrive with a
- * null confidence and the rule is right for both:
+ * **A result with no confidence always survives**, which is `survivesThreshold`
+ * in threshold.ts and the one line in the feature that must not be got wrong.
+ * Two different things arrive with a null confidence and the rule is right for
+ * both:
  *
  *  - **Every literal match.** Words mode has no confidence to report at all, so
  *    treating null as zero would empty that list completely the moment an
@@ -927,36 +939,26 @@ export const CONF_STEP = 1;
  * Note that `runId === null` — not nullness of the confidence — is what
  * actually distinguishes a literal hit from a model one, which is why the tests
  * below exercise both spellings rather than assuming they coincide.
+ *
+ * **One result rather than a filter beside a counter.** `ConfSlider` prints
+ * `N of M` and a foot line saying how many are hidden, and both come out of
+ * this — a count that disagrees with the list under it is the failure the whole
+ * threshold module exists to make impossible.
  */
-function clears(found: Found, gate: number): boolean {
-  return (found.confidence ?? 100) >= gate;
-}
-
-/** The results that clear the bar. Only ever called for `prioritised`. */
-export function keepAbove(found: Found[], gate: number): Found[] {
-  return found.filter((f) => clears(f, gate));
-}
-
-/** How many clear a given bar. The number under the reader's hand. */
-export function countAbove(found: Found[], gate: number): number {
-  let n = 0;
-  for (const f of found) if (clears(f, gate)) n += 1;
-  return n;
+export function applyConf(found: Found[], gate: number): ThresholdResult<Found> {
+  return applyThreshold(found, gate, (f) => f.confidence);
 }
 
 /**
- * Says out loud when the bar is doing nothing, or everything.
+ * The results that survive the bar. Only ever called for `prioritised`.
  *
- * The two ends a filter fails silently at. "No results" with a slider above it
- * is ambiguous between *the search found nothing* and *you have hidden it all*,
- * and those want opposite things done about them.
+ * A thin wrapper, and it stays a separate name because of where it is called:
+ * `App.tsx` applies the threshold in **exactly one place**, so what reaches the
+ * panel is what reaches the prose and the rows can never be a different set
+ * from the marks. No second filter may appear in `SearchPanel`.
  */
-export function confNote(found: Found[], gate: number): string | null {
-  if (found.length === 0) return null;
-  const kept = countAbove(found, gate);
-  if (kept === 0) return "Nothing clears this bar. Drag it left to see the weaker matches.";
-  if (kept === found.length) return "Every match clears this bar, so none are hidden.";
-  return null;
+export function keepAbove(found: Found[], gate: number): Found[] {
+  return applyConf(found, gate).visible;
 }
 
 /**

@@ -1,0 +1,439 @@
+{
+  "meta": {
+    "startedAt": "2026-09-03T04:59:06.673Z",
+    "commit": "da3aba391959e35d4a47d24b61ca3e4e0f9dd275",
+    "gitDirty": true,
+    "srcPatchSha256": null,
+    "store": "postgres",
+    "databaseTarget": "postgresql://postgres:***@127.0.0.1:54362/postgres",
+    "evalOwnerId": "00000000-0000-4000-8000-000000000002",
+    "environmentOwnerId": "f4d08b58-5573-4811-9887-e26c114fb324",
+    "scenario": "per-mode",
+    "node": "v26.8.1",
+    "effort": {
+      "pipelineEnvOverride": null,
+      "hierarchy": "medium",
+      "labels": "module-private in src/labels.ts — pinned by commit + srcPatchSha256",
+      "articleStages": {
+        "arc": "high",
+        "tweets": "high",
+        "glossary": "medium",
+        "quotes": "medium",
+        "ideas": "high",
+        "sketch": "high",
+        "timeline": "high",
+        "quiz": "high"
+      }
+    }
+  },
+  "runTag": "1bpfhts0",
+  "notes": [
+    "Stage 1 (fetch) is a fixture read, so the elapsed time excludes real-world fetch latency. It costs no model call, so the money is unaffected.",
+    "There is no `labels` step: nav labels fan out inside `hierarchy`, so every label call carries stepName=hierarchy and job=labels. The hierarchy/labels split is in `byAiJob`.",
+    "Per-step wall clock is max(finishedAt) - min(startedAt). sum(durationMs) is printed beside it and is several times larger wherever a step fanned out; it is not a wait.",
+    "Unpriced rows are unknown, not zero. A total carrying them is short by an unknown amount.",
+    "Pipeline cache breakpoints are conditional and off by default (`sharesArticleCache`), so an ordinary ingest marks nothing and these are cold numbers in that sense too. Checked in the code: `sharesArticleCache` returns false for anything that is not an ArticleStage, and `hierarchy` is not one — so nothing an ingest writes can be read warm by a later draw.",
+    "`scenario` says whether the modes were measured one per job (`per-mode`) or several in one (`batched-modes`). The two are different numbers and must never be aggregated together.",
+    "A draw that was billed and did not produce its artefact is a PAID FAILURE: its money was really spent and it is not the price of anything, so it is excluded from every per-mode and whole-article figure and listed separately. Read `jobStatus` and `steps` per draw, not the money alone — a truncated generation is billed in full with an `outcome: \"ok\"` row.",
+    "`observedSpend` is what each step's own collector saw, from AdvanceParts.onStepSpend. Its `calls` is what the ledger is reconciled against. Its `writeFailures` is a LOWER BOUND: collectSpend calls onDone before draining its writes, so a write that rejects late is not counted there — which is exactly why the check is calls-made against rows-kept."
+  ],
+  "draws": [
+    {
+      "phase": "ingest",
+      "mode": null,
+      "fixture": "long-html",
+      "fixtureFile": "evals/extraction/fixtures/gwern.html",
+      "fixtureSha256": {
+        "measured": "4a2564b8da9689f11afab5c99b621930defad2f305aaa0da7ff2e80152086f18",
+        "manifest": "4a2564b8da9689f11afab5c99b621930defad2f305aaa0da7ff2e80152086f18",
+        "matches": true
+      },
+      "fixtureBytes": 290410,
+      "createdArticle": true,
+      "repeat": 1,
+      "order": 1,
+      "slug": "evalcost-1bpfhts0-long-html-1-spya-mbha8x",
+      "url": "https://cost-eval.invalid/1bpfhts0/long-html-1",
+      "jobId": "spya-etbstt",
+      "elapsedMs": 180087,
+      "jobStatus": "done",
+      "steps": [
+        {
+          "name": "fetch",
+          "status": "done",
+          "detail": "284 KB (fixture long-html)"
+        },
+        {
+          "name": "extract",
+          "status": "done",
+          "detail": "The Scaling Hypothesis"
+        },
+        {
+          "name": "blocks",
+          "status": "done",
+          "detail": "186 blocks, 186 new ids (0 kept)"
+        },
+        {
+          "name": "hierarchy",
+          "status": "done",
+          "detail": "36 sections over 186 blocks"
+        }
+      ],
+      "blocks": {
+        "observed": 186,
+        "manifest": 186,
+        "matches": true
+      },
+      "gistableBlocks": 177,
+      "unreadable": 0,
+      "money": {
+        "credits": 326049500,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [
+        {
+          "step": "hierarchy",
+          "calls": 4,
+          "money": {
+            "credits": 326049500,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "7750de6c-bd14-4cf0-b77a-bbed5030e636"
+          ],
+          "jobIds": [
+            "spya-etbstt"
+          ],
+          "tokens": {
+            "input": 58061,
+            "output": 20197,
+            "cacheRead": 0,
+            "cacheWrite": 3183,
+            "reasoning": 10903
+          },
+          "outcomes": {
+            "ok": 4
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 163419,
+          "summedDurationMs": 191701
+        }
+      ],
+      "byAiJob": [
+        {
+          "step": "hierarchy",
+          "calls": 1,
+          "money": {
+            "credits": 211404000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "7750de6c-bd14-4cf0-b77a-bbed5030e636"
+          ],
+          "jobIds": [
+            "spya-etbstt"
+          ],
+          "tokens": {
+            "input": 28582,
+            "output": 15424,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 10903
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 139695,
+          "summedDurationMs": 139695
+        },
+        {
+          "step": "labels",
+          "calls": 3,
+          "money": {
+            "credits": 114645500,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "7750de6c-bd14-4cf0-b77a-bbed5030e636"
+          ],
+          "jobIds": [
+            "spya-etbstt"
+          ],
+          "tokens": {
+            "input": 29479,
+            "output": 4773,
+            "cacheRead": 0,
+            "cacheWrite": 3183,
+            "reasoning": 0
+          },
+          "outcomes": {
+            "ok": 3
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 23485,
+          "summedDurationMs": 52006
+        }
+      ],
+      "ledgerWallClockMs": 163419,
+      "observedSpend": [
+        {
+          "step": "fetch",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "blocks",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "hierarchy",
+          "calls": 4,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "findings": [],
+      "articleId": "b811ac27-509a-4ccb-b936-3669ca9d1d5b",
+      "adoption": {
+        "kind": "minted",
+        "requested": "evalcost-1bpfhts0-long-html-1",
+        "got": "evalcost-1bpfhts0-long-html-1-spya-mbha8x",
+        "why": "an ingest draw mints"
+      }
+    },
+    {
+      "phase": "ingest",
+      "mode": null,
+      "fixture": "long-html",
+      "fixtureFile": "evals/extraction/fixtures/gwern.html",
+      "fixtureSha256": {
+        "measured": "4a2564b8da9689f11afab5c99b621930defad2f305aaa0da7ff2e80152086f18",
+        "manifest": "4a2564b8da9689f11afab5c99b621930defad2f305aaa0da7ff2e80152086f18",
+        "matches": true
+      },
+      "fixtureBytes": 290410,
+      "createdArticle": true,
+      "repeat": 2,
+      "order": 2,
+      "slug": "evalcost-1bpfhts0-long-html-2-spya-y6dq80",
+      "url": "https://cost-eval.invalid/1bpfhts0/long-html-2",
+      "jobId": "spya-edtzyw",
+      "elapsedMs": 144257,
+      "jobStatus": "error",
+      "jobError": "Node range not in blocks.json — at root > child 5 > child 3: end not a block id (a 10-character string, withheld)",
+      "steps": [
+        {
+          "name": "fetch",
+          "status": "done",
+          "detail": "284 KB (fixture long-html)"
+        },
+        {
+          "name": "extract",
+          "status": "done",
+          "detail": "The Scaling Hypothesis"
+        },
+        {
+          "name": "blocks",
+          "status": "done",
+          "detail": "186 blocks, 186 new ids (0 kept)"
+        },
+        {
+          "name": "hierarchy",
+          "status": "error",
+          "detail": "11k characters of tree so far",
+          "error": "Node range not in blocks.json — at root > child 5 > child 3: end not a block id (a 10-character string, withheld)"
+        }
+      ],
+      "blocks": {
+        "observed": 186,
+        "manifest": 186,
+        "matches": true
+      },
+      "gistableBlocks": 177,
+      "unreadable": 0,
+      "money": {
+        "credits": 212414000,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [
+        {
+          "step": "hierarchy",
+          "calls": 1,
+          "money": {
+            "credits": 212414000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "cfeea3dd-243a-4cb2-9ffc-7af1b8120807"
+          ],
+          "jobIds": [
+            "spya-edtzyw"
+          ],
+          "tokens": {
+            "input": 28557,
+            "output": 15530,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 11375
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 135602,
+          "summedDurationMs": 135602
+        }
+      ],
+      "byAiJob": [
+        {
+          "step": "hierarchy",
+          "calls": 1,
+          "money": {
+            "credits": 212414000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "cfeea3dd-243a-4cb2-9ffc-7af1b8120807"
+          ],
+          "jobIds": [
+            "spya-edtzyw"
+          ],
+          "tokens": {
+            "input": 28557,
+            "output": 15530,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 11375
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 135602,
+          "summedDurationMs": 135602
+        }
+      ],
+      "ledgerWallClockMs": 135602,
+      "observedSpend": [
+        {
+          "step": "fetch",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "blocks",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "hierarchy",
+          "calls": 1,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "findings": [
+        {
+          "kind": "no-spend",
+          "step": "labels",
+          "fatal": true,
+          "message": "AI job labels was expected to pay and has no ledger row at all."
+        }
+      ],
+      "articleId": "db440892-930d-4e4b-a69f-0b57bcc692e0",
+      "adoption": {
+        "kind": "minted",
+        "requested": "evalcost-1bpfhts0-long-html-2",
+        "got": "evalcost-1bpfhts0-long-html-2-spya-y6dq80",
+        "why": "an ingest draw mints"
+      }
+    }
+  ]
+}
