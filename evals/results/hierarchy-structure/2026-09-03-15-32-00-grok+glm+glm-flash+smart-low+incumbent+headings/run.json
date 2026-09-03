@@ -1,0 +1,2471 @@
+{
+  "startedAt": "2026-09-03T15:32:00.938Z",
+  "commit": "890d19f6489a7204141fa6c6dc3992bbb5429b5b",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "grok",
+      "kind": "one-call",
+      "comparison": "bakeoff",
+      "call": {
+        "model": "x-ai/grok-4.3",
+        "effort": "low",
+        "provider": {
+          "zdr": true,
+          "require_parameters": true
+        }
+      },
+      "seed": "none"
+    },
+    {
+      "name": "glm",
+      "kind": "one-call",
+      "comparison": "bakeoff",
+      "call": {
+        "model": "z-ai/glm-5.3",
+        "effort": "low",
+        "provider": {
+          "zdr": true,
+          "require_parameters": true
+        }
+      },
+      "seed": "none"
+    },
+    {
+      "name": "glm-flash",
+      "kind": "one-call",
+      "comparison": "bakeoff",
+      "call": {
+        "model": "z-ai/glm-5.3-flash",
+        "effort": "low",
+        "provider": {
+          "zdr": true,
+          "require_parameters": true
+        }
+      },
+      "seed": "none"
+    },
+    {
+      "name": "smart-low",
+      "kind": "one-call",
+      "comparison": "isolated",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "low"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "incumbent",
+      "kind": "one-call",
+      "comparison": "baseline",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "medium"
+      },
+      "seed": "none"
+    },
+    {
+      "name": "headings",
+      "kind": "headings",
+      "comparison": "baseline"
+    }
+  ],
+  "expected": [
+    {
+      "arm": "grok",
+      "slug": "noema-mythology-of-conscious-ai"
+    },
+    {
+      "arm": "glm",
+      "slug": "noema-mythology-of-conscious-ai"
+    },
+    {
+      "arm": "glm-flash",
+      "slug": "noema-mythology-of-conscious-ai"
+    },
+    {
+      "arm": "smart-low",
+      "slug": "noema-mythology-of-conscious-ai"
+    },
+    {
+      "arm": "incumbent",
+      "slug": "noema-mythology-of-conscious-ai"
+    },
+    {
+      "arm": "headings",
+      "slug": "noema-mythology-of-conscious-ai"
+    },
+    {
+      "arm": "grok",
+      "slug": "openai-huggingface"
+    },
+    {
+      "arm": "glm",
+      "slug": "openai-huggingface"
+    },
+    {
+      "arm": "glm-flash",
+      "slug": "openai-huggingface"
+    },
+    {
+      "arm": "smart-low",
+      "slug": "openai-huggingface"
+    },
+    {
+      "arm": "incumbent",
+      "slug": "openai-huggingface"
+    },
+    {
+      "arm": "headings",
+      "slug": "openai-huggingface"
+    }
+  ],
+  "results": [
+    {
+      "arm": "grok",
+      "comparison": "bakeoff",
+      "slug": "noema-mythology-of-conscious-ai",
+      "run": 1,
+      "callOrder": 1,
+      "blocksSha256": {
+        "measured": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "manifest": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "matchesManifest": true
+      },
+      "outcome": "threw",
+      "error": "Node range not in blocks.json — at root > child 1: end not a block id (a 13-character string, withheld)",
+      "calls": [
+        {
+          "ms": 21778,
+          "inputTokens": 12600,
+          "outputTokens": 2605,
+          "reasoningTokens": 1648,
+          "generationId": "gen-1788449521-dmJxyYPwdtRcqsEQXye7",
+          "costUsd": 0.0220609,
+          "providerCostUsd": 0.0220609,
+          "upstream": "xAI"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 1"
+        ]
+      }
+    },
+    {
+      "arm": "glm",
+      "comparison": "bakeoff",
+      "slug": "noema-mythology-of-conscious-ai",
+      "run": 1,
+      "callOrder": 2,
+      "blocksSha256": {
+        "measured": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "manifest": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "noema-mythology-of-conscious-ai",
+        "blocks": 141,
+        "bodyBlocks": 141,
+        "headingBlocks": 9,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 117
+        },
+        "parts": {
+          "count": 6,
+          "words": [
+            172,
+            483,
+            1296,
+            4673,
+            999,
+            660
+          ],
+          "balanceCv": 1.097706846934532
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 6.6,
+          "max": 26,
+          "within5to9": 0.44
+        },
+        "headings": {
+          "boundaries": 17,
+          "boundariesOnHeadings": 0.29411764705882354,
+          "headingsCut": 0.625,
+          "l1OnHeadings": 0.8,
+          "sourceHeadingShare": 0.24,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 25,
+            "words": 1749
+          }
+        },
+        "titles": {
+          "count": 25,
+          "meanWords": 4.2,
+          "within2to6": 1,
+          "copiedHeadings": 6,
+          "retention": 0.6921052631578944
+        },
+        "gists": {
+          "count": 25,
+          "coverage": 1,
+          "meanWords": 25.76,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.7697486553693984
+        }
+      },
+      "calls": [
+        {
+          "ms": 15074,
+          "inputTokens": 12704,
+          "outputTokens": 2808,
+          "reasoningTokens": 660,
+          "generationId": "gen-1788449543-bOkXfQjExHFATfZoAtmm",
+          "costUsd": 0.0301408,
+          "providerCostUsd": 0.0301408,
+          "upstream": "Modal"
+        }
+      ],
+      "repaired": {
+        "ranges": 6,
+        "blocks": 8,
+        "largest": 2,
+        "where": [
+          "root > child 6 (overlap, 1)",
+          "root > child 4 > child 3 (gap, 1)",
+          "root > child 4 > child 4 (gap, 2)",
+          "root > child 4 > child 6 (gap, 2)",
+          "root > child 5 > child 3 (over, 1)",
+          "root > child 6 > child 2 (overlap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 1",
+          "root > child 1 > child 1",
+          "root > child 1 > child 2",
+          "root > child 2",
+          "root > child 2 > child 1",
+          "root > child 2 > child 2",
+          "root > child 3 > child 1",
+          "root > child 3 > child 2",
+          "root > child 3 > child 3",
+          "root > child 4 > child 1",
+          "root > child 4 > child 2",
+          "root > child 4 > child 3",
+          "root > child 4 > child 5",
+          "root > child 4 > child 6",
+          "root > child 5 > child 1",
+          "root > child 5 > child 2",
+          "root > child 5 > child 3",
+          "root > child 6 > child 1",
+          "root > child 6 > child 2"
+        ]
+      },
+      "vsDisk": {
+        "partCountA": 6,
+        "partCountB": 5,
+        "l1Boundaries": 0.8,
+        "allBoundaries": 0.4230769230769231,
+        "boundaryDistance": {
+          "mean": 0.5945945945945946,
+          "within1Block": 0.8648648648648649
+        }
+      }
+    },
+    {
+      "arm": "glm-flash",
+      "comparison": "bakeoff",
+      "slug": "noema-mythology-of-conscious-ai",
+      "run": 1,
+      "callOrder": 3,
+      "blocksSha256": {
+        "measured": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "manifest": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "noema-mythology-of-conscious-ai",
+        "blocks": 141,
+        "bodyBlocks": 141,
+        "headingBlocks": 9,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 117
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            655,
+            1296,
+            4673,
+            999,
+            660
+          ],
+          "balanceCv": 0.92172431404891
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.900709219858156
+        },
+        "fanout": {
+          "mean": 8,
+          "max": 26,
+          "within5to9": 0.5
+        },
+        "headings": {
+          "boundaries": 14,
+          "boundariesOnHeadings": 0.5714285714285714,
+          "headingsCut": 1,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.7,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 25,
+            "words": 1749
+          }
+        },
+        "titles": {
+          "count": 20,
+          "meanWords": 4.05,
+          "within2to6": 1,
+          "copiedHeadings": 11,
+          "retention": 0.8981481481481483
+        },
+        "gists": {
+          "count": 20,
+          "coverage": 1,
+          "meanWords": 26.3,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.7611797924297925
+        }
+      },
+      "calls": [
+        {
+          "ms": 34396,
+          "inputTokens": 12704,
+          "outputTokens": 2128,
+          "reasoningTokens": 496,
+          "generationId": "gen-1788449558-V3ZHhzuD139nzMRnBzss",
+          "costUsd": 0.0014848,
+          "providerCostUsd": 0.0014848,
+          "upstream": "Z.AI"
+        }
+      ],
+      "repaired": {
+        "ranges": 7,
+        "blocks": 12,
+        "largest": 5,
+        "where": [
+          "root > child 4 (gap, 1)",
+          "root > child 5 (overlap, 1)",
+          "root > child 2 > child 2 (gap, 5)",
+          "root > child 3 > child 6 (short, 1)",
+          "root > child 4 > child 3 (gap, 1)",
+          "root > child 4 > child 3 (over, 1)",
+          "root > child 5 > child 2 (overlap, 2)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      },
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 5,
+        "l1Boundaries": 1,
+        "allBoundaries": 0.6190476190476191,
+        "boundaryDistance": {
+          "mean": 0.7352941176470589,
+          "within1Block": 0.8235294117647058
+        }
+      }
+    },
+    {
+      "arm": "smart-low",
+      "comparison": "isolated",
+      "slug": "noema-mythology-of-conscious-ai",
+      "run": 1,
+      "callOrder": 4,
+      "blocksSha256": {
+        "measured": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "manifest": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "noema-mythology-of-conscious-ai",
+        "blocks": 141,
+        "bodyBlocks": 141,
+        "headingBlocks": 9,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 117
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            655,
+            1296,
+            4673,
+            999,
+            660
+          ],
+          "balanceCv": 0.92172431404891
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 6.6,
+          "max": 29,
+          "within5to9": 0.36
+        },
+        "headings": {
+          "boundaries": 18,
+          "boundariesOnHeadings": 0.3888888888888889,
+          "headingsCut": 0.875,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.36,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 25,
+            "words": 1749
+          }
+        },
+        "titles": {
+          "count": 25,
+          "meanWords": 3.64,
+          "within2to6": 1,
+          "copiedHeadings": 9,
+          "retention": 0.6197916666666666
+        },
+        "gists": {
+          "count": 25,
+          "coverage": 1,
+          "meanWords": 20.72,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.5898156469261733
+        }
+      },
+      "calls": [
+        {
+          "ms": 27919,
+          "inputTokens": 19490,
+          "outputTokens": 2610,
+          "reasoningTokens": 0,
+          "generationId": "gen-1788449593-VQatODN50pdJjLwMCjoZ",
+          "costUsd": 0.06508,
+          "providerCostUsd": 0.06508,
+          "upstream": "Anthropic"
+        }
+      ],
+      "repaired": {
+        "ranges": 6,
+        "blocks": 25,
+        "largest": 9,
+        "where": [
+          "root > child 4 (gap, 9)",
+          "root > child 3 > child 1 (gap, 3)",
+          "root > child 3 > child 3 (gap, 2)",
+          "root > child 3 > child 5 (short, 9)",
+          "root > child 4 > child 3 (gap, 1)",
+          "root > child 5 > child 3 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      },
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 5,
+        "l1Boundaries": 1,
+        "allBoundaries": 0.52,
+        "boundaryDistance": {
+          "mean": 0.4473684210526316,
+          "within1Block": 0.9210526315789473
+        }
+      }
+    },
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "noema-mythology-of-conscious-ai",
+      "run": 1,
+      "callOrder": 5,
+      "blocksSha256": {
+        "measured": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "manifest": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "noema-mythology-of-conscious-ai",
+        "blocks": 141,
+        "bodyBlocks": 141,
+        "headingBlocks": 9,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 117
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            655,
+            1296,
+            4673,
+            999,
+            660
+          ],
+          "balanceCv": 0.92172431404891
+        },
+        "depth": {
+          "maxInternal": 3,
+          "minLeaf": 3,
+          "maxLeaf": 4,
+          "modalLeafDepthShare": 0.5531914893617021
+        },
+        "fanout": {
+          "mean": 4.589743589743589,
+          "max": 15,
+          "within5to9": 0.3076923076923077
+        },
+        "headings": {
+          "boundaries": 28,
+          "boundariesOnHeadings": 0.25,
+          "headingsCut": 0.875,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.23076923076923078,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 25,
+            "words": 1749
+          }
+        },
+        "titles": {
+          "count": 39,
+          "meanWords": 3.769230769230769,
+          "within2to6": 1,
+          "copiedHeadings": 9,
+          "retention": 0.6416666666666667
+        },
+        "gists": {
+          "count": 39,
+          "coverage": 1,
+          "meanWords": 19.435897435897434,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.6312755950884079
+        }
+      },
+      "calls": [
+        {
+          "ms": 46012,
+          "inputTokens": 19490,
+          "outputTokens": 4359,
+          "reasoningTokens": 0,
+          "generationId": "gen-1788449621-xo0v5bDA1pBCVYMxi0Fl",
+          "costUsd": 0.08257,
+          "providerCostUsd": 0.08257,
+          "upstream": "Anthropic"
+        }
+      ],
+      "repaired": {
+        "ranges": 14,
+        "blocks": 43,
+        "largest": 9,
+        "where": [
+          "root > child 4 (gap, 9)",
+          "root > child 3 > child 1 (gap, 3)",
+          "root > child 3 > child 3 (gap, 2)",
+          "root > child 3 > child 4 (overlap, 7)",
+          "root > child 3 > child 4 (short, 9)",
+          "root > child 3 > child 1 > child 1 (gap, 4)",
+          "root > child 3 > child 2 > child 1 (gap, 1)",
+          "root > child 3 > child 2 > child 3 (short, 2)",
+          "root > child 3 > child 3 > child 1 (gap, 1)",
+          "root > child 3 > child 3 > child 3 (over, 7)",
+          "root > child 3 > child 4 > child 1 (gap, 1)",
+          "root > child 3 > child 4 > child 3 (short, 9)",
+          "root > child 4 > child 3 (gap, 1)",
+          "root > child 5 > child 3 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 1",
+          "root > child 1 > child 1",
+          "root > child 1 > child 2",
+          "root > child 1 > child 3",
+          "root > child 1 > child 4",
+          "root > child 2 > child 1",
+          "root > child 2 > child 2",
+          "root > child 2 > child 3",
+          "root > child 2 > child 4",
+          "root > child 3 > child 1 > child 1",
+          "root > child 3 > child 1 > child 2",
+          "root > child 3 > child 1 > child 3",
+          "root > child 3 > child 1 > child 4",
+          "root > child 3 > child 2 > child 1",
+          "root > child 3 > child 2 > child 2",
+          "root > child 3 > child 2 > child 3",
+          "root > child 3 > child 3 > child 1",
+          "root > child 3 > child 3 > child 2",
+          "root > child 3 > child 3 > child 3",
+          "root > child 3 > child 4 > child 1",
+          "root > child 3 > child 4 > child 2",
+          "root > child 3 > child 4 > child 3",
+          "root > child 4 > child 1",
+          "root > child 4 > child 2",
+          "root > child 4 > child 3",
+          "root > child 4 > child 4",
+          "root > child 5 > child 1",
+          "root > child 5 > child 2",
+          "root > child 5 > child 3",
+          "root > child 5 > child 4"
+        ]
+      },
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 5,
+        "l1Boundaries": 1,
+        "allBoundaries": 0.2972972972972973,
+        "boundaryDistance": {
+          "mean": 1.5416666666666667,
+          "within1Block": 0.6875
+        }
+      }
+    },
+    {
+      "arm": "headings",
+      "comparison": "baseline",
+      "slug": "noema-mythology-of-conscious-ai",
+      "run": 1,
+      "callOrder": 6,
+      "blocksSha256": {
+        "measured": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "manifest": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "noema-mythology-of-conscious-ai",
+        "blocks": 141,
+        "bodyBlocks": 141,
+        "headingBlocks": 9,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 11,
+          "otherProblems": 0,
+          "advice": 108
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            655,
+            1296,
+            4673,
+            999,
+            660
+          ],
+          "balanceCv": 0.92172431404891
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.5531914893617021
+        },
+        "fanout": {
+          "mean": 13.727272727272727,
+          "max": 26,
+          "within5to9": 0.18181818181818182
+        },
+        "headings": {
+          "boundaries": 8,
+          "boundariesOnHeadings": 1,
+          "headingsCut": 1,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.9090909090909091,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 25,
+            "words": 1749
+          }
+        },
+        "titles": {
+          "count": 11,
+          "meanWords": 4.090909090909091,
+          "within2to6": 1,
+          "copiedHeadings": 11,
+          "retention": null
+        },
+        "gists": {
+          "count": 0,
+          "coverage": 0,
+          "meanWords": 0,
+          "multiSentence": null,
+          "templateRepetition": null,
+          "retention": null
+        }
+      },
+      "sectionLevel": 2,
+      "flat": false,
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 5,
+        "l1Boundaries": 1,
+        "allBoundaries": 0.4,
+        "boundaryDistance": {
+          "mean": 2.607142857142857,
+          "within1Block": 0.5714285714285714
+        }
+      }
+    },
+    {
+      "arm": "grok",
+      "comparison": "bakeoff",
+      "slug": "openai-huggingface",
+      "run": 1,
+      "callOrder": 7,
+      "blocksSha256": {
+        "measured": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "manifest": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "matchesManifest": true
+      },
+      "outcome": "threw",
+      "error": "The node at root > child 3 > child 1 has a range that runs backwards — its start block comes 2 block(s) after its end block in the article.",
+      "calls": [
+        {
+          "ms": 27748,
+          "inputTokens": 6975,
+          "outputTokens": 2961,
+          "reasoningTokens": 958,
+          "generationId": "gen-1788449667-2oN3fn9AImeQG3KDflUR",
+          "costUsd": 0.01591965,
+          "providerCostUsd": 0.01591965,
+          "upstream": "xAI"
+        }
+      ],
+      "repaired": {
+        "ranges": 1,
+        "blocks": 4,
+        "largest": 4,
+        "where": [
+          "root > child 7 (overlap, 4)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 1",
+          "root > child 1 > child 1",
+          "root > child 1 > child 2",
+          "root > child 1 > child 3",
+          "root > child 1 > child 4",
+          "root > child 2",
+          "root > child 2 > child 1",
+          "root > child 2 > child 2",
+          "root > child 3",
+          "root > child 3 > child 1"
+        ]
+      }
+    },
+    {
+      "arm": "glm",
+      "comparison": "bakeoff",
+      "slug": "openai-huggingface",
+      "run": 1,
+      "callOrder": 8,
+      "blocksSha256": {
+        "measured": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "manifest": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "openai-huggingface",
+        "blocks": 95,
+        "bodyBlocks": 94,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 93
+        },
+        "parts": {
+          "count": 8,
+          "words": [
+            206,
+            376,
+            526,
+            1067,
+            729,
+            650,
+            284,
+            251
+          ],
+          "balanceCv": 0.5387331147475591
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 4.241379310344827,
+          "max": 13,
+          "within5to9": 0.27586206896551724
+        },
+        "headings": {
+          "boundaries": 19,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.034482758620689655,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 93,
+            "words": 4082
+          }
+        },
+        "titles": {
+          "count": 29,
+          "meanWords": 3.5172413793103448,
+          "within2to6": 0.9655172413793104,
+          "copiedHeadings": 1,
+          "retention": 0.6238095238095239
+        },
+        "gists": {
+          "count": 29,
+          "coverage": 1,
+          "meanWords": 18.137931034482758,
+          "multiSentence": 0,
+          "templateRepetition": 0.10344827586206896,
+          "retention": 0.6850206961822208
+        }
+      },
+      "calls": [
+        {
+          "ms": 33499,
+          "inputTokens": 6916,
+          "outputTokens": 2566,
+          "reasoningTokens": 576,
+          "generationId": "gen-1788449694-eYg9T08Pef2tO2H2NoHT",
+          "costUsd": 0.0209614,
+          "providerCostUsd": 0.0209614,
+          "upstream": "Fireworks"
+        }
+      ],
+      "repaired": {
+        "ranges": 3,
+        "blocks": 68,
+        "largest": 60,
+        "where": [
+          "root > child 2 (overlap, 60)",
+          "root > child 5 (gap, 4)",
+          "root > child 4 > child 4 (short, 4)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 1",
+          "root > child 1 > child 1",
+          "root > child 1 > child 2",
+          "root > child 2",
+          "root > child 2 > child 1",
+          "root > child 2 > child 2",
+          "root > child 3",
+          "root > child 3 > child 1",
+          "root > child 3 > child 2",
+          "root > child 3 > child 3",
+          "root > child 4",
+          "root > child 4 > child 1",
+          "root > child 4 > child 2",
+          "root > child 4 > child 3",
+          "root > child 4 > child 4",
+          "root > child 5",
+          "root > child 5 > child 1",
+          "root > child 5 > child 2",
+          "root > child 6",
+          "root > child 6 > child 1",
+          "root > child 6 > child 2",
+          "root > child 6 > child 3",
+          "root > child 7",
+          "root > child 7 > child 1",
+          "root > child 7 > child 2",
+          "root > child 8",
+          "root > child 8 > child 1",
+          "root > child 8 > child 2"
+        ]
+      },
+      "vsDisk": {
+        "partCountA": 8,
+        "partCountB": 8,
+        "l1Boundaries": 0.4,
+        "allBoundaries": 0.2972972972972973,
+        "boundaryDistance": {
+          "mean": 0.7708333333333334,
+          "within1Block": 0.7916666666666666
+        }
+      }
+    },
+    {
+      "arm": "glm-flash",
+      "comparison": "bakeoff",
+      "slug": "openai-huggingface",
+      "run": 1,
+      "callOrder": 9,
+      "blocksSha256": {
+        "measured": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "manifest": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "matchesManifest": true
+      },
+      "outcome": "threw",
+      "error": "The tree does not cover the whole article: it skips 0 block(s) at the start and 3 at the end. Every block gets exactly one leaf, so a block outside the root's range has no row anywhere and nothing can resolve its id.",
+      "calls": [
+        {
+          "ms": 44180,
+          "inputTokens": 6916,
+          "outputTokens": 2769,
+          "reasoningTokens": 950,
+          "generationId": "gen-1788449728-m7tRTrE6RCeKZHAIkaQU",
+          "costUsd": 0.00121095,
+          "providerCostUsd": 0.00121095,
+          "upstream": "Z.AI"
+        }
+      ],
+      "repaired": {
+        "ranges": 1,
+        "blocks": 6,
+        "largest": 6,
+        "where": [
+          "root > child 5 > child 2 (overlap, 6)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      }
+    },
+    {
+      "arm": "smart-low",
+      "comparison": "isolated",
+      "slug": "openai-huggingface",
+      "run": 1,
+      "callOrder": 10,
+      "blocksSha256": {
+        "measured": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "manifest": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "openai-huggingface",
+        "blocks": 95,
+        "bodyBlocks": 94,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 93
+        },
+        "parts": {
+          "count": 7,
+          "words": [
+            206,
+            318,
+            697,
+            954,
+            773,
+            606,
+            535
+          ],
+          "balanceCv": 0.41020310154016204
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 4.032258064516129,
+          "max": 12,
+          "within5to9": 0.3225806451612903
+        },
+        "headings": {
+          "boundaries": 22,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.03225806451612903,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 93,
+            "words": 4082
+          }
+        },
+        "titles": {
+          "count": 31,
+          "meanWords": 3.935483870967742,
+          "within2to6": 0.9354838709677419,
+          "copiedHeadings": 1,
+          "retention": 0.4933333333333334
+        },
+        "gists": {
+          "count": 31,
+          "coverage": 1,
+          "meanWords": 22.967741935483872,
+          "multiSentence": 0,
+          "templateRepetition": 0.1935483870967742,
+          "retention": 0.5523569634662713
+        }
+      },
+      "calls": [
+        {
+          "ms": 54257,
+          "inputTokens": 10307,
+          "outputTokens": 5019,
+          "reasoningTokens": 1691,
+          "generationId": "gen-1788449772-Y95kirHwPb2gNGm2qnmo",
+          "costUsd": 0.070804,
+          "providerCostUsd": 0.070804,
+          "upstream": "Anthropic"
+        }
+      ],
+      "repaired": {
+        "ranges": 4,
+        "blocks": 13,
+        "largest": 5,
+        "where": [
+          "root > child 7 (gap, 4)",
+          "root > child 6 > child 3 (short, 4)",
+          "root > child 7 > child 1 (overlap, 4)",
+          "root > child 7 > child 3 (gap, 5)"
+        ],
+        "droppedChildren": [
+          "root > child 7 > child 2"
+        ],
+        "droppedHeadings": []
+      },
+      "vsDisk": {
+        "partCountA": 7,
+        "partCountB": 8,
+        "l1Boundaries": 0.4444444444444444,
+        "allBoundaries": 0.4166666666666667,
+        "boundaryDistance": {
+          "mean": 0.6470588235294118,
+          "within1Block": 0.9019607843137255
+        }
+      }
+    },
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "openai-huggingface",
+      "run": 1,
+      "callOrder": 11,
+      "blocksSha256": {
+        "measured": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "manifest": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "matchesManifest": true
+      },
+      "outcome": "threw",
+      "error": "The tree does not cover the whole article: it skips 0 block(s) at the start and 3 at the end. Every block gets exactly one leaf, so a block outside the root's range has no row anywhere and nothing can resolve its id.",
+      "calls": [
+        {
+          "ms": 93716,
+          "inputTokens": 10307,
+          "outputTokens": 9956,
+          "reasoningTokens": 6940,
+          "generationId": "gen-1788449826-ZBWFfkwlTvZlPLWati9d",
+          "costUsd": 0.120174,
+          "providerCostUsd": 0.120174,
+          "upstream": "Anthropic"
+        }
+      ],
+      "repaired": {
+        "ranges": 3,
+        "blocks": 8,
+        "largest": 4,
+        "where": [
+          "root > child 6 (gap, 2)",
+          "root > child 5 > child 2 (overlap, 4)",
+          "root > child 5 > child 3 (short, 2)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      }
+    },
+    {
+      "arm": "headings",
+      "comparison": "baseline",
+      "slug": "openai-huggingface",
+      "run": 1,
+      "callOrder": 12,
+      "blocksSha256": {
+        "measured": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "manifest": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "openai-huggingface",
+        "blocks": 95,
+        "bodyBlocks": 94,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 1,
+          "otherProblems": 0,
+          "advice": 92
+        },
+        "parts": {
+          "count": 0,
+          "words": [],
+          "balanceCv": 0
+        },
+        "depth": {
+          "maxInternal": 0,
+          "minLeaf": 1,
+          "maxLeaf": 1,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 95,
+          "max": 95,
+          "within5to9": 0
+        },
+        "headings": {
+          "boundaries": 0,
+          "boundariesOnHeadings": null,
+          "headingsCut": null,
+          "l1OnHeadings": null,
+          "sourceHeadingShare": 0,
+          "sourceHeadingValid": null,
+          "longestHeadinglessRun": {
+            "blocks": 93,
+            "words": 4082
+          }
+        },
+        "titles": {
+          "count": 1,
+          "meanWords": 7,
+          "within2to6": 0,
+          "copiedHeadings": 1,
+          "retention": null
+        },
+        "gists": {
+          "count": 0,
+          "coverage": 0,
+          "meanWords": 0,
+          "multiSentence": null,
+          "templateRepetition": null,
+          "retention": null
+        }
+      },
+      "sectionLevel": null,
+      "flat": true,
+      "vsDisk": {
+        "partCountA": 0,
+        "partCountB": 8,
+        "l1Boundaries": 0,
+        "allBoundaries": 0,
+        "boundaryDistance": null
+      }
+    },
+    {
+      "arm": "grok",
+      "comparison": "bakeoff",
+      "slug": "noema-mythology-of-conscious-ai",
+      "run": 2,
+      "callOrder": 13,
+      "blocksSha256": {
+        "measured": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "manifest": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "noema-mythology-of-conscious-ai",
+        "blocks": 141,
+        "bodyBlocks": 141,
+        "headingBlocks": 9,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 117
+        },
+        "parts": {
+          "count": 4,
+          "words": [
+            1941,
+            4342,
+            1340,
+            660
+          ],
+          "balanceCv": 0.6700034790626943
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.7446808510638298
+        },
+        "fanout": {
+          "mean": 13.727272727272727,
+          "max": 31,
+          "within5to9": 0.09090909090909091
+        },
+        "headings": {
+          "boundaries": 7,
+          "boundariesOnHeadings": 0.14285714285714285,
+          "headingsCut": 0.125,
+          "l1OnHeadings": 0.3333333333333333,
+          "sourceHeadingShare": 0.5454545454545454,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 25,
+            "words": 1749
+          }
+        },
+        "titles": {
+          "count": 11,
+          "meanWords": 3.727272727272727,
+          "within2to6": 1,
+          "copiedHeadings": 5,
+          "retention": 0.8888888888888888
+        },
+        "gists": {
+          "count": 11,
+          "coverage": 1,
+          "meanWords": 21.818181818181817,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.7284648432375704
+        }
+      },
+      "calls": [
+        {
+          "ms": 18903,
+          "inputTokens": 12600,
+          "outputTokens": 2339,
+          "reasoningTokens": 1432,
+          "generationId": "gen-1788449920-cc7BBpxpZAJljHurBnmu",
+          "costUsd": 0.0213959,
+          "providerCostUsd": 0.0213959,
+          "upstream": "xAI"
+        }
+      ],
+      "repaired": {
+        "ranges": 4,
+        "blocks": 19,
+        "largest": 14,
+        "where": [
+          "root > child 1 (gap, 14)",
+          "root > child 4 (overlap, 1)",
+          "root > child 1 > child 1 (gap, 14)",
+          "root > child 2 > child 1 (gap, 4)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 1 > child 1",
+          "root > child 1 > child 2",
+          "root > child 2 > child 2",
+          "root > child 2 > child 3",
+          "root > child 2 > child 4"
+        ]
+      },
+      "vsDisk": {
+        "partCountA": 4,
+        "partCountB": 5,
+        "l1Boundaries": 0.16666666666666666,
+        "allBoundaries": 0.08,
+        "boundaryDistance": {
+          "mean": 4.074074074074074,
+          "within1Block": 0.5185185185185185
+        }
+      }
+    },
+    {
+      "arm": "glm",
+      "comparison": "bakeoff",
+      "slug": "noema-mythology-of-conscious-ai",
+      "run": 2,
+      "callOrder": 14,
+      "blocksSha256": {
+        "measured": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "manifest": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "matchesManifest": true
+      },
+      "outcome": "threw",
+      "error": "Node range not in blocks.json — at root > child 1 > child 1: end not a block id (a 6-character string, withheld)",
+      "calls": [
+        {
+          "ms": 13095,
+          "inputTokens": 12704,
+          "outputTokens": 1774,
+          "reasoningTokens": 155,
+          "generationId": "gen-1788449939-mOjadrSxwXQiG3793T0J",
+          "costUsd": 0.0255912,
+          "providerCostUsd": 0.0255912,
+          "upstream": "Modal"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 1",
+          "root > child 1 > child 1"
+        ]
+      }
+    },
+    {
+      "arm": "glm-flash",
+      "comparison": "bakeoff",
+      "slug": "noema-mythology-of-conscious-ai",
+      "run": 2,
+      "callOrder": 15,
+      "blocksSha256": {
+        "measured": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "manifest": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "noema-mythology-of-conscious-ai",
+        "blocks": 141,
+        "bodyBlocks": 141,
+        "headingBlocks": 9,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 117
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            655,
+            1296,
+            4673,
+            999,
+            660
+          ],
+          "balanceCv": 0.92172431404891
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 7.363636363636363,
+          "max": 26,
+          "within5to9": 0.5454545454545454
+        },
+        "headings": {
+          "boundaries": 15,
+          "boundariesOnHeadings": 0.5333333333333333,
+          "headingsCut": 1,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.2727272727272727,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 25,
+            "words": 1749
+          }
+        },
+        "titles": {
+          "count": 22,
+          "meanWords": 3.4545454545454546,
+          "within2to6": 1,
+          "copiedHeadings": 6,
+          "retention": 0.8697916666666666
+        },
+        "gists": {
+          "count": 22,
+          "coverage": 1,
+          "meanWords": 27.454545454545453,
+          "multiSentence": 0,
+          "templateRepetition": 0.09090909090909091,
+          "retention": 0.7807528831677442
+        }
+      },
+      "calls": [
+        {
+          "ms": 61696,
+          "inputTokens": 12704,
+          "outputTokens": 2681,
+          "reasoningTokens": 1054,
+          "generationId": "gen-1788449952-JlJX0wRJigiRB9d4dZF8",
+          "costUsd": 0.00086273,
+          "providerCostUsd": 0.00086273,
+          "upstream": "Z.AI"
+        }
+      ],
+      "repaired": {
+        "ranges": 4,
+        "blocks": 14,
+        "largest": 6,
+        "where": [
+          "root > child 4 (gap, 6)",
+          "root > child 1 > child 2 (short, 1)",
+          "root > child 3 > child 6 (gap, 1)",
+          "root > child 3 > child 6 (short, 6)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      },
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 5,
+        "l1Boundaries": 1,
+        "allBoundaries": 0.34615384615384615,
+        "boundaryDistance": {
+          "mean": 0.8285714285714286,
+          "within1Block": 0.8
+        }
+      }
+    },
+    {
+      "arm": "smart-low",
+      "comparison": "isolated",
+      "slug": "noema-mythology-of-conscious-ai",
+      "run": 2,
+      "callOrder": 16,
+      "blocksSha256": {
+        "measured": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "manifest": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "noema-mythology-of-conscious-ai",
+        "blocks": 141,
+        "bodyBlocks": 141,
+        "headingBlocks": 9,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 117
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            655,
+            1296,
+            4673,
+            999,
+            660
+          ],
+          "balanceCv": 0.92172431404891
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 7.363636363636363,
+          "max": 29,
+          "within5to9": 0.45454545454545453
+        },
+        "headings": {
+          "boundaries": 15,
+          "boundariesOnHeadings": 0.4666666666666667,
+          "headingsCut": 0.875,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.4090909090909091,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 25,
+            "words": 1749
+          }
+        },
+        "titles": {
+          "count": 22,
+          "meanWords": 3.8181818181818183,
+          "within2to6": 0.9545454545454546,
+          "copiedHeadings": 9,
+          "retention": 0.5769230769230769
+        },
+        "gists": {
+          "count": 22,
+          "coverage": 1,
+          "meanWords": 17.90909090909091,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.6045081812127266
+        }
+      },
+      "calls": [
+        {
+          "ms": 23959,
+          "inputTokens": 19490,
+          "outputTokens": 2328,
+          "reasoningTokens": 0,
+          "generationId": "gen-1788450014-7ZpoTlAX2ZH4KTgtaQmX",
+          "costUsd": 0.06226,
+          "providerCostUsd": 0.06226,
+          "upstream": "Anthropic"
+        }
+      ],
+      "repaired": {
+        "ranges": 9,
+        "blocks": 27,
+        "largest": 9,
+        "where": [
+          "root > child 1 (gap, 1)",
+          "root > child 4 (gap, 9)",
+          "root > child 1 > child 1 (gap, 1)",
+          "root > child 3 > child 1 (gap, 3)",
+          "root > child 3 > child 3 (gap, 2)",
+          "root > child 3 > child 4 (overlap, 1)",
+          "root > child 3 > child 4 (short, 9)",
+          "root > child 4 > child 3 (gap, 1)",
+          "root > child 5 > child 1 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 1",
+          "root > child 1 > child 1",
+          "root > child 1 > child 2",
+          "root > child 1 > child 3",
+          "root > child 2 > child 1",
+          "root > child 2 > child 2",
+          "root > child 2 > child 3",
+          "root > child 2 > child 4",
+          "root > child 4 > child 1",
+          "root > child 4 > child 2",
+          "root > child 4 > child 3",
+          "root > child 5 > child 1",
+          "root > child 5 > child 2"
+        ]
+      },
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 5,
+        "l1Boundaries": 1,
+        "allBoundaries": 0.5217391304347826,
+        "boundaryDistance": {
+          "mean": 0.7428571428571429,
+          "within1Block": 0.8571428571428571
+        }
+      }
+    },
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "noema-mythology-of-conscious-ai",
+      "run": 2,
+      "callOrder": 17,
+      "blocksSha256": {
+        "measured": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "manifest": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "noema-mythology-of-conscious-ai",
+        "blocks": 141,
+        "bodyBlocks": 141,
+        "headingBlocks": 9,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 117
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            655,
+            1296,
+            4649,
+            1023,
+            660
+          ],
+          "balanceCv": 0.9147718499022681
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 6.833333333333333,
+          "max": 26,
+          "within5to9": 0.4583333333333333
+        },
+        "headings": {
+          "boundaries": 17,
+          "boundariesOnHeadings": 0.4117647058823529,
+          "headingsCut": 0.875,
+          "l1OnHeadings": 0.75,
+          "sourceHeadingShare": 0.375,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 25,
+            "words": 1749
+          }
+        },
+        "titles": {
+          "count": 24,
+          "meanWords": 4.041666666666667,
+          "within2to6": 1,
+          "copiedHeadings": 9,
+          "retention": 0.801111111111111
+        },
+        "gists": {
+          "count": 24,
+          "coverage": 1,
+          "meanWords": 23.291666666666668,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.6099497209017332
+        }
+      },
+      "calls": [
+        {
+          "ms": 79706,
+          "inputTokens": 19490,
+          "outputTokens": 8331,
+          "reasoningTokens": 5652,
+          "generationId": "gen-1788450038-O7BuFhMOQUgxvngbeSFf",
+          "costUsd": 0.12229,
+          "providerCostUsd": 0.12229,
+          "upstream": "Anthropic"
+        }
+      ],
+      "repaired": {
+        "ranges": 3,
+        "blocks": 6,
+        "largest": 2,
+        "where": [
+          "root > child 4 (gap, 2)",
+          "root > child 3 > child 4 (gap, 2)",
+          "root > child 3 > child 6 (short, 2)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      },
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 5,
+        "l1Boundaries": 0.6,
+        "allBoundaries": 0.48,
+        "boundaryDistance": {
+          "mean": 0.6486486486486487,
+          "within1Block": 0.7567567567567568
+        }
+      }
+    },
+    {
+      "arm": "headings",
+      "comparison": "baseline",
+      "slug": "noema-mythology-of-conscious-ai",
+      "run": 2,
+      "callOrder": 18,
+      "blocksSha256": {
+        "measured": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "manifest": "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "noema-mythology-of-conscious-ai",
+        "blocks": 141,
+        "bodyBlocks": 141,
+        "headingBlocks": 9,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 11,
+          "otherProblems": 0,
+          "advice": 108
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            655,
+            1296,
+            4673,
+            999,
+            660
+          ],
+          "balanceCv": 0.92172431404891
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.5531914893617021
+        },
+        "fanout": {
+          "mean": 13.727272727272727,
+          "max": 26,
+          "within5to9": 0.18181818181818182
+        },
+        "headings": {
+          "boundaries": 8,
+          "boundariesOnHeadings": 1,
+          "headingsCut": 1,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.9090909090909091,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 25,
+            "words": 1749
+          }
+        },
+        "titles": {
+          "count": 11,
+          "meanWords": 4.090909090909091,
+          "within2to6": 1,
+          "copiedHeadings": 11,
+          "retention": null
+        },
+        "gists": {
+          "count": 0,
+          "coverage": 0,
+          "meanWords": 0,
+          "multiSentence": null,
+          "templateRepetition": null,
+          "retention": null
+        }
+      },
+      "sectionLevel": 2,
+      "flat": false,
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 5,
+        "l1Boundaries": 1,
+        "allBoundaries": 0.4,
+        "boundaryDistance": {
+          "mean": 2.607142857142857,
+          "within1Block": 0.5714285714285714
+        }
+      }
+    },
+    {
+      "arm": "grok",
+      "comparison": "bakeoff",
+      "slug": "openai-huggingface",
+      "run": 2,
+      "callOrder": 19,
+      "blocksSha256": {
+        "measured": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "manifest": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "openai-huggingface",
+        "blocks": 95,
+        "bodyBlocks": 94,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 93
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            256,
+            326,
+            1908,
+            903,
+            696
+          ],
+          "balanceCv": 0.7271489259157873
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 5.476190476190476,
+          "max": 20,
+          "within5to9": 0.3333333333333333
+        },
+        "headings": {
+          "boundaries": 14,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.047619047619047616,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 93,
+            "words": 4082
+          }
+        },
+        "titles": {
+          "count": 21,
+          "meanWords": 3.4285714285714284,
+          "within2to6": 0.9523809523809523,
+          "copiedHeadings": 1,
+          "retention": 0.6500000000000001
+        },
+        "gists": {
+          "count": 21,
+          "coverage": 1,
+          "meanWords": 17.952380952380953,
+          "multiSentence": 0,
+          "templateRepetition": 0.23809523809523808,
+          "retention": 0.5430506312859253
+        }
+      },
+      "calls": [
+        {
+          "ms": 19366,
+          "inputTokens": 6975,
+          "outputTokens": 2388,
+          "reasoningTokens": 821,
+          "generationId": "gen-1788450118-0bsAQ98iTA5fBzGIo1ry",
+          "costUsd": 0.01448715,
+          "providerCostUsd": 0.01448715,
+          "upstream": "xAI"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 1",
+          "root > child 1 > child 1",
+          "root > child 1 > child 2",
+          "root > child 1 > child 3",
+          "root > child 2",
+          "root > child 2 > child 1",
+          "root > child 2 > child 2",
+          "root > child 3",
+          "root > child 3 > child 1",
+          "root > child 3 > child 2",
+          "root > child 3 > child 3",
+          "root > child 3 > child 4",
+          "root > child 3 > child 5",
+          "root > child 4",
+          "root > child 4 > child 1",
+          "root > child 4 > child 2",
+          "root > child 5",
+          "root > child 5 > child 1",
+          "root > child 5 > child 2",
+          "root > child 5 > child 3"
+        ]
+      },
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 8,
+        "l1Boundaries": 0,
+        "allBoundaries": 0.19444444444444445,
+        "boundaryDistance": {
+          "mean": 1.7209302325581395,
+          "within1Block": 0.5813953488372093
+        }
+      }
+    },
+    {
+      "arm": "glm",
+      "comparison": "bakeoff",
+      "slug": "openai-huggingface",
+      "run": 2,
+      "callOrder": 20,
+      "blocksSha256": {
+        "measured": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "manifest": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "openai-huggingface",
+        "blocks": 95,
+        "bodyBlocks": 94,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 93
+        },
+        "parts": {
+          "count": 8,
+          "words": [
+            206,
+            318,
+            663,
+            988,
+            729,
+            650,
+            533,
+            2
+          ],
+          "balanceCv": 0.5817479916931007
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 2,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 0.968421052631579
+        },
+        "fanout": {
+          "mean": 4.615384615384615,
+          "max": 13,
+          "within5to9": 0.23076923076923078
+        },
+        "headings": {
+          "boundaries": 17,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.038461538461538464,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 93,
+            "words": 4082
+          }
+        },
+        "titles": {
+          "count": 26,
+          "meanWords": 3.1153846153846154,
+          "within2to6": 1,
+          "copiedHeadings": 0,
+          "retention": 0.5705128205128205
+        },
+        "gists": {
+          "count": 26,
+          "coverage": 1,
+          "meanWords": 22.884615384615383,
+          "multiSentence": 0,
+          "templateRepetition": 0.15384615384615385,
+          "retention": 0.6859216127538943
+        }
+      },
+      "calls": [
+        {
+          "ms": 29523,
+          "inputTokens": 6916,
+          "outputTokens": 2391,
+          "reasoningTokens": 444,
+          "generationId": "gen-1788450137-1d2NzSrlxtLMPbsEJo76",
+          "costUsd": 0.0123197,
+          "providerCostUsd": 0.0123197,
+          "upstream": "Fireworks"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 1",
+          "root > child 1 > child 1",
+          "root > child 1 > child 2",
+          "root > child 2",
+          "root > child 2 > child 1",
+          "root > child 2 > child 2",
+          "root > child 2 > child 3",
+          "root > child 3",
+          "root > child 3 > child 1",
+          "root > child 3 > child 2",
+          "root > child 3 > child 3",
+          "root > child 4",
+          "root > child 4 > child 1",
+          "root > child 4 > child 2",
+          "root > child 4 > child 3",
+          "root > child 5",
+          "root > child 5 > child 1",
+          "root > child 5 > child 2",
+          "root > child 6",
+          "root > child 6 > child 1",
+          "root > child 6 > child 2",
+          "root > child 7",
+          "root > child 7 > child 1",
+          "root > child 7 > child 2",
+          "root > child 8"
+        ]
+      },
+      "vsDisk": {
+        "partCountA": 8,
+        "partCountB": 8,
+        "l1Boundaries": 0.75,
+        "allBoundaries": 0.5333333333333333,
+        "boundaryDistance": {
+          "mean": 0.6521739130434783,
+          "within1Block": 0.8260869565217391
+        }
+      }
+    },
+    {
+      "arm": "glm-flash",
+      "comparison": "bakeoff",
+      "slug": "openai-huggingface",
+      "run": 2,
+      "callOrder": 21,
+      "blocksSha256": {
+        "measured": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "manifest": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "matchesManifest": true
+      },
+      "outcome": "threw",
+      "error": "The tree does not cover the whole article: it skips 0 block(s) at the start and 3 at the end. Every block gets exactly one leaf, so a block outside the root's range has no row anywhere and nothing can resolve its id.",
+      "calls": [
+        {
+          "ms": 36001,
+          "inputTokens": 6916,
+          "outputTokens": 1798,
+          "reasoningTokens": 698,
+          "generationId": "gen-1788450167-v6oUKEAImRJw1W8IcLZu",
+          "costUsd": 0.0009682,
+          "providerCostUsd": 0.0009682,
+          "upstream": "DeepInfra"
+        }
+      ],
+      "repaired": {
+        "ranges": 6,
+        "blocks": 57,
+        "largest": 27,
+        "where": [
+          "root > child 2 (gap, 4)",
+          "root > child 4 (overlap, 2)",
+          "root > child 5 (overlap, 10)",
+          "root > child 7 (gap, 4)",
+          "root > child 8 (overlap, 10)",
+          "root > child 10 (gap, 27)"
+        ],
+        "droppedChildren": [
+          "root > child 9"
+        ],
+        "droppedHeadings": [
+          "root > child 2",
+          "root > child 3",
+          "root > child 4",
+          "root > child 5",
+          "root > child 6",
+          "root > child 7",
+          "root > child 8",
+          "root > child 10"
+        ]
+      }
+    },
+    {
+      "arm": "smart-low",
+      "comparison": "isolated",
+      "slug": "openai-huggingface",
+      "run": 2,
+      "callOrder": 22,
+      "blocksSha256": {
+        "measured": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "manifest": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "openai-huggingface",
+        "blocks": 95,
+        "bodyBlocks": 94,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 93
+        },
+        "parts": {
+          "count": 8,
+          "words": [
+            206,
+            318,
+            663,
+            988,
+            729,
+            146,
+            504,
+            535
+          ],
+          "balanceCv": 0.5186860154682313
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 4.032258064516129,
+          "max": 8,
+          "within5to9": 0.3225806451612903
+        },
+        "headings": {
+          "boundaries": 21,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0,
+          "sourceHeadingValid": null,
+          "longestHeadinglessRun": {
+            "blocks": 93,
+            "words": 4082
+          }
+        },
+        "titles": {
+          "count": 31,
+          "meanWords": 3.6774193548387095,
+          "within2to6": 1,
+          "copiedHeadings": 0,
+          "retention": 0.5403225806451613
+        },
+        "gists": {
+          "count": 31,
+          "coverage": 1,
+          "meanWords": 20.516129032258064,
+          "multiSentence": 0,
+          "templateRepetition": 0.0967741935483871,
+          "retention": 0.5400282627415616
+        }
+      },
+      "calls": [
+        {
+          "ms": 50063,
+          "inputTokens": 10307,
+          "outputTokens": 4551,
+          "reasoningTokens": 1628,
+          "generationId": "gen-1788450203-ad4sGm830EKXENyahLfQ",
+          "costUsd": 0.066124,
+          "providerCostUsd": 0.066124,
+          "upstream": "Anthropic"
+        }
+      ],
+      "repaired": {
+        "ranges": 1,
+        "blocks": 1,
+        "largest": 1,
+        "where": [
+          "root > child 4 > child 3 (gap, 1)"
+        ],
+        "droppedChildren": [],
+        "droppedHeadings": []
+      },
+      "vsDisk": {
+        "partCountA": 8,
+        "partCountB": 8,
+        "l1Boundaries": 0.75,
+        "allBoundaries": 0.5151515151515151,
+        "boundaryDistance": {
+          "mean": 0.56,
+          "within1Block": 0.84
+        }
+      }
+    },
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "openai-huggingface",
+      "run": 2,
+      "callOrder": 23,
+      "blocksSha256": {
+        "measured": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "manifest": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "openai-huggingface",
+        "blocks": 95,
+        "bodyBlocks": 94,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 93
+        },
+        "parts": {
+          "count": 8,
+          "words": [
+            206,
+            376,
+            332,
+            307,
+            954,
+            773,
+            606,
+            535
+          ],
+          "balanceCv": 0.46883906586030627
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 3.9375,
+          "max": 8,
+          "within5to9": 0.375
+        },
+        "headings": {
+          "boundaries": 22,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.03125,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 93,
+            "words": 4082
+          }
+        },
+        "titles": {
+          "count": 32,
+          "meanWords": 3.65625,
+          "within2to6": 0.96875,
+          "copiedHeadings": 1,
+          "retention": 0.5096774193548388
+        },
+        "gists": {
+          "count": 32,
+          "coverage": 1,
+          "meanWords": 24.5625,
+          "multiSentence": 0,
+          "templateRepetition": 0.21875,
+          "retention": 0.5116768906482569
+        }
+      },
+      "calls": [
+        {
+          "ms": 108827,
+          "inputTokens": 10307,
+          "outputTokens": 12596,
+          "reasoningTokens": 8664,
+          "generationId": "gen-1788450253-4gzCCBquOfZonOsvZXXo",
+          "costUsd": 0.146574,
+          "providerCostUsd": 0.146574,
+          "upstream": "Anthropic"
+        }
+      ],
+      "repaired": {
+        "ranges": 0,
+        "blocks": 0,
+        "largest": 0,
+        "where": [],
+        "droppedChildren": [],
+        "droppedHeadings": [
+          "root > child 1",
+          "root > child 1 > child 1",
+          "root > child 1 > child 2",
+          "root > child 2",
+          "root > child 2 > child 1",
+          "root > child 2 > child 2",
+          "root > child 3",
+          "root > child 3 > child 1",
+          "root > child 3 > child 2",
+          "root > child 4",
+          "root > child 4 > child 1",
+          "root > child 4 > child 2",
+          "root > child 5",
+          "root > child 5 > child 1",
+          "root > child 5 > child 2",
+          "root > child 5 > child 3",
+          "root > child 5 > child 4",
+          "root > child 5 > child 5",
+          "root > child 6",
+          "root > child 6 > child 1",
+          "root > child 6 > child 2",
+          "root > child 6 > child 3",
+          "root > child 7",
+          "root > child 7 > child 1",
+          "root > child 7 > child 2",
+          "root > child 7 > child 3",
+          "root > child 8",
+          "root > child 8 > child 1",
+          "root > child 8 > child 2",
+          "root > child 8 > child 3",
+          "root > child 8 > child 4"
+        ]
+      },
+      "vsDisk": {
+        "partCountA": 8,
+        "partCountB": 8,
+        "l1Boundaries": 0.2727272727272727,
+        "allBoundaries": 0.3783783783783784,
+        "boundaryDistance": {
+          "mean": 0.7058823529411765,
+          "within1Block": 0.8431372549019608
+        }
+      }
+    },
+    {
+      "arm": "headings",
+      "comparison": "baseline",
+      "slug": "openai-huggingface",
+      "run": 2,
+      "callOrder": 24,
+      "blocksSha256": {
+        "measured": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "manifest": "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "openai-huggingface",
+        "blocks": 95,
+        "bodyBlocks": 94,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 1,
+          "otherProblems": 0,
+          "advice": 92
+        },
+        "parts": {
+          "count": 0,
+          "words": [],
+          "balanceCv": 0
+        },
+        "depth": {
+          "maxInternal": 0,
+          "minLeaf": 1,
+          "maxLeaf": 1,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 95,
+          "max": 95,
+          "within5to9": 0
+        },
+        "headings": {
+          "boundaries": 0,
+          "boundariesOnHeadings": null,
+          "headingsCut": null,
+          "l1OnHeadings": null,
+          "sourceHeadingShare": 0,
+          "sourceHeadingValid": null,
+          "longestHeadinglessRun": {
+            "blocks": 93,
+            "words": 4082
+          }
+        },
+        "titles": {
+          "count": 1,
+          "meanWords": 7,
+          "within2to6": 0,
+          "copiedHeadings": 1,
+          "retention": null
+        },
+        "gists": {
+          "count": 0,
+          "coverage": 0,
+          "meanWords": 0,
+          "multiSentence": null,
+          "templateRepetition": null,
+          "retention": null
+        }
+      },
+      "sectionLevel": null,
+      "flat": true,
+      "vsDisk": {
+        "partCountA": 0,
+        "partCountB": 8,
+        "l1Boundaries": 0,
+        "allBoundaries": 0,
+        "boundaryDistance": null
+      }
+    }
+  ],
+  "effortCatalogue": [
+    {
+      "model": "x-ai/grok-4.3",
+      "supportedEfforts": [
+        "high",
+        "medium",
+        "low",
+        "none"
+      ],
+      "defaultEffort": "low",
+      "mandatory": false
+    },
+    {
+      "model": "z-ai/glm-5.3",
+      "supportedEfforts": [
+        "max",
+        "high",
+        "low"
+      ],
+      "defaultEffort": "max",
+      "mandatory": true
+    },
+    {
+      "model": "z-ai/glm-5.3-flash",
+      "supportedEfforts": [
+        "max",
+        "high",
+        "low"
+      ],
+      "defaultEffort": "max",
+      "mandatory": true
+    },
+    {
+      "model": "anthropic/claude-sonnet-5",
+      "supportedEfforts": [
+        "max",
+        "xhigh",
+        "high",
+        "medium",
+        "low"
+      ],
+      "defaultEffort": "high",
+      "mandatory": false
+    }
+  ],
+  "completedAt": "2026-09-03T15:46:02.134Z"
+}

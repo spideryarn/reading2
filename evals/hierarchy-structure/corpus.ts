@@ -113,6 +113,23 @@ export const CORPUS: readonly CorpusEntry[] = [
     calibration: true,
     why: "Nineteen blocks, one heading: the article too short for any structure rule. Calibration: short.",
   },
+  /* ---- Ingested 2026-09-03 for the effort and cheap-model evals. ---- */
+  {
+    slug: "gwern-scaling-long",
+    fragments: 6,
+    dir: "data/gwern-scaling-long",
+    sha256: "8250b24f4a5dfe456652db765e249d3d51685e7b3318e2b5d6908995b0c0ac6f",
+    role: "fixture",
+    why: "16,846 words, 184 blocks, 24 headings — the longest article any eval here has measured, ingested for the effort eval (evals/results/hierarchy-effort-2026-09-03.md) and reused for the cheap-model bake-off. `fixture` rather than `dev` on purpose: it arrived after the dev set was frozen, and folding it into the aggregates would silently move every earlier number. Named explicitly by both runs that use it.",
+  },
+  {
+    slug: "openai-huggingface",
+    fragments: 0,
+    dir: "data/openai-huggingface",
+    sha256: "88ddedfa5298e574797df2648c36b7c706052501b714f1a02175834de5e0fc95",
+    role: "fixture",
+    why: "4,192 words in 95 blocks with ONE heading — the case where the free author-heading tree cannot compete and the paid call has to do the whole carving alone. That is exactly the control the effort eval lacked, since its finding was that the author's headings carve better than the paid call; here there are none to carve with.",
+  },
   /* ---- The held-out five, ingested 2026-08-30 (free stages 1–3 only). ----
      Chosen by GPT Sol's five structural categories BEFORE the heading rule saw
      them, approved by the team lead; the rule is judged on them exactly as it

@@ -32,6 +32,13 @@ import { parseJsonFrom } from "../../src/parse-json.js";
 import type { CallStats } from "./model-arms.js";
 
 interface RunLike {
+  /**
+   * Set by the runner only when every cell it set out to fill produced a
+   * result. Absent means the process died partway, and the results present are
+   * the survivors of whatever killed it — see `RunFile.expected` in run.ts.
+   */
+  completedAt?: string;
+  expected?: { arm: string; slug: string }[];
   results: { arm: string; slug: string; calls?: CallStats[] }[];
 }
 
@@ -72,6 +79,21 @@ async function main(): Promise<void> {
 
   const runFile = path.join(runDir, "run.json");
   const run = parseJsonFrom<RunLike>(await readFile(runFile, "utf-8"), runFile);
+
+  /* **Reconciling a partial run is worse than not reconciling it**, because it
+     ends in a tick. A panel that died on cell six leaves five reconciled arms
+     and a file that looks finished, and the arms most likely to be missing are
+     the ones that failed — so the survivors read as the whole field. Refused
+     before a single generation is fetched. GPT Sol's review, finding 1. */
+  if (!run.completedAt) {
+    console.error(
+      `${runFile} has no completedAt: the run did not finish every cell it set out to fill` +
+        (run.expected ? ` (${run.expected.length} expected, ${run.results.length} recorded)` : "") +
+        `. Reconciling the survivors would put a tick on a partial panel; re-run it.`,
+    );
+    process.exit(1);
+  }
+
   const failures: string[] = [];
   let checked = 0;
 

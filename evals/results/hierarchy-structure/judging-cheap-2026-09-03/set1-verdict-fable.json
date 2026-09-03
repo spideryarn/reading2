@@ -1,0 +1,25 @@
+{
+  "ranking": ["F", "B", "E", "C", "D", "A"],
+  "unusable": [],
+  "boundaryFaults": {
+    "A": [
+      "Between \"Blessings Of Scale\" and \"Why Does Pretraining Work?\": the article's own Scaling Hypothesis section (h2 at block 35, the strong-scaling-hypothesis statement at blocks 36-37) is swallowed inside the Blessings Of Scale entry — the piece's namesake thesis gets no entry of its own (verified: A's section 3 opens at block 39, so blocks 35-38 sit untitled under Blessings)",
+      "Between \"Meta-Learning and Scaling Evidence\" and \"Blessings Of Scale\": the first entry runs from block 0 to block 23, welding four real sections (Meta-Learning, Flexing GPT, Baking The Cake, and the entire Scaling/scaling-laws section at blocks 15-22) under one title that names only the first of them"
+    ],
+    "D": [
+      "Between \"GPT-3 Announcement and Capabilities\" and \"Scaling Laws\": the first entry spans blocks 0-15, welding the announcement, the capabilities showcase (Flexing GPT), and the separate is-GPT-part-of-AGI / cost-economics argument (Baking The Cake, blocks 8-14) into one undifferentiated span — the seam itself lands on a real heading, but a quarter of the pre-appendix argument hides behind one door"
+    ],
+    "E": [
+      "Between \"Appendix\" and the end of the tree: the Appendix entry silently absorbs the Backlinks/Similar Links/Bibliography navigation (blocks 137-142) and roughly forty footnote blocks (143-183) — nearly a quarter of all blocks hang off an entry titled for the agency argument"
+    ],
+    "F": [
+      "Between \"Appendix\" and \"It From Byte\": both entries open on the identical quote (block 97) because the Appendix h2 (block 95) has no content of its own before the It From Byte h2 (block 96) — the Appendix entry is an empty shell duplicating its only child's opening, so two adjacent top-level entries point at the same place"
+    ]
+  },
+  "missingCuts": [
+    "The footnote mass (blocks 143-183, ~40 footnote items after the Bibliography link) gets no entry in any tree — in A, D and E it hangs off the Appendix, in B, C and F off the nav section, but nowhere is it named",
+    "Inside Why Does Pretraining Work? (blocks 39-67, 29 blocks) there is a real pivot at block 58, \"Reasons for doubt.\", where the author turns to arguments against his own pretraining thesis — no tree cuts there, so the section's self-critique is invisible from every map"
+  ],
+  "titles": { "A": "names", "B": "names", "C": "names", "D": "names", "E": "names", "F": "names" },
+  "gists": { "A": "claims", "B": "claims", "C": "claims", "D": "claims", "E": "none", "F": "claims" }
+}

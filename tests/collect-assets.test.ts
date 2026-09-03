@@ -23,7 +23,7 @@
  * permit rather than after made an article of ten small images come back with
  * six of them refused for budget.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { Assets } from "../src/assets.js";
 import {
@@ -44,7 +44,8 @@ import {
   type FetchLike,
 } from "../src/fetch.js";
 import { hashBlocks } from "../src/source-hash.js";
-import type { BlobHead, PutResult, RawSourceStore } from "../src/store/blobs.js";
+import { type BlobHead, CorruptObject, type PutResult, type RawSourceStore } from "../src/store/blobs.js";
+import { supabaseBlobs } from "../src/store/blobs-supabase.js";
 import type { Block } from "../src/types.js";
 
 /* ------------------------------------------------------------------ *
@@ -422,9 +423,156 @@ describe("one bad image never fails the step", () => {
     expect(run.assets.entries.every((e) => e.status === "failed" && e.reason === "storage")).toBe(
       true,
     );
-    /* Deduplicated names, and no message and no URL — a message can carry a
-       key and a URL is somebody's reading. */
-    expect(run.storageErrors).toEqual(["CorruptObject"]);
+    /* Deduplicated, and the message comes too — redacted, because a message
+       can carry a key and a URL is somebody's reading. */
+    expect(run.storageErrors).toEqual([
+      "CorruptObject: the object at sha256/… does not hash to its own name",
+    ]);
+  });
+
+  /**
+   * **The production 415, through the real Storage client.**
+   *
+   * The `sources` bucket on production allowed only `application/pdf` and
+   * `text/html` from 2026-08-27 to 2026-09-03, so every image of every article
+   * ingested there was refused with `415 mime type image/jpeg is not
+   * supported`, marked `failed`, and left hot-linked — and the only trace was
+   * one log line reading `storageErrors: ["Error"]`. A repo-wide config break
+   * was indistinguishable from one publisher being flaky.
+   * docs/plans/260903j-illustrated-415-and-one-click-paint.md.
+   *
+   * So this goes through `supabaseBlobs` itself rather than a fake that throws
+   * a hand-written message: what is being pinned is the *status and reason
+   * reaching the caller*, and half of that is produced by `fail()` in
+   * src/store/blobs-supabase.ts. A fake would pin our own guess at its wording.
+   * `fetch` is stubbed, so this is still offline.
+   */
+  it("hands back the status and the reason when the bucket refuses the mime type", async () => {
+    const refusal = JSON.stringify({
+      statusCode: "415",
+      error: "invalid_mime_type",
+      message: "mime type image/jpeg is not supported",
+    });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      /* `storeRawSource` asks `head` first; nothing is there. */
+      if (url.includes("/object/info/")) return new Response("{}", { status: 404 });
+      if (init?.method === "POST") {
+        return new Response(refusal, {
+          status: 415,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      throw new Error(`the test stub was not expecting ${init?.method ?? "GET"} ${url}`);
+    });
+    try {
+      const run = await collectAssets({
+        blocks: [img("https://cdn.test/a.jpg")],
+        fetchImpl: scripted({ "https://cdn.test/a.jpg": JPEG }).impl,
+        blobs: supabaseBlobs("https://proj.supabase.co", "service-key"),
+      });
+      expect(run.failed).toBe(1);
+      expect(reasons(run.assets)).toEqual(["storage"]);
+      expect(run.storageErrors).toEqual([
+        "Storage put failed (415): mime type image/jpeg is not supported",
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  /**
+   * **The sneaky case, not the happy one.** Passing the message through is only
+   * safe if the message cannot carry the two things src/log.ts forbids: a
+   * secret, and somebody's reading. Both are reachable — a signed upload grant
+   * is a URL with a JWT in its query string, and an error thrown by anything
+   * holding the image's own address puts a publisher URL in the text. Neither
+   * is hypothetical enough to leave to a comment.
+   */
+  it("keeps URLs and tokens out of the message it hands back, and bounds its length", async () => {
+    const messages = [
+      "Storage put failed (500): upstream refused " +
+        "https://proj.supabase.co/storage/v1/object/sign/sources/sha256/deadbeef.jpeg" +
+        "?token=eyJhbGciOiJIUzI1NiJ9.eyJrIjoic291cmNlcyJ9.c2lnbmF0dXJl",
+      `fetch failed while storing https://cdn.private-letter.test/2026/09/scan.jpeg ${"x".repeat(400)}`,
+      /* A grant token with no URL around it, so the token rule is reddenable on
+         its own rather than riding on the URL rule. */
+      "Storage put failed (400): grant eyJhbGciOiJIUzI1NiJ9.eyJrIjoiZ3JhbnQifQ.c2ln has expired",
+    ];
+    let nth = 0;
+    const leaky: RawSourceStore = {
+      ...fakeBlobs(),
+      async putIfAbsent(): Promise<PutResult> {
+        const message = messages[nth % messages.length];
+        nth += 1;
+        throw new Error(message);
+      },
+    };
+    const run = await collectAssets({
+      blocks: [
+        img("https://cdn.test/a.png"),
+        img("https://cdn.test/b.gif"),
+        img("https://cdn.test/c.jpg"),
+      ],
+      fetchImpl: scripted({
+        "https://cdn.test/a.png": PNG,
+        "https://cdn.test/b.gif": GIF,
+        "https://cdn.test/c.jpg": JPEG,
+      }).impl,
+      blobs: leaky,
+    });
+
+    expect(run.storageErrors).toHaveLength(3);
+    const said = run.storageErrors.join(" | ");
+    expect(said).not.toMatch(/https?:\/\//);
+    expect(said).not.toContain("proj.supabase.co");
+    expect(said).not.toContain("cdn.private-letter.test");
+    expect(said).not.toContain("eyJ");
+    /* Redacted, not swallowed: what actually went wrong is still there. */
+    expect(said).toContain("Storage put failed (500)");
+    expect(said).toContain("fetch failed");
+    expect(said).toContain("has expired");
+    for (const one of run.storageErrors) expect(one.length).toBeLessThanOrEqual(200);
+  });
+
+  /**
+   * **Deduplication stopped bounding the array when the message came along.**
+   *
+   * `err.name` collapsed every corrupt object in an article to the single entry
+   * `"CorruptObject"`, so `new Set` was a bound as well as a tidy-up. A message
+   * is not like that: `CorruptObject` embeds the key it is complaining about
+   * (src/store/blobs.ts § `CorruptObject`), so N of them are N distinct
+   * ~200-char strings, all in one pino line. The cardinality is the
+   * environment's to choose now, which it never was before.
+   */
+  it("bounds how many distinct failures it hands back, and says how many it dropped", async () => {
+    const urls = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => `https://cdn.test/n${i}.png`);
+    let nth = 0;
+    const allDifferent: RawSourceStore = {
+      ...fakeBlobs(),
+      async putIfAbsent(key): Promise<PutResult> {
+        nth += 1;
+        /* The real shape: one message per object, each naming its own key. */
+        throw new CorruptObject(key);
+      },
+    };
+    const run = await collectAssets({
+      blocks: urls.map((u) => img(u)),
+      /* Distinct bytes per image, so each lands on its own canonical key and
+         so each message is genuinely different. */
+      fetchImpl: scripted(Object.fromEntries(urls.map((u, i) => [u, new Uint8Array([...PNG, i])])))
+        .impl,
+      blobs: allDifferent,
+    });
+
+    expect(run.failed).toBe(8);
+    expect(nth).toBe(8);
+    /* Five of them, plus a line saying what is missing — never all eight. */
+    expect(run.storageErrors).toHaveLength(6);
+    expect(run.storageErrors.at(-1)).toBe("+3 more");
+    for (const one of run.storageErrors.slice(0, -1)) {
+      expect(one.startsWith("CorruptObject: The object at ")).toBe(true);
+    }
   });
 });
 

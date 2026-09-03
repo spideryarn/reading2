@@ -1,0 +1,460 @@
+{
+  "version": "toc/3",
+  "generator": "claude-sonnet-5",
+  "slug": "writes",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0009",
+        "n0017",
+        "n0022",
+        "n0030"
+      ],
+      "range": [
+        "spya-hqt79k",
+        "spya-zz20s6"
+      ],
+      "title": "Writes and Write-Nots",
+      "gist": "The author predicts that in a couple of decades few people will be able to write, and because writing is thinking, this will divide the world into thinkers and non-thinkers.",
+      "sourceHeading": "Writes and Write-Nots"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003"
+      ],
+      "range": [
+        "spya-hqt79k",
+        "spya-tphbr6"
+      ],
+      "title": "The Disappearing Writers",
+      "gist": "The author predicts that within a couple of decades there won't be many people who can write."
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0004",
+        "n0005",
+        "n0006",
+        "n0007",
+        "n0008"
+      ],
+      "range": [
+        "spya-hqt79k",
+        "spya-tphbr6"
+      ],
+      "title": "Few People Who Can Write",
+      "gist": "The author predicts that within a couple of decades there won't be many people who can write."
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-hqt79k",
+        "spya-hqt79k"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-t97070",
+        "spya-t97070"
+      ],
+      "title": ""
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-hkx6yy",
+        "spya-hkx6yy"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-zpa7s8",
+        "spya-zpa7s8"
+      ],
+      "title": ""
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-tphbr6",
+        "spya-tphbr6"
+      ],
+      "title": ""
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0010",
+        "n0013"
+      ],
+      "range": [
+        "spya-vp6ghy",
+        "spya-zzw20p"
+      ],
+      "title": "The Pressure to Write",
+      "gist": "Writing is fundamentally difficult because it requires clear thinking, yet prestigious jobs demand it, and until recently there was no escape except paying or stealing words."
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 2,
+      "parent": "n0009",
+      "children": [
+        "n0011",
+        "n0012"
+      ],
+      "range": [
+        "spya-vp6ghy",
+        "spya-ts48cj"
+      ],
+      "title": "Why Writing Is Hard",
+      "gist": "Writers know how many people need help writing because writing requires thinking clearly, which is hard."
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-vp6ghy",
+        "spya-vp6ghy"
+      ],
+      "title": ""
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 3,
+      "parent": "n0010",
+      "children": [],
+      "range": [
+        "spya-ts48cj",
+        "spya-ts48cj"
+      ],
+      "title": ""
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 2,
+      "parent": "n0009",
+      "children": [
+        "n0014",
+        "n0015",
+        "n0016"
+      ],
+      "range": [
+        "spya-u97r7e",
+        "spya-zzw20p"
+      ],
+      "title": "Pressure and Plagiarism",
+      "gist": "The pressure from prestigious jobs causes professors to plagiarize boilerplate, since for a long time the only alternatives were paying someone or stealing words."
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 3,
+      "parent": "n0013",
+      "children": [],
+      "range": [
+        "spya-u97r7e",
+        "spya-u97r7e"
+      ],
+      "title": ""
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 3,
+      "parent": "n0013",
+      "children": [],
+      "range": [
+        "spya-xdmpa0",
+        "spya-xdmpa0"
+      ],
+      "title": ""
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 3,
+      "parent": "n0013",
+      "children": [],
+      "range": [
+        "spya-zzw20p",
+        "spya-zzw20p"
+      ],
+      "title": ""
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0018",
+        "n0020"
+      ],
+      "range": [
+        "spya-gm3xu0",
+        "spya-hg7u0a"
+      ],
+      "title": "The New Divide",
+      "gist": "AI has blown open the old pressure, leaving only good writers and people who can't write."
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 2,
+      "parent": "n0017",
+      "children": [
+        "n0019"
+      ],
+      "range": [
+        "spya-gm3xu0",
+        "spya-gm3xu0"
+      ],
+      "title": "AI Removes the Pressure",
+      "gist": "The author says AI has blown the world open and dissipated the pressure to write."
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 3,
+      "parent": "n0018",
+      "children": [],
+      "range": [
+        "spya-gm3xu0",
+        "spya-gm3xu0"
+      ],
+      "title": ""
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 2,
+      "parent": "n0017",
+      "children": [
+        "n0021"
+      ],
+      "range": [
+        "spya-hg7u0a",
+        "spya-hg7u0a"
+      ],
+      "title": "The Disappearing Middle",
+      "gist": "The middle ground of okay writers will disappear, leaving only good writers and people who can't write."
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 3,
+      "parent": "n0020",
+      "children": [],
+      "range": [
+        "spya-hg7u0a",
+        "spya-hg7u0a"
+      ],
+      "title": ""
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0023",
+        "n0025",
+        "n0028"
+      ],
+      "range": [
+        "spya-z79mew",
+        "spya-xk7vyy"
+      ],
+      "title": "Writing Is Thinking",
+      "gist": "Losing writing is bad because writing is a unique form of thinking, so write-nots become think-nots."
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 2,
+      "parent": "n0022",
+      "children": [
+        "n0024"
+      ],
+      "range": [
+        "spya-z79mew",
+        "spya-z79mew"
+      ],
+      "title": "Not Like Blacksmithing",
+      "gist": "Skills often disappear without harm, as with blacksmithing, but this case is different."
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 3,
+      "parent": "n0023",
+      "children": [],
+      "range": [
+        "spya-z79mew",
+        "spya-z79mew"
+      ],
+      "title": ""
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 2,
+      "parent": "n0022",
+      "children": [
+        "n0026",
+        "n0027"
+      ],
+      "range": [
+        "spya-z7zzwv",
+        "spya-arj7ry"
+      ],
+      "title": "Thinking Requires Writing",
+      "gist": "Lamport says if you're thinking without writing, you only think you're thinking, so writing is a kind of thinking."
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 3,
+      "parent": "n0025",
+      "children": [],
+      "range": [
+        "spya-z7zzwv",
+        "spya-z7zzwv"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 3,
+      "parent": "n0025",
+      "children": [],
+      "range": [
+        "spya-arj7ry",
+        "spya-arj7ry"
+      ],
+      "title": ""
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 2,
+      "parent": "n0022",
+      "children": [
+        "n0029"
+      ],
+      "range": [
+        "spya-xk7vyy",
+        "spya-xk7vyy"
+      ],
+      "title": "Thinks and Think-Nots",
+      "gist": "A world divided into writes and write-nots is a world of thinks and think-nots, and the author chooses the writing half."
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-xk7vyy",
+        "spya-xk7vyy"
+      ],
+      "title": ""
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0031",
+        "n0034"
+      ],
+      "range": [
+        "spya-rqzp97",
+        "spya-zz20s6"
+      ],
+      "title": "Choosing to Be Smart",
+      "gist": "Like physical strength in preindustrial times, writing and smartness will survive only for those who choose them."
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 2,
+      "parent": "n0030",
+      "children": [
+        "n0032",
+        "n0033"
+      ],
+      "range": [
+        "spya-rqzp97",
+        "spya-smzw4j"
+      ],
+      "title": "The Strength Analogy",
+      "gist": "In preindustrial times jobs made people strong, but now only those who work out are strong; writing will be similar."
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 3,
+      "parent": "n0031",
+      "children": [],
+      "range": [
+        "spya-rqzp97",
+        "spya-rqzp97"
+      ],
+      "title": ""
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 3,
+      "parent": "n0031",
+      "children": [],
+      "range": [
+        "spya-smzw4j",
+        "spya-smzw4j"
+      ],
+      "title": ""
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 2,
+      "parent": "n0030",
+      "children": [
+        "n0035"
+      ],
+      "range": [
+        "spya-zz20s6",
+        "spya-zz20s6"
+      ],
+      "title": "Thanks to Draft Readers",
+      "gist": "The author thanks Jessica Livingston, Ben Miller, and Robert Morris for reading drafts."
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 3,
+      "parent": "n0034",
+      "children": [],
+      "range": [
+        "spya-zz20s6",
+        "spya-zz20s6"
+      ],
+      "title": ""
+    }
+  }
+}

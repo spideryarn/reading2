@@ -1,0 +1,41 @@
+{
+  "ranking": ["E", "F", "B", "C", "D", "A"],
+  "unusable": [],
+  "boundaryFaults": {
+    "A": [
+      "\"Meta-Learning and Scaling Evidence\" / \"Blessings Of Scale\" arrives only after welding the introduction, meta-learning, capabilities, AGI significance, and scaling-law arguments together.",
+      "\"Blessings Of Scale\" / \"Why Does Pretraining Work?\" welds the blessings-of-scale argument to the distinct strong-scaling-hypothesis argument."
+    ],
+    "B": [
+      "\"GPT-3 and Meta-Learning\" / \"Flexing GPT\" welds the article's framing to the distinct meta-learning section."
+    ],
+    "C": [
+      "\"GPT-3's Capabilities\" / \"Scaling Laws & Blessings Of Scale\" welds the capability demonstration to the separate question of whether GPT-3 constitutes progress toward AGI.",
+      "\"Scaling Laws & Blessings Of Scale\" / \"The Scaling Hypothesis And Pretraining\" welds empirical scaling laws to the distinct theoretical blessings-of-scale argument.",
+      "\"The Scaling Hypothesis And Pretraining\" / \"Prospects And Skeptics\" welds the scaling hypothesis to the separate explanation of why language pretraining works.",
+      "\"Prospects And Skeptics\" / \"Emergent Agency\" welds institutional prospects to the retrospective critique of skeptical experts."
+    ],
+    "D": [
+      "\"GPT-3 Announcement and Capabilities\" / \"Scaling Laws\" welds the framing, meta-learning, capability demonstrations, and AGI-significance discussion into one oversized section.",
+      "\"Scaling Hypothesis and Pretraining\" / \"Prospects and Critiques\" welds the scaling hypothesis to the separate pretraining argument.",
+      "\"Prospects and Critiques\" / \"Appendix: Agency in Generative Models\" welds institutional prospects to the retrospective critique of skeptics."
+    ]
+  },
+  "missingCuts": [],
+  "titles": {
+    "A": "names",
+    "B": "names",
+    "C": "names",
+    "D": "generic",
+    "E": "names",
+    "F": "names"
+  },
+  "gists": {
+    "A": "claims",
+    "B": "claims",
+    "C": "claims",
+    "D": "claims",
+    "E": "none",
+    "F": "claims"
+  }
+}
