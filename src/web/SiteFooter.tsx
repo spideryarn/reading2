@@ -12,9 +12,18 @@
  * out of six, so the row is a component and the list below is the whole of it:
  * a Terms page is one entry in `LINKS`, not an edit to every page.
  *
+ * **And it very nearly existed twice again.** The marketing redesign of
+ * 2026-09-03 extracted its own `SiteFooter` into `SiteBits.tsx` on the same day
+ * this file was written, in another worktree — two components, one name, the
+ * same job, found only when the branches met. Greg's call was one component:
+ * *"mine absorbs theirs"*. That is what `variant` below is for, and it is the
+ * evidence for the paragraph above rather than a counter-example to it — the
+ * duplication this file exists to prevent had already begun, twice, in a week.
+ * docs/project/marketing-pages.md.
+ *
  * ## Where it goes, and where it does not
  *
- * Every page a reader *lands on and reads*, and there are six files:
+ * Every page a reader *lands on and reads*, and there are six:
  * `LandingPage`, `FeaturesPage`, `PrivacyPage` and `SignInPage` signed out, and
  * the signed-in pages of the same shape — the shelf, `/profile`, and those same
  * policy pages when a signed-in reader opens them.
@@ -112,9 +121,27 @@ const LINKS: readonly { href: string; label: string; here: FooterPage }[] = [
 
 const LINK_CLASS = "tw:text-ink-faint tw:hover:text-highlight";
 
+/**
+ * **How much air the row sits in**, and it is two values because the pages come
+ * in two shapes rather than because anybody wanted a knob.
+ *
+ * `page` is the app's own measure, on the four pages that are chrome around
+ * something a reader came for. `marketing` is the taller, roomier one the
+ * 2026-09-03 redesign chose for `/` and `/features`, kept exactly as that
+ * redesign had it (`mt-24 pt-6 pb-16`) when its footer was absorbed into this
+ * file — those two pages end in a lot of vertical space on purpose, and the
+ * app's tighter measure read as the page having been cut off.
+ * docs/project/marketing-pages.md.
+ */
+const SPACING = {
+  page: "tw:mt-14 tw:pt-5",
+  marketing: "tw:mt-24 tw:pt-6 tw:pb-16",
+} as const;
+
 export function SiteFooter({
   children,
   here,
+  variant = "page",
 }: {
   /**
    * An optional sentence above the links — what the landing and features pages
@@ -129,13 +156,17 @@ export function SiteFooter({
    * arrangement that cannot drift.
    */
   here?: FooterPage;
+  /** Which spacing — see `SPACING`. The two marketing pages pass `marketing`. */
+  variant?: keyof typeof SPACING;
 }) {
   const route = useRoute();
   const kind = here ?? route.kind;
   const links = LINKS.filter((l) => l.here !== kind);
 
   return (
-    <footer className="tw:mt-14 tw:border-t tw:border-border tw:pt-5 tw:text-xs tw:text-ink-faint">
+    <footer
+      className={`${SPACING[variant]} tw:border-t tw:border-border tw:text-xs tw:text-ink-faint`}
+    >
       {children && <p className="tw:m-0">{children}</p>}
       <p className={children ? "tw:mt-2 tw:mb-0" : "tw:m-0"}>
         {links.map((l) => (

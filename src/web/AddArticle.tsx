@@ -84,11 +84,11 @@ function faded(job: Job, now: number): boolean {
  * A successful job leaves after eight seconds (`KEEP_DONE_MS` above) because
  * the article it made is on the shelf directly below. **A failed one has never
  * left at all** — deliberately, since the card is the only account of what went
- * wrong — and the server keeps fifty of those per reader, preferring failures
- * when it prunes (`KEEP_FINISHED` in src/jobs.ts). So the box that is meant to
- * say "here is what is happening now" was showing every import that had ever
- * gone wrong, oldest at the bottom, above a shelf that was the actual point of
- * the page.
+ * wrong — and the server keeps fifty finished jobs per reader, favouring
+ * failures over successes where the two compete for a slot (`KEEP_FINISHED` in
+ * src/jobs.ts). So the box that is meant to say "here is what is happening now"
+ * was showing every import that had ever gone wrong, oldest at the bottom,
+ * above a shelf that was the actual point of the page.
  *
  * **Module scope, not a mount, and that is the load-bearing part.** Adding an
  * article navigates to `/add/<url>`, and coming home remounts this component —
@@ -205,143 +205,180 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
 
   return (
     <section className="tw:mb-8 tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-4">
-      <form onSubmit={submit}>
-        <label
-          htmlFor="add-url"
-          className="tw:mb-2 tw:flex tw:items-center tw:gap-2 tw:text-xs tw:font-medium tw:text-muted-foreground"
-        >
-          <Plus size={14} />
-          Add an article
-        </label>
-        <div className="tw:flex tw:gap-2">
-          {/* `type="text"`, not `type="url"`. The browser's own URL validation
-              will not submit a value without a scheme, and typing
-              `example.com/an-essay` is meant to work — see `normaliseUrl` in
-              src/ingest.ts. `inputMode` still asks a phone keyboard for the
-              URL layout, and the validation that matters is `slugFromUrl`
-              below, which is the same function the server uses. */}
-          <input
-            id="add-url"
-            type="text"
-            inputMode="url"
-            autoComplete="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="example.com/an-essay-worth-reading"
-            spellCheck={false}
-            className="tw:min-w-0 tw:flex-1 tw:rounded-md tw:border tw:border-border tw:bg-background tw:px-3 tw:py-2 tw:font-mono tw:text-[13px] tw:text-foreground tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight tw:focus:ring-2 tw:focus:ring-highlight/25"
-          />
-          {/* **The default variant, not `outline`.** This is the one thing the
-              shelf exists to let you do, and until 2026-08-27 it was drawn as
-              the quietest control on the page — a grey slab that, next to a
-              grey input inside a grey card, was hard to find and (being
-              disabled until the box has a URL in it) read as permanently
-              switched off. Filling it orange costs nothing: the disabled state
-              still says so, at 50% opacity, and now says it about something you
-              can see. */}
-          <Button type="submit" disabled={!slug}>
-            Add
-          </Button>
-        </div>
-      </form>
+      {/* **One row, two ways in, and the box is the drop target.** Until
+          2026-09-03 the PDF half was a dashed rectangle of its own under the
+          URL row — about 130px of a 300px section, for the rarer way in, which
+          on a phone put the shelf's own list below the fold. Now `UploadPicker`
+          wraps this form and hands back its button to sit beside Add, so what
+          used to be a strip you could drop on is the whole of this box.
+          docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md § Stage 3. */}
+      <UploadPicker>
+        {({ pdfButton, uploadStatus }) => (
+          <>
+            <form onSubmit={submit}>
+              <label
+                htmlFor="add-url"
+                className="tw:mb-2 tw:flex tw:items-center tw:gap-2 tw:text-xs tw:font-medium tw:text-muted-foreground"
+              >
+                <Plus size={14} />
+                Add an article
+              </label>
+              {/* **Wrap, do not shrink.** Three controls on one row crushed the
+                  URL field to 85px at a 320px viewport — usable width is not the
+                  same as no overflow, and the shelf's own rule is that a row of
+                  things whose widths you do not control must be allowed to wrap
+                  (docs/project/design-css-overview.md § Narrow windows). So the
+                  input keeps a real floor and the two buttons, kept together in
+                  their own box so they never separate, take their own line when
+                  that floor cannot be met. No breakpoints; the shelf has none.
+                  GPT Sol, 2026-09-03. */}
+              <div className="tw:flex tw:flex-wrap tw:gap-2">
+                {/* `type="text"`, not `type="url"`. The browser's own URL
+                    validation will not submit a value without a scheme, and
+                    typing `example.com/an-essay` is meant to work — see
+                    `normaliseUrl` in src/ingest.ts. `inputMode` still asks a
+                    phone keyboard for the URL layout, and the validation that
+                    matters is `slugFromUrl` below, which is the same function
+                    the server uses. */}
+                <input
+                  id="add-url"
+                  type="text"
+                  inputMode="url"
+                  autoComplete="url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="example.com/an-essay-worth-reading"
+                  spellCheck={false}
+                  className="tw:min-w-48 tw:flex-1 tw:rounded-md tw:border tw:border-border tw:bg-background tw:px-3 tw:py-2 tw:font-mono tw:text-[13px] tw:text-foreground tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight tw:focus:ring-2 tw:focus:ring-highlight/25"
+                />
+                {/* One box, so the two actions wrap together rather than the
+                    row breaking between them, and `ml-auto` keeps them on the
+                    right of the line they land on. */}
+                <div className="tw:ml-auto tw:flex tw:gap-2">
+                  {/* The PDF control, drawn by UploadPicker so that the file,
+                      the transfer and the refusals all stay in the one component
+                      that runs them. It is only placed here. */}
+                  {pdfButton}
+                  {/* **The default variant, not `outline`.** This is the one
+                      thing the shelf exists to let you do, and until 2026-08-27
+                      it was drawn as the quietest control on the page — a grey
+                      slab that, next to a grey input inside a grey card, was
+                      hard to find and (being disabled until the box has a URL in
+                      it) read as permanently switched off. Filling it orange
+                      costs nothing: the disabled state still says so, at 50%
+                      opacity, and now says it about something you can see. */}
+                  <Button type="submit" disabled={!slug}>
+                    Add
+                  </Button>
+                </div>
+              </div>
+            </form>
 
-      {url.trim() !== "" && !slug && (
-        <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">
-          That doesn't look like a URL yet.
-        </p>
-      )}
-      {/* **The trailing dash and ellipsis are not decoration.** Since
-          2026-08-31 the server puts a short id on the end of every new slug
-          (src/ingest.ts § `slugWithShortId`), and it is random, so the box
-          cannot know it. Naming the readable half and showing that something
-          follows is the true statement; printing `why-trees` on its own was a
-          promise about an address that will not exist.
-          docs/project/ingest-queue.md § Every slug carries a short id. */}
-      {slug && (
-        <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">
-          It'll be on the shelf as{" "}
-          <code className="tw:font-mono tw:text-foreground">{slug}-…</code>.
-        </p>
-      )}
-
-      {/* Under the URL box rather than beside it. They are two ways to start
-          the same thing, and the reader will nearly always be doing the first —
-          a row of two equal halves would give a rarely-used control half the
-          section. See docs/plans/260826u-pdf-upload-and-storage.md for what is behind
-          it, which today is nothing. */}
-      <UploadPicker />
-
-      {/* **What happens to the text, said once, at the point of deciding.**
-          One sentence, no gate and no checkbox: the reader is told, and then
-          they decide. It sits under both controls because it is true of both —
-          a pasted URL and an uploaded PDF go the same way — and because it is
-          about what happens *after* Add, not about the box above it.
-
-          It matters most to somebody who has been sent a manuscript to
-          peer-review, and Referee mode says the past-tense half of it
-          (`REFEREE_TEXT_ALREADY_SENT`, src/web/App.tsx § RefereeBand). This is
-          the half that arrives while the choice is still open, which is the
-          only reason that one can be honest.
-          docs/plans/260831an-referee-mode-for-peer-reviewers.md § Confidentiality. */}
-      <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">
-        {ADDING_SENDS_TEXT_AWAY}
-      </p>
-
-      {/* **The reason, and something to press.** A quota refusal gets a link to
-          `/profile` beside it — the sentence has been naming an Upgrade button
-          since the wall went up, and this is the first version of this box where
-          that button exists. Everything else renders as it always did.
-          QuotaNotice.tsx. */}
-      <QuotaNotice
-        message={queue.error}
-        className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-destructive"
-      />
-
-      {current.length > 0 && <JobList jobs={current} queue={queue} onHide={hide} />}
-
-      {history.length > 0 && (
-        <div className="tw:mt-4">
-          {/* The same disclosure the shelf's deleted articles wear — a chevron
-              that turns, the hit area widened with `-ml-2` so the label stays
-              on the section's left margin, and one height (28px) shared with
-              every other small control on this page. See Library.tsx § Show
-              deleted and docs/project/design-css-overview.md § Controls. */}
-          <button
-            type="button"
-            onClick={() => setOpenHistory((v) => !v)}
-            aria-expanded={openHistory}
-            className="tw:-ml-2 tw:inline-flex tw:h-7 tw:items-center tw:gap-1.5 tw:rounded-md tw:bg-transparent tw:px-2 tw:text-xs tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground"
-          >
-            <ChevronRight
-              size={13}
-              className={`tw:transition-transform ${openHistory ? "tw:rotate-90" : ""}`}
-            />
-            {history.length === 1 ? "1 earlier import" : `${history.length} earlier imports`}
-            {/* **Said out loud, and in the destructive colour, whether or not
-                the group is open.** Everything folded away here is finished, so
-                the only reason to look is that one of them went wrong — and a
-                collapsed disclosure that hides a failure without mentioning it
-                is exactly the shape of bug docs/reusable/silent-success.md is
-                about, with the reader as the thing that fails silently. The
-                count is the whole of the case for opening it. */}
-            {failedEarlier > 0 && (
-              <>
-                {/* A separator, because the two halves are both counts and a
-                    flex gap alone leaves "3 earlier imports 2 failed" reading
-                    as one run of numbers. The same middot the cards use. */}
-                <span aria-hidden="true" className="tw:opacity-50">
-                  ·
-                </span>
-                <span className="tw:text-destructive">
-                  {failedEarlier === 1 ? "1 failed" : `${failedEarlier} failed`}
-                </span>
-              </>
+            {url.trim() !== "" && !slug && (
+              <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">
+                That doesn't look like a URL yet.
+              </p>
             )}
-          </button>
+            {/* **The trailing dash and ellipsis are not decoration.** Since
+                2026-08-31 the server puts a short id on the end of every new
+                slug (src/ingest.ts § `slugWithShortId`), and it is random, so
+                the box cannot know it. Naming the readable half and showing that
+                something follows is the true statement; printing `why-trees` on
+                its own was a promise about an address that will not exist.
+                docs/project/ingest-queue.md § Every slug carries a short id. */}
+            {slug && (
+              <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">
+                It'll be on the shelf as{" "}
+                <code className="tw:font-mono tw:text-foreground">{slug}-…</code>.
+              </p>
+            )}
 
-          {openHistory && <JobList jobs={history} queue={queue} onHide={hide} />}
-        </div>
-      )}
+            {/* The chosen file, its progress and its refusals — drawn by
+                UploadPicker, placed here so it sits under the row it is about
+                rather than under everything below. */}
+            {uploadStatus}
+
+          {/* **What happens to the text, said once, at the point of deciding.**
+              One sentence, no gate and no checkbox: the reader is told, and then
+              they decide. It sits under both controls because it is true of both —
+              a pasted URL and an uploaded PDF go the same way — and because it is
+              about what happens *after* Add, not about the box above it.
+
+              It matters most to somebody who has been sent a manuscript to
+              peer-review, and Referee mode says the past-tense half of it
+              (`REFEREE_TEXT_ALREADY_SENT`, src/web/App.tsx § RefereeBand). This is
+              the half that arrives while the choice is still open, which is the
+              only reason that one can be honest.
+              docs/plans/260831an-referee-mode-for-peer-reviewers.md § Confidentiality.
+
+              **It must not be gated on typing.** Compacting this box on 2026-09-03
+              nearly did exactly that — show it once a URL is in the field — and it
+              would have been a real regression, because dropping a PDF *is* the
+              commit gesture (UploadPicker.tsx) and a reader can send a manuscript
+              without ever having typed a character. Visible at rest while either
+              way in is available, or the promise is not made. */}
+          <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">
+            {ADDING_SENDS_TEXT_AWAY}
+          </p>
+
+          {/* **The reason, and something to press.** A quota refusal gets a link to
+              `/profile` beside it — the sentence has been naming an Upgrade button
+              since the wall went up, and this is the first version of this box where
+              that button exists. Everything else renders as it always did.
+              QuotaNotice.tsx. */}
+          <QuotaNotice
+            message={queue.error}
+            className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-destructive"
+          />
+
+          {current.length > 0 && <JobList jobs={current} queue={queue} onHide={hide} />}
+
+          {history.length > 0 && (
+            <div className="tw:mt-4">
+              {/* The same disclosure the shelf's deleted articles wear — a chevron
+                  that turns, the hit area widened with `-ml-2` so the label stays
+                  on the section's left margin, and one height (28px) shared with
+                  every other small control on this page. See Library.tsx § Show
+                  deleted and docs/project/design-css-overview.md § Controls. */}
+              <button
+                type="button"
+                onClick={() => setOpenHistory((v) => !v)}
+                aria-expanded={openHistory}
+                className="tw:-ml-2 tw:inline-flex tw:h-7 tw:items-center tw:gap-1.5 tw:rounded-md tw:bg-transparent tw:px-2 tw:text-xs tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground"
+              >
+                <ChevronRight
+                  size={13}
+                  className={`tw:transition-transform ${openHistory ? "tw:rotate-90" : ""}`}
+                />
+                {history.length === 1 ? "1 earlier import" : `${history.length} earlier imports`}
+                {/* **Said out loud, and in the destructive colour, whether or not
+                    the group is open.** Everything folded away here is finished, so
+                    the only reason to look is that one of them went wrong — and a
+                    collapsed disclosure that hides a failure without mentioning it
+                    is exactly the shape of bug docs/reusable/silent-success.md is
+                    about, with the reader as the thing that fails silently. The
+                    count is the whole of the case for opening it. */}
+                {failedEarlier > 0 && (
+                  <>
+                    {/* A separator, because the two halves are both counts and a
+                        flex gap alone leaves "3 earlier imports 2 failed" reading
+                        as one run of numbers. The same middot the cards use. */}
+                    <span aria-hidden="true" className="tw:opacity-50">
+                      ·
+                    </span>
+                    <span className="tw:text-destructive">
+                      {failedEarlier === 1 ? "1 failed" : `${failedEarlier} failed`}
+                    </span>
+                  </>
+                )}
+              </button>
+
+              {openHistory && <JobList jobs={history} queue={queue} onHide={hide} />}
+            </div>
+          )}
+          </>
+        )}
+      </UploadPicker>
     </section>
   );
 }

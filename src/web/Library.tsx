@@ -365,13 +365,6 @@ export function Library() {
         </p>
       </header>
 
-      {/* `trim()` rather than `v || null`: spaces alone serialise to `?q=%20`,
-          which the parser reads back as `null`. So the box emptied itself on
-          reload while the URL still carried something — the one thing this
-          page's URL state is supposed to make impossible. A value that merely
-          *ends* in a space is kept as typed. */}
-      <SearchBox value={query} onChange={(v) => void setQuery(v.trim() ? v : null)} />
-
       <AddArticle queue={queue} />
 
       {error && (
@@ -388,6 +381,24 @@ export function Library() {
       {shelf.undoable && (
         <UndoStrip title={shelf.undoable.title} onUndo={() => void shelf.undo()} />
       )}
+
+      {/* **Directly above the list it filters**, and below the box for adding
+          one, since 2026-09-03:
+
+          > Move the search bar so it's just above the list of articles.
+          >
+          > — Greg, 2026-09-03
+
+          It used to be the first thing under the header — so the box you use to
+          *find* an article sat above the box you use to *add* one, with
+          everything else between it and the list it narrows.
+
+          `trim()` rather than `v || null`: spaces alone serialise to `?q=%20`,
+          which the parser reads back as `null`. So the box emptied itself on
+          reload while the URL still carried something — the one thing this
+          page's URL state is supposed to make impossible. A value that merely
+          *ends* in a space is kept as typed. */}
+      <SearchBox value={query} onChange={(v) => void setQuery(v.trim() ? v : null)} />
 
       {/* The controls sit directly above the list they govern, and only once
           there is a list. A sort control over an empty shelf is furniture. */}

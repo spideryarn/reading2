@@ -170,6 +170,77 @@ that module initialisation is the thing to look at.
 
 Done when: the harness runs, its numbers are in this file, and both log lines exist.
 
+#### What landed, 2026-09-03
+
+**[`scripts/bench-cold-start.ts`](../../scripts/bench-cold-start.ts)**, modelled on
+[`bench-shelf-reads.ts`](../../scripts/bench-shelf-reads.ts) and refusing the same way. One **fresh
+child process per measurement**, because a module can only be imported once per process and the
+second reading is microseconds — which reads exactly like "we made it fast". It throws on a missing
+bundle, a bundle smaller than 100 kB, a bundle **older than anything under `src/`**, a child that
+died or was signalled, a child that printed no reading, a reading that will not parse, and any
+reading under `MIN_PLAUSIBLE_MS`. And it checks the *outcome* of the fresh-process discipline rather
+than restating it: every reading's pid distinct, and none of them the harness's own.
+
+**Read the load line before the table.** This box is shared, and it was at a load average of 108–136
+across 16 cores while these ran — eight times oversubscribed. So the harness now prints the load and
+marks a contended run, and the numbers below are **upper bounds**: Sol's ~2.61 s for the same bundle
+on a quiet machine is about 3.5× faster, and the *ordering* is what survives every run.
+
+| import | ms (median of 3) | RSS |
+|---|---|---|
+| **`api-dist/vercel.js` (the whole bundle)** | **9,364** | 247 MB |
+| `drizzle-orm/node-postgres` | 1,953 | 281 MB |
+| `drizzle-orm/pg-core` | 1,873 | 253 MB |
+| `jsdom` | 1,650 | 153 MB |
+| `@sentry/node-core/light` | 896 | 84 MB |
+| `pdf-lib` | 885 | 67 MB |
+| `stripe` | 456 | 78 MB |
+| `undici` | 387 | 76 MB |
+| `@anthropic-ai/sdk` | 240 | 64 MB |
+| `mdast-util-from-markdown` | 192 | 62 MB |
+| `@supabase/supabase-js` | 100 | 56 MB |
+| `pg` | 66 | 56 MB |
+| `fflate`, `@mozilla/readability`, `p-queue`, `dompurify` | under 55 each | |
+
+Not additive — the bundle's figure already contains every row below it. **Two things in there were
+not on the list Stage 4 was written against**, and finding them is what the harness is for:
+**`drizzle-orm/pg-core` is a second cost beside `node-postgres`** (so "the drizzle import" is two
+imports, not one), and **`@sentry/node-core/light` outranks Stripe**. Stage 4's shortlist should be
+drizzle ×2, jsdom, Sentry, pdf-lib — in that order — rather than the jsdom-first assumption above.
+
+**The instrument, and the seam.** `api/index.js` cannot import [`src/log.ts`](../../src/log.ts) — it
+is plain JavaScript outside the compiled bundle on purpose, and the logger is on the far side of the
+very import being measured. So it takes `performance.now()` either side and hands the numbers across
+to [`src/cold-start.ts`](../../src/cold-start.ts), re-exported by
+[`src/vercel.ts`](../../src/vercel.ts) as `reportBundleImport` / `reportFirstRequest`. **The
+measuring happens outside the logged world; the logging happens inside it.**
+
+`api/index.js` calls both **unconditionally, on every request**, and `src/cold-start.ts` drops all
+but the first. One decision, in one place, that a test can reach — a flag in `api/index.js` too
+would be the same rule written twice, with the copy nothing can import being the copy nothing
+checks. Both lines go out under the **`health`** component, whose own comment in `src/log.ts` says it
+is for the things reporting on the *deployment* rather than the application; a sixteenth component
+for two lines an instance would be a filter nobody would build.
+
+```
+{"component":"health","phase":"moduleImport","ms":8844,"msg":"cold start: module import"}
+{"component":"health","phase":"firstRequest","ms":8999,"msg":"cold start: first request"}
+```
+
+Those two are real, from driving the actual `api/index.js` against the actual `api-dist/vercel.js`
+three times: **exactly two lines for three requests**, and the gap between them says the
+`/api/health` work itself was ~155 ms of an ~9 s invocation. That is the shape Sol's second-number
+argument predicted, and it is why there are two — an import moved inside the handler would shrink
+`moduleImport` and leave `firstRequest` exactly where it is.
+
+**Tested, and each guard watched go red on its own.** `tests/bench-cold-start.test.ts` (16) and
+`tests/cold-start-report.test.ts` (5). Five mutation controls, each reverted after: the `ms` floor
+removed → the two floor cases fail and nothing else; the duplicate-pid check removed → one case; the
+staleness check removed → one case; each of the two once-per-instance guards removed → *"expected
+[ …(3) ] to have a length of 1 but got 3"*, which names the thing it is about. The staleness guard
+was also run against the real tree, where it refused with *"api-dist/vercel.js is stale:
+src/cold-start.ts is newer than it"*.
+
 ### Stage 2 — the offline envelope, and its postmortem
 
 Independent of everything else, small, and a real bug — so it lands early rather than waiting behind
@@ -254,6 +325,77 @@ Done when: screenshots at 1280 and 390 show the new order; the add box is materi
 re-measured the same way; a PDF still uploads by drop *and* by button; the disclosure is visible at
 rest; and nothing in `ShelfControls` has moved.
 
+**Done, 2026-09-03.** Both jobs landed in
+[`Library.tsx`](../../src/web/Library.tsx), [`AddArticle.tsx`](../../src/web/AddArticle.tsx) and
+[`UploadPicker.tsx`](../../src/web/UploadPicker.tsx). The page renders in the order Greg asked for,
+read back off the DOM rather than off the source: `header → section` (add box and its jobs) `→ div`
+(search) `→ div` (`ShelfControls`) `→ ul` (the list) `→ section` (Show deleted). Errors, Undo and the
+"n of m" count sit where the plan puts them; `ShelfControls` and everything below it is untouched.
+
+**The add box, re-measured with `getBoundingClientRect` in the same signed-in browser:**
+
+| | before | after | first card's top edge |
+|---|---|---|---|
+| 1280 × 900 | 300.3 px (33% of the screenful) | **164.3 px (18%)** | 562 → **426** |
+| 390 × 844 | 316.3 px (37%) | **223.3 px (26%)** | 686 → **593** |
+
+**The 390 "before" is 316 px, not the 454 px at the top of this stage.** Both were measured the same
+way; the shelf state was not the same, and the shared local database had moved on between them.
+316 → 180 is the honest comparison, because both halves of it came from the same run of the same
+script minutes apart. The 136 px that went at *both* widths is the dashed box, which is what the
+stage said it would be.
+
+**How the space was found.** `UploadPicker` no longer draws a rectangle of its own. It hands
+`AddArticle` two pieces and wraps the whole section: the **button**, a small outline `PDF` control on
+the URL row beside Add, and the **status** (the chosen file, the progress bar, the refusals, Send
+it), placed directly under that row. Everything else about the upload — the file, the transfer, the
+cancellation — stays in the one component that runs it. The **drop target** is now that wrapper,
+which covers the card's own padding and so is *much* larger than the dashed strip ever was, while
+drawing nothing at rest: the border is transparent until a file is over it, then orange. Measured:
+`rgba(0,0,0,0)` at rest, `rgb(219,138,69)` with a file over it (read after the 150 ms
+`transition-colors`, which is why a read in the same tick says transparent and means nothing).
+
+**Both ways in were exercised, and the evidence is the address rather than the screen.** A real PDF
+(`evals/pdf/easy/source.pdf`, 141 KB) went up by the file picker → *Send it* → `/add/upload/0bee882d…`,
+and by a dispatched `dragenter`/`dragover`/`drop` carrying a real `File` → `/add/upload/a474c7a1…`.
+That address only exists once the bytes are in the object store and a grant has been minted, so it is
+not something a filename on screen could fake. The drop landed **on the URL input**, and a second run
+dropped on the **disclosure paragraph** → `/add/upload/b5f03ba2…`; neither was a drop target before
+this change.
+
+**The disclosure is visible at rest at both widths** — `ADDING_SENDS_TEXT_AWAY`, read out of the DOM
+with a non-zero box, directly under the row, with nothing typed and no file chosen. The near-miss the
+review caught is now written into the comment at its call site, so the next person to compact this box
+finds the reason before the idea.
+
+**What the cross-family review changed, and it was both findings.** GPT Sol read the finished diff
+and returned **do not ship**, twice rightly:
+
+- **The row did not wrap, so the URL input was crushed.** Three controls side by side left it at
+  155 px at 390 and **85 px at 320** — about 59 px of usable text. Zero page overflow is not the same
+  as a usable field, and text zoom makes it worse. Fixed as Sol proposed and as this repo's own rule
+  already said: the input keeps a real floor (`min-w-48`), the two buttons are kept together in their
+  own box so the row can never break *between* them, and the row wraps when the floor cannot be met.
+  Now 661 px / **306 px** / **236 px** at 1280 / 390 / 320, `scrollWidth - clientWidth` still 0 at
+  all three. It costs 43 px at 390 — the whole difference between the 180 px this first measured and
+  the 223 px above — and no breakpoint, because the shelf has none
+  ([design-css-overview.md § Narrow windows](../project/design-css-overview.md#narrow-windows-wrap-do-not-shrink)).
+- **The title promised a bigger target than existed.** *"drop one anywhere on this box"*, while the
+  handlers covered only the form. A PDF let go on the disclosure line or a job row fell through to
+  the browser, which opens it over the page — a worse failure than the old dashed box's, because the
+  old one at least looked like what it was. Fixed by making the promise true rather than by shrinking
+  it: the wrapper now takes the whole section, `-m-4 … p-4` so it reaches the card's edge, and the
+  drop on the disclosure paragraph above is the proof.
+
+Sol found no defect in the render prop (no ownership, identity, re-render or focus problem; the
+hidden `input` is `display:none` and cannot affect hit-testing or the drag depth count), confirmed
+the second-drop refusal, abort, quota and retry paths intact, and confirmed the biome suppression is
+correctly placed and active.
+
+No test asserted the old page order or the dropzone's markup, so none needed changing.
+[library.md](../project/library.md#finding-an-article-and-finding-a-passage-in-one) and
+[ingest-queue.md](../project/ingest-queue.md#uploading-a-pdf) were updated in the same commit.
+
 ### Stage 4 — reduce the cold start, measured against Stage 1
 
 **A spike, not a predetermined edit.** The first draft called this cheap; Sol showed it is not, and
@@ -269,19 +411,40 @@ the correction is the useful part:
   collect-assets`, so moving the imports in `blocks.ts` and `extract.ts` alone **removes nothing from
   the cold path**.
 
-The likely seam is route/store module splitting, which is architectural. So: attempt the smallest
-change the harness shows actually moves the number, re-measuring the emitted bundle after each step,
-and **stop and report rather than pressing on** if the seam turns out to need a redesign. That is a
-decision for Greg, not something to slip into a stage.
+**And Stage 1's ranking is not the one this stage was written against.** Two things it turned up:
+
+- **"The drizzle import" is two**, not one — `drizzle-orm/node-postgres` *and* `drizzle-orm/pg-core`,
+  the largest pair on the list.
+- **`@sentry/node-core/light` outranks Stripe**, and `pdf-lib` outranks it too. **jsdom is third.**
+
+That matters because of which of them the shelf actually needs. Drizzle is on the shelf's own query
+path and cannot be moved off it at all; Sentry is arguably load-bearing. jsdom, `pdf-lib`, Stripe and
+the Anthropic SDK are needed by **no part of answering `GET /api/library`**. So the reachable prize is
+the smaller half of the list, and there is a floor under it that no amount of work removes.
+
+**Individual import costs are not additive** — they share dependencies, and the parts sum to more
+than the 9.4 s whole — so the honest statement of the ceiling is "some fraction, with a hard drizzle
+floor", not a number.
+
+So: attempt the smallest change the harness shows actually moves the number, re-measuring the emitted
+bundle after each step, and **stop and report rather than pressing on** if the seam turns out to need
+a redesign. That is a decision for Greg, not something to slip into a stage.
 
 Done when: a before/after number from Stage 1's harness is in this file — including the honest
 outcome if it is "no cheap seam exists".
 
-### Stage 5 — stale-while-revalidate, only if Stage 4 leaves it worth doing
+### Stage 5 — stale-while-revalidate
 
-Last, and **conditional**, because it hides the very thing Stage 4 is judged by. If Stage 4 gets the
-cold start under the threshold this may not be needed at all; if it does not, this is what the reader
-actually feels.
+**Unblocked by Stage 1, and this is a change to the plan worth stating.** Sol's argument for putting
+this last was that it hides the very thing Stage 4 is judged by. That argument was correct and is now
+spent: Stage 1 committed a harness *and* two production log lines that report the cold start
+regardless of what the client paints. **The measurement is permanent, so SWR can no longer conceal
+it** — `firstRequest` brackets the whole invocation and cannot be improved by moving work around
+inside it.
+
+What survives is the ordering: Stage 4 is attempted first, so the cause gets its chance before the
+symptom is covered. But this is no longer conditional on Stage 4 succeeding, because it is the thing
+the reader actually feels and Greg named it as what he noticed.
 
 The machinery exists: `apiFetch` already writes every GET body to IndexedDB and `cacheable()` already
 special-cases `/api/library` — it is simply only read when the transport *fails*. But the contract has
@@ -336,7 +499,13 @@ cannot overwrite it — plus unmount, a change of reader, and the chosen 401/5xx
 ## Status
 
 Stage 0 (diagnose) — **done**, reviewed by Fable and GPT Sol, rewritten on Sol's six findings.
-Stage 1 next.
+Stage 1 (measure) — **done**, 2026-09-03; the harness, its numbers and the two log lines are in
+§ Stage 1 above. Stage 4 has its shortlist, and it is not the one Stage 4 was written against.
+Stage 2 (the offline envelope) — **done**, 2026-09-03.
+Stage 3 (the two layout jobs) — **done**, 2026-09-03; the add box is 45% shorter at 1280 and 29%
+shorter at 390, and both ways of uploading a PDF were exercised end to end. Reviewed by GPT Sol,
+which returned *do not ship* on two findings; both are fixed and both are written up. Numbers in
+§ Stage 3.
 
 Baseline for comparison, `npm test` on this worktree before any change — **5 files / 6 tests red** of
 586 files / 10,506 tests, and these are the five, so that a sixth is mine:

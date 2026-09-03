@@ -36,6 +36,7 @@ import type { LookupsByTerm } from "../glossary-lookups.js";
 import { currentOwnerId } from "../owner.js";
 import type { Citation, GlossaryLookup } from "../types.js";
 import type { GlossaryLookupStore } from "./contracts.js";
+import { guardDbStore } from "./db-errors.js";
 import { articleIdForOwned } from "./pg.js";
 
 function toLookup(row: typeof glossaryLookups.$inferSelect): GlossaryLookup {
@@ -64,7 +65,7 @@ async function lookupsFor(articleId: string): Promise<LookupsByTerm> {
   return Object.fromEntries(rows.map((row) => [row.entryId, toLookup(row)]));
 }
 
-export const pgGlossaryLookupStore: GlossaryLookupStore = {
+const rawPgGlossaryLookupStore: GlossaryLookupStore = {
   async load(slug: string): Promise<LookupsByTerm> {
     return lookupsFor(await articleIdForOwned(slug));
   },
@@ -101,3 +102,6 @@ export const pgGlossaryLookupStore: GlossaryLookupStore = {
     return lookupsFor(articleId);
   },
 };
+
+/** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
+export const pgGlossaryLookupStore: GlossaryLookupStore = guardDbStore("glossary-lookup", rawPgGlossaryLookupStore);

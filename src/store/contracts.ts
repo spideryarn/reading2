@@ -1614,6 +1614,69 @@ export type FeedbackSubmission =
   | { kind: "limited"; retryAfterMs: number };
 
 /**
+ * **A fenced write that arrived without its fence** — a caller's bug, in four stores.
+ *
+ * `SearchStore.finish`, `CommentStore.patch`, `ChatStore.finish` and
+ * `RefereeCriteriaStore.finish` all take `attempt` as optional, because the
+ * filesystem store has no such token. The Postgres side refuses a call without
+ * one rather than falling back to identity: a caller that merely forgot to carry
+ * it through would put the whole cross-process race back — a model call the
+ * sweep already buried landing on top of the retry the reader is watching
+ * arrive — with nothing anywhere reporting it. Stage H of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * is where `attempt` stops being optional and this class stops being reachable.
+ *
+ * ## Why it is a class, and why its message names no slug
+ *
+ * All four threw a bare `Error` until 2026-09-03, and the message carried the
+ * slug. That was invisible for as long as it was: through `src/store/index.ts`
+ * the store is guarded, so `guardDbStore` scrubbed the sentence to *"this app
+ * asked its database for something it would not do"* — a true-ish sentence that
+ * drops the entire content of the refusal, which is **what the caller forgot**.
+ * The tests covering it passed because they imported the adapter directly, and
+ * the adapter's export was not guarded yet. That is the shape of
+ * docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md exactly, and it
+ * surfaced the moment every Postgres store went behind the guard at its export.
+ *
+ * `IllegalTransition` (src/store/uploads.ts) is the precedent and was added for
+ * the identical trigger — *"found by tests/store-uploads-parity.test.ts the
+ * moment `pgUploadStore` went behind this guard"*. Like it, this is a caller's
+ * bug either way and the whole point of it is to name what was asked for.
+ *
+ * **So the message is built only from literals we chose.** The slug is gone on
+ * purpose: `src/store/db-errors.ts` says a candidate whose message can contain a
+ * URL, a title, a quote or a model's answer does not belong on that allowlist
+ * however well-behaved its class is, and a slug is a URL path segment derived
+ * from a title. Which article it was is in the request the log already carries.
+ */
+export class MissingAttempt extends Error {
+  /**
+   * **Door 1, not the allowlist**, which is what `src/store/db-errors.ts` asks
+   * for: *"Adding another closed class: don't. Give it a `status` instead."* The
+   * three sibling refusals beside it — `must end a run`, `must end an answer`,
+   * `must end a criterion` — carry a status too, so the whole family goes
+   * through one door rather than two.
+   *
+   * `500` because it is always a bug in our own caller and never anything the
+   * reader did.
+   */
+  readonly status = 500;
+
+  constructor(
+    /** The method that refused, e.g. `"SearchStore.finish"`. A literal, always. */
+    operation: string,
+    /** The method that handed the token out, e.g. `"begin()"`. A literal, always. */
+    origin: string,
+  ) {
+    super(
+      `${operation} needs the attempt that ${origin} returned. ` +
+        "Without it a model call the sweep already buried can overwrite the retry.",
+    );
+    this.name = "MissingAttempt";
+  }
+}
+
+/**
  * **Ten reports an hour, per owner.**
  *
  * Said plainly, and the plan says it too: this stops a loop and one account

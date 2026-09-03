@@ -498,9 +498,67 @@ stores an absent period, and meters against it.
 ## Setting it up
 
 ```bash
-npx tsx scripts/stripe-setup.ts            # say what it would do
-npx tsx scripts/stripe-setup.ts --apply    # do it
+npm run stripe:setup                     # say what it would do — the sandbox, and this laptop
+npm run stripe:setup -- --apply          # do it
+npm run stripe:check                     # read-only: is this account fit to take money?
+
+npm run stripe:setup -- --prod           # the same three, against LIVE and the production database
+npm run stripe:setup -- --prod --apply
+npm run stripe:check -- --prod
 ```
+
+**`--prod` is how you reach production, and naming the target on the command line is not.**
+Both scripts call `loadEnvLocal()`, so `.env.local` beats the shell by design ([`src/env.ts`](../../src/env.ts));
+`DATABASE_URL=… STRIPE_SECRET_KEY=… npm run stripe:setup` therefore talks to the sandbox and the
+laptop whatever you type. The Stripe half fails loudly — a test key with `VERCEL_ENV=production`
+trips the mode guard — and **the database half fails silently**, creating live prices and writing
+their ids to your laptop while printing success. `--prod` takes both credentials from `.env.prod`
+together, so a mismatched pair has to be written into that one file rather than assembled by
+accident on a command line. [`scripts/stripe-target.ts`](../../scripts/stripe-target.ts),
+[260903h](../plans/260903h-stripe-scripts-reach-production.md).
+
+What `--prod` requires, before anything is created: a `DATABASE_URL` that **`pg`'s own parser**
+resolves to a hosted Supabase host (`*.pooler.supabase.com`, or `db.<ref>.supabase.co`) over TLS.
+That is an allowlist, and it is deliberately not a list of local spellings to refuse — the version
+that was accepted `local%68ost`, `2130706433` and `postgresql:///postgres`, because `new URL` and
+`pg` do not agree on what the host is. It then wants that database to match `SUPABASE_URL` in the
+same file, both credentials present and non-empty, and a Stripe key that opens Spideryarn's own
+account. It does **not** check that the row contents or `.env.prod` are current.
+
+**Do it in this order**, because only the first step is free:
+
+1. `npm run stripe:check -- --prod` — read-only.
+2. Read the three identity lines it prints: the `.env.prod` it read, the `Target:` database, and the
+   account id. If any is not what you expect, stop.
+3. `npm run stripe:setup -- --prod` — the dry run. Read what it says it would change.
+4. `npm run stripe:setup -- --prod --apply`.
+5. `npm run stripe:check -- --prod` again.
+
+Every run prints its target before it does anything — including a run that is about to fail on a bad
+key, since that is when you most want to know what it was aimed at:
+
+```
+Stripe setup — LIVE mode, API 2026-08-26.dahlia
+  Target: postgresql://spideryarn_app.alschkahzfagtppxspfq@aws-0-eu-west-2.pooler.supabase.com:6543/postgres
+  Account: acct_1UBW3NLv4piDbwcb
+```
+
+A mistyped flag is refused rather than ignored: `--prodd` would otherwise mean "the sandbox", which
+is not what the person typing it meant.
+
+**A `prod_…` id is not enough to tell the modes apart.** Read back on 2026-09-03,
+`prod_VBu1bNwCZAIWwc` exists in *both* accounts — same id, `livemode=false` in one and `true` in the
+other, created fifty minutes apart. So two runs' output can look identical while touching different
+accounts, and it is worth knowing before you compare a sandbox run against a live one. The account
+id and the `Target:` line are what distinguish them.
+
+`stripe:check` writes nothing. It is what you run against **live** before trusting it, and against a
+sandbox to see whether the two agree: the business name a customer reads on the Checkout page, the
+statement descriptor, the tax code without which nothing sells, `tax_behavior`, every currency
+against its row, the portal's cancel and card-update features, and whether any endpoint is listening
+for the webhook that grants entitlement. `✗` exits non-zero. It exists because every check it makes
+is one a real purchase found on 2026-09-03 and no unit test can —
+[`scripts/stripe-check.ts`](../../scripts/stripe-check.ts) says which.
 
 Idempotent by `lookup_key`, not by product name — a name is a label a human may edit, and matching
 on one is how you end up with two $10 prices and two cohorts of customers on different ones. It
@@ -515,11 +573,33 @@ carry: the ids are rows.
 Greg's manual surface is the account, the keys, and the few dashboard-only settings — customer
 email receipts, dispute auto-cancellation and the dunning schedule. Everything else is the script.
 
-**Live mode needs no activating.** `acct_1GHoSxLZ0dGTJEEP` has taken real payments for Greg's
-consulting work for years: read back on 2026-09-03, `charges_enabled`, `payouts_enabled` and
-`details_submitted` are all true with nothing in `requirements`. So going live is configuration in
-the live half of the dashboard and a live key, not an application. Everything else about Stripe is
-per-mode and starts empty over there — products, prices, portal configuration, webhook endpoints.
+### Spideryarn has its own Stripe account
+
+`acct_1UBW3NLv4piDbwcb`, live, with sandbox `acct_1UBW3ULUG7Oye8CX` — **not** the
+`acct_1GHoSxLZ0dGTJEEP` that bills Greg's consulting work. Greg's call, 2026-09-03, and the reasoning
+is worth keeping because the obvious argument for splitting turned out to be the wrong one.
+
+The obvious argument was the statement descriptor: a Spideryarn customer would read
+`GREG DETRE CONSULTING` on their bank statement. That is **solvable inside one account** — Stripe
+resolves the descriptor Invoice → Product → account default, so a `statement_descriptor` on the
+Spideryarn product would have done it, and per-session `branding_settings` would have fixed the
+Checkout page too.
+
+What could not be solved per-product is everything else, because it is account-wide: the **Customer
+Portal** (one headline, one custom domain — and it is our entire self-serve billing UI), the
+**customer email sender**, the **dunning and retry cadence**, **Radar** rules, the payout schedule,
+and the blast radius if Stripe ever freezes an account. A consumer subscription and B2B consulting
+invoicing want different answers to all of those. Two settings collided in one morning before the
+split — the portal login link and the one-subscription toggle — which is what made the pattern
+obvious.
+
+The costs, paid knowingly: a second account verifies from scratch and inherits nothing, and there are
+two payout streams to reconcile. **A separate Stripe account is not a separate tax position** — that
+follows the legal entity, and both trade under the same company.
+
+Settings do **not** cross between a sandbox and live, or between accounts: products, prices, portal
+configuration, webhook endpoints, business name, branding and every dashboard toggle start empty in
+live and must be set again there. `npm run stripe:check` is how you find out whether they were.
 
 ### Subscribing twice: looked at, and deliberately left open
 
@@ -540,8 +620,8 @@ What was weighed and passed over, so nobody re-derives it:
   Checkout section — so it is a dashboard click, per mode. It **redirects a Checkout page as it
   loads**; it is not a refusal at `sessions.create`, so it would not have closed the two-tab case
   anyway. When its destination is the Portal it also depends on `login_page.enabled`, which would
-  silently make it do nothing — and that field is **account-wide**, on an account that also bills
-  Greg's consulting work.
+  silently make it do nothing — and that field was **account-wide** on an account that also billed
+  Greg's consulting work, which is one of the collisions that prompted the split above.
 - **Reusing an open Session** — the actual close, and it needs stored session state plus expiry
   handling.
 - **An idempotency key** on `sessions.create` — no help, because the window here is a second tab
@@ -574,6 +654,35 @@ unavailable. It is the one route nobody is signed in to and the one that grants 
 Tests sign payloads offline with the SDK's own signer, and `api.stripe.com` is refused by
 [`tests/setup/provider-guard.ts`](../../tests/setup/provider-guard.ts) so no test can reach Stripe
 for real with the key sitting in `.env.local`.
+
+### Pointing Stripe at it
+
+**Locally**, nothing is registered at Stripe. `stripe listen` holds a connection open and forwards,
+minting its own signing secret each time it starts — which is why `STRIPE_WEBHOOK_SECRET` is
+per-machine and never travels:
+
+```bash
+stripe listen --api-key "$STRIPE_SECRET_KEY" \
+  --forward-to http://localhost:5273/api/webhooks/stripe \
+  --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted
+```
+
+It prints `whsec_…` on the line that says *Ready!*. Put that in `.env.local` and **restart the dev
+server** — the value is read at startup, so a server already running is still checking signatures
+against the previous session's secret and will reject every delivery with a 400. Pass `--api-key`
+rather than relying on `stripe login`: the CLI's stored login is whichever account somebody
+authenticated last, which is not necessarily this one.
+
+**In production**, it is a registered endpoint at
+[dashboard.stripe.com/webhooks](https://dashboard.stripe.com/webhooks) (the live URL, with no
+`/test/`), pointing at `https://www.spideryarn.com/api/webhooks/stripe`, subscribed to exactly the
+four events in `HANDLED_EVENTS`, with its own permanent `whsec_…` revealed on the endpoint's own
+page. That secret is per-endpoint and unrelated to the API keys; it goes in the Vercel production
+environment.
+
+`npm run stripe:check` fails if nothing is listening at that URL, because a live account with no
+endpoint takes money and grants nothing — the one failure mode where every other check passes and
+the customer is simply not served.
 
 ## The three billing routes
 
@@ -722,6 +831,7 @@ Comp subscriptions for journalists and QA, and go-live. The order is in
 | [`src/billing/subscription.ts`](../../src/billing/subscription.ts) | Reading a Stripe subscription into the fields entitlement needs, and refusing everything unrecognised. Pure. |
 | [`src/billing/webhook.ts`](../../src/billing/webhook.ts) | Verification. |
 | [`src/billing/checkout.ts`](../../src/billing/checkout.ts) | The three billing routes: the order that makes the mapping durable, the Portal redirect, and the proof that a Checkout Session belongs to the reader asking about it. |
+| [`scripts/stripe-check.ts`](../../scripts/stripe-check.ts) | Read-only. Whether an account is actually fit to take money, one check per thing a real purchase has caught. |
 | [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts) | Reserve, settle, count. The lock. |
 | [`src/billing/admission.ts`](../../src/billing/admission.ts) | Which requests spend a slot, the refusal a reader sees, and the release. The only caller of `reserveIngest`. |
 | [`src/billing-plan.ts`](../../src/billing-plan.ts) | What `/profile` is told and what it says. Pure — no database, no network, no React, so the browser can have it. |

@@ -387,17 +387,27 @@ export const articleVisibilityChanges = spideryarn.table(
  *
  * ## Why "in its text" and not simply "immutable"
  *
- * **Every step mints a revision. There are no exceptions in the pipeline.** A
- * job opens a draft (`openOrBeginJobDraft` → `beginDraftIn`, in
- * src/store/pg-revisions.ts), each step writes into *that draft's* row, and a
- * `done` ending publishes it (`publishRevisionIn`, called from
+ * **Every pipeline job writes its steps into one draft and publishes that draft
+ * once.** A job opens a draft (`openOrBeginJobDraft` → `beginDraftIn`, in
+ * src/store/pg-revisions.ts), every step of that job writes into *that draft's*
+ * row, and a `done` ending publishes it (`publishRevisionIn`, called from
  * src/store/pg-session.ts). `hierarchy`, `arc`, `tweets` and `glossary` take
  * exactly that path, the same as `fetch`, `extract` and `blocks`.
  *
+ * **One draft per job, not one per step**, and that distinction is the whole
+ * reason `openOrBeginJobDraft` exists rather than `beginRevision`: `advanceJob`
+ * runs one step per HTTP request, so a draft minted per step would throw away
+ * what the previous step wrote. Its own comment tells that story.
+ *
  * What the property is *for* is the sentence below it: a failed re-extraction
- * must not overwrite a good article in place. That is about the **text**, which
- * is why "in its text" and not "immutable" — a published row's *bookkeeping*
- * still moves after publication (`status`, and the pointer in `articles`).
+ * must not overwrite a good article in place. That is about the **text**, and
+ * what earns "in its text" rather than plain "immutable" is exactly one thing:
+ * the glossary delete below, which nulls one column of a row that is already
+ * published. Nothing else in this table writes a published revision.
+ * Publication is the row's *last* change as a draft — `publishRevisionIn` sets
+ * `status` and the library scalars and moves `articles.current_revision_id` in
+ * one transaction — and `failRevisionIn`'s `UPDATE` names `status = 'draft'` in
+ * its `WHERE`, so a published row is out of its reach too.
  *
  * ### This comment said the opposite until 2026-09-03, and two readers believed it
  *
@@ -415,6 +425,13 @@ export const articleVisibilityChanges = spideryarn.table(
  *
  * docs/project/database.md had it right the whole time — *"A `done` ending
  * publishes the draft"* — so the correction was one file away.
+ *
+ * **The first replacement was wrong too**, which is worth recording next to the
+ * original: it said *"every step mints a revision"* and that a published row's
+ * bookkeeping *"still moves after publication"*. Neither is true — one draft
+ * serves a whole job, and after publication nothing moves a published row's
+ * `status`. GPT Sol caught it on the built code, one review after catching the
+ * sentence it replaced.
  *
  * ### The one deliberate exception, which is a reader's and not the pipeline's
  *

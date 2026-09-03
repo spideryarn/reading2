@@ -48,6 +48,8 @@
     "db:seed-dev": "tsx scripts/db-seed-dev.ts",
     "db:reown": "tsx scripts/db-reown.ts",
     "db:admin-password": "tsx scripts/db-admin-password.ts",
+    "stripe:setup": "tsx scripts/stripe-setup.ts",
+    "stripe:check": "tsx scripts/stripe-check.ts",
     "setup": "tsx scripts/setup-local.ts",
     "db:export": "tsx scripts/db-export.ts",
     "db:start": "supabase start",

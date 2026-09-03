@@ -42,7 +42,11 @@ import { articleRevisions, articles, blockIdentities, revisionBlocks } from "../
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { inputFingerprint as illustratedFingerprint } from "../src/illustrated.js";
-import type { Illustrated, IllustratedImage } from "../src/illustrated-plate.js";
+import {
+  ILLUSTRATED_VERSION,
+  type Illustrated,
+  type IllustratedImage,
+} from "../src/illustrated-plate.js";
 import type { OwnerId } from "../src/owner.js";
 import type { Sketch } from "../src/sketch-scene.js";
 import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
@@ -182,7 +186,7 @@ function sketchFor(slug: string): Sketch {
 
 function illustratedFor(slug: string, sketch: Sketch, image: IllustratedImage): Illustrated {
   return {
-    version: "illustrated/1",
+    version: ILLUSTRATED_VERSION,
     generator: "claude-opus-5",
     illustrator: "openai/gpt-image-2",
     slug,
