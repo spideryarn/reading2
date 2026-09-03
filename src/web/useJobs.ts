@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Job, StepName } from "../types.js";
 import { jobEngine, send } from "./jobEngine.js";
+import { uploadEngine } from "./uploadEngine.js";
 import { statusOf } from "./lib/api.js";
 
 /**
@@ -185,12 +186,34 @@ export function useJobSession(readerId: string | null, accessToken: string | nul
   useEffect(() => {
     if (!readerId) return;
     jobEngine.start(readerId);
-    return () => jobEngine.stop();
+    /* **The upload engine is bound here too**, and for the same reason rather
+       than for convenience: it is the other tab-level singleton that outlives
+       every mount, and it holds a reader's filename and their bytes. Left
+       unbound, signing out mid-transfer leaves one reader's upload in a
+       singleton that then posts `/api/jobs` as whoever signs in next. GPT Sol,
+       reviewing docs/plans/260903j-background-pdf-upload-so-add-does-not-wait.md.
+
+       Not in the token effect below: a refreshed token must not tear down a
+       transfer, which is exactly the mistake the comment above warns about for
+       the job list. */
+    uploadEngine.start(readerId);
+    return () => {
+      jobEngine.stop();
+      uploadEngine.stop();
+    };
   }, [readerId]);
 
   useEffect(() => {
     if (!readerId || !accessToken) return;
     jobEngine.resume();
+    /* **And the upload engine, which fails differently.** A job whose
+       `/advance` is refused 401 is retried by the poller for ever; a queue POST
+       happens once and then sits `failed`. So a reader whose session lapsed
+       during a long upload had their file safely in Storage and an ingest
+       nobody would ever queue — recoverable only by going back to the page and
+       pressing Try again. `resume` there retries a 401 queue phase and nothing
+       else. GPT Sol, 2026-09-03, finding 5. */
+    uploadEngine.resume();
   }, [readerId, accessToken]);
 }
 

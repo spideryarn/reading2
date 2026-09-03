@@ -115,12 +115,57 @@ export function asOf(record: UploadRecord, now: Date = new Date()): UploadRecord
     : record;
 }
 
-/** Take exclusive ownership of an upload, or say who got there first. */
+/**
+ * Take exclusive ownership of an upload, or say who got there first.
+ *
+ * `arrived` — *the object is in Storage, and I have just looked* — suppresses
+ * the grant-expiry refusal and nothing else. Only `POST /api/jobs` may pass it,
+ * because only that route does the `head` that makes it true. See
+ * `UploadStore.claim` for why the expiry has nothing left to protect once it is.
+ */
 export function claimUpload(
   id: string,
-  options: { owner?: string; now?: Date } = {},
+  options: { owner?: string; now?: Date; arrived?: boolean } = {},
 ): Promise<ClaimResult> {
   return store.claim(id, options);
+}
+
+/**
+ * **The reader pressed Stop, and the server is told.**
+ *
+ * `pending → expired`, which the state machine already allows (`NEXT` in
+ * src/source.ts) and which is the honest name for what has happened: this
+ * upload's grant is over as far as we are concerned, and nothing will ever be
+ * made from it.
+ *
+ * Without it, Stop was a client-side fact and nothing more, and two things
+ * followed. A reload of `/add/upload/<id>` after a Stop found a `pending` record
+ * with no object and sat there **polling for the two hours of the grant**,
+ * telling the reader their file was still on its way — measured in a browser on
+ * 2026-09-03. And a Stop pressed after the object had quietly landed (the
+ * ambiguous-completion case `retry` exists for) left a record a second tab could
+ * still queue, so *"nothing was added"* was not a claim we were entitled to
+ * make. GPT Sol, finding 2.
+ *
+ * **It races `claimUpload`, and the store decides.** `settle` refuses an illegal
+ * transition, so an upload already `claimed` by a queue request that got there
+ * first stays claimed and this answers false — the ingest wins, which is right:
+ * the Stop arrived after the thing it was trying to stop. The caller reports
+ * that as *too late*, not as an error.
+ */
+export async function cancelUpload(id: string, owner: string): Promise<boolean> {
+  const record = await store.read(id, owner);
+  /* Somebody else's upload, or none — `read` answers null for both, and a
+     stranger learns nothing either way. */
+  if (record?.status !== "pending") return false;
+  try {
+    await store.settle(id, "expired", {});
+    return true;
+  } catch {
+    /* The claim won the race in the moment between the read and the settle.
+       Not an error: the ingest is under way and the reader will see it. */
+    return false;
+  }
 }
 
 /** Move an upload to a terminal state, refusing an illegal transition loudly. */

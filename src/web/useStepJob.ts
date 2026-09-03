@@ -101,6 +101,33 @@ interface StepRun {
    * visit reads the reader's choice off the file instead of remembering it.
    */
   useProfile?: boolean;
+  /**
+   * **Steps this one needs run first, in the same job.**
+   *
+   * One job holding many steps is what the queue is already for: `orderSteps`
+   * (src/jobs.ts) puts the names through a `Set` and sorts them by `STEP_ORDER`,
+   * so the server decides what runs before what and the browser cannot get it
+   * wrong. The alternative — two POSTs sequenced by the client — puts the
+   * ordering in a tab that can be closed halfway through.
+   *
+   * **Named, not positional**, for the same reason `force` is: a caller says
+   * which steps, and nothing here infers a prefix of `STEP_ORDER`. The only
+   * caller today is Illustrated asking for `["sketch"]` — the one step in this
+   * app whose input is another step's artefact (src/pipeline.ts § illustrated).
+   *
+   * **Each of them is a paid step in its own right**, so a surface that passes
+   * this owes the reader the price of all of them *before* the press, not after.
+   * That is the whole of what the refusal it replaces was protecting:
+   * *"not `enqueue(["sketch", "illustrated"])`, which turns one press into a
+   * hidden $0.20 charge and a three-minute wait that nothing warned about"* —
+   * the objection was to the hiding, not to the chain.
+   *
+   * **`force` still names only this hook's own step**, never these. Forcing an
+   * earlier step would cascade over everything after it (`cascadeForce`), which
+   * is the opposite of what a preceding step is here for: it is wanted only if
+   * it is genuinely not current, and `stepIsDone` is what decides that.
+   */
+  precededBy?: readonly StepName[];
 }
 
 /**
@@ -445,14 +472,19 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
   }, [queue.jobs, watchedId]);
 
   const start = useCallback(
-    async ({ force = false, useProfile = true }: StepRun = {}) => {
+    async ({ force = false, useProfile = true, precededBy }: StepRun = {}) => {
       setWatchedId(null);
       /* Before the `await`, so the button is gone for the whole of the round
          trip rather than from whenever it comes back. */
       setStarting(true);
       const started = await queue.run({
         slug,
-        steps: [step],
+        /* Sent in reading order because that is what the request means, not
+           because the order is load-bearing: `orderSteps` sorts by `STEP_ORDER`
+           on arrival, so a client that named them backwards would get the same
+           run. `precededBy` defaults to nothing, so the ordinary request is
+           still the same two-field body it has always been. */
+        steps: [...(precededBy ?? []), step],
         /* The step named, never a positional force — see `force` on `StepRun`
            for both halves of why. */
         ...(force ? { force: [step] } : {}),

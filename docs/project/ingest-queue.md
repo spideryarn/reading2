@@ -97,8 +97,10 @@ three PDFs in this project's own eval set are bigger than that. So:
 
 ```
   POST /api/uploads   {filename, bytes, sha256}   ~200 bytes of JSON to us
+     └─ navigate to /add/upload/<id> here, with zero bytes sent
   PUT  <signed url>   the whole file              straight to Supabase Storage, no credentials
   POST /api/jobs      {uploadId}                  ~60 bytes of JSON to us
+     └─ the server HEADs the staging object first: no object, no job
 ```
 
 The middle step carries no bearer token and no API key. The grant is in the URL, it is bound to one
@@ -116,12 +118,18 @@ reviews are in [260826u-pdf-upload-and-storage.md](../plans/260826u-pdf-upload-a
 
 ### Four things about it that are not obvious
 
-**The upload is not the ingest, and they happen in different places.** The transfer runs on the
-shelf, because that is where the `File` is — a file handle is not something an address can carry,
-so navigating first and uploading there is not available. Only when the bytes have landed does the
-reader go to `/add/upload/<uploadId>`, which queues the job and watches it exactly as `/add/<url>`
-does. So an ingest still has one place and one address, and the thing that *cannot* have an address
-is over before the navigation happens.
+**The upload is not the ingest, and they happen in different places.** The transfer starts on the
+shelf, because that is where the `File` is — a file handle is not something an address can carry.
+But since 2026-09-03 it does not *stay* there: it belongs to
+[`src/web/uploadEngine.ts`](../../src/web/uploadEngine.ts), a tab-level singleton beside
+[`jobEngine`](../../src/web/jobEngine.ts), which owns hashing, the grant, the PUT **and** the
+`POST /api/jobs` that follows it. The reader presses Add and is sent to `/add/upload/<uploadId>`
+**at byte zero**, and can then go anywhere in the app while the file goes up and the ingest starts
+itself. [§ Add commits, and does not wait](#add-commits-and-does-not-wait).
+
+Closing the tab still loses the upload, because the bytes exist only in the browser until they
+reach Storage — there is no server-side copy to resume from, which is the same 4.5 MB body limit
+that put them there in the first place.
 
 **There is no new step in the pipeline.** An upload's first step is still called `fetch`; it simply
 has two halves, and the branch on `ctx.upload` is the only place in the whole pipeline that knows
@@ -196,6 +204,54 @@ a cliff — every attempt starts from zero, so it can never finish at all. The v
 nobody read was the slug: three retries gave `…-spya-aaa-spya-bbb-spya-ccc`, three articles, three
 invoices. `tests/retry-keeps-the-checkpoints.test.ts` and
 [the plan](../plans/260903k-pdf-page-cap-refused-with-no-reason-given.md) § Bug 2.
+
+### Add commits, and does not wait
+
+> sometimes it takes a while to upload over a slow connection. I have to wait before I can then
+> click the Add button … I'd like to be able to upload and then click Add immediately, which would
+> then wait for the upload to finish and run the ingestion queue immediately, so I could go off and
+> do something else in the meantime.
+>
+> — Greg, 2026-09-03
+
+Add is now **one button for both ways in** — a typed URL or a chosen PDF, whichever was touched
+last, and the label says which (*Add* or *Add PDF*). The *Send it* button is gone. Pressing it with
+a file chosen mints the grant, navigates, and leaves; `uploadEngine` finishes the transfer and
+queues the ingest wherever the reader has gone.
+
+**Handing out the address at byte zero needed a lock on the other end**, and that is the part worth
+knowing. `POST /api/jobs { uploadId }` now asks Storage whether the staging object is there before
+it claims anything (`uploadHasArrived`, [`src/routes.ts`](../../src/routes.ts)) and answers
+`UPLOAD_STILL_ARRIVING` when it is not — taking no claim, no job and **no quota slot**. Without it,
+three ordinary gestures queue an ingest over a file that has not arrived — reload the page, open it
+in a second tab, press Stop and reload — and `acquireUpload` refuses each of those *terminally*, so
+a reader's own reload destroyed their upload.
+
+The object's existence is the readiness state rather than a `ready` column, because a column would
+need a writer and the only candidate is the browser saying it has finished. It is a true test
+rather than a proxy, and that is measured: a PUT aborted at 320 KB of 5 MB leaves **no object at
+all**, and re-PUTting the same grant then succeeds. The table, and the rest of the design, is in
+[260903j-background-pdf-upload-so-add-does-not-wait.md](../plans/260903j-background-pdf-upload-so-add-does-not-wait.md).
+
+Two consequences that follow from the gate rather than from the feature:
+
+- **An upload's existing job is found before the quota slot is reserved.** `admitIngest` throws 402
+  before its callback runs, so a reader on their last slot who reloaded the ingest page used to be
+  refused for having no allowance when the right answer was the job their first request had already
+  made.
+- **A cancelled transfer can never become a job**, however many times its address is opened. Nothing
+  told the server it was cancelled; the object simply never arrived, and that is now enough.
+
+### Abandoned uploads are not swept, and nothing sweeps them
+
+`sweepable()` in [`src/source.ts`](../../src/source.ts) has **no production caller** — only its own
+definition and `tests/source.test.ts`. So an expired `pending` record and its staging object stay
+where they are. `asOf` *reports* an expired grant without rewriting the row, which is right, but
+nothing ever deletes anything. Cancelling got easier on 2026-09-03, so the pile grows faster.
+
+Written down rather than fixed (2026-09-03, verified by grep). Whoever writes the sweep: it must not
+delete an object whose record could still be claimed, because the readiness gate above now treats
+that object as the fact.
 
 ### `/add/upload/<id>` has to survive a reload, and for a day it did not
 

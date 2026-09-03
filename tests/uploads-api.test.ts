@@ -18,7 +18,9 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { handleApi, parseJobRequest } from "../src/routes.js";
 import { slugFromFilename, slugWithShortId } from "../src/ingest.js";
 import { forgetUpload, recordsSurviveTheRequest } from "../src/upload-records.js";
+import { blobStore, CONTENT_TYPE } from "../src/store/blobs.js";
 import { forgetForTests, fsJobStore } from "../src/store/jobs-fs.js";
+import { stagingKey } from "../src/source.js";
 import type { OwnerId } from "../src/owner.js";
 import type { JobStep } from "../src/types.js";
 import { acceptAny, AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
@@ -40,9 +42,36 @@ const OWNER = TEST_SUB as OwnerId;
  * list of things this file actually caused.
  */
 const minted: string[] = [];
+/** Staging objects this file wrote, so `land` can be undone. */
+const landed: string[] = [];
 afterEach(async () => {
   for (const id of minted.splice(0)) await forgetUpload(id);
+  for (const key of landed.splice(0)) await blobStore().remove(key);
 });
+
+/**
+ * **Put the bytes where the browser would have put them.**
+ *
+ * Needed from 2026-09-03, and the reason is the point of the readiness gate:
+ * `POST /api/jobs { uploadId }` now HEADs the staging object before it claims
+ * anything, so a test that mints a grant and queues a job without ever
+ * uploading is describing a sequence the route no longer allows. It never
+ * should have — that sequence is a reader reloading `/add/upload/<id>` mid
+ * transfer, and it used to destroy their upload. See
+ * `tests/an-upload-is-queued-only-once-its-bytes-arrive.test.ts`.
+ *
+ * The three recovery cases below are about what happens *after* an ingest
+ * exists, so they need a real one, so they need bytes.
+ */
+async function land(uploadId: string): Promise<void> {
+  const key = stagingKey(uploadId);
+  await blobStore().putIfAbsent(
+    key,
+    new TextEncoder().encode("%PDF-1.4\ntrailer\n<<>>\n%%EOF\n"),
+    CONTENT_TYPE.pdf,
+  );
+  landed.push(key);
+}
 
 async function call(
   method: string,
@@ -345,6 +374,9 @@ describe("the job a repeat claim finds", () => {
     });
     expect(minted.status).toBe(201);
     const uploadId = String(minted.body.uploadId);
+    /* The transfer, which the readiness gate now requires before anything
+       may be queued from this id. */
+    await land(uploadId);
 
     /* **`VERCEL`, so `enqueue` does not start driving what it queues.** `pump`
        returns immediately when it is set (src/jobs.ts); without it the ingest
@@ -410,6 +442,9 @@ describe("the job a repeat claim finds", () => {
     });
     expect(minted.status).toBe(201);
     const uploadId = String(minted.body.uploadId);
+    /* The transfer, which the readiness gate now requires before anything
+       may be queued from this id. */
+    await land(uploadId);
 
     const was = process.env.VERCEL;
     process.env.VERCEL = "1";
@@ -472,6 +507,9 @@ describe("the job a repeat claim finds", () => {
     });
     expect(minted.status).toBe(201);
     const uploadId = String(minted.body.uploadId);
+    /* The transfer, which the readiness gate now requires before anything
+       may be queued from this id. */
+    await land(uploadId);
 
     const was = process.env.VERCEL;
     process.env.VERCEL = "1";

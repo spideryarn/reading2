@@ -746,6 +746,401 @@ database is a failure rather than a silent inheritance.
 - **The lease connection is T-D's**, per the scavenger section above.
 - **Storage is still shared.** Not addressed here, and a stated limitation rather than an oversight.
 
+#### T-C is built — the lane map, its guards, and the tail a clean database exposes, 2026-09-03
+
+Still opt-in. `vitest.config.ts`, `package.json` and `scripts/check.ts` are untouched; the three
+vitest projects and the wiring into `npm test` are T-D's and land in one commit after this.
+
+What landed:
+
+- **`TEST_LANES`** in [`tests/store-migration-registry.ts`](../../tests/store-migration-registry.ts)
+  — one lane for each of the **93** test files that open a Postgres connection of their own. Four
+  `shared-services`, 89 `private-postgres`.
+- **`OWNER_AUDIT`** in the same file — one verdict per *(file, owner uuid)* pair. Sol's review
+  turned this from a file-keyed exception list into a pair-keyed audit; see below.
+- **Three guard cases plus a compiler check** — the third rebuilt after review — in
+  [`tests/store-migration-registry.test.ts`](../../tests/store-migration-registry.test.ts)
+  § *the test-lane map*, over a live static scan of every test file.
+- **[`tests/helpers/seed-local-accounts.ts`](../../tests/helpers/seed-local-accounts.ts)** and its
+  suite [`tests/seed-local-accounts.test.ts`](../../tests/seed-local-accounts.test.ts) — the one fix
+  that removes 49 of the 54 reds, described below.
+- One test fixed: `tests/admin-feedback-store.test.ts`, for a reason worth reading.
+- The 260903e spike setup [`tests/setup/spike-db.ts`](../../tests/setup/spike-db.ts) gained a real
+  positive control (`current_database()`, not the name in the URL it wrote) and calls the seeder.
+  **T-D promotes both halves into the private lane's own setup.**
+
+##### The universe is 93 files, and the predicate is mechanical
+
+Every test file whose *code lines* contain `pgReady(` or `new Pool(`/`new Client(`. 85 call
+`pgReady`, 15 build their own connection, union 93. Comment lines are dropped, because 86 files
+contain the string `pgReady` and only 85 call it — `store-seams-have-two-implementations` discusses
+it in a paragraph. **`tests/db-test-create.test.ts` and `tests/migration-reconciliations.test.ts`
+were invisible to a first draft that looked only for `pgReady` and `new Pool`**: they use `new
+Client`, and the factory's own suite is the last file that should have been missed.
+
+##### The four in `shared-services`, and how each was settled
+
+| file | how decided |
+|---|---|
+| `tests/auth-user-seeding.test.ts` | **Measured.** Red on a private database: it seeds a row and asks `GET /auth/v1/admin/users` to list it, and GoTrue answers about `postgres`. `expected [ …(11) ] to include '6fece419-…'` |
+| `tests/seed-admin-signin.test.ts` | Signs in through the Auth service. Same service, same database. |
+| `tests/admin-store.test.ts` | **Reasoned, and the measurement is the argument for moving it, not against.** It is *green* on a private database while checking nothing: accounts come from GoTrue over HTTP so its `users.length > 0` control still fires, and every aggregate beside them is `?? 0` out of the empty clone. `typeof 0` is `"number"` however wrong the number is. |
+| `tests/db-test-create.test.ts` | **Chosen by contract, not by a red, and the measurement says so**: 57/57 pass in the private lane as well as the shared one, because `dumpSharedSchema` hardcodes `-d postgres` and the host and port are the same either way. What is wrong is quieter — `baseUrl()`'s documented job is to mean *the shared database*, and in the private lane it silently means a clone, so the factory's own suite would be minting siblings of a clone and T-D's lane would create a database in order to create databases. The file whose job is to police the factory is the worst place to leave that ambiguity. |
+
+**`tests/store-realtime-sessions.test.ts` is not among them, and 260903e's first list was wrong to
+include it** — checked here rather than inherited. Its Postgres half seeds its own `auth.users` row
+through `seedAuthUser` and drives `pgRealtimeSessionStore` over Drizzle; `Realtime` in the name is
+the feature's, not the service's. **It passed on a private database, first time, unchanged.**
+
+##### The tail is one row, fifty-odd times over
+
+Ran 91 of the 93 one file at a time against a factory-minted database under `REQUIRE_POSTGRES=1`,
+so a skip counted as a failure (`db-test-create` and `migration-reconciliations` were run
+separately, being the two the first scan had missed). **54 red** — out of the 76 files that ran
+before the seeder below existed; the last 15 of that run were already benefiting from it, so 54/76
+is the bare-clone figure and the run's own 54/91 understates it.
+
+The commonest failure by a wide margin, and it is the same line every time:
+
+```
+insert or update on table "articles" violates foreign key constraint "articles_owner_fk"
+Key (owner_id)=(f4d08b58-…) is not present in table "users".
+```
+
+That id is not a fixture. It is the **ambient owner** — what `currentOwnerId()` answers outside a
+request, from `SPIDERYARN_OWNER_ID` in `.env.local` (`src/owner.ts` § `environmentOwnerId`) — and
+suites write rows owned by it without ever naming it, because `npm run db:seed-owner` put that row
+in the shared database weeks ago and everything has been quietly borrowing it.
+
+**47 of the 54 reds are a key into `auth.users`** — `articles_owner_fk`,
+`ingest_events_owner_fk`, `ai_calls_owner_id_users_id_fk` and their siblings; 23 tables carry one,
+and a schema-only clone can satisfy none of them. **Two more of the remaining seven are the same
+cause wearing a different symptom**: `a-claim-that-lost-its-draft` fails an outcome assertion and
+`claim-session-postgres` reports *"case 1 has to have published before this case runs"*, and both
+went green on the seeder with no edit. **So 49 of 54, one cause.**
+
+**So the fix is one place, not fifty edits.** `tests/helpers/seed-local-accounts.ts` writes the rows
+a local database is *expected* to have — derived from `SEEDED_ACCOUNTS` in
+[`scripts/seed-accounts.ts`](../../scripts/seed-accounts.ts), the repo's own declaration of what
+`db:seed-owner` guarantees, plus whatever `SPIDERYARN_OWNER_ID` names if it is not one of them.
+Derived rather than hand-copied, so a fourth account added there arrives for free — a hand-copied
+list of ids is the shape that stopped `db:export` writing `shelf.json`.
+
+The alternative considered and rejected: fifty files each calling `seedAuthUser` on the same id.
+They would all say the same thing, drift separately, and bury the genuinely interesting owner
+dependencies — a *second* owner, a fixture id — under fifty that are not interesting at all.
+
+**What it costs, stated rather than discovered:** a private database is no longer a bare clone. It
+carries three or four `auth.users` rows, so no suite can use it to prove *"this works with no
+accounts at all"*. Nothing needs that today.
+
+Re-run in full on a fresh database with the seeder in the lane setup: **86 of 91 green**, and one of
+the five reds is `auth-user-seeding` failing exactly as its shared lane predicts.
+
+**The three files 260903e named are the proof that it is one cause and not three.** All three were
+red on a bare clone and green after the seeder, with **no edit to any of them**:
+
+| | bare clone | with the seeder |
+|---|---|---|
+| `tests/store-checkpoints.test.ts` | red | green |
+| `tests/store-artefacts-pg.test.ts` | red | green |
+| `tests/blocks-baseline.test.ts` | red | green |
+
+**And this is where the cost-recording families went.** § T says *"every route or job suite that
+records cost needs its owner row in `auth.users` — 5 of 5 writes refused without it. Add the route
+families to 260903e's Stage C list rather than discovering them one at a time."* They are all in
+`TEST_LANES` — the scan takes every file that opens a connection, so there is no family to remember
+— and the seeder is what satisfies them, because the owner they record cost against *is* the ambient
+owner. `ai-calls-spend-pg`, `billing-admission`, `billing-quota-race`, `billing-settlement` and
+`running-slot` are green in the private lane.
+
+##### What is left after the seeder — the catalogued tail
+
+| shape | files | what it needs |
+|---|---|---|
+| **`billing_tiers.stripe_price_id` is NULL in a clone** | `billing-checkout`, `billing-usage-route`, `plans-match-tiers` | The tiers themselves come from a migration (`20260902181004_seed_billing_tiers.sql`); the **price ids** are written by `npx tsx scripts/stripe-setup.ts --apply` against the shared database and are not in it. `offerableTiers` filters on `stripePriceId !== null`, so a clone offers nothing: two of the three throw `billing_tiers has no active 'reader' row with a stripe_price_id` from their own helper, and `plans-match-tiers` fails as `the table advertises "Reader" and no active tier sells it`. |
+
+**The recommended fix for that family, not taken here — and the first version of this
+recommendation was unsafe.** It said: backfill a plainly fake `price_local_test_…` onto the `reader`
+row, **only when `stripe_price_id` is null**. GPT Sol found two defects, both certain, and this
+paragraph is the corrected version.
+
+- **Null is not evidence of a private database.** Null is the *legitimate* state on any machine
+  where nobody has run `npx tsx scripts/stripe-setup.ts --apply` — a fresh clone of the repo, or the
+  Mac. On such a machine the "safe" conditional fires against the shared `postgres` and **persists a
+  Stripe price id that does not exist** into a developer's own database. Nullness cannot tell
+  private from shared, and no refinement of it can.
+- **`reader` is not the only tier.** `20260902181004_seed_billing_tiers.sql` creates `reader` *and*
+  `researcher`, both `active`, both with a null price id, and `plans-match-tiers` requires every
+  paid row the UI advertises to be offerable. Filling `reader` alone leaves `researcher` red — a fix
+  that turns three failures into one and looks like progress.
+
+So the safe version is: **positively prove the target is a factory-owned private database** — the
+name matches what `scripts/db-test-create.ts` mints, and nothing weaker — then backfill **every**
+active paid tier the UI requires, derived from what the page advertises rather than from a list of
+tier ids somebody typed. Never infer privateness from the data.
+
+None of the three suites asserts anything about a price id's *value*, so a placeholder preserves
+each claim exactly: `plans-match-tiers` compares the website's copy against the `amounts` the
+migration seeded, and the other two only need the route to have something to sell. Left for T-D
+because it needs all three suites' Stripe stubs read, and now also because it needs the
+private-database proof that only T-D's lane can supply.
+
+**One found and fixed, and it is a third shape worth naming:**
+`tests/admin-feedback-store.test.ts` § *says there are more only when it has seen one more* wrote
+**one** feedback row and then asked for a page of `n - 1`. On the shared database the table always
+held several, so that was a sensible limit; on an empty one `n` is 1 and `n - 1` is **zero**, which
+the store legitimately clamps to one — so the length assertion failed on a suite that was already
+careful enough to *measure* the count rather than assume it. The class is **boundary arithmetic that
+is only non-degenerate because the table was not empty**, and measuring the count is not a defence
+against it. Fixed by writing two rows, with the floor raised to `> 1` so the case cannot go
+degenerate again silently.
+
+##### Storage is not isolated, and the docs now say so
+
+The private lane clones the SQL. The bucket does not move: `blobStore` talks to the Storage service
+over HTTP and that service is bound to `postgres`, so two runs share one bucket and
+`storage.objects` in a clone is permanently empty. Acceptable, because every key this repo writes is
+content-addressed — two runs writing the same bytes write the same object. But it is a **stated
+limitation** in `TEST_LANES`'s own docstring, not something a reader discovers:
+**Two files reach it**, and the count was wrong twice before it was right —
+`tests/helpers-load-article.test.ts` and `tests/source-store.test.ts`; see the review section
+below for why the other three candidates do not.
+
+##### The guards, and the violation planted in each
+
+**Five reds, each watched and each naming what was broken.** The violation was a *new file* rather
+than an edited line wherever it could be — `tests/zz-lane-control.test.ts`, one `pgReady(` call and
+one literal owner uuid — because the line a control breaks is otherwise the least stable text in the
+file and a peer may have edited it minutes ago.
+
+| planted | what it said |
+|---|---|
+| the control file exists, with no lane | `test files that open a Postgres connection and have no lane in TEST_LANES …: [ "tests/zz-lane-control.test.ts" ]` |
+| … given a lane, still no `seedAuthUser` | `files naming a fixed owner uuid … that neither seed it nor appear in UNSEEDED_OWNER_EXCEPTIONS …: [ "tests/zz-lane-control.test.ts" ]` — **the file-keyed guard this round replaced**; its pair-keyed successor's controls are in the review section below |
+| … declared, with a nine-character reason | `the reason recorded for tests/zz-lane-control.test.ts: expected 9 to be greater than 40` |
+| the control file deleted, its entries left behind | `TEST_LANES entries the scan does not find …: [ "tests/zz-lane-control.test.ts" ]` |
+| the same, for the exception list | `UNSEEDED_OWNER_EXCEPTIONS entries that are no longer true …: [ "tests/zz-lane-control.test.ts" ]` |
+
+**Those two rows are about the guard as first built, and it was replaced** — the owner half is
+now pair-keyed, with five controls of its own. Kept rather than rewritten because a superseded
+control that was actually watched is evidence about the *mechanism*, and quietly restating it as
+though it had always been pair-keyed is how a record stops being one.
+
+**And the sixth is the compiler's, which is why no vitest case looks for it.** *"A file in no lane or
+in two"* was the brief; a `Record` cannot hold a file twice, so duplicating
+`"tests/store-comments.test.ts"` with the other lane is not a runtime fact to assert on —
+`npm run typecheck` answers
+
+```
+tests/store-migration-registry.ts(1174,3): error TS1117: An object literal cannot have
+  multiple properties with the same name.
+```
+
+Watched, then put back. The guard case says where that half went, so the next reader does not
+conclude it was forgotten.
+
+**The scan's controls are in both directions.** Each assertion is a set difference, and a difference
+is empty when its inputs are empty — a regex edited into never matching, or a moved `tests/`
+directory, would pass all three in silence. So the scan must find more than 70 Postgres files, more
+than 5 files naming a fixed owner uuid, and more than 5 seeding one, before any difference is
+believed.
+
+##### Six things 260903e § Stage C got wrong, and what was done instead
+
+Its design held. Its inventory and its proposed scan did not, and the two errors pull in opposite
+directions — the scan looks for the wrong thing, and the tail is far bigger than the three files
+named.
+
+1. **Sol's marker list misses the commonest case entirely.** It proposed grepping for
+   `DEV_OWNER_ID`, `ADMIN_USER_ID_LOCAL`, `auth.users`, `SUPABASE_URL`, `blobStore` and `new Pool`.
+   **The dominant failure has none of those markers**: it is `currentOwnerId()`, which names no id
+   at all. Measured over the 76 files run before the seeder existed — 54 of them red — **only 20 of
+   the 54 carry any of Sol's six markers. 34 do not**, and 19 of those 34 use `currentOwnerId()`,
+   the rest reaching an owner through a helper. So the proposed scan would have found rather more
+   than a third of the tail and vouched, silently, for the rest.
+2. **`require every fixed owner … to call `seedAuthUser` or be a declared exception` is unusable as
+   literally written.** Applied to every fixed owner it demands fifty declarations or fifty edits,
+   and either way fifty entries saying the same thing. The version that earns its keep is narrower:
+   the *lane* provides the accounts a local database is expected to have, and the guard covers the
+   owners it cannot. **And the narrow version was still too coarse**: keyed by file it treated one
+   seed call as covering every owner in the file, which Sol's review then caught. Pair-keyed, it
+   is a couple of dozen entries — a list, deliberately without a total beside it, since this is
+   the count that has now drifted four times.
+3. **`new Pool` is not the whole pool predicate.** `tests/db-test-create.test.ts` and
+   `tests/migration-reconciliations.test.ts` use `new Client`, so a scan for `pgReady` and
+   `new Pool` misses both — including the factory's own suite, which is the last file that should
+   have been invisible to a lane guard.
+4. **`admin-store.test.ts` is in the shared lane for a different reason than the one given.**
+   260903e says *"an empty clone yields no accounts"*. It does not: the accounts come from GoTrue
+   over HTTP and GoTrue reads `postgres`, so the list is non-empty and the suite is **green on a
+   private database while checking nothing**. The right reason is that its claim is about a join
+   with one real side and one empty one.
+5. **The shared lane has a fourth member 260903e does not list** — `tests/db-test-create.test.ts`,
+   for the contract reason above.
+6. **`store-realtime-sessions` really is not shared**, and this was checked rather than taken from
+   the plan: it seeds its own `auth.users` row and drives `pgRealtimeSessionStore` over Drizzle,
+   and it passed on a private database first time, unchanged.
+
+##### The T-C review found one real hole, and it was in the guard rather than the manifest
+
+[`260903f-lane-manifest-review-sol.md`](260903f-lane-manifest-review-sol.md), 2026-09-03. Verdict:
+**would not ship the guards under the claim that they prove completeness.** It confirmed the
+substance — no wrongly assigned private-lane suite; `store-realtime-sessions` correctly private; all
+four shared assignments defensible including `db-test-create` by contract; the marker-scan
+correction right; `environmentOwnerId` correct on a differently-configured machine, reproduced
+including the invalid-uuid throw; and only one emptiness oracle in the tree, which is shared-lane,
+so the baseline seeding invalidates nothing. What follows is what changed.
+
+**1 — the owner guard was file-complete, not owner-complete.** It treated a `seedAuthUser(` call
+anywhere in a file as covering **every** literal owner in it, and the witness was already in the
+tree: `tests/store-jobs-parity.test.ts` declares `STRANGER` and seeds only `OWNER` and `OWNER_B`.
+Safe today because `STRANGER` is read-only, and **green on the day that stops being true**.
+
+Rebuilt as `OWNER_AUDIT`, keyed *(file, owner uuid)*, two verdicts:
+
+| | |
+|---|---|
+| `seeded` | the file puts a row in `auth.users` for this owner. **Mostly checked, not promised** — the scan resolves each seed call's balanced-paren arguments plus one enclosing `for (… of […])`, and where it sees the owner there no reason is required. |
+| `no-row-needed` | a foreign key is checked on **write**, and this owner is never on the writing side of one. Always with a reason, saying what the owner is for *and* what would change if that stopped being true. |
+
+Keyed by uuid rather than by the constant's name, because the uuid is the identity the foreign key
+checks — a renumbered constant goes stale and the guard says so — and the reason names `OUTSIDER` or
+`STRANGER` out loud for the reader.
+
+**Watched failing, with `STRANGER` as the witness**, before it was exempted:
+
+```
+fixed owners under the auth.users foreign key with no verdict in OWNER_AUDIT …
+  [ "tests/store-jobs-parity.test.ts STRANGER 00000000-0000-4000-8000-0000000000b5" ]
+```
+
+Four more planted and watched, so every assertion in the case has been seen to fire by name:
+
+| planted | what it said |
+|---|---|
+| a `seeded` verdict in a file with no seed call | `declared \`seeded\` in a file that contains no seedAuthUser or seedLocalAccounts call: [ "tests/zz-lane-control.test.ts" ]` |
+| `no-row-needed` on an owner the scan sees seeded | `declared \`no-row-needed\` while the file demonstrably seeds them — the verdict is stale` |
+| a verdict for a uuid the file does not contain | `OWNER_AUDIT entries the scan no longer finds — the constant was renamed, its uuid changed, or the file stopped naming a fixed owner` |
+| a twelve-character reason | `verdicts that need a reason and have none …: [ "tests/source-store.test.ts 00000000-…c8" ]` |
+
+**Detection is three rules, and each catches what the others miss** — which is the answer to *"why
+not just one regex"*. (1) a uuid literal on a line that says `owner`: alone it missed `STRANGER` in
+`store-uploads-parity`, declared without an `as OwnerId`. (2) a `const NAME = "uuid"` whose name is
+later used in an **owner position** — `ownerId:`, `owner_id`, `setRequestOwner(`, `runAsOwner(`,
+`as:`, `sub:`, derived from the seams rather than from a list of names somebody thought of, since a
+fixture called `PROPRIETOR` would defeat a name list: alone it missed the inline literal in
+`store-ai-calls`. (3) anything resolvable inside a seed window, which is also a *widening* — a row
+put in `auth.users` is an owner by definition, and it is how `store-realtime-sessions`' second owner
+arrives at all.
+
+**And the counts drifted again — the fourth time in one day.** The report and the first draft of
+this section said 20 literal-owner files, 10 of them seeding; Sol re-derived 18 and 9; the
+pair-level scan says 18 files. **No total is written into `OWNER_AUDIT` or into this section**, per
+§ *Counts are perishable here* — the entries are the list, and a number beside them is a second
+claim that can be wrong on its own. The guard holds floors (`> 15` pairs, `> 5` seeded, `> 5` files
+with a seed call) rather than pins, because a floor cannot go stale into a false green.
+
+**2 — the lane guard is a syntactic inventory guard, and now says so.** Sol reproduced the inventory
+independently and audited direct `pg` imports and `getDb()` use without finding an omission, so it
+is not vacuous. But the predicate reads *text*, so it cannot see an aliased or namespaced
+constructor, a helper of a file's own that connects elsewhere, a dynamic `import()`, or a transitive
+`getDb()`. The docstrings on both `TEST_LANES` and `laneScan` now say that in as many words, and
+name T-D's `DATABASE_URL`-poisoning obligation as the backstop — an over-claimed guard is worse than
+a modest one, and this plan has spent a day on that class. Connection-opening **helpers**
+(`pg-ready`, `corpus-lock`, `run-lock`, `lock-lifecycle`) were added to the scan as an import-
+specifier match; re-derived, they add **nothing today** — every file importing one also calls
+`pgReady(` or builds a pool — so it is a forward guard, and saying so is the point.
+
+The first version of that clause matched the bare helper names and **flagged the guard file itself**,
+which contains them in its own array. Caught on the first run; matched as an import specifier now.
+
+**3 — the Stripe backfill recommendation was unsafe and is rewritten**, above. Both defects were
+real: nullness cannot tell a private database from a shared one, and `researcher` is active with a
+null price id beside `reader`.
+
+**4 — `admin-store`'s oracle could be vacuous, and now cannot.** Sol's point: it requires non-empty
+auth accounts while every aggregate accepts zero, and `pg-admin.ts` fills a missing `group by` row
+with `?? 0` — so on a database where nobody has uploaded anything, all seven counts are the literal
+`0` this file supplied, never the string node-postgres hands back for `bigint`, which is the entire
+bug the file was written for. Added: a per-run owner seeded through `seedAuthUser`, four `uploads`
+rows of which exactly **three** are `verified`, and `expect(mine?.uploads).toBe(3)`. Exact equality
+rather than `>= 1`, because `"3" >= 1` is true in JavaScript — the same trap the file's own header
+records about `"3" > 2`. `uploads` because it is the only aggregate needing no article, no revision
+and no `onTheShelf()`. Per-run id and a `finally` that removes both the rows and the account,
+because this suite runs against the shared `postgres` that peers are inside.
+
+**Proved both halves, with one mutation.** Replacing `count()` with an unmapped
+`sql<number>\`count(*)\`` in `pg-admin.ts` § `uploads` — the original bug, reinstated:
+
+| run | result |
+|---|---|
+| shared `postgres` | `expected '3' to be 3`, and the pre-existing `typeof` case also went red *because this box happens to have uploads for the dev admin* |
+| a factory-minted clone | **the two pre-existing cases passed** while the bug was live — Sol's vacuity point, measured — and the new case failed |
+
+The clone run also produced independent confirmation of the lane: the new case failed as
+`the seeded account 3e10b9ea-… is not in the admin list`, because the row went into the clone while
+GoTrue reads `postgres`. That is `admin-store` belonging to `shared-services`, said by a failure
+rather than by an argument. Mutation reverted; `src/` is clean.
+
+**5 — three exception reasons were wrong, and one of them was wrong in the file itself.**
+
+- **`export-route` was backwards.** It said seeding the outsider would let the 404 arrive for a
+  second reason; it would *remove* one — *"the requester does not exist"*. And the suite already has
+  better evidence: the owner goes through the same path for a 200, and removing the ownership
+  predicate was watched answering 200 for the outsider too. **The wrong reasoning came from that
+  file's own docstring**, which claimed seeding a second owner would mean driving GoTrue's admin API
+  — it would not; `seedAuthUser` inserts directly over the same connection and touches no service.
+  Corrected in `tests/export-route.test.ts` as well as in the audit.
+- **`public-visibility-pg`'s outsider is not read-only** — it is the `as:` of a `PUT`. What makes it
+  safe is that the `UPDATE` carries `owner_id = OUTSIDER` in its `WHERE`: no row matches, nothing is
+  written, the id never lands in a column. `store-uploads-parity`'s `STRANGER` is the same shape
+  through `claim({ owner })`, and its entry says so.
+- **`owner-isolation` conflated two roles.** Alice and Bob are request-context identities for the
+  `AsyncLocalStorage` half; the persisted fixture is owned by the ambient owner. Each of its three
+  pairs now says which job it belongs to.
+- And **`seedAuthUser` is not "driving GoTrue"** anywhere any more.
+
+**6 — the Storage count was wrong twice, and the second answer was Sol's.** The registry said three
+files reach the real bucket; Sol said one. **It is two.** Five suites mention `src/store/blobs.js`:
+`illustrated-route` and `store-export-bundle` `vi.mock` it (the second to a store that *throws* on
+any read), and `store-export-raw` imports only a type — so Sol is right about those three. But
+`tests/source-store.test.ts` calls `storeRawSource(bytes, kind)` with its **default third
+argument**, which is `blobStore()`. Nothing in the file says "bucket", which is why one count
+missed the mocks and the other missed the default. The way to see it is to follow what `blobStore()`
+is *called by*, not what a test file mentions — recorded in `TEST_LANES`'s docstring with both
+wrong answers, because the shape of the mistake is the useful part.
+
+##### What T-C deliberately left for T-D
+
+- **`vitest.config.ts`, `package.json` and `scripts/check.ts` are untouched.** Three disjoint
+  projects and the wiring into `npm test` land in one commit, per Sol's blocking finding that B and
+  C cannot be separated.
+- **An obligation, not a suggestion: the unit project must delete or poison `DATABASE_URL` after
+  `.env.local` has loaded.** The lane scan is a *syntactic* inventory guard — it reads the text a
+  file contains, so it cannot see an aliased constructor (`new PgPool()`), a helper of a file's own
+  that connects elsewhere, a dynamic `import()`, or a transitive `getDb()` inside application code.
+  A test that escapes it today reaches the shared database and passes, silently. Poisoning
+  `DATABASE_URL` in the unit lane is the **semantic backstop** that a syntactic guard cannot be, and
+  it costs one line in a setup file. *After* `.env.local` has loaded, for the ordering reason in
+  260903e § *The ordering trap* — before it, the file simply puts the shared URL back.
+  A transitive-import guard is **not** an alternative and should not be tried: Sol measured of the
+  order of a hundred and fifty test files outside the lane map that can *reach* a module importing
+  `pg`, nearly all of them legitimate unit tests that mock it or never execute that path, so a
+  manifest built that way would cover half the suite and mean nothing.
+- **The lease connection** (T-B's scavenger section) — a factory function cannot hold one.
+- **Promoting `tests/setup/spike-db.ts`** into the private lane's real setup: the ordering, the
+  `current_database()` control and the `seedLocalAccounts` call, none of which changes.
+- **`docs/project/testing.md`** — 260903e § Stage F says explicitly to update it *alongside*
+  activation rather than after it. T-C changes no behaviour, so documenting a lane nothing selects
+  yet would be wrong in the other direction. The Storage limitation is stated in `TEST_LANES`'s own
+  docstring in the meantime.
+- **The `billing_tiers.stripe_price_id` family**, above, with the recommended fix and its trap.
+- **Residue within one run.** The private lane is one database for the whole invocation, so a row an
+  earlier file leaves behind is visible to a later one. Per-run isolation removes dev servers,
+  peers, and residue from killed runs — not the run's own. Nothing in the 93 currently depends on
+  it, and 260903e's Stage G (per-worker) is where that changes if it starts to.
+
 ### B0 — take `RUN_LOCK` off the seed window — **already done, and this plan was wrong about it**
 
 **Nothing to build. It landed on 2026-09-01 in `df7a7980`, two days before this plan was written.**

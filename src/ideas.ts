@@ -71,7 +71,7 @@ import {
 } from "./source-hash.js";
 import { findQuote } from "./quote-match.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
-import { parseJsonFrom, readJsonOrNull, stripFence } from "./parse-json.js";
+import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
 import { articleWithIds } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
@@ -815,13 +815,13 @@ ${skeleton}`;
 }
 
 /**
- * Read the model's answer, fence and all.
+ * Read the model's answer, fence, preamble, sign-off and all.
  *
- * `stripFence` then `parseJsonFrom`, never a bare `JSON.parse` — src/parse-json.ts
- * § `stripFence` has the reasoning.
+ * `parseJsonAnswer`, never a bare `JSON.parse` — src/parse-json.ts has the
+ * reasoning.
  */
 function parseJson(raw: string): { ideas?: unknown } {
-  return parseJsonFrom<{ ideas?: unknown }>(stripFence(raw), "the model's answer");
+  return parseJsonAnswer<{ ideas?: unknown }>(raw, "the model's answer");
 }
 
 export async function generateIdeas(opts: {

@@ -66,6 +66,8 @@ import { loadEnvLocal } from "../src/env.js";
 import type { OwnerId } from "../src/owner.js";
 import { forgetCachedTiers } from "../src/store/pg-tiers.js";
 import { mintUpload } from "../src/upload-records.js";
+import { blobStore, CONTENT_TYPE } from "../src/store/blobs.js";
+import { stagingKey } from "../src/source.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
@@ -165,8 +167,19 @@ afterAll(async () => {
   await pool.end();
 });
 
+/**
+ * Staging objects written by `anUploadReadyToQueue`, removed with the rows.
+ *
+ * A list of this file's own keys rather than a prefix scan of the bucket:
+ * vitest runs test files in parallel against one Storage, and "everything under
+ * `staging/`" would take another suite's object out from under it mid-run —
+ * the trap `tests/uploads-api.test.ts` documents for upload records.
+ */
+const staged: string[] = [];
+
 /** Jobs before ingest events: `jobs_ingest_event_fk` points that way. */
 async function sweep(): Promise<void> {
+  for (const key of staged.splice(0)) await blobStore().remove(key);
   if (!pool) return;
   await pool.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
   await pool.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
@@ -389,23 +402,93 @@ describe("adding an article spends a slot", () => {
   });
 
   dbIt("reserves for an upload, which is the other kind of new ingest", async () => {
-    /* `mintUpload` takes its grant issuer as an argument, so this needs no blob
-       storage — only the record `POST /api/jobs {uploadId}` reads. */
-    const minted = await mintUpload(
-      { filename: "test-admission-paper.pdf", bytes: 1024, sha256: "a".repeat(64), owner: OWNER },
-      async () => ({
-        url: "https://storage.invalid/staging",
-        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-      }),
-      (id) => `staging/${id}`,
-    );
+    const uploadId = await anUploadReadyToQueue("test-admission-paper.pdf");
 
-    const reply = await post("/api/jobs", { uploadId: minted.record.id });
+    const reply = await post("/api/jobs", { uploadId });
     expect(reply.status, JSON.stringify(reply.body)).toBe(202);
     expect(await slotOf(reply.body.id as string)).not.toBeNull();
     expect(await ledger()).toEqual({ taken: 1, inFlight: 1 });
   });
+
+  /**
+   * **A reload of `/add/upload/<id>` must not be told it has run out.**
+   *
+   * `withIngestSlot` wraps `queueAnUpload`, and `admitIngest` throws 402
+   * **before** the callback runs. So until 2026-09-03 the second request for an
+   * upload that already had a job asked for a slot it was never going to spend —
+   * and a reader on their last one was refused for having no allowance, when the
+   * true answer was the ingest their first request had already made. The refusal
+   * was about a slot nobody needed. GPT Sol, reviewing the plan for the
+   * background upload (finding 2).
+   *
+   * It matters far more now than it did: the reader reaches that address at byte
+   * zero, so reloading it, and opening it in a second tab, are ordinary.
+   *
+   * **The count is the assertion**, not the status. A route that resolved the
+   * repeat correctly and still reserved would answer 202 here and look perfect,
+   * while quietly taking a slot per reload out of a lifetime allowance of three.
+   * `ledger()` is the only thing that can see it.
+   *
+   * Watched red 2026-09-03 by deleting `resolveExistingUpload` from the route,
+   * so the repeat falls through to `withIngestSlot` as it used to: *"the reload
+   * spent a slot of its own: expected { taken: 2, inFlight: 1 } to deeply equal
+   * { taken: 1, inFlight: 1 }"*. Note `inFlight` **1**, not 2 — the second
+   * reservation is released, because `releaseReservation` finds no job holding
+   * it. That is precisely why `taken` is the number to assert on: the release
+   * makes the leak invisible to every count but the lifetime one, which is the
+   * count a free reader has three of.
+   */
+  dbIt("resolves a repeat claim without taking a second slot", async () => {
+    const uploadId = await anUploadReadyToQueue("test-admission-reloaded.pdf");
+
+    const first = await post("/api/jobs", { uploadId });
+    expect(first.status, JSON.stringify(first.body)).toBe(202);
+    expect(await ledger()).toEqual({ taken: 1, inFlight: 1 });
+
+    const again = await post("/api/jobs", { uploadId });
+    expect(again.status, JSON.stringify(again.body)).toBe(202);
+    expect(again.body.id, "the reload was handed a different job").toBe(first.body.id);
+    expect(await ledger(), "the reload spent a slot of its own").toEqual({
+      taken: 1,
+      inFlight: 1,
+    });
+  });
 });
+
+/**
+ * An upload whose bytes have landed, which is the only kind that may be queued.
+ *
+ * Two halves, and the second is new on 2026-09-03: `mintUpload` writes the
+ * record, and then the staging object has to be **there**, because
+ * `POST /api/jobs { uploadId }` HEADs it before it claims anything. Without the
+ * object the route answers 409 *still arriving* and reserves nothing, so every
+ * count below would be zero and the suite would report a wall that was never
+ * reached. See `tests/an-upload-is-queued-only-once-its-bytes-arrive.test.ts`
+ * for what that gate is for.
+ *
+ * The grant issuer is a stub — nothing here PUTs through a signed URL — but the
+ * object is real, written with the service key at the key the route will look
+ * under. `stagingKey` on both sides rather than a literal, so the two cannot
+ * drift.
+ */
+async function anUploadReadyToQueue(filename: string): Promise<string> {
+  const minted = await mintUpload(
+    { filename, bytes: 1024, sha256: "a".repeat(64), owner: OWNER },
+    async () => ({
+      url: "https://storage.invalid/staging",
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+    }),
+    stagingKey,
+  );
+  const key = stagingKey(minted.record.id);
+  await blobStore().putIfAbsent(
+    key,
+    new TextEncoder().encode("%PDF-1.4\ntrailer\n<<>>\n%%EOF\n"),
+    CONTENT_TYPE.pdf,
+  );
+  staged.push(key);
+  return minted.record.id;
+}
 
 describe("retry is the second front door", () => {
   /**

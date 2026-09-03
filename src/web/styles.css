@@ -312,6 +312,60 @@
 .reader.spine-on { --spine-w: 12px; }
 .reader.spine-off { --spine-w: 0px; }
 
+/* **The status-bar strip is nobody's, so the reading view claims it.**
+
+   `viewport-fit=cover` lays the document across the whole physical screen and
+   every piece of chrome adds back the edge it faces (§ tokens). The controls
+   bar faces this one and adds it as `top: var(--safe-top)` — it *starts* below
+   the clock, which is right — so `[0, --safe-top)` belongs to whoever is behind
+   it, and behind it is the article.
+
+   The masthead was covering that, incidentally rather than deliberately: its
+   `padding: calc(1.25rem + var(--safe-top)) …` paints `--page` up into the
+   inset, and it is the top of the page until you scroll. So the strip was
+   covered exactly while nothing was moving, and the two states where something
+   is:
+
+    - **A mode band covering the article** (§ a band with no room), where the
+      masthead is `display: none` and 59px of prose scrolls along the top of the
+      screen above a panel that is supposed to be covering it. Greg, 2026-09-03,
+      on the installed app: *"Most of the modes don't display correctly any more
+      on mobile. When activated, they occlude the text (which you can see
+      scrolling behind, peeking out at the top and bottom."*
+    - **Plain and Hierarchy, once the masthead has scrolled away** and the bar
+      has stuck. Same strip, same prose, and it was there first.
+
+   One backstop answers both, and it is a backstop rather than a taller bar for
+   three reasons: it changes no layout, it does not need to know whether a
+   sticky element is currently stuck — which CSS cannot ask — and it is outside
+   `.controls`, which is `overflow: auto hidden` at ≤731px and would clip a
+   pseudo-element of its own. GPT Sol proposed it over the taller bar this was
+   written as first, 2026-09-03. An offset `box-shadow` was the other candidate
+   and is wrong for an arithmetic reason worth keeping: it leaves a gap whenever
+   `--safe-top > --bar-h`, which is 59 against 44 on the device in question.
+
+   **z-index 39 is the whole of its correctness**: over the article and the
+   table head, under the controls bar (40), the band (44), the spine (45), the
+   dock (96) and every dialog. `--page` is the bar's own background and the
+   masthead's, so where it overlaps the masthead's inset padding it is
+   invisible.
+
+   **Zero-height on every machine we develop on**, which is why nobody saw the
+   hole and why this rule cannot be checked by looking —
+   `scripts/safe-area-check.ts` is how, and
+   docs/postmortems/260903f-the-mode-band-stopped-short-of-the-notch.md is why.
+   `.reader::after` is the overflow fade, below; this is the other one. */
+.reader::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--safe-top);
+  background: var(--page);
+  z-index: 39;
+}
+
 body {
   margin: 0;
   background: var(--page);
@@ -5337,11 +5391,31 @@ td.text.has-hit[data-hues="8"] {
   font-family: var(--font-ui);
   font-size: 0.79rem;
 }
+/* The card's two ways out: "open in a new tab" on a link, and "in the glossary"
+   on a term.
+
+   **The padding is the tap target, and it is not behind a media query.** These
+   were 17px tall, which a browser pass at 390×844 flagged on 2026-09-03. The
+   obvious answer — grow them under `(pointer: coarse)` — is the one this
+   codebase has already been stopped for once, because that query describes only
+   the *primary* pointer and a touchscreen laptop is neither thing (touch.md).
+   Everything else here decides per event, from `pointerType`, and CSS cannot
+   see that.
+
+   So everyone gets the bigger target, and the reason that costs nothing is
+   Fable's, 2026-09-03: on touch the small button already satisfies WCAG 2.5.8,
+   because tapping the words a second time is the equivalent control the
+   exception is written for — so this is comfort rather than compliance, and 44px
+   would be paying Apple's price for a primary control that this is not. **The
+   reader with no second route is the one holding a mouse**, for whom a click on
+   the words selects text and this button is the only way through. ~30px,
+   one rule, no device detection. */
 .prose-card-link,
 .prose-card-open {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+  padding-block: 0.4rem;
   color: var(--ink-faint);
   font-family: inherit;
   font-size: inherit;
@@ -5354,7 +5428,9 @@ td.text.has-hit[data-hues="8"] {
    not jump about between one term and the next. */
 .prose-card-open {
   margin-left: auto;
-  padding: 0;
+  /* Horizontal only. A `padding: 0` shorthand here — which is what this was —
+     silently puts back the 17px target the rule above exists to fix. */
+  padding-inline: 0;
   border: none;
   background: none;
   cursor: pointer;
@@ -11360,6 +11436,38 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
   ) {
     --dock-bottom: var(--dock-space);
   }
+
+  /* **And when a mode opens, both bars arrive rather than slide.**
+
+     The two guards above bring the bars back the instant `.mode-band` exists.
+     The band is `position: fixed` and takes its final bounds on the same frame;
+     the bars take 180ms of `transition: transform` to travel from off-screen —
+     so **for that window the band is the right size with nothing above or below
+     it**, and the article is painted at the top and the bottom of the screen.
+     That is the second half of Greg's report, and the half that is at the
+     bottom: § shell's backstop covers the top strip at rest and cannot cover a
+     bar that has not arrived.
+
+     Measured 2026-09-03 at 390 × 844 with the installed app's insets: scroll
+     until `data-bars="hidden"`, press Glossary, and sample every frame. At
+     t=181ms and t=410ms the top-most element at both `y: 2` and
+     `y: innerHeight - 2` was a `p` inside `div.prose`, with `.controls` still
+     at `bottom: 0` and `.dock` at `top: 844`; at t=472ms both were home. **The
+     180ms is the floor, not the number** — mounting a panel costs frames, and
+     these were real layout reads, not dropped ones.
+
+     A slide is how a bar announces that it is *getting out of the way*; a bar
+     coming back because the reader opened a panel is not announcing anything,
+     and there is nothing to see through in the meantime. Nothing else here
+     transitions on `.mode-band`, so this only ever fires on that switch.
+
+     GPT Sol found the ordering reviewing the first fix, 2026-09-03, and
+     predicted it from the CSS alone. */
+  :root:has(.mode-band) .controls,
+  :root:has(.mode-band) .dock {
+    transition: none;
+  }
+
   /* Tighter chrome as well, which is free and needs no state: 12px more of the
      article at every scroll position.
 
@@ -13021,7 +13129,14 @@ table.only-prose thead { display: none; }
 
 .fb-field { display: flex; flex-direction: column; gap: 0.3rem; }
 .fb-label { font-size: 0.78rem; font-weight: 600; }
-.fb-hint { font-weight: 400; color: var(--ink-faint); }
+/* The three things we ask a bug report for, under the label and above the one
+   box — FeedbackDialog.tsx says why they are not hidden in the disclosure. */
+.fb-hint {
+  font-size: 0.76rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
 .fb-input {
   width: 100%;
   padding: 0.45rem 0.55rem;

@@ -145,7 +145,7 @@ import { MODEL_REFUSED, QUIZ_NOTHING_ANCHORED, quizBandsNotSpread } from "./mess
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
-import { parseJsonFrom, readJsonOrNull, stripFence } from "./parse-json.js";
+import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
 import { findQuote } from "./quote-match.js";
 import {
   articleWithIdsFingerprint,
@@ -1003,13 +1003,13 @@ ${skeleton}`;
 }
 
 /**
- * Read the model's answer, fence and all.
+ * Read the model's answer, fence, preamble, sign-off and all.
  *
- * `stripFence` then `parseJsonFrom`, never a bare `JSON.parse` —
- * src/parse-json.ts § `stripFence` has the reasoning.
+ * `parseJsonAnswer`, never a bare `JSON.parse` — src/parse-json.ts has the
+ * reasoning.
  */
 function parseJson(raw: string): { questions?: unknown } {
-  return parseJsonFrom<{ questions?: unknown }>(stripFence(raw), "the model's answer");
+  return parseJsonAnswer<{ questions?: unknown }>(raw, "the model's answer");
 }
 
 /**

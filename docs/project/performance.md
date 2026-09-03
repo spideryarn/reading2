@@ -42,6 +42,28 @@ npx tsx scripts/chrome-cpu.ts --seconds 60 --pid 51928
 `Spine=114 TableView=104 …`. **Read that line first.** See
 [render counts beat percentages](#render-counts-beat-percentages).
 
+**Pick the slug and the account together, and check the run said `N rows`.** Two ways this wastes an
+hour, both hit on 2026-09-03:
+
+- `--local-sign-in` signs in as the **most recently used** local account, which on a shared box is
+  whichever throwaway a peer made last — and *a slug you do not own is a 404*, so you measure the
+  "Not shared" page. Pass `--email <the owner>`.
+- A local `articles` row can have `current_revision_id` **null** (an ingest that never finished),
+  and that is also a 404. `constitution` is in this state locally, so the commands above no longer
+  work as written on this box. This finds a slug that will actually load, with its owner:
+
+  ```sql
+  select a.slug, u.email, rv.word_count, rv.block_count
+  from spideryarn.articles a
+  join spideryarn.article_revisions rv on rv.id = a.current_revision_id
+  left join auth.users u on u.id = a.owner_id
+  order by rv.block_count desc limit 10;
+  ```
+
+Both failures produce a page that renders fine and costs almost nothing, which is why the harness
+prints `page: 551 rows, … 66123px tall` and shouts when there are none. Believe that line, not the
+percentage.
+
 ### Comparing a change against `main`
 
 Do **not** edit source while a measurement is running, and do not measure a server another agent is
@@ -115,6 +137,17 @@ and say so.
 | [`src/web/perf.ts`](../../src/web/perf.ts) — in the page, `?perf=1` | **why**: which timer, which component, how many fetches, visible vs hidden | you have a live page and want to know what it is doing |
 | [`scripts/measure-cpu.ts`](../../scripts/measure-cpu.ts) — its own Chrome, over CDP | **how much**: real CPU for the whole renderer *and* the main thread alone, the script / layout / style split, per frame, plus render counts | you want a number you can put in a commit message |
 | [`scripts/chrome-cpu.ts`](../../scripts/chrome-cpu.ts) — `ps` against a running Chrome | **how much**, whole process, nothing else | you must measure a browser you cannot relaunch |
+| `measure-cpu.ts --cpu-profile <out>` — a sampling profile of the window | **which function**: self time, ours separated from `node_modules` | the split says *layout* or *script* and you need a name to go and open |
+| a **DOM mutation census** in the page — a `MutationObserver` during a scroll, grouped and counted | **what is being written**, which is often not what the profiler blames | style or layout is high and you do not know what is dirtying the DOM |
+
+The last two are new on 2026-09-03 and between them they found
+[the largest cost on this page](#scrolling-rebuilt-the-whole-article-2026-09-03). The census is a
+dozen lines pasted into a page rather than a script, because what you want to group by changes every
+time; the version that found it is in
+[260903l](../plans/260903l-prose-innerhtml-rewritten-on-every-scroll-render.md).
+
+**Profiling perturbs the number.** A run with `--cpu-profile` is a run for *finding* the cost; the
+run whose percentage you quote is a separate one without it.
 
 ### Use `measure-cpu.ts` unless you can't
 
@@ -601,6 +634,63 @@ re-render the table. A hover is a gesture; a scroll is sixty frames a second.
 `useReadingPosition` writing `?at=` as sections pass the reading line, which is a deliberate
 feature ([url-state.md](url-state.md)) and now the largest remaining cause.
 
+## Scrolling rebuilt the whole article, 2026-09-03
+
+**Every one of those remaining renders was destroying and rebuilding the DOM of every paragraph in
+the article, with byte-identical HTML.** On a 551-block article a plain scroll did it **18,734**
+times — 34 renders × 551 blocks, exactly. Fixing it is the largest main-thread saving recorded on this
+page.
+
+| production build, 25s of wheel events, 551 blocks | before | after |
+|---|---:|---:|
+| **main thread CPU**, % of one core | 77.3 / 77.0 | **49.1 / 48.9 / 49.1** |
+| script, % of the window | 22.2 | 17.9 |
+| **layout**, % of the window | 17.1 | **0.8** |
+| **style recalc**, % of the window | 10.6 | **0.9** |
+| prose subtrees rebuilt | 18,734 | **0** |
+
+Two matched runs before and three after, spread ±0.3 — much tighter than the ±20% this page warns
+about, because the box was quiet and the harness owns its browser. Only the first row is CPU; the
+three below it are wall-clock inside main-thread tasks, per
+[§ The last column is not CPU](#the-last-column-is-not-cpu) — which this table got wrong on its
+first draft, so the trap is live. `ProcessTime` was unavailable (headless), so this is the largest
+measured **main-thread** saving on this page and says nothing about compositor or raster. Full
+working: [260903l](../plans/260903l-prose-innerhtml-rewritten-on-every-scroll-render.md).
+
+### React compares the wrapper, not the html
+
+```tsx
+dangerouslySetInnerHTML={{ __html: proseHtml.get(block.id) ?? block.html }}
+```
+
+The memo feeding that line was already careful, and **the string was never the problem.** React
+decides a prop changed by identity, and the value it compares for `dangerouslySetInnerHTML` is the
+`{ __html: … }` **wrapper** — so an object literal in JSX is always "changed", and `setProp` then
+runs `domElement.innerHTML = …` *unconditionally*, with no test against what is already there
+(`react-dom-client` § `updateProperties`, and the assignment in `setProp`). Writing an identical
+string still tears the paragraph down and rebuilds it.
+
+So the obvious way to write that line is the slow way — the same shape as
+[the rail](#the-rail-stopped-re-rendering), and the reason both now have a test. The memo hands out
+stable `{ __html }` objects instead, one for every block, reused whenever the html is unchanged.
+That also means a streaming comment rewrites the paragraphs it touches rather than the article,
+which is item 1 below, addressed as a side effect.
+
+### Two things this changes about how to measure here
+
+- **Measure a production build, or measure the wrong half.** In dev, `jsxDEV`,
+  `validateProperty` and friends are about half of all script, and a profile taken there points at
+  React re-renders. In the production bundle script fell to 22% while **layout and style rose to
+  28% between them** — the opposite priority. `--sign-in-via` exists so this is possible at all;
+  see below.
+- **A mutation census beats a profiler for this class.** The hottest frame in the profile was
+  `apply` in [`scroll.ts`](../../src/web/scroll.ts) at 36% of script, and the tempting read was
+  "`watchBarVisibility` is expensive". It is not. Its self time was a **forced synchronous layout**,
+  charged to whichever function first reads `window.scrollY` after something dirties the DOM — it
+  was the victim, and moving that read would have moved the cost rather than removed it. Counting
+  DOM mutations during a scroll named the real cause in one step, and `18,734 / 551 = 34.0` is what
+  turned a suspicious number into a mechanism.
+
 ### Still open, ranked, with citations
 
 GPT Sol reviewed the plan and hunted for the spikes I had not looked at. What survived, in its
@@ -611,6 +701,13 @@ order, none of it done:
    rebuilding the prose HTML map. Chat does not have this problem because `useChat` deliberately
    sits *below* `Reader`. The fix is to mirror that ownership. Care needed: the delete race
    deliberately reads through to `done` ([comments.md](comments.md)).
+   **The DOM half of this went on 2026-09-03, and only that half.** Every delta still replaces the
+   `comments` array, still re-resolves every anchor and still rebuilds the whole HTML map — the
+   O(article) computation is untouched. What stopped is the *writing*: only blocks whose html
+   actually changed get new `{ __html }` objects, so a streaming answer now rewrites the paragraphs
+   it touches instead of all of them. Moving the ownership is still the right fix and is still not
+   done. (The first draft of this note claimed the item was addressed; GPT Sol pointed out that the
+   expensive recomputation is still there.)
 2. **Literal search rebuilds its index on every keypress** — parsing every block's HTML to text and
    rebuilding the folded text and offset map, then committing twice per key. Precomputing per
    `blocks` identity is behaviour-preserving; debouncing would not be.
@@ -687,7 +784,25 @@ Said plainly, because the fixes above are all real and none of them has been sho
   npx tsx scripts/measure-cpu.ts --local-sign-in \
     --url "http://localhost:5273/read/<slug>?perf=1" --settle 20 --seconds 30 --scroll
   ```
-- **Nothing here has been measured on a production build.** `npm run dev` runs `StrictMode`, which
+- ~~**Nothing here has been measured on a production build.**~~ **Done, 2026-09-03**, and it changed
+  the answer rather than confirming it — see
+  [two things this changes](#two-things-this-changes-about-how-to-measure-here). What blocked it was
+  the sign-in: `--local-sign-in` works by importing the app's *own* Supabase module, and only a dev
+  server serves a module at its source path. `--sign-in-via <dev origin>` signs in there and carries
+  the SDK's stored token to the origin being measured — the string moved is the one the SDK wrote,
+  so it cannot drift out of step with the client that reads it, which is the objection to writing
+  `localStorage` ourselves. Both origins are localhost and
+  [`seed-local-session.ts`](../../scripts/seed-local-session.ts) still refuses any non-local
+  Supabase.
+
+  ```bash
+  npm run build && SPIDERYARN_STORE=postgres npx vite preview --port 5299 --strictPort
+  npx tsx scripts/measure-cpu.ts --local-sign-in --email <owner> \
+    --sign-in-via http://localhost:5273/ \
+    --url "http://localhost:5299/read/<slug>" --settle 20 --seconds 25 --scroll
+  ```
+
+  The paragraph below is why it matters, and stands: `npm run dev` runs `StrictMode`, which
   renders every component twice on purpose, plus `@react-refresh` and unbundled modules.
   `configurePreviewServer` in [`vite.config.ts`](../../vite.config.ts) now puts the API in front of
   `vite preview` so a built bundle *can* be measured. **`npm run build` works against any store** —
@@ -719,7 +834,12 @@ Said plainly, because the fixes above are all real and none of them has been sho
 **The instruments**
 
 - [`scripts/measure-cpu.ts`](../../scripts/measure-cpu.ts) — the clean-browser harness. Flags:
-  `--url --settle --seconds --scroll --hidden --local-sign-in --profile --sign-in --json`
+  `--url --settle --seconds --scroll --hidden --local-sign-in --email --sign-in-via --cpu-profile
+  --profile --sign-in --display --json`. It picks Chrome by platform and honours
+  `SPIDERYARN_CHROME`; with no `DISPLAY` it goes headless, and `--display :99` puts it on the box's
+  X server. **`ProcessTime` reads 0 under headless Chrome**, so a headless run reports main-thread
+  CPU only and the whole-renderer figure — compositor and raster, the threads no main-thread
+  profiler can see — is simply missing. Do not quote a headless number as a total
 - [`scripts/seed-local-session.ts`](../../scripts/seed-local-session.ts) — signs a measuring browser
   into the **local** Supabase, and refuses any other host
 - [`src/web/perf.ts`](../../src/web/perf.ts) — the in-page probe (`?perf=1`), and `useRenderCount`.
@@ -738,6 +858,12 @@ Said plainly, because the fixes above are all real and none of them has been sho
   first one exits, so awaiting inside it waits before the frame is even requested
 - [`tests/perf-probe.test.ts`](../../tests/perf-probe.test.ts) — the probe is genuinely inert when
   switched off
+- [`tests/prose-not-rebuilt.test.tsx`](../../tests/prose-not-rebuilt.test.tsx) — a render that
+  changes no block's html rebuilds **no** prose, and a block that gains a mark is rebuilt **alone**.
+  The second assertion is the one that keeps the first honest: a memo that over-cached would satisfy
+  "zero mutations" perfectly while silently never drawing a search hit again. It renders the real
+  `TableView` against a committed fixture and counts with a `MutationObserver` — the same instrument
+  that found the bug in the browser
 
 **The code this keeps coming back to**
 

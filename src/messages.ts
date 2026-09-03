@@ -374,6 +374,12 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "up-off": "ours",
   "up-sum": "blocked",
   "up-gone": "blocked",
+  /* **`retry`, and it is the only upload code that is.** The other three
+     describe a file that will never be there; this one describes one that is
+     not there *yet*, which is an ordinary state now that the reader gets the
+     ingest's address before the bytes have finished moving. Another go is
+     exactly what helps. See `UPLOAD_STILL_ARRIVING`. */
+  "up-wait": "retry",
   /* These two were missing until 2026-08-26, so `kindOfMessage` returned null
      for `NO_RESPONSE` and `TOOL_CALL_LOST` and the interface was guessing on
      both. It guessed right — both are `retry`, and null means offer the retry —
@@ -1373,6 +1379,40 @@ export const UPLOAD_CHECKSUM: ReaderFacingFailure = {
  * duration tells the reader nothing about whether they were slow or we were
  * broken.
  */
+/**
+ * **The bytes are still on their way.**
+ *
+ * The readiness gate's refusal: `POST /api/jobs {uploadId}` asks Storage
+ * whether the staging object is there, and answers this when it is not. Nothing
+ * is claimed, nothing is queued, and no quota slot is spent — so unlike every
+ * other refusal on that route, this one costs the reader nothing and is
+ * expected to be temporary.
+ *
+ * It exists because the reader now reaches `/add/upload/<id>` at byte zero
+ * rather than at the last byte (docs/plans/260903j-background-pdf-upload-so-add-does-not-wait.md).
+ * Reloading that page, or opening it in a second tab, used to be impossible
+ * before the file had landed and is now the ordinary thing to do — and without
+ * this the job was queued over an object that was not there, which
+ * `acquireUpload` answers with `UPLOAD_MISSING`, terminally. A reader's own
+ * reload destroyed their upload.
+ *
+ * **`retry`, where the other three upload codes are not.** Another go is
+ * precisely what helps, and the page does it for them: it waits, and posts
+ * again when `GET /api/uploads/:id` says the object has arrived.
+ *
+ * **It names another go even though the page takes it for the reader**, because
+ * `tests/messages.test.ts` requires every `retry` sentence to say what would
+ * help — and the requirement is right here rather than merely satisfied: this
+ * message reaches a person only when the automatic wait is not running, which
+ * is exactly when pressing the button is the thing to do.
+ */
+export const UPLOAD_STILL_ARRIVING: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "That file is still on its way — nothing has been lost. Trying again in a moment will " +
+    "work, and this page does that for you as long as a Spideryarn tab stays open. [up-wait]",
+};
+
 export const UPLOAD_MISSING: ReaderFacingFailure = {
   kind: "blocked",
   message:

@@ -1,6 +1,8 @@
 # Illustrated: the 415 that ate every plate, and one press that draws then paints
 
-Status: **planned**. Worktree `illustrated-415-and-one-click`, 2026-09-03.
+Status: **stage 1 landed, production repaired**; stages 2-3 to come. Worktrees
+`illustrated-415-and-one-click` (planning, on the Hetzner box) then `illustrated-415-mac` (stage 1,
+on the Mac — it is where `.env.prod` is), 2026-09-03.
 
 Two things Greg asked for after the first live use of the
 [Illustrated](../project/diagram.md#illustrated) sub-mode:
@@ -227,6 +229,62 @@ rather than new hardcoded ones, so it cannot drift from the single-step copy.
 Auto-arming the Sketch chip and then the Illustrated chip from the client — two jobs, two POSTs,
 client-side sequencing. Rejected: it puts the ordering in the browser, where a closed tab loses it,
 when the server's `STEP_ORDER` already does it correctly for free.
+
+## What stage 1 actually did, 2026-09-03
+
+Landed in three commits on `worktree-illustrated-415-mac`.
+
+- **The postmortem**, [260903f](../postmortems/260903f-the-bucket-allowlist-drifted-again-on-production.md).
+  It declines the class name this plan proposed — "a declaration that no running system reads" was
+  already named in 260828a and naming it prevented nothing, so it is the standing condition rather
+  than the class — and names two instead: *an instrument that cannot be aimed at what it measures,
+  and passes instead of refusing*, and *a required manual act recorded in the list that is read, not
+  the list that is worked*. Plus the close-out rule: **a postmortem recommendation is open until
+  something runs it unbidden, against the environment the bug happened in.**
+- **`scripts/storage-buckets.ts` (new)** — target selection and I/O, shared by `check-buckets.ts` and
+  `deploy.ts` so the gate and the repair cannot disagree about what production is. The pure
+  judgement stays in `deploy-checks.ts`; this was the one piece of machinery added beyond the plan,
+  and it earns itself by being the thing both callers share.
+- **`--prod` / `--apply` / `--allow-narrowing`**, and a `Target:` line above the verdict in every
+  mode — including the safe local ones, because a line that appears only when something is dangerous
+  is a line nobody has read.
+- **The deploy gate**, before migrations rather than after: a refusal once the schema has advanced
+  costs something, and this costs one GET.
+- **`storageErrors` carries the message and status**, redacted (URLs and JWTs replaced wholesale)
+  and bounded (5 distinct entries plus `+N more`). The bound is new rather than inherited: `new Set`
+  had only ever been a bound by accident, because every entry collapsed to `"Error"`, and
+  `CorruptObject` names the key it complains about.
+
+**Corrections to this plan, found while building it.**
+
+- The endpoint is **`PUT /storage/v1/bucket/:id`**, not the `PATCH` this plan asserted. Confirmed
+  against the local project.
+- The equal `created_at`/`updated_at` was retracted as evidence — see above.
+- Cited line numbers had drifted, and are now stable names instead, per AGENTS.md.
+
+**Production was repaired**, with Greg's approval on the confirmed drift:
+
+```
+Target: https://alschkahzfagtppxspfq.supabase.co   (from …/.env.prod)
+  before  sources: private, 52428800 byte limit, accepts application/pdf, text/html
+  after   sources: private, 52428800 byte limit, accepts application/pdf, text/html, image/png, image/jpeg, image/gif
+```
+
+and then **proved by upload rather than by re-reading the config**, since that read shares an
+assumption with the thing it checks: a real `POST` of `image/jpeg` to production now returns 200
+where it returned 415. The probe object was written under `_probe/` — deliberately not under
+`sha256/`, where an object that does not hash to its own name is the `CorruptObject` state — then
+deleted, and the prefix confirmed empty.
+
+**Still open after stage 1.** Articles ingested on production between 2026-08-30 and 2026-09-03 still
+have hot-linked images: the bucket accepts them now, but nothing has re-run `assets` over them, so
+those readers' IPs still reach the publisher on every read. Re-running the step over that window is
+a bulk job over real readers' articles and was deliberately not done here — it is Greg's call.
+
+**A note on the test baseline.** `npm test` is not a stable signal on this box while other agents
+work: consecutive clean-tree runs gave 4 then 10 failing files, all database-backed, against one
+shared local Supabase, with the suite's own test count moving underneath. Targeted file runs are the
+trustworthy signal.
 
 ## Stages
 
