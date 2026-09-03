@@ -31,6 +31,7 @@ import { FeaturesPage } from "./FeaturesPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
+import { useExperimental } from "./useExperimental.js";
 import { DesignPage } from "./DesignPage.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
@@ -292,6 +293,31 @@ export function App() {
    * the real one rather than a copy of it.
    */
   useJobSession(user?.id ?? null, session?.access_token ?? null);
+
+  /**
+   * **Nothing here tells the experimental-features store who is reading.** It
+   * used to, from an effect beside this one, and that was a frame too late: a
+   * passive effect runs after its children have rendered, so on an account
+   * switch every `Dock` on the page drew once from the previous account's
+   * snapshot. The store subscribes to `onAuthStateChange` itself now, in the
+   * same notification pass as `useSession` — src/web/experimental-store.ts
+   * § the store listens for it itself.
+   *
+   * **And nothing here wakes it, either.** The store starts listening on its
+   * first subscriber and asks the server for nobody until then. Since stage 2
+   * the subscribers are the four components that mount a `Dock` — `Reader`
+   * below, `Metadata`, `Tweets` and `VisitorDock` in PublicPages.tsx — each
+   * calling `useExperimental()` and handing the answer down as a prop, because
+   * the bar is told rather than going and getting it (Dock.tsx § experimental).
+   * A stranger still asks for nothing: the store issues no request for a
+   * signed-out reader, who is off because we decided.
+   *
+   * A keep-awake subscriber sat here briefly — `subscribe(() => {})`, ignoring
+   * what it heard — so that the switch was read once up front rather than when
+   * a page mounted. It bought a round trip's head start and existed mainly to
+   * keep a trace assertion true, which is the wrong way round. What replaced it
+   * is the real subscriber in `Reader`.
+   */
 
   /* **The callback is answered before the gate**, and it has to be: the reader
      arriving here is by definition not signed in yet, and sending them to the
@@ -1391,6 +1417,22 @@ function Reader({
      the chip in the bar below it, neither of which is drawn for an owner.
      PublicChrome.tsx § SharedNotice for why it is two things and not one. */
   const sessionUnconfirmed = capability.kind === "visitor" && capability.sessionUnconfirmed;
+  /**
+   * **Whether this reader sees the modes that are still being built**, handed
+   * down to the bar rather than fetched by it.
+   *
+   * The page owns the fetches and the bar is told — Dock.tsx's own header says
+   * so, and `drawer`, `marked` and `signedIn` all already work that way. The
+   * store behind this hook is shared and session-bound, so the reading view,
+   * the metadata page and the tweets page cannot disagree for the length of a
+   * toggle (experimental-store.ts).
+   *
+   * **This is what makes a signed-in reader ask `GET /api/reader` on a reading
+   * view at all** — the store is lazy, and through stage 1 nothing on this page
+   * subscribed. tests/public-network-trace.test.tsx pins that at one, and pins a
+   * stranger's at zero.
+   */
+  const experimental = useExperimental();
   const geometry = useMemo(
     () => buildGeometry(article.tree, article.blocks),
     [article],
@@ -2918,6 +2960,9 @@ function Reader({
       <Dock
         slug={slug}
         view="article"
+        /* Which modes the bar draws at all — Dock.tsx § experimental, and the
+           hook call at the top of this component. */
+        experimental={experimental}
         mode={mode}
         onMode={(next) => {
           void setMode(next);

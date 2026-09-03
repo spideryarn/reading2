@@ -390,9 +390,34 @@ interface StepTiming {
  * noise. When one of them reaches enough runs, add it here — with the method
  * above, not with an aggregate over the call log.
  */
+/**
+ * ## `illustrated` needs a threshold for the opposite reason, and gets no
+ * `usually` for `hierarchy`'s
+ *
+ * The default 180s threshold is **below the fastest run this step has ever
+ * had**, so left to default it would put *"this has been running for a while —
+ * you can stop it"* under every single Illustrated job, a couple of minutes
+ * before the median one finishes. That is the reassurance-shaped invention in
+ * reverse: an alarm the code knows is false at the moment it raises it.
+ *
+ * Three end-to-end runs are recorded in `evals/results/illustrated-2026-09-03/`
+ * and `-03b/`, each a brief call plus three image calls: **273s, 308s and
+ * 417s**. Ten minutes is past the worst of them with room, and inside the 740s
+ * at which the claimant kills itself — so the sentence still has time to appear
+ * before the server settles the job.
+ *
+ * **No `usually`, at n=3.** The bar this file sets is thirteen observations for
+ * `sketch` and "two is not usually" for `ideas`; three is nearer the second. The
+ * empty state in src/web/IllustratedView.tsx does quote a range before the
+ * press, which is a different promise — *this is what you are about to buy*,
+ * where being vague and early is the honest thing — and it is a range for
+ * exactly this reason. When there are enough runs, add the sentence here with
+ * the method above rather than an aggregate over the call log.
+ */
 const STEP_TIMING: Partial<Record<StepName, StepTiming>> = {
   hierarchy: { slowAfterMs: 600_000 },
   sketch: { slowAfterMs: 420_000, usually: STEP_USUALLY_A_COUPLE_OF_MINUTES },
+  illustrated: { slowAfterMs: 600_000 },
 };
 
 /**

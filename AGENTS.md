@@ -61,7 +61,9 @@ listed here; the names under each are files in `docs/project/`.
 - **[design-css-overview.md](docs/project/design-css-overview.md)** — the map for anything visual:
   the stylesheets and their order, which mechanism owns a given rule, the colour and type tokens.
   Its live counterpart is `/design`.
-  <br>↳ `colour-scales.md` · `icons.md`
+  <br>↳ `colour-scales.md` · `icons.md` ·
+  `marketing-pages.md` (the signed-out pages, and how to shoot a screenshot that shows what it
+  claims to)
 - **[security-map.md](docs/project/security-map.md)** — start here for security: the untrusted
   parties (none of them is another reader) and where each defence physically lives.
   <br>↳ `security.md` (the deep dive) · `auth.md` · `admin.md` (the one view across owners) ·
@@ -150,11 +152,11 @@ the other docs and to the code. Not descriptions of code, which the code already
   carries intent that a paraphrase loses. If you find you've flattened a quote into your own voice,
   put his back.
 - **Signpost heavily**, both directions, deep-linking to sections, and out to the code
-  (e.g. [`src/blocks.ts`](src/blocks.ts)). **One source of truth.** Where a fact lives in the code —
-  a constant, a setting, what another module does — name the file and let the reader look, rather
-  than restating the value. A restatement is a second copy that nothing keeps in step, and it goes
-  wrong by waiting: a comment in [`src/token-budget.ts`](src/token-budget.ts) said `src/hierarchy.ts` had
-  moved to `"medium"` when it had not, and two agents believed it.
+  (e.g. [`src/blocks.ts`](src/blocks.ts)). **Cite, don't restate.** Give a fact one home. For facts
+  held in code, cite the defining file and stable name — `` `src/models.ts` § `STAGE_EFFORT` `` —
+  rather than copying a value or line number. For inventories, record the command, scope and run
+  date; treat its output as a dated example. Otherwise record the source, date and confidence or
+  status. [Why](docs/research/260903b-facts-that-were-wrong.md).
 - **Record decisions where they belong.** When something in
   [open-questions.md](docs/project/open-questions.md) gets decided, write it into the relevant doc
   and delete the question. That file should shrink.

@@ -124,6 +124,7 @@ import type {
 import { metaRawSha256, sameStamp } from "./artifacts.js";
 import type { ArtifactMap } from "./artifacts.js";
 import type { ArticleReader, RawSource } from "./contracts.js";
+import { guardDbStore } from "./db-errors.js";
 import { postgresBlobStore } from "./blobs.js";
 import { readRawDocument } from "./raw-document.js";
 import { pgReaderStore } from "./pg-reader.js";
@@ -2124,7 +2125,7 @@ export function shareableArtefacts(revision: {
  * The narrower inferred type buys callers nothing here: every method already
  * returns exactly what the interface declares.
  */
-export const pgArticleReader: ArticleReader = {
+const rawPgArticleReader: ArticleReader = {
   /**
    * **The raw document, out of the object store the revision names.**
    *
@@ -2975,3 +2976,6 @@ export const pgArticleReader: ArticleReader = {
     };
   },
 };
+
+/** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
+export const pgArticleReader: ArticleReader = guardDbStore("reader", rawPgArticleReader);

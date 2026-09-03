@@ -1,6 +1,11 @@
 # Illustrated: a fifth diagram sub-mode, drawn by an image model from Sketch's data
 
-Status: **planned**, being built 2026-09-03 in worktree `illustrated-260903`.
+Status: **stages 1–3 built, reviewed and on `dev`**; stage 4 (the client) in progress, stage 5 (docs
+and the final review) after it. Built 2026-09-03 in worktree `illustrated-260903`.
+
+**A reader cannot see this yet.** Everything below the chip exists — the wire, the two calls, the
+validator, the artefact, the migration, the routes — and nothing renders it until stage 4 lands. The
+way to look at what it produces today is `evals/results/illustrated-2026-09-03b/`.
 
 > Let's take the Diagram Sketch sub-mode and try and create another sub-mode called "Illustrated"
 > … It should use the latest OpenAI Images image-generation model to generate a more engaging
@@ -425,8 +430,9 @@ design and it costs the free-flowing prose the plates are currently good because
 tonight change.
 
 What v1 does instead, and it is containment rather than a fix: a **fixed trusted envelope** around
-the model's prompt at the image call, forbidding rendered text other than section headings and
-forbidding logos, brand names, URLs, slogans and watermarks; article and Sketch text fenced as
+the model's prompt at the image call, forbidding rendered text of any kind (the section-heading
+exception went in `illustrated/2` — see below) and forbidding logos, brand names, URLs, slogans and
+watermarks; article and Sketch text fenced as
 untrusted in both prompts; every model-written field capped and stripped of control and bidi
 characters; and a **hostile-article case in the eval** kept as evidence rather than as an assertion,
 so the next person can see what actually gets through.
@@ -583,6 +589,134 @@ correct; the invented caption was not. Strengthen the instruction to *no text at
 section headings*, and treat any remaining garbling as the reason the "what it depicts" list under
 the picture carries the real words.
 
+**That instruction did not survive contact with three articles** — the exception went entirely in
+`illustrated/2`, because the heading that came back "SΩUL MACHINE" *was* one of the ones this was
+about to protect. See the next section.
+
+## Tuning the prompt: `illustrated/2`
+
+Greg asked for spikes across a few different articles and for the plates to be looked at, rather
+than for more argument. `illustrated/1` had only ever been judged on two articles, so a third —
+`openai-huggingface`, whose Sketch was drawn for this at $0.25 — was added first. Fable then read
+the plates beside the Sketch each came from, and every dropped vignette was traced back to the
+model's own answer rather than counted.
+
+**Six edits, and none of them taste.** Each is named in the header of
+[`src/illustrated.ts`](../../src/illustrated.ts) with the thing it came from; the short version:
+
+1. **The quote must name the thing drawn.** The check validates the *quote*, so a model can satisfy
+   it with a real thesis sentence and then invent an emblem for `depicts` — both fields individually
+   fine, and nothing structural able to catch the pair. Six of the noema overview's fourteen
+   roundels were emblems on real quotes, and almost all of the first constitution map was.
+2. **A tier for the abstract article.** "Never a symbol for the section's topic" left an abstract
+   policy document with nothing it was allowed to draw, so the rule was quietly broken rather than
+   obeyed — and being disobeyed silently is worse than allowing the thing. The tiers now let the
+   *article's own* figure of speech through, named as such, and keep the ban on emblems we supply.
+3. **A zoom plate is the inside of one part of the overview.** They were coming back as unrelated
+   pages. The zoom scenes already share block ids with the overview's nodes, so a plate can open on
+   the overview's own vignette for that part — the visual anchor a reader arriving from a click
+   needs, and the nearest thing to a hotspot [§ Clickability](#clickability) allows.
+4. **The section-heading exception is gone**, from `imagePrompt` as well as `SYSTEM`. It was not
+   dead, which was the assumption going in: it was taken on one run of two, and the run that took it
+   is where "SΩUL MACHINE" came from. Across three draws of one brief a heading came out correct
+   once, misspelt once and omitted once — one reader in three told a confident-looking lie, for
+   wayfinding the plate's title already does in real text beside the picture.
+5. **Ornament capped, and eight to eleven vignettes rather than eight to fourteen.** About 40% of
+   every noema plate was foliate border and marginal beasts that `SYSTEM` never asked for —
+   "illuminated manuscript page" plus nothing said about empty space produces them every time —
+   leaving fourteen roundels at roughly 150 px each and two of them mud. Not banned: the marginalia
+   *are* the register Greg asked for.
+6. **Copy the punctuation, and the id beside a node is not where the quote must come from.** The
+   four dropped noema vignettes were only two mistakes. Two were one quote that dropped the curly
+   marks the article printed around a phrase, then reused on a second plate; `findQuote` in
+   `"spaced"` mode folds same-length so it cannot absorb a deleted character, which is why this had
+   to be fixed in the prompt rather than in the matcher. The other two kept the id the scene line
+   handed them — where the *node* points, and often a heading — while quoting a passage one and four
+   blocks away.
+
+### What changed, measured
+
+| article | version | vignettes kept | dropped | brief $ | $ per kept vignette |
+|---|---|---|---|---|---|
+| noema | `illustrated/1` | 26 | 4 of 30 | $0.2740 | $0.0105 |
+| noema | `illustrated/2` | 26 | 1 of 27 | $0.2987 | $0.0115 |
+| constitution | `illustrated/1` | 18 | 0 of 18 | $0.3593 | $0.0200 |
+| constitution | `illustrated/2` | 26 | **0 of 26** | **$0.3322** | **$0.0128** |
+| openai-huggingface | `illustrated/1` | 28 | 2 of 30 | $0.2025 | $0.0072 |
+| openai-huggingface | `illustrated/2` | 25 | **0 of 25** | **$0.1829** | $0.0073 |
+
+`illustrated/1` rows are [`illustrated-2026-09-03b/`](../../evals/results/illustrated-2026-09-03b/)
+and [`illustrated-oaihf-base/`](../../evals/results/illustrated-oaihf-base/); `illustrated/2` is
+[`illustrated-v2b/`](../../evals/results/illustrated-v2b/), except the noema row, which is
+[`illustrated-v2/`](../../evals/results/illustrated-v2/) — see the regression note below for why
+that one is a wording behind.
+
+**The constitution is the row that settles it**, because it is the abstract article the
+one-concrete-thing rule was being broken on. Under `illustrated/1` its overview was a road past a
+triumphal arch, a market stall with a two-pan scale, and a watchtower — emblems for *sequence*,
+*unhelpfulness* and *oversight*, none of them in the article. Under `illustrated/2` those same three
+are a file of figures climbing steps in order, a figure holding an empty basket out at a locked
+storeroom, and a small figure standing behind a taller one whose hand is raised in a checking
+gesture. Scenes of the sentences rather than emblems for the topics. It kept eight more vignettes
+than before, dropped none, and cost less.
+
+**Zero drops on both final runs**, and the brief did not get dearer: measured per kept vignette it
+got cheaper on the two articles that were rerun under the final wording. The bill is still the
+brief, and it is still the number that decides whether this ships.
+
+**Zoom anchoring is visible rather than inferred.** The noema zoom plates open and close on the same
+automaton and the same cinnamon bun the overview draws, in the same hand; the constitution's ethics
+plate opens on the overview's lantern-at-the-pit.
+
+### One regression, half-fixed, and honestly labelled
+
+Asking for ornament to stop crowding the scenes made the model too shy of the page: both
+`illustrated-v2` constitution plates put a narrow column of roundels down the middle of a half-empty
+sheet. The bullet now also asks the scenes to use the width of the plate, and says a narrow column
+on an empty page is worse than a busy margin.
+
+**That took on one article and not the other.** `openai-huggingface` came back filling the page in
+three colour-banded registers; the constitution came back as a column again, though with visibly
+larger and more legible scenes than before. So the composition is the model's habit as much as the
+instruction's, and this is the wording verified on fewest runs.
+
+**Noema's `illustrated/2` plates predate that last wording change.** They were not redrawn, because
+noema never showed the narrow-column problem — the change was made *because* the constitution did —
+and $0.30 to move a number that measures something else is not evidence, it is tidiness.
+
+### What this did not fix, and what it is not evidence about
+
+- **The register is a lottery.** Handed the same noema Sketch, `illustrated/1` chose an illuminated
+  page and `illustrated/2` chose an antique map; the constitution chose an illuminated page twice
+  with different colour. All are defensible in their own style sentence, but a reader who
+  regenerates gets a different-looking picture. This is the house-style question Greg deferred; it
+  is now a measurement rather than a guess.
+- **A modern subject in a medieval register turns into monks.** `openai-huggingface` draws "OpenAI
+  launched tens of thousands of parallel agents" as ranks of hooded figures filing into a vaulted
+  hall. The `depicts` and the quote pair honestly — this is not the emblem failure — but every
+  specific modern thing arrives wearing the same robe. Widening the register list beyond *antique
+  map* and *illuminated page* is the obvious answer and was **not** taken, because it makes a house
+  style harder to settle later. Greg's call.
+- **Illegible script-like texture is not "text", and the rule does not catch it.** The
+  `openai-huggingface` overview draws a wall covered in writing. Nothing on it is a readable word,
+  so it carries no misspelling and the ban is arguably satisfied, but a reader could reasonably call
+  it lettering.
+- **Three articles.** Two were drawn at the final wording, one a wording behind.
+
+### One bug this found, which had nothing to do with the prompt
+
+`ILLUSTRATED_VERSION` (src/illustrated-plate.ts, stamped onto every artefact) and `PROMPT_VERSION`
+(src/illustrated.ts, what `src/store/pg.ts` compares that field against to answer `outdated`) were
+two string literals in two files, equal by coincidence rather than by construction. Bumping one for
+a prompt change made every freshly drawn artefact report `outdated: true` for ever — a reader would
+be told the picture was out of date the instant it arrived. They are one constant now, and
+`tests/illustrated-plate.test.ts` fails if anyone re-splits them; that test was watched going red
+before it was kept.
+
+`evals/illustrated/run.ts --check` also could not read a `.raw.json` whose answer the model had
+fenced, because it parsed where the shipping stage strips first — the harness taking a different
+road from the stage, which its own header warns about.
+
 ## Reviews
 
 **Fable, 2026-09-03**, before the plan was written, on four product forks. Gave us the rule that
@@ -632,6 +766,63 @@ import-clean for the client boundary. What it found:
 
 All of those are fixed in the hardening pass. The one deliberately **not** fixed is the second-hop
 injection above.
+
+## For Greg: what was decided in the night, and what is still open
+
+Greg was asleep and asked for judgment calls to be made and listed. These are the ones where
+somebody could reasonably have chosen differently. Nothing here is load-bearing on anything else, so
+each can be reversed on its own.
+
+### Three that went against the letter of the instruction
+
+1. **The `OPENAI_API_KEY` in `.env.local` is not used.** It goes through OpenRouter instead, because
+   `openai/gpt-image-2` turned out to be routable there with reference images and a real cost line —
+   so [ai-gateway.md](../project/ai-gateway.md)'s one-gateway claim survives, and there is no
+   hand-maintained per-image price table (OpenAI publishes only per-token rates). About an hour to
+   reverse; the seam is one file. **This is the one that most deserves a second look**, because it
+   was a direct instruction and the reason for overriding it is architectural taste rather than
+   necessity.
+2. **The picture has no hotspots**, where Greg asked for a clickable top-level image. See
+   [§ Clickability](#clickability): we cannot know where the illustrator put section 3, and an
+   invisible wrong door is worse than no door. The vignette list under the plate is the clickable
+   layer instead. The three honest routes to a clickable image are listed there.
+3. **Article figures are not fed in.** Greg's version — a graph "re-depicted (faithfully!)" — is not
+   achievable, and [§ Article figures are deferred](#article-figures-are-deferred-and-gregs-version-of-it-is-not-achievable)
+   says why at length. The achievable version is a v2 with an eval behind it.
+
+### Two that are product calls rather than engineering ones
+
+4. **It costs more than Sketch: $0.27–$0.40 an article, 86–89% of it the brief call.** Every
+   intuition says the pictures are the expensive part and they are not. If that is too much, the
+   levers in order are the vignette count and the length of the three compositions — both prompt
+   edits — before a cheaper tier for the brief. [§ What it costs](#what-it-costs).
+5. **An article's author can influence what its illustration depicts**, and v1 accepts that rather
+   than fixing it. The fix is a typed composition our code renders, and it costs the free prose the
+   plates are good because of. Fine while this is owner-only; **not fine before any plate is shared,
+   made public, or used as an OG image.** [§ Two hazards](#two-hazards-the-pipeline-does-not-have-elsewhere).
+
+### Assumptions that are worth knowing are assumptions
+
+6. **`quality: "low"`** — because every plate drawn tonight was drawn at `low` and they are good.
+   Medium and high were never tried, so "low is enough" is evidence about `low`, not a comparison.
+7. **`MAX_PLATES = 4`, and only three-plate runs have been measured.** The 417 s worst case is a
+   three-plate number against a 760 s lease. A four-plate run on a long article is untested.
+8. **Two articles, one corpus.** Everything about picture quality rests on `noema` and
+   `constitution`. They are unalike enough to be encouraging and they are still two.
+9. **`output_format: "jpeg"` is honoured by a model that does not advertise supporting it.** Measured
+   twice, and the code refuses bytes that are not JPEG rather than trusting the request was obeyed —
+   but if it stops being honoured, plates stop being drawn until somebody sends `png` instead.
+
+### Open questions
+
+- **Should a drop remove a vignette from the picture as well as from the list?** Today it does not,
+  and [§ Check the brief](#check-the-brief-not-the-picture) explains why that would cost the
+  composition. A second call could rewrite the prompt from the survivors for about $0.02.
+- **Is one plate per zoom scene worth it**, or is the overview enough? Fable argued for overview-only;
+  the plates are cheap and Greg asked for them, so they are in, behind one constant.
+- **Should the register be a house style eventually?** Greg said not to worry about it yet. Worth
+  knowing that the model currently picks per article and gives a reason, and that the reasons are
+  good — which is an argument against fixing a house style rather than for one.
 
 ## The simpler option this passed over
 

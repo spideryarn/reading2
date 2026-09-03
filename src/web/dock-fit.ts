@@ -103,7 +103,7 @@ function applyDockFit(el: HTMLElement, level: number): void {
  * The narrowest rung the bar needs, left applied to `el` when this returns.
  *
  * Walks from rung 0 down, applying each and asking the browser. Up to three
- * forced reflows on a sixteen-element row, and only when something changed.
+ * forced reflows on a seventeen-element row, and only when something changed.
  *
  * `current` is returned unchanged when the element has no layout at all
  * (`clientWidth` 0 — detached, `display: none`, or jsdom, which has no layout

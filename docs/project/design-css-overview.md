@@ -500,6 +500,12 @@ eventually have to decide whether they are a system or an accident:
   number is the sharp end of the question. This line said "~1200" until 2026-09-03, and it was
   right when it was written: the file was 1,211 lines on 2026-08-25.
 
+## Under this doc
+
+- **[marketing-pages.md](marketing-pages.md)** — `/` and `/features`: the `site-*` block at the foot
+  of `styles.css` and the four rules in it, how to shoot a product screenshot that shows what it
+  claims to, and the two ways a full-page capture of these pages lies to you.
+
 ## See also
 
 - [web-client.md](web-client.md) — the view all of this styles, and its constraints
