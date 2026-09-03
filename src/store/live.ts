@@ -191,13 +191,15 @@ export const SEAM_ASYMMETRIES: Readonly<Record<string, SeamAsymmetry>> = {
       "already-published revision in a single UPDATE, which src/store/artifacts-pg.ts " +
       "does on every glossary run today. Nulling the column is that same write. " +
       "So this is no longer refused on principle; it is simply unbuilt. " +
-      "The one thing to settle when building it, which is implementation rather than " +
-      "permission: nulling the column does not change the step's fingerprint " +
-      "(FINGERPRINT_COLUMNS in src/store/pg.ts hashes tree/title/byline/siteName, the " +
-      "step's INPUTS), so check whether an ordinary run re-runs glossary afterwards or " +
-      "whether the revision_step_runs row still says done — if the latter, the delete " +
-      "must remove that row too, or 'start again' deletes a glossary nothing regenerates. " +
-      "Found by the 2026-09-03 sweep, docs/plans/260903d-improve-the-codebase-second-sweep.md.",
+      "The one thing that looked like it needed settling does not. Nulling the column " +
+      "does not change the step's fingerprint (FINGERPRINT_COLUMNS in src/store/pg.ts " +
+      "hashes the step's INPUTS), so the worry was that revision_step_runs would still " +
+      "say done and 'start again' would delete a glossary nothing regenerates. It would " +
+      "not: hasArtefacts in src/store/artifacts-pg.ts needs BOTH a done row AND every " +
+      "produced kind reading back, and an absent column reads back absent — so has() is " +
+      "false, stepIsDone is false, and an ordinary run rebuilds it. The delete is one " +
+      "UPDATE and must not touch revision_step_runs. Checked by the 2026-09-03 sweep, " +
+      "docs/plans/260903d-improve-the-codebase-second-sweep.md.",
     productionGap:
       "The glossary panel's 'start over' does not work on the deployed app: it answers " +
       "501 and the reader is stuck with the glossary they have.",
