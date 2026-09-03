@@ -120,6 +120,7 @@ import {
   loadArc,
   loadIdeas,
   loadQuotes,
+  loadIllustrated,
   loadSketch,
   loadQuiz,
   loadTimeline,
@@ -187,7 +188,8 @@ import { isStorableColour } from "./searches.js";
 /* The one media type this route serves, from the file that names it for the
    writer too — so what goes into the bucket and what comes out of it cannot be
    described two different ways. */
-import { CONTENT_TYPE } from "./store/blobs.js";
+import type { IllustratedImage } from "./illustrated-plate.js";
+import { blobStore, CONTENT_TYPE } from "./store/blobs.js";
 /* The download's two halves: the zip itself, and the one error a route has to
    turn into a 404 rather than let travel to the catch-all as a 500. Both come
    straight from the store, so this file adds no data model of its own. */
@@ -290,7 +292,7 @@ import {
   withSpendAttribution,
 } from "./ai-spend.js";
 import { costStore } from "./store/ai-calls.js";
-import { stagingKey } from "./source.js";
+import { canonicalKey, stagingKey } from "./source.js";
 import { uploadGrants } from "./store/blobs.js";
 import { uploadProblem } from "./uploads.js";
 import {
@@ -339,6 +341,7 @@ import type {
   IdeasResponse,
   QuizFound,
   QuotesResponse,
+  IllustratedResponse,
   SketchResponse,
   RememberStance,
   ThreadKind,
@@ -526,6 +529,80 @@ async function sendSource(res: ServerResponse, slug: string): Promise<void> {
      number whenever both exist, and the one that is true when they are not. */
   res.setHeader("Content-Length", String(source.bytes.byteLength));
   res.end(Buffer.from(source.bytes));
+}
+
+/**
+ * **One plate of an Illustrated diagram, as bytes** —
+ * docs/project/diagram.md § Illustrated.
+ *
+ * The only binary route in this file besides `sendSource`, and it is the one
+ * with a rule that has to be stated rather than followed by habit:
+ *
+ * > **The key is rebuilt from the artefact, never taken from the path.**
+ *
+ * Plates live in a **content-addressed store shared by every article and every
+ * reader** — `sha256/<hash>.jpeg`, the same bucket the articles' own figures
+ * are in. So a route that concatenated the caller's string into a blob key
+ * would be an arbitrary-object read: name any hash you can guess or have seen
+ * and get the object, whoever owns the article it belongs to. That is the rule
+ * docs/project/security.md owns, and it is why the hash in the path is used
+ * **only to look a plate up in this article's own artefact**. What reaches the
+ * store is `canonicalKey(plate.image.sha256, "jpeg")`, built here from the
+ * value we wrote.
+ *
+ * Two consequences worth keeping:
+ *
+ *  - a hash that is a real plate of **somebody else's** article is a 404, not a
+ *    picture, even though the object exists and the key is well-formed;
+ *  - a hash that is a plate of an **older revision** of this article is a 404
+ *    too, because `loadIllustrated` reads the current revision. That is right:
+ *    the panel only ever asks for hashes it has just been given.
+ *
+ * Ownership is checked the way `sendSource` checks it — `shelfStore.read`,
+ * which is the same owner-filtered lookup every other article route goes
+ * through, and which throws the same 404. It is asked as a question and its
+ * answer discarded.
+ *
+ * `blobStore()` and **not** `postgresBlobStore()`, for the reason
+ * src/fetch.ts § *Why `blobStore()`* gives about the raw document: the bytes
+ * were *written* through `blobStore()` (src/illustrated-image.ts), so selecting
+ * differently here would be a split brain by construction — the process that
+ * painted and the process that serves looking in two different buckets.
+ *
+ * **Immutable, and it can be**: the URL contains the hash of its own contents,
+ * so the bytes at it can never change. `private` because the article is one
+ * reader's — a shared cache must not hold it.
+ */
+async function sendPlate(res: ServerResponse, slug: string, hash: string): Promise<void> {
+  /* Ownership first, before the artefact is read and long before a byte moves —
+     `sendSource`'s rule, and the failure it was written after. */
+  await shelfStore.read(slug);
+
+  const found = await loadIllustrated(slug);
+  const plates = (found.illustrated as { plates?: { image?: IllustratedImage }[] }).plates ?? [];
+  /* **The stored record, not the caller's string.** Everything below is built
+     from `plate.image`; `hash` is never used again after this line. */
+  const image = plates.find((p) => p.image?.sha256 === hash)?.image;
+  if (!image) throw httpError(404, "No such plate.");
+
+  const bytes = await blobStore().get(canonicalKey(image.sha256, image.ext));
+  if (!bytes) {
+    /* The artefact names an object the store has not got. A 500 rather than a
+       404, on `sendSource`'s reasoning: telling a reader their picture does not
+       exist because a bucket is misconfigured is the wrong sentence, and this
+       is a dangling reference rather than an absence. */
+    throw httpError(500, "That plate's picture could not be read back.");
+  }
+
+  res.statusCode = 200;
+  res.setHeader("Content-Type", CONTENT_TYPE[image.ext]);
+  res.setHeader("Content-Length", String(bytes.byteLength));
+  /* A stranger's model drew these bytes and they are served from our origin —
+     the one place a wrong content type becomes script. Same reason
+     `sendSource` sets it. */
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+  res.end(Buffer.from(bytes));
 }
 
 /**
@@ -6187,6 +6264,17 @@ export async function serveAuthenticatedApi(
      POST /api/jobs { slug, steps: ["sketch"] }, which is also how "draw it
      again" is spelled, because the step replaces rather than appends. */
   const sketch = /^\/api\/sketch\/([\w.%-]+)$/.exec(path);
+  /* Illustrated — docs/project/diagram.md § Illustrated. GET only, like Sketch
+     above and for the same reason: painting one is
+     POST /api/jobs { slug, steps: ["illustrated"] }.
+
+     **Two routes, and the second is the only one in this file that serves bytes
+     an artefact points at.** The hash is spelled out as 64 hex characters here
+     rather than as a loose capture — not because `sendPlate` trusts it (it does
+     not; see that function) but because a pattern that accepts anything invites
+     the next reader to think the capture is a key. */
+  const illustrated = /^\/api\/illustrated\/([\w.%-]+)$/.exec(path);
+  const illustratedPlate = /^\/api\/illustrated\/([\w.%-]+)\/([0-9a-f]{64})\.jpeg$/.exec(path);
   /* The arc on its own. It also travels inside `/api/article/:slug`, and this is
      not a second way to do the same thing — since 2026-08-29 the arc is not built
      by every ingest, so a reader can arrive without one, ask for one, and need to
@@ -6680,6 +6768,37 @@ export async function serveAuthenticatedApi(
           ),
         );
       }
+      return;
+    }
+    if (illustrated && req.method === "GET") {
+      {
+        const at = slugPart(illustrated, 1);
+        /* Shaped exactly like `sketch` above, including the cast, which is only
+           about reaching `profileHash` — the client parses the plates itself on
+           arrival (IllustratedResponse in src/types.ts).
+
+           **`profileChanged` is about the profile the SKETCH was drawn for**,
+           because that is what this artefact inherits (src/illustrated.ts). The
+           comparison is the same one either way; what differs is where the hash
+           came from, and it came from the Sketch. */
+        send(
+          res,
+          200,
+          await withProfileChanged<IllustratedResponse>(
+            at,
+            () => loadIllustrated(at),
+            (found) => found.illustrated as { profileHash?: string | null },
+          ),
+        );
+      }
+      return;
+    }
+    if (illustratedPlate && req.method === "GET") {
+      /* `slugPart` on the slug for the reason the `source` route gives — the
+         pattern allows `%` and `.` — and `part` is not used at all on the hash,
+         which is already narrowed to hex by the pattern and is in any case only
+         ever compared, never joined onto anything. */
+      await sendPlate(res, slugPart(illustratedPlate, 1), part(illustratedPlate, 2));
       return;
     }
     /* Read only, like the ideas above and for the same reason: running the step
