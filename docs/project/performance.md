@@ -274,7 +274,7 @@ Found by the second GPT Sol review — the one on the built code, which
 [CLAUDE.md](../../CLAUDE.md) says to weight higher than the plan-stage one, and this is why. And the
 regression test could not see it either: its fake `/advance` always succeeded, and its
 `readJson` stand-in did not throw on a non-2xx the way the real one does
-([`lib/api.ts:159`](../../src/web/lib/api.ts)). A test that cannot reach the error path passes for
+(`src/web/lib/api.ts` § `readJson`). A test that cannot reach the error path passes for
 the same reason a correct one does.
 
 ### The clock stops too

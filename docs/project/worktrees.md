@@ -431,7 +431,7 @@ cap is **deliberately global** — counted across every row, which is what makes
 correct in production — so the store answered `busy` correctly about a machine that other worktrees
 had filled.
 
-**That suite takes the run lock** (`takeRunLockAndSetUp`, `tests/store-jobs-parity.test.ts:178`), so
+**That suite takes the run lock** (`tests/store-jobs-parity.test.ts` § `takeRunLockAndSetUp`), so
 this is not the 2026-08-30 case wearing a new hat. The lock serialises the holders that take it. It
 cannot exclude a dev server mid-ingest, and it cannot remove rows an earlier crashed or killed run
 left sitting at `running` — and either is enough to fill a **global** counter that every worktree
