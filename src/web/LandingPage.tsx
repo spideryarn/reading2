@@ -67,8 +67,9 @@ import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { Plans } from "./Plans.js";
-import { FEATURES_HREF } from "./router.js";
+import { FEATURES_HREF, PRICING_HREF } from "./router.js";
 import { SHOTS } from "./shots.js";
+import { SiteFooter } from "./SiteFooter.js";
 import { SignInControls } from "./SignInControls.js";
 import {
   Feature,
@@ -78,7 +79,6 @@ import {
   PrimaryCta,
   SHELL,
   Showcase,
-  SiteFooter,
   SiteNav,
   Tile,
 } from "./SiteBits.js";
@@ -319,6 +319,17 @@ export function LandingPage() {
         <H2 eyebrow="Plans">Simple, and reading is never gated.</H2>
         <div className="site-reveal">
           <Plans />
+          {/* [tissue] The same three rows are on `/pricing`, which exists to be
+              an address you can send somebody rather than a page with more on
+              it. Same shape as the features link above. */}
+          <p className="tw:mt-6 tw:text-sm">
+            <Link
+              href={PRICING_HREF}
+              className="tw:text-highlight tw:no-underline tw:hover:underline"
+            >
+              Pricing, and what a month’s allowance means →
+            </Link>
+          </p>
         </div>
 
         {/* ---------------------------------------------------------- sign in --
@@ -335,7 +346,20 @@ export function LandingPage() {
           <SignInControls />
         </section>
 
-        <SiteFooter here="home" />
+        {/* **One footer for the whole site**, since the merge of 2026-09-03:
+            this page's own `SiteFooter` in SiteBits.tsx and the general one
+            arrived the same day in two worktrees, and Greg's call was to keep
+            the general one. `variant` carries this page's taller spacing over
+            unchanged; the sentence is this page's and stays here.
+
+            **`here` because this page is drawn at addresses that are not its
+            own.** Signed out, `App.tsx` answers `/profile`, `/design`,
+            `/admin`, `/add/...` and an unshared `/read/<slug>` with this page,
+            so without it the row offered those readers a Home link to the page
+            they were already on. SiteFooter.tsx § `here`. */}
+        <SiteFooter here="library" variant="marketing">
+          Spideryarn Reading — beta. Every screenshot is of a real article read in Spideryarn.
+        </SiteFooter>
       </main>
     </div>
   );

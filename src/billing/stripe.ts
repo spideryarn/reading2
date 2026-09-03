@@ -36,8 +36,23 @@
  * answers the question and the variable name is not consulted. The same
  * reasoning, and the same prefixes, guard the shared dev box in
  * `scripts/gjd-remote-env.ts`.
+ *
+ * ## Why the SDK is imported inside `stripeClient()`
+ *
+ * `import type`, and one `await import("stripe")` in the one function that
+ * constructs a client. Everything in `api-dist/vercel.js` is loaded before a
+ * request's clock starts, and `/api/health` reads `expectedLivemode` from this
+ * file — so a static import here put the whole Stripe SDK into the cold start
+ * of every `GET /api/library`, which will never sell anything. Measured at
+ * ~230ms of a ~3.3s module import;
+ * docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md § Stage 4.
+ *
+ * That is what makes `stripeClient()` async. The alternative — a warm-up call
+ * that has to happen first — is an ordering rule nothing enforces, and the
+ * failure would be on the billing path only. The three callers were already
+ * inside async functions.
  */
-import Stripe from "stripe";
+import type Stripe from "stripe";
 
 
 /**
@@ -130,18 +145,23 @@ export class StripeConfigError extends Error {
 let cached: { key: string; client: Stripe } | null = null;
 
 /**
- * The Stripe client, or a throw naming exactly what is wrong.
+ * The Stripe client, or a rejection naming exactly what is wrong.
+ *
+ * **Async only because the SDK is loaded here** — see the header. The
+ * configuration check still happens before anything else, so an unconfigured
+ * deployment rejects without paying for the import.
  *
  * @throws {StripeConfigError} when unconfigured or the key's mode does not
  * match the deployment.
  */
-export function stripeClient(): Stripe {
+export async function stripeClient(): Promise<Stripe> {
   const problem = stripeConfigProblem();
   if (problem) throw new StripeConfigError(problem);
 
   const key = (process.env.STRIPE_SECRET_KEY ?? "").trim();
   if (cached?.key === key) return cached.client;
 
+  const { default: Stripe } = await import("stripe");
   const client = new Stripe(key, {
     apiVersion: STRIPE_API_VERSION,
     /* Named so a support request, and Stripe's own dashboard log, say which

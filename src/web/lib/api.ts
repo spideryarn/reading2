@@ -428,9 +428,29 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
     return fetch(input, { ...init, headers });
   };
 
-  const token = await accessToken();
-  const first = await attempt(input, init, () => send(token));
-  if (first.status !== 401) return saving(input, init, first);
+  /**
+   * **The token, and whose it is, out of the same answer.**
+   *
+   * Every cache read and every cache write below used to call `lastKnownUser()`
+   * at the moment it ran — which is *after* the round trip. A direct A→B sign-in
+   * (`rememberUser(B)` with no `forgetUser(A)`, because that only runs on a null
+   * session) landing inside that window put **A's response into B's partition**,
+   * and from there onto B's screen. Harmless-ish while the cache was read only
+   * when the network was gone; the shelf now reads it on every repeat visit, so
+   * it is a wrong reader's titles rather than a rare offline oddity.
+   *
+   * Capturing it before the request instead was the obvious repair and was still
+   * not right, which is GPT Sol's second finding and a better rule than the one
+   * it replaced: **the drawer belongs to whoever's token the server is about to
+   * check**, so the id has to come out of the same session object as the token
+   * rather than from a second lookup that can have moved on. `accessToken`
+   * returns the pair for that reason. See § Stage 5 of
+   * docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md,
+   * 2026-09-03.
+   */
+  const { token, owner } = await accessToken();
+  const first = await attempt(input, init, () => send(token), owner);
+  if (first.status !== 401) return saving(input, init, first, owner);
 
   /* **Nobody was signed in, so there is nothing to refresh.** Without this the
      sign-in screen's own requests would each provoke a pointless refresh call,
@@ -446,6 +466,9 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
      here would replace a perfectly good 401 (which callers know how to report)
      with a `TypeError` about `fetch`. */
   let refreshed: string | undefined;
+  /* The refresh answers with a whole session, so the retry's drawer comes from
+     that one rather than from the session the first attempt used. */
+  let refreshedOwner = owner;
   try {
     /* Offline this cannot succeed, and the SDK will spend around twenty-five
        seconds finding that out — see `accessToken` below. A 401 we already have
@@ -453,11 +476,17 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
     if (!probablyOnline()) return first;
     const { data } = await supabase.auth.refreshSession();
     refreshed = data?.session?.access_token;
+    refreshedOwner = data?.session?.user?.id ?? owner;
   } catch {
     return first;
   }
   if (!refreshed) return first;
-  return saving(input, init, await attempt(input, init, () => send(refreshed)));
+  return saving(
+    input,
+    init,
+    await attempt(input, init, () => send(refreshed), refreshedOwner),
+    refreshedOwner,
+  );
 }
 
 /**
@@ -535,6 +564,8 @@ async function attempt(
   input: string,
   init: RequestInit,
   run: () => Promise<Response>,
+  /** Whose cache to look in, from when the request went out — see `apiFetch`. */
+  owner: string | null,
 ): Promise<Response> {
   const method = (init.method ?? "GET").toUpperCase();
   const started = Date.now();
@@ -587,8 +618,7 @@ async function attempt(
     if (init.signal?.aborted) throw e;
     if (!cacheable(input)) throw e;
 
-    const user = lastKnownUser();
-    const saved = await readCached(input, user);
+    const saved = await readCached(input, owner);
     if (!saved) {
       noteNoConnection();
       throw e;
@@ -596,7 +626,7 @@ async function attempt(
     noteServedCopy(saved.savedAt);
 
     const body = input.split("?")[0] === "/api/library"
-      ? await onlyWhatWeHave(saved.body, user)
+      ? await onlyWhatWeHave(saved.body, owner)
       : saved.body;
 
     /* A real `Response`, so every caller downstream — `readJson`, the hooks,
@@ -625,16 +655,21 @@ async function attempt(
  * for their article should not also wait for a database write; a quota error
  * must cost them nothing at all.
  */
-function saving(input: string, init: RequestInit, res: Response): Response {
+function saving(
+  input: string,
+  init: RequestInit,
+  res: Response,
+  /** Whose cache to write, from when the request went out — see `apiFetch`. */
+  owner: string | null,
+): Response {
   if ((init.method ?? "GET").toUpperCase() !== "GET") {
     /* **A successful write makes our copy of that thing wrong.** Deleting a
        chat thread and then going offline must not bring the thread back, which
        is what a cache kept past the delete would do — and it would look exactly
        like the delete having failed. See `invalidate`. */
     if (res.ok && !leavesCachedResourceCurrent(input)) {
-      const user = lastKnownUser();
       const prefix = resourceOf(input);
-      if (user && prefix) void invalidate(prefix, user);
+      if (owner && prefix) void invalidate(prefix, owner);
       /* **One write makes two of our copies wrong, and only one of them is
          named in the URL.**
 
@@ -651,7 +686,7 @@ function saving(input: string, init: RequestInit, res: Response): Response {
          resource and is right to: this is a second resource the write affects,
          and it has to be named. GPT Sol's review of the built code,
          2026-08-30; docs/plans/260830c-profile-panel.md. */
-      if (user && prefix.startsWith("/api/library/")) void invalidate("/api/reader", user);
+      if (owner && prefix.startsWith("/api/library/")) void invalidate("/api/reader", owner);
     }
     return res;
   }
@@ -672,8 +707,7 @@ function saving(input: string, init: RequestInit, res: Response): Response {
      `application/json; charset=utf-8`, so it is split on `;` instead. */
   if (!isJson(res)) return res;
 
-  const user = lastKnownUser();
-  if (!user) return res;
+  if (!owner) return res;
 
   try {
     /* `clone()` before anything reads the body. A `Response` body can be read
@@ -683,7 +717,7 @@ function saving(input: string, init: RequestInit, res: Response): Response {
     const copy = res.clone();
     void copy
       .json()
-      .then((body) => writeCached(input, body, user, slugOf(input)))
+      .then((body) => writeCached(input, body, owner, slugOf(input)))
       .catch(() => {
         /* A body that dies after its headers arrived. Nothing to save, and the
            previous copy — if any — is left alone rather than replaced by half
@@ -898,13 +932,13 @@ function probablyOnline(): boolean {
  * error the reader cannot act on. It also means the sign-in screen's own calls
  * do not need a special case.
  */
-async function accessToken(): Promise<string | undefined> {
+async function accessToken(): Promise<Credential> {
   /* **No network, no wait.** `getSession()` refreshes a token it thinks has
      expired, and offline that refresh is a retry loop the SDK bounds at its own
      thirty-second tick. Skipping it here is the difference between a reader
      seeing a saved copy at once and a reader watching nothing happen for
      twenty-five seconds and then being told their credentials are bad. */
-  if (!probablyOnline()) return cachedToken;
+  if (!probablyOnline()) return fromCache();
 
   /* Online, the same hang is still possible — a captive portal accepts the
      connection and never answers — so the wait has a deadline as well as a
@@ -913,9 +947,39 @@ async function accessToken(): Promise<string | undefined> {
      retry below handles it. Being refused quickly is recoverable. Hanging is
      not. */
   return await Promise.race([
-    supabase.auth.getSession().then((r) => r.data.session?.access_token),
-    after(SESSION_DEADLINE_MS).then(() => cachedToken),
+    supabase.auth.getSession().then((r) => ({
+      token: r.data.session?.access_token,
+      /* **Out of the same session object as the token**, so the two cannot
+         disagree. `lastKnownUser()` behind it is for a session shape with no
+         user on it, which the SDK does not produce and a test stub does. */
+      owner: r.data.session?.user?.id ?? lastKnownUser(),
+    })),
+    after(SESSION_DEADLINE_MS).then(fromCache),
   ]);
+}
+
+/**
+ * A token and the reader it belongs to, which must travel together.
+ *
+ * Two lookups a moment apart can straddle an account switch, and then a
+ * response is filed in the wrong reader's drawer. One type, so a caller cannot
+ * take the token and go and ask somebody else who it is for.
+ */
+interface Credential {
+  token: string | undefined;
+  /** An id, never a token: it selects a drawer and authorises nothing. */
+  owner: string | null;
+}
+
+/**
+ * The pair the auth listener last saw.
+ *
+ * Safe as a pair because that listener writes `cachedToken` and calls
+ * `rememberUser` in the same callback, so these two never disagree — see the
+ * bottom of this file.
+ */
+function fromCache(): Credential {
+  return { token: cachedToken, owner: lastKnownUser() };
 }
 
 /**

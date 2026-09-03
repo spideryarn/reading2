@@ -2789,8 +2789,14 @@ async function inFlightSlugForUrlKey(key: string): Promise<string | undefined> {
  * far more than anyone scrolls back through and small enough that the list
  * stays a list.
  *
- * Failures are kept preferentially: they are the ones worth reading later, and
- * the successes have an article on the shelf to speak for them.
+ * **The two kinds are interleaved**, ranked by when each finished — the rule
+ * is src/store/pg-jobs.ts § `trimFinished`. Failures are still favoured where
+ * the two compete for one slot: they are the ones worth reading later, and the
+ * successes have an article on the shelf to speak for them. What changed on
+ * 2026-09-03 is that the preference is no longer absolute, because an owner
+ * holding fifty failures had every success deleted by the same `noteEnded` that
+ * finished it — and the client learns a job is done by polling for its terminal
+ * row, so nothing was ever announced finished.
  */
 const KEEP_FINISHED = 50;
 

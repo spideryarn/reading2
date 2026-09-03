@@ -69,6 +69,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_HREF, DESIGN_HREF, PROFILE_HREF } from "./router.js";
 import { ShelfCard } from "./ShelfEntry.js";
 import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
+import { SiteFooter } from "./SiteFooter.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useJobs } from "./useJobs.js";
 import { useLibrarySearch } from "./useLibrarySearch.js";
@@ -78,14 +79,30 @@ import { useShelf } from "./useShelf.js";
 import { useSlow } from "./useSlow.js";
 import { useRenderCount } from "./perf.js";
 
-export function Library() {
+export function Library({
+  readerId,
+}: {
+  /**
+   * Whose shelf this is, from `SignedIn` in App.tsx.
+   *
+   * A prop rather than `user?.id` off the `useSession()` below, even though the
+   * two are the same string: `useShelf` reads this reader's saved copy out of
+   * IndexedDB before the live answer lands, and *which reader* is then a fact
+   * the shelf depends on rather than a detail of the chrome. `SignedIn` has a
+   * non-optional `User`, so passing it down makes the id non-optional here —
+   * the `?.` that `useSession` forces on every other caller cannot creep into
+   * the one place it would mean "look in nobody's cache".
+   * docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md § Stage 5.
+   */
+  readerId: string;
+}) {
   useRenderCount("Library");
   /* Who the Admin link is drawn for, and whose address the Profile tooltip
      names. `useSession` is already subscribed once at the top of the app
      (App.tsx), and a second subscription is one listener rather than a second
      source of truth — the SDK is the source, and both read it. */
   const { user } = useSession();
-  const shelf = useShelf();
+  const shelf = useShelf(readerId);
   const { articles, error, reload } = shelf;
   const slow = useSlow(articles === null);
 
@@ -460,6 +477,20 @@ export function Library() {
       {searching && <Passages state={passages} query={query} only={unread} />}
 
       {!searching && <Archived shelf={shelf} />}
+
+      {/* Greg's own example of a signed-in page that should carry one
+          (2026-09-03). The shelf has a bottom, and it is where a reader who has
+          been away comes back to — so it is where the policy and the feature
+          list stay reachable long after the landing page stopped being shown to
+          them.
+
+          **`here` because this page is App.tsx's fallback**, exactly as the
+          landing page is signed out: a non-administrator at `/admin` gets the
+          shelf, and so does every unrecognised address, because `parseRoute`
+          has no 404. Without this the row offered those readers a Home link to
+          the shelf they were already looking at. GPT Sol, 2026-09-03.
+          SiteFooter.tsx § `here`. */}
+      <SiteFooter here="library" />
     </main>
   );
 }

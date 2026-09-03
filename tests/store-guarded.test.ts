@@ -232,6 +232,24 @@ describe("no Postgres store is selected without a guard", () => {
            types every match index as possibly undefined — see typechecking.md. */
         if (m[1]) names.add(m[1]);
       }
+      /* **A factory counts as guarded when its body returns a guarded store.**
+         Three of them do — `createPgCheckpointStore`, `createPgSourceStore` and
+         `pgStoreSession` — and the first version of this scan saw none, because
+         it looked only for `export const X = guardDbStore(`. That made the
+         companion check below report three false offenders and hid the one real
+         one among them.
+
+         **Bounded to this declaration**, not to a character count, so that a
+         `guardDbStore` in some *later* function cannot vouch for this one. A
+         fixed window was the first attempt and it was wrong in the direction
+         that matters: `pgStoreSession` guards on its last line, 450 lines below
+         its signature, so a 400-character window called it unguarded. */
+      for (const m of code.matchAll(/export\s+function\s+([A-Za-z_$][\w$]*)\s*\(/g)) {
+        const rest = code.slice(m.index + m[0].length);
+        const next = rest.search(/\nexport\s+(?:const|function|class|async)\s/);
+        const body = next < 0 ? rest : rest.slice(0, next);
+        if (m[1] && /return\s+guardDbStore\(/.test(body)) names.add(m[1]);
+      }
     }
     return names;
   }
@@ -304,6 +322,12 @@ describe("no Postgres store is selected without a guard", () => {
        stops being guarded has to delete its own name from here, which is a
        line a reviewer sees. */
     expect([...guarded].sort()).toEqual([
+      /* The three **factories**, which the first version of the discovery could
+         not see at all: it scanned `export const X = guardDbStore(` and a
+         factory returns its guarded store from a body instead. GPT Sol found
+         `createPgSourceStore` unguarded behind that blind spot, 2026-09-03. */
+      "createPgCheckpointStore",
+      "createPgSourceStore",
       "pgAdminStore",
       "pgArticleReader",
       "pgChatStore",
@@ -320,6 +344,9 @@ describe("no Postgres store is selected without a guard", () => {
       "pgSearchStore",
       "pgShelfStore",
       "pgSourceStore",
+      /* The third factory, and the one that proved a fixed-size window wrong:
+         it guards on its last line, 450 below its signature. */
+      "pgStoreSession",
       "pgUploadStore",
       "pgVisibilityStore",
     ]);
@@ -357,13 +384,28 @@ describe("no Postgres store is selected without a guard", () => {
         "scrubs its own, deliberately and more narrowly, because its import graph is closed " +
           "and walked by tests/public-imports.test.ts",
       ],
+      [
+        "pgArtifactsIn",
+        "not a store anybody selects: it is built per transaction inside pgStoreSession, whose " +
+          "own returned object IS guarded, so every escape route from it already goes through " +
+          "the wrapper. Wrapping it again per transaction would allocate a proxy for each of " +
+          "its methods on every step. Listed rather than fixed, and it is the one entry here " +
+          "that would have to change if it ever gained a caller outside pg-session.ts",
+      ],
     ]);
 
     const guarded = await guardedAtExport();
     const exported: string[] = [];
     for (const file of await sourcesUnder(root)) {
       const code = strip(await readFile(file, "utf8"));
-      for (const m of code.matchAll(/export\s+const\s+(pg[A-Z][\w$]*)/g)) {
+      /* **`function` as well as `const`, and `createPgX` as well as `pgX`.** The
+         first version scanned `export const pg[A-Z]` only, and GPT Sol found the
+         hole within the hour: `createPgSourceStore` is an exported *factory*
+         returning a live `SourceStore`, four tests call it directly, and it was
+         unguarded while the singleton beside it was wrapped. A shape check is
+         only as good as the shapes it knows, so this one names both spellings
+         and the assertion below counts what it found. */
+      for (const m of code.matchAll(/export\s+(?:const|function)\s+((?:create)?[Pp]g[A-Z][\w$]*)/g)) {
         if (m[1]) exported.push(m[1]);
       }
     }

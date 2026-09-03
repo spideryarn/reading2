@@ -51,7 +51,6 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import PQueue from "p-queue";
-import { PDFDocument } from "pdf-lib";
 import { stageCli } from "./cli-ledger.js";
 import { allOrStop } from "./concurrency.js";
 import { loadEnvLocal } from "./env.js";
@@ -327,6 +326,16 @@ function chunkFrom(pages: number[], before: Chunk[]): Chunk {
  * comparison.
  */
 export async function cutPages(source: Uint8Array, pages: number[]): Promise<Uint8Array> {
+  /* **Imported here rather than at the top of the file**, and it is a cold-start
+     cost rather than tidiness. `api-dist/vercel.js` is one bundle that every
+     request loads before its clock starts, and a static import here put pdf-lib
+     into that load for a `GET /api/library` that will never cut a page —
+     measured at ~200-470ms of a ~3.3s module import
+     (docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md § Stage 4).
+     This function is the only thing in the file that touches pdf-lib and it was
+     already async, so the seam costs nothing else. Same shape as `loadPdfjs()`
+     in src/pdf.ts; Node caches the module, so the second call is free. */
+  const { PDFDocument } = await import("pdf-lib");
   const src = await PDFDocument.load(source);
   const out = await PDFDocument.create();
   const copied = await out.copyPages(

@@ -442,6 +442,38 @@ that compiles the client.
 This is the same shape as [linting.md](linting.md): TypeScript 7 removed the API
 ESLint needed, and it removed the one Vercel's builder needs too.
 
+### Everything that bundle imports at module scope is paid for by every request
+
+`api/index.js` answers a request by `await import`ing the whole 3.5 MB
+`api-dist/vercel.js`, and the server's own clock — every `GET /api/library 200
+10ms` line you have ever read — starts **after** that. So a static import in any
+of the ~200 modules that bundle reaches is initialised before the shelf's query
+runs, whether or not the request could ever use it.
+
+Measure it with `npm run build && npx tsx scripts/bench-cold-start.ts`, which
+refuses rather than shrugs on a stale or missing bundle and prints the box's load
+average beside the numbers. In production the two `component: "health"` lines
+`cold start: module import` and `cold start: first request` report the same thing
+once per instance ([`src/cold-start.ts`](../../src/cold-start.ts)); both exist
+because moving work *inside* the handler improves the first number and not the
+second.
+
+Three packages are therefore reached only when something needs them, and the
+seams are documented where they live: **jsdom** through
+[`src/jsdom-lazy.ts`](../../src/jsdom-lazy.ts) (a synchronous `createRequire`,
+because `splitIntoBlocks` and `sanitizeHtml` are synchronous and would otherwise
+have to become async everywhere), **pdf-lib** inside `cutPages`, and the
+**Stripe SDK** inside `stripeClient()`. That was ~940 ms off a ~2,400 ms module
+import on a quiet box, measured paired against the previous build.
+`tests/cold-start-lazy-imports.test.ts` fails if any of them goes back to module
+scope, and `tests/pdf-bundle-trace.test.ts` asks the real Vercel tracer whether
+they still *ship* — which is the half that is an outage if it is wrong.
+
+**drizzle and Sentry stay at module scope on purpose.** The shelf's own query
+goes through drizzle, and error reporting has to be up before the code that might
+fail; they are the floor under this, not the next target.
+docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md § Stage 4.
+
 ## Who can reach it
 
 **Anybody with the address can read the app right now.** That is a deliberate
@@ -578,10 +610,10 @@ is read by nothing.
 | `OPENROUTER_API_KEY` | **every paid call in the app**, since 2026-08-27 — the pipeline as well as explain, chat, search, PDF reading and embeddings. Without it nothing can be ingested at all. [ai-gateway.md](ai-gateway.md) |
 | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | the gate verifies tokens with these. `SUPABASE_ANON_KEY` is the legacy fallback and is what is set today |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | **set on Production, 2026-08-27 — and they are read at BUILD time**, which is the part to remember. Vite compiles them into the bundle, so setting them after a deploy changes nothing until the next build. Missing means [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) throws at module load and the site is a **blank page** — which is what `www.spideryarn.com` was for a few hours that day. **Set on Preview too, 2026-08-27** — until then a preview was a blank page for this reason and no other, which looks identical to a build that never ran. Note that Preview builds predating that setting keep the missing values baked in; only a new build picks them up. The values came from `.env.prod`, where the publishable key lives under the legacy name `SUPABASE_ANON_KEY` and its value is an `sb_publishable_…`. [auth.md](auth.md), [260826ae-auth-ui-and-production.md § The release fence](../plans/260826ae-auth-ui-and-production.md#the-release-fence) |
-| `STRIPE_SECRET_KEY` | **not set yet — payments are not live.** When it is, it must be the **live** key here and nowhere else. A production deployment on `sk_test_…` takes test cards, writes `active` subscription rows and grants real quota, while every "is it set" check stays green; [`src/billing/stripe.ts`](../../src/billing/stripe.ts) refuses to construct a client in that state and `/api/health` warns. Absent is fine and means everybody is on the free tier. [billing.md](billing.md) |
-| `STRIPE_WEBHOOK_SECRET` | the signing secret of the **dashboard** webhook endpoint, which is a different value from the one `stripe listen` mints locally — that is why this is not on the `gjd-remote push-env` allowlist. Unset refuses every delivery rather than skipping verification, deliberately: the alternative turns one missing variable into an endpoint that grants subscriptions to anyone who can POST JSON |
+| `STRIPE_SECRET_KEY` | **set on Production, 2026-09-03** — the `sk_live_…` for `acct_1UBW3NLv4piDbwcb`, and it must be the **live** key here and nowhere else. A production deployment on `sk_test_…` takes test cards, writes `active` subscription rows and grants real quota, while every "is it set" check stays green; [`src/billing/stripe.ts`](../../src/billing/stripe.ts) refuses to construct a client in that state and `/api/health` warns. Absent is fine and means everybody is on the free tier. [billing.md](billing.md) |
+| `STRIPE_WEBHOOK_SECRET` | **set on Production, 2026-09-03.** The signing secret of the **dashboard** webhook endpoint (`we_1UBXjMLv4piDbwcbrLUPudWD` → `/api/webhooks/stripe`), which is a different value from the one `stripe listen` mints locally — that is why this is not on the `gjd-remote push-env` allowlist. Unset refuses every delivery rather than skipping verification, deliberately: the alternative turns one missing variable into an endpoint that grants subscriptions to anyone who can POST JSON |
 | `SPIDERYARN_BASE_URL` | **must stay unset here**, and it is listed so nobody adds it. It is where Stripe returns a reader to after Checkout or the Portal, and production reads no variable for that at all — `billingReturnOrigin()` ([`src/billing/checkout.ts`](../../src/billing/checkout.ts)) answers `PUBLIC_ORIGIN` before it looks. It exists for a **worktree's** dev server, which lands on 5274, 5275… and would otherwise send a test purchase back to somebody else's checkout |
-| ~~`STRIPE_PRICE_*`~~ | **Gone, deliberately.** Tiers and their Stripe price ids live in the `billing_tiers` table since 2026-09-02, so they can be changed without a deploy and without pasting an id onto every machine. `npx tsx scripts/stripe-setup.ts --apply` reads the rows, makes Stripe match, and writes the id back. [billing.md](billing.md#adding-a-tier-or-a-currency) |
+| ~~`STRIPE_PRICE_*`~~ | **Gone, deliberately.** Tiers and their Stripe price ids live in the `billing_tiers` table since 2026-09-02, so they can be changed without a deploy and without pasting an id onto every machine. `npm run stripe:setup -- --prod --apply` reads the rows, makes Stripe match, and writes the id back — and `--prod` is how you reach production, because naming the target on the command line silently does not. [billing.md](billing.md#setting-it-up) |
 | `SPIDERYARN_OWNER_ID` | the uuid in `auth.users` that rows are stamped with **when there is no signed-in reader** — the CLI and the pipeline. Inside a request the session user wins and this is ignored, and that ordering is load-bearing: were it the other way round, setting this here would have handed every signed-in stranger Greg's own shelf and every query would have matched. Unset in production is a thrown error rather than a default. [`src/owner.ts`](../../src/owner.ts), [auth.md](auth.md) |
 | `LOG_LEVEL=info` | [logging.md](logging.md) |
 

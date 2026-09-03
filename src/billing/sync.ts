@@ -87,7 +87,7 @@ export type SyncResult =
  * work: it always asks Stripe.
  */
 export async function syncSubscriptionFromStripe(customerId: string): Promise<SyncResult> {
-  const stripe = stripeClient();
+  const stripe = await stripeClient();
   /* Read once, before the transaction opens. An empty list is a deployment
      whose setup script has not run, which must not turn a webhook into a 500. */
   const tiers = await allTiers();

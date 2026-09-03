@@ -433,6 +433,109 @@ a redesign. That is a decision for Greg, not something to slip into a stage.
 Done when: a before/after number from Stage 1's harness is in this file — including the honest
 outcome if it is "no cheap seam exists".
 
+#### What landed, 2026-09-03 — **the module import is 40% shorter**
+
+**The headline, and read the method before the number.** The harness's own figure moved
+**2,371 ms → 1,470 ms** for the whole bundle. But two harness runs an hour apart on this box are not
+a comparison — the load average went 9 → 73 → 3 while this work was happening, and the same unchanged
+bundle timed 2.5 s and 10.2 s on the same afternoon. So the number that decides anything is a
+**paired** one: the two bundles imported alternately, in fresh processes, seconds apart, so both arms
+see the same box.
+
+| | before | after |
+|---|---|---|
+| `api-dist/vercel.js`, median of 15 (load 4.3/16 cores) | **2,371 ms** | **1,476 ms** |
+| the same, minimum of 15 | 2,252 ms | 1,353 ms |
+| **paired difference, round by round** | — | **944 ms median, 15 rounds out of 15 in that direction** |
+| RSS after the import | 225 MB | 198 MB |
+
+The Stage 1 harness on the finished bundle at load 3.3: **1,470 ms, 198 MB**. Its own "before" reading
+was 2,525 ms at load 9.2 and 9,364 ms at load 108, which is the whole argument for pairing.
+
+**How the marginal cost of each dependency was found**, since the standalone import times at the top
+of Stage 1 do not say what *removing* one from the bundle is worth. A Node `registerHooks` resolver
+swapped one package at a time for an empty stub **inside the real built bundle**, and the arms were
+interleaved. Only the bundle's own imports were stubbed, not a dependency's — which is how it turned
+up that **jsdom `require`s undici itself**, so undici's own 162 ms is hidden behind jsdom and
+stubbing it alone saves nothing at all. Least-contended reading of 9 rounds, load 72:
+
+| stubbed out | bundle import | marginal cost |
+|---|---|---|
+| nothing | 3,278 ms | — |
+| jsdom (+ dompurify, which cannot start without it) | 2,236 ms | **~1,040 ms** |
+| pdf-lib | 2,804 ms | ~474 ms |
+| stripe | 3,046 ms | ~232 ms |
+| `@anthropic-ai/sdk` | 3,063 ms | ~215 ms |
+| undici | 3,389 ms | **~0** — jsdom loads it anyway |
+| everything droppable at once | 1,837 ms | ~1,440 ms, and **not the sum**: with jsdom gone, undici starts counting |
+
+**What moved, and the seam each one took.**
+
+- **jsdom — the prize, and it did *not* need the redesign.** Sol's finding was right as far as it
+  goes: `splitIntoBlocks`, `readArticle`, `imageUrlsIn`, `articleLinks` and `sanitizeHtml` are
+  synchronous exported functions with call sites and tests throughout the repo, and `await
+  import("jsdom")` inside any of them turns that whole chain async. But jsdom is **CommonJS**, so
+  `createRequire(import.meta.url)("jsdom")` loads exactly the same module — through the same CJS
+  cache Node's ESM loader would have used — **synchronously**, on first use. Not one signature
+  changed. [`src/jsdom-lazy.ts`](../../src/jsdom-lazy.ts) is the one place that says why, and the six
+  modules each destructure what they need at the top of the function that needs it.
+  [`src/sanitize.ts`](../../src/sanitize.ts) built its DOMPurify at module evaluation and now builds
+  it on the first sanitise — same instance, once per process, later.
+- **pdf-lib** — one `await import` inside `cutPages`, which was already async and is the only thing in
+  [`src/pdf-read.ts`](../../src/pdf-read.ts) that touches the package. The `src/pdf.ts` pattern
+  exactly.
+- **Stripe** — `stripeClient()` is now async, and with it `verifyEvent` and `billingClient`. Three
+  call sites, all already inside async functions; `ensurePortalConfiguration`'s default parameter
+  became an optional argument, because a default cannot await. The alternative — a warm-up call that
+  has to happen first — is an ordering rule nothing enforces, failing only on the billing path.
+
+**What did not move, and why.**
+
+- **`@anthropic-ai/sdk` (~215 ms): stopped and reported, per this stage's own rule.** The seam is
+  three synchronous functions, not one. `messagesClient()` constructs the client; `streamMessage()`
+  calls it synchronously and is called by **eleven** stages; `anthropicCallFailed()` needs the SDK's
+  error classes for two `instanceof` checks and is called from eleven `catch` blocks. Making
+  `streamMessage` async is not only 24 call sites — it moves `beginSpend()`, which registers a call
+  *before the stream opens*, to after an await, and `tests/messages-stream.test.ts` has concurrency
+  cases that turn on exactly that ordering. That is a change to the spend ledger's semantics for 6%
+  of the import, and `throw anthropicCallFailed(err)` compiles fine without the `await` — TypeScript
+  will not catch a missed site. **Greg's call, not a stage's.** If it is wanted, the honest cost is
+  ~50 edits across every pipeline stage plus a rename, so that a missed site is a compile error.
+- **undici (162 ms standalone): nothing to win, measured.** jsdom requires it. Now that jsdom is lazy
+  it may be worth a second look — `src/fetch.ts`'s `pinnedAgent` is the only user.
+- **drizzle (`node-postgres` 865 ms + `pg-core` 760 ms) and `@sentry/node-core/light` (322 ms): the
+  floor.** The shelf's own query goes through drizzle, and Sentry has to be up before the code that
+  might fail. Together with the ~1.4 s of our own 3.5 MB of bundle, that is what the 1,470 ms is.
+
+**Correctness, and the one way this could have been an outage.** A specifier the deployment's file
+tracer cannot read is how two production outages started here (`@napi-rs/canvas`, then
+`pdf.worker.mjs` — [260827a](../postmortems/260827a-pdfjs-dommatrix-serverless.md)): the bundle
+ships, the package does not, every request 500s, and jsdom would take the **public reading page**
+down with it because `src/sanitize.ts` is on that path. So it was measured rather than reasoned
+about. `@vercel/nft` over the real built bundle collects **3,031 files before the change and 3,031
+after**, with jsdom's entry point, all 637 of its files, pdf-lib's 139 and Stripe's 386 present in
+both, and the same three pre-existing unresolved warnings (`canvas`, `pg-native`,
+`cloudflare:sockets`) either side. `createRequire` also resolves correctly from `api-dist/` itself,
+run there rather than argued about.
+
+Two guards landed with it, and the second one was **watched go red for the right reason** — a static
+`import { JSDOM } from "jsdom"` put back into `src/collect-assets.ts`, rebuilt, and the failure said
+*"jsdom is imported at module scope again"* and named the seam it should have used. Reverted, rebuilt,
+green again.
+
+- `tests/pdf-bundle-trace.test.ts` — the three packages added to `MUST_SHIP`, so the real tracer has
+  to keep collecting them.
+- `tests/cold-start-lazy-imports.test.ts` — reads the emitted bundle's own import statements and
+  fails if any of the three is back at module scope. Nothing else can see that happen: re-adding the
+  import is *correct code*, passes every other test, and silently puts a second of cold start back.
+
+`npm test`: **4 files / 5 tests red**, none of them mine. `store-jobs-parity` (2) prints the suite's
+own `TEST DATABASE CONTENDED` banner and was red in this plan's baseline; `no-undeclared-spend` and
+`admin-feedback-store` pass on their own; `diagram-css` reads `src/web/styles.css` and
+`src/web/DiagramPanel.tsx`, neither of which anything in this tree has modified, so it is red against
+committed CSS from `f3b8861d`. `npm run typecheck` and `npm run check`'s other gates are clean; biome
+on the touched files reports only the two findings that were already there.
+
 ### Stage 5 — stale-while-revalidate
 
 **Unblocked by Stage 1, and this is a change to the plan worth stating.** Sol's argument for putting
@@ -478,6 +581,97 @@ to be written down before it is built, and this is the half the first draft was 
 Tests both ways round: cache first then live replaces it, **and** live first then a late cache result
 cannot overwrite it — plus unmount, a change of reader, and the chosen 401/5xx policy.
 
+**Done, 2026-09-03.** All seven bullets are built.
+[`src/web/lib/cached-shelf.ts`](../../src/web/lib/cached-shelf.ts) reads the copy back and validates
+it; [`useShelf`](../../src/web/useShelf.ts) owns the race and now takes a `readerId` passed down from
+`SignedIn`. The generation counter is `answered`, a ref bumped by a live answer that paints **and by
+a 401 that clears** — both are the server having spoken — and deliberately not by a transport failure
+or a 5xx, which said nothing about the shelf and leave a late copy free to land under the error.
+
+**And one thing the contract implied rather than said.** *Clear on a change of reader* is not one
+edit: the previous reader's `GET /api/library` is still in flight, and when it lands it puts their
+titles back one frame after we took them down. So there is a second ref, `reader`, bumped by the
+effect and checked before anything writes a list — a separate number because it answers a separate
+question (`settled` is *whether* the network has spoken; `reader` is *who about*). Its test was
+watched go red too. The hole predates this stage, and eager painting is what made it worth closing
+rather than noting.
+
+**GPT Sol reviewed the built code and returned *not safe to commit* on three findings. All three
+were right**, and the third names a test of mine that tested nothing.
+
+- **An A response could be filed in B's IndexedDB partition**, and this stage is what made it
+  matter. `saving()` and `attempt()`'s offline fallback both asked `lastKnownUser()` when the
+  *answer* arrived, which is after the round trip — so a direct A→B sign-in inside that window put
+  A's body under B's key, and the shelf now reads that key on every repeat visit rather than only
+  when the network is gone. `apiFetch` captures the owner once, when the request goes out, and
+  carries it into both. Two tests in `tests/api-fetch-offline.test.ts` switch the signed-in user
+  *inside* the `fetch` stub; both were watched fail first. **Passing `readerId` down was necessary
+  and was not sufficient**, which is the correction worth keeping.
+- **The clear-on-reader-change is a passive effect, so it runs after the first commit for the new
+  reader** — my comment claimed it was synchronous with the render, and that was simply false.
+  `App.tsx` now gives `<Library>` a `key={user.id}`, which removes the frame by removing the
+  instance; the hook still clears for itself, and now also clears `renaming`, `actionError` and the
+  in-flight `archiving` set. Sol also found the writes I had left unfenced: `archive`'s reply sets
+  `undoable`, and the Undo strip draws a **title** from it, so A's article could be named on B's
+  screen with a button offering to restore it. `archive`, `undo`, `rename`, `restore` and
+  `loadArchived` all check `stillOurs(asked)` before every `setState` now, and `loadArchived`'s check
+  moved to after the body is parsed rather than before.
+- **Overlapping reloads were unordered, and the test I wrote for that never called `reload` twice.**
+  It posed two answers, reached the first, and was a duplicate of the case above it wearing a
+  different name — a test that could not have failed. `answered` is now the pair `issued`/`settled`:
+  each reload takes a number, an answer is applied only if it is not older than the newest one
+  applied, and the cached read compares the same `settled` against what it was when it began. One
+  pair serves both guards, so this is fewer moving parts than the counter it replaced, not more. The
+  corrected test really does reload, a new one drives two reloads that finish in the other order, and
+  both were watched fail.
+
+**A second review of the fixes found two more, and both were right.**
+
+- **Capturing the owner at the start of `apiFetch` was still the wrong rule.** It closed the window
+  that spans the round trip and left a smaller one in front of it: the session can change *while the
+  token is being fetched*, so the request goes out with B's token and the reply is filed under A.
+  The rule Sol gave is better than the one it replaces — **the drawer belongs to whoever's token the
+  server is about to check** — so `accessToken` now returns a `Credential`, the token and the id out
+  of the same session object, and the refresh retry takes the id from the session the refresh
+  returned. The test switches the account *inside* `getSession()` and was watched fail against the
+  capture-at-start version. What was **not** taken is his further suggestion to refuse a request
+  whose call-start owner and token owner differ: during a first sign-in they differ routinely
+  (`lastKnownUser()` is null, the session has a user), so that rule would refuse legitimate traffic.
+- **The ordering guard was on the success path only.** Two reloads overlap, the newer paints, the
+  older then fails — and its message went up over a shelf that is perfectly current. Worse for
+  `undo`, which awaits `reload()` and clears the Undo strip only if it resolves: an overtaken
+  rejection leaves the strip and an action error on screen for an article that has already been
+  restored and drawn. An overtaken failure is now neither reported nor rethrown but **resolved**,
+  because the caller's post-condition — the shelf is current — is what the newer answer just made
+  true. Watched fail first.
+
+**What it does in a browser.** Headless Chrome against the dev server, one context so IndexedDB and
+the session persist, `GET /api/library` held for 6,000 ms by a route interceptor, every time read
+from the page's own `performance.now()`:
+
+| | app mounted | first article | "Reading the shelf…" |
+|---|---|---|---|
+| repeat visit, copy saved | 2,091 ms | **2,391 ms** (18 articles) | **never appeared** |
+| control, IndexedDB deleted | 2,208 ms | 8,658 ms | 2,840 ms |
+
+The control is the half that makes the other half mean anything: same delay, same page, and it
+behaves exactly as the homepage did before this stage. The ~2 s mount is the unbundled Vite dev
+server on a loaded shared box and is not the shelf.
+
+**The tests were watched go red, six ways.** Removing the cached read reddens 4 of the 13; removing
+the generation check reddens 3 — including both "a late copy must not overwrite the live answer"
+cases, which is the direction a boolean gets wrong; removing the cleanup's `cancelled` flag reddens
+the change-of-reader test; removing the clear-on-reader-change reddens one; removing the 401 branch
+reddens one; removing validation reddens 3.
+
+**And one test cannot go red, which is written into it rather than left to be discovered.** React
+silently drops a `setState` aimed at an unmounted root — no render, no warning — so *"commits nothing
+after unmount"* passes against a build with `cancelled` removed. Measured, not assumed. The guard it
+depends on is proved by the change-of-reader test, which exercises the same cleanup line; what is
+left in the unmount test is that unmounting mid-read throws nothing and schedules nothing. It also
+needs `IS_REACT_ACT_ENVIRONMENT`: without it, `root.unmount()` itself logs a `console.error` and the
+assertion would have passed for the wrong reason, which is what it did on the first run.
+
 ### Not doing
 
 - **Progressive/two-pass loading** — § above, and both reviews agree.
@@ -506,6 +700,14 @@ Stage 3 (the two layout jobs) — **done**, 2026-09-03; the add box is 45% short
 shorter at 390, and both ways of uploading a PDF were exercised end to end. Reviewed by GPT Sol,
 which returned *do not ship* on two findings; both are fixed and both are written up. Numbers in
 § Stage 3.
+Stage 4 (reduce the cold start) — **done**, 2026-09-03, and it moved further than the stage expected:
+the module import is **40% shorter**, 944 ms off a 2,371 ms median, paired 15 rounds out of 15.
+jsdom, pdf-lib and Stripe left module scope; `@anthropic-ai/sdk` is **stopped and reported** rather
+than done, because its seam is three synchronous functions and one of them would move the spend
+ledger's ordering. Numbers, method and the tracer comparison in § Stage 4.
+Stage 5 (stale-while-revalidate) — **done**, 2026-09-03; the repeat visit paints 18 articles while
+the server is held for six seconds, and the control with the copy deleted still says "Reading the
+shelf…". Table and the six red-first experiments in § Stage 5.
 
 Baseline for comparison, `npm test` on this worktree before any change — **5 files / 6 tests red** of
 586 files / 10,506 tests, and these are the five, so that a sixth is mine:
@@ -525,3 +727,45 @@ assumed**, because it is the shelf parity test and this work touches the shelf: 
 
 `tests/api-fetch-offline.test.ts` is **24 passed** — which is the point of Stage 2, not a
 contradiction of it.
+
+## All five stages are on `dev`, and one number was re-checked by the orchestrator
+
+Pushed 2026-09-03 as `627a7a20`. The merge of `dev` produced **a semantic conflict rather than a
+textual one**, worth recording because git reported success: Stage 4 made `stripeClient()` async so
+the SDK leaves module scope, and `dev` had meanwhile gained a `scripts/stripe-setup.ts` that reaches
+straight through it for `.accounts`. Both sides merged cleanly and the result did not compile. One
+`await`; the other six call sites were already async. Caught by `npm run typecheck`, which is the
+argument for running it after a merge and not only after an edit.
+
+**Stage 4's headline was re-measured independently**, on a quiet box rather than taking the report's
+word for it — load 4.7 across 16 cores, which the harness itself calls *"quiet enough to compare"*:
+
+```
+  api-dist/vercel.js (the whole bundle)   1646 ms   199 MB
+  jsdom                                   1056 ms   147 MB     ← no longer in it
+  drizzle-orm/node-postgres                821 ms   279 MB
+  drizzle-orm/pg-core                      771 ms   251 MB
+```
+
+1,646 ms against the ~2,371 ms before. The bundle now costs less than jsdom alone would add to it,
+which is the check that it really did leave module scope — and the guard test
+`tests/cold-start-lazy-imports.test.ts` fails if it ever comes back.
+
+**Two guards fired on the orchestrator during this**, both doing exactly their job: the harness
+refused a stale bundle (*"api-dist/vercel.js is stale: src/db/schema.ts is newer than it"*), and the
+API build refused a client shell from a different commit. Neither is a fault; both are the shape of
+check [silent-success.md](../reusable/silent-success.md) argues for, seen working.
+
+### Left open, deliberately
+
+- **`@anthropic-ai/sdk`, ~87–215 ms.** Stage 4 stopped and reported rather than pressing on, which
+  is what it was told to do. The honest cost is ~50 edits across every pipeline stage plus a rename
+  so a missed site is a compile error, and it moves `beginSpend()` — which registers a call *before*
+  the stream opens — to after an `await`, which `tests/messages-stream.test.ts` has concurrency cases
+  about. **Greg's call.**
+- **`tests/diagram-css.test.ts` is red on `dev` and is not this work's.** It reads
+  `src/web/styles.css`, last changed by `f3b8861d` (the signed-out marketing-page redesign); nothing
+  here touches CSS. Checked in isolation, not merely observed in a batch.
+- **The production numbers still do not exist.** Everything above is this box. The two `health` log
+  lines from Stage 1 will produce the real figure on the next deploy, and until they do, the title of
+  this plan remains a hypothesis with strong local support rather than a measured fact.

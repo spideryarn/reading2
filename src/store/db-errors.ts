@@ -354,43 +354,61 @@ function framesOf(err: unknown): string | undefined {
  * tests/store-guard-idempotent.test.ts holds both.
  *
  * A symbol rather than `err.name === "StoreFailure"`, because `name` is writable
- * and a thrower could set it.
+ * and a thrower could set it by accident.
  *
- * ## `Symbol()` and not `Symbol.for()`, which is the difference between a mark
- * and a password
+ * ## What this mark does and does not promise, since the first draft overclaimed
  *
- * This said *"this mark can only be put here"* until 2026-09-03, while using the
- * **global** symbol registry — where `Symbol.for("spideryarn.scrubbedDbError")`
- * hands the identical symbol to any module in the process that asks. GPT Sol
- * built an error carrying it and free text, and this file waved it through
- * unread. A module-private symbol is what makes the sentence true, and it costs
- * nothing: nothing outside this file ever needs to recognise the mark.
+ * It said *"this mark can only be put here"*, and that is **false**:
+ * `Symbol.for` is a process-global registry, so any code in this process can
+ * look the key up and plant it. GPT Sol demonstrated it, 2026-09-03, planting
+ * both this and `GUARDED` without touching the repo and getting a raw error with
+ * its stack straight through.
  *
- * That is the opposite call from `GUARDED` below, deliberately. `GUARDED` is a
- * *brand tests ask about* and has to survive this module being loaded twice
- * (two specifiers, a bundler, a re-export), so global is right there; and it is
- * harmless, because the worst a forged `GUARDED` buys you is your own store
- * going unwrapped. `SCRUBBED` is a *claim about a privacy boundary*, and a
- * forged one buys you a way across it.
+ * **`Symbol.for` is still the right primitive, and the reason is module
+ * duplication rather than security.** A private `WeakSet` would be unforgeable
+ * and would break the moment this module exists twice — which is not
+ * hypothetical here: a dev-server reload makes a second live copy of every
+ * server module, and that duplication is the entire subject of
+ * `tests/store-fs-write-chains.test.ts`. Under a `WeakSet` a store guarded by
+ * copy A would be re-wrapped by copy B, which is exactly the double-diagnostic
+ * bug the early return in `guardDbStore` was written to remove. A registry
+ * symbol survives duplication; private state does not.
  *
- * The cost, said out loud: if this module ever were loaded twice, a scrubbed
- * error crossing from one instance's guard into the other's would be scrubbed
- * again rather than passed through — a second log line, and the errno downgrade
- * `tests/store-guard-idempotent.test.ts` pins. The early return in
- * `guardDbStore` still covers the double-wrapped case, and one process loading
- * two copies of the store layer is a bigger problem than this. Unforgeable was
- * the trade worth making.
+ * So the honest statement is: **this mark defends against accident, not against
+ * hostile code in our own process** — and against hostile code in our own
+ * process there is nothing to defend, since it could read the article directly.
+ * What *was* worth fixing is the check below, which used `in` and therefore
+ * accepted a mark **inherited from a prototype**. It now asks for an own
+ * property, so a class whose prototype happens to carry the key cannot launder
+ * every instance through the boundary.
+ *
+ * ## And the freeze, which is what the check can actually rest on
+ *
+ * The mark says *this file made this*. It cannot say *and nothing has touched
+ * it since*, and that second half is the one the pass-through needs: a guarded
+ * outer store that caught a guarded inner store's error and hung a field on it
+ * — which is exactly the shape Drizzle's `params` take — would still be
+ * carrying the mark. So `scrubDbError` freezes what it builds and the check
+ * asks `Object.isFrozen` as well.
+ *
+ * **This is a defence against accident, not against forgery**, and the
+ * paragraph above is right that forgery is not worth defending against. The
+ * accident is worth it: nothing in `src/` mutates a caught error today, and the
+ * cost of the freeze is that a future caller which tried would get a
+ * `TypeError` out of its own `catch` rather than a sentinel in a response body.
  */
-const SCRUBBED = Symbol("spideryarn.scrubbedDbError");
+const SCRUBBED = Symbol.for("spideryarn.scrubbedDbError");
 
 /**
  * **Is this an error this file made, that nothing has touched since?**
  *
  * Both halves are load-bearing, and each was a way through until 2026-09-03:
  *
- * - `Object.hasOwn` rather than `SCRUBBED in err`, because `in` walks the
- *   prototype chain — so `Object.create(scrubbedError)` inherits the mark and
- *   can put its own `message` over the top, no forgery required.
+ * - `carriesMark`, which asks for an **own** property, because `SCRUBBED in err`
+ *   walks the prototype chain — so `Object.create(scrubbedError)` inherits the
+ *   mark and can put its own `message` over the top, no forgery required. Two
+ *   agents found that hole independently on 2026-09-03 and fixed it the same
+ *   way; `carriesMark` is the one that landed.
  * - `Object.isFrozen`, because the mark alone says only *this was scrubbed
  *   once*. A guarded outer store that caught an inner store's scrubbed error
  *   and rewrote its `message` — or hung an enumerable field on it, which is
@@ -399,8 +417,15 @@ const SCRUBBED = Symbol("spideryarn.scrubbedDbError");
  *   here is the one this file actually needs to make.
  */
 function alreadyScrubbed(err: unknown): boolean {
+  return carriesMark(err, SCRUBBED) && Object.isFrozen(err);
+}
+
+/** The mark, as an **own** property — never inherited. See `SCRUBBED`. */
+function carriesMark(value: unknown, mark: symbol): boolean {
   return (
-    err !== null && typeof err === "object" && Object.hasOwn(err, SCRUBBED) && Object.isFrozen(err)
+    value !== null &&
+    typeof value === "object" &&
+    Object.prototype.hasOwnProperty.call(value, mark)
   );
 }
 
@@ -523,7 +548,11 @@ const GUARDED = Symbol.for("spideryarn.guardedDbStore");
 
 /** Whether this object came out of `guardDbStore`, and under what name. */
 export function isGuardedStore(store: unknown): string | undefined {
-  if (store === null || typeof store !== "object") return undefined;
+  /* An **own** property, never an inherited one — see `SCRUBBED` above for why
+     that distinction is the half of this worth defending. A store whose
+     prototype carried the key would otherwise report every instance as guarded
+     and `guardDbStore` would hand each one straight back unwrapped. */
+  if (!carriesMark(store, GUARDED)) return undefined;
   const mark = (store as Record<symbol, unknown>)[GUARDED];
   return typeof mark === "string" ? mark : undefined;
 }

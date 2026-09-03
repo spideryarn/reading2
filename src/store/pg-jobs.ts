@@ -1127,22 +1127,75 @@ const rawPgJobStore: JobStore = {
     return gone.length === 1;
   },
 
+  /**
+   * **The retention rule, written out here and cited from the filesystem
+   * adapter** (src/store/jobs-fs.ts § `trimFinished`), which implements the
+   * same thing in JavaScript. It used to be spelled out at length on both
+   * sides, and that is how they drifted.
+   *
+   * Rank each terminal job **within its own kind** — `done` on one side,
+   * everything that is not a success on the other — most recently finished
+   * first. Then fill the `keep` slots by alternating: the top-ranked
+   * non-success, the top-ranked success, the next of each, and so on. Whichever
+   * side runs out, the other takes the rest. Everything past `keep` goes.
+   *
+   * **Ordered by what to KEEP**, and everything past the offset is deleted.
+   *
+   * `order by rank, is_done` is what does the alternating: `false` sorts before
+   * `true` in Postgres, so a tie of rank goes to the non-success. That is what
+   * survives of the old preference — a reader who loses a failure loses the
+   * only account of what went wrong, so where the two kinds compete for one
+   * slot the failure still takes it.
+   *
+   * **Why `finished_at` and not `created_at`.** `created_at` is when a job was
+   * *queued*; jobs run several at a time (src/jobs.ts §
+   * `DEFAULT_JOB_CONCURRENCY`) and take wildly different times, so a job queued
+   * before several others routinely ends after all of them. Ranked by queue
+   * time such a job can sit well down its kind and be swept **by its own
+   * ending** — `noteEnded` trims immediately after every finish (src/jobs.ts).
+   * Ranked by finish time it is rank 1 of its kind, because nothing has ended
+   * since. `nulls last` puts a legacy or malformed terminal row at the back of
+   * its kind, which is the conservative answer; every terminal transition on
+   * both adapters stamps the column.
+   *
+   * **What depends on this.** The client learns a job finished by polling for a
+   * terminal row (`recordCompletions`, src/web/jobEngine.ts) — so the
+   * newest-finished job of each kind has to survive its own sweep. Until
+   * 2026-09-03 the preference for failures was absolute rather than
+   * interleaved, so an owner holding `KEEP_FINISHED` failures had every success
+   * deleted in the same call that marked it done, and no completion was ever
+   * announced, for any mode:
+   * docs/postmortems/260903e-successes-deleted-before-failures-so-no-job-is-ever-announced-done.md.
+   * The trade that bought it — an owner with both kinds in abundance now keeps
+   * 25 of each rather than 50 failures — is argued in
+   * docs/plans/260903h-keep-a-fresh-success-out-of-the-retention-sweep.md.
+   *
+   * `id` is the last key because neither timestamp is a total order, and
+   * without it the two adapters answer from different accidents.
+   *
+   * **No lock.** Two endings each trimming this one owner see a consistent
+   * snapshot, and overlapping deletes only make one of the returned counts
+   * smaller — which nothing in production reads, `noteEnded` discards it.
+   */
   async trimFinished(owner: OwnerId, keep: number): Promise<number> {
     const db = getDb();
-    /* **Ordered by what to KEEP, then everything past `keep` is deleted** —
-       which is the opposite way round from the filesystem adapter, where the
-       list is ordered by what to drop and sliced from the front. Getting that
-       inversion wrong is how the first version of this deleted the failures and
-       kept old successes, and the parity test is what caught it: a reader who
-       loses a failure loses the only account of what went wrong.
-       So: failures first (`status = 'done'` is false for them, and false sorts
-       first), then newest first within each group. `id` breaks the tie, because
-       `created_at` alone is not a total order. */
-    const doomed = db
-      .select({ id: jobs.id })
+    const ranked = db
+      .select({
+        id: jobs.id,
+        isDone: sql<boolean>`(${jobs.status} = 'done')`.as("is_done"),
+        rank: sql<number>`row_number() over (
+             partition by (${jobs.status} = 'done')
+             order by ${jobs.finishedAt} desc nulls last, ${jobs.createdAt} desc, ${jobs.id} desc)`.as(
+          "rank",
+        ),
+      })
       .from(jobs)
       .where(and(eq(jobs.ownerId, owner), inArray(jobs.status, TERMINAL)))
-      .orderBy(sql`(${jobs.status} = 'done')`, desc(jobs.createdAt), desc(jobs.id))
+      .as("ranked");
+    const doomed = db
+      .select({ id: ranked.id })
+      .from(ranked)
+      .orderBy(ranked.rank, ranked.isDone)
       .offset(keep);
     const gone = await db
       .delete(jobs)

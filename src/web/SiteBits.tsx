@@ -37,7 +37,6 @@
  */
 import { ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
-import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
 import { FEATURES_HREF, PRIVACY_HREF } from "./router.js";
 import type { Shot as ShotRecord } from "./shots.js";
@@ -319,39 +318,12 @@ export function Feature({ name, children }: { name: string; children: ReactNode 
   );
 }
 
-/**
- * The foot of both pages.
- *
- * The provenance sentence is not decoration: every picture on these pages is a
- * real article read in Spideryarn, and saying so is the same promise the product
- * makes about generated text. Keep it accurate — see
- * docs/project/marketing-pages.md § Say what the pictures are.
- */
-export function SiteFooter({ here }: { here: "home" | "features" }) {
-  return (
-    <footer className="tw:mt-24 tw:border-t tw:border-border tw:pt-6 tw:pb-16 tw:text-xs tw:text-ink-faint">
-      <p className="tw:m-0">
-        Spideryarn Reading — beta. Every screenshot is of a real article read in Spideryarn.
-      </p>
-      <p className="tw:mt-2 tw:mb-0">
-        {here === "home" ? (
-          <Link href={FEATURES_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
-            Features
-          </Link>
-        ) : (
-          <Link href="/" className="tw:text-ink-faint tw:hover:text-highlight">
-            Home
-          </Link>
-        )}
-        {" · "}
-        <Link href={PRIVACY_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
-          Privacy
-        </Link>
-        {" · "}
-        <a href={`mailto:${CONTACT_EMAIL}`} className="tw:text-ink-faint tw:hover:text-highlight">
-          {CONTACT_EMAIL}
-        </a>
-      </p>
-    </footer>
-  );
-}
+/* **`SiteFooter` was here until 2026-09-03**, and it is now the general one in
+   SiteFooter.tsx, which these two pages call with `variant="marketing"` to keep
+   the spacing this design chose. Two components with one name and the same job
+   arrived on the same day in two worktrees and met at a merge; Greg's call was
+   one component. The provenance sentence — every picture is a real article read
+   in Spideryarn — did not move: it is each page's own child text, because it is
+   a promise about *these pages* rather than a fact about the site.
+   docs/project/marketing-pages.md § Say what the pictures are. */
+
