@@ -124,6 +124,27 @@ export interface UseIllustrated {
    * swept in with it.
    */
   regenerate(): Promise<void>;
+  /**
+   * **Draw the Sketch, then paint it** — one job holding both steps, for the
+   * three states in which painting alone would be refused.
+   *
+   * The chain is the server's: `STEP_ORDER` puts `illustrated` immediately after
+   * `sketch`, so a job naming both draws before it paints (src/pipeline.ts), and
+   * `stepIsDone` is what decides whether the Sketch half runs at all. That last
+   * part is the load-bearing one for `stale` and `profile-changed`, where the
+   * Sketch has to be **re-drawn rather than adopted**: the sketch step's stamp
+   * is read out of the artefact's own `sourceHash` and `profileHash`, which are
+   * the same two fields the route reports `stale` and `profileChanged` from — so
+   * a Sketch the panel calls out of date is a Sketch the step cannot call
+   * current. Asserted rather than assumed:
+   * tests/illustrated-step-registration.test.ts § one press that draws and then
+   * paints.
+   *
+   * **Unforced.** A force would name `sketch`, and forcing a step forces every
+   * step after it (`cascadeForce`, src/jobs.ts) — so a Sketch that is genuinely
+   * current would be redrawn at $0.20 for nothing.
+   */
+  drawThenPaint(): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -241,6 +262,9 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
   const regenerate = useCallback(async () => {
     await queue.start({ force: true });
   }, [queue]);
+  const drawThenPaint = useCallback(async () => {
+    await queue.start({ precededBy: ["sketch"] });
+  }, [queue]);
 
   /* Asked only when there is nothing to show — see the header. Re-asked when an
      Illustrated job ends, because a refusal is itself evidence the Sketch is
@@ -311,6 +335,7 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
     automatic: auto && (queue.job !== null || queue.starting),
     ensure,
     regenerate,
+    drawThenPaint,
     cancel: queue.cancel,
   };
 }

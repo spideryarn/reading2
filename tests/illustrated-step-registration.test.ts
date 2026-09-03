@@ -33,8 +33,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { readArticle } from "../src/article-input.js";
 import { isBodyEvidence } from "../src/block-policy.js";
 import { inputFingerprint as illustratedFingerprint } from "../src/illustrated.js";
-import { hashProfile } from "../src/profile.js";
-import { inputFingerprint as sketchFingerprint } from "../src/sketch.js";
+import { hashProfile, profileIsStale } from "../src/profile.js";
+import {
+  inputFingerprint as sketchFingerprint,
+  isStale as sketchIsStale,
+} from "../src/sketch.js";
 import type { Illustrated } from "../src/illustrated-plate.js";
 import { STEPS, stepIsDone } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
@@ -513,5 +516,167 @@ describe("running the step again", () => {
     } finally {
       await cp(path.join(REPO, "example", "blocks.json"), at);
     }
+  });
+});
+
+/* ------------------------------------------ one press that draws and paints -- */
+
+/**
+ * **The assumption the one-press button rests on, asked of the server rather
+ * than believed.**
+ *
+ * `IllustratedView`'s three refusal states each offer *"Draw the Sketch, then
+ * paint"*, which posts one job naming `["sketch", "illustrated"]` — **unforced**.
+ * For `absent` that plainly draws a Sketch. For `stale` and `profile-changed`
+ * there already **is** a Sketch, and the whole feature turns on `stepIsDone`
+ * refusing to call it current: adopt it, and the reader pays $0.27–$0.40 to
+ * paint the very picture the panel has just told them is out of date, with
+ * every check passing while it happens.
+ *
+ * *"The stamp will notice"* is exactly the shared assumption
+ * docs/reusable/silent-success.md is about, so it is measured here — in both
+ * halves, and at the seam between them:
+ *
+ *  - the **panel's** question: `sketchIsStale` and `profileIsStale`, the two
+ *    functions behind the `stale` and `profileChanged` fields of
+ *    `GET /api/sketch/:slug` that `useSketchReadiness` branches on;
+ *  - the **step's** question: `stepIsDone(STEPS.sketch, …)`, which is what
+ *    decides whether the Sketch half of that job spends anything.
+ *
+ * They agree for a structural reason rather than a lucky one, and that is worth
+ * knowing before relying on it: `STAMP_SOURCE.sketch` is `"sketch"`, so
+ * `stampFor` reads the stamp **out of the artefact itself** — `sourceHash` and
+ * `profileHash` — which are the same two fields the route compares. There is no
+ * second recorded copy of either that could drift from the first.
+ *
+ * **The first test is the control, and it is not decoration.** Every assertion
+ * below it is `false`, and `stepIsDone` answers `false` for a dozen reasons that
+ * have nothing to do with staleness — a missing artefact, an interrupted step, a
+ * `generator` that is not today's model. Without a case that comes out `true`,
+ * this whole block would pass against a Sketch that nothing could ever make
+ * current.
+ */
+describe("one press that draws and then paints", () => {
+  /**
+   * The Sketch as the step would have written it a moment ago: stamped with
+   * exactly what `STEPS.sketch.stamp` produces for this article and this reader.
+   *
+   * Built from the step's own stamp rather than from hand-typed values, because
+   * two of the four fields — the prompt version and the model — are facts about
+   * the configuration this test is not about, and typing them would make the
+   * control fail for a reason that has nothing to do with the question. The
+   * self-reference that buys is bounded, and paid off at the call site: the
+   * control checks the `sourceHash` independently against `SKETCH_HASH`, which
+   * this file computed from the real article with the route's own fingerprint.
+   */
+  async function stampedNow(ctx: StepContext): Promise<Sketch> {
+    const want = await STEPS.sketch.stamp?.(ctx, store);
+    if (!want) throw new Error("the sketch step's stamp answered null for the fixture article");
+    return {
+      ...sketchFixture(),
+      sourceHash: want.inputHash as string,
+      version: want.promptVersion as string,
+      generator: want.model as string,
+      profileHash: (want.profileHash ?? null) as string | null,
+    } as Sketch;
+  }
+
+  /** The three inputs the panel's own staleness question is asked against. */
+  async function articleNow() {
+    const a = await readArticle(SLUG, store);
+    return { blocks: a.blocks, tree: a.tree, meta: a.meta ?? null };
+  }
+
+  it("adopts a Sketch that is genuinely current, and does not redraw it at $0.20", async () => {
+    const ctx = ctxFor();
+    const sketch = await stampedNow(ctx);
+    /* Independently of the stamp it was built from: this is the route's own
+       fingerprint over the real fixture article, computed in `beforeAll`. */
+    expect(sketch.sourceHash, "the control Sketch is not this article's").toBe(SKETCH_HASH);
+    await writeSketch(sketch);
+
+    const { blocks, tree, meta } = await articleNow();
+    expect(sketchIsStale(sketch, blocks, tree, meta), "the panel would call this one stale").toBe(
+      false,
+    );
+    expect(
+      await stepIsDone(STEPS.sketch, ctx, store),
+      "a current Sketch is redrawn anyway — one press would buy a $0.20 model call for nothing",
+    ).toBe(true);
+  });
+
+  it("redraws a Sketch the panel calls stale, rather than painting from it", async () => {
+    const ctx = ctxFor();
+    /* The article having moved underneath it, which is what the panel's `stale`
+       means and what its sentence tells the reader. */
+    const sketch = {
+      ...(await stampedNow(ctx)),
+      sourceHash: "the fingerprint of an article this is no longer about",
+    } as Sketch;
+    await writeSketch(sketch);
+
+    const { blocks, tree, meta } = await articleNow();
+    expect(
+      sketchIsStale(sketch, blocks, tree, meta),
+      "the panel would NOT show the stale refusal here, so this proves nothing",
+    ).toBe(true);
+    expect(
+      await stepIsDone(STEPS.sketch, ctx, store),
+      "the Sketch half would skip — the press would pay to paint the out-of-date picture the panel just refused",
+    ).toBe(false);
+  });
+
+  it("redraws a Sketch the panel calls profile-changed", async () => {
+    /* **The reader has a profile now, and it is not the one the Sketch was
+       drawn for.** Both halves of that matter: `profileIsStale` answers false
+       when *either* side is null (src/profile.ts), so a case with no current
+       profile is a case the panel never shows this refusal for. */
+    const ctx = { ...ctxFor(), profile: "I read for the evidence, not the history." };
+    const sketch = {
+      ...(await stampedNow(ctx)),
+      profileHash: hashProfile("Somebody else entirely."),
+    } as Sketch;
+    await writeSketch(sketch);
+
+    expect(
+      profileIsStale(sketch.profileHash, hashProfile(ctx.profile)),
+      "the panel would NOT show the profile-changed refusal here, so this proves nothing",
+    ).toBe(true);
+    expect(
+      await stepIsDone(STEPS.sketch, ctx, store),
+      "the Sketch half would skip — the painting would inherit the profile the reader has moved on from",
+    ).toBe(false);
+    /* And it is the profile that made it re-run, not the article. */
+    const { blocks, tree, meta } = await articleNow();
+    expect(sketchIsStale(sketch, blocks, tree, meta), "the article moved too").toBe(false);
+  });
+
+  /**
+   * **The control for the case above, differing in one field.**
+   *
+   * The control at the top of this block has no profile on either side, so it
+   * and the profile-changed case differ in two things at once — which reader
+   * the context carries, and which reader the artefact was stamped for. This
+   * one holds the context still and moves only `profileHash`, so a `false`
+   * there is attributable to the profile and to nothing else.
+   */
+  it("adopts a Sketch drawn for the profile the reader still has", async () => {
+    const ctx = { ...ctxFor(), profile: "I read for the evidence, not the history." };
+    const sketch = await stampedNow(ctx);
+    expect(sketch.profileHash, "the fixture is not stamped for this reader").toBe(
+      hashProfile(ctx.profile),
+    );
+    await writeSketch(sketch);
+
+    expect(profileIsStale(sketch.profileHash, hashProfile(ctx.profile))).toBe(false);
+    expect(
+      await stepIsDone(STEPS.sketch, ctx, store),
+      "a Sketch drawn for this very reader is redrawn anyway",
+    ).toBe(true);
+  });
+
+  it("draws one when there is no Sketch at all", async () => {
+    await writeSketch(null);
+    expect(await stepIsDone(STEPS.sketch, ctxFor(), store)).toBe(false);
   });
 });
