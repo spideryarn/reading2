@@ -1,8 +1,15 @@
 # A success deleted in the same call that finished it, so no job is ever announced done
 
+**Once the reader's retained history is saturated with failures** — that is the precondition, and
+the title is only true after it. Fifty of them, and every success from then on is deleted at birth.
+
 **Found:** 2026-09-03, pressing the glossary panel's *"Start again"* in a real browser while
 verifying [260903e-glossary-delete-in-postgres.md](../plans/260903e-glossary-delete-in-postgres.md).
 **Not caused by that work.** The glossary delete is what made it visible.
+
+**Fixed** the same day, by the retention half rather than the client half —
+[260903h-keep-a-fresh-success-out-of-the-retention-sweep.md](../plans/260903h-keep-a-fresh-success-out-of-the-retention-sweep.md).
+The ranking below was wrong about which fix to reach for first, and the correction is at the foot.
 
 ## What the reader sees
 
@@ -121,6 +128,31 @@ that went the other way. Quietly reversing it while finishing an unrelated featu
 postmortem gets written. It wants Greg, or a reviewer, saying which way the trade should go —
 [engineering-manager.md](../reusable/engineering-manager.md): *"Dropping something non-trivial wants
 a reason from someone other than you."*
+
+## The ranking above was wrong, and here is what was built
+
+⟨Sol⟩, reviewing the built glossary work, 2026-09-03.
+
+**Fix 1 does not close the whole class**, which is the one thing that made it fix 1. It changes
+`useStepJob`, which the eight mode hooks use — but the shelf and Add do not: `Library.tsx` calls
+`useJobs(reload)` directly, and this postmortem lists Add among the surfaces affected. So the
+highest-value fix, as written, would have left the two surfaces it names untreated.
+
+**The server fix protects every consumer**, because it works below all of them, and that reorders
+the two. It is what was built, on 2026-09-03: the two kinds of terminal job now interleave, ranked
+by when each *finished* rather than when it was queued, so a just-ended job is rank 1 of its kind
+and cannot be swept by its own ending. Ranking by `created_at` — which is where that plan started —
+would not have fixed it: jobs run three at a time and a job queued first routinely ends last.
+[260903h](../plans/260903h-keep-a-fresh-success-out-of-the-retention-sweep.md) has the rule, the
+trade it makes against `0d42a484`, and both red-first cases.
+
+**One half of fix 1 was worth taking on its own**, and was: `drive` no longer retries a 404 from
+`/advance` for ever. Measured at 76 requests in ten simulated minutes before, one after.
+
+**The rest of fix 1 is recorded, not built.** Telling *"not yet"* from *"gone"* needs a poll-start
+sequence number the engine does not have, and after the retention fix there is no known trigger
+left. The hole remains and the design for closing it is in the plan; if it is ever built, it belongs
+in the shared engine rather than in `useStepJob`, so that the shelf and Add are covered too.
 
 ## The thing that made it constant on this box
 
