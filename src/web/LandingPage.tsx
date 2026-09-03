@@ -67,7 +67,7 @@ import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { Plans } from "./Plans.js";
-import { FEATURES_HREF } from "./router.js";
+import { FEATURES_HREF, PRICING_HREF } from "./router.js";
 import { SHOTS } from "./shots.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { SignInControls } from "./SignInControls.js";
@@ -319,6 +319,17 @@ export function LandingPage() {
         <H2 eyebrow="Plans">Simple, and reading is never gated.</H2>
         <div className="site-reveal">
           <Plans />
+          {/* [tissue] The same three rows are on `/pricing`, which exists to be
+              an address you can send somebody rather than a page with more on
+              it. Same shape as the features link above. */}
+          <p className="tw:mt-6 tw:text-sm">
+            <Link
+              href={PRICING_HREF}
+              className="tw:text-highlight tw:no-underline tw:hover:underline"
+            >
+              Pricing, and what a month’s allowance means →
+            </Link>
+          </p>
         </div>
 
         {/* ---------------------------------------------------------- sign in --

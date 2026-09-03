@@ -113,3 +113,24 @@ now leads with one or two landscape shots and follows with three portraits acros
 
 The plan for both pages, with the simpler options passed over, is
 [260902k-website-copy-homepage-and-features.md](../plans/260902k-website-copy-homepage-and-features.md).
+
+## The pricing page
+
+[`PricingPage.tsx`](../../src/web/PricingPage.tsx) at `/pricing`, since 2026-09-03, because Greg
+asked for an address you can send somebody who asks what it costs. Linked from the landing page
+twice — under the plans table and in the footer — and reachable signed out, more obviously than the
+other two: a price you have to sign up to read is the thing people complain about.
+
+**It holds no numbers of its own.** It renders the same `Plans` component as the other two pages,
+and adds only the three things a table cannot say: that the price shown is the price charged with
+tax already in it, that the allowance counts articles *added* and resets on the day you subscribed,
+and that cancelling leaves you the month you paid for.
+
+**And the second copy of the numbers now has a guard.** The trade in `Plans.tsx` — copy rather than
+configuration, so a signed-out page needs no fetch — is still the right one, and it still means a
+quota raised with one `UPDATE` leaves the website saying the old number.
+[`tests/plans-match-tiers.test.ts`](../../tests/plans-match-tiers.test.ts) reads `billing_tiers` and
+fails when the table disagrees, naming the tier and the file. It reads the source rather than
+rendering it, so it can miss a stale row but never invent one — the right way round for a check
+nobody watches. A public tiers endpoint was the obvious alternative and was passed over: it would
+undo the no-fetch trade, and put a spinner in front of the first thing a stranger wants to know.

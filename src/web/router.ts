@@ -165,6 +165,14 @@ export type Route =
    */
   | { kind: "features" }
   /**
+   * What it costs — `/pricing`. See PricingPage.tsx and
+   * docs/project/website-text.md. Signed out for the same reason as `privacy`
+   * and `features`, and rather more so: a price you have to sign up to see is
+   * the thing people complain about, and this is the page somebody sends
+   * somebody else.
+   */
+  | { kind: "pricing" }
+  /**
    * Where Google sends the reader back — `/auth/callback`. See AuthCallback.tsx.
    *
    * **The one route that must be exempt from every rewrite in main.tsx**, and
@@ -246,6 +254,7 @@ export function parseRoute(pathname: string): Route {
   // because it is not about being signed in either.
   if (new RegExp(`^${PRIVACY_HREF}/?$`).test(pathname)) return { kind: "privacy" };
   if (new RegExp(`^${FEATURES_HREF}/?$`).test(pathname)) return { kind: "features" };
+  if (new RegExp(`^${PRICING_HREF}/?$`).test(pathname)) return { kind: "pricing" };
   /* Beside `design` and `profile`, and above `/read/` for the same reason: it
      is not about an article. The alternation is the validation — `/admin/foo`
      matches nothing here and falls through to the shelf, which is what every
@@ -378,6 +387,12 @@ export const PRIVACY_HREF = "/privacy";
  * with "everything it does, with pictures".
  */
 export const FEATURES_HREF = "/features";
+/**
+ * The pricing page. Linked from the landing page's footer and from beside the
+ * plans table there, which is the same three rows: `/pricing` exists so there is
+ * an address to send somebody, not because the numbers live anywhere new.
+ */
+export const PRICING_HREF = "/pricing";
 /**
  * Spelled once, and read by both `parseRoute` above and main.tsx's rewrite
  * exemption.

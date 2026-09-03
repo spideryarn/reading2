@@ -28,6 +28,7 @@ import { AdminFeedbackPage, AdminHome, AdminUsersPage } from "./AdminPage.js";
 import { LandingPage } from "./LandingPage.js";
 import { PrivacyPage } from "./PrivacyPage.js";
 import { FeaturesPage } from "./FeaturesPage.js";
+import { PricingPage } from "./PricingPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
@@ -370,6 +371,10 @@ export function App() {
        landing page's "everything it does" link has to land somewhere a
        stranger can read. */
     if (route.kind === "features") return <FeaturesPage />;
+    /* The fifth, and the least arguable of them: a price somebody has to sign
+       up to read is the thing people complain about, and this is the page one
+       person sends another. */
+    if (route.kind === "pricing") return <PricingPage />;
     if (route.kind !== "read") return <LandingPage />;
     return <ArticlePage slug={route.slug} view={route.view} readerId={null} />;
   }
@@ -469,6 +474,13 @@ function SignedIn({
       <>
         <HomeLogo />
         <FeaturesPage />
+      </>
+    );
+  if (route.kind === "pricing")
+    return (
+      <>
+        <HomeLogo />
+        <PricingPage />
       </>
     );
   // Not under /read/, and so not inside `ArticlePage`'s shared shell: this page
