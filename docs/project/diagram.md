@@ -1737,12 +1737,24 @@ that would have recorded every plate as a chat call.
 every intuition about this feature: measured at **$0.27–$0.40 an article, 86–89%
 of it the brief**, against Sketch's $0.20. Worst case 417 s inside a 760 s lease.
 The numbers, per article and per plate, are in
-[`evals/results/illustrated-2026-09-03/README.md`](../../evals/results/illustrated-2026-09-03/README.md).
+[`evals/results/illustrated-2026-09-03b/README.md`](../../evals/results/illustrated-2026-09-03b/README.md).
 
 Plates are asked for as JPEG (`output_format`, which the model honours despite not
 advertising it) and stored content-addressed in the blob store, never base64 in
 the artefact. A plate's media type is decided **from the signature, never from
-what the provider claimed**.
+what the provider claimed**, and
+[`src/illustrated-image.ts`](../../src/illustrated-image.ts) refuses to store
+anything that is not `image/jpeg` — a `.jpeg` object that is not one is the
+failure a future model silently ignoring `output_format` would cause.
+
+**Orphan blobs are accepted and no sweep is built.** The store is
+content-addressed and create-only, so a run that draws two plates and then fails
+leaves two objects nothing references. They cost about 150 KB each, the next
+identical run dedups straight onto them, and a garbage collector over
+content-addressed blobs has to be right about every artefact in every revision
+that could still hold a hash — getting that wrong deletes a picture somebody is
+looking at. Named here so the next person knows it was decided rather than
+forgotten.
 
 ## What is deliberately not here
 

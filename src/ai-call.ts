@@ -68,7 +68,7 @@ import {
 /* `sniffImage` says what a picture actually is, from its signature. Reused
    rather than re-implemented so this repo has one statement of the PNG magic
    bytes; `assets.ts` imports nothing at all, so this closes no cycle. */
-import { sniffImage } from "./assets.js";
+import { imageDimensions, sniffImage } from "./assets.js";
 import { NOT_CONFIGURED, providerHttpFailure } from "./messages.js";
 /* **A type-only import, and that is load-bearing rather than tidy.** A value
    import here closes a cycle: `models.ts` imports `EMBEDDING_MODEL` from
@@ -1407,36 +1407,15 @@ interface ImageBody {
  *
  * Not tuning knobs — a plate at `quality: "low"` and `2:3` measured 1024x1536
  * and 3.5 MB, so every bound here is several times what the feature produces.
- * They exist because the bytes arrive from outside this process and the next
- * thing that touches them (Stage 3: `@napi-rs/canvas`, then the blob store)
- * allocates width x height x 4 without asking. A PNG claiming 20000x20000
- * compresses to about a megabyte and asks for 1.6 GB on decode, and refusing it
- * here costs one `if`.
+ * They exist because the bytes arrive from outside this process. Stage 3 reads
+ * the dimensions out of the header rather than decoding — src/assets.ts
+ * § `imageDimensions` — so nothing downstream allocates width x height x 4 any
+ * more, but a picture claiming 20000x20000 is still either broken or hostile
+ * and refusing it here costs one `if`.
  */
 const MAX_IMAGE_BYTES = 32 * 1024 * 1024;
 const MAX_IMAGE_EDGE = 8192;
 const MAX_IMAGE_PIXELS = 33_554_432;
-
-/**
- * A PNG's stated dimensions, or `null` for a format we cannot ask.
- *
- * IHDR is the first chunk and its two big-endian `uint32`s sit at a fixed
- * offset, so this is a read rather than a parse — no loop, nothing to run away
- * with. **Deliberately not extended to JPEG**, which needs a marker walk: the
- * honest answer for a format we cannot measure is "we do not know", and the
- * caller below then leans on the byte cap alone. `sniffImage` is what says
- * which case we are in.
- *
- * Private to this file rather than added to [`assets.ts`](assets.ts), where
- * `sniffImage` lives, because one caller is not yet a shared helper — if a
- * second ever wants it, that is where it should move.
- */
-function pngDimensions(bytes: Uint8Array): { width: number; height: number } | null {
-  /* 8 signature bytes + 4 length + 4 type + 8 of IHDR. */
-  if (bytes.length < 24) return null;
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  return { width: view.getUint32(16), height: view.getUint32(20) };
-}
 
 /**
  * **The first plate, decoded and checked — and every failure is a sentence of
@@ -1477,7 +1456,13 @@ function readPlate(body: ImageBody | null): { image: Uint8Array; mediaType: stri
     throw new Error(
       `the images endpoint called its picture ${claimed} and sent ${sniffed.contentType}`,
     );
-  const size = sniffed.ext === "png" ? pngDimensions(image) : null;
+  /* **Both formats now, and the change is a widening rather than a rewrite.**
+     This was PNG-only while the dimension read was private to this file and
+     said so; src/assets.ts § `imageDimensions` is the shared version, and a
+     JPEG claiming 20000x20000 is exactly as much of a decode bomb as a PNG
+     claiming it. `null` still means we could not tell, and the byte cap above
+     is what stands behind that case. */
+  const size = imageDimensions(image);
   if (
     size &&
     (size.width < 1 ||
