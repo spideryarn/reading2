@@ -52,9 +52,14 @@ vi.mock("../src/web/lib/offline-store.js", () => ({
   invalidate: invalidateCache,
   cachedSlugs: slugsHeld,
   rememberUser: vi.fn(),
-  lastKnownUser: () => "user-1",
+  /* Mutable, because one test below switches accounts *while a request is in
+     flight* — the whole point being which of the two answers the cache is
+     partitioned under. Reset to "user-1" in `beforeEach`. */
+  lastKnownUser: () => signedInAs,
   forgetUser: vi.fn(),
 }));
+
+let signedInAs: string | null = "user-1";
 
 const { apiFetch } = await import("../src/web/lib/api.js");
 
@@ -68,6 +73,7 @@ beforeEach(() => {
   slugsHeld.mockReset();
   readCache.mockResolvedValue(undefined);
   writeCache.mockResolvedValue(undefined);
+  signedInAs = "user-1";
   invalidateCache.mockResolvedValue(undefined);
   slugsHeld.mockResolvedValue(new Set<string>());
   getSession.mockResolvedValue({ data: { session: { access_token: "TOKEN-1" } } });
@@ -218,6 +224,68 @@ describe("what gets written", () => {
          whole articles rather than in loose responses. */
       expect(writeCache).toHaveBeenCalledWith("/api/article/x", { a: 1 }, "user-1", "x"),
     );
+  });
+
+  /**
+   * **Whose cache a response goes into is decided when the request goes out.**
+   *
+   * A direct A→B sign-in calls `rememberUser(B)` and never `forgetUser(A)` —
+   * that only runs on a null session — so a reply that started as A's and lands
+   * after the switch used to be filed under **B**, because both the save and the
+   * offline read asked `lastKnownUser()` at the moment they ran. From there it
+   * is B opening the app and being shown A's shelf, which since the shelf began
+   * painting from this cache on every repeat visit is an ordinary Tuesday rather
+   * than a rare offline oddity. GPT Sol, 2026-09-03.
+   */
+  it("files a reply under the reader who asked for it, not whoever is signed in when it lands", async () => {
+    signedInAs = "user-a";
+    vi.stubGlobal("fetch", async () => {
+      /* The account switch, in the window between the request going out and its
+         answer arriving. */
+      signedInAs = "user-b";
+      return jsonOk();
+    });
+
+    await apiFetch("/api/article/x");
+    await vi.waitFor(() => expect(writeCache).toHaveBeenCalled());
+    expect(writeCache).toHaveBeenCalledWith("/api/article/x", { a: 1 }, "user-a", "x");
+  });
+
+  /**
+   * **And the drawer is the token's, not the clock's.**
+   *
+   * Capturing `lastKnownUser()` at the top of `apiFetch` closed the window that
+   * spanned the round trip and left a smaller one open in front of it: the
+   * session can change *while the token is being fetched*, so the request goes
+   * out with B's token and the reply is filed under A. The id therefore comes
+   * out of the same session object as the token. GPT Sol's second review,
+   * 2026-09-03 — his phrase for the rule was "the same session snapshot".
+   */
+  it("files a reply under the token's reader when the account changes during sign-in", async () => {
+    signedInAs = "user-a";
+    /* The switch lands inside `getSession()`: by the time a token exists it is
+       B's, and B is who the server will check. */
+    getSession.mockImplementation(async () => {
+      signedInAs = "user-b";
+      return { data: { session: { access_token: "TOKEN-B", user: { id: "user-b" } } } };
+    });
+    vi.stubGlobal("fetch", () => Promise.resolve(jsonOk()));
+
+    await apiFetch("/api/article/x");
+    await vi.waitFor(() => expect(writeCache).toHaveBeenCalled());
+    expect(writeCache).toHaveBeenCalledWith("/api/article/x", { a: 1 }, "user-b", "x");
+  });
+
+  it("reads a saved copy from the partition of the reader who asked, when the transport fails", async () => {
+    signedInAs = "user-a";
+    vi.stubGlobal("fetch", () => {
+      signedInAs = "user-b";
+      return Promise.reject(new TypeError("Failed to fetch"));
+    });
+    readCache.mockResolvedValue({ body: { a: 1 }, savedAt: 5 });
+
+    await apiFetch("/api/article/x");
+    expect(readCache).toHaveBeenCalledWith("/api/article/x", "user-a");
   });
 
   it("does not save an endpoint that is not on the whitelist", async () => {

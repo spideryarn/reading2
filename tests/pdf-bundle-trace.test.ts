@@ -41,6 +41,19 @@ const MUST_SHIP = [
   "node_modules/pdfjs-dist/legacy/build/pdf.mjs",
   "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
   "node_modules/@napi-rs/canvas/geometry.js",
+  /* The three the API stopped importing at module scope on 2026-09-03, to keep
+     them out of the cold start of a request that never uses them
+     (src/jsdom-lazy.ts; the `await import` in `cutPages`, src/pdf-read.ts; and
+     `stripeClient()`, src/billing/stripe.ts). Each one is now reached through a
+     specifier this tracer has to read for itself, and each is a production
+     outage if it is missed — jsdom takes the public reading page down with it,
+     because src/sanitize.ts is on that path. This is the only check that asks
+     the tracer rather than reasoning about it, which is the whole point of the
+     file: the trace collected the same 3,031 files before and after the change,
+     and that comparison is what made it safe to make. */
+  "node_modules/jsdom/lib/api.js",
+  "node_modules/pdf-lib/cjs/index.js",
+  "node_modules/stripe/esm/stripe.esm.node.js",
 ];
 
 /**

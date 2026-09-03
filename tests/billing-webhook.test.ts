@@ -85,9 +85,9 @@ async function* stream(...chunks: Array<Buffer | string>): AsyncGenerator<Buffer
 }
 
 describe("verifying the bytes that arrived", () => {
-  it("accepts a genuine delivery", () => {
+  it("accepts a genuine delivery", async () => {
     const payload = eventBody();
-    const event = verifyEvent(Buffer.from(payload), sign(payload));
+    const event = await verifyEvent(Buffer.from(payload), sign(payload));
     expect(event.type).toBe("customer.subscription.updated");
     expect(event.livemode).toBe(false);
   });
@@ -99,32 +99,34 @@ describe("verifying the bytes that arrived", () => {
    * identical. If this ever passes, the handler is verifying a signature over
    * bytes the sender never sent, which is the same as not verifying it.
    */
-  it("rejects the same event re-encoded, because the bytes are what is signed", () => {
+  it("rejects the same event re-encoded, because the bytes are what is signed", async () => {
     const payload = eventBody();
     const signature = sign(payload);
     const reEncoded = JSON.stringify(JSON.parse(payload));
     /* The two really are different, or this test proves nothing. */
     expect(reEncoded).not.toBe(payload);
-    expect(() => verifyEvent(Buffer.from(reEncoded), signature)).toThrow(WebhookRefused);
+    await expect(verifyEvent(Buffer.from(reEncoded), signature)).rejects.toThrow(WebhookRefused);
   });
 
-  it("rejects a body signed with somebody else's secret", () => {
+  it("rejects a body signed with somebody else's secret", async () => {
     const payload = eventBody();
-    expect(() => verifyEvent(Buffer.from(payload), sign(payload, "whsec_someoneelses"))).toThrow(
-      /signature verification failed/i,
-    );
+    await expect(
+      verifyEvent(Buffer.from(payload), sign(payload, "whsec_someoneelses")),
+    ).rejects.toThrow(/signature verification failed/i);
   });
 
-  it("rejects a tampered payload under a valid-looking signature", () => {
+  it("rejects a tampered payload under a valid-looking signature", async () => {
     const payload = eventBody();
     const signature = sign(payload);
     const tampered = payload.replace("cus_1", "cus_someone_elses");
-    expect(() => verifyEvent(Buffer.from(tampered), signature)).toThrow(WebhookRefused);
+    await expect(verifyEvent(Buffer.from(tampered), signature)).rejects.toThrow(WebhookRefused);
   });
 
-  it("rejects a delivery with no signature header at all", () => {
+  it("rejects a delivery with no signature header at all", async () => {
     const payload = eventBody();
-    expect(() => verifyEvent(Buffer.from(payload), undefined)).toThrow(/No stripe-signature/);
+    await expect(verifyEvent(Buffer.from(payload), undefined)).rejects.toThrow(
+      /No stripe-signature/,
+    );
   });
 
   /**
@@ -132,23 +134,23 @@ describe("verifying the bytes that arrived", () => {
    * variable must not turn this endpoint into one that grants subscriptions to
    * anyone who can POST JSON. It refuses rather than skipping verification.
    */
-  it("refuses every delivery when no signing secret is configured", () => {
+  it("refuses every delivery when no signing secret is configured", async () => {
     delete process.env.STRIPE_WEBHOOK_SECRET;
     const payload = eventBody();
     /* Signed correctly for the secret we *would* have used — so the only reason
        this fails is the missing configuration, not the signature. */
-    expect(() => verifyEvent(Buffer.from(payload), sign(payload))).toThrow(
+    await expect(verifyEvent(Buffer.from(payload), sign(payload))).rejects.toThrow(
       /STRIPE_WEBHOOK_SECRET is not set/,
     );
-    expect(() => verifyEvent(Buffer.from(payload), sign(payload))).toThrow(
+    await expect(verifyEvent(Buffer.from(payload), sign(payload))).rejects.toThrow(
       expect.objectContaining({ status: 503 }),
     );
   });
 
-  it("treats a blank secret as no secret", () => {
+  it("treats a blank secret as no secret", async () => {
     process.env.STRIPE_WEBHOOK_SECRET = "   ";
     const payload = eventBody();
-    expect(() => verifyEvent(Buffer.from(payload), sign(payload))).toThrow(/is not set/);
+    await expect(verifyEvent(Buffer.from(payload), sign(payload))).rejects.toThrow(/is not set/);
   });
 
   /**
@@ -157,9 +159,9 @@ describe("verifying the bytes that arrived", () => {
    * knows. Refusing is the only safe answer: acting on it would write live
    * subscription state into a test database, or the reverse.
    */
-  it("refuses a live-mode event on a deployment that expects test mode", () => {
+  it("refuses a live-mode event on a deployment that expects test mode", async () => {
     const payload = eventBody({ livemode: true });
-    expect(() => verifyEvent(Buffer.from(payload), sign(payload))).toThrow(/live-mode/);
+    await expect(verifyEvent(Buffer.from(payload), sign(payload))).rejects.toThrow(/live-mode/);
   });
 });
 
@@ -197,7 +199,7 @@ describe("reading the raw body", () => {
   it("returns an empty buffer for an empty body, which verification then refuses", async () => {
     const raw = await readRawBody(stream());
     expect(raw.length).toBe(0);
-    expect(() => verifyEvent(raw, sign(""))).toThrow(WebhookRefused);
+    await expect(verifyEvent(raw, sign(""))).rejects.toThrow(WebhookRefused);
   });
 });
 
@@ -227,22 +229,22 @@ describe("which events are acted on", () => {
 });
 
 describe("the customer an event names", () => {
-  it("reads a string customer", () => {
+  it("reads a string customer", async () => {
     const payload = eventBody();
-    expect(customerOf(verifyEvent(Buffer.from(payload), sign(payload)))).toBe("cus_1");
+    expect(customerOf(await verifyEvent(Buffer.from(payload), sign(payload)))).toBe("cus_1");
   });
 
-  it("reads an expanded customer object", () => {
+  it("reads an expanded customer object", async () => {
     const payload = eventBody({
       data: { object: { id: "sub_1", customer: { id: "cus_expanded", object: "customer" } } },
     });
-    expect(customerOf(verifyEvent(Buffer.from(payload), sign(payload)))).toBe("cus_expanded");
+    expect(customerOf(await verifyEvent(Buffer.from(payload), sign(payload)))).toBe("cus_expanded");
   });
 
-  it("returns null rather than guessing when an event names none", () => {
+  it("returns null rather than guessing when an event names none", async () => {
     const payload = eventBody({ data: { object: { id: "sub_1" } } });
-    expect(customerOf(verifyEvent(Buffer.from(payload), sign(payload)))).toBeNull();
+    expect(customerOf(await verifyEvent(Buffer.from(payload), sign(payload)))).toBeNull();
     const nulled = eventBody({ data: { object: { id: "sub_1", customer: null } } });
-    expect(customerOf(verifyEvent(Buffer.from(nulled), sign(nulled)))).toBeNull();
+    expect(customerOf(await verifyEvent(Buffer.from(nulled), sign(nulled)))).toBeNull();
   });
 });

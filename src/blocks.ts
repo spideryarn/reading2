@@ -15,9 +15,12 @@
  * files the command line above still produces.
  */
 
-import { JSDOM } from "jsdom";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+/* jsdom is loaded on first use rather than imported here — src/jsdom-lazy.ts
+   says why, and it is the largest single thing a cold `GET /api/library` used
+   to pay for. `splitIntoBlocks` stays synchronous. */
+import { jsdom } from "./jsdom-lazy.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { isMain } from "./is-main.js";
 /* The three strings stage 2 stamped into the DOM, from the file that writes
@@ -521,7 +524,7 @@ interface NoteKeyParts {
 
 function withoutNoteControls(text: string, html: string): NoteKeyParts {
   if (!MIGHT_BE_STAMPED.test(html)) return { text, ids: [], stamped: false };
-  const root = JSDOM.fragment(html).firstElementChild;
+  const root = jsdom().JSDOM.fragment(html).firstElementChild;
   if (root === null) return { text, ids: [], stamped: false };
 
   /* Which notes this block *is part of* — its own, plus any note whose
@@ -1010,6 +1013,7 @@ function decodeFragment(fragment: string): string {
 }
 
 export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
+  const { JSDOM } = jsdom();
   const dom = new JSDOM(html);
   const doc = dom.window.document;
 

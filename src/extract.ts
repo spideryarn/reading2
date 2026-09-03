@@ -23,7 +23,9 @@
  * at `main()` in src/blocks.ts. With one, this module becomes an async module,
  * and importing it would also *run* it.
  */
-import { JSDOM, VirtualConsole } from "jsdom";
+/* jsdom on first use rather than at module scope — src/jsdom-lazy.ts says why.
+   `readArticle` below stays synchronous. */
+import { jsdom } from "./jsdom-lazy.js";
 import { Readability } from "@mozilla/readability";
 import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
@@ -314,6 +316,7 @@ export function readArticle(
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
+  const { JSDOM, VirtualConsole } = jsdom();
   const dom = new JSDOM(html, { url, virtualConsole: new VirtualConsole() });
   unhideCollapsedSections(dom.window.document);
   /* Before Readability, and it has to be: Readability's `keepClasses: false`
