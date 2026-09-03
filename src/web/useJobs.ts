@@ -206,6 +206,14 @@ export function useJobSession(readerId: string | null, accessToken: string | nul
   useEffect(() => {
     if (!readerId || !accessToken) return;
     jobEngine.resume();
+    /* **And the upload engine, which fails differently.** A job whose
+       `/advance` is refused 401 is retried by the poller for ever; a queue POST
+       happens once and then sits `failed`. So a reader whose session lapsed
+       during a long upload had their file safely in Storage and an ingest
+       nobody would ever queue — recoverable only by going back to the page and
+       pressing Try again. `resume` there retries a 401 queue phase and nothing
+       else. GPT Sol, 2026-09-03, finding 5. */
+    uploadEngine.resume();
   }, [readerId, accessToken]);
 }
 

@@ -76,7 +76,8 @@
  *   GET    /api/referee/scan/:slug          the deterministic injection scan of the stored raw
  *                                           source — no model, no cost, and no verdict
  *   POST   /api/uploads          { filename, bytes, sha256 } → where to PUT a PDF, and for how long
- *   GET    /api/uploads/:id      what became of one upload
+ *   GET    /api/uploads/:id      what became of one upload, and whether its bytes have arrived
+ *   DELETE /api/uploads/:id      the reader pressed Stop: pending → expired
  *   GET    /api/jobs             every ingest job this server knows about
  *   POST   /api/jobs             { url } | { uploadId } | { slug, steps?, force? }
  *   GET    /api/jobs/:id         one job, for the progress indicator to poll
@@ -307,6 +308,7 @@ import { uploadGrants } from "./store/blobs.js";
 import { uploadProblem } from "./uploads.js";
 import {
   asOf,
+  cancelUpload,
   claimUpload,
   isUploadId,
   mintUpload,
@@ -4695,6 +4697,12 @@ async function resolveExistingUpload(uploadId: string): Promise<UploadOutcome | 
      is a 404 before a slot is reserved for it, too. */
   if (!record) throw httpError(404, "No such upload");
   if (record.status === "pending") return null;
+  /* **Stopped by the reader, or its grant swept.** `cancelUpload` puts a record
+     here, so this is the answer to *I pressed Stop and then reloaded the
+     address*. It has to come before the job lookup: an `expired` upload has no
+     job and no slug, and without this it fell through to *"already being turned
+     into an article"*, which is the opposite of what happened. */
+  if (record.status === "expired") throw httpError(410, UPLOAD_MISSING.message);
 
   const already = await jobForUpload(uploadId);
   if (already) return { kind: "job", job: already };
@@ -4729,7 +4737,14 @@ async function resolveExistingUpload(uploadId: string): Promise<UploadOutcome | 
  */
 async function queueAnUpload(uploadId: string, slot: IngestSlot): Promise<UploadOutcome> {
   const owner = currentOwnerId();
-  const claim = await claimUpload(uploadId, { owner });
+  /* **`arrived`, because the route has just looked.** `uploadHasArrived` ran a
+     `head` on the staging key immediately above this call, so the question the
+     grant's expiry stands in for — *did the bytes ever come?* — has been
+     answered from the authoritative place. Suppressing the expiry refusal is
+     what stops a reader who upgrades after a late quota 402, or whose PUT
+     started inside the two hours and finished outside them, being told their
+     file expired while we are holding it. `UploadStore.claim` has the rest. */
+  const claim = await claimUpload(uploadId, { owner, arrived: true });
   if (!claim.ok) {
     /* **`unknown` is a 404, and it used to be a 409.** The `readUpload` that
        answered it moved out to `resolveExistingUpload`, and without this line
@@ -7406,6 +7421,22 @@ export async function serveAuthenticatedApi(
        picker to confirm what landed. Read-only in the strict sense: an expired
        grant is *reported* as expired without the record being rewritten, so a
        poll cannot be a mutation. See `asOf`. */
+    /* `DELETE /api/uploads/:id` — **the reader pressed Stop.**
+       `pending → expired`, so a reload of `/add/upload/<id>` is answered rather
+       than polled at for the two hours of the grant, and so that *"nothing was
+       added"* is a claim the server backs rather than one the browser asserts
+       about itself. `cancelUpload` for the race against a queue request that
+       got there first: it loses, quietly, and the ingest goes on.
+
+       200 either way, with `cancelled` saying which. A Stop that arrived too
+       late is not an error the reader did anything wrong to cause, and the page
+       is about to show them the running job it lost to. */
+    if (upload && req.method === "DELETE") {
+      const id = part(upload, 1);
+      const stopped = await cancelUpload(id, currentOwnerId());
+      send(res, 200, { uploadId: id, cancelled: stopped });
+      return;
+    }
     if (upload && req.method === "GET") {
       const id = part(upload, 1);
       const found = await readUpload(id, currentOwnerId());

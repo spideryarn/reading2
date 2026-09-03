@@ -129,6 +129,19 @@ export function UploadPicker({
       transfer.phase.kind === "queueing");
 
   /**
+   * Whether Stop is a thing that can still be done.
+   *
+   * **Busy minus `queueing`.** By then the bytes are in Storage and
+   * `POST /api/jobs` is in flight; there is nothing to abort that would undo
+   * anything, and the server may already have made the job. Offering Stop there
+   * produced the worst state available — a box saying the upload was cancelled
+   * while the job poll found the ingest and drove it to completion. GPT Sol,
+   * finding 2. The engine refuses it from its own side too; this is what stops
+   * the reader being shown a button that declines.
+   */
+  const stoppable = busy && transfer.phase.kind !== "queueing";
+
+  /**
    * Accept a file, and say whether it was accepted.
    *
    * The return value is what lets a **drop** go straight on to `commit()`. It
@@ -298,14 +311,19 @@ export function UploadPicker({
             type="button"
             variant="ghost"
             size="icon-xs"
-            title={busy ? "Stop uploading" : "Forget this file"}
+            title={stoppable ? "Stop uploading" : "Forget this file"}
+            /* **Nothing to press while the ingest is being queued.** That phase
+               is a single small request and it cannot be undone, so a button
+               here would either lie or decline. It reappears the instant the
+               job comes back. */
+            disabled={busy && !stoppable}
             onClick={() => {
               /* One button, three jobs, and the middle one is why it stays on
                  screen during the upload: a transfer nobody can stop is a page
                  the reader has to reload to escape. On a transfer that has
                  already stopped it is `forget`, which is the only way to clear a
                  finished or cancelled row off the shelf. */
-              if (busy) uploadEngine.cancel();
+              if (stoppable) uploadEngine.cancel();
               else uploadEngine.forget();
               setChosen(null);
               setProblem(null);

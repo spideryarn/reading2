@@ -55,6 +55,7 @@ import { formatBytes } from "../uploads.js";
 import { KEEP_A_TAB_OPEN } from "../job-state.js";
 import {
   ADDING_SENDS_TEXT_AWAY,
+  codeOfMessage,
   DIRECT_ADD_SENT_TEXT_AWAY,
   UPLOAD_STILL_ARRIVING,
   worthRetrying,
@@ -92,6 +93,19 @@ export type AddSource = { kind: "url"; url: string } | { kind: "upload"; uploadI
  * it knows.
  */
 const ARRIVAL_POLL_MS = 3000;
+
+/**
+ * The code on `UPLOAD_STILL_ARRIVING`, which is what the waiting page matches on.
+ *
+ * **The code and not the sentence.** Comparing prose means a client on an older
+ * bundle, mid-deploy, holds one wording while the server has sent another — and
+ * then a page that should be waiting for a file simply never starts, silently.
+ * The bracketed codes exist for exactly this (docs/project/copy.md), and
+ * `codeOfMessage` is how you read one. GPT Sol, finding 4.
+ *
+ * Derived from the message rather than written out, so the two cannot drift.
+ */
+const UPLOAD_WAIT_CODE = codeOfMessage(UPLOAD_STILL_ARRIVING.message);
 
 export function AddPage({ source: origin }: { source: AddSource }) {
   const queue = useJobs();
@@ -323,7 +337,10 @@ export function AddPage({ source: origin }: { source: AddSource }) {
    * expired with nothing at that key, which is a transfer that is not coming
    * back. `asOf` reports that without writing anything, so asking is free.
    */
-  const stillArriving = failure?.reason === UPLOAD_STILL_ARRIVING.message;
+  const stillArriving =
+    failure?.reason !== undefined &&
+    failure.reason !== null &&
+    codeOfMessage(failure.reason) === UPLOAD_WAIT_CODE;
   useEffect(() => {
     if (!stillArriving || uploadId === undefined) return;
     let live = true;
@@ -333,17 +350,30 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           await apiFetch(`/api/uploads/${encodeURIComponent(uploadId)}`),
         ).catch(() => null);
         if (!live || !seen) return;
+        /* Nothing to act on yet, and the timer stays armed. */
+        const done = seen.status === "expired" || seen.arrived === true;
+        if (!done) return;
+        /* **Closed synchronously, before either branch below acts.** A `GET`
+           slower than the interval leaves two callbacks in flight, and if both
+           come back `arrived` both bump `attempt` — two POSTs for one upload,
+           which at the reader's last quota slot can hand the loser a 402 about a
+           job the winner has already made. `resolveExistingUpload` closes
+           *sequential* repeats; it cannot close two requests that both read
+           `pending`. GPT Sol, finding 4. */
+        live = false;
+        clearInterval(timer);
         if (seen.status === "expired") {
-          /* `null` rather than a sentence: `UPLOAD_MISSING` is the server's
-             words for this and the reader gets them from the job if one is ever
-             made. Here the honest thing is the page's own generic line plus the
-             Try again, which is what a `null` reason renders. */
+          /* Stopped by the reader, or its grant swept — `cancelUpload` in
+             src/upload-records.ts puts a record here. `null` rather than a
+             sentence: the page's own line plus a Try again is the honest
+             rendering, and `UPLOAD_MISSING`'s words belong to a job that in this
+             case was never made. */
           setFailure({ reason: null });
           return;
         }
         /* `attempt` is what the posting effect's guard compares, so bumping it
            is how this asks for another go — the same door Retry knocks on. */
-        if (seen.arrived) setAttempt((n) => n + 1);
+        setAttempt((n) => n + 1);
       })();
     }, ARRIVAL_POLL_MS);
     return () => {
@@ -401,6 +431,14 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           Above the disclosure sentence rather than below it, because it is what
           the reader came here to watch. */}
       {mine && <Sending transfer={mine} />}
+      {/* **Queueing gets a line and no button.** One small request, and it
+          cannot be undone — see `cancel` in uploadEngine.ts. Saying so beats
+          both a Stop that declines and a bar that has silently stopped moving. */}
+      {mine?.phase.kind === "queueing" && (
+        <p className="tw:mb-4 tw:mt-0 tw:text-sm tw:text-muted-foreground">
+          Your file is safely uploaded. Starting the import…
+        </p>
+      )}
 
       {!ok && (
         <p className="tw:rounded-md tw:border tw:border-destructive/40 tw:bg-destructive/10 tw:p-4 tw:text-sm tw:text-foreground">
@@ -440,11 +478,18 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           prevent, and it would be false at the one moment the reader could
           still act on it. `ADDING_SENDS_TEXT_AWAY` is the shelf's wording and
           it is right here too, for the same reason: the choice is still open.
-          `sending` covers hashing and granting as well, where nothing has left
-          the machine at all. */}
+
+          **And the question is "has this been queued", not "has the transfer
+          stopped"** — see `textHasGone`. Asking it the other way round, which is
+          what the first version did, put the past tense over a file the reader
+          had just pressed Stop on, over a queue request refused 402, and in a
+          second tab that then said the text had gone and that the file was still
+          arriving in consecutive sentences. GPT Sol, 2026-09-03, finding 3. */}
       {ok && (
         <p className="tw:mb-4 tw:mt-0 tw:text-sm tw:text-muted-foreground">
-          {stillSending(mine) ? ADDING_SENDS_TEXT_AWAY : DIRECT_ADD_SENT_TEXT_AWAY}
+          {textHasGone(mine, origin.kind === "upload", started !== null)
+            ? DIRECT_ADD_SENT_TEXT_AWAY
+            : ADDING_SENDS_TEXT_AWAY}
         </p>
       )}
 
@@ -527,8 +572,20 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           right recovery for the pages the engine is not driving.
 
           It says which it will do, because the two differ by minutes on the
-          connection this feature exists for. */}
-      {mine?.phase.kind === "failed" && worthRetrying(mine.phase.reason) && (
+          connection this feature exists for.
+
+          **A `queueing` failure always gets one, even a quota refusal**, and
+          that is the exception `worthRetrying` cannot make for itself. Its rule
+          is right everywhere else: a quota code is `blocked`, because the count
+          will be the same next time, and offering a retry under a sentence that
+          has just said trying again will not help teaches the reader to distrust
+          the sentence. But this button is *precisely* what a reader presses
+          after upgrading — their file is already in Storage, and the alternative
+          is uploading 40 MB again to reach a POST that costs nothing. Hiding it
+          made the recovery this whole feature promises reachable only from
+          DevTools. GPT Sol, finding 1. */}
+      {mine?.phase.kind === "failed" &&
+        (mine.phase.at === "queueing" || worthRetrying(mine.phase.reason)) && (
         <p className="tw:mb-0 tw:text-sm tw:text-muted-foreground">
           <button
             type="button"
@@ -543,10 +600,13 @@ export function AddPage({ source: origin }: { source: AddSource }) {
         </p>
       )}
 
-      {/* Stopped, and it stays stopped: nothing was queued, and nothing can be
-          queued later either, because the object never arrived
-          (`uploadHasArrived` in src/routes.ts). So this is a dead end, and it
-          gets a way out rather than a state to wait in. */}
+      {/* Stopped, and it stays stopped — and since 2026-09-03 that is the
+          **server's** position rather than this tab's. `cancel()` sends
+          `DELETE /api/uploads/:id`, which moves the record `pending → expired`,
+          so a reload of this address is answered instead of polled at, and a
+          second tab cannot queue an upload whose object happened to land in the
+          moment before Stop was pressed. Without that DELETE, *"nothing was
+          added"* was a claim only the browser was making. GPT Sol, finding 2. */}
       {mine?.phase.kind === "cancelled" && (
         <p className="tw:mb-0 tw:text-sm tw:text-muted-foreground">
           You stopped that upload, so nothing was added. Choosing the file again on the shelf
@@ -581,16 +641,47 @@ export function AddPage({ source: origin }: { source: AddSource }) {
 /**
  * Whether this tab is still moving bytes, or about to be.
  *
- * The three phases in which **nothing of the article has left the machine for a
- * model provider** — the file is being hashed, the grant is being asked for, or
- * the PUT is going to our own object store. It is what decides the tense of the
- * disclosure sentence, so it is a function with a name rather than a condition
- * inlined in JSX: getting it wrong makes a false statement about a reader's
- * manuscript, which is what `DIRECT_ADD_SENT_TEXT_AWAY` exists to prevent.
+ * The three phases in which nothing has left the machine for a model provider —
+ * hashing, asking for the grant, and the PUT to our own object store.
+ * `Sending` renders on exactly these.
  */
 function stillSending(transfer: Transfer | null): boolean {
   const kind = transfer?.phase.kind;
   return kind === "hashing" || kind === "granting" || kind === "sending";
+}
+
+/**
+ * **Has the article's text actually gone to a model provider yet?**
+ *
+ * The predicate behind the disclosure sentence's tense, and it is asked the
+ * right way round: *has an ingest been queued*, not *has the transfer stopped*.
+ *
+ * The first version asked `!stillSending(...)`, and that was false in four
+ * ordinary states at once, every one of them a wrong statement about somebody's
+ * manuscript. Press Stop halfway through the PUT and the page changed to *"the
+ * article's text has been sent to a third-party model provider"* about a file
+ * that never left the browser. So did a queue-time 402 or 503. So did a second
+ * tab watching another tab's transfer — which said the text had been sent and
+ * that the file was still arriving, in consecutive sentences. GPT Sol, finding
+ * 3, and it is the finding I most wanted broken.
+ *
+ * So: past tense only once something **queued** it. For a URL that is the whole
+ * page — the effect posts before the first paint, and there is no state in which
+ * it has not. For an upload it is an engine outcome of `queued` or `article`, or
+ * this page's own POST having come back with a job id.
+ *
+ * **`started`, not `job`.** `started` is set the instant `addUpload` resolves;
+ * `job` waits for the next poll to bring that job back, up to a second later. A
+ * second of present tense over a request that has already gone is the safe
+ * direction to be wrong in, and it is still wrong. What it must not do is read
+ * true when the POST was *refused* — a page that says the text has gone about a
+ * file the server would not take is the same lie in the other direction, and
+ * `addUpload` answers null there.
+ */
+function textHasGone(transfer: Transfer | null, isUpload: boolean, posted: boolean): boolean {
+  if (!isUpload) return true;
+  const kind = transfer?.phase.kind;
+  return kind === "queued" || kind === "article" || posted;
 }
 
 /** The sentence for a transfer that stopped, or null. `QuotaNotice` renders it. */

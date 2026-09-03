@@ -109,7 +109,20 @@ export type TransferPhase =
    * quota 402 arrives with its `[bill-…]` code intact so `QuotaNotice` can put
    * the link to `/profile` beside it.
    */
-  | { kind: "failed"; at: "hashing" | "granting" | "sending" | "queueing"; reason: string };
+  | {
+      kind: "failed";
+      at: "hashing" | "granting" | "sending" | "queueing";
+      reason: string;
+      /**
+       * The HTTP status, when the failure had one.
+       *
+       * Carried for one caller: `resume` retries a **401** queue phase and
+       * nothing else, because a refused token is the one failure a fresh token
+       * fixes by itself. Reading it back out of the sentence would mean matching
+       * on prose, which is what `codeOfMessage` exists to stop.
+       */
+      status: number | null;
+    };
 
 /** One transfer, as anything watching it sees it. */
 export interface Transfer {
@@ -134,6 +147,17 @@ export interface UploadEngineDeps {
   ): Promise<void>;
   /** `POST /api/jobs { uploadId }`. Separated so a test needs no network. */
   queue(uploadId: string): Promise<Job | AlreadyAnArticle>;
+  /**
+   * `DELETE /api/uploads/:id` — tell the server the reader pressed Stop.
+   *
+   * Fire-and-forget as far as the screen is concerned: the transfer reads as
+   * cancelled the instant the button is pressed, whatever the network then does.
+   * What this buys is durable: a **reload** of the address is answered rather
+   * than polled at for the two hours of the grant, and *"nothing was added"*
+   * becomes the server's position rather than an assertion this tab makes about
+   * itself. See `cancelUpload` in src/upload-records.ts.
+   */
+  cancelUpload(uploadId: string): Promise<void>;
   /** The job engine's action seam, so a test can assert it was used correctly. */
   jobs: {
     epoch(): number;
@@ -168,6 +192,8 @@ export interface UploadEngine {
   retry(): void;
   /** Drop a finished, cancelled or failed transfer from the snapshot. */
   forget(): void;
+  /** Retry a queue request that was refused 401, now that there is a new token. */
+  resume(): void;
   /** Back to the state a fresh engine is in. For tests of the singleton. */
   reset(): void;
 }
@@ -295,11 +321,12 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
     } catch (err) {
       if (!mine(token)) return;
       const reason = (err as Error).message;
-      deps.jobs.actionFailed(reason, statusOf(err), jobsEpoch);
+      const status = statusOf(err);
+      deps.jobs.actionFailed(reason, status, jobsEpoch);
       /* **`queueing`, so `retry` re-POSTs and does not re-PUT.** The bytes are in
          Storage; a re-PUT would come back `409 Duplicate` and strand the retry
          short of the thing that actually failed. Review finding 4. */
-      settle({ kind: "failed", at: "queueing", reason });
+      settle({ kind: "failed", at: "queueing", reason, status });
     }
   };
 
@@ -315,9 +342,13 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
    * Measured on 2026-09-03: a *partial* PUT leaves no object at all, so this
    * cannot be a half-written file — see the plan's table.
    */
-  const sendBytes = async (theGrant: Grant, theFile: File, token: number): Promise<void> => {
+  const sendBytes = async (
+    theGrant: Grant,
+    theFile: File,
+    controller: AbortController,
+    token: number,
+  ): Promise<void> => {
     phase({ kind: "sending", sent: 0 });
-    const controller = new AbortController();
     abort = controller;
     try {
       await deps.putFile(theGrant, theFile, {
@@ -333,7 +364,12 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
         return;
       }
       if ((err as UploadRefused).status !== DUPLICATE) {
-        settle({ kind: "failed", at: "sending", reason: (err as Error).message });
+        settle({
+          kind: "failed",
+          at: "sending",
+          reason: (err as Error).message,
+          status: statusOf(err),
+        });
         return;
       }
     }
@@ -386,6 +422,15 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
       const token = fence;
       file = chosen;
       grant = null;
+      /* **The controller is created here, not in `sendBytes`.** It used to be,
+         and that left `cancel()` with nothing to abort during hashing and
+         granting — so a Stop pressed while a 50 MB file was being hashed let the
+         grant request go out anyway and mint an upload row for a transfer the
+         reader had already stopped. The fence stopped the *PUT*; it could not
+         stop an external mutation that was already on its way. GPT Sol, finding
+         6. Owning it from the first line means one signal covers every phase. */
+      const controller = new AbortController();
+      abort = controller;
       set({
         uploadId: null,
         filename: chosen.name,
@@ -397,9 +442,16 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
       let minted: Grant;
       try {
         phase({ kind: "granting" });
-        minted = await deps.requestGrant(chosen);
+        minted = await deps.requestGrant(chosen, controller.signal);
       } catch (err) {
-        if (mine(token)) settle({ kind: "failed", at: "granting", reason: (err as Error).message });
+        if (mine(token)) {
+          settle({
+            kind: "failed",
+            at: "granting",
+            reason: (err as Error).message,
+            status: statusOf(err),
+          });
+        }
         return null;
       }
       /* **A cancel during the grant request lands here.** The fence has moved,
@@ -414,18 +466,71 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
          navigates, and the bytes go on moving wherever they go next. Nothing
          downstream rejects — `sendBytes` puts every outcome on the snapshot — so
          there is no unhandled rejection to catch. */
-      void sendBytes(minted, chosen, token);
+      void sendBytes(minted, chosen, controller, token);
       return minted.uploadId;
     },
 
+    /**
+     * Stop, and mean it.
+     *
+     * **Not during `queueing`**, and that refusal is the point rather than a
+     * missing feature. By then the bytes are in Storage and `POST /api/jobs` is
+     * in flight: there is nothing to abort that would undo anything, and the
+     * server may already have made the job. Marking the transfer `cancelled`
+     * then produced the worst state of all — a client saying *nothing was
+     * added* while the ordinary job poll found the ingest and drove it to
+     * completion. GPT Sol, finding 2. The window is one small request wide, so
+     * the honest answer is that Stop is no longer offered.
+     *
+     * **The server is told.** `DELETE /api/uploads/:id` moves the record
+     * `pending → expired`, which is what makes *nothing was added* a claim we
+     * are entitled to make: without it, a Stop pressed after the object had
+     * quietly landed left a record a second tab could still queue, and a reload
+     * of the address polled at a `pending` row for the two hours of the grant.
+     * If a queue request beat us to the claim, the server says so by leaving it
+     * claimed and the reader sees the running job — the ingest wins, correctly.
+     */
     cancel() {
+      const now = snapshot.transfer;
+      if (!now || now.phase.kind === "queueing") return;
       fence += 1;
       abort?.abort();
+      const id = now.uploadId;
+      /* Fire and forget: the screen must not wait on the network to say the
+         thing the reader just did. A failed DELETE leaves exactly the state we
+         had before it existed, which is survivable — the object never arrives,
+         so nothing can be made from the record anyway. */
+      if (id) void deps.cancelUpload(id).catch(() => {});
       /* **Set here as well as in `sendBytes`'s catch**, because there may be no
-         PUT to abort yet: cancelling during `hashing` or `granting` has no
-         `AbortController` to fire, and a Stop that did nothing visible is the
-         worst button on the page. */
+         PUT to abort yet: cancelling during `hashing` or `granting` fires the
+         controller but has no rejection to catch, and a Stop that did nothing
+         visible is the worst button on the page. */
       settle({ kind: "cancelled" });
+    },
+
+    /**
+     * **A fresh token, and a queue request that was refused for want of one.**
+     *
+     * The mirror of `jobEngine.resume`, and it exists because the two engines
+     * fail differently: a job whose `/advance` 401s is retried by the poller for
+     * ever, where a queue POST happens exactly once and then sits `failed`. So a
+     * reader whose session lapsed during a long upload had their file safely in
+     * Storage, an ingest nobody would ever queue, and no way back to it except
+     * returning to the page and pressing Try again. GPT Sol, finding 5.
+     *
+     * **Only a 401, and only the queue phase.** Every other failure is either
+     * something a new token does not fix (a quota 402, a Storage refusal) or
+     * something that would re-send the bytes, and neither should happen because
+     * a token happened to refresh while the reader was reading something else.
+     */
+    resume() {
+      const now = snapshot.transfer;
+      if (now?.phase.kind !== "failed") return;
+      if (now.phase.at !== "queueing" || now.phase.status !== 401) return;
+      if (!grant) return;
+      fence += 1;
+      guard(true);
+      void queueIt(grant.uploadId, fence);
     },
 
     /**
@@ -454,7 +559,13 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
         void queueIt(grant.uploadId, token);
         return;
       }
-      if (now.phase.at === "sending") void sendBytes(grant, file, token);
+      if (now.phase.at === "sending") {
+        /* A fresh controller: the previous one is spent, and a retry the reader
+           cannot then Stop is the button this engine already refuses to ship. */
+        const controller = new AbortController();
+        abort = controller;
+        void sendBytes(grant, file, controller, token);
+      }
     },
 
     forget() {
@@ -496,6 +607,9 @@ export const uploadEngine: UploadEngine = createUploadEngine({
         body: JSON.stringify({ uploadId }),
       }),
     ),
+  cancelUpload: async (uploadId) => {
+    await apiFetch(`/api/uploads/${encodeURIComponent(uploadId)}`, { method: "DELETE" });
+  },
   jobs: {
     epoch: () => jobEngine.epoch(),
     actionSucceeded: (epoch) => jobEngine.actionSucceeded(epoch),

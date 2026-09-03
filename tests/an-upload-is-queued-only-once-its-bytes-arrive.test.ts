@@ -47,6 +47,7 @@
  * changing anything here: these tests need the local Supabase up.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { handleApi } from "../src/routes.js";
@@ -55,7 +56,11 @@ import { stagingKey } from "../src/source.js";
 import { blobStore, CONTENT_TYPE } from "../src/store/blobs.js";
 import { forgetForTests } from "../src/store/jobs-fs.js";
 import { forgetUpload } from "../src/upload-records.js";
-import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
+import { fsUploadStore } from "../src/store/uploads-fs.js";
+import { acceptAny, AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
+
+/** The reader `AUTHED_HEADERS` is. Records written straight to the store need it. */
+const OWNER = TEST_SUB;
 
 /** A minimal but genuine PDF, so nothing downstream refuses it for its bytes. */
 const PDF = new TextEncoder().encode("%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n");
@@ -271,6 +276,120 @@ describe("POST /api/jobs { uploadId } before the bytes have landed", () => {
       uploadId: "99999999-2222-4333-8444-555555555555",
     });
     expect(status).toBe(404);
+  });
+});
+
+describe("a grant that has run out, over bytes we are holding", () => {
+  it("still queues, because the object is there", async () => {
+    /* **The plan ticked this box before the test existed**, which GPT Sol caught
+       reviewing the built code — the worst kind of error, a plan claiming
+       evidence it had not got. Here it is.
+
+       The grant's two-hour expiry exists to stop us claiming an upload whose
+       bytes never came. A successful `head` answers that question better, from
+       the authoritative place, so `claimUpload` is passed `arrived: true` and
+       drops the expiry predicate (`UploadStore.claim`). Without it a reader
+       refused on quota, who upgrades three hours later, is told their file
+       expired while we are holding it — and a very slow PUT that starts inside
+       the window and finishes outside it lands in the same dead end.
+
+       The record is written straight through the store, because there is no way
+       to ask the API for a grant that is already old. Watched red by restoring
+       the expiry clause: 410, *"That file never finished arriving."* */
+    await withoutTheWorker(async () => {
+      const id = randomUUID();
+      const longAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+      await fsUploadStore.create({
+        id,
+        owner: OWNER,
+        filename: "held-past-its-grant.pdf",
+        claimedBytes: PDF.byteLength,
+        claimedSha256: "e".repeat(64),
+        status: "pending",
+        mintedAt: longAgo,
+        grantExpiresAt: longAgo,
+      });
+      minted.push(id);
+      await land(id);
+
+      const reply = await call("POST", "/api/jobs", { uploadId: id });
+      expect(reply.status, `refused with: ${String(reply.body.error)}`).toBe(202);
+    });
+  });
+
+  it("and refuses when there is nothing at the key after all", async () => {
+    /* The control, and the half the expiry still does. An expired grant with no
+       object is an upload that never arrived and never will — the gate answers
+       first, so the reader is told to wait rather than told it expired, and
+       either way nothing is claimed. */
+    await withoutTheWorker(async () => {
+      const id = randomUUID();
+      const longAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+      await fsUploadStore.create({
+        id,
+        owner: OWNER,
+        filename: "never-came.pdf",
+        claimedBytes: PDF.byteLength,
+        claimedSha256: "f".repeat(64),
+        status: "pending",
+        mintedAt: longAgo,
+        grantExpiresAt: longAgo,
+      });
+      minted.push(id);
+
+      const reply = await call("POST", "/api/jobs", { uploadId: id });
+      expect(reply.status).toBe(409);
+      expect(queued).toHaveLength(0);
+    });
+  });
+});
+
+describe("the reader pressed Stop", () => {
+  it("is answered rather than polled at, however often the address is opened", async () => {
+    /* **Found in a browser on 2026-09-03, not by a review.** Stop was a fact
+       this tab knew and nobody else did, so a reload of `/add/upload/<id>` found
+       a `pending` record with no object and settled into *"That file is still on
+       its way"* — polling for the two hours of the grant, about a transfer that
+       had been cancelled a second earlier.
+
+       `DELETE /api/uploads/:id` moves it `pending → expired`, which is a
+       transition the state machine already had. 410 with the server's own
+       sentence, and nothing queued, for ever. */
+    await withoutTheWorker(async () => {
+      const uploadId = await mint("stopped-and-told.pdf");
+
+      const stopped = await call("DELETE", `/api/uploads/${uploadId}`);
+      expect(stopped.status).toBe(200);
+      expect(stopped.body.cancelled).toBe(true);
+
+      const reply = await call("POST", "/api/jobs", { uploadId });
+      expect(reply.status, "a cancelled upload was not refused outright").toBe(410);
+      expect(String(reply.body.error)).not.toBe(UPLOAD_STILL_ARRIVING.message);
+
+      const seen = await call("GET", `/api/uploads/${uploadId}`);
+      expect(seen.body.status, "the waiting page had nothing to stop on").toBe("expired");
+      expect(queued).toHaveLength(0);
+    });
+  });
+
+  it("loses to a queue request that got there first", async () => {
+    /* The race `cancelUpload` documents. A Stop that arrives after the claim is
+       a Stop that arrived too late, and the honest answer is to let the ingest
+       stand — the reader is about to be shown the running job. `cancelled:
+       false` says which happened without making it an error. */
+    await withoutTheWorker(async () => {
+      const uploadId = await mint("stopped-too-late.pdf");
+      await land(uploadId);
+
+      const first = await call("POST", "/api/jobs", { uploadId });
+      expect(first.status, `refused with: ${String(first.body.error)}`).toBe(202);
+
+      const late = await call("DELETE", `/api/uploads/${uploadId}`);
+      expect(late.status).toBe(200);
+      expect(late.body.cancelled, "a claimed upload was cancelled out from under its job").toBe(
+        false,
+      );
+    });
   });
 });
 

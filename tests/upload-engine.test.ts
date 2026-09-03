@@ -62,6 +62,11 @@ function deferred<T>(): {
   return { promise, resolve, reject };
 }
 
+/** The shape `POST /api/jobs` answers when the file is already an article. */
+interface AlreadyAnArticleShape {
+  article: string;
+}
+
 interface Harness {
   engine: ReturnType<typeof createUploadEngine>;
   /** Every `POST /api/jobs {uploadId}` the engine made, in order. */
@@ -80,13 +85,20 @@ interface Harness {
   successes: number[];
   /** How many times a `beforeunload` guard is currently registered. */
   guards(): number;
-  /** Whether `jobEngine.start` was reached, which it never may be. */
-  started: number;
+  /** Every `DELETE /api/uploads/:id` the engine sent, in order. */
+  cancelled: string[];
+  /** Make the next queue POST hang, so a test can act during `queueing`. */
+  holdTheQueueRequest(): void;
+  /** Let it finish. */
+  releaseTheQueueRequest(): void;
 }
 
 function harness(options: { grant?: () => Promise<Grant> } = {}): Harness {
   const state = {
     queued: [] as string[],
+    cancelled: [] as string[],
+    holdQueue: false,
+    queueHeld: undefined as ReturnType<typeof deferred<Job | AlreadyAnArticleShape>> | undefined,
     puts: 0,
     put: deferred<void>(),
     onProgress: undefined as ((p: UploadProgress) => void) | undefined,
@@ -94,7 +106,6 @@ function harness(options: { grant?: () => Promise<Grant> } = {}): Harness {
     failures: [] as Array<[string, number | null, number]>,
     successes: [] as number[],
     guardCount: 0,
-    started: 0,
   };
 
   const deps: UploadEngineDeps = {
@@ -114,6 +125,15 @@ function harness(options: { grant?: () => Promise<Grant> } = {}): Harness {
     },
     queue: async (uploadId) => {
       state.queued.push(uploadId);
+      /* **Holdable.** It used to settle immediately, and that is why no test
+         could reach the `queueing` phase to press Stop in it — which is exactly
+         where GPT Sol found the engine saying "cancelled" while the server made
+         the job anyway. A mock that cannot be paused hides the states worth
+         testing. */
+      if (state.holdQueue) {
+        state.queueHeld = deferred<Job | AlreadyAnArticleShape>();
+        return state.queueHeld.promise as Promise<Job>;
+      }
       if (state.answer !== undefined) {
         const answer = state.answer;
         state.answer = undefined;
@@ -121,6 +141,9 @@ function harness(options: { grant?: () => Promise<Grant> } = {}): Harness {
         return answer as Job;
       }
       return job("job-1");
+    },
+    cancelUpload: async (uploadId) => {
+      state.cancelled.push(uploadId);
     },
     jobs: {
       epoch: () => 7,
@@ -135,6 +158,7 @@ function harness(options: { grant?: () => Promise<Grant> } = {}): Harness {
     },
   };
 
+  depsShape = deps;
   const engine = createUploadEngine(deps);
   engine.start("reader-a");
 
@@ -143,6 +167,14 @@ function harness(options: { grant?: () => Promise<Grant> } = {}): Harness {
     get queued() {
       return state.queued;
     },
+    /** Every `DELETE /api/uploads/:id` the engine sent. */
+    get cancelled() {
+      return state.cancelled;
+    },
+    holdTheQueueRequest: () => {
+      state.holdQueue = true;
+    },
+    releaseTheQueueRequest: () => state.queueHeld?.resolve(job("job-1")),
     get puts() {
       return state.puts;
     },
@@ -155,9 +187,6 @@ function harness(options: { grant?: () => Promise<Grant> } = {}): Harness {
     get successes() {
       return state.successes;
     },
-    get started() {
-      return state.started;
-    },
     progress: (sent) => state.onProgress?.({ sent, total: 11_000_000 }),
     answerQueueWith: (answer) => {
       state.answer = answer;
@@ -166,6 +195,15 @@ function harness(options: { grant?: () => Promise<Grant> } = {}): Harness {
     guards: () => state.guardCount,
   };
 }
+
+/**
+ * The last deps object built, so a case can assert over its **shape**.
+ *
+ * Used once, for the guarantee that the engine has no way to restart the job
+ * poller: that is a property of the seam rather than of a run, and a counter
+ * would only ever record that this particular test did not trip it.
+ */
+let depsShape: UploadEngineDeps;
 
 /** Let every already-resolved promise settle, without any timers. */
 const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
@@ -244,6 +282,7 @@ describe("send", () => {
       kind: "failed",
       at: "granting",
       reason: "No room left. [bill-out]",
+      status: null,
     });
     expect(h.puts).toBe(0);
   });
@@ -294,8 +333,126 @@ describe("when it stops", () => {
       kind: "failed",
       at: "sending",
       reason: "The upload stopped before it finished. [st-net]",
+      status: null,
     });
     expect(h.queued).toEqual([]);
+  });
+});
+
+describe("Stop, once the bytes are safe", () => {
+  it("is refused while the ingest is being queued", async () => {
+    /* **The state Sol found, and the reason `cancel` now declines.** By
+       `queueing` the bytes are in Storage and `POST /api/jobs` is in flight:
+       nothing can be aborted that would undo anything, and the server may
+       already have made the job. Marking the transfer `cancelled` there gave the
+       worst state available — a client saying *nothing was added* while the job
+       poll found the ingest and drove it to completion. Finding 2.
+
+       Watched red by letting `cancel` run in every phase: the phase became
+       `cancelled` and the job below still arrived. */
+    const h = harness();
+    h.holdTheQueueRequest();
+    await h.engine.send(aFile());
+    h.put.resolve();
+    await settle();
+    expect(h.transfer()?.phase.kind).toBe("queueing");
+
+    h.engine.cancel();
+    expect(h.transfer()?.phase.kind, "Stop cancelled a request it could not undo").toBe("queueing");
+    expect(h.cancelled, "a DELETE went out for an upload that is being claimed").toEqual([]);
+
+    h.releaseTheQueueRequest();
+    await settle();
+    expect(h.transfer()?.phase.kind).toBe("queued");
+  });
+
+  it("tells the server, so a reload is answered rather than polled at", async () => {
+    /* Cancelling used to be a fact this tab knew and nobody else did. A reload
+       of `/add/upload/<id>` then found a `pending` record with no object and sat
+       polling for the two hours of the grant, saying the file was still on its
+       way — measured in a browser, 2026-09-03. `DELETE /api/uploads/:id` moves
+       it to `expired`, which the waiting page reads and stops on. */
+    const h = harness();
+    await h.engine.send(aFile());
+    h.engine.cancel();
+    await settle();
+
+    expect(h.cancelled, "the server was never told the reader pressed Stop").toEqual([UPLOAD_ID]);
+    expect(h.transfer()?.phase).toEqual({ kind: "cancelled" });
+  });
+
+  it("aborts the grant request, not only the transfer that would follow it", async () => {
+    /* Finding 6. The controller used to be created inside `sendBytes`, so a Stop
+       during hashing or granting had nothing to fire — the fence stopped the
+       *PUT*, and could not stop a grant request already on its way. Hashing a
+       50 MB file is seconds, so this is a real window, and what came out of it
+       was an upload row minted for a transfer the reader had stopped.
+
+       The signal is asserted rather than the outcome: an aborted `apiFetch` is
+       `lib/api.ts`'s business, and what this engine owes is having handed one
+       over and fired it. */
+    let seen: AbortSignal | undefined;
+    const held = deferred<Grant>();
+    const h = harness({
+      grant: ((_file: File, signal?: AbortSignal) => {
+        seen = signal;
+        return held.promise;
+      }) as unknown as () => Promise<Grant>,
+    });
+    const sending = h.engine.send(aFile());
+
+    expect(seen, "the grant request was made with no signal at all").toBeDefined();
+    expect(seen?.aborted).toBe(false);
+
+    h.engine.cancel();
+    expect(seen?.aborted, "Stop did not reach the grant request").toBe(true);
+
+    held.resolve(grantFor());
+    await sending;
+    await settle();
+    expect(h.puts, "a cancelled transfer started sending anyway").toBe(0);
+  });
+});
+
+describe("resume, when the token comes back", () => {
+  it("retries a queue request that was refused 401, and nothing else", async () => {
+    /* Finding 5. A job whose `/advance` 401s is retried by the poller for ever;
+       a queue POST happens once and then sits `failed`. So a reader whose
+       session lapsed during a long upload had their file safely in Storage and
+       an ingest nobody would ever queue. `useJobSession` calls this beside
+       `jobEngine.resume()` on a fresh token.
+
+       **Never re-PUTs**, which is the half that would be expensive to get
+       wrong. */
+    const h = harness();
+    h.answerQueueWith(Object.assign(new Error("Not signed in. [auth-401]"), { status: 401 }));
+    await h.engine.send(aFile());
+    h.put.resolve();
+    await settle();
+    expect(h.transfer()?.phase).toMatchObject({ kind: "failed", at: "queueing", status: 401 });
+
+    h.engine.resume();
+    await settle();
+    expect(h.queued).toEqual([UPLOAD_ID, UPLOAD_ID]);
+    expect(h.puts, "resume sent the bytes again").toBe(1);
+    expect(h.transfer()?.phase.kind).toBe("queued");
+  });
+
+  it("leaves a quota refusal alone", async () => {
+    /* A new token does not buy a slot, and silently re-posting on every hourly
+       refresh would be a request that cannot succeed, forever. The reader's own
+       Try again is the way out of this one, once they have upgraded. */
+    const h = harness();
+    h.answerQueueWith(Object.assign(new Error("No room left. [bill-out]"), { status: 402 }));
+    await h.engine.send(aFile());
+    h.put.resolve();
+    await settle();
+
+    h.engine.resume();
+    await settle();
+    expect(h.queued, "a fresh token re-posted a request the quota had refused").toEqual([
+      UPLOAD_ID,
+    ]);
   });
 });
 
@@ -377,36 +534,55 @@ describe("who it belongs to", () => {
     expect(h.queued, "a PUT that landed after the sign-out queued an ingest").toEqual([]);
   });
 
-  it("fences a reply that arrives after the reader changed", async () => {
-    /* The generation, rather than merely clearing the snapshot: a PUT can land
-       minutes after a sign-out, and without the fence it writes a finished
-       transfer into whoever is signed in now. `jobEngine` guards its own
-       requests the same way. */
-    const h = harness();
-    await h.engine.send(aFile());
-    h.engine.stop();
-    h.engine.start("reader-b");
+  it("fences a queue reply that lands after the reader changed", async () => {
+    /* **The PUT is let finish first**, and that ordering is the whole case. An
+       earlier version stopped the engine while the PUT was still open — but
+       `stop` aborts, so the posed PUT rejected immediately with an `AbortError`
+       and the later `resolve()` was a no-op. It stayed green with the fence
+       removed, which Sol pointed out and which makes it worse than no test.
 
+       So: let the PUT land, hold the *queue* request open, and only then sign
+       out. The reply that arrives afterwards is a real one for real work, and
+       the fence is the only thing between it and the next reader's engine. */
+    const h = harness();
+    h.holdTheQueueRequest();
+    await h.engine.send(aFile());
     h.put.resolve();
     await settle();
+    expect(h.transfer()?.phase.kind, "the queue request did not stay open").toBe("queueing");
 
-    expect(h.transfer()).toBeNull();
-    expect(h.queued).toEqual([]);
+    h.engine.stop();
+    h.engine.start("reader-b");
+    h.releaseTheQueueRequest();
+    await settle();
+
+    expect(h.transfer(), "one reader's finished upload landed in the next one's engine").toBeNull();
   });
 
   it("reports the queue POST through the job engine's action seam", async () => {
-    /* Never `jobEngine.start()`, which takes a session key — calling it with
-       anything else tears the poller down and rebinds it under a wrong key,
-       weakening the signed-out guarantee `tests/public-network-trace.test.tsx`
-       pins. `epoch` + `actionSucceeded` is the seam for an action's outcome: it
-       pokes the poll and lifts an authentication pause. Review finding 7. */
+    /* `epoch` + `actionSucceeded` is the seam for an action's outcome: it pokes
+       the poll and lifts an authentication pause, session-fenced. Review
+       finding 7 was that the plan said `jobEngine.start()`, which takes a
+       session key — calling it with anything else tears the poller down and
+       rebinds it under a wrong key.
+
+       **The guarantee that it cannot is structural, not a runtime count.** An
+       earlier version of this case asserted `started === 0` against a counter
+       nothing ever incremented — vacuous, as Sol pointed out, and it would have
+       stayed green through any change. What actually holds the line is that
+       `UploadEngineDeps.jobs` has no `start` on it at all, so reaching for one
+       is a compile error rather than a test failure. The line below says that in
+       the only way a test can. */
     const h = harness();
     await h.engine.send(aFile());
     h.put.resolve();
     await settle();
 
     expect(h.successes, "the queued job was not announced to the job engine").toEqual([7]);
-    expect(h.started, "the upload engine restarted the job engine").toBe(0);
+    expect(
+      Object.keys(depsShape.jobs),
+      "the job-engine seam grew a way to restart the poller",
+    ).toEqual(["epoch", "actionSucceeded", "actionFailed"]);
   });
 });
 
@@ -468,6 +644,7 @@ describe("the singleton", () => {
       requestGrant: async () => grantFor(),
       putFile: async () => {},
       queue: async () => job("j"),
+      cancelUpload: async () => {},
       jobs: { epoch: () => 0, actionSucceeded: () => {}, actionFailed: () => {} },
       guardUnload: () => {
         spy();
