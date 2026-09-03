@@ -37,7 +37,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { articles, refereeCriteria } from "../db/schema.js";
+import { refereeCriteria } from "../db/schema.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import {
@@ -50,7 +50,8 @@ import { CRITERION_SWEPT, withCriterion } from "../referee-criteria-store.js";
 import { MAX_CRITERIA, type SavedCriterion } from "../saved-criteria.js";
 import { requireColour } from "../searches.js";
 import type { RefereeCriteriaStore, SweepOptions } from "./contracts.js";
-import { notFound, ownedSlug, requireSlug, sourceHashFor } from "./pg.js";
+import { READ_COMMITTED } from "./isolation.js";
+import { articleIdForOwned, lockArticleRow, sourceHashFor } from "./pg.js";
 
 const logger = log("store");
 
@@ -59,19 +60,6 @@ const DB_NOW = sql`clock_timestamp()` as unknown as Date;
 
 type Tx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
 type Db = ReturnType<typeof getDb>;
-
-/** The article's uuid, or a tagged 404 — the same shape src/api.ts throws. */
-async function articleIdFor(slug: string, db: Db | Tx = getDb()): Promise<string> {
-  requireSlug(slug);
-  const rows = await db
-    .select({ id: articles.id })
-    .from(articles)
-    .where(ownedSlug(slug))
-    .limit(1);
-  const found = rows[0];
-  if (!found) throw notFound(slug);
-  return found.id;
-}
 
 /**
  * A row as the client sees it, or `null` if its config cannot be read back.
@@ -141,18 +129,13 @@ async function criteriaFor(
   return readable(rows, slug);
 }
 
-/** Take the article row, so nothing else in this article writes until we commit. */
-async function lockArticle(tx: Tx, articleId: string): Promise<void> {
-  await tx.select({ id: articles.id }).from(articles).where(eq(articles.id, articleId)).for("update");
-}
-
 export const pgRefereeCriteriaStore: RefereeCriteriaStore = {
   async load(slug: string): Promise<SavedCriterion[]> {
-    return criteriaFor(await articleIdFor(slug), getDb(), slug);
+    return criteriaFor(await articleIdForOwned(slug), getDb(), slug);
   },
 
   async sourceHash(slug: string): Promise<string | undefined> {
-    return sourceHashFor(await articleIdFor(slug));
+    return sourceHashFor(await articleIdForOwned(slug));
   },
 
   async begin(
@@ -163,12 +146,12 @@ export const pgRefereeCriteriaStore: RefereeCriteriaStore = {
     now: () => string = () => new Date().toISOString(),
   ): Promise<{ row: SavedCriterion; attempt: string | undefined }> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     const at = now();
     const attempt = randomUUID();
 
     const row = await db.transaction(async (tx) => {
-      await lockArticle(tx, articleId);
+      await lockArticleRow(tx, articleId);
       /* Inside the lock, so the fingerprint and the row are written against one
          state of the article — pg-searches.ts § begin. */
       const sourceHash = await sourceHashFor(articleId, tx);
@@ -278,7 +261,7 @@ export const pgRefereeCriteriaStore: RefereeCriteriaStore = {
       const back = toCriterion(inserted!);
       if (!back) throw new Error(`Criterion "${decided.id}" was written and cannot be read back.`);
       return back;
-    });
+    }, READ_COMMITTED);
 
     logger.info({ slug, criterionId: row.id, kind: config.kind }, "criterion started");
     return { row, attempt };
@@ -291,7 +274,7 @@ export const pgRefereeCriteriaStore: RefereeCriteriaStore = {
     attempt?: string,
   ): Promise<SavedCriterion | undefined> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
 
     /* Refused without an attempt rather than falling back to identity — the
        token is optional in the interface because the filesystem store has none,
@@ -350,7 +333,7 @@ export const pgRefereeCriteriaStore: RefereeCriteriaStore = {
 
   async remove(slug: string, id: string): Promise<SavedCriterion[]> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     await db
       .delete(refereeCriteria)
       .where(and(eq(refereeCriteria.articleId, articleId), eq(refereeCriteria.id, id)));
@@ -368,7 +351,7 @@ export const pgRefereeCriteriaStore: RefereeCriteriaStore = {
        sees. */
     requireColour(colour);
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     /* Unconditional on status: a colour is not part of the answer, so there is
        no attempt fence here and nothing to race. An id that names nothing is a
        no-op — a second tab can have deleted it, and the list that comes back
@@ -382,7 +365,7 @@ export const pgRefereeCriteriaStore: RefereeCriteriaStore = {
 
   async sweepPending(slug: string, opts: SweepOptions): Promise<SavedCriterion[]> {
     const db = getDb();
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     const cutoff = new Date(Date.now() - opts.graceMs);
 
     /* Two guards, and each one alone is a bug — pg-searches.ts § sweepPending.
