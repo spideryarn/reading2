@@ -39,8 +39,9 @@
  * (useJobs.ts), exactly as the job engine is. Without that, signing out
  * mid-transfer leaves one reader's filename and bytes in a singleton that then
  * posts `/api/jobs` as whoever signs in next — GPT Sol, reviewing the plan.
- * Every network reply is fenced on a generation, so a PUT that lands after a
- * sign-out cannot write into the next reader's engine.
+ * Every network reply is fenced, so a PUT that lands after a sign-out — or after
+ * a cancel, or after the reader chose a different file — cannot write into
+ * whatever the engine is doing now. See `fence`.
  *
  * ## What it never does
  *
@@ -191,8 +192,23 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
   let snapshot: UploadSnapshot = IDLE;
   const subscribers = new Set<() => void>();
 
-  /** Bumped by `stop`. Every reply checks it before writing anything. */
-  let generation = 0;
+  /**
+   * **Which attempt is the current one.** Every reply checks it before writing.
+   *
+   * Bumped by *four* things, and the first draft only had the first: `stop`,
+   * `send`, `cancel` and `retry`. It was a session generation, so a Stop pressed
+   * while the grant request was still out left the fence unchanged — the grant
+   * arrived a second later, found nothing to stop it, and started a 40 MB PUT
+   * for a transfer the reader had already cancelled. Nothing rendered it and
+   * nothing could stop it again. Found by
+   * `tests/upload-engine.test.ts` § *cancels during hashing or granting*.
+   *
+   * One counter rather than a session generation plus an attempt number,
+   * because everything that invalidates work in flight invalidates all of it:
+   * there is only ever one transfer, and any of these four means *whatever is
+   * still out there is no longer the thing we are doing*.
+   */
+  let fence = 0;
   let readerId: string | null = null;
 
   /* The `File` and the grant, held for the life of the transfer so `retry` has
@@ -223,10 +239,11 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
   /**
    * Whether this reply still belongs to the engine that made the request.
    *
-   * A sign-out bumps the generation, so a PUT that lands afterwards — and they
-   * can land minutes afterwards — finds itself fenced and writes nothing.
+   * A sign-out, a cancel, a new file or a retry all bump the fence, so a PUT
+   * that lands afterwards — and they can land minutes afterwards — finds itself
+   * stale and writes nothing.
    */
-  const mine = (epoch: number): boolean => epoch === generation && snapshot.transfer !== null;
+  const mine = (token: number): boolean => token === fence && snapshot.transfer !== null;
 
   /**
    * **Hold the tab open while work would be lost by closing it.**
@@ -264,19 +281,19 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
    * tick, and what lifts an authentication pause when a queue POST succeeds
    * after a token refresh.
    */
-  const queueIt = async (uploadId: string, epoch: number): Promise<void> => {
-    if (!mine(epoch)) return;
+  const queueIt = async (uploadId: string, token: number): Promise<void> => {
+    if (!mine(token)) return;
     phase({ kind: "queueing" });
     const jobsEpoch = deps.jobs.epoch();
     try {
       const outcome = await deps.queue(uploadId);
-      if (!mine(epoch)) return;
+      if (!mine(token)) return;
       deps.jobs.actionSucceeded(jobsEpoch);
       settle(
         "article" in outcome ? { kind: "article", slug: outcome.article } : { kind: "queued", job: outcome },
       );
     } catch (err) {
-      if (!mine(epoch)) return;
+      if (!mine(token)) return;
       const reason = (err as Error).message;
       deps.jobs.actionFailed(reason, statusOf(err), jobsEpoch);
       /* **`queueing`, so `retry` re-POSTs and does not re-PUT.** The bytes are in
@@ -298,19 +315,19 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
    * Measured on 2026-09-03: a *partial* PUT leaves no object at all, so this
    * cannot be a half-written file — see the plan's table.
    */
-  const sendBytes = async (theGrant: Grant, theFile: File, epoch: number): Promise<void> => {
+  const sendBytes = async (theGrant: Grant, theFile: File, token: number): Promise<void> => {
     phase({ kind: "sending", sent: 0 });
     const controller = new AbortController();
     abort = controller;
     try {
       await deps.putFile(theGrant, theFile, {
         onProgress: (p) => {
-          if (mine(epoch)) phase({ kind: "sending", sent: p.sent });
+          if (mine(token)) phase({ kind: "sending", sent: p.sent });
         },
         signal: controller.signal,
       });
     } catch (err) {
-      if (!mine(epoch)) return;
+      if (!mine(token)) return;
       if ((err as Error).name === "AbortError") {
         settle({ kind: "cancelled" });
         return;
@@ -320,7 +337,7 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
         return;
       }
     }
-    await queueIt(theGrant.uploadId, epoch);
+    await queueIt(theGrant.uploadId, token);
   };
 
   const engine: UploadEngine = {
@@ -331,7 +348,7 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
     },
 
     stop() {
-      generation += 1;
+      fence += 1;
       guard(false);
       /* Aborted, not merely fenced. The reader has gone; the bytes are still
          going, and nobody is going to want them. */
@@ -365,7 +382,8 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
         throw new Error(ONE_UPLOAD_AT_A_TIME);
       }
 
-      const epoch = generation;
+      fence += 1;
+      const token = fence;
       file = chosen;
       grant = null;
       set({
@@ -381,10 +399,14 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
         phase({ kind: "granting" });
         minted = await deps.requestGrant(chosen);
       } catch (err) {
-        if (mine(epoch)) settle({ kind: "failed", at: "granting", reason: (err as Error).message });
+        if (mine(token)) settle({ kind: "failed", at: "granting", reason: (err as Error).message });
         return null;
       }
-      if (!mine(epoch)) return null;
+      /* **A cancel during the grant request lands here.** The fence has moved,
+         so this returns before starting a PUT for a transfer the reader has
+         already stopped — and before overwriting the `cancelled` phase they can
+         see. */
+      if (!mine(token)) return null;
       grant = minted;
       set({ ...(snapshot.transfer as Transfer), uploadId: minted.uploadId });
 
@@ -392,11 +414,12 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
          navigates, and the bytes go on moving wherever they go next. Nothing
          downstream rejects — `sendBytes` puts every outcome on the snapshot — so
          there is no unhandled rejection to catch. */
-      void sendBytes(minted, chosen, epoch);
+      void sendBytes(minted, chosen, token);
       return minted.uploadId;
     },
 
     cancel() {
+      fence += 1;
       abort?.abort();
       /* **Set here as well as in `sendBytes`'s catch**, because there may be no
          PUT to abort yet: cancelling during `hashing` or `granting` has no
@@ -422,15 +445,16 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
      */
     retry() {
       const now = snapshot.transfer;
-      if (!now || now.phase.kind !== "failed") return;
-      const epoch = generation;
+      if (now?.phase.kind !== "failed") return;
       if (!file || !grant) return;
+      fence += 1;
+      const token = fence;
       guard(true);
       if (now.phase.at === "queueing") {
-        void queueIt(grant.uploadId, epoch);
+        void queueIt(grant.uploadId, token);
         return;
       }
-      if (now.phase.at === "sending") void sendBytes(grant, file, epoch);
+      if (now.phase.at === "sending") void sendBytes(grant, file, token);
     },
 
     forget() {
@@ -446,7 +470,7 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
     },
 
     reset() {
-      generation += 1;
+      fence += 1;
       guard(false);
       abort = null;
       file = null;
