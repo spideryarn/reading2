@@ -38,7 +38,7 @@ import {
   splitIntoBlocks,
 } from "./blocks.js";
 import { ASSETS_VERSION, collectAssets } from "./collect-assets.js";
-import { runExtract } from "./extract.js";
+import { ReadabilityRefused, runExtract } from "./extract.js";
 import {
   fetchDocument,
   type RawManifest,
@@ -95,6 +95,16 @@ import { log } from "./log.js";
 import { ARTICLE_RENDERER, type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
 import { articleFingerprint, hashBlocks } from "./source-hash.js";
 import { hashProfile, profileIsStale } from "./profile.js";
+import {
+  ARTICLE_HAD_NO_TEXT,
+  ILLUSTRATE_NO_SKETCH,
+  ILLUSTRATE_SKETCH_PROFILE,
+  ILLUSTRATE_SKETCH_STALE,
+  PAGE_HAS_NO_ARTICLE,
+  type ReaderFacingFailure,
+  SOURCE_DOCUMENT_DAMAGED,
+  SOURCE_DOCUMENT_GONE,
+} from "./messages.js";
 import { type RejectReason, looksLikePdf, MAX_UPLOAD_BYTES, rejectionFailure, stagingKey } from "./source.js";
 import { readUpload, rejectUpload, settleUpload } from "./upload-records.js";
 import { fsLocations } from "./store/artifacts-fs.js";
@@ -1459,25 +1469,44 @@ async function acquireUpload(
 }
 
 /**
- * What stage 2 says when Readability finds no article in the page.
+ * **The three reasons painting the argument refuses**, as a closed union.
  *
- * **Matched on its sentence, which is the one place here that does that, and it
- * is worth saying why.** Every other permanent failure in the pipeline is
- * tagged where it is thrown (`stageFailure`, src/job-failure.ts). This one is
- * thrown in src/extract.ts, which belongs to stage 2, so the tag is applied at
- * the seam instead — and a sentence is all the seam has to go on.
+ * It was `refuse(why: string)` until 2026-09-03 — one helper that took a
+ * sentence and appended *"Draw the Sketch first…"* — and that shape was wrong
+ * twice over. Its three callers mean three different things, so they want three
+ * sentences and three codes rather than one; and a free-string factory would
+ * let arbitrary text be minted into a **coded** `ReaderFacingFailure`, which is
+ * precisely the provenance `authored` in src/monitoring-scrub.ts is told to
+ * trust. ⟨Sol, 2026-09-03⟩
  *
- * A match on prose is exactly the kind of thing that rots quietly, so it does
- * not rest on care: tests/job-failure.test.ts runs the real extractor over a
- * page Readability refuses and asserts the classification, which goes red the
- * day that sentence changes.
+ * The map is total over the union, so a fourth reason cannot be added without
+ * coming here and writing its sentence — the discipline `RETRYABLE` and
+ * `STEP_GAVE_UP` in src/messages.ts already keep.
  *
- * The claim itself is about a **retry** rather than a re-run, and it holds
- * because Retry never re-runs a step that finished: `forceForRetry` forces from
- * the first unfinished step, which is this one, so `fetch` stays done and stage
- * 2 re-reads byte-for-byte the page it has already refused.
+ * **No `detail`, on purpose.** `stageFailure` then makes `Error.message` the
+ * reader's own coded sentence, which is a stronger claim than `{ authored }`
+ * rather than a weaker one: the string is a registered message out of
+ * src/messages.ts, so Sentry forwards it and the log line says which of the
+ * three fired. There is nothing further a diagnostic could add — the slug is
+ * already a Sentry tag and a log field.
  */
-const READABILITY_REFUSED = /^Readability could not parse this page\./;
+type IllustrateRefusal = "no-sketch" | "stale-sketch" | "wrong-profile";
+
+const ILLUSTRATE_REFUSAL: Record<IllustrateRefusal, ReaderFacingFailure> = {
+  "no-sketch": ILLUSTRATE_NO_SKETCH,
+  "stale-sketch": ILLUSTRATE_SKETCH_STALE,
+  "wrong-profile": ILLUSTRATE_SKETCH_PROFILE,
+};
+
+/**
+ * A function declaration rather than a `const`, so that TypeScript narrows
+ * after a call to it: `if (!usableSketch(sketch)) refuseToIllustrate(…)` leaves
+ * `sketch` usable below, where the arrow it replaced needed a
+ * `throw new Error("unreachable")` underneath it to say the same thing.
+ */
+function refuseToIllustrate(reason: IllustrateRefusal): never {
+  throw stageFailure(ILLUSTRATE_REFUSAL[reason]);
+}
 
 /**
  * The pipeline.
@@ -1583,16 +1612,45 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       try {
         bytes = await readRawBytes(manifest, { slug: ctx.slug });
       } catch (err) {
-        /* **`blocked`, not an unclassified failure, and the distinction is
-           about what the Retry button can do.** All three reasons —
-           `no-object`, `missing`, `corrupt` — mean the document behind this
-           manifest is not there or is not what it claims. Retry never re-runs a
-           step that finished, and `fetch` finished, so a retry would arrive
-           here and read the same absent object again. The fix is a re-fetch,
-           and `blocked` is how the reader is told that rather than offered a
-           button that cannot work. */
+        /* **Not one message for all three reasons, and the difference is
+           whether the reader can do anything.** Retry never re-runs a step that
+           finished, and `fetch` finished, so no reason here is served by the
+           button — but that is a fact about the *button*, and the sentence has
+           to be about the reader.
+
+           `no-object` and `missing` mean the bytes are not where the manifest
+           says. Adding the article again really does fix that: the fetch runs
+           afresh and stores them. `SOURCE_DOCUMENT_GONE`, `blocked`.
+
+           `corrupt` — from either constructor — means the bytes *are* there and
+           are not the ones the name promises, and **adding the article again
+           does not fix it**. The object is content-addressed, so a re-fetch of
+           the same document lands on the same name, finds something already
+           there, and leaves the bad object alone; both throw sites say so in as
+           many words (src/fetch.ts). Telling the reader to try the thing that
+           cannot work is the expensive mistake docs/project/copy.md § rule 2
+           names, so this is `SOURCE_DOCUMENT_DAMAGED`, `bug`, and the object
+           needs clearing here. GPT Sol, reviewing the built stage 1, finding 4.
+
+           **The kind was all the reader got until 2026-09-03**, so they were
+           told a step had refused and never what had happened. The diagnostic
+           keeps the object key, the hashes and the credential reading either
+           way, which is what somebody looking at the store needs and nothing a
+           reader can use.
+
+           `{ authored }` around an `err.message`, which src/job-failure.ts
+           warns against in general and which is safe here because the class is
+           narrowed by `instanceof` and every one of its four constructors is in
+           src/fetch.ts: fixed prose around a slug, a content-addressed key,
+           byte counts, a local digest, and `credentialsSeen()`, which reports
+           only whether two environment variables are *set*. Nothing on that
+           list arrived over a wire. `RawDocumentUnavailable`'s own header
+           carries the constraint that keeps it true. */
         if (err instanceof RawDocumentUnavailable) {
-          throw stageFailure("blocked", err.message);
+          throw stageFailure(
+            err.reason === "corrupt" ? SOURCE_DOCUMENT_DAMAGED : SOURCE_DOCUMENT_GONE,
+            { authored: err.message },
+          );
         }
         throw err;
       }
@@ -1617,11 +1675,29 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
             detail: result.meta.title,
           };
         } catch (err) {
-          /* Only the one sentence. Everything else this can throw — a full
-             disk, a directory that vanished — is ordinary bad luck, and hiding
-             a Retry that would have worked is the costlier way to be wrong. */
-          if (READABILITY_REFUSED.test((err as Error).message)) {
-            throw stageFailure("blocked", (err as Error).message);
+          /* **Only this one, and by type since 2026-09-03.** Everything else
+             `runExtract` can throw — a full disk, a directory that vanished —
+             is ordinary bad luck, and hiding a Retry that would have worked is
+             the costlier way to be wrong.
+
+             It was a regex over `err.message` until the day this comment was
+             written, which is the shape `blocks` below had already moved off:
+             a prose match rots when somebody rewords the sentence, and being
+             prefix-only it could not prove that a message it matched was ours
+             all the way to the end. `ReadabilityRefused` (src/extract.ts) says
+             the same thing in the type system and says it exactly.
+
+             **The diagnostic is fixed here and is deliberately not
+             `{ authored }`.** The claim is *I wrote every character of this
+             string*, and the string worth logging is the error's own, which
+             stage 2 owns and this seam does not — so what travels to Sentry is
+             the reader's coded sentence, and the log keeps the library's name.
+             ⟨Sol, 2026-09-03⟩ */
+          if (err instanceof ReadabilityRefused) {
+            throw stageFailure(
+              PAGE_HAS_NO_ARTICLE,
+              "Readability found no article in the fetched page.",
+            );
           }
           throw err;
         }
@@ -1762,8 +1838,23 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            `IdsNotCarried` is deliberately not here: it is thrown against a
            baseline, so it is the *article* that changed under us, and whether a
            retry can come out differently depends on why. It has never been
-           classified and this is not the change that decides it. */
-        if (err instanceof NoBlocksProduced) throw stageFailure("blocked", err.message);
+           classified and this is not the change that decides it.
+
+           **"which is what the error's own last sentence tells the reader" was
+           not true**, and was written in good faith on the day the two
+           audiences were split apart. `NoBlocksProduced`'s message goes to the
+           log; what a reader saw was `stepGaveUp`'s generic `blocked` copy.
+           `ARTICLE_HAD_NO_TEXT` is now what they get, and it keeps the one
+           useful thing that message had to say — the usual causes, and that it
+           is the fetch rather than this step that needs looking at.
+
+           `{ authored }`: `NoBlocksProduced` (src/blocks.ts) is fixed prose
+           around `slug`, which docs/project/logging.md permits by name and
+           `captureFailure` already sends to Sentry as a tag. Its header carries
+           the constraint that keeps that true. */
+        if (err instanceof NoBlocksProduced) {
+          throw stageFailure(ARTICLE_HAD_NO_TEXT, { authored: err.message });
+        }
         throw err;
       }
       const previousBlocks = run.previousBlocks;
@@ -2915,9 +3006,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    * absent, stale, or drawn for a different profile would either crash or —
    * worse — quietly paint an argument the reader is not looking at.
    *
-   * So `run` throws a sentence naming the Sketch chip, with `stageFailure`'s
-   * `"ours"`: a retry skips the steps that finished and would find the identical
-   * missing Sketch, so offering the button would be a lie.
+   * So `run` refuses, through `refuseToIllustrate` above — one of three
+   * sentences naming the Sketch chip, all `blocked`. A retry skips the steps
+   * that finished and would find the identical missing Sketch, so offering the
+   * button would be a lie; `blocked` rather than the `ours` it carried until
+   * 2026-09-03 because nothing here is misconfigured and the reader's way out
+   * is a press away. See § the steps that know why they stopped in
+   * src/messages.ts.
    *
    * **Not `enqueue(["sketch", "illustrated"])`**, which is the tempting version
    * and is worse. It turns one press into a hidden $0.20 charge and a
@@ -2973,18 +3068,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     },
     async run(ctx, store) {
       const sketch = await store.read(ctx.slug, "sketch", "sketch");
-      /* **`ours` on every one of these, and the sentence names the chip rather
-         than the step**, because it is read by somebody looking at a band and
-         not at a pipeline. `ours` rather than `retry`: a retry skips the steps
-         that finished, so it would find the identical Sketch and fail
-         identically — offering the button would be a lie. */
-      const refuse = (why: string): never => {
-        throw stageFailure("ours", `${why} Draw the Sketch first — it is the chip one to the left — and then press this one again.`);
-      };
-      if (!usableSketch(sketch)) {
-        refuse(`There is no sketch of "${ctx.slug}" to illustrate.`);
-        throw new Error("unreachable");
-      }
+      if (!usableSketch(sketch)) refuseToIllustrate("no-sketch");
 
       const article = await readArticle(ctx.slug, store);
       /* **A stale Sketch is refused rather than painted, and the reason is the
@@ -3001,7 +3085,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          re-runs on its own and this sentence only ever appears when somebody
          actually asked. Both stores agree, because `stamp` is untouched. */
       if (sketchIsStale(sketch, article.blocks, article.tree, article.meta ?? null)) {
-        refuse("The sketch of this article is out of date — the article has moved underneath it.");
+        refuseToIllustrate("stale-sketch");
       }
       /* **And a Sketch drawn for somebody else's profile.** Without this the
          panel loops: the picture inherits the Sketch's `profileHash`, the route
@@ -3012,7 +3096,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          (src/profile.ts): an artefact written deliberately without a profile,
          and a reader who has since cleared theirs, are both *not* a mismatch. */
       if (profileIsStale(sketch.profileHash, ctx.profile ? hashProfile(ctx.profile) : null)) {
-        refuse("The sketch of this article was drawn for a different reader profile.");
+        refuseToIllustrate("wrong-profile");
       }
 
       const run = await generateIllustrated({

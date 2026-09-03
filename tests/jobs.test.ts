@@ -24,6 +24,7 @@ import {
   forceForRetry,
   forgetJob,
   freeSlug,
+  slugForRetry,
   getJob,
   orderSteps,
   sameWork,
@@ -871,14 +872,27 @@ describe("running a job", () => {
   /**
    * **The sweep, through `advanceJob` rather than through the store.**
    *
-   * `tests/store-jobs-parity.test.ts` proves `settleExpired` frees the slot, and
-   * GPT Sol pointed out that it proves nothing about the *wiring*: delete the
-   * `store.settleExpired()` line from `advanceJob` and that test stays green,
-   * because it calls the sweep itself. Which is the whole shape of the original
-   * bug — the function existed and nothing called it — so the test has to be
-   * the one that goes through the caller.
+   * `tests/store-jobs-parity.test.ts` proves what `settleExpired` does to a
+   * lapsed claim, and GPT Sol pointed out that it proves nothing about the
+   * *wiring*: delete the `store.settleExpired()` line from `advanceJob` and that
+   * test stays green, because it calls the sweep itself. Which is the whole
+   * shape of the original bug — the function existed and nothing called it — so
+   * the test has to be the one that goes through the caller.
+   *
+   * **What "frees" means changed on 2026-09-03.** The sweep used to end the job
+   * `error` / `retry` and hand the reader a button; a lapsed claim with budget
+   * left now goes back to `queued` on its own row and this very advance picks it
+   * up — src/jobs.ts § `REQUEUE_BUDGET`. So the assertion moved from *the ending
+   * it was given* to *the advance got inside it at all*, which is the property
+   * the wiring is actually about and the one that goes red without the line:
+   * `claim` only takes a `queued` row, so with no sweep this answers `busy` and
+   * the record sits at `running` for ever.
+   *
+   * The step then fails on its own merits — `fetch` on a slug with no URL — and
+   * that is not what is under test here; the case asserts the job is *over*
+   * rather than which sentence ended it.
    */
-  it("frees a job whose claimant stopped answering, from the advance itself", async () => {
+  it("gets inside a job whose claimant stopped answering, from the advance itself", async () => {
     const slug = "test-advance-sweeps";
     const job = await enqueue({ slug, steps: ["fetch"] });
     await settle(job.id);
@@ -902,11 +916,16 @@ describe("running a job", () => {
 
     try {
       const advanced = await advanceJob(job.id);
-      // Failed rather than taken over, and it says so in the reader's words.
+      /* **Not `busy`**, which is what a `running` row nobody swept answers, and
+         what this said before the sweep line existed. */
+      expect(advanced?.busy).toBeFalsy();
       expect(advanced?.done).toBe(true);
       const after = await getJob(job.id);
-      expect(after?.status).toBe("error");
-      expect(after?.failureKind).toBe("retry");
+      /* The same row, and it is no longer stuck under a claim nobody holds. */
+      expect(after?.id).toBe(job.id);
+      expect(after?.slug).toBe(slug);
+      expect(after?.status).not.toBe("running");
+      expect(after?.finishedAt).toBeDefined();
     } finally {
       // See the note in the test above: a record left behind breaks the next run.
       await forgetJob(job.id).catch(() => undefined);
@@ -1144,6 +1163,102 @@ describe("freeSlug", () => {
     const got = await freeSlug(long, "https://example.com/long", shelf({}));
     expect(isSlug(got.slug)).toBe(true);
     expect(got.slug).toMatch(/-spya-[a-z0-9]{6}$/);
+  });
+});
+
+/* --------------------------------------------------------------------------
+   Which slug a **retry** lands on, which is not the same question.
+
+   `freeSlug` above decides where a *fresh* request goes. `slugForRetry` decides
+   where the second attempt at one named prior attempt goes, and the difference
+   between the two is a decision rather than a fact: a retry of an upload and a
+   second upload of the same file arrive with exactly the same shape, and *"two
+   uploads of one file are two documents"* has to stay true of the second while
+   the first lands back on its own article.
+
+   It matters because per-chunk checkpoints are addressed by the **article**
+   (src/store/checkpoints.ts), the article is a pure function of the slug, and a
+   retry that moved the slug moved the article — so attempt 2 re-bought every
+   chunk attempt 1 had paid for, and a PDF too long for one lease could never
+   finish at all. tests/retry-keeps-the-checkpoints.test.ts is that end to end,
+   against a real queue and a real checkpoint store; this is the decision on its
+   own, with the lookup injected so none of it touches a database.
+   -------------------------------------------------------------------------- */
+describe("slugForRetry", () => {
+  const shelf = (entries: Record<string, string>) => async (key: string) =>
+    Object.entries(entries).find(([, url]) => urlKey(url) === key)?.[0];
+
+  const UPLOAD = { id: "8a1d0c9e-0000-4000-8000-000000000001", filename: "a-long-book.pdf" };
+
+  /**
+   * **The upload case, which is the one a hundred-page PDF arrives through** and
+   * the one `enqueue` had no branch for: it minted unconditionally.
+   */
+  it("keeps an upload's own name rather than minting a second one", async () => {
+    expect(
+      await slugForRetry({ slug: "a-long-book-spya-k3m9qt", upload: UPLOAD }, shelf({})),
+    ).toEqual({ kind: "minted", slug: "a-long-book-spya-k3m9qt" });
+  });
+
+  /**
+   * **A failed first URL ingest.** Nothing is on the shelf — it published no
+   * revision. The old name is what is left, and taking it is a *claim*, so it
+   * reserves: that is what puts the queued retry inside `jobs_active_source` and
+   * stops a racing paste minting a second article for one address.
+   */
+  it("keeps a failed first ingest's name, and reserves it", async () => {
+    expect(
+      await slugForRetry(
+        { slug: "why-trees-spya-k3m9qt", url: "https://example.com/why-trees" },
+        shelf({}),
+      ),
+    ).toEqual({ kind: "minted", slug: "why-trees-spya-k3m9qt" });
+  });
+
+  /**
+   * **And it asks the shelf first.** A *published* article for this address is
+   * by definition the article this address is, so the retry goes there rather
+   * than to the name it happens to remember. This is the half that keeps one
+   * article for one address when the two names differ.
+   *
+   * **The shelf and nothing else**, since GPT Sol's review of the built stage 3.
+   * It used to ask `slugAlreadyHolding` — the shelf *or a live job* — and
+   * adopting from a live job is what left the address unreserved when that job
+   * ended before the insert. A retry that races a live holder is now told so by
+   * `jobs_active_source` and handed the holder; `src/jobs.ts` §
+   * `handBackToARetry`, and `tests/one-article-for-one-address.test.ts` § *and a
+   * retry's two*.
+   */
+  it("adopts what the shelf already holds, over its own remembered name", async () => {
+    expect(
+      await slugForRetry(
+        { slug: "why-trees-spya-k3m9qt", url: "https://example.com/why-trees" },
+        shelf({ "why-trees-spya-zzzzzz": "https://www.example.com/why-trees/" }),
+      ),
+    ).toEqual({ kind: "adopted", slug: "why-trees-spya-zzzzzz" });
+  });
+
+  /** A late-stage re-run, which was already landing right and still does. */
+  it("adopts for a request that names an article rather than claiming a name", async () => {
+    expect(await slugForRetry({ slug: "why-trees-spya-k3m9qt" }, shelf({}))).toEqual({
+      kind: "adopted",
+      slug: "why-trees-spya-k3m9qt",
+    });
+  });
+
+  /**
+   * **No second short id, ever** — the bug's own visible fingerprint, and the
+   * reason it should have been caught long ago. `retryJob` passes
+   * `slug: old.slug` and `slugWithShortId` *appends*, so three retries used to
+   * give `…-spya-aaa-spya-bbb-spya-ccc`: three names, three articles, three
+   * invoices.
+   */
+  it("never stacks a second short id, however many times it is asked", async () => {
+    let slug = "a-long-book-spya-k3m9qt";
+    for (let i = 0; i < 3; i++) {
+      slug = (await slugForRetry({ slug, upload: UPLOAD }, shelf({}))).slug;
+    }
+    expect(slug).toBe("a-long-book-spya-k3m9qt");
   });
 });
 

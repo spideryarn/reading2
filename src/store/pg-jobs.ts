@@ -57,7 +57,7 @@
  * down as unreachable-today rather than presented as a live guard.
  */
 
-import { and, desc, eq, inArray, isNull, lte, or, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, lte, not, or, type SQL, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { guardDbStore, lockUnavailable, violatesConstraint } from "./db-errors.js";
@@ -893,7 +893,11 @@ const rawPgJobStore: JobStore = {
    * src/db/schema.ts § `ingest_events`). The transaction is what the reservation
    * buys: it used to be a bare `UPDATE` on the pool.
    */
-  async settleExpired(now?: Date, owner?: OwnerId): Promise<ExpirySettlement[]> {
+  async settleExpired(
+    now?: Date,
+    owner?: OwnerId,
+    requeueBudget = 0,
+  ): Promise<ExpirySettlement[]> {
     const db = getDb();
     /* Pinned rather than inherited, as src/store/pg-billing.ts and
        src/store/pg-session.ts both pin theirs: a `default_transaction_isolation`
@@ -901,6 +905,126 @@ const rawPgJobStore: JobStore = {
        one reservation do — zero rows and a log at `read committed`, an
        uncaught 40001 that takes the whole sweep down above it. */
     return await db.transaction(async (tx) => {
+      /**
+       * **Which rows this sweep may touch at all**, written once so that the
+       * requeue and the settlement below cannot disagree about it. A row either
+       * gets another go or it is over; there must be no third state and no
+       * instant in which it is neither, which is why both statements are in one
+       * transaction and share this predicate exactly.
+       */
+      const lapsed = and(
+        eq(jobs.status, "running"),
+        /* **This reader's, when a reader is asking**, and the whole table when
+           the advance path is. `listJobs` calls this from inside a request, so an
+           unscoped sweep there would be one reader's page load ending another
+           reader's import — the same predicate `list` itself is scoped by, in
+           the statement rather than in a filter afterwards, so there is no moment
+           at which the wrong row is locked. GPT Sol, 2026-09-01, answer 7. */
+        owner === undefined ? undefined : eq(jobs.ownerId, owner),
+        /* **Database time, unless a test says otherwise.** The lease is written
+           by `claim` as `clock_timestamp() + leaseMs` on this same clock, so the
+           deadline is one clock's arithmetic end to end. It used to be
+           `Date.now()` at both ends, which is fine on a laptop and is a different
+           clock from the one holding the row the moment there are two instances.
+
+           **The exact expression the fence refuses on**, imported rather than
+           written again: what `liveAttempt` will no longer let a claimant write
+           to is precisely what this may settle, with no instant in between where
+           a job is neither. That includes the NULL-lease row
+           `jobs_running_is_fenced` makes impossible — see src/store/job-fence.ts
+           for why *over* is the better answer for a state that cannot happen. */
+        now === undefined
+          ? leaseIsOver
+          : or(isNull(jobs.leaseExpiresAt), lte(jobs.leaseExpiresAt, now)),
+      );
+
+      /**
+       * **First, the jobs that get another go — back to `queued` on their own
+       * row.**
+       *
+       * This is the Postgres answer to `sweepStopped` (src/store/jobs-fs.ts),
+       * which has always turned a restart into a *pause* rather than an
+       * abandoned ingest: running steps back to `pending`, the job back to
+       * `queued`, the row otherwise untouched. Postgres had no equivalent, so on
+       * the store we actually ship a deploy landing mid-ingest ended the job —
+       * and the reader's only door out of that was a Retry that, until
+       * 2026-09-03, minted a new article and threw away every chunk they had
+       * paid for.
+       *
+       * **The same job id, which is the whole point.** The slug does not move, so
+       * the article does not move, so the article's checkpoints
+       * (src/store/checkpoints.ts) are still reachable — that is the property
+       * this exists for, and a new job row could not have it.
+       *
+       * **Before the settlement below, not after.** These rows are `queued` by
+       * the time the next statement runs, and that statement requires
+       * `status = 'running'`, so nothing can be both. Ordering is the whole
+       * arbitration; there is no second predicate to keep in step.
+       *
+       * **`cancelling` rows are excluded**, and would be even without the
+       * budget: a reader who pressed Stop and whose claimant then walked away
+       * must get their stop, not a resumption of the thing they stopped.
+       *
+       * **Skipped entirely at a zero budget**, which is the default, so a caller
+       * that has not asked for this pays no round trip and sees exactly the
+       * behaviour it saw before.
+       */
+      const requeued =
+        requeueBudget <= 0
+          ? []
+          : await tx
+              .update(jobs)
+              .set({
+                status: "queued",
+                /* The *cancelled* shape of `settledSteps`: the running step back
+                   to `pending` with its `startedAt` dropped and no sentence on
+                   it. Nothing failed — the job is going back into the line — and
+                   this is exactly what `sweepStopped` writes for a step whose
+                   process went away, so the two mechanisms agree rather than
+                   inventing a third answer. */
+                steps: settledSteps(sql`true`),
+                attemptId: null,
+                leaseExpiresAt: null,
+                requeues: sql`${jobs.requeues} + 1`,
+                /**
+                 * **The draft goes with the claim here too, and that is a
+                 * decision rather than an oversight.**
+                 *
+                 * Keeping the pointer would let the next claim *reopen* this
+                 * draft — `openOrBeginJobDraft` finds a draft only via this
+                 * job's `draft_revision_id` — and carrying a half-written draft
+                 * across attempts is decision 8 of
+                 * docs/plans/260831b-finish-the-database-move.md, which Greg
+                 * deferred. It is not free: the draft was being written by a
+                 * process that vanished mid-step, so what is in it is whatever
+                 * that process had got to.
+                 *
+                 * Dropping it costs nothing the reader can feel. The next claim
+                 * opens a fresh draft, every step's `stepIsDone` reads the
+                 * *artefacts* rather than the step record and finds none, so the
+                 * steps re-run — exactly as they do after a Retry today. The
+                 * expensive half is the model calls, and those are held by the
+                 * checkpoints, which are keyed on the article this row still
+                 * names.
+                 *
+                 * And a terminal job may not keep a pointer at all —
+                 * `sweepAbandonedDrafts` spares a revision any job row names — so
+                 * clearing it here keeps this transition's field set the same as
+                 * the settlement's, which is the pair most likely to drift.
+                 */
+                draftRevisionId: null,
+                /* Cleared, so the record always describes *this* state. A job
+                   that failed a step, was requeued and is now waiting its turn
+                   must not sit in the queue wearing the last attempt's sentence.
+                   `jobWorthRetrying` reads `failureKind` and a stale one under a
+                   `queued` status is a card saying something that did not
+                   happen. */
+                error: null,
+                failureKind: null,
+              })
+              .where(and(lapsed, not(jobs.cancelling), lt(jobs.requeues, requeueBudget)))
+              .returning({ id: jobs.id, status: jobs.status });
+
       const settled = await tx
         .update(jobs)
         .set({
@@ -934,36 +1058,11 @@ const rawPgJobStore: JobStore = {
              what is finished from the artefacts, so a retry resumes. */
           failureKind: sql`case when ${jobs.cancelling} then null else ${INTERRUPTED.kind}::text end`,
         })
-        .where(
-          and(
-            eq(jobs.status, "running"),
-            /* **This reader's, when a reader is asking**, and the whole table
-               when the advance path is. `listJobs` calls this from inside a
-               request, so an unscoped sweep there would be one reader's page load
-               ending another reader's import — the same predicate `list` itself
-               is scoped by, in the same statement rather than in a filter
-               afterwards, so there is no moment at which the wrong row is
-               locked. GPT Sol, 2026-09-01, answer 7. */
-            owner === undefined ? undefined : eq(jobs.ownerId, owner),
-            /* **Database time, unless a test says otherwise.** The lease is
-               written by `claim` as `clock_timestamp() + leaseMs` on this same
-               clock, so the deadline is one clock's arithmetic end to end. It
-               used to be `Date.now()` at both ends, which is fine on a laptop
-               and is a different clock from the one holding the row the moment
-               there are two instances.
-
-               **The exact expression the fence refuses on**, imported rather
-               than written again: what `liveAttempt` will no longer let a
-               claimant write to is precisely what this may settle, with no
-               instant in between where a job is neither. That includes the
-               NULL-lease row `jobs_running_is_fenced` makes impossible — see
-               src/store/job-fence.ts for why *over* is the better answer for a
-               state that cannot happen. */
-            now === undefined
-              ? leaseIsOver
-              : or(isNull(jobs.leaseExpiresAt), lte(jobs.leaseExpiresAt, now)),
-          ),
-        )
+        /* **What the statement above left behind**, and nothing else: a row it
+           requeued is `queued` by now and this requires `running`. So the two
+           partition the lapsed set between them, in one transaction, with the
+           order doing the arbitration. */
+        .where(lapsed)
         .returning({ id: jobs.id, status: jobs.status, ingestEventId: jobs.ingestEventId });
 
       /* **One statement over the whole set**, and it used to be one per settled
@@ -985,10 +1084,17 @@ const rawPgJobStore: JobStore = {
         settled.map((row) => row.ingestEventId),
       );
 
-      /* What the statement already returns, and both fields of it. `RETURNING`
-         hands back the row *after* the update, so the status here is the ending
-         the `case` chose rather than the one it started from. */
-      return settled.map((row) => ({
+      /* What the statements already return, and both fields of theirs.
+         `RETURNING` hands back the row *after* the update, so the status here is
+         the ending the `case` chose — or `queued`, for the rows that got another
+         go — rather than the one it started from.
+
+         **The requeued rows are in the answer**, and they have to be: the caller
+         logs this as the only account there is of a claimant that stopped
+         answering, and a sweep that resumed somebody's import while reporting
+         nothing would be exactly the silent success this file's neighbours are
+         written against. `listJobs` also re-reads only when this is non-empty. */
+      return [...requeued, ...settled].map((row) => ({
         id: row.id,
         status: row.status as ExpirySettlement["status"],
       }));
