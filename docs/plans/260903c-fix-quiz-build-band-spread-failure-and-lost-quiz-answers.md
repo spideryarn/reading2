@@ -70,8 +70,8 @@ supporting evidence rather than proof — sample-size rules legitimately have th
 plan's first draft overstated it as plain non-monotonicity, which is false.** Batches of three or
 fewer are deliberately exempt (`bandQuota(3) === 0`, `tests/quiz.test.ts:166`), so three medium
 questions pass and a fourth medium fails. Any rule keeping that exemption — and it should, since
-demanding a spread from a four-question article is an instruction to pad — is monotonic only among
-batches of four or more. That narrower claim is the true one.
+demanding a spread from a *three*-question article is an instruction to pad — is monotonic only
+among batches of four or more. That narrower claim is the true one.
 
 The prompt (`src/quiz.ts:720-735`) disagrees with both: it demands a flat 3 of each in a full batch,
 and tells the model that a failing batch means *"the article is asked again"*, which is false —
@@ -158,8 +158,10 @@ Each ends with the suite green and the tree safe to commit.
   numeric representation is precisely what let the prose and the arithmetic diverge, so removing it
   is the fix for the class, not just for the value.
 - **Keep the short-batch exemption** — batches too short to carry both ends are asked for nothing,
-  as today (`bandQuota(3) === 0`). Demanding a spread from a four-question article is an instruction
-  to pad, which `260831al` decided against on purpose. State the boundary explicitly in the code.
+  as today (`bandQuota(3) === 0`, so the boundary is at four). Demanding a spread from a
+  three-question article is an instruction to pad, which `260831al` decided against on purpose.
+  State the boundary explicitly in the code as a named constant rather than letting it fall out of
+  `floor()`, which is how it came to be somewhere nobody could see or challenge.
 - Keep measuring against survivors — that part was right.
 - **The prompt keeps asking for three of each.** Sol is right that lowering the ask to one would
   turn the emergency floor into the normal distribution. The prompt states a target; the gate
@@ -179,6 +181,54 @@ Each ends with the suite green and the tree safe to commit.
   after.
 
 Done: `npm test`, `npm run typecheck`, `npm run check` green; the new tests red before, green after.
+
+#### What stage 1 actually landed, 2026-09-03
+
+`bandQuota` and `quotaShortfall` are deleted. `missingBandEnds(questions): QuizBandEnd[]` is the
+gate, `SPREAD_FROM = 4` is the named boundary, and `QuizBandEnd` is
+`Extract<QuizBand, "easy" | "hard">` — narrower than the plan's `QuizBand[]`, so nothing downstream
+can write a branch for a `medium` that cannot arrive.
+
+The failing test reproduces production byte-for-byte: nine survivors, one `hard`, and the old error
+string from the Vercel log. 62 tests in `tests/quiz.test.ts`, 118 across the quiz-adjacent files.
+
+**Two things GPT Sol's stage-1 review changed**, both reproduced by it rather than reasoned to:
+
+- **The first reader message was false.** It called `fresh.length` — the *survivor* count — what the
+  AI "wrote", so twelve questions with seven dropped reported *"The AI service wrote 5 questions"*.
+  It now reads: *"Of the questions written for this article, 5 survived checking against it — but
+  there is no hard one among them to finish on, so they would not cover the full range from easier
+  to harder. Writing the questions again usually gets a better spread."* The wording borrows the
+  panel's own adjacent sentence so a reader who meets both gets one vocabulary, and the test that
+  pins it now includes the twelve-sent-five-survived case, which is what makes the survivor wording
+  load-bearing.
+- **The prompt says less than the first draft did.** The draft disclosed the gate's floor, which
+  sits in the same paragraph as "must contain at least three" and gives the model two definitions of
+  *not optional* — Sol's point being that revealing the lower floor makes one-per-end look
+  sufficient. The floor is now withheld deliberately.
+
+**The implementer pushed back on my instruction here and was right.** I asked for the minimal edit —
+remove only the false *"the article is asked again"*. But the clause it sat in, *"is thrown away
+whole"*, **was true before this stage and false after it**: the gate no longer refuses a full batch
+for having two of an end instead of three. The minimal edit would have traded one false sentence for
+another. The whole consequence clause went instead, leaving a directive to the model rather than a
+claim about our machinery — which is the thing that went stale within a day of being written.
+
+`missingEndsInReaderWords` returns `string | null` rather than assuming a non-empty input, which
+also collapses a guard that was being written in two places that could have disagreed.
+
+#### Deferred, on purpose: the cap can manufacture a spread failure
+
+Sol reproduced it: `toQuestions` keeps the first twelve survivors **in the model's order**
+(`src/quiz.ts:481`), so a response of thirteen valid questions whose only `hard` one is thirteenth
+loses it to the cap, and the gate then refuses the batch for missing an end the model did supply.
+Real, pre-existing, and it contradicts the intended "over-cap degrades rather than fails" behaviour.
+
+Not fixed, because the fix is not small: moving the gate above the loop would be wrong (the stored
+twelve would still lack an end), so it needs *cap selection* that preserves one of each end. Nothing
+has shown it is needed — the prompt asks for at most twelve, so it only fires when the model
+overshoots. A comment at the cap records the mechanism, why the obvious fix is not one, and the
+trigger to watch for: `dropped.overCap` non-zero on a run that also failed on bands.
 
 ### Stage 2 — split the two audiences at the seam
 
