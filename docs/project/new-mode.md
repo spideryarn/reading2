@@ -33,7 +33,7 @@ rest.** A fourteenth word there is red until it has a row in each of these total
 |---|---|
 | `MODE_LABEL` | [`src/title-text.ts`](../../src/title-text.ts) — the only place a mode is spelled for a person |
 | `OWNER_MODE_NOTE` | [`src/messages.ts`](../../src/messages.ts) |
-| `MODES_UI`, via `ModesMissingFromDock` | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) — an ordered array, because the order is Greg's; the type check stands in for the `Record` |
+| `MODES_UI`, via `ModesMissingFromDock` | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) — an ordered array, because the order is Greg's; the type check stands in for the `Record`. **The row carries a required `experimental: boolean`**, so adding a mode means deciding whether it is finished enough to draw for everybody — [experimental-features.md](experimental-features.md). Say why in the table there either way |
 | `POLICY` | [`src/web/visitor.ts`](../../src/web/visitor.ts) — what a visitor may see; there is no fall-through any more, a missing row is a typecheck error |
 | `BAND_SAYS` | [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) |
 

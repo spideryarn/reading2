@@ -11,10 +11,12 @@
  * `file:`, `w:`, `h:` in that order; keep them so.
  *
  * **How these were made, 2026-09-03.** Headless system Chrome driven by
- * Playwright, 1440×900 at 2× (scripts in the plan,
- * docs/plans/260902k-website-copy-homepage-and-features.md), of real articles
- * in a local library — *The Mythology of AI Consciousness* by Anil Seth for
- * most of them. Then `pngquant --quality 65-92 --speed 1` and a downscale to
+ * Playwright, 1440×900 at 2×, of real articles in a local library — *The
+ * Mythology of AI Consciousness* by Anil Seth for most of them. The capture
+ * scripts were session scratch and were not kept; a retake is a fresh
+ * playwright-core script against system Chrome, signed in as the local admin,
+ * following the plan (docs/plans/260902k-website-copy-homepage-and-features.md)
+ * and the alt text below for what each shot shows. Then `pngquant --quality 65-92 --speed 1` and a downscale to
  * about twice the width they are drawn at. PNG rather than JPEG: small light
  * text on a near-black ground rings around every glyph as a JPEG, and a UI
  * screenshot has few enough flat colours that quantised PNG is smaller anyway.
