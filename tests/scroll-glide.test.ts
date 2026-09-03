@@ -29,6 +29,7 @@ let frames: FrameRequestCallback[] = [];
 /** Every `scrollTo` the module made, in order. */
 let scrolled: number[] = [];
 let now = 0;
+const realNow = performance.now;
 
 const DESTINATION = 4000;
 
@@ -36,6 +37,12 @@ beforeEach(() => {
   frames = [];
   scrolled = [];
   now = 0;
+  /* The test owns the clock. `glide` reads `performance.now()` for its zero and
+     `flush` hands each frame `started + t`; on a busy box the real clock could
+     move more than `t` between the two reads, which put the animation's progress
+     negative and scrolled the page to -4162 (2026-09-03, load average 120). */
+  now = 1000;
+  performance.now = () => now;
   /* A row 4000px down a long article. `stickyOffset()` returns 0 with no
      `.controls` and no `thead th` in the document, so the glide's target is the
      row's own top. */
@@ -69,14 +76,15 @@ beforeEach(() => {
 
 afterEach(() => {
   scrollToTop(); // leave no animation running for the next test
+  performance.now = realNow;
 });
 
 /**
  * Run whatever frames are queued, `t` ms past the start of the animation.
  *
  * `glide` reads `performance.now()` for its own zero and is handed the frame
- * timestamp, so the two have to share a clock — passing a bare `50` puts the
- * animation's progress hugely negative and the first frame moves nowhere.
+ * timestamp, so the two have to share a clock: `performance.now` is stubbed to
+ * return `now`, and `started` is what it returned when the glide began.
  */
 let started = 0;
 function flush(t: number) {
@@ -88,7 +96,7 @@ function flush(t: number) {
 
 describe("scrollToTop", () => {
   it("stops a jump that is still in flight", () => {
-    started = performance.now();
+    started = now;
     scrollToBlock("spya-k3m9qt");
     expect(glideTarget()).toBe(DESTINATION);
     flush(50); // one frame of travel, so the page is genuinely part-way there

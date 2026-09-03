@@ -348,6 +348,7 @@ import type {
   QuotesResponse,
   IllustratedResponse,
   SketchResponse,
+  LibraryResponse,
   RememberStance,
   ThreadKind,
   ThreadResponse,
@@ -6536,7 +6537,12 @@ export async function serveAuthenticatedApi(
       /* `=== "1"`, not truthiness. `?archived=0` is a thing somebody will write
          meaning "no", and a loose check would hand them the archive. */
       const archived = query.get("archived") === "1";
-      send(res, 200, { articles: await listArticles({ archived }) });
+      /* Annotated rather than inferred: `LibraryResponse` is the envelope the
+         client filters and reads, and naming it here is what makes a
+         disagreement about it a compile error instead of a silent no-op.
+         docs/postmortems/260903e-offline-shelf-filter-never-ran.md. */
+      const shelf: LibraryResponse = { articles: await listArticles({ archived }) };
+      send(res, 200, shelf);
       return;
     }
     if (librarySearchRoute && req.method === "GET") {

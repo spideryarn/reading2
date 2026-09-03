@@ -493,7 +493,7 @@ code change, no config change, no restart.
   seven. Ours are non-expiring too now, so the difference is blast radius alone, and that is still
   the whole argument: seven repositories under two owners, versus everything.
 - **Not `GH_TOKEN` in a shell profile.** `gjd-remote` starts agents over non-interactive ssh, which
-  sources neither `.bashrc` nor `.bash_profile` — see the comment at `scripts/gjd-remote.ts:341`.
+  sources neither `.bashrc` nor `.bash_profile` — see the comment in `scripts/gjd-remote.ts` § `Non-interactive ssh`.
   An exported token works when a human tests it in a login shell and is missing inside every real
   agent session. Test it the easy way and you test the wrong thing.
 - **Not per-owner `credential.<url>.helper` sections.** They do prefix-match on git 2.50.0, but

@@ -117,8 +117,28 @@ npx tsx scripts/stripe-setup.ts --apply    # creates the Stripe objects, writes 
 
 **Changing an amount works the same way** — edit the row, run the script. Stripe prices are
 immutable, so it creates a *new* price and moves the lookup key onto it with
-`transfer_lookup_key`. The old price stays alive and unarchived, so **anyone already subscribed
-keeps billing at the price they were sold**; moving them is a separate, deliberate act.
+`transfer_lookup_key`. The old price stays alive and unarchived, so anyone already subscribed
+keeps billing at the price they were sold; moving them is a separate, deliberate act.
+
+> [!WARNING]
+> **They keep billing and lose their allowance. Do not change a price with live subscribers until
+> this is fixed.**
+>
+> `tierForPrice` ([`src/billing/tiers.ts`](../../src/billing/tiers.ts)) matches a subscription's
+> price against `billing_tiers.stripe_price_id`, of which there is exactly one per tier — the
+> *current* one. A grandfathered subscriber is therefore on a price no tier sells, and
+> `entitlementFromRow` ([`src/store/pg-billing.ts`](../../src/store/pg-billing.ts)) fails towards
+> free, as it should when it cannot recognise a price. So they go on paying and drop to three
+> lifetime ingests. It logs a warning nobody is reading and tells the reader nothing.
+>
+> Demonstrated on 2026-09-03 rather than reasoned about: after the VAT fix below replaced both
+> prices, the test subscriber — `active`, paid, unchanged — resolved to
+> `{"tier":"free","limit":3}`.
+>
+> The fix is to stop identifying a tier by its current price. Every price this script creates
+> already carries `metadata.tier`, so `syncSubscriptionFromStripe` could read it and store a
+> `tier_id` on `billing_accounts`, leaving entitlement to read that instead — the price id stays as
+> a record of what they bought. A price-history table is the heavier alternative. **Not built.**
 
 ### What holds these rows to account
 
@@ -151,6 +171,47 @@ it silently shows somebody the base-currency price.
   down at the top of this document.
 - **The lookup key is the identity, not the name.** Never change one on a tier that has been sold:
   it is how a re-run finds the price it made last time instead of minting a second one.
+
+### Tax: the two fields that decide what a reader is charged
+
+Both live in [`scripts/stripe-setup.ts`](../../scripts/stripe-setup.ts), both were found by driving a
+real purchase on 2026-09-03, and neither is visible to any unit test — nothing here renders a Stripe
+invoice.
+
+**`tax_code` on the product.** A Stripe account created from 2026 has **Managed Payments** on by
+default — Stripe as merchant of record — and it refuses to sell a product without one. The first
+Checkout on the new account died with `Invalid line_items[0]: the product tax code is missing`, which
+our route correctly reported to the reader as "we could not reach Stripe just now". Ours is
+`txcd_10103000`, *SaaS — personal use*.
+
+**`tax_behavior` on the price, and this one is the money.** Its default, `unspecified`, behaves as
+*exclusive*: tax goes **on top**. A reader shown €9 was charged **€10.71** — €9.00 plus 19% German
+VAT — which is not the price on the page and, for a consumer sale in the UK or EU, not a price that
+may be advertised that way. It is now `inclusive`, measured side by side on the same customer: the
+old price totalled 1071, the new one 900. `tax_behavior` is immutable like the amount, so fixing it
+meant minting new prices; `differences()` now checks it, so a price predating this is replaced rather
+than kept.
+
+The consequence to be aware of is that the **net varies by the buyer's country** — €9 is €7.56 in
+Germany at 19% and €7.44 in Ireland at 21%. That is the price of quoting one honest number
+everywhere.
+
+### Managed Payments, and what it is worth
+
+On by default on the Spideryarn account, and worth an explicit decision rather than drift. Stripe
+becomes merchant of record and **registers, files and remits VAT/GST in its own name** across 80+
+countries including the UK, the EU and the US — which retires the OSS problem below rather than
+managing it. It also takes fraud liability and fights disputes.
+
+It costs **3.5% on top of** normal processing — on an £8 subscription, roughly 32p becomes 60p — and
+the customer's statement reads `LINK.COM* SPIDERYARN.COM`, with receipts, invoices and subscription
+management on link.com and an invoice footer saying "sold through Link". Checkout and Payment Links
+only, digital goods only, and Stripe may refund a customer without asking if a support escalation
+goes unanswered for 48 hours.
+
+Turn it off at `dashboard.stripe.com/settings/managed-payments` (per mode) or per session with
+`managed_payments[enabled]=false`. **Unverified**: what happens to subscriptions already running when
+it is toggled — which is the argument for deciding before anyone has subscribed.
 
 ### VAT, flagged rather than resolved
 

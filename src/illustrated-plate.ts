@@ -792,9 +792,17 @@ function readImage(raw: unknown): IllustratedImage | null {
 }
 
 /**
- * The plates that actually have a picture. The panel's scene row is built from
- * this rather than from `plates`, because a plate whose call failed is a row
- * that says so rather than a row that opens onto nothing.
+ * The plates that actually have a picture — a count, not a row list.
+ *
+ * **This said the panel's plate row is built from it, and stage 4 did the
+ * opposite on purpose.** That sentence also carried its own refutation: a plate
+ * filtered out of the row cannot "say so", it simply is not there, and a gap is
+ * exactly what docs/project/diagram.md § Illustrated says a failed plate must
+ * not be. `src/web/IllustratedView.tsx` lists every plate and draws the
+ * failure sentence in place of the picture.
+ *
+ * So what is left for this is the question it really answers — *how many of
+ * them came out* — which is what `src/pipeline.ts` logs at the end of a run.
  */
 export function drawnPlates(illustrated: Illustrated): IllustratedPlate[] {
   return illustrated.plates.filter((p) => p.image !== undefined);
