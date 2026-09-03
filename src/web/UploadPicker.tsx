@@ -1,25 +1,35 @@
 /**
  * Choose a PDF off your own machine, or drop one on the shelf.
  *
- * **Wired up, 2026-08-27.** It used to pick a file and then say plainly that
- * there was nowhere to send it, which was the honest thing to do while the
- * object store was unbuilt. There is one now, so this sends the bytes — and
- * everything that was here for the inert version survived unchanged: the drop
- * target, the drag counter, the refusals, and `uploadProblem` in
- * src/uploads.ts, which `POST /api/uploads` now uses too.
+ * **The transfer does not live here any more, as of 2026-09-03.** It lives in
+ * [`uploadEngine`](uploadEngine.ts), a tab-level singleton, and this component
+ * renders what that engine is doing. The reason is Greg's:
  *
- * ## The two halves, and why the file never leaves this component
+ * > sometimes it takes a while to upload over a slow connection. I have to wait
+ * > before I can then click the Add button … I'd like to be able to upload and
+ * > then click Add immediately, which would then wait for the upload to finish
+ * > and run the ingestion queue immediately, so I could go off and do something
+ * > else in the meantime.
+ * >
+ * > — Greg, 2026-09-03
  *
- * The bytes go **straight to the object store** and never through our server —
- * src/web/upload.ts says why, and it is not an optimisation. That upload
- * happens here, on the shelf, because this is where the `File` is: navigating
- * first and uploading there would mean carrying a file handle through a page
- * change, which is not a thing an address can do.
+ * Going off and doing something else unmounts this component. So everything
+ * that must survive that — the `File`, the grant, the PUT, and the
+ * `POST /api/jobs` that follows it — had to stop being state of a mount.
+ * docs/plans/260903j-background-pdf-upload-so-add-does-not-wait.md.
  *
- * Then, and only then, the reader goes to `/add/upload/<id>` — which queues the
- * job and watches it, exactly as `/add/<url>` does for a page. So an ingest
- * still has one place and one address, and the thing without an address (the
- * transfer) is over before the navigation happens.
+ * **What went with it: the abort-on-unmount.** That cleanup existed so a
+ * finished transfer could not navigate at somebody who had already left the
+ * shelf. Nothing navigates on completion now — the address is minted *before*
+ * the bytes move and the reader is sent there immediately — so the hazard it
+ * guarded is gone, and what it actually did in practice was throw away a nearly
+ * finished 40 MB upload every time somebody clicked anything.
+ *
+ * ## What is still here
+ *
+ * The **chosen file**, which is page state and should die when you leave: a PDF
+ * picked and not yet committed is a thought, not a transfer. The **drop
+ * target**, the drag counter, and `uploadProblem`'s refusals, all unchanged.
  *
  * ## It wraps the add row rather than sitting under it
  *
@@ -31,40 +41,50 @@
  * So the box is gone and the parts went two ways: the **button** is now a small
  * control on the URL row, handed back to the caller through `children` so it
  * can sit beside Add; and the **drop target** became this wrapper, which is
- * larger than the dashed box ever was rather than smaller. Nothing was removed —
- * dragging, the counter, the refusals, progress, cancellation and retry are all
- * as they were. Only the rest at idle costs nothing: the border is transparent
- * until a file is over it. docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md § Stage 3.
+ * larger than the dashed box ever was rather than smaller. Only the rest at idle
+ * costs nothing: the border is transparent until a file is over it.
+ * docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md § Stage 3.
  */
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { FileText, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type ChosenFile, formatBytes, uploadProblem } from "../uploads.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { addUploadHref, navigate } from "./router.js";
-import { uploadPdf } from "./upload.js";
+import { type Transfer, uploadEngine } from "./uploadEngine.js";
+import { useUpload } from "./useUpload.js";
 
-/** The two pieces this component draws and the caller places. */
+/** The three pieces this component draws and the caller places. */
 export interface UploadSlots {
   /** The control that opens the file dialog. Belongs on the URL row, beside Add. */
   pdfButton: React.ReactNode;
   /**
-   * The chosen file, the progress bar, the refusals and the Send it button.
+   * The chosen file, the progress bar, the refusals.
    * Belongs directly under the row, above whatever else the caller draws.
    */
   uploadStatus: React.ReactNode;
+  /**
+   * Whether a file is chosen and waiting for Add, and how to commit it.
+   *
+   * The caller owns the Add button — it is the URL form's submit — and since
+   * 2026-09-03 that one button commits both ways in, so it has to be able to ask
+   * *is there a file* and to say *send it*. Greg chose one button over keeping a
+   * separate *Send it*.
+   */
+  chosen: ChosenFile | null;
+  commit: () => void;
 }
 
 export function UploadPicker({
   children,
 }: {
   /**
-   * Everything inside the drop target, given the two pieces to place.
+   * Everything inside the drop target, given the pieces to place.
    *
-   * A function rather than a plain node because both pieces have to live in
-   * rows this component does not own, while their state (the chosen file, the
-   * transfer, the refusals) has to stay in the one component that runs the
-   * upload. Handing the elements down is the smallest thing that satisfies both.
+   * A function rather than a plain node because the pieces have to live in rows
+   * this component does not own, while the file, the refusals and the engine's
+   * transfer have to stay in one place. Handing the elements down is the
+   * smallest thing that satisfies both.
    *
    * The caller passes the **whole** of the add box through here, which is what
    * makes the drop target the whole of the add box — see the header.
@@ -76,22 +96,20 @@ export function UploadPicker({
   const [problem, setProblem] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   /**
-   * How far the transfer has got, or `null` when none is running.
+   * The transfer the engine is running, or null.
    *
-   * Bytes rather than a percentage, because the two things a reader wants from
-   * a progress bar during a 50 MB upload are "is it moving" and "how much is
-   * left", and a rounded percentage answers the first badly — it sits on the
-   * same integer for seconds at a time on a slow connection.
+   * **This is the whole of what used to be `sent`, `sending`, `abort` and the
+   * `file` ref.** Reading it rather than holding it is what makes the bar still
+   * be moving when the reader comes back to the shelf from somewhere else.
    */
-  const [sent, setSent] = useState<number | null>(null);
+  const transfer = useUpload();
+
   /* The `File` itself, which `ChosenFile` deliberately is not: that type is the
      small shared shape src/uploads.ts can check in either process, and this is
      the handle the bytes come out of. Held in a ref rather than in state
-     because nothing renders it and a re-render must not lose it. */
+     because nothing renders it and a re-render must not lose it. It is handed
+     to the engine on commit and forgotten here. */
   const file = useRef<File | null>(null);
-  const abort = useRef<AbortController | null>(null);
-  /** Whether a send is in flight *right now*, rather than as of the last render. */
-  const sending = useRef(false);
 
   /* **A counter, not a boolean.** `dragleave` fires every time the pointer
      crosses into a child element — the icon, the button, the text — and each of
@@ -102,30 +120,46 @@ export function UploadPicker({
      same handler, and a stale render value would drift the count. */
   const depth = useRef(0);
 
+  /** Whether the engine is busy with something that is not finished. */
+  const busy =
+    transfer !== null &&
+    (transfer.phase.kind === "hashing" ||
+      transfer.phase.kind === "granting" ||
+      transfer.phase.kind === "sending" ||
+      transfer.phase.kind === "queueing");
+
+  /**
+   * Whether Stop is a thing that can still be done.
+   *
+   * **Busy minus `queueing`.** By then the bytes are in Storage and
+   * `POST /api/jobs` is in flight; there is nothing to abort that would undo
+   * anything, and the server may already have made the job. Offering Stop there
+   * produced the worst state available — a box saying the upload was cancelled
+   * while the job poll found the ingest and drove it to completion. GPT Sol,
+   * finding 2. The engine refuses it from its own side too; this is what stops
+   * the reader being shown a button that declines.
+   */
+  const stoppable = busy && transfer.phase.kind !== "queueing";
+
   /**
    * Accept a file, and say whether it was accepted.
    *
-   * The return value is what lets a **drop** go straight on to `send()`. It has
-   * to be a return value rather than a look at `chosen` afterwards, because
+   * The return value is what lets a **drop** go straight on to `commit()`. It
+   * has to be a return value rather than a look at `chosen` afterwards, because
    * `setChosen` does not change `chosen` until the next render — the caller is
    * still in the same tick and would read the previous file, or `null`.
-   * `file.current` is written here synchronously for the same reason, and that
-   * is the handle `send()` actually reads.
+   * `file.current` is written here synchronously for the same reason.
    */
   function take(files: FileList | null): boolean {
     if (!files || files.length === 0) return false;
-    /* **A transfer already in flight owns this control until it is done.**
-       `take` used to overwrite `file.current` and `chosen` unconditionally, and
-       `send` only checked the lock afterwards — so a second drop during an
-       upload replaced the name and the size on screen, its own `send` returned
-       at the lock, and the *first* file went on uploading underneath the second
-       one's name and then navigated to the first one's article. Nothing was
-       lost twice and no second grant was minted; the display simply described a
-       file that was not moving. Found by GPT Sol's review, 2026-08-27.
-
-       Refusing here rather than in `send` covers the file picker as well as the
-       drop, which had the same hole from the other direction. */
-    if (sending.current) {
+    /* **A transfer already in flight owns this control until it is done.** It
+       used to overwrite the file and the name on screen while the *first* one
+       went on uploading underneath the second one's name and then navigated to
+       the first one's article — found by GPT Sol, 2026-08-27. The engine
+       enforces the same rule from its own side (`ONE_UPLOAD_AT_A_TIME`); this
+       is the half that keeps the reader from getting that far, and covers the
+       file picker as well as the drop. */
+    if (busy) {
       setProblem("That upload is still going. Wait for it, or stop it first.");
       return false;
     }
@@ -147,60 +181,30 @@ export function UploadPicker({
   }
 
   /**
-   * Send it, then go to the page that owns the ingest.
+   * Hand it to the engine, and go to the page that owns the ingest.
    *
-   * `navigate` only on success. A failed upload leaves the reader here, with
-   * the file still chosen and the reason on screen, so pressing the button
-   * again is the whole of the recovery — no page to come back from, and nothing
-   * to re-pick.
+   * **The navigation happens with zero bytes sent**, which is the point of the
+   * whole change: `send` resolves as soon as the grant is in hand, so the
+   * address exists long before the file has finished moving, and the transfer
+   * carries on in the engine wherever the reader goes next.
+   *
+   * `null` means the grant itself was refused — a quota wall, a file the server
+   * will not take — and there is nothing to navigate to. The reason is already
+   * on screen through `transfer.phase`, the file is still chosen, and pressing
+   * Add again is the whole of the recovery.
    */
-  async function send() {
+  async function commit(): Promise<void> {
     const chose = file.current;
-    /* **A ref, not `sent !== null`.** `sent` is the value from the last render,
-       and `setSent(0)` does not change it until the next one — so two clicks
-       inside one tick, which is a double-click or an agent clicking twice
-       because the first looked like it had not registered, both read `null` and
-       both start. That mints two grants, sends the file twice, and navigates
-       twice. The ref is written before the first `await`, so the second caller
-       sees it however fast it arrives. */
-    if (!chose || sending.current) return;
-    sending.current = true;
-    const controller = new AbortController();
-    abort.current = controller;
+    if (!chose || busy) return;
     setProblem(null);
-    setSent(0);
-    try {
-      const grant = await uploadPdf(chose, {
-        onProgress: (p) => setSent(p.sent),
-        signal: controller.signal,
-      });
-      navigate(addUploadHref(grant.uploadId));
-    } catch (err) {
-      /* An abort is the reader's own doing and is not a failure to report —
-         `name` rather than `instanceof DOMException`, which is false across a
-         realm boundary and true of several things that are not aborts. */
-      if ((err as Error).name !== "AbortError") setProblem((err as Error).message);
-      setSent(null);
-    } finally {
-      abort.current = null;
-      sending.current = false;
-    }
+    /* Cleared here, not on the way back: this component is about to unmount,
+       and if the reader presses Back the box should show the engine's transfer
+       rather than a stale copy of the same file waiting to be sent again. */
+    setChosen(null);
+    file.current = null;
+    const uploadId = await uploadEngine.send(chose);
+    if (uploadId) navigate(addUploadHref(uploadId));
   }
-
-  /**
-   * **Stop the transfer if the reader leaves.**
-   *
-   * `send` navigates on success, and without this the navigation could happen
-   * to somebody who is no longer here: leave the shelf mid-upload, and minutes
-   * later the finished request pulls you onto the ingest page of a file you had
-   * already walked away from. The X button aborted, and nothing else did.
-   *
-   * Aborting rather than merely ignoring the result, because the bytes are
-   * still going: a reader who left is not a reader who wants to keep paying for
-   * a 50 MB PUT. `send` treats an abort as the reader's own doing and reports
-   * nothing, which is exactly right here.
-   */
-  useEffect(() => () => abort.current?.abort(), []);
 
   /** Whether this drag is carrying files at all, rather than selected text. */
   function hasFiles(event: React.DragEvent): boolean {
@@ -247,7 +251,7 @@ export function UploadPicker({
   );
 
   /**
-   * The chosen file, how much of it has gone, the refusals, and Send it.
+   * What is on this box's mind: a chosen file, or a transfer, or a refusal.
    *
    * Drawn here and placed by the caller directly under the URL row, so that
    * the whole of the add box — the disclosure and the job list included — can
@@ -258,72 +262,95 @@ export function UploadPicker({
        to somebody using a screen reader — and the button they just pressed
        gives no other feedback. */
     <div aria-live="polite">
-    {/* **`POST /api/uploads` refuses at the door when there is no room
-        left** — a non-reserving eligibility check, so nobody transfers
-        11 MB to be told no (docs/project/billing.md § *Which requests spend
-        a slot*). It carries the same refusal sentence the job route does, so
-        it gets the same link beside it. QuotaNotice.tsx. */}
-    <QuotaNotice message={problem} className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-destructive" />
-
-    {chosen && (
-      <div className="tw:mt-2 tw:flex tw:items-baseline tw:gap-2 tw:text-xs tw:text-muted-foreground">
-        <FileText size={13} className="tw:shrink-0 tw:self-center" />
-        <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-foreground">
-          {chosen.name}
-        </span>
-        <span className="tw:shrink-0">
-          {/* While it is going, how much of it has gone. The same units in
-              both states, so the second number does not change meaning
-              when the first appears. */}
-          {sent === null
-            ? formatBytes(chosen.size)
-            : `${formatBytes(sent)} of ${formatBytes(chosen.size)}`}
-        </span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          title={sent === null ? "Forget this file" : "Stop uploading"}
-          onClick={() => {
-            /* One button, two jobs, and the second is why it stays on
-               screen during the upload: a transfer nobody can stop is a
-               page the reader has to reload to escape. */
-            abort.current?.abort();
-            setChosen(null);
-            setProblem(null);
-            setSent(null);
-            file.current = null;
-          }}
-        >
-          <X size={12} />
-        </Button>
-      </div>
-    )}
-
-    {/* A real bar rather than a spinner, for the reason src/web/upload.ts
-        reaches for `XMLHttpRequest` at all: 50 MB on a domestic connection
-        is tens of seconds, and "something is happening" is not the question
-        a reader has after the first five of them.
-
-        `<progress>` rather than a styled div, because it is the element
-        that already announces itself to a screen reader and already has a
-        determinate value. */}
-    {chosen && sent !== null && (
-      <progress
-        className="tw:mt-2 tw:h-1 tw:w-full"
-        value={sent}
-        max={chosen.size}
-        aria-label={`Uploading ${chosen.name}`}
+      {/* **`POST /api/uploads` refuses at the door when there is no room
+          left** — a non-reserving eligibility check, so nobody transfers
+          11 MB to be told no (docs/project/billing.md § *Which requests spend
+          a slot*). It carries the same refusal sentence the job route does, so
+          it gets the same link beside it. QuotaNotice.tsx. */}
+      <QuotaNotice
+        message={problem ?? failureOf(transfer)}
+        className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-destructive"
       />
-    )}
 
-    {chosen && sent === null && (
-      <div className="tw:mt-2">
-        <Button type="button" size="sm" onClick={() => void send()}>
-          <Upload size={13} /> Send it
-        </Button>
-      </div>
-    )}
+      {/* One row, whichever of the two it is describing. A chosen file and a
+          transfer cannot both exist — committing clears the first — so this is
+          a single shape with two sources rather than two rows that could both
+          appear. */}
+      {(chosen || transfer) && (
+        <div className="tw:mt-2 tw:flex tw:items-baseline tw:gap-2 tw:text-xs tw:text-muted-foreground">
+          <FileText size={13} className="tw:shrink-0 tw:self-center" />
+          <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-foreground">
+            {chosen ? (
+              chosen.name
+            ) : (
+              /* **A link, once there is an address.** The transfer has a page of
+                 its own now, and a reader who wandered back to the shelf should
+                 be able to get to it without remembering where they were. */
+              <a
+                href={transfer?.uploadId ? addUploadHref(transfer.uploadId) : undefined}
+                className="tw:text-foreground tw:hover:text-highlight"
+                onClick={(e) => {
+                  if (!transfer?.uploadId) return;
+                  e.preventDefault();
+                  navigate(addUploadHref(transfer.uploadId));
+                }}
+              >
+                {transfer?.filename}
+              </a>
+            )}
+          </span>
+          <span className="tw:shrink-0">
+            {/* While it is going, how much of it has gone. The same units in
+                both states, so the second number does not change meaning
+                when the first appears. */}
+            {transfer?.phase.kind === "sending"
+              ? `${formatBytes(transfer.phase.sent)} of ${formatBytes(transfer.bytes)}`
+              : formatBytes(chosen?.size ?? transfer?.bytes ?? 0)}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            title={stoppable ? "Stop uploading" : "Forget this file"}
+            /* **Nothing to press while the ingest is being queued.** That phase
+               is a single small request and it cannot be undone, so a button
+               here would either lie or decline. It reappears the instant the
+               job comes back. */
+            disabled={busy && !stoppable}
+            onClick={() => {
+              /* One button, three jobs, and the middle one is why it stays on
+                 screen during the upload: a transfer nobody can stop is a page
+                 the reader has to reload to escape. On a transfer that has
+                 already stopped it is `forget`, which is the only way to clear a
+                 finished or cancelled row off the shelf. */
+              if (stoppable) uploadEngine.cancel();
+              else uploadEngine.forget();
+              setChosen(null);
+              setProblem(null);
+              file.current = null;
+            }}
+          >
+            <X size={12} />
+          </Button>
+        </div>
+      )}
+
+      {/* A real bar rather than a spinner, for the reason src/web/upload.ts
+          reaches for `XMLHttpRequest` at all: 50 MB on a domestic connection
+          is tens of seconds, and "something is happening" is not the question
+          a reader has after the first five of them.
+
+          `<progress>` rather than a styled div, because it is the element
+          that already announces itself to a screen reader and already has a
+          determinate value. */}
+      {transfer?.phase.kind === "sending" && (
+        <progress
+          className="tw:mt-2 tw:h-1 tw:w-full"
+          value={transfer.phase.sent}
+          max={transfer.bytes}
+          aria-label={`Uploading ${transfer.filename}`}
+        />
+      )}
     </div>
   );
 
@@ -355,32 +382,31 @@ export function UploadPicker({
         if (depth.current === 0) setDragging(false);
       }}
       /**
-       * **A drop uploads it. Dropping is the commit gesture.**
+       * **A drop commits it. Dropping is the commit gesture.**
        *
-       * It used to only *choose* the file, leaving a "Send it" button to
-       * press — and on 2026-08-27 Greg dropped a PDF on this box and reported
-       * that "nothing seems to have happened". Nothing had gone wrong: the
-       * filename row appeared and the upload was waiting for a second gesture
-       * that the box had not asked for. A control captioned *drop a PDF here*,
-       * that catches the file and then waits, is indistinguishable from one
-       * that swallowed it.
+       * It used to only *choose* the file, leaving a second button to press —
+       * and on 2026-08-27 Greg dropped a PDF on this box and reported that
+       * "nothing seems to have happened". Nothing had gone wrong: the filename
+       * row appeared and the upload was waiting for a gesture that the box had
+       * not asked for. A control captioned *drop a PDF here*, that catches the
+       * file and then waits, is indistinguishable from one that swallowed it.
        *
-       * So the two entry points now differ on purpose. Dropping a file on a
+       * So the two entry points still differ on purpose. Dropping a file on a
        * target that names itself is unambiguous, and there is nothing to
-       * confirm. The **button** still chooses-then-sends, because the file
-       * dialog is a place people browse — the first PDF you click is often not
-       * the one you meant, and the row with its size and its X is the only
-       * chance to notice before 50 MB goes.
+       * confirm. The **button** still chooses-then-Adds, because the file dialog
+       * is a place people browse — the first PDF you click is often not the one
+       * you meant, and the row with its size and its X is the only chance to
+       * notice before 50 MB goes.
        *
        * `take` returning false is a refusal it has already explained (not a
-       * PDF, too large, more than one), so there is nothing to send and the
-       * reason is already on screen.
+       * PDF, too large, more than one, one already going), so there is nothing
+       * to send and the reason is already on screen.
        */
       onDrop={(e) => {
         e.preventDefault();
         depth.current = 0;
         setDragging(false);
-        if (take(e.dataTransfer.files)) void send();
+        if (take(e.dataTransfer.files)) void commit();
       }}
       /* **Nothing at rest, everything on drag, and it covers the whole card.**
          `-m-4 … p-4` cancels the section's own padding and puts it back inside
@@ -394,7 +420,22 @@ export function UploadPicker({
         dragging ? "tw:border-highlight tw:bg-highlight/10" : "tw:border-transparent"
       }`}
     >
-      {children({ pdfButton, uploadStatus })}
+      {children({ pdfButton, uploadStatus, chosen, commit: () => void commit() })}
     </div>
   );
+}
+
+/**
+ * The sentence for a transfer that stopped, or null.
+ *
+ * **Only `granting`**, and that is the division of labour rather than an
+ * omission. A grant refused here is the one failure the reader is still on this
+ * page for — everything after it happens on `/add/upload/<id>`, which has an
+ * address, a *Try again* that knows which phase failed, and the room to say what
+ * went wrong. Repeating those here would put the same refusal on two pages and
+ * make the shelf's copy the one nobody maintains.
+ */
+function failureOf(transfer: Transfer | null): string | null {
+  if (transfer?.phase.kind !== "failed") return null;
+  return transfer.phase.at === "granting" ? transfer.phase.reason : null;
 }

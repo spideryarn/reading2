@@ -40,7 +40,7 @@ import {
 import { ADDING_SENDS_TEXT_AWAY } from "../messages.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { addHref, navigate } from "./router.js";
-import { UploadPicker } from "./UploadPicker.js";
+import { UploadPicker, type UploadSlots } from "./UploadPicker.js";
 import { useNow } from "./useNow.js";
 import type { Job, JobStep } from "../types.js";
 import type { UseJobs } from "./useJobs.js";
@@ -129,6 +129,19 @@ export function earlier(job: Job, before: number): boolean {
 export function AddArticle({ queue }: { queue: UseJobs }) {
   const [url, setUrl] = useState("");
   const slug = useMemo(() => slugFromUrl(url), [url]);
+  /**
+   * Which of the two ways in Add will take, when both are available.
+   *
+   * **The last one touched, not "a file beats a URL"**, which is what the plan
+   * for this said first. GPT Sol was right that it is false: typing a URL after
+   * choosing a file is the more recent intent, and the reader would watch Add
+   * send the PDF they had moved on from. Tracked rather than inferred, because
+   * the presence of a file says nothing about when it arrived.
+   *
+   * The Add button's **label** is what tells the reader which — *Add* or *Add
+   * PDF* — rather than a `title`, which is invisible on touch and on a keyboard.
+   */
+  const [lastTouched, setLastTouched] = useState<"url" | "file">("url");
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
   // One re-render when the next still-showing success is due to fade. The
@@ -191,11 +204,32 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
    * in it; pressing Back should bring you home to the URL you typed rather than
    * to an empty box, and the double-add that clearing used to guard against is
    * now a second click on a button that is no longer on screen.
+   *
+   * **Since 2026-09-03 it is also the button for a chosen PDF**, which is Greg's
+   * choice over keeping a separate *Send it* under the row. Both ways in now end
+   * at `/add/upload/<id>` or `/add/<url>`, and neither waits: pressing this with
+   * a file chosen hands it to `uploadEngine` and navigates with zero bytes sent.
    */
-  function submit(event: React.FormEvent) {
+  function submit(event: React.FormEvent, slots: UploadSlots) {
     event.preventDefault();
+    if (takesTheFile(slots)) {
+      slots.commit();
+      return;
+    }
     if (!slug) return;
     navigate(addHref(url));
+  }
+
+  /**
+   * Whether Add would send the chosen file rather than the typed URL.
+   *
+   * A file with no usable URL beside it always wins, whatever was touched last —
+   * otherwise a reader who typed half an address and then chose a PDF would
+   * press a disabled-looking button that does nothing.
+   */
+  function takesTheFile(slots: UploadSlots): boolean {
+    if (!slots.chosen) return false;
+    return lastTouched === "file" || !slug;
   }
 
   /* Hidden here *and* forgotten on the server, which `JobCard` already does —
@@ -213,9 +247,9 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
           used to be a strip you could drop on is the whole of this box.
           docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md § Stage 3. */}
       <UploadPicker>
-        {({ pdfButton, uploadStatus }) => (
+        {(slots) => (
           <>
-            <form onSubmit={submit}>
+            <form onSubmit={(e) => submit(e, slots)}>
               <label
                 htmlFor="add-url"
                 className="tw:mb-2 tw:flex tw:items-center tw:gap-2 tw:text-xs tw:font-medium tw:text-muted-foreground"
@@ -246,7 +280,14 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
                   inputMode="url"
                   autoComplete="url"
                   value={url}
-                  onChange={(e) => setUrl(e.target.value)}
+                  onChange={(e) => {
+                    setUrl(e.target.value);
+                    /* Typing is touching. This is the half that makes *last
+                       touched* true rather than a slogan: a reader who chose a
+                       PDF and then went back to the address bar gets the
+                       address, and the button says so before they press it. */
+                    setLastTouched("url");
+                  }}
                   placeholder="example.com/an-essay-worth-reading"
                   spellCheck={false}
                   className="tw:min-w-48 tw:flex-1 tw:rounded-md tw:border tw:border-border tw:bg-background tw:px-3 tw:py-2 tw:font-mono tw:text-[13px] tw:text-foreground tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight tw:focus:ring-2 tw:focus:ring-highlight/25"
@@ -258,7 +299,19 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
                   {/* The PDF control, drawn by UploadPicker so that the file,
                       the transfer and the refusals all stay in the one component
                       that runs them. It is only placed here. */}
-                  {pdfButton}
+                  <span
+                    /* The picker owns the input and the button; this only
+                       notices that the reader reached for them. `onClickCapture`
+                       rather than `onClick`, so it runs whether or not the inner
+                       button stops the event, and a `change` handler as well
+                       because opening the dialog and cancelling it is not a
+                       choice — only a file is. */
+                    onClickCapture={() => setLastTouched("file")}
+                    onChangeCapture={() => setLastTouched("file")}
+                    className="tw:contents"
+                  >
+                    {slots.pdfButton}
+                  </span>
                   {/* **The default variant, not `outline`.** This is the one
                       thing the shelf exists to let you do, and until 2026-08-27
                       it was drawn as the quietest control on the page — a grey
@@ -267,8 +320,14 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
                       it) read as permanently switched off. Filling it orange
                       costs nothing: the disabled state still says so, at 50%
                       opacity, and now says it about something you can see. */}
-                  <Button type="submit" disabled={!slug}>
-                    Add
+                  {/* **Enabled by either way in, and it says which it will
+                      take.** Until 2026-09-03 this was `disabled={!slug}` and a
+                      chosen PDF was committed by a separate *Send it* button
+                      under the row; Greg asked for one button, and the label is
+                      what keeps that unambiguous when both a URL and a file are
+                      present. See `takesTheFile`. */}
+                  <Button type="submit" disabled={!slug && !slots.chosen}>
+                    {takesTheFile(slots) ? "Add PDF" : "Add"}
                   </Button>
                 </div>
               </div>
@@ -296,7 +355,7 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
             {/* The chosen file, its progress and its refusals — drawn by
                 UploadPicker, placed here so it sits under the row it is about
                 rather than under everything below. */}
-            {uploadStatus}
+            {slots.uploadStatus}
 
           {/* **What happens to the text, said once, at the point of deciding.**
               One sentence, no gate and no checkbox: the reader is told, and then
