@@ -429,6 +429,20 @@ free, which was checked in the code before running rather than assumed.
       they started, and `onStepSpend` reporting a call count for every step. Each gate was watched
       refusing: the local-target check, the stale fixture (no job created), two on-demand modes,
       and a fabricated phantom call producing a fatal `ledger-short` that stopped the run.
+      - **Correction, 2026-09-03: those passes were never end-to-end, and this entry did not say
+        so.** Every one ended `blocks=error` — `PublishRefused: … it has no tree` from
+        `publishRevisionIn` ([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) —
+        because nothing publishes without `hierarchy`, and `hierarchy` is the first paid step.
+        The block counts and the cleanup were real, and they are what this entry went looking for;
+        the **job status was red and went unmentioned.** Reproduced deliberately on 2026-09-03
+        while checking a claim from the stage below. This is
+        [silent-success.md](../reusable/silent-success.md) inside our own evidence — the pass
+        reported the two numbers it was looking for, and the thing it claimed to be, a whole
+        pipeline run, had failed.
+      - **Consequence for the stage below**: a mode step cannot be proven to do work for free,
+        because an unpublished article has no inputs for it. The sweep's *shape* is provable free
+        and was proved; a mode producing a number needs the paid `hierarchy`, and the two new
+        fatal findings are what stand in for the proof.
 - [x] **Code review, GPT Sol: *"not ready for the first paid run — no P0s, five P1 correctness
       gaps"*** ([prompt](260902g-estimate-article-ingestion-and-mode-generation-costs-code-review-prompt.md),
       [review](260902g-estimate-article-ingestion-and-mode-generation-costs-code-review-sol.md)).
@@ -559,8 +573,15 @@ because the cache is marked *per job*, and there is no entry for a later job to 
       success and total paid cost, as *observed variation* (Principles). A fifth draw only if the
       range exceeds ~30% of the median.
 - [ ] **Per-interaction unit costs: driven live, in a new `evals/cost/interactions.ts`** — chat
-      turn, quiz marking, explain, search, referee per-turn, dictation, cold and warm reported
-      separately. Not harvested from the ledger: no row records the commit, so a prompt or
+      turn, Remember turn, quiz marking, explain, glossary term lookup, search, all four referee
+      tasks, dictation, cold and warm reported separately. **Twelve tasks as of 2026-09-03**,
+      which is the whole of the Principles inventory: Remember, the glossary lookup and the
+      referee *candidates* task were missing and were added after GPT Sol's review. Two notes
+      that change what this line costs — `referee-candidates` is the app's most expensive turn
+      (12k output tokens, up to 30 web search results) and is run as two turns because its brief
+      and its names turn are two different prices; and the glossary lookup is `explain` with a
+      different selection, so it is expected to reproduce `explain`'s number and is worth running
+      only because nobody has checked. Not harvested from the ledger: no row records the commit, so a prompt or
       `max_tokens` change is invisible; chat's historical warm rows straddle the 2026-08-26
       automatic-breakpoint bug (postmortem 260826h) and so describe a broken-cache era; and the
       referee tasks have no coverage at all. Historical figures become **sanity cross-checks, not
@@ -571,6 +592,48 @@ because the cache is marked *per job*, and there is no entry for a later job to 
       **Correcting the review again**: request-path calls send no effort parameter at all, so the
       moved-constant trap does not literally apply to them — the other three grounds stand.
 - [ ] Run over all three fixtures. Stop & review with Greg: the range, ranked expensive bits.
+
+#### Code review, GPT Sol: *"not ready for the paid sweep"* — no P0s, five P1s
+
+[prompt](260902g-all-modes-runner-review-prompt.md) ·
+[review](260902g-all-modes-runner-review-sol.md). Every finding was checked against the code before
+being acted on; all five P1s were real. Sol also **cleared the stage's main decision**: the
+cold-per-mode construction is sound for the current eight modes — each is an Anthropic Messages
+call, each single-mode job has an empty `later` list, `assets` calls no model, and no mode makes a
+preliminary cheaper call that could stand in front of the measured one. Cleanup and adoption
+checked out too.
+
+The finding that matters most, because it is the one this eval exists to prevent:
+
+- **The cold gate covered every path except the two where implicit caching is actually possible.**
+  The argument for measuring modes cheaply is that Anthropic's cache is explicit-only — true, and
+  it made the modes safe. But `checkFirstCallCold` returned early for every *non-mode* draw, and
+  **PDF extraction runs on `openai/gpt-5.6-luna`, which caches a repeated prefix automatically,
+  while dictation runs on `google/gemini-3.1-flash-lite`
+  ([`src/models.ts`](../../src/models.ts)), which caches implicitly by default.** Both resend
+  byte-identical committed fixtures, so a rerun inside the cache lifetime reports a discounted
+  call as a cold one — a plausible wrong number, not an error. Worse, the reasoning had been
+  written into `interactions.ts` as an *assertion* that no explicit breakpoint means nothing can
+  warm, which is true for Anthropic and false for Gemini. **The lesson generalises: a
+  provider-specific fact was promoted to a general one at the moment it stopped being checked.**
+
+The rest: paid-but-failed generations were quoted as a mode's cost and folded into the
+whole-article total; `interactions.ts` rows would have carried the environment owner and a null
+`article_id`, because `withLedger` pins `ownerId` ([`src/cli-ledger.ts`](../../src/cli-ledger.ts))
+and explicit collector attribution beats ambient ownership
+([`src/ai-spend.ts`](../../src/ai-spend.ts) § `ownerFor`) — `run.ts` escapes it only because it
+passes `EVAL_OWNER_ID` per draw; cold and warm rounds were labelled by position, never validated,
+and a "cache worth X×" ratio printed from them; and `referee-mirror` was booked as a one-time
+article cost when production writes nothing and recalls the model on every reload. P2s: null cache
+telemetry was read as proof of coldness (unknown is now fatal — it is unknown, not cold);
+`--all-modes --batched-modes` silently disabled the cold check; and the interaction inventory was
+three tasks short of the surface Principles names.
+
+Tightened beyond the review, from the orchestrator: **on a per-mode draw *any* cache read is
+fatal, not merely the earliest.** All eight modes gate their only `cache_control` on
+`opts.cacheArticle`, and a single-mode job sets it false, so no breakpoint is sent and nothing can
+legitimately be read. The weaker earliest-call rule stays for ingest steps, where the label
+fan-out's within-run caching is deliberate.
 
 #### The run, in order, with what each line is expected to cost
 
@@ -584,11 +647,15 @@ any fatal finding, so an overrun surfaces as a stopped run rather than a bill.
 | 3 | `--fixture pdf --all-modes` | ~$1.25 |
 | 4 | `--fixture long-html --all-modes` (its ingest is hierarchy draw 1) | ~$1.40 |
 | 5 | `--fixture long-html --repeat 3 --steps fetch,extract,blocks,hierarchy --keep` (draws 2–4) | ~$1.35 |
-| 6 | `npx tsx evals/cost/interactions.ts` against a kept article, cold and warm | ~$0.80 |
+| 6 | `npm run eval:cost:interactions -- --slug <kept>` against a kept article, cold and warm | ~$1.80 |
 | 7–9 | `--against <kept-n> --batched-modes` for `arc,tweets` · `glossary,quotes` · `ideas,timeline` | ~$0.55 |
 | 10 | Delete the kept articles and jobs by recorded id; ledger rows stay | $0 |
 
-**~$5.70, worst case ~$8**, against $20 authorised. The remainder is deliberately left unspent for
+Line 6 was ~$0.80 for nine tasks and is ~$1.80 for twelve — nearly all of the difference is
+`referee-candidates`, whose two turns are the most expensive calls in the app. `--task` runs a
+subset if that is not worth paying for in one go.
+
+**~$6.70, worst case ~$9**, against $20 authorised. The remainder is deliberately left unspent for
 the model-arms follow-up rather than absorbed here.
 
 Lines 7–9 are the first measurement of `sharesArticleCache` **paying off** — what a reader who

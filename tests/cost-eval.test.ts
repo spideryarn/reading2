@@ -30,28 +30,42 @@ import { type AiCallRow, collectSpend, recordSpend, type SpendRecord } from "../
 import { STEPS } from "../src/pipeline.js";
 import type { PipelineStep } from "../src/pipeline.js";
 import type { StepRegistry } from "../src/jobs.js";
+import type { StepName } from "../src/types.js";
 import { DEV_OWNER_ID, EVAL_OWNER_ID } from "../src/owner.js";
 import { fixtureByName } from "../evals/cost/fixtures.js";
 import {
+  ALL_MODES,
+  assertAdoptable,
   assertDistinctEvalOwner,
   assertLedgerUsable,
   assertOneOnDemandMode,
+  assertSweepArgs,
   blocksFromDetail,
   evalRegistry,
   evalScoped,
   localTarget,
   mustPayFor,
+  parseStepList,
   requiredAiJobsFor,
   verifyFixtures,
   withoutTheInProcessPump,
 } from "../evals/cost/harness.js";
 import {
   aggregateByStep,
+  cacheRatio,
+  checkAdoption,
   checkCold,
+  checkColdDraw,
+  type DrawOutcome,
   formatFindings,
+  formatPaidFailures,
   formatStepTable,
+  headlineTotal,
   jobWallClockMs,
   naiveTotal,
+  observedVariation,
+  type RoundForRatio,
+  roundCache,
   totalMoney,
 } from "../evals/cost/report.js";
 
@@ -827,5 +841,553 @@ describe("assertLedgerUsable", () => {
     const boom = new Error("42703");
     const caught = await assertLedgerUsable(() => Promise.reject(boom)).catch((e: unknown) => e);
     expect((caught as Error).cause).toBe(boom);
+  });
+});
+
+/* ============================================ the all-modes sweep, 09-03 == */
+
+describe("ALL_MODES", () => {
+  it("is the eight on-demand modes, in pipeline order", () => {
+    /* Written out rather than derived, because the *content* of this list is
+       what the stage buys — a ninth mode arriving and being silently swept in
+       would change what a run costs without anybody choosing it. */
+    expect([...ALL_MODES]).toEqual([
+      "arc",
+      "tweets",
+      "glossary",
+      "quotes",
+      "ideas",
+      "timeline",
+      "quiz",
+      "sketch",
+    ]);
+  });
+
+  it("holds no ingest step — hierarchy is bought once, by the ingest draw", () => {
+    for (const ingest of ["fetch", "extract", "blocks", "hierarchy", "assets"]) {
+      expect(ALL_MODES).not.toContain(ingest);
+    }
+  });
+});
+
+describe("parseStepList", () => {
+  it("takes a comma-separated list of real step names", () => {
+    expect(parseStepList("fetch,extract, blocks", "--steps")).toEqual([
+      "fetch",
+      "extract",
+      "blocks",
+    ]);
+  });
+
+  it("names the flag and the real steps when one is a typo", () => {
+    expect(() => parseStepList("fetch,hierarcy", "--steps")).toThrow(/hierarcy/);
+    expect(() => parseStepList("fetch,hierarcy", "--steps")).toThrow(/--steps/);
+  });
+
+  it("refuses an empty list rather than running the default five unasked", () => {
+    expect(() => parseStepList("", "--modes")).toThrow(/--modes/);
+    expect(() => parseStepList(undefined, "--modes")).toThrow(/--modes/);
+  });
+});
+
+/**
+ * The combinations that would spend money measuring something other than what
+ * they claim. Each is refused before the first job exists, which is the only
+ * place a refusal is worth anything.
+ */
+describe("assertSweepArgs", () => {
+  const base = {
+    allModes: false,
+    against: null,
+    repeat: 1,
+    fixtures: ["short-html"],
+    steps: ["fetch", "extract", "blocks", "hierarchy", "assets"] as StepName[],
+    batchedModes: false,
+  };
+
+  it("accepts an ordinary ingest run", () => {
+    expect(() => assertSweepArgs(base)).not.toThrow();
+  });
+
+  it("accepts a single all-modes sweep", () => {
+    expect(() => assertSweepArgs({ ...base, allModes: true })).not.toThrow();
+  });
+
+  it("refuses a repeated all-modes sweep, whose second pass would find every mode done", () => {
+    /* A mode already generated on an article skips on its `stepIsDone` stamp
+       (src/pipeline.ts), which the fatal `no-spend` finding turns into a stop —
+       so the second sweep would abort after paying for a second ingest. */
+    expect(() => assertSweepArgs({ ...base, allModes: true, repeat: 2 })).toThrow(
+      /--repeat/,
+    );
+  });
+
+  it("refuses --all-modes together with --against, which name two different articles", () => {
+    expect(() => assertSweepArgs({ ...base, allModes: true, against: "kept-1" })).toThrow(
+      /--against/,
+    );
+  });
+
+  it("refuses --against without an explicit step list", () => {
+    /* The default is the five ingest steps, and stage 1 is a fixture read — so
+       an `--against` run that did not say what to run would try to re-fetch an
+       article it has no bytes for. */
+    expect(() => assertSweepArgs({ ...base, against: "kept-1", steps: null })).toThrow(
+      /--steps/,
+    );
+  });
+
+  it("refuses --against with a fixture, because it runs on a slug and not on bytes", () => {
+    expect(() =>
+      assertSweepArgs({ ...base, against: "kept-1", steps: ["ideas"], fixtures: ["short-html"] }),
+    ).toThrow(/--fixture/);
+  });
+
+  it("refuses --all-modes --batched-modes, which turns the cold check off and batches nothing", () => {
+    /* The combination still runs one job per mode — `--all-modes` decides that
+       — but `--batched-modes` is what tells `checkColdDraw` a warm first call
+       is expected, so one stray flag would buy eight per-mode numbers with
+       nothing checking they were cold. GPT Sol, 2026-09-03. */
+    expect(() => assertSweepArgs({ ...base, allModes: true, batchedModes: true })).toThrow(
+      /--batched-modes/,
+    );
+  });
+
+  it("still accepts --batched-modes on its own, which is a real scenario", () => {
+    expect(() =>
+      assertSweepArgs({
+        ...base,
+        against: "kept-1",
+        fixtures: [],
+        steps: ["arc", "tweets"],
+        batchedModes: true,
+      }),
+    ).not.toThrow();
+  });
+});
+
+/**
+ * **A mode job with no article to adopt is a cold ingest waiting to happen**,
+ * and it is refused before the job is advanced rather than diagnosed after.
+ */
+describe("assertAdoptable", () => {
+  it("lets a mode draw past when the article the sweep ingested is there", () => {
+    expect(() => assertAdoptable("evalcost-x", "article-1")).not.toThrow();
+  });
+
+  it("refuses when there is no such article, which is what a mint looks like early", () => {
+    expect(() => assertAdoptable("evalcost-x", null)).toThrow(/evalcost-x/);
+    expect(() => assertAdoptable("evalcost-x", null)).toThrow(/adopt/);
+  });
+});
+
+/**
+ * **The check that makes the whole shape of the all-modes stage falsifiable.**
+ *
+ * The stage ingests once and then runs each mode as its own job against the
+ * adopted article, which is only sound if a later job cannot read the cached
+ * article prefix an earlier one wrote. The argument for that is in the plan —
+ * `sharesArticleCache` marks nothing when the job's `later` list is empty, and
+ * Anthropic's cache is explicit-only — and an argument is not a measurement.
+ *
+ * Two strengths of rule, and the difference is the point. **A per-mode draw
+ * sends no breakpoint at all**, so any read is anomalous. **An ingest draw**
+ * fans out on purpose, so only the earliest call of each step is asked — and it
+ * is asked *per step*, because the version that returned early for every non-
+ * mode draw left PDF `extract` and dictation, the two paths where a provider
+ * caches implicitly, with no gate whatsoever. GPT Sol, 2026-09-03.
+ */
+describe("checkColdDraw", () => {
+  const cold = row({ id: "cold", startedAt: "2026-09-03T10:00:00.000Z", cacheReadTokens: 0 });
+  const warm = row({ id: "warm", startedAt: "2026-09-03T10:00:00.000Z", cacheReadTokens: 4_000 });
+
+  it("refuses a per-mode draw whose earliest call read a warm cache", () => {
+    const findings = checkColdDraw([warm], { phase: "mode", batchedModes: false });
+    expect(findings.map((f) => f.kind)).toEqual(["warm-mode-call"]);
+    expect(findings[0]!.fatal).toBe(true);
+  });
+
+  it("refuses a per-mode draw whose LATER call read a cache, which the earliest-call rule allows", () => {
+    /* No mode sends a `cache_control` breakpoint when it is the only step in
+       its job — every one of the eight gates its single one on
+       `opts.cacheArticle` — so there is nothing here that should be readable at
+       any point in the draw, not merely nothing readable first. */
+    const later = row({ id: "l", startedAt: "2026-09-03T10:00:30.000Z", cacheReadTokens: 9_000 });
+    const findings = checkColdDraw([cold, later], { phase: "mode", batchedModes: false });
+    expect(findings.map((f) => f.kind)).toEqual(["warm-mode-call"]);
+    expect(findings[0]!.message).toContain("9000 cached token(s)");
+  });
+
+  it("refuses a call whose cache telemetry is missing, and says it is unknown not warm", () => {
+    /* Coercing the absent field to zero is what let a guard with no evidence
+       under it pass. */
+    const silent = row({ id: "s", cacheReadTokens: null });
+    const findings = checkColdDraw([silent], { phase: "mode", batchedModes: false });
+    expect(findings.map((f) => f.kind)).toEqual(["unknown-cache-telemetry"]);
+    expect(findings[0]!.fatal).toBe(true);
+    expect(findings[0]!.message).toContain("no evidence it was cold");
+  });
+
+  it("holds an ingest draw's PDF extract to a cold first call, where OpenAI caches implicitly", () => {
+    /* `PDF_READER_MODEL` is an OpenAI model and OpenAI caches a repeated prefix
+       automatically. The fixture bytes are committed, so a rerun inside the
+       cache lifetime would otherwise report a discounted extraction as a cold
+       first generation. */
+    const extract = row({
+      id: "x",
+      stepName: "extract",
+      job: "pdf",
+      requestedModel: "openai/gpt-5.6-luna",
+      startedAt: "2026-09-03T10:00:00.000Z",
+      cacheReadTokens: 12_000,
+    });
+    const findings = checkColdDraw([extract], { phase: "ingest", batchedModes: false });
+    expect(findings.map((f) => f.kind)).toEqual(["warm-first-call"]);
+    expect(findings[0]!.step).toBe("extract");
+  });
+
+  it("asks each step separately, so a cold hierarchy does not vouch for a warm extract", () => {
+    const extract = row({
+      id: "x",
+      stepName: "extract",
+      startedAt: "2026-09-03T09:59:00.000Z",
+      cacheReadTokens: 12_000,
+    });
+    /* Earlier by the clock and cold, which under a whole-draw rule would be the
+       only call asked and would clear the draw. */
+    const findings = checkColdDraw([extract, cold], { phase: "ingest", batchedModes: false });
+    expect(findings.map((f) => f.step)).toEqual(["extract"]);
+  });
+
+  it("allows a later call of an ingest step to read off the first, which is production cost", () => {
+    /* Within-run caching is part of what an ingest really costs (Principles):
+       hierarchy's label fan-out shares `stepName: "hierarchy"` with the
+       structure call and legitimately reads off it. A rule of "no cache read
+       anywhere" would fail every fan-out we deliberately pay the write premium
+       for. */
+    const label = row({
+      id: "l",
+      job: "labels",
+      startedAt: "2026-09-03T10:00:30.000Z",
+      cacheReadTokens: 9_000,
+    });
+    expect(checkColdDraw([cold, label], { phase: "ingest", batchedModes: false })).toEqual([]);
+  });
+
+  it("reads the clock, not the array order", () => {
+    /* The ledger comes back ordered by `started_at` today. If that ever stops
+       being true, "the first row" and "the earliest call" part company and this
+       check would quietly start asking about the wrong call. */
+    const later = row({ id: "l", startedAt: "2026-09-03T10:00:30.000Z", cacheReadTokens: 0 });
+    const findings = checkColdDraw([later, warm], { phase: "ingest", batchedModes: false });
+    expect(findings.map((f) => f.kind)).toEqual(["warm-first-call"]);
+  });
+
+  it("is silent under --batched-modes, where the warm read is the measurement", () => {
+    expect(checkColdDraw([warm], { phase: "batched", batchedModes: true })).toEqual([]);
+    expect(checkColdDraw([warm], { phase: "ingest", batchedModes: true })).toEqual([]);
+  });
+
+  it("treats a tie on the clock as one earliest call, and a warm one fails it", () => {
+    /* Two rows can share a millisecond, and picking whichever arrived first
+       would make the verdict depend on the row order the reader cannot see. */
+    expect(
+      checkColdDraw([cold, warm], { phase: "ingest", batchedModes: false }).map((f) => f.kind),
+    ).toEqual(["warm-first-call"]);
+  });
+
+  it("has nothing to say about a draw with no rows — that is no-spend's job", () => {
+    expect(checkColdDraw([], { phase: "mode", batchedModes: false })).toEqual([]);
+  });
+});
+
+/**
+ * **Billed and produced nothing is not a price.**
+ *
+ * A mode whose response was paid for and then failed parsing or validation was
+ * being quoted as "Ideas costs $X" and folded into "whole article". The money is
+ * real and has to appear; the number is not a price for anything, so it appears
+ * separately. Same treatment `observedVariation` already gives repeated draws.
+ */
+describe("headlineTotal", () => {
+  const draw = (label: string, cost: number, over: Partial<DrawOutcome> = {}): DrawOutcome => ({
+    label,
+    totalNanos: cost,
+    succeeded: true,
+    ...over,
+  });
+
+  it("keeps a paid failure out of the quoted total and names it beside the money", () => {
+    const t = headlineTotal([
+      draw("arc", 100),
+      draw("ideas", 900, { succeeded: false, failure: "ideas bug" }),
+      draw("quotes", 200),
+    ]);
+    expect(t.nanos).toBe(300);
+    expect(t.totalPaidNanos).toBe(1_200);
+    expect(t.paidFailures).toEqual([{ label: "ideas", nanos: 900, failure: "ideas bug" }]);
+    expect(t.complete).toBe(false);
+  });
+
+  it("is complete only when every draw produced what it was billed for", () => {
+    const t = headlineTotal([draw("arc", 100), draw("quotes", 200)]);
+    expect(t.complete).toBe(true);
+    expect(t.nanos).toBe(t.totalPaidNanos);
+  });
+
+  it("says a failure's money out loud rather than dropping it", () => {
+    const t = headlineTotal([draw("ideas", 900, { succeeded: false, failure: "truncated" })]);
+    const printed = formatPaidFailures(t);
+    expect(printed).toContain("$0.0000");
+    expect(printed).toContain("truncated");
+    expect(printed).toContain("no artefact");
+  });
+
+  it("prints nothing at all when nothing failed", () => {
+    expect(formatPaidFailures(headlineTotal([draw("arc", 100)]))).toBe("");
+  });
+
+  it("counts an unknown failure rather than treating it as a success", () => {
+    const t = headlineTotal([draw("arc", 100, { succeeded: false })]);
+    expect(t.succeeded).toBe(0);
+    expect(t.paidFailures[0]!.failure).toBe("unknown");
+  });
+});
+
+/**
+ * **Cold or warm, read off the calls rather than off the round's position.**
+ *
+ * The interactions runner labelled round 1 cold and round 2 warm and then
+ * divided one by the other. Neither label was ever checked, and both can be
+ * false: chat's tool loop reads cache on a later call when the first was cold,
+ * and chat may invoke passage search before the standalone search task, warming
+ * a round still called cold.
+ */
+describe("roundCache", () => {
+  const call = (read: number | null, write: number | null = 0) => ({
+    cacheRead: read,
+    cacheWrite: write,
+  });
+
+  it("is cold when nothing was read", () => {
+    expect(roundCache([call(0, 5_000)])).toEqual({ kind: "cold", readWithinRound: 0 });
+  });
+
+  it("is still cold when a later call reads what an earlier one wrote", () => {
+    /* Chat's tool loop. The round arrived with nothing cached, which is what
+       cold means — treating this as warm would suppress the most interesting
+       ratio in the set. */
+    expect(roundCache([call(0, 5_000), call(5_000, 0)])).toEqual({
+      kind: "cold",
+      readWithinRound: 5_000,
+    });
+  });
+
+  it("is warm when the first call read a cache it cannot have written", () => {
+    expect(roundCache([call(4_000, 0)])).toEqual({ kind: "warm", read: 4_000 });
+  });
+
+  it("is warm when a later call reads while nothing in this round has written", () => {
+    /* The case the earliest-call rule alone misses: a cheap first call that
+       caches nothing, then a call reading a prefix from an earlier round. */
+    expect(roundCache([call(0, 0), call(7_000, 0)])).toEqual({ kind: "warm", read: 7_000 });
+  });
+
+  it("is unknown, not cold, when a call reported no cache-read count", () => {
+    const verdict = roundCache([call(null, 0)]);
+    expect(verdict.kind).toBe("unknown");
+  });
+
+  it("does not treat an unknown cache WRITE as a licence to read", () => {
+    /* Not knowing whether this round wrote a cache is not evidence that it
+       did, so the read that follows is still pre-existing. */
+    expect(roundCache([call(0, null), call(3_000, 0)])).toEqual({ kind: "warm", read: 3_000 });
+  });
+
+  it("says so when the round made no calls at all", () => {
+    expect(roundCache([])).toEqual({ kind: "no-calls" });
+  });
+});
+
+/**
+ * **A missing ratio is a fine outcome; a wrong one is not.** "cache worth 2.5×"
+ * was printed from two rounds whose labels nothing had checked, including when
+ * one of them had failed or was unpriced.
+ */
+describe("cacheRatio", () => {
+  const round = (over: Partial<RoundForRatio> = {}): RoundForRatio => ({
+    expected: "cold",
+    nanos: 1_000,
+    unpriced: 0,
+    failed: false,
+    cache: { kind: "cold", readWithinRound: 0 },
+    ...over,
+  });
+  const warm = (over: Partial<RoundForRatio> = {}): RoundForRatio =>
+    round({ expected: "warm", nanos: 400, cache: { kind: "warm", read: 9_000 }, ...over });
+
+  it("divides two rounds that were what they were labelled", () => {
+    expect(cacheRatio(round(), warm())).toEqual({ kind: "ratio", ratio: 2.5 });
+  });
+
+  it("refuses a ratio when the cold round read a pre-existing cache", () => {
+    const verdict = cacheRatio(round({ cache: { kind: "warm", read: 9_000 } }), warm());
+    expect(verdict.kind).toBe("none");
+    expect(verdict.kind === "none" && verdict.why).toContain("labelled cold");
+  });
+
+  it("refuses a ratio when the warm round read nothing", () => {
+    const verdict = cacheRatio(round(), warm({ cache: { kind: "cold", readWithinRound: 0 } }));
+    expect(verdict.kind).toBe("none");
+    expect(verdict.kind === "none" && verdict.why).toContain("no pre-existing cache");
+  });
+
+  it("refuses a ratio when either round failed", () => {
+    expect(cacheRatio(round({ failed: true }), warm()).kind).toBe("none");
+    expect(cacheRatio(round(), warm({ failed: true })).kind).toBe("none");
+  });
+
+  it("refuses a ratio built on an unpriced round, which is short by an unknown amount", () => {
+    expect(cacheRatio(round({ unpriced: 1 }), warm()).kind).toBe("none");
+  });
+
+  it("refuses a ratio when a round's cache state is unknown", () => {
+    const verdict = cacheRatio(round({ cache: { kind: "unknown", why: "no telemetry" } }), warm());
+    expect(verdict.kind).toBe("none");
+    expect(verdict.kind === "none" && verdict.why).toContain("unknown");
+  });
+});
+
+/**
+ * **Adoption, checked rather than assumed.** A mode job carrying neither a URL
+ * nor an upload is `{kind: "adopted"}` in `enqueue` — but if it ever mints
+ * instead, the draw pays for a whole cold ingest and files it under the mode's
+ * name, and every other check here would pass.
+ */
+describe("checkAdoption", () => {
+  it("refuses a mode draw whose job minted a fresh article", () => {
+    const findings = checkAdoption(
+      { kind: "minted", requested: "evalcost-x", got: "evalcost-x-spya-ab12cd", why: "the slug moved" },
+      "mode",
+    );
+    expect(findings.map((f) => f.kind)).toEqual(["not-adopted"]);
+    expect(findings[0]!.fatal).toBe(true);
+    expect(findings[0]!.message).toContain("evalcost-x-spya-ab12cd");
+  });
+
+  it("is quiet when the job adopted the article the sweep ingested", () => {
+    expect(checkAdoption({ kind: "adopted", slug: "evalcost-x", articleId: "a1" }, "mode")).toEqual([]);
+  });
+
+  it("expects an ingest draw to mint, and says nothing about it", () => {
+    expect(
+      checkAdoption(
+        { kind: "minted", requested: "evalcost-x", got: "evalcost-x", why: "a fresh article" },
+        "ingest",
+      ),
+    ).toEqual([]);
+  });
+
+  it("holds a batched draw to the same rule as a mode draw", () => {
+    /* `--against` names an article that already exists. A mint there means the
+       run measured a fresh empty article rather than the kept one. */
+    const findings = checkAdoption(
+      { kind: "minted", requested: "kept-1", got: "kept-1-x", why: "the slug moved" },
+      "batched",
+    );
+    expect(findings.map((f) => f.kind)).toEqual(["not-adopted"]);
+  });
+});
+
+/**
+ * **Observed variation, and the two words that are not in it.**
+ *
+ * Principles forbids a tail probability and a standard deviation: with four
+ * draws either would be a number with no evidence under it. What we can honestly
+ * say is where the middle is, how far apart the ends are, how many draws failed,
+ * what the successful ones cost, and what the whole set was billed.
+ */
+describe("observedVariation", () => {
+  const draw = (cost: number, over: Partial<DrawOutcome> = {}): DrawOutcome => ({
+    label: "long-html",
+    totalNanos: cost,
+    succeeded: true,
+    ...over,
+  });
+
+  it("takes the median across an even number of draws", () => {
+    const v = observedVariation([draw(100), draw(400), draw(200), draw(300)]);
+    expect(v.draws).toBe(4);
+    expect(v.median).toBe(250);
+    expect(v.min).toBe(100);
+    expect(v.max).toBe(400);
+    expect(v.range).toBe(300);
+  });
+
+  it("counts failures from the stage outcome, not from the gateway's", () => {
+    /* `outcome: "ok"` only means the gateway returned. A truncated hierarchy is
+       a `bug` failure with a perfectly ok row beside it, and counting the
+       gateway's word would report zero failures over a run of them. */
+    const v = observedVariation([
+      draw(100),
+      draw(900, { succeeded: false, failure: "truncated" }),
+      draw(200),
+      draw(300, { succeeded: false, failure: "truncated" }),
+    ]);
+    expect(v.failures).toBe(2);
+    expect(v.failureKinds).toEqual({ truncated: 2 });
+  });
+
+  it("reports cost conditional on success beside the total that was actually paid", () => {
+    const v = observedVariation([
+      draw(100),
+      draw(900, { succeeded: false, failure: "truncated" }),
+      draw(300),
+    ]);
+    /* The successful draws are 100 and 300. */
+    expect(v.succeeded).toBe(2);
+    expect(v.medianGivenSuccess).toBe(200);
+    /* And the failed draw was still billed — a stopped run is not a refund. */
+    expect(v.totalPaidNanos).toBe(1_300);
+  });
+
+  it("says null rather than zero when nothing succeeded", () => {
+    const v = observedVariation([draw(500, { succeeded: false, failure: "bug" })]);
+    expect(v.medianGivenSuccess).toBeNull();
+    expect(v.totalPaidNanos).toBe(500);
+  });
+
+  it("has no draws at all without inventing a middle", () => {
+    const v = observedVariation([]);
+    expect(v).toEqual({
+      draws: 0,
+      median: null,
+      min: null,
+      max: null,
+      range: null,
+      succeeded: 0,
+      failures: 0,
+      failureKinds: {},
+      medianGivenSuccess: null,
+      totalPaidNanos: 0,
+    });
+  });
+
+  it("reports no standard deviation and no tail, and this is the check that keeps it that way", () => {
+    /* An exact key list rather than two `toBeUndefined`s: the failure mode is
+       somebody *adding* a spread statistic, and only an exhaustive assertion
+       notices an addition. docs/plans/…260902g § Principles. */
+    expect(Object.keys(observedVariation([draw(100), draw(200)])).sort()).toEqual([
+      "draws",
+      "failureKinds",
+      "failures",
+      "max",
+      "median",
+      "medianGivenSuccess",
+      "min",
+      "range",
+      "succeeded",
+      "totalPaidNanos",
+    ]);
   });
 });

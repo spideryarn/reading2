@@ -20,7 +20,7 @@ import { createHash } from "node:crypto";
 import { withSpendAttribution } from "../../src/ai-spend.js";
 import { type FetchedDocument, writeRaw } from "../../src/fetch.js";
 import type { StepRegistry } from "../../src/jobs.js";
-import { type PipelineStep, STEPS } from "../../src/pipeline.js";
+import { type PipelineStep, STEP_ORDER, STEPS } from "../../src/pipeline.js";
 import type { StepName } from "../../src/types.js";
 import type { CostFixture } from "./fixtures.js";
 
@@ -223,9 +223,9 @@ const PAYING_STEPS: readonly StepName[] = [
  * deliberately stopping short of `hierarchy` — a free smoke pass, or a later
  * per-mode run — would report a fatal no-spend for a step that never ran.
  */
-export function mustPayFor(fixture: CostFixture, steps: readonly StepName[]): string[] {
+export function mustPayFor(fixture: CostFixture | null, steps: readonly StepName[]): string[] {
   const paying: readonly string[] =
-    fixture.kind === "pdf" ? ["extract", ...PAYING_STEPS] : PAYING_STEPS;
+    fixture?.kind === "pdf" ? ["extract", ...PAYING_STEPS] : PAYING_STEPS;
   return steps.filter((s) => paying.includes(s));
 }
 
@@ -243,11 +243,20 @@ export function mustPayFor(fixture: CostFixture, steps: readonly StepName[]): st
  * `Task`, which is why it cannot be derived from the step name alone either.
  * Every other paying step is a `Task` of the same name.
  */
-export function requiredAiJobsFor(fixture: CostFixture, steps: readonly StepName[]): string[] {
+export function requiredAiJobsFor(
+  /**
+   * `null` for an `--against` draw, which names an article by slug and never
+   * learns what kind of document is under it. The only thing that hangs on the
+   * kind is whether `extract` must pay, and an `--against` run does not run
+   * `extract` — it runs modes on an article that was extracted long ago.
+   */
+  fixture: CostFixture | null,
+  steps: readonly StepName[],
+): string[] {
   const jobs: string[] = [];
   for (const step of steps) {
     if (step === "extract") {
-      if (fixture.kind === "pdf") jobs.push("pdf");
+      if (fixture?.kind === "pdf") jobs.push("pdf");
       continue;
     }
     if (step === "hierarchy") {
@@ -313,8 +322,118 @@ export function assertDistinctEvalOwner(evalOwner: string, environmentOwner: str
   );
 }
 
-/** The modes a reader presses a button for — everything paid that is not ingest. */
+/**
+ * The modes a reader presses a button for — everything paid that is not ingest.
+ *
+ * **Exported as `ALL_MODES` because it is what `--all-modes` buys**, and the
+ * stage's whole bill is the length of this list times a per-mode price. A ninth
+ * mode arriving and being swept in silently would change what a run costs
+ * without anybody choosing it, which is why tests/cost-eval.test.ts writes the
+ * eight out longhand rather than deriving them from here.
+ */
 const ON_DEMAND_MODES: readonly StepName[] = PAYING_STEPS.filter((s) => s !== "hierarchy");
+export const ALL_MODES = ON_DEMAND_MODES;
+
+/**
+ * `--steps fetch,extract,blocks` or `--modes arc,ideas` — a comma-separated
+ * list, checked against `STEP_ORDER` so a typo is a message rather than a job
+ * that quietly runs the default five and a bill nobody expected.
+ *
+ * `flag` is in the message because the two callers are different mistakes: a
+ * misspelled step and a misspelled mode read identically otherwise.
+ */
+export function parseStepList(spec: string | undefined, flag: string): StepName[] {
+  const named = (spec ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (named.length === 0) throw new Error(`${flag} needs a comma-separated list of step names`);
+  const unknown = named.filter((s) => !STEP_ORDER.includes(s as StepName));
+  if (unknown.length > 0) {
+    throw new Error(`${flag}: unknown step(s) ${unknown.join(", ")}. Have: ${STEP_ORDER.join(", ")}`);
+  }
+  return named as StepName[];
+}
+
+/**
+ * **The argument combinations that would spend money measuring something other
+ * than what they claim**, refused before the first job exists.
+ *
+ * Each one is a real mistake rather than a tidiness rule, and the message says
+ * which. They are here rather than in the parser so they can be exercised for
+ * every answer, including the ones this machine does not happen to produce.
+ */
+export function assertSweepArgs(args: {
+  allModes: boolean;
+  against: string | null;
+  repeat: number;
+  fixtures: readonly string[];
+  /** `null` when the run never said, which is the case `--against` cannot survive. */
+  steps: readonly StepName[] | null;
+  /** `--batched-modes`, which turns off the cold check — and must not do so silently. */
+  batchedModes: boolean;
+}): void {
+  if (args.allModes && args.batchedModes) {
+    throw new Error(
+      "--all-modes and --batched-modes contradict each other: --all-modes runs one job per mode " +
+        "whatever else is passed, so nothing is batched — but --batched-modes is what tells the " +
+        "report a warm first call is expected, and it would turn the cold check off across the " +
+        "whole sweep. One stray flag, eight per-mode numbers with nothing checking they are " +
+        "cold. Pass one or the other.",
+    );
+  }
+  if (args.allModes && args.repeat > 1) {
+    throw new Error(
+      "--all-modes runs each mode once against the article it just ingested, so --repeat > 1 " +
+        "would find every mode already generated: a mode with a `stepIsDone` stamp skips " +
+        "(src/pipeline.ts), the run records $0 for it, and the fatal no-spend finding stops " +
+        "the sweep — after it has paid for a second ingest. Run it again with a fresh run tag " +
+        "instead, or use --repeat on an ingest-only step list to measure hierarchy variation.",
+    );
+  }
+  if (args.allModes && args.against !== null) {
+    throw new Error(
+      "--all-modes and --against name two different articles: the first ingests a fresh one " +
+        "under a run-tagged slug, the second runs on one that already exists. Pick one.",
+    );
+  }
+  if (args.against !== null && args.steps === null) {
+    throw new Error(
+      "--against needs --steps. The default is the five ingest steps and stage 1 is a fixture " +
+        "read, so an --against run that did not say what to run would try to re-fetch an " +
+        "article it holds no bytes for.",
+    );
+  }
+  if (args.against !== null && args.fixtures.length > 0) {
+    throw new Error(
+      "--against runs on a slug, not on bytes, so --fixture has nothing to do there. The " +
+        "fixture manifest is what an ingest draw is held constant by; an article that already " +
+        "exists was ingested from whatever it was ingested from.",
+    );
+  }
+}
+
+/**
+ * **A mode draw with no article to adopt is a cold ingest waiting to happen**,
+ * and this is the pre-spend half of `checkAdoption` in report.ts.
+ *
+ * A job carrying neither a URL nor an upload is `{kind: "adopted"}` in `enqueue`
+ * — but adoption of a slug nobody has is *allowed through* deliberately
+ * (src/jobs.ts explains why: the slug carries a random short id, so no other
+ * reader can come to want it). The job then runs, `lockOrCreateArticle` creates
+ * the row on publish, and what the runner measures is a fresh empty article
+ * wearing a mode's name.
+ *
+ * So the runner asks the database whether the article is there **before**
+ * advancing the job. The post-job check in report.ts stays: this one cannot see
+ * an article that is swapped underneath a running job.
+ */
+export function assertAdoptable(slug: string, articleId: string | null): void {
+  if (articleId !== null) return;
+  throw new Error(
+    `There is no article "${slug}" on this database, so this job has nothing to adopt: ` +
+      "`enqueue` lets a slug nobody holds through, the job would create the article on publish, " +
+      "and the number it produced would be a cold ingest filed under a mode's name. " +
+      "Ingest it first (--all-modes does), or name a slug an earlier --keep run left behind.",
+  );
+}
 
 /**
  * **One on-demand mode per job, or the number is not the cost of that mode.**
