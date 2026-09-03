@@ -260,6 +260,35 @@ describe("the filesystem ledger", () => {
     expect(found).toEqual(written);
   });
 
+  it("counts a call once however many times its line was appended", async () => {
+    /* **The lost-acknowledgement retry, on the store that has no unique key.**
+       The browser reporting a live turn retries whatever it did not see
+       acknowledged, and a request that succeeded whose `200` was lost is the
+       ordinary case rather than the pathological one. Postgres absorbs it: the
+       row id is derived from the event, so the repeat lands on
+       `on conflict do nothing`. This ledger is a file — it appends both copies,
+       and `read` returned both, so `totalRows()` counted the money twice.
+
+       **Double-counting is the direction that looks exactly like the thing being
+       measured**, which is what makes it worth fixing here rather than shrugging
+       at "the filesystem store is only for development": every number this store
+       produces is one somebody reads while deciding a price. GPT Sol, 2026-09-03.
+
+       The file is still append-only and is never rewritten — the collapse
+       happens on the way out, which is what keeps the evidence of both writes on
+       disk while making the two stores agree about what the ledger *says*. */
+    const written = row({ id: "00000000-0000-4000-8000-00000000a0f8", creditsUsedNanos: 7_000 });
+    await store.record(written);
+    await store.record(written);
+    const { rows, unreadable } = await store.read();
+    const mine = rows.filter((r) => r.id === written.id);
+    expect(mine).toHaveLength(1);
+    /* A duplicate is history, not damage: it must not inflate the count that
+       says how much of the ledger could not be read. */
+    expect(unreadable).toBe(0);
+    expect(totalRows(mine).credits).toBe(7_000);
+  });
+
   it("filters a range half-open, so two months cannot both claim one call", async () => {
     const july = row({
       id: "00000000-0000-4000-8000-00000000a0f2",
@@ -528,6 +557,62 @@ describe("the filesystem ledger", () => {
     const t = totalRows(mine);
     expect(sum).toBe(t.credits + t.upstream + t.computed);
     expect(sum).toBe(9_004_000);
+  });
+
+  it("translates the legacy upstream field on exactly the migration's predicate", async () => {
+    /* **The translation and the migration have to agree, and they did not.**
+       `translateByokUpstream` kept the old value whenever `isByok === true`;
+       drizzle/20260902141103 requires all three of `cost_source = 'provider'`,
+       `is_byok IS TRUE` and `provider_account = 'openrouter'`. The gap is a real
+       historical shape, because those fields were captured independently by the
+       gateway: a call that OpenRouter answered under somebody else's key and for
+       which no `cost` figure arrived is BYOK, has no credits, and backfills to
+       `cost_source: 'none'`.
+
+       Under the old rule that line kept its upstream value, `agrees()` then
+       refused it — an upstream figure on a non-`provider` row — and the reader
+       counted a row of real history as **unreadable**. The migration would have
+       nulled the value and kept the row. Two stores, two answers, and the one
+       that loses data is the one running on this laptop. GPT Sol, 2026-09-03.
+
+       Two lines: the shape the missing conditions let through, and the one
+       shape that legitimately keeps its value. */
+    const legacy = (over: Partial<AiCallRow>, upstream: number): string => {
+      const r = row({ jobId: "job-byok-predicate", ...over }) as unknown as Record<string, unknown>;
+      delete r.byokUpstreamNanos;
+      /* Pre-0023 as well as pre-rename, which is the shape these lines really
+         have: the provenance columns arrive in `backfillPre0023` and
+         `cost_source` is derived from the credits figure, so the translation
+         below has to run *after* it and read what it decided. */
+      delete r.costSource;
+      delete r.providerAccount;
+      r.upstreamInferenceNanos = upstream;
+      return JSON.stringify(r);
+    };
+    /* BYOK, but no credits figure arrived — so it backfills to `none`, and the
+       migration nulls its upstream value. */
+    const noCredits = legacy(
+      { id: "00000000-0000-4000-8000-00000000f301", creditsUsedNanos: null, isByok: true },
+      9_000_000,
+    );
+    /* BYOK with credits, on OpenRouter: the one shape that keeps its value. */
+    const keeps = legacy(
+      { id: "00000000-0000-4000-8000-00000000f302", creditsUsedNanos: 0, isByok: true },
+      7_000_000,
+    );
+    const before = (await store.read()).unreadable;
+    await writeFile(store.describe(), `${noCredits}\n${keeps}\n`, { flag: "a" });
+    const after = await store.read();
+    /* **History, not damage.** This is the assertion that was red. */
+    expect(after.unreadable).toBe(before);
+    const mine = after.rows.filter((r) => r.jobId === "job-byok-predicate");
+    expect(mine).toHaveLength(2);
+    const dropped = mine.find((r) => r.id === "00000000-0000-4000-8000-00000000f301");
+    expect(dropped?.costSource).toBe("none");
+    expect(dropped?.byokUpstreamNanos).toBeNull();
+    expect(mine.find((r) => r.id === "00000000-0000-4000-8000-00000000f302")?.byokUpstreamNanos).toBe(
+      7_000_000,
+    );
   });
 
   it("does not interleave two writes racing each other", async () => {

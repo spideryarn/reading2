@@ -180,6 +180,45 @@ handled — the failure [improve-the-codebase.md](../reusable/improve-the-codeba
 its own job: per-run minted fixture ids across the suite, which is the remedy `fixture-ids.test.ts`
 already points at.
 
+## Still open after the code review, and deliberately left to the Stripe work
+
+Both from [GPT Sol's code review](260902g-cost-tracking-that-can-set-a-price-code-review-sol.md) of
+2026-09-03, both P2, both real, and both the same question underneath: **what counts as being inside
+a billing period, and who counts as being in the population during it.** That is a decision the
+Stripe work has to make anyway — its periods are arbitrary half-open intervals, not calendar months
+— and answering it twice, once here and once there, is how the two answers end up disagreeing. Fixed
+in the same pass: the two P1s, the category table's mislabelled column, the legacy JSONL predicate,
+the `SpendRecord` provenance union, and the filesystem ledger's missing dedupe.
+
+**Historical spreads use today's account population.**
+[`accountDenominator`](../../scripts/ai-cost.ts) asks the Auth service for every account that is
+live *now*, whatever the report's `until`. In Sol's words:
+
+> A later signup therefore enters an August report as zero spend, while an account subsequently
+> deleted disappears from it. Historical median/p95 figures will change over time. At minimum filter
+> on the already-available `createdAt`; Stripe ultimately needs the subscriber population active
+> during the billing interval.
+
+The `createdAt` filter is a few lines and would fix the first half. It would not fix the second —
+a deleted account is simply not in the answer at all — and the honest denominator is *subscribers
+active during the interval*, which does not exist until subscriptions do. Doing the cheap half now
+would make the figures stop moving without making them right, which is the worse of the two states
+to be in: a number that changes under you at least advertises that it is unreliable.
+
+**Realtime coverage and realtime spend use different cohorts.**
+
+> Spend is bounded by `ai_calls.started_at`, while
+> [`realtimeSessionCoverage`](../../src/store/ai-calls-spend-pg.ts) bounds sessions by `issued_at`,
+> and its `NOT EXISTS` examines calls from all time. A session issued before the range but used
+> inside it contributes cost with no session; one issued inside but used just after it is considered
+> non-silent although its cost is absent. This becomes routine at billing boundaries.
+
+The coverage line exists to answer "how many conversations left no cost row at all", and the two
+bounds disagree only for a session that straddles the edge — rare on a calendar month, routine on a
+subscription anniversary, which is exactly when the Stripe work will care. Picking one clock for
+both (almost certainly the *call's* `started_at`, since that is what the money is bounded by) is the
+fix, and it should be made once, alongside the decision about what a billing period is.
+
 ## The pricing-structure finding
 
 [`src/pipeline.ts:235`](../../src/pipeline.ts) `DEFAULT_INGEST_STEPS` is five steps — fetch,

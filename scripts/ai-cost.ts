@@ -8,7 +8,13 @@
  *     npm run cost -- --all             everything there is
  *     npm run cost -- --reconcile       ask OpenRouter what it thinks (network, free)
  *     npm run cost -- --owners          what each owner cost, by category, with the spread
- *     npm run cost -- --owners --price 20   …and the contribution margin at $20/month
+ *     npm run cost -- --owners --price 20   …and the margin at a $20/month price
+ *     npm run cost -- --owners --price 20 --month 2026-08    …over a month that finished
+ *
+ * A `--price` is a MONTH's price, and the margin is only a monthly margin over a
+ * whole finished month. Over anything else — a custom range, `--all`, or the
+ * default current month, which is two days long on the 3rd — the heading says so
+ * in those words. `marginPeriod` below has the argument.
  *
  * ## `--owners` is a different report, not a flag on this one
  *
@@ -86,7 +92,9 @@ interface Args {
    * Only ever used to subtract: *price minus what the models cost this account*.
    * It is **not** a scenario engine and must not become one — GPT Sol cut that
    * from this stage, and the candidate-price arithmetic belongs in a measured
-   * plan document rather than in code.
+   * plan document rather than in code. In particular it is never prorated: see
+   * `marginPeriod`, which says what period the subtraction was actually over
+   * instead of scaling it into one nobody measured.
    */
   price?: number;
   label: string;
@@ -782,10 +790,19 @@ function printCoverage(
 function printUnclassified(fold: SpendFold): void {
   const totals = fold.byCategory.get("unknown");
   if (!totals || totals.calls === 0) return;
-  const grand = [...fold.byCategory.values()].reduce((n, t) => n + money(t), 0);
-  const share = grand === 0 ? 0 : (money(totals) / grand) * 100;
+  /* **Ledger money, on the headline and on every line under it.**
+     The headline used `money()` — credits with OpenRouter's purchase fee
+     allocated on top — while `fold.unknownFacts` carries `totalNanos`, the raw
+     figures as written on the rows. So the parts did not have to add up to the
+     whole they were printed under, and the discrepancy grows with the credits
+     share. GPT Sol, 2026-09-03. The uplift is an allocation this report makes
+     rather than a fact on any row, and it belongs in the one table that says so
+     (`printCategories` below, in its own column); an itemised list of names is
+     for finding a name, and the raw figure is the one that can be looked up. */
+  const grand = [...fold.byCategory.values()].reduce((n, t) => n + totalNanos(t), 0);
+  const share = grand === 0 ? 0 : (totalNanos(totals) / grand) * 100;
   console.log(
-    `\nUNCLASSIFIED — ${totals.calls} call(s), ${formatNanos(money(totals))}, ` +
+    `\nUNCLASSIFIED — ${totals.calls} call(s), ${formatNanos(totalNanos(totals))} ledger, ` +
       `${share.toFixed(1)}% of the money`,
   );
   for (const u of fold.unknownFacts) {
@@ -797,15 +814,28 @@ function printUnclassified(fold: SpendFold): void {
     "Each is a scope/job/step that no rule in src/cost-categories.ts recognises — usually a " +
       "retired name from an older row. They are NOT folded into a neighbouring category, " +
       "because that would invent the provenance the schema cannot supply. Classify them there, " +
-      "or read this as the noise floor.",
+      "or read this as the noise floor. Ledger figures throughout — the headline and the lines " +
+      "under it are the same arithmetic, so they add up; the cash uplift is in the category " +
+      "table below.",
   );
 }
 
-/** What each kind of work cost, over everything in the period. */
+/**
+ * What each kind of work cost, over everything in the period.
+ *
+ * **The first money column is `ledger`, and it was headed `credits` until
+ * 2026-09-03.** It has always printed `totalNanos` — credits *plus* the BYOK
+ * pocket *plus* our own computed figures — so on any run with BYOK or realtime
+ * rows in it the column was larger than the credits it claimed to be, and a
+ * reader comparing it against OpenRouter's own credit spend would have found a
+ * gap with no explanation. GPT Sol found the label. Three pockets, one column,
+ * and the name now says which. The second column is the same money with the
+ * credit-purchase fee allocated onto the credits part.
+ */
 function printCategories(fold: SpendFold): void {
   console.log("\nBy category, over everything in the period");
   console.log(
-    `  ${"category".padEnd(26)}${"calls".padStart(7)}${"credits".padStart(13)}` +
+    `  ${"category".padEnd(26)}${"calls".padStart(7)}${"ledger".padStart(13)}` +
       `${"cash".padStart(13)}${"unpriced".padStart(10)}`,
   );
   for (const category of COST_CATEGORIES) {
@@ -818,9 +848,12 @@ function printCategories(fold: SpendFold): void {
     );
   }
   note(
-    `Cash is credits + ${(OPENROUTER_CREDIT_FEE * 100).toFixed(1)}%. OpenRouter's fee is on BUYING ` +
-      "credits, not per token, so it is allocated here and never written to a row. BYOK and " +
-      "computed rows never bought a credit and carry no uplift.",
+    "Ledger is what the rows say: credits + BYOK upstream + our own computed figures, the sum " +
+      `every other table here uses. Cash is the same money with OpenRouter's ` +
+      `${(OPENROUTER_CREDIT_FEE * 100).toFixed(1)}% fee added to the credits part only. That fee is on ` +
+      "BUYING credits, not per token, so it is allocated here and never written to a row. BYOK and " +
+      "computed rows never bought a credit and carry no uplift, which is why the two columns are " +
+      "equal on a category that has none.",
   );
   for (const category of COST_CATEGORIES) {
     const totals = fold.byCategory.get(category);
@@ -861,13 +894,32 @@ function printSpread(fold: SpendFold, population: string[], denominatorIsReal: b
   }
   const allProduct = spendPerAccount(fold, population, product, money);
   line("ALL PRODUCT", allProduct);
+  /* **Conditional, because it stops being true at 20 accounts.** Nearest rank
+     picks element `ceil(0.95n)`, which is `n` — the maximum — only while
+     `n <= 19`; at 20 it is the 19th of 20 and the sentence quietly becomes a
+     lie about the number Greg underwrites against. Computed from the actual
+     population rather than asserted, so it cannot go stale on its own. GPT Sol,
+     2026-09-03. */
+  const n = population.length;
+  /* `spread()` sorts ascending and takes element `ceil(0.95n)`, so counted from
+     the expensive end that is the `n - rank + 1`th. */
+  const fromTop = n - Math.max(1, Math.ceil(0.95 * n)) + 1;
   note(
     "Non-product spend is excluded from this table on purpose — it is ours, not a reader's, and " +
       "a bake-off landing in the figure a price is set from is how a price gets set wrong. " +
-      `Nearest-rank percentiles: at ${population.length} account(s) the p95 IS the most expensive ` +
-      'account, so read it as "the worst we have seen" rather than as a stable statistic.',
+      `Nearest-rank percentiles: at ${n} account(s) the p95 is ` +
+      (fromTop <= 1
+        ? 'the most expensive account there is, so read it as "the worst we have seen" rather than as a stable statistic.'
+        : `the ${ordinal(fromTop)} most expensive of ${n}, so it is a real percentile and the max beside it is the worst.`),
   );
   return allProduct;
+}
+
+/** "2nd", "3rd", "11th" — for the one sentence that has to count places. */
+function ordinal(n: number): string {
+  const tens = n % 100;
+  if (tens >= 11 && tens <= 13) return `${n}th`;
+  return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
 }
 
 /** Who cost what, by name where the Auth service could supply one. */
@@ -900,8 +952,73 @@ function printOwners(fold: SpendFold, accounts: Denominator, population: string[
   if (silent > 0) console.log(`  ${silent} more account(s) spent nothing at all in this period.`);
 }
 
-/** Price minus what the models cost, and nothing else. */
-function printMargin(price: number, allProduct: number[]): void {
+/**
+ * **What period the margin is a margin over** — a monthly price is only a
+ * monthly margin against a month.
+ *
+ * `--price` is a candidate *monthly* subscription, and `printMargin` subtracts
+ * whatever the report's range cost from it. The range is whatever was asked for:
+ * a custom fortnight, `--all`, or — by default — the whole current calendar
+ * month, which on the 3rd contains two days of spend. GPT Sol's review found
+ * `$20 minus two days` presented as the contribution margin, and Greg
+ * reproduced it independently the same morning.
+ *
+ * ## Labelled rather than refused, and why
+ *
+ * The other option was to refuse `--price` outside a completed month. Rejected:
+ * `npm run cost -- --owners --price 20` is the command in this file's own
+ * header and the one that gets run, and on most days of most months it would
+ * simply fail — which teaches people to pass `--month <last month>` and read a
+ * figure about a month whose product was different. The spend is real either
+ * way; the only thing that was ever wrong is the **sentence around it**. So the
+ * heading names the period, says outright when it is not a whole month, and
+ * points at the flag that would give a real monthly figure. A reader who wants
+ * the arithmetic still gets it, and cannot mistake what it is of.
+ *
+ * The one thing this must never do is prorate. Scaling two days up to a month
+ * would invent a number nobody measured, and `Args.price` is explicit that this
+ * is not a scenario engine.
+ */
+export type MarginPeriod =
+  | { kind: "month"; label: string }
+  | { kind: "part-month"; label: string; elapsed: number; of: number }
+  | { kind: "other"; label: string };
+
+/** The `YYYY-MM` a `[since, until)` covers exactly, or `null` if it is not one month. */
+function calendarMonthOf(since: string, until: string): string | null {
+  const from = new Date(since);
+  const to = new Date(until);
+  const first = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), 1);
+  if (from.getTime() !== first) return null;
+  const next = Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + 1, 1);
+  if (to.getTime() !== next) return null;
+  return `${from.getUTCFullYear()}-${String(from.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/* Exported for tests/ai-cost-cli.test.ts, which is where the boundary cases
+   live: the first half of a month starts on the 1st, so "does it start on the
+   1st" is not the question, and `--all` has no bounds to ask it of at all. */
+export function marginPeriod(args: Args, now: Date): MarginPeriod {
+  if (!args.since || !args.until) return { kind: "other", label: args.label };
+  const month = calendarMonthOf(args.since, args.until);
+  if (!month) return { kind: "other", label: args.label };
+  const until = Date.parse(args.until);
+  if (until <= now.getTime()) return { kind: "month", label: month };
+  const since = Date.parse(args.since);
+  return {
+    kind: "part-month",
+    label: month,
+    /* One decimal, not a whole number of days: "2 of 30" on the evening of the
+       3rd reads as a fact about complete days and is short by most of one. */
+    elapsed: Math.max(0, (now.getTime() - since) / DAY_MS),
+    of: Math.round((until - since) / DAY_MS),
+  };
+}
+
+/** Price minus what the models cost over `period`, and nothing else. */
+export function printMargin(price: number, allProduct: number[], period: MarginPeriod): void {
   const priceNanos = Math.round(price * 1e9);
   /* **Derived from the COST spread, not from a spread of the margins.** A
      nearest-rank p95 over margins returns the *largest* margin, which is the
@@ -910,19 +1027,50 @@ function printMargin(price: number, allProduct: number[]): void {
      which is what "what am I underwriting" means. Getting this backwards would
      have printed a reassuring figure with nothing red anywhere. */
   const cost = spread(allProduct);
-  console.log(`\nModel-cost contribution margin at $${price.toFixed(2)} per account`);
+  console.log(
+    period.kind === "month"
+      ? `\nModel-cost contribution margin at $${price.toFixed(2)} per account per month — ${period.label} (UTC)`
+      : `\nModel-cost margin at $${price.toFixed(2)} per account against ${
+          period.kind === "part-month"
+            ? `${period.elapsed.toFixed(1)} of ${period.of} days of ${period.label}`
+            : period.label
+        } — NOT a monthly margin`,
+  );
   console.log(
     `  at the median account ${formatNanos(priceNanos - cost.median)}   ` +
       `at the p95 account ${formatNanos(priceNanos - cost.p95)}   ` +
       `at the worst ${formatNanos(priceNanos - cost.max)}   ` +
       `underwater ${allProduct.filter((c) => c > priceNanos).length} of ${allProduct.length}`,
   );
+  if (period.kind !== "month") {
+    note(
+      `$${price.toFixed(2)} is a MONTH's price and the spend above is ` +
+        (period.kind === "part-month"
+          ? `${period.elapsed.toFixed(1)} of the ${period.of} days of ${period.label}`
+          : `over ${period.label}`) +
+        ". The subtraction is still arithmetic anybody can check, but it is not a monthly " +
+        "margin and must not be quoted as one — a short period flatters it and a long one " +
+        "buries it. Nothing here is prorated, deliberately: scaling a part-month up would " +
+        "invent a number nobody measured. For a real monthly figure ask for a month that " +
+        "has finished, e.g. --month " +
+        previousMonthOf(period.label) +
+        ".",
+    );
+  }
   note(
     "MODEL-COST contribution margin, not gross margin. It is the price minus what the models " +
       "cost and nothing else: Stripe's fees, hosting, storage, bandwidth and every unmetered " +
-      "spend listed below are all still to come out of it. The spread is over the same period " +
-      "as everything above, so a period shorter than a month flatters it.",
+      "spend listed below are all still to come out of it.",
   );
+}
+
+/** The month before a `YYYY-MM`, for the "ask for a finished month" hint. */
+function previousMonthOf(label: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(label);
+  if (!m) return "<YYYY-MM>";
+  const year = Number(m[1]);
+  const mon = Number(m[2]);
+  return mon === 1 ? `${year - 1}-12` : `${year}-${String(mon - 1).padStart(2, "0")}`;
 }
 
 /**
@@ -992,7 +1140,7 @@ async function ownersReport(args: Args): Promise<void> {
   const population = accounts.ids.length > 0 ? accounts.ids : [...fold.byOwner.keys()];
   const allProduct = printSpread(fold, population, accounts.ids.length > 0);
   printOwners(fold, accounts, population);
-  if (args.price !== undefined) printMargin(args.price, allProduct);
+  if (args.price !== undefined) printMargin(args.price, allProduct, marginPeriod(args, new Date()));
 
   unmetered();
   undeclared();

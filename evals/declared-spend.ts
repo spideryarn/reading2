@@ -396,17 +396,31 @@ export async function withDeclaredExternalCall<T>(
           wire: declaration.wire,
           model: spec.model,
           answeredBy: seen.answeredBy,
-          costNanos: seen.costNanos,
+          /* **Never both, and now the type is what says so.** OpenRouter's
+             figure is settled and ours is an estimate; a row carrying the two
+             would invite a reader to pick, and a `SUM` over both would
+             double-count. The 0023 `CHECK` refuses it at the database, and
+             `SpendProvenance` in src/ai-spend.ts refuses it at the compiler —
+             this used to be three fields and a pair of matched ternaries that
+             had to agree with each other by hand.
+
+             A settled figure wins where there is one. Otherwise our own
+             arithmetic, unless the call was **retried**: a retried call spent
+             about N times what one attempt reports, so the figure is dropped
+             and the row reads `none` — "short by an unknown amount", which is
+             exactly the truth. GPT Sol, twice, on that last point. */
+          cost:
+            seen.costNanos !== null
+              ? { source: "provider", costNanos: seen.costNanos }
+              : retried || seen.computedCostNanos === null || seen.priceVersion === null
+                ? { source: "none" }
+                : {
+                    source: "computed",
+                    computedCostNanos: seen.computedCostNanos,
+                    priceVersion: seen.priceVersion,
+                  },
           upstreamCostNanos: null,
           providerAccount: declaration.account,
-          /* **Never both.** OpenRouter's figure is settled and ours is an
-             estimate; a row carrying the two would invite a reader to pick, and a
-             `SUM` over both would double-count. The 0023 `CHECK` refuses it at the
-             database as well, so a future caller cannot quietly do it either. */
-          computedCostNanos:
-          retried || seen.costNanos !== null ? null : seen.computedCostNanos,
-          priceVersion:
-          retried || seen.costNanos !== null ? null : seen.priceVersion,
           generationId: null,
           upstream: seen.upstream,
           isByok: null,

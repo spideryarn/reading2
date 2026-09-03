@@ -117,7 +117,13 @@ function readFolder(): FolderState {
   let entries: JournalEntry[] = [];
   try {
     entries = readJournal(FOLDER);
-  } catch {
+  } catch (err) {
+    /* Only a missing file is the legitimate starting state. This catch used to
+       swallow every failure, which meant a journal left mid-merge lost the one
+       message that says so — `readJournal` names the file, the line and the
+       marker, and generating on top of a conflicted journal is the last thing
+       anybody wants. */
+    if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") throw err;
     /* No journal yet is a legitimate starting state — drizzle writes one. */
   }
   return {

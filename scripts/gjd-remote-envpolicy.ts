@@ -1173,7 +1173,7 @@ export async function pushEnvPlan(deps: EnvPlanDeps): Promise<EnvPlan> {
   const why = proposalReason(names, reviewed, blocked, deps.flags.propose);
   let proposal: Map<string, ProposedKey> | undefined;
   if (why === null) deps.say("no keys you have not decided on — skipping the model", "dim");
-  else proposal = await deps.propose(names, why);
+  else proposal = await deps.propose(askAbout(names, reviewed, blocked, deps.flags.propose), why);
 
   const items = planChecklist({
     names,
@@ -1246,6 +1246,24 @@ async function chooseNames(
  * finding 1 in one line: `--none --save` would then ask again on the very next
  * run, about the exact keys the reader had just said no to.
  */
+/**
+ * **The names the model is asked about.** Only the ones its answer could change:
+ * a decided name keeps its saved answer whatever the model says, and a blocked
+ * one is greyed out whatever it says, so sending either is a paid opinion on
+ * nothing — and, GPT Sol's post-landing finding 1, it made "no model is asked
+ * about a decided key" false while the reason line said otherwise. `--propose`
+ * is the explicit request for a fresh opinion on everything, and gets it.
+ */
+function askAbout(
+  names: readonly string[],
+  reviewed: ReadonlySet<string> | undefined,
+  blocked: ReadonlySet<string>,
+  forced: boolean,
+): string[] {
+  if (forced) return [...names];
+  return names.filter((n) => !blocked.has(n) && !(reviewed?.has(n) ?? false));
+}
+
 function proposalReason(
   names: readonly string[],
   reviewed: ReadonlySet<string> | undefined,

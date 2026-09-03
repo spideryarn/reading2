@@ -341,39 +341,6 @@ every id permanently, and orphans every note, highlight and gist that pointed at
 
 ### Adding an artefact-backed mode
 
-The client half is [web-client.md § Adding a mode](web-client.md#adding-a-mode); the reasoning and
-the **rejected** shapes — a `makeArtefactStage()` factory, a generic `/api/artefact/:kind` — are in
-[260902o-adding-a-mode.md](../plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md).
+The checklist lives in **[new-mode.md § The artefact](new-mode.md#the-artefact-if-the-mode-shows-one)**
+since 2026-09-03, beside the client half. This heading stays so links to it keep working.
 
-It starts at `ArtifactKind` and `ArtifactMap` in
-[`src/store/artifacts.ts`](../../src/store/artifacts.ts) and `StepName` in
-[`src/types.ts`](../../src/types.ts). **The compiler then asks for a row in each of these**, every
-one of them a total record, so the new kind or step stays red until it has one: `SHAPE` and
-`STAMP_SOURCE` (`artifacts.ts`), `DECODERS`
-([`artifacts-fs.ts`](../../src/store/artifacts-fs.ts)), `STEP_BUDGET_MS`
-([`src/jobs.ts`](../../src/jobs.ts)), `STEPS` and — via `StepsMissingFromOrder` — `STEP_ORDER`
-([`src/pipeline.ts`](../../src/pipeline.ts)); `TASK_TIER`, `TASK_WIRE`, `MODEL_ENV_VAR`,
-`STAGE_EFFORT` and `ARTICLE_RENDERER` ([`src/models.ts`](../../src/models.ts));
-`REVISION_CARRY_POLICY` ([`pg-revisions.ts`](../../src/store/pg-revisions.ts)); and `ArticleReader`
-([`contracts.ts`](../../src/store/contracts.ts)) with both adapters,
-[`fs.ts`](../../src/store/fs.ts) and [`pg.ts`](../../src/store/pg.ts), *annotated* rather than
-`Pick`-cast. They are total on purpose — a hand-kept list falling behind a growing set is
-[260830c § What would have caught the class](../postmortems/260830c-the-dialog-said-nothing-was-personalised.md#what-would-have-caught-the-class).
-
-Then the residue nothing refuses at compile time:
-
-- **The SQL CHECK on `revision_step_runs.step_name`** — a migration is the truth and the literal in
-  [`src/db/schema.ts`](../../src/db/schema.ts) is a hand-kept copy, because `drizzle-kit generate`
-  cannot see a CHECK expression. [`tests/db-step-constraint.test.ts`](../../tests/db-step-constraint.test.ts)
-  compares the last `ADD CONSTRAINT` in the journal's migrations with `STEP_ORDER`, both directions.
-- **The per-kind GET route** in [`src/routes.ts`](../../src/routes.ts); each carries a different
-  staleness contract, which is why there is no generic one.
-- **The put-chain in [`src/store/export.ts`](../../src/store/export.ts)** — one `await put(…)` per
-  artefact, and a missing line exports nothing and says nothing.
-- **`PUBLIC_PROJECTIONS` and the public DTO**, if a visitor may read it:
-  [`public-reader.ts`](../../src/store/public-reader.ts) and
-  [`src/public/dto.ts`](../../src/public/dto.ts).
-  [`tests/store-revision-columns.test.ts`](../../tests/store-revision-columns.test.ts) pins each
-  read's projection exactly against `REVISION_READ_POLICY`'s grants;
-  [`tests/public-dto.test.ts`](../../tests/public-dto.test.ts) pins the keys a public DTO may emit,
-  against inputs deliberately over-full so a projection that copied its argument would fail.

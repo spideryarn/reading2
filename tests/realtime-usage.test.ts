@@ -214,16 +214,56 @@ describe("the counts, rejected rather than clamped", () => {
     ).toThrow(/add up to more than outputTokens/);
   });
 
-  it("accepts details that add to LESS than their parent", () => {
-    /* Deliberately `<=` rather than `===`. OpenAI's own responses sometimes
-       arrive with the nested breakdown absent or partial
+  it("accepts details that add to LESS than their parent — and does not PRICE them", () => {
+    /* Deliberately `<=` rather than `===` **at the parse**. OpenAI's own
+       responses sometimes arrive with the nested breakdown absent or partial
        (openai/openai-agents-js#538), and refusing a true-but-incomplete report
-       to be pedantic about arithmetic would lose real money. The splits are then
-       a lower bound, which is visible on the row rather than hidden. */
+       to be pedantic about arithmetic would throw away the evidence that the
+       turn happened at all.
+
+       But the parse is only half the rule, and the other half was missing until
+       2026-09-03: `priceResponseRow` prices the *details* and nothing else, so a
+       report whose splits are a lower bound was priced as if the lower bound
+       were the whole thing. The row is kept, and it is kept **unpriced** — see
+       the incomplete-split cases below. */
     const usage = parseRealtimeUsage(
       response({ inputTextTokens: 10, inputAudioTokens: 10, cachedTokens: 0, cachedTextTokens: 0, cachedAudioTokens: 0 }),
     );
     expect(usage.kind).toBe("response");
+  });
+
+  it("refuses more cached text than there was text to cache", () => {
+    /* **The bound a per-parent check cannot make.** `cachedTextTokens` is
+       checked against `cachedTokens`, and `cachedTokens` against `inputTokens`,
+       so nothing in that chain stops a report claiming 1,000 cached text tokens
+       against 100 text tokens of input. `priceResponseRow` then subtracts one
+       from the other and prices a NEGATIVE quantity of fresh text: GPT Sol
+       produced exactly this and got `computedCostNanos = -3,200,000`, which
+       would have subtracted $0.0032 from a total somebody is about to set a
+       price against. A cached token is a token that was already in the input;
+       there cannot be more of them than there were. */
+    expect(() =>
+      parseRealtimeUsage(
+        response({
+          inputTextTokens: 100,
+          inputAudioTokens: 0,
+          cachedTokens: 1000,
+          cachedTextTokens: 1000,
+          cachedAudioTokens: 0,
+        }),
+      ),
+    ).toThrow(/cachedTextTokens/);
+    expect(() =>
+      parseRealtimeUsage(
+        response({
+          inputTextTokens: 0,
+          inputAudioTokens: 100,
+          cachedTokens: 1000,
+          cachedTextTokens: 0,
+          cachedAudioTokens: 1000,
+        }),
+      ),
+    ).toThrow(/cachedAudioTokens/);
   });
 
   it("refuses image tokens, because there is no price for them", () => {
@@ -459,6 +499,84 @@ describe("the row it builds", () => {
          the status, so a cancelled turn's figure is complete even though its
          answer was not. */
       expect(row.computedCostNanos).toBeGreaterThan(0);
+    }
+  });
+});
+
+/* ------------------------------------- a split that cannot be priced -- */
+
+describe("a report the price table cannot fully account for", () => {
+  /**
+   * **The failure this whole workstream exists to prevent, found in its newest
+   * code.** GPT Sol's review, 2026-09-03: the parse permits the modality details
+   * to sum to *less* than their parent totals, and `priceResponseRow` prices
+   * only the details — so a turn whose splits are missing is priced at
+   * approximately nothing and lands in the ledger as a real, settled, cheap row.
+   *
+   * A zero cost and a free call are the same row, which is the exact confusion
+   * src/pricing.ts spends four paragraphs refusing. So the row is kept — the
+   * turn happened and the evidence should survive — and it is marked
+   * `cost_source: 'none'`, which `npm run cost` already counts and prints as
+   * "short by an unknown amount".
+   */
+  it("does not price a turn whose input splits do not account for the input", () => {
+    /* Sol's first case verbatim: `inputTokens=1000`, `outputTokens=200`, every
+       modality detail zero. It was accepted with `computedCostNanos = 0`. */
+    const row = accept(
+      response({
+        inputTokens: 1000,
+        outputTokens: 200,
+        inputTextTokens: 0,
+        inputAudioTokens: 0,
+        cachedTokens: 0,
+        cachedTextTokens: 0,
+        cachedAudioTokens: 0,
+        outputTextTokens: 0,
+        outputAudioTokens: 0,
+      }),
+    );
+    expect(row.costSource).toBe("none");
+    expect(row.computedCostNanos).toBeNull();
+    expect(row.priceVersion).toBeNull();
+    /* **And the counts still travel**, which is what makes the row worth
+       keeping: somebody can price it later from the totals, or ask OpenAI. */
+    expect(row.reportedInputTokens).toBe(1000);
+    expect(row.outputTokens).toBe(200);
+  });
+
+  it("does not price a turn whose output splits do not account for the output", () => {
+    const row = accept(response({ outputTextTokens: 0, outputAudioTokens: 0 }));
+    expect(row.costSource).toBe("none");
+    expect(row.computedCostNanos).toBeNull();
+  });
+
+  it("still prices a turn whose CACHED split is short, because that errs upward", () => {
+    /* The one incompleteness that is safe, and the reason this is not a blanket
+       "every split must be exact" rule. An absent cached split prices that input
+       at the FRESH rate, which is ten times the cached one — so the error is
+       against us, and `cached_tokens` is still on the row for anyone auditing
+       it. src/web/live/meter.ts argues the same case from the browser's end. */
+    const row = accept(
+      response({ cachedTokens: 300, cachedTextTokens: 0, cachedAudioTokens: 0 }),
+    );
+    expect(row.costSource).toBe("computed");
+    /* 400 text in at $4/Mtok + 600 audio in at $32/Mtok + 40 text out at $24
+       + 160 audio out at $64 = $0.0016 + $0.0192 + $0.00096 + $0.01024. */
+    expect(row.computedCostNanos).toBe(32_000_000);
+  });
+
+  it("never lets a priced row carry a negative figure", () => {
+    /* The property rather than a case: whatever the report says, a row that
+       reaches the ledger claiming a cost claims a non-negative one. The database
+       holds the same rule as `ai_calls_costs_not_negative`, because a negative
+       here is subtracted from a total somebody sets a price against. */
+    for (const over of [
+      {},
+      { cachedTokens: 1000, cachedTextTokens: 400, cachedAudioTokens: 600 },
+      { inputTextTokens: 0, inputAudioTokens: 1000, cachedTokens: 0, cachedTextTokens: 0, cachedAudioTokens: 0 },
+    ]) {
+      const row = accept(response(over));
+      expect(row.computedCostNanos ?? 0).toBeGreaterThanOrEqual(0);
     }
   });
 });

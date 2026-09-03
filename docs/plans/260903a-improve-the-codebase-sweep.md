@@ -781,11 +781,62 @@ deployed artefacts, and anything visible only in a browser.
 - [x] Plan reviewed by GPT Sol — **"not ready"**, and right on both counts. Re-cut below.
 - [x] T2.2 — the SSRF question: answered, and the comment corrected
 - [x] Stage 1 — gates · `453f3784`, pushed
-- [ ] Stage 2a — store
+- [x] Stage 2a — store · `726bac0e`, pushed
 - [x] Stage 2b — ledger, tautology, target · `8e6f1f2e`, pushed
 - [x] Stage 2c — dead code and false comments · `453f3784`, pushed
 - [x] Stage 3 — client tidyups · `eee69715`, pushed
-- [ ] The four important-doc edits, prepared and awaiting Greg
+- [ ] The important-doc edits, prepared and awaiting Greg —
+      [260903a-…-doc-proposals.md](260903a-improve-the-codebase-sweep-doc-proposals.md)
+
+## What the next sweep should know
+
+**Every stage is done. Nothing here is half-landed.** What is left is three decisions, all in the
+proposals doc or below, and none of them is engineering.
+
+**The method's own failure mode, found twice in one night.** Two counts in this plan were wrong —
+T1.4 said one lock where there are ten, T1.9 said three `?at=` reads where there are two — and both
+came from the same thing: **an audit agent read a comment saying "same trick as X" and filed X as an
+instance.** That is a hazard of this sweep's own best advice, which is to start from what the
+codebase says about itself. Comments that cross-reference each other are how you find a cluster and
+are not a census of it. A one-sentence addition to
+[improve-the-codebase.md](../reusable/improve-the-codebase.md) is proposed for this.
+
+**Three of this plan's claims were corrected by the lanes that built them**, which is the system
+working: the `DATABASE_URL` scripts do not "deliberately decline" anything, `export.ts`'s re-exports
+are alive, and `notes-view.ts` is not the third home of first-duplicate-wins (`internal-links.ts` is).
+A plan is a claim too.
+
+**The shared local Postgres cost more time than any finding.** Across the night, `store-jobs-parity`
+and a dozen timing-sensitive suites failed a *different subset every run* and passed in isolation
+every time — the unscoped `settleExpired()` window `ba05333b` documents as still open, plus one lane
+having its vitest processes killed by another session's `pkill`. **Nothing was ever wrong.** The cost
+was in proving that, repeatedly. If a future sweep wants one infrastructural win, it is this: a way
+for a worktree's test run not to share a database with every other worktree's.
+
+## Where it ended
+
+`npm run check`, on the merged tree at `726bac0e`:
+
+```
+  ✓ typecheck    clean          ✓ cycles       clean
+  ✓ build        clean          ✓ chain        clean
+  ✓ test         clean          ✓ committed    clean      ← a gate as of this sweep
+All gates green.
+```
+
+That is the first fully green `check` of the run, and the point of doing T0.1 first: at the start of
+the night the command could not pass on any clean checkout, so no later stage could have used it as
+evidence.
+
+| | before | after |
+|---|---|---|
+| `npm run check` | **red on any clean checkout** | green |
+| gates | 5 | **6** — `committed` promoted, as `check.ts` had promised in writing |
+| knip unused files | 13 | **9** — four were its own config |
+| jscpd clones | 265 | **258** |
+| `.transaction(` unpinned | 17 of 24 | **0**, and a test that names the next one |
+| `articleIdFor` copies | 6, one with a dropped check | **1** |
+| citations of a file deleted 2026-09-01 | 36 across 28 files | **0** |
 
 ## What the review changed
 

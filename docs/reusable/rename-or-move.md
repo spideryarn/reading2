@@ -48,6 +48,21 @@ do not match the same pattern, and neither matches `SCREAMING_SNAKE`. Search for
 on its own and read the noise, rather than searching for the exact string and getting a clean, short,
 wrong answer.
 
+## A deletion is a rename to nothing, and needs the same sweep
+
+Deleting a file removes the thing; it does not remove the sentences that explain the codebase by
+pointing at it. Those keep their confident present tense and send the next reader looking for a file
+that is not there.
+
+So run exactly the sweep above with only the old name, and rewrite every hit. Prefer **correcting**
+the fact to deleting the sentence — the comment usually explains *why* some defence exists, and that
+is still worth having with the right subject. Where the deleted thing was the whole reason for a
+rule, say what the rule defends against now, or say plainly that the reason has gone. Past tense with
+a date (*"…until it was deleted on 2026-09-01"*) is the cheapest fix that misleads nobody.
+
+The evidence: `src/store/import.ts` was deleted cleanly on 2026-09-01, and two days later **36
+references to it were still live across 28 files**.
+
 ## Process Guidelines
 
 ### Before Starting

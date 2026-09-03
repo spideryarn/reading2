@@ -212,3 +212,159 @@ describe("journalInversions", () => {
     expect(journalInversions(j, GRANDFATHERED)).toHaveLength(1);
   });
 });
+
+/* ------------------------------------------------------------------ */
+
+/**
+ * **A half-finished merge inside the journal.**
+ *
+ * On 2026-09-02 `drizzle/meta/_journal.json` sat in the shared primary checkout
+ * with `<<<<<<< HEAD` still in it, and every migration tool in the repo went
+ * blind at once: `readJournal` threw `SyntaxError: Expected ',' or '}' after
+ * property value in JSON at position 8151`, `npm run db:migrate` died on it, and
+ * `spideryarn.ai_calls` was left short the columns the code already wrote, so
+ * **every paid model call on the box was recorded nowhere** for hours.
+ *
+ * The cost was not the outage, it was the diagnosis. A JSON parse error at a
+ * byte offset says nothing about merges, so the hunt went to the ledger instead
+ * — three rows were read as belonging to no migration, and an hour went into
+ * hashing every `.sql` across every worktree to prove all three were real
+ * migrations and the ledger had been fine the whole time. One sentence naming
+ * the marker would have ended it at the first command.
+ *
+ * The class: **a machine-read file that a human merge can corrupt, whose reader
+ * reports the corruption in its own vocabulary rather than the one the reader
+ * needs.** `_journal.json` is the worst case in this repo — nearly every change
+ * appends to the same last line, so it conflicts constantly, and nothing but the
+ * tools ever reads it, so nobody sees the markers.
+ */
+describe("conflict markers in the journal", () => {
+  const journalSaying = (text: string): string => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "spya-journal-"));
+    mkdirSync(path.join(dir, "meta"));
+    writeFileSync(path.join(dir, "meta", "_journal.json"), text);
+    return dir;
+  };
+
+  /* Built rather than typed, so this file does not itself trip `git diff
+     --check` and every reviewer's editor. `n` is git's conflict-marker-size,
+     which is configurable — the default is 7. */
+  const marker = (ch: string, n = 7): string => ch.repeat(n);
+
+  const conflicted = (open: string, sep: string, close: string, eol = "\n"): string =>
+    [
+      "{",
+      '  "entries": [',
+      '    { "idx": 0, "version": "7", "when": 100, "tag": "0000_first" }',
+      open,
+      sep,
+      '    ,{ "idx": 1, "version": "7", "when": 200, "tag": "0001_theirs" }',
+      close,
+      "  ]",
+      "}",
+    ].join(eol);
+
+  const DEFAULT = conflicted(`${marker("<")} HEAD`, marker("="), `${marker(">")} origin/dev`);
+
+  const messageFrom = (dir: string): string => {
+    try {
+      readJournal(dir);
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err);
+    }
+    throw new Error("readJournal did not throw");
+  };
+
+  it("says the word 'merge', and names the file", () => {
+    const dir = journalSaying(DEFAULT);
+    expect(() => readJournal(dir)).toThrow(/unresolved merge conflict/i);
+    expect(() => readJournal(dir)).toThrow(/_journal\.json/);
+  });
+
+  /* The marker and its line are what a reader can act on; a byte offset into
+     the JSON is not, and leading with one is how the real hour was lost. The
+     assertion is on the FIRST line, so a message that buries the marker under
+     the parser error fails — the earlier version of this test only checked the
+     marker appeared somewhere, which a much worse message also satisfies. */
+  it("puts the file, the line and the marker in its first line", () => {
+    const first = messageFrom(journalSaying(DEFAULT)).split("\n")[0] ?? "";
+    expect(first).toContain("_journal.json");
+    expect(first).toContain("line 4");
+    expect(first).toContain(`${marker("<")} HEAD`);
+  });
+
+  /* Sends the reader to the runbook rather than restating it — the fork, not
+     the markers, is the part that bites, and it lives in one place. */
+  it("points at the fork runbook and the check that catches it", () => {
+    const message = messageFrom(journalSaying(DEFAULT));
+    expect(message).toContain("Repairing a fork");
+    expect(message).toContain("db:chain");
+  });
+
+  /* `conflict-marker-size` is configurable, so exactly-seven is an assumption
+     about somebody else's git config. Eight `<` used to slip straight past. */
+  it("catches a marker longer than the default seven", () => {
+    const dir = journalSaying(conflicted(`${marker("<", 9)} HEAD`, marker("=", 9), marker(">", 9)));
+    expect(() => readJournal(dir)).toThrow(/unresolved merge conflict/i);
+  });
+
+  /* diff3/zdiff3 add a base section. A half-finished resolution can leave only
+     that marker behind, with the ones either side already deleted. */
+  it("catches a lone diff3 base marker", () => {
+    const dir = journalSaying(
+      ["{", '  "entries": [', `${marker("|")} base`, "  ]", "}"].join("\n"),
+    );
+    expect(() => readJournal(dir)).toThrow(/unresolved merge conflict/i);
+  });
+
+  it("catches a CRLF conflict, and quotes the marker without the carriage return", () => {
+    const first =
+      messageFrom(
+        journalSaying(conflicted(`${marker("<")} HEAD`, marker("="), marker(">"), "\r\n")),
+      ).split("\n")[0] ?? "";
+    expect(first).toContain(`${marker("<")} HEAD`);
+    expect(first).not.toContain("\r");
+  });
+
+  /* Malformed-but-unmerged JSON is a different fault and must not be dressed up
+     as a merge — a wrong diagnosis is what this whole block exists to stop. */
+  it("does not blame a merge for ordinary broken JSON", () => {
+    const dir = journalSaying(`{ "entries": [ }`);
+    expect(() => readJournal(dir)).toThrow();
+    expect(() => readJournal(dir)).not.toThrow(/merge conflict/i);
+  });
+
+  /* A `tag` is a filename a person chose, and JSON allows a raw U+2028 inside a
+     string while JavaScript counts it as a line break. Scanning the text with a
+     multiline regex called this valid journal a conflict. */
+  it("does not blame a merge for a tag containing a line separator", () => {
+    const dir = journalSaying(
+      JSON.stringify({
+        entries: [{ idx: 0, tag: `0000_odd ${marker("<")} HEAD`, when: 100 }],
+      }),
+    );
+    expect(readJournal(dir)).toHaveLength(1);
+  });
+
+  it("still reads a journal with no markers in it", () => {
+    const dir = journalSaying(
+      JSON.stringify({ entries: [{ idx: 0, tag: "0000_first", when: 100 }] }),
+    );
+    expect(readJournal(dir)).toHaveLength(1);
+  });
+
+  /* `scripts/db-generate.ts` distinguishes "no journal yet", which is a
+     legitimate starting state, from every other failure, which it must not
+     swallow — it used to catch all of them and lose this diagnostic entirely.
+     That narrowing is only sound while a missing file arrives as ENOENT. */
+  it("reports a missing journal as ENOENT, which is what db:generate keys on", () => {
+    const empty = mkdtempSync(path.join(os.tmpdir(), "spya-journal-"));
+    let code: string | undefined;
+    try {
+      readJournal(empty);
+    } catch (err) {
+      code = (err as NodeJS.ErrnoException).code;
+    }
+    expect(code).toBe("ENOENT");
+  });
+});

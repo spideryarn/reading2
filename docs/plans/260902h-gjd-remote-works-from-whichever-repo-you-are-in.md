@@ -387,12 +387,12 @@ The pre-ticking answer is above, and everything else in it was settled before it
 
 Only after `/Users/greg/dev/hellozenno` exists and has been quiet for fifteen minutes.
 
-- [ ] `provision.sh`: `python3-venv`, `python3-pip`; re-run against the box.
-- [ ] hellozenno's `.gjd-remote/config.toml` + `setup` (venv, submodule, `npm ci --prefix
+- [x] `provision.sh`: `python3-venv`, `python3-pip`; re-run against the box.
+- [x] hellozenno's `.gjd-remote/config.toml` + `setup` (venv, submodule, `npm ci --prefix
   frontend`) + a `check` that looks rather than trusts exit codes; `.gitmodules` → https; the
   `lsof | kill -9` lines replaced by "refuse and name the holder".
-- [ ] `gjd-remote new-claude` from that directory: prompt, clone, setup, session — recorded here.
-- [ ] `push-env` from it: `FLASK_SECRET_KEY` and the Supabase password not sent; outcome recorded
+- [x] `gjd-remote new-claude` from that directory: prompt, clone, setup, session — recorded here.
+- [x] `push-env` from it: `FLASK_SECRET_KEY` and the Supabase password not sent; outcome recorded
   as key names only.
 - [ ] Its plan doc updated to point here; Sol review of the whole.
 
@@ -771,3 +771,87 @@ into its own repo · per-session worktrees on the box · a second Unix user.
   from before today left 23 staged `.env.local` copies under `$TMPDIR/gjd-remote-env-*` (15 from
   2026-08-31 with real local-dev credentials, 8 from today's throwaway runs with fake values) — the
   bug is fixed; the leftovers are Greg's to delete.
+- 2026-09-03 — **Post-landing review and the road to Stage 5.** hellozenno's `main` pushed
+  (`62e7c54`); the 23 staged env copies deleted; the primary checkout pulled and `npm install`ed,
+  so the shim is the new tool (`gjd-remote resolve` → `spideryarn/reading2`, found by origin).
+  GPT Sol reviewed the landing fixes (`…-stage4-fixes-review-sol.md`): **go**, with two
+  should-fixes, both confirmed and fixed here — the model was still asked about every name when
+  one was undecided (now only the undecided, unblocked ones, unless `--propose`), and a failed
+  `scp` inside `sendEnvPayload` skipped the `finally` because `die()` is `process.exit`
+  (`stageAndSend` now returns the failure and dies after the cleanup). Sol's third, low finding —
+  no injected-transport test for `sendEnvPayload` itself — is deferred: it lives in the
+  `main()`-on-import file. Then `gjd-remote provision` refused: cloud-init's first-boot status on
+  the box is `error` for ever (the pre-split `runcmd`), and the wait gate added on 2026-09-01 had
+  never been run against this box. `cloudInitGate` now asks for the bootstrap artefacts as a second
+  witness — tests red first, then green;
+  [hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md) says why. (Its first
+  version read the provision status file instead, and the very next run showed why not: a failed
+  run rewrites that file as "started".)
+- 2026-09-03 — **Provisioning then failed at "install claude code" with the installer saying
+  success.** Root-caused on the box: `su - greg -c 'set -eu; …'` runs `~/.bash_logout` on exit,
+  its `clear_console -q` fails without a console, and `set -e` made that the exit status — every
+  `su -` step with `set -e` in it, since 2026-09-02. `provision.sh` now runs user steps through a
+  non-login `AS_USER` array, and `run` says "failed with exit N" rather than "failed or timed out".
+  [260903a-a-logout-hook-decided-the-exit-status.md](../postmortems/260903a-a-logout-hook-decided-the-exit-status.md).
+- 2026-09-03 — **Stage 5 run end to end against the box, from `/Users/greg/dev/hellozenno`.** The
+  clone, the setup, the session and both `push-env` runs all worked; three things came out of it
+  that were not expected, and the third is a decision for Greg.
+  - **The slug is `spideryarn/hellozenno`, not `gregdetre/hellozenno`.** Identity is the origin —
+    `git@github.com:spideryarn/hellozenno.git` — so every path this stage wrote is
+    `spideryarn--hellozenno.*`, not the `gregdetre--…` the stage was briefed to expect.
+  - **`resolve`** printed `box:  nothing found; absent, proposed /home/greg/code/hellozenno` and
+    exited 1, with `gjd-remote clone spideryarn/hellozenno` as the way out.
+  - **`new-claude hz-stage5 -p …`** asked once — `? Clone spideryarn/hellozenno to
+    /home/greg/code/hellozenno and run its setup, then start the session? (y/N)` — having already
+    printed the laptop's spec, `setup: ./.gjd-remote/setup (script, sha b5c0fb822ea8, check:
+    ./.gjd-remote/check)`. **Sol's first watch point held and did not need to fire**: after the
+    clone the config was re-read from the cloned commit, printed as `… sha b5c0fb822ea8 … on the
+    box`, the same specification, so there was no second question. Clone → staging directory →
+    rename, origin and HEAD verified, all in one transaction.
+  - **Setup took 2m04s and passed.** `--- submodule: gjdutils` cloned over https with no credential
+    prompt (**Sol's second point**); `--- venv: creating` succeeded, `Python 3.12.3`, so
+    `python3-venv` is on the box (**Sol's third**); pip installed `backend/requirements-dev.txt`;
+    `npm ci --prefix frontend` gave 399 entries in `frontend/node_modules`. Then `gjd-remote setup:
+    success — spideryarn/hellozenno exited 0, check success`. **Sol's fourth point**: the durable
+    status carries both witnesses — `"configSha256":"968bd9ef2d84…"` and
+    `"checkoutInode":"2647533"`, and `stat` says `.git` is inode 2647533. `gjd-remote setup
+    --status` afterwards: `config: … agree` and `✓ set up on attempt 577f24b3…`. Re-running
+    hellozenno's own `./.gjd-remote/check` on the box by hand: all three green, `=== check passed
+    ===`, exit 0.
+  - **The session was created and Claude Code started in the right tree** — `gjd-remote ls` showed
+    `hz-stage5   spideryarn/hellozenno`, and the pane read `Accessing workspace:
+    /home/greg/code/hellozenno`. It stopped at Claude's own "is this a project you trust?" prompt,
+    which this agent deliberately did not answer, so the `-p` prompt never ran. Both sessions
+    (`hz-stage5` and the setup job's) were killed afterwards; the checkout stays.
+  - **`push-env` run 1** (`--save`): `26 key name(s), no values`, `asking
+    anthropic/claude-sonnet-5 about 26 key NAMES`, `Spent: $0.0227 over 1 model call(s)` into
+    Spideryarn's `data/_ai-calls.jsonl` as `env-proposal` — billed here, run from there, exactly as
+    designed. The model pre-ticked 20 and left 6 unticked, and **the two that had to be unticked
+    already were**, so nothing needed changing: withheld were `DATABASE_URL`, `FLASK_SECRET_KEY`,
+    `SUPABASE_HOST`, `SUPABASE_DATABASE`, `SUPABASE_USER`, `SUPABASE_PASSWORD`. Sent were
+    `OPENAI_API_KEY`, `CLAUDE_API_KEY`, `ELEVENLABS_API_KEY`, `PERPLEXITY_API_KEY`,
+    `GEMINI_API_KEY`, `CODEX_API_KEY`, `USE_LOCAL_TO_PROD`, `LOGS_DIR`, `FLASK_PORT`,
+    `SUPABASE_PORT`, `SUPABASE_POOL_MODE`, `PUBLIC_SUPABASE_URL`, `SUPABASE_URL`,
+    `PUBLIC_SUPABASE_ANON_KEY`, `USE_LEGACY_CURSORRULES`, `VITE_FRONTEND_URL`, `VITE_API_URL`,
+    `SEGMENTATION_DEFAULT`, `SEGMENTATION_TH`, `RECOGNITION_KNOWN_WORD_SEARCH`. **No row was hard-
+    guarded**, `DATABASE_URL` included — its value is `127.0.0.1`, so the value guard had nothing to
+    catch, and it was unticked on the model's judgement alone. Result: `✓ 20 keys, 0600 greg, read
+    back and verified`.
+  - **`push-env` run 2** (`--save --yes`): `no keys you have not decided on — skipping the model`,
+    every unticked row still unticked and annotated `you unticked this on 2026-09-03 — tick it to
+    change your mind`, then `= 20 unchanged`. The ledger still holds exactly one `env-proposal`
+    row, which is the honest proof no second model call happened. `--yes` skips the final "send
+    these 20 keys?" confirmation but **not** the checklist itself, which is what `--help` says and
+    is worth knowing before scripting it.
+  - **The staged-copy leak stays fixed**: zero `$TMPDIR/gjd-remote-env-*` directories before run 1,
+    after run 1, and after run 2.
+  - **On the box**: `/home/greg/code/hellozenno/.env.local` is `600 greg:greg`, 26 lines, and holds
+    exactly the 20 approved names and none of the 6 refused ones.
+  - **The thing for Greg to decide.** hellozenno's own plan doc has a section headed
+    "Environment variables: do not use `push-env`", written 2026-08-31, and it is now half wrong and
+    half still right. Wrong: it says `push-env` "will **refuse** for this repo, deliberately" — the
+    checklist route built in Stage 4 means it no longer does. Still right: `backend/utils/env_config.py`
+    requires *every* key, so the 20-key file on the box would crash the backend at import. Nobody
+    stood the app up — setup deliberately does not — so nothing is broken today, but the box now has
+    a `.env.local` that is a hazard rather than a help if someone tries to run it. `FLASK_SECRET_KEY`,
+    the one secret that doc singles out, was not sent.

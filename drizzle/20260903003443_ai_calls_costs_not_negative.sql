@@ -1,0 +1,35 @@
+-- A cost is never negative.
+--
+-- Cheap, and it earns its place because of the direction the failure runs. A
+-- missing cost is loud: `cost_source = 'none'` is counted, and `npm run cost`
+-- prints the total as short by an unknown amount. A *negative* cost is silent
+-- and worse than missing — every reader of this table sums a column, so a
+-- negative row quietly pays for somebody else's and the grand total stays
+-- plausible while being wrong in the direction that flatters a price.
+--
+-- Not hypothetical. `computed_cost_nanos` is the one figure this repo works out
+-- for itself: for a live conversation it subtracts the cached tokens from their
+-- modality total and multiplies by a rate. On 2026-09-03 a GPT Sol review
+-- produced a browser report — `inputTextTokens = 100`, `cachedTextTokens = 1000`
+-- — that made the subtraction go negative, and the endpoint wrote a row claiming
+-- **minus** $0.0032. `parseRealtimeUsage` in src/live.ts now refuses that report
+-- (a cached token is an input token; there cannot be more of them than there
+-- were). This is the belt to those braces, and unlike the TypeScript it holds
+-- for arithmetic nobody has written yet.
+--
+-- ## All three pockets, not only the computed one
+--
+-- `totalRows()` in src/store/ai-calls.ts and the per-owner SQL in
+-- src/store/ai-calls-spend-pg.ts both add `COALESCE` of all three, so a negative
+-- in any of them has the same effect on the number Greg sets a price against.
+-- Neither provider figure has ever been negative — OpenRouter bills through
+-- `credits_used_nanos`, it does not refund through it — so this constrains
+-- nothing that happens today, which is exactly when a constraint is cheap to
+-- add. `ADD CONSTRAINT` validates the existing rows, so if that ever stops being
+-- true this migration says so by failing rather than by passing.
+--
+-- docs/plans/260902g-cost-tracking-that-can-set-a-price.md, and the code review
+-- beside it.
+ALTER TABLE "spideryarn"."ai_calls" ADD CONSTRAINT "ai_calls_costs_not_negative" CHECK (("spideryarn"."ai_calls"."credits_used_nanos" is null or "spideryarn"."ai_calls"."credits_used_nanos" >= 0)
+          and ("spideryarn"."ai_calls"."byok_upstream_nanos" is null or "spideryarn"."ai_calls"."byok_upstream_nanos" >= 0)
+          and ("spideryarn"."ai_calls"."computed_cost_nanos" is null or "spideryarn"."ai_calls"."computed_cost_nanos" >= 0));

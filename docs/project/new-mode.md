@@ -1,0 +1,110 @@
+# Adding a mode
+
+The one checklist for adding a mode to the reader — the client half and, if the mode shows a
+generated artefact, the pipeline-and-store half. It was two sections until 2026-09-03,
+[web-client.md § Adding a mode](web-client.md#adding-a-mode) and
+[architecture.md § Adding an artefact-backed mode](architecture.md#adding-an-artefact-backed-mode);
+Greg asked for one place, and those two now point here.
+
+> We keep adding new modes because we're experimenting with what feels good. We want to make it
+> easy/consistent/robust/reusable to add new modes.
+>
+> — Greg, 2026-09-02
+
+What a mode *is* is [reading-view-overview.md](reading-view-overview.md); the reasoning, the
+measured counts, and the shapes deliberately **rejected** — a mode registry, a sixteen-prop
+`<ModeBands>`, a `Record<Mode, BandSpec | null>`, a `makeArtefactStage()` factory, a generic
+`/api/artefact/:kind` — are in
+[260902o-adding-a-mode.md](../plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md).
+Read its *Rejected* list before proposing a registry again.
+
+The shape of both halves is the same: **a closed vocabulary, total tables the compiler checks,
+and then a residue nothing checks** — listed here with, in italics, what would tell you if you
+forgot it. The rule behind the total tables is
+[260830c § What would have caught the class](../postmortems/260830c-the-dialog-said-nothing-was-personalised.md#what-would-have-caught-the-class):
+a hand-kept list falling behind a growing set.
+
+## The client
+
+**The vocabulary is `MODES` in [`src/modes.ts`](../../src/modes.ts), and the compiler asks for the
+rest.** A fourteenth word there is red until it has a row in each of these totals:
+
+| Table | Where |
+|---|---|
+| `MODE_LABEL` | [`src/title-text.ts`](../../src/title-text.ts) — the only place a mode is spelled for a person |
+| `OWNER_MODE_NOTE` | [`src/messages.ts`](../../src/messages.ts) |
+| `MODES_UI`, via `ModesMissingFromDock` | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) — an ordered array, because the order is Greg's; the type check stands in for the `Record` |
+| `POLICY` | [`src/web/visitor.ts`](../../src/web/visitor.ts) — what a visitor may see; there is no fall-through any more, a missing row is a typecheck error |
+| `BAND_SAYS` | [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) |
+
+Then the residue, which is why this page exists:
+
+- **The band branch**: the `mode === "…"` if-chain near the bottom of `Reader` in
+  [`App.tsx`](../../src/web/App.tsx), whose own header comment records why it is still a chain and
+  not a table. *Nothing; this list.*
+- **The mode's URL params**, [`params.ts`](../../src/web/params.ts) — [url-state.md](url-state.md).
+  *Nothing.*
+- **A resolver in [`search-hits.ts`](../../src/web/search-hits.ts)** if the mode marks passages;
+  `Found` is the one currency. *Nothing.*
+- **A read hook** shaped like [`useIdeas.ts`](../../src/web/useIdeas.ts) — ordering from
+  [`useOrderedRead.ts`](../../src/web/useOrderedRead.ts), the job from
+  [`useStepJob.ts`](../../src/web/useStepJob.ts), rather than a ninth copy of either. *Nothing.*
+- **The band's chrome**: the header markup is `.band-head`, and the scroller under it is documented
+  in the same place — [`styles.css`](../../src/web/styles.css) § mode band. *Nothing.*
+- **`CACHEABLE`** in [`lib/api.ts`](../../src/web/lib/api.ts), if the mode has a GET.
+  *[`tests/cacheable-covers-artefact-routes.test.ts`](../../tests/cacheable-covers-artefact-routes.test.ts)*,
+  which derives the list rather than repeating it.
+- **The dock's mode page**, and the mode's line in
+  [reading-view-overview.md § The modes in the band](reading-view-overview.md#the-modes-in-the-band)
+  with the doc that owns it. *[`tests/doc-links.test.ts`](../../tests/doc-links.test.ts), for the
+  doc; nothing for the line.*
+
+A mode that shows nothing generated — Plain, Hierarchy, Search — stops here.
+
+## The artefact, if the mode shows one
+
+It starts at `ArtifactKind` and `ArtifactMap` in
+[`src/store/artifacts.ts`](../../src/store/artifacts.ts) and `StepName` in
+[`src/types.ts`](../../src/types.ts). **The compiler then asks for a row in each of these**, every
+one of them a total record, so the new kind or step stays red until it has one: `SHAPE` and
+`STAMP_SOURCE` (`artifacts.ts`), `DECODERS`
+([`artifacts-fs.ts`](../../src/store/artifacts-fs.ts)), `STEP_BUDGET_MS`
+([`src/jobs.ts`](../../src/jobs.ts)), `STEPS` and — via `StepsMissingFromOrder` — `STEP_ORDER`
+([`src/pipeline.ts`](../../src/pipeline.ts)); `TASK_TIER`, `TASK_WIRE`, `MODEL_ENV_VAR`,
+`STAGE_EFFORT` and `ARTICLE_RENDERER` ([`src/models.ts`](../../src/models.ts));
+`REVISION_CARRY_POLICY` ([`pg-revisions.ts`](../../src/store/pg-revisions.ts)); and `ArticleReader`
+([`contracts.ts`](../../src/store/contracts.ts)) with both adapters,
+[`fs.ts`](../../src/store/fs.ts) and [`pg.ts`](../../src/store/pg.ts), *annotated* rather than
+`Pick`-cast.
+
+Then the residue nothing refuses at compile time:
+
+- **The SQL CHECK on `revision_step_runs.step_name`** — a migration is the truth and the literal in
+  [`src/db/schema.ts`](../../src/db/schema.ts) is a hand-kept copy, because `drizzle-kit generate`
+  cannot see a CHECK expression. *[`tests/db-step-constraint.test.ts`](../../tests/db-step-constraint.test.ts)*
+  compares the last `ADD CONSTRAINT` in the journal's migrations with `STEP_ORDER`, both directions.
+- **The per-kind GET route** in [`src/routes.ts`](../../src/routes.ts); each carries a different
+  staleness contract, which is why there is no generic one. *Nothing.*
+- **The put-chain in [`src/store/export.ts`](../../src/store/export.ts)** — one `await put(…)` per
+  artefact, and a missing line exports nothing and says nothing. *Nothing.*
+- **`PUBLIC_PROJECTIONS` and the public DTO**, if a visitor may read it:
+  [`public-reader.ts`](../../src/store/public-reader.ts) and
+  [`src/public/dto.ts`](../../src/public/dto.ts).
+  *[`tests/store-revision-columns.test.ts`](../../tests/store-revision-columns.test.ts)* pins each
+  read's projection exactly against `REVISION_READ_POLICY`'s grants;
+  *[`tests/public-dto.test.ts`](../../tests/public-dto.test.ts)* pins the keys a public DTO may emit,
+  against inputs deliberately over-full so a projection that copied its argument would fail.
+- **Pressing the mode's button with nothing in it runs the job**; arriving does not —
+  [`useAutoRun.ts`](../../src/web/useAutoRun.ts) is the whole rule, and
+  [reading-view-overview.md § True across the whole view](reading-view-overview.md#true-across-the-whole-view)
+  is why. *Nothing.*
+
+## Before you call it finished
+
+The dock, the visitor's view, the exported bundle and the offline copy each have a test that
+walks `MODES` or `STEP_ORDER`; if yours went green without a new row somewhere, one of the residue
+items above is the reason — [silent-success.md](../reusable/silent-success.md).
+
+---
+
+Up: [reading-view-overview.md](reading-view-overview.md)

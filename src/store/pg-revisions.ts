@@ -81,6 +81,7 @@ import { hashBlocks } from "../source-hash.js";
 import { checkTree } from "../tree-invariants.js";
 import type { Block, StepName, Tree } from "../types.js";
 import { deriveLibraryScalars } from "../library-scalars.js";
+import { READ_COMMITTED } from "./isolation.js";
 import { REVISION_PROJECTIONS, ownedSlug, requireSlug } from "./pg.js";
 import { slugIsTaken } from "./slug-is-taken.js";
 import { NO_INPUT_HASH, PIPELINE_RUN } from "./artifacts.js";
@@ -344,8 +345,10 @@ function carriedColumns(): (keyof typeof articleRevisions.$inferSelect)[] {
  * so the app runs without a database.
  *
  * It is re-exported because this is still part of this module's surface:
- * `PublishResult.scalars` is typed from it, and src/store/import.ts is a store
- * module reaching for its neighbour. See docs/plans/260828c-library-read-latency.md § 1.
+ * `PublishResult.scalars` is typed from it. (The second reason was
+ * src/store/import.ts, a store module reaching for its neighbour; it was deleted
+ * on 2026-09-01 with the rest of the importer.) See
+ * docs/plans/260828c-library-read-latency.md § 1.
  */
 export { deriveLibraryScalars, type LibraryScalars } from "../library-scalars.js";
 
@@ -644,8 +647,9 @@ export interface BeginRevisionResult {
  * derived id means two different extractions that happen to produce the same
  * blocks are the *same row*, so the second one overwrites the first in place —
  * which is exactly what "immutable in its text" is supposed to forbid.
- * src/store/import.ts used to derive one and no longer does; see its header for
- * why that had to be decided in the same change.
+ * (src/store/import.ts derived one, stopped, and was itself deleted on
+ * 2026-09-01 — docs/plans/260831b-finish-the-database-move.md § Stage 4. Nothing
+ * derives a revision id now, and nothing may start.)
  *
  * ## There is no lookback to a previous draft
  *
@@ -662,7 +666,7 @@ export interface BeginRevisionResult {
  */
 export async function beginRevision(opts: BeginRevisionOptions): Promise<BeginRevisionResult> {
   requireSlug(opts.slug);
-  return getDb().transaction((tx) => beginDraftIn(tx, opts));
+  return getDb().transaction((tx) => beginDraftIn(tx, opts), READ_COMMITTED);
 }
 
 /**
@@ -987,7 +991,7 @@ export async function openOrBeginJobDraft(opts: {
     }
 
     return { ...(await beginDraftIn(tx, opts)), created: true };
-  });
+  }, READ_COMMITTED);
 }
 
 /* --------------------------------------------------------- recordStepRun -- */
@@ -1442,7 +1446,7 @@ export async function publishRevision(
   opts: PublishRevisionOptions,
 ): Promise<PublishRevisionResult> {
   requireSlug(opts.slug);
-  const published = await getDb().transaction((tx) => publishRevisionIn(tx, opts));
+  const published = await getDb().transaction((tx) => publishRevisionIn(tx, opts), READ_COMMITTED);
   logPublication(opts, published);
   return published;
 }
@@ -1623,7 +1627,7 @@ export function logPublication(
  */
 export async function failRevision(opts: FailRevisionOptions): Promise<void> {
   requireSlug(opts.slug);
-  const failed = await getDb().transaction((tx) => failRevisionIn(tx, opts));
+  const failed = await getDb().transaction((tx) => failRevisionIn(tx, opts), READ_COMMITTED);
   logDraftFailure(opts, failed);
 }
 

@@ -204,7 +204,7 @@ describe("streamMessage — the recording lifecycle", () => {
 
       expect(report.calls).toHaveLength(1);
       expect(report.calls[0]?.job).toBe("hierarchy");
-      expect(report.calls[0]?.costNanos).toBe(21_523_500);
+      expect(report.calls[0]?.cost).toEqual({ source: "provider", costNanos: 21_523_500 });
       expect(report.calls[0]?.outcome).toBe("ok");
       expect(report.calls[0]?.upstream).toBe("Claude Platform on AWS");
       expect(report.calls[0]?.generationId).toBe(
@@ -295,7 +295,7 @@ describe("streamMessage — the recording lifecycle", () => {
   it("takes the cost off the wire, where finalMessage() would have dropped it", async () => {
     const row = await recordOne();
     /* Nano-dollars, per src/pricing.ts — an integer, so no float drift in a sum. */
-    expect(row.costNanos).toBe(21_523_500);
+    expect(row.cost).toEqual({ source: "provider", costNanos: 21_523_500 });
     expect(row.upstreamCostNanos).toBe(21_523_500);
     expect(row.isByok).toBe(false);
   });
@@ -306,14 +306,16 @@ describe("streamMessage — the recording lifecycle", () => {
        quietly reads as free. `null` is a thing a report can count and complain
        about; `0` is indistinguishable from a free call. */
     const row = await recordOne({ cost: undefined, cost_details: undefined });
-    expect(row.costNanos).toBeNull();
-    expect(row.costNanos).not.toBe(0);
+    expect(row.cost).toEqual({ source: "none" });
+    /* `none`, not a provider figure of zero — a free call and an unknown one are
+       different facts, and only one of them is reconcilable. */
+    expect(row.cost).not.toEqual({ source: "provider", costNanos: 0 });
   });
 
   it("refuses a cost that is not a finite number rather than coercing it", async () => {
     for (const bad of [null, "0.02", Number.NaN, -1]) {
       const row = await recordOne({ cost: bad, cost_details: undefined });
-      expect(row.costNanos, `cost: ${String(bad)}`).toBeNull();
+      expect(row.cost, `cost: ${String(bad)}`).toEqual({ source: "none" });
     }
   });
 
@@ -365,7 +367,7 @@ describe("streamMessage — the recording lifecycle", () => {
       /* The row exists and admits it does not know — rather than not existing,
          which is a hole in the bill that nothing points at. */
       expect(report.calls).toHaveLength(1);
-      expect(report.calls[0]?.costNanos).toBeNull();
+      expect(report.calls[0]?.cost).toEqual({ source: "none" });
       expect(totalSpend(report.calls).unpriced).toBe(1);
     } finally {
       t.restore();
@@ -414,7 +416,8 @@ describe("streamMessage — the recording lifecycle", () => {
         ]);
       });
       expect(report.calls).toHaveLength(3);
-      for (const c of report.calls) expect(c.costNanos).toBe(21_523_500);
+      for (const c of report.calls)
+        expect(c.cost).toEqual({ source: "provider", costNanos: 21_523_500 });
       expect(totalSpend(report.calls).nanos).toBe(3 * 21_523_500);
     } finally {
       t.restore();

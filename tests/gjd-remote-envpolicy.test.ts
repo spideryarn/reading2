@@ -1072,12 +1072,17 @@ describe("pushEnvPlan", () => {
     const said: string[] = [];
     const sent: { url: string; body: string }[] = [];
     const printed: string[] = [];
-    const content = JSON.stringify({
-      keys: ALL_NAMES.map((name) => ({ name, class: "local-dev-only", reason: "a fixture said so" })),
-    });
     const fetchStub = vi.fn(async (url: unknown, init: unknown) => {
       const body = typeof init === "object" && init !== null && "body" in init ? String(init.body) : "";
       sent.push({ url: String(url), body });
+      // The model answers about the names it was asked about and no others —
+      // an answer naming a key outside the question is refused (fail-closed),
+      // which is right, and which a stub that always named all five tripped
+      // once the question stopped naming the decided ones.
+      const keys = asked[asked.length - 1] ?? ALL_NAMES;
+      const content = JSON.stringify({
+        keys: keys.map((name) => ({ name, class: "local-dev-only", reason: "a fixture said so" })),
+      });
       return new Response(
         JSON.stringify({
           id: "gen-fixture",
@@ -1180,9 +1185,11 @@ describe("pushEnvPlan", () => {
     expect(run.rows).toHaveLength(1);
   });
 
-  it("asks the model about every name, once, and only names", async () => {
+  it("asks the model about every selectable name, once, and only names", async () => {
     const run = await runPlan();
-    expect(run.asked).toEqual([ALL_NAMES]);
+    // Not ALL_NAMES: the two hard-guarded keys are greyed out whatever the model
+    // says, so a paid opinion on them is a paid opinion on nothing.
+    expect(run.asked).toEqual([ELIGIBLE]);
     expect(run.sent).toHaveLength(1);
     expect(run.sent[0]?.body).toContain("LOCAL_PORT");
   });
@@ -1231,6 +1238,22 @@ describe("pushEnvPlan", () => {
     const rows = second.offered[0] ?? [];
     expect(rows.filter((r) => r.checked)).toEqual([]);
     expect(rows.find((r) => r.name === "LOCAL_PORT")?.description).toContain("you unticked this on 1970-01-01");
+  });
+
+  it("asks the model only about the names nobody has decided on", async () => {
+    // GPT Sol, post-landing review, finding 1: the reason for asking counted the
+    // undecided keys, then the question named every key. A decided name could
+    // not be re-ticked by the answer, but "no model is asked about a decided
+    // key" was still false.
+    const file = policyPath(slug, tempDir());
+    writePolicy(file, { repo: slug, approved: ["LOCAL_PORT"], reviewed: ["LOCAL_PORT", "OPENAI_API_KEY"] }, new Date(0));
+    const saved = readPolicy(file, slug);
+    if (saved.kind !== "policy") throw new Error("the fixture policy did not read back");
+    const run = await runPlan({ saved });
+    expect(run.asked).toEqual([["DATABASE_URL"]]);
+    expect(run.sent).toHaveLength(1);
+    expect(run.sent[0]?.body).not.toContain("LOCAL_PORT");
+    expect(run.sent[0]?.body).not.toContain("OPENAI_API_KEY");
   });
 
   it("asks anyway under --propose, saved policy or not", async () => {
