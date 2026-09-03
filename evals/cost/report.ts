@@ -221,6 +221,12 @@ export type FindingKind =
   | "warm-first-call"
   /** A per-mode draw read a cache at all, and it sent no breakpoint for one to exist. */
   | "warm-mode-call"
+  /**
+   * A required step or `AiJob` bought nothing, **and the job's own step statuses
+   * say why** — the step that would have bought it failed, or never ran because
+   * something before it did. See `stoppedAtOrBefore`.
+   */
+  | "explained-absence"
   /** A call reported no cache-read count, so there is no evidence it was cold. */
   | "unknown-cache-telemetry"
   /** A job that was supposed to adopt an article minted a fresh one instead. */
@@ -243,6 +249,12 @@ export interface Finding {
    *   accept "unknown" as its answer, and `allowUnpriced` is the deliberate
    *   override;
    * - a ledger that is short of what the step said it bought.
+   *
+   * **The second and the fourth are not the same absence**, and the difference
+   * is the point of `stoppedAtOrBefore`: a row that is missing because the step
+   * that would have bought it failed is a paid failure to be counted, not a lost
+   * row, and it is reported loudly and non-fatally so the sweep can go on
+   * counting. Only an absence nothing explains stops the run.
    *
    * Everything else is reported beside the numbers and the run carries on — a
    * duplicate execution is a *finding about production*, not a broken harness.
@@ -274,6 +286,69 @@ export interface StepObservation {
   writeFailures: number;
 }
 
+/**
+ * **What the job said one of its steps did** — the fact that tells an absence
+ * apart from a loss.
+ *
+ * Structurally what `Draw.steps` already holds in run.ts, narrowed to the two
+ * fields this file may reason about. `status` is the job's own word
+ * (`StepStatus` in src/types.ts: pending, running, done, skipped, error) and is
+ * typed as a string here because report.ts is pure arithmetic over what it is
+ * handed and has no business importing the pipeline's vocabulary.
+ */
+export interface StepOutcome {
+  name: string;
+  status: string;
+}
+
+/**
+ * The statuses that mean the pipeline stopped here. `bug` is not a `StepStatus`
+ * production writes today, and it is in the set because `outcomeOf` in run.ts
+ * counts it as a failure — the two lists disagreeing is the kind of drift that
+ * makes one summary contradict the other.
+ */
+const STOPPED = new Set(["error", "bug", "failed"]);
+
+/**
+ * **The judgement this whole distinction hangs on: which absences are explained.**
+ *
+ * A required step or `AiJob` with no priced row is either a *lost row* — money
+ * really spent and the ledger short of it, the class that cost this project a
+ * silent $0.0333 run — or a *paid failure*, where the step that would have
+ * bought it never got the chance. The two look identical from the ledger, and
+ * only the job's own step statuses can separate them.
+ *
+ * The rule is **at or before**, and the direction matters both ways. Walking the
+ * steps in pipeline order, anything from the first failure onwards never
+ * completed, so an absence there is explained. A failure *after* `producedBy`
+ * explains nothing about it: `hierarchy` finishing and `arc` blowing up leaves a
+ * missing `labels` row exactly as lost as it ever was.
+ *
+ * Found by evals/results/cost/2026-09-03-04-59-07-1bpfhts0-long-html: draw 2's
+ * `hierarchy` was billed $0.2124 and then failed its own range check, so the
+ * label fan-out — which runs only after hierarchy succeeds — bought nothing, and
+ * the fatal `no-spend` stopped a sweep whose purpose was to count how often that
+ * happens. Draws 3 and 4 never ran.
+ *
+ * `undefined` when nothing explains it, which keeps the finding fatal. A run
+ * that supplies no statuses gets the old behaviour: no explanation is not an
+ * explanation.
+ */
+function stoppedAtOrBefore(
+  steps: readonly StepOutcome[] | undefined,
+  producedBy: string,
+): StepOutcome | undefined {
+  if (!steps) return undefined;
+  const at = steps.findIndex((s) => s.name === producedBy);
+  /* A step the job never listed cannot be explained by this job's failures.
+     Whatever went wrong there is a different bug, and it stays fatal. */
+  if (at === -1) return undefined;
+  for (const step of steps.slice(0, at + 1)) {
+    if (STOPPED.has(step.status)) return step;
+  }
+  return undefined;
+}
+
 export interface ColdExpectation {
   /** Steps that must have recorded non-zero spend for this run to be cold. */
   mustPay: readonly string[];
@@ -297,6 +372,22 @@ export interface ColdExpectation {
   /** What each step's collector saw, to reconcile against the rows that survived. */
   observed?: readonly StepObservation[];
   /**
+   * **What the job recorded for each of its steps, in pipeline order** — the
+   * only evidence that can turn a fatal missing row into a counted paid failure.
+   *
+   * Passed in rather than read: this file is pure, and `Draw.steps` in run.ts is
+   * where the job's own answer lives. Omit it and every absence stays fatal,
+   * which is what every caller got before 2026-09-03.
+   */
+  stepStatuses?: readonly StepOutcome[];
+  /**
+   * Which step each `AiJob` in `mustPayJobs` runs inside, for the two whose
+   * names differ from their step's — `AI_JOB_STEP` in harness.ts holds them and
+   * says why there are only two. Anything not in the map is looked up under its
+   * own name.
+   */
+  aiJobStep?: Readonly<Record<string, string>>;
+  /**
    * Accept a required step whose entire bill is unknown, as a note rather than
    * a stop. Deliberate, and it makes the run's headline number short by an
    * unknown amount — which the report then has to say.
@@ -311,17 +402,46 @@ export interface ColdExpectation {
  * `AiJob` cut. `what` names the namespace so a finding says which cut it is
  * about — "labels" is not a step and a message that implied it was would send
  * the next reader to `STEP_ORDER`.
+ *
+ * `stepOf` maps the required name onto the pipeline step that would have bought
+ * it, which is the identity for the step cut and `AI_JOB_STEP` for the job cut.
  */
 function checkMustPay(
   groups: readonly StepSpend[],
   required: readonly string[],
   what: "step" | "AI job",
   allowUnpriced: boolean,
+  expect: ColdExpectation,
+  stepOf: (name: string) => string,
 ): Finding[] {
   const byName = new Map(groups.map((s) => [s.step, s]));
   const findings: Finding[] = [];
   for (const name of required) {
     const group = byName.get(name);
+    if (group && moneyTotalNanos(group.money) > 0) continue;
+
+    /* **Asked before any of the three fatals below.** All three are ways of
+       saying "this bought nothing", and every one of them is the *expected*
+       shape of a draw whose pipeline stopped short — so the explanation is a
+       property of the absence rather than of which flavour of absence it is. */
+    const stopped = stoppedAtOrBefore(expect.stepStatuses, stepOf(name));
+    if (stopped) {
+      findings.push({
+        kind: "explained-absence",
+        step: name,
+        fatal: false,
+        message:
+          `PAID FAILURE — ${what} ${name} bought nothing` +
+          (group ? ` beyond ${group.calls} unpaid call(s)` : " and has no ledger row") +
+          `, and step ${stopped.name} is ${stopped.status}: it never ran, so this is an absence ` +
+          "the job's own status explains rather than a row that was lost. The draw's money was " +
+          "really spent and is not the price of anything — it is kept out of every headline " +
+          "figure and listed beside them. The run carries on: a sweep that measures how often " +
+          "this happens cannot stop the first time it does.",
+      });
+      continue;
+    }
+
     if (!group) {
       findings.push({
         kind: "no-spend",
@@ -331,7 +451,6 @@ function checkMustPay(
       });
       continue;
     }
-    if (moneyTotalNanos(group.money) > 0) continue;
     if (group.money.unpriced > 0) {
       findings.push({
         kind: "unpriced",
@@ -411,10 +530,18 @@ export function checkCold(rows: readonly AiCallRow[], expect: ColdExpectation): 
   const allowed = new Set([...expect.mustPay, ...(expect.mayPay ?? [])]);
   const allowUnpriced = expect.allowUnpriced ?? false;
 
-  findings.push(...checkMustPay(steps, expect.mustPay, "step", allowUnpriced));
-  /* The second namespace, and the one that can see a missing label fan-out. */
+  findings.push(...checkMustPay(steps, expect.mustPay, "step", allowUnpriced, expect, (n) => n));
+  /* The second namespace, and the one that can see a missing label fan-out. Its
+     names are not step names, so it needs the map to ask the step question. */
   findings.push(
-    ...checkMustPay(aggregateByAiJob(rows), expect.mustPayJobs ?? [], "AI job", allowUnpriced),
+    ...checkMustPay(
+      aggregateByAiJob(rows),
+      expect.mustPayJobs ?? [],
+      "AI job",
+      allowUnpriced,
+      expect,
+      (n) => expect.aiJobStep?.[n] ?? n,
+    ),
   );
   if (expect.observed) findings.push(...checkLedgerComplete(rows, expect.observed));
 
@@ -745,27 +872,55 @@ export function observedVariation(draws: readonly DrawOutcome[]): ObservedVariat
   };
 }
 
+/** The failure kinds as `2 truncated, 1 hierarchy error`, or "" when none failed. */
+function namedFailures(v: ObservedVariation): string {
+  return Object.entries(v.failureKinds)
+    .map(([kind, n]) => `${n} ${kind}`)
+    .join(", ");
+}
+
 /**
  * The variation summary as a paragraph, with the words the plan chose.
  *
  * It says *observed variation* rather than anything that sounds like a
  * distribution, and it names the failure kinds rather than folding them into the
  * median — a run whose cheapest two draws were truncations is not a cheap run.
+ *
+ * **And a set where nothing succeeded gets a different paragraph**, because the
+ * ordinary one is a confident-looking cost line built entirely out of failures:
+ * "median $0.21, range $0.20–$0.22" reads as the price of an article, and it is
+ * the price of not getting one. The numbers are still printed — what four
+ * failures cost is worth knowing — under a heading that says what they are.
+ * Every draw of a set failing is not hypothetical: it is the neighbouring case
+ * to the run that prompted all this
+ * (evals/results/cost/2026-09-03-04-59-07-1bpfhts0-long-html), where the sweep
+ * stopped rather than going on to find out.
  */
 export function formatVariation(what: string, v: ObservedVariation): string {
   if (v.draws === 0) return `  ${what}: no draws.`;
+  const tail =
+    "    Observed variation only. No tail probability and no standard deviation: over this " +
+    "many draws either would be a number with no evidence under it.";
+  if (v.succeeded === 0) {
+    return [
+      `  ${what}: ${v.draws} draw(s) and NOT ONE produced its artefact (${namedFailures(v)}) — ` +
+        "there is no cost to quote here.",
+      `    Every figure that follows is the price of failing, not the price of the thing: ` +
+        `median ${formatNanos(v.median ?? 0)}, range ${formatNanos(v.min ?? 0)}–` +
+        `${formatNanos(v.max ?? 0)} (spread ${formatNanos(v.range ?? 0)}).`,
+      `    Total paid across every draw, all of them failures: ${formatNanos(v.totalPaidNanos)}.`,
+      tail,
+    ].join("\n");
+  }
   const lines = [
     `  ${what}: ${v.draws} draw(s), observed variation — ` +
       `median ${formatNanos(v.median ?? 0)}, range ${formatNanos(v.min ?? 0)}–` +
       `${formatNanos(v.max ?? 0)} (spread ${formatNanos(v.range ?? 0)}).`,
     `    ${v.succeeded} succeeded, ${v.failures} failed` +
-      (v.failures > 0
-        ? ` (${Object.entries(v.failureKinds).map(([k, n]) => `${n} ${k}`).join(", ")})`
-        : "") +
+      (v.failures > 0 ? ` (${namedFailures(v)})` : "") +
       `; median given success ${v.medianGivenSuccess === null ? "—" : formatNanos(v.medianGivenSuccess)}.`,
     `    Total paid across every draw, failures included: ${formatNanos(v.totalPaidNanos)}.`,
-    "    Observed variation only. No tail probability and no standard deviation: over this " +
-      "many draws either would be a number with no evidence under it.",
+    tail,
   ];
   return lines.join("\n");
 }
@@ -1013,9 +1168,22 @@ export function formatStepTable(steps: readonly StepSpend[]): string {
 /**
  * The findings, fatal ones first and labelled, so that a run whose numbers look
  * plausible cannot be read past a leak.
+ *
+ * **Three ranks, not two.** An explained absence is not fatal — the run has to
+ * carry on past it, or a sweep counting semantic failures stops at the first one
+ * — but it is not an aside either: it says this draw was billed and produced
+ * nothing, which is the one thing a reader must not miss while scanning a page
+ * of dollars. So it sorts above the ordinary notes, and its message leads with
+ * the words rather than relying on the label, because the same text is what a
+ * later reader finds in `run.json`.
  */
+function findingRank(f: Finding): number {
+  if (f.fatal) return 0;
+  return f.kind === "explained-absence" ? 1 : 2;
+}
+
 export function formatFindings(findings: readonly Finding[]): string {
   if (findings.length === 0) return "";
-  const ordered = [...findings].sort((a, b) => Number(b.fatal) - Number(a.fatal));
+  const ordered = [...findings].sort((a, b) => findingRank(a) - findingRank(b));
   return ordered.map((f) => `  ${f.fatal ? "FATAL" : "note "} ${f.message}`).join("\n");
 }

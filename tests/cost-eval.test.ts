@@ -34,6 +34,7 @@ import type { StepName } from "../src/types.js";
 import { DEV_OWNER_ID, EVAL_OWNER_ID } from "../src/owner.js";
 import { fixtureByName } from "../evals/cost/fixtures.js";
 import {
+  AI_JOB_STEP,
   ALL_MODES,
   assertAdoptable,
   assertDistinctEvalOwner,
@@ -41,6 +42,7 @@ import {
   assertOneOnDemandMode,
   assertSweepArgs,
   blocksFromDetail,
+  drawMustStop,
   evalRegistry,
   evalScoped,
   localTarget,
@@ -60,6 +62,7 @@ import {
   formatFindings,
   formatPaidFailures,
   formatStepTable,
+  formatVariation,
   headlineTotal,
   jobWallClockMs,
   naiveTotal,
@@ -395,6 +398,16 @@ describe("formatting", () => {
     const text = formatFindings(findings);
     expect(text.indexOf("FATAL")).toBeLessThan(text.indexOf("note"));
   });
+
+  it("puts a paid failure above the ordinary notes, where it cannot be scrolled past", () => {
+    /* Not fatal — the run must go on — but the reader has to see that this draw
+       was billed and produced nothing before they read a dollar figure. */
+    const text = formatFindings([
+      { kind: "call-count", step: "hierarchy", fatal: false, message: "an ordinary note" },
+      { kind: "explained-absence", step: "labels", fatal: false, message: "PAID FAILURE — labels" },
+    ]);
+    expect(text.indexOf("PAID FAILURE")).toBeLessThan(text.indexOf("an ordinary note"));
+  });
 });
 
 /* ============================================================ the harness == */
@@ -711,6 +724,139 @@ describe("reconciling the ledger against what the steps said they bought", () =>
         observed: [{ step: "hierarchy", calls: 1, pending: 0, writeFailures: 0 }],
       }),
     ).toEqual([]);
+  });
+});
+
+/**
+ * **An absence the job's own status explains, against a row that was lost.**
+ *
+ * The run that found this: evals/results/cost/2026-09-03-04-59-07-1bpfhts0-long-html.
+ * Draw 2's `hierarchy` failed semantically — "Node range not in blocks.json" —
+ * after being billed $0.2124. Labels fan out *inside* `hierarchy` and only after
+ * it succeeds, so there were no `labels` rows, and the `no-spend` guard called
+ * that fatal and stopped the sweep. Draws 3 and 4 never ran: the eval halted on
+ * the very phenomenon it was counting.
+ *
+ * The absence was explained and the guard could not tell. These fix the telling,
+ * and the last one holds the line the guard actually exists for.
+ */
+describe("a paid failure explains its own missing rows", () => {
+  /* Draw 2, in the shape report.ts sees it: the structure call was billed, the
+     step errored on its output, the fan-out never happened. */
+  const structure = row({ id: "structure", stepName: "hierarchy", job: "hierarchy", creditsUsedNanos: 212_414_000 });
+  const failedAtHierarchy = [
+    { name: "fetch", status: "done" },
+    { name: "extract", status: "done" },
+    { name: "blocks", status: "done" },
+    { name: "hierarchy", status: "error" },
+  ];
+
+  it("does not stop the run when the step that would have bought the rows failed", () => {
+    const findings = checkCold([structure], {
+      mustPay: ["hierarchy"],
+      mustPayJobs: ["hierarchy", "labels"],
+      observed: [{ step: "hierarchy", calls: 1, pending: 0, writeFailures: 0 }],
+      stepStatuses: failedAtHierarchy,
+      aiJobStep: AI_JOB_STEP,
+    });
+    expect(findings.map((f) => f.kind)).toEqual(["explained-absence"]);
+    expect(findings[0]!.step).toBe("labels");
+    expect(findings[0]!.fatal).toBe(false);
+    expect(drawMustStop(findings)).toEqual([]);
+    /* The message has to name the step whose failure explains it, or the reader
+       is told an absence is fine without being told why. */
+    expect(findings[0]!.message).toContain("hierarchy");
+    expect(findings[0]!.message).toContain("error");
+  });
+
+  it("still stops when the same job's steps all say done — that is a lost row", () => {
+    /* The identical ledger, the identical expectation, and only the step
+       statuses differ. `hierarchy` finished, so the fan-out ran and its rows
+       are simply not there. */
+    const findings = checkCold([structure], {
+      mustPay: ["hierarchy"],
+      mustPayJobs: ["hierarchy", "labels"],
+      observed: [{ step: "hierarchy", calls: 1, pending: 0, writeFailures: 0 }],
+      stepStatuses: failedAtHierarchy.map((s) => ({ ...s, status: "done" })),
+      aiJobStep: AI_JOB_STEP,
+    });
+    expect(findings.map((f) => f.kind)).toEqual(["no-spend"]);
+    expect(findings[0]!.fatal).toBe(true);
+    expect(drawMustStop(findings)).toHaveLength(1);
+  });
+
+  it("still stops on a lost row the collector watched being made", () => {
+    /* **The case the guard exists for, and it must not regress.** Spend was
+       observed by `onStepSpend`, the job says every step is done, and the
+       ledger has fewer rows than calls: on 2026-09-02 a run spent $0.0333 into
+       a ledger that could not hold it and reported nothing wrong. */
+    const findings = checkCold([structure], {
+      mustPay: ["hierarchy"],
+      mustPayJobs: ["hierarchy"],
+      observed: [{ step: "hierarchy", calls: 4, pending: 0, writeFailures: 0 }],
+      stepStatuses: failedAtHierarchy.map((s) => ({ ...s, status: "done" })),
+      aiJobStep: AI_JOB_STEP,
+    });
+    expect(findings.map((f) => f.kind)).toEqual(["ledger-short"]);
+    expect(findings[0]!.fatal).toBe(true);
+    expect(drawMustStop(findings)).toHaveLength(1);
+  });
+
+  it("keeps a short ledger fatal even on a draw that failed — a failure is not an alibi", () => {
+    /* An explained absence is about rows that were never bought. A row the
+       collector *saw bought* and the ledger has not got is lost however the
+       step ended, and folding the two together would hand every dropped write
+       an excuse. */
+    const findings = checkCold([structure], {
+      mustPay: ["hierarchy"],
+      mustPayJobs: ["hierarchy", "labels"],
+      observed: [{ step: "hierarchy", calls: 3, pending: 0, writeFailures: 1 }],
+      stepStatuses: failedAtHierarchy,
+      aiJobStep: AI_JOB_STEP,
+    });
+    expect(findings.map((f) => f.kind).sort()).toEqual(["explained-absence", "ledger-short"]);
+    expect(drawMustStop(findings).map((f) => f.kind)).toEqual(["ledger-short"]);
+  });
+
+  it("does not excuse a step whose own failure came after it should have paid", () => {
+    /* `arc` failed; `hierarchy` did not, and its labels are still missing. A
+       failure downstream of the absence explains nothing about it. */
+    const findings = checkCold([structure], {
+      mustPay: ["hierarchy"],
+      mustPayJobs: ["hierarchy", "labels"],
+      stepStatuses: [
+        { name: "blocks", status: "done" },
+        { name: "hierarchy", status: "done" },
+        { name: "arc", status: "error" },
+      ],
+      aiJobStep: AI_JOB_STEP,
+    });
+    expect(findings.map((f) => f.kind)).toEqual(["no-spend"]);
+    expect(findings[0]!.fatal).toBe(true);
+  });
+
+  it("is fatal as before when the run supplied no step statuses at all", () => {
+    /* Nothing to explain the absence with is not the same as an explanation,
+       and the older callers pass none. */
+    const findings = checkCold([structure], {
+      mustPay: ["hierarchy"],
+      mustPayJobs: ["hierarchy", "labels"],
+    });
+    expect(findings.map((f) => f.kind)).toEqual(["no-spend"]);
+    expect(findings[0]!.fatal).toBe(true);
+  });
+
+  it("explains a step's own absence, not only a fan-out job's", () => {
+    /* A per-mode draw whose only paying step errored before buying anything:
+       no rows at all, and the step list says why. */
+    const findings = checkCold([], {
+      mustPay: ["ideas"],
+      mustPayJobs: ["ideas"],
+      stepStatuses: [{ name: "ideas", status: "error" }],
+      aiJobStep: AI_JOB_STEP,
+    });
+    expect(findings.map((f) => f.kind)).toEqual(["explained-absence", "explained-absence"]);
+    expect(findings.every((f) => !f.fatal)).toBe(true);
   });
 });
 
@@ -1373,6 +1519,29 @@ describe("observedVariation", () => {
     });
   });
 
+  /**
+   * **The run that prompted the fix, arithmetic first.** Draw 1 of
+   * evals/results/cost/2026-09-03-04-59-07-1bpfhts0-long-html succeeded at
+   * $0.3260 and draw 2 was billed $0.2124 and failed its range check. The
+   * summary was already right about this and the literals are here so it stays
+   * right: the quotable number is the successful draw's, and the failed draw's
+   * money is reported rather than dropped or averaged in.
+   */
+  it("quotes the successful draw and counts the failed one, on the real run's numbers", () => {
+    const v = observedVariation([
+      draw(326_049_500),
+      draw(212_414_000, { succeeded: false, failure: "hierarchy error" }),
+    ]);
+    expect(v.succeeded).toBe(1);
+    expect(v.failures).toBe(1);
+    expect(v.failureKinds).toEqual({ "hierarchy error": 1 });
+    expect(v.medianGivenSuccess).toBe(326_049_500);
+    expect(v.totalPaidNanos).toBe(538_463_500);
+    /* The median over *every* draw is deliberately not the quotable number, and
+       it is printed because the spread is the thing the repeats exist to show. */
+    expect(v.median).toBe(269_231_750);
+  });
+
   it("reports no standard deviation and no tail, and this is the check that keeps it that way", () => {
     /* An exact key list rather than two `toBeUndefined`s: the failure mode is
        somebody *adding* a spread statistic, and only an exhaustive assertion
@@ -1389,5 +1558,71 @@ describe("observedVariation", () => {
       "succeeded",
       "totalPaidNanos",
     ]);
+  });
+});
+
+/**
+ * **The variance paragraph, and the sentence it must not print.**
+ *
+ * A set where every draw failed still has a median and a range, and the ordinary
+ * wording turns them into a confident-looking price for an article nobody got.
+ * The run that made this reachable is
+ * evals/results/cost/2026-09-03-04-59-07-1bpfhts0-long-html: once a failed draw
+ * stops halting the sweep, a run of four failures is a shape this can be handed.
+ */
+describe("formatVariation", () => {
+  const draw = (cost: number, over: Partial<DrawOutcome> = {}): DrawOutcome => ({
+    label: "long-html",
+    totalNanos: cost,
+    succeeded: true,
+    ...over,
+  });
+
+  it("reads as observed variation when some draws worked", () => {
+    const out = formatVariation(
+      "long-html",
+      observedVariation([
+        draw(326_049_500),
+        draw(212_414_000, { succeeded: false, failure: "hierarchy error" }),
+      ]),
+    );
+    expect(out).toContain("observed variation");
+    expect(out).toContain("1 succeeded, 1 failed (1 hierarchy error)");
+    expect(out).toContain("median given success");
+  });
+
+  it("refuses to quote a middle for a set where nothing succeeded", () => {
+    const out = formatVariation(
+      "long-html",
+      observedVariation([
+        draw(212_414_000, { succeeded: false, failure: "hierarchy error" }),
+        draw(198_000_000, { succeeded: false, failure: "hierarchy error" }),
+      ]),
+    );
+    expect(out).toContain("NOT ONE produced its artefact (2 hierarchy error)");
+    expect(out).toContain("no cost to quote");
+    expect(out).toContain("the price of failing");
+    /* The two phrasings that would let a reader take the median as a cost. */
+    expect(out).not.toContain("observed variation —");
+    expect(out).not.toContain("succeeded, ");
+  });
+
+  it("still says what the failures cost, because a stop is not a refund", () => {
+    const out = formatVariation(
+      "long-html",
+      observedVariation([draw(212_414_000, { succeeded: false, failure: "truncated" })]),
+    );
+    expect(out).toContain("all of them failures: $0.2124");
+  });
+
+  it("keeps the two forbidden statistics out of both paragraphs", () => {
+    for (const succeeded of [true, false]) {
+      const out = formatVariation("long-html", observedVariation([draw(100, { succeeded })]));
+      expect(out).toContain("No tail probability and no standard deviation");
+    }
+  });
+
+  it("says so plainly when there were no draws at all", () => {
+    expect(formatVariation("long-html", observedVariation([]))).toBe("  long-html: no draws.");
   });
 });

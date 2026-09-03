@@ -151,6 +151,7 @@ import { STORE } from "../../src/store/live.js";
 import type { Job, StepName } from "../../src/types.js";
 import { type CostFixture, FIXTURES, fixtureByName } from "./fixtures.js";
 import {
+  AI_JOB_STEP,
   ALL_MODES,
   assertAdoptable,
   assertDistinctEvalOwner,
@@ -158,6 +159,7 @@ import {
   assertOneOnDemandMode,
   assertSweepArgs,
   blocksFromDetail,
+  drawMustStop,
   evalRegistry,
   fixtureFetch,
   localTarget,
@@ -337,6 +339,11 @@ const STANDING_NOTES = [
     "really spent and it is not the price of anything, so it is excluded from every per-mode and " +
     "whole-article figure and listed separately. Read `jobStatus` and `steps` per draw, not the " +
     "money alone — a truncated generation is billed in full with an `outcome: \"ok\"` row.",
+  "A missing ledger row is read against `steps`: if the step that would have bought it failed, " +
+    "or never ran because something before it did, the absence is EXPLAINED (finding kind " +
+    "`explained-absence`) and the sweep carries on — a run measuring how often hierarchy fails " +
+    "cannot stop the first time it does. An absence nothing explains is still fatal and still " +
+    "stops the run, because that is a row that was lost rather than never bought.",
   "`observedSpend` is what each step's own collector saw, from AdvanceParts.onStepSpend. Its " +
     "`calls` is what the ledger is reconciled against. Its `writeFailures` is a LOWER BOUND: " +
     "collectSpend calls onDone before draining its writes, so a write that rejects late is not " +
@@ -674,6 +681,12 @@ async function oneDraw(req: DrawRequest): Promise<Draw> {
        `stepName`. */
     mustPayJobs: requiredAiJobsFor(fixture, stepNames),
     observed: observedSpend,
+    /* **What the job said its own steps did**, so an absence a failure explains
+       can be told from a row that was lost. Filled from `job.steps` a few lines
+       up, which is why this is here and the judgement is in report.ts: the
+       statuses are IO, the rule about them is not. */
+    stepStatuses: draw.steps ?? [],
+    aiJobStep: AI_JOB_STEP,
     ...(req.allowUnpriced ? { allowUnpriced: true } : {}),
   });
   draw.articleId = await articleIdFor(job.slug);
@@ -700,8 +713,14 @@ async function oneDraw(req: DrawRequest): Promise<Draw> {
      `npm run cost`'s Product bucket, one draw at a time. The `finally` in
      `main` still checkpoints, cleans up and prints the draws already paid for,
      so stopping loses nothing. evals/cost/feasibility.md § the one residual
-     risk asks for exactly this refusal. */
-  const fatal = draw.findings.filter((f) => f.fatal);
+     risk asks for exactly this refusal.
+
+     **A draw that simply failed is not one of them**, and on 2026-09-03 it was:
+     hierarchy failed its range check, its label fan-out never ran, and the
+     missing `labels` rows read as lost. The sweep stopped two draws into
+     measuring how often exactly that happens. `stoppedAtOrBefore` in report.ts
+     is the telling apart; `drawMustStop` is the rule that reads it. */
+  const fatal = drawMustStop(draw.findings);
   if (fatal.length > 0) {
     throw new Error(
       `${job.slug}: ${fatal.length} fatal finding(s) — ${fatal.map((f) => f.message).join(" ")} ` +

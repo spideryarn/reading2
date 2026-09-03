@@ -23,6 +23,7 @@ import type { StepRegistry } from "../../src/jobs.js";
 import { type PipelineStep, STEP_ORDER, STEPS } from "../../src/pipeline.js";
 import type { StepName } from "../../src/types.js";
 import type { CostFixture } from "./fixtures.js";
+import type { Finding } from "./report.js";
 
 /* -------------------------------------------------- the local-target gate -- */
 
@@ -266,6 +267,41 @@ export function requiredAiJobsFor(
     if (PAYING_STEPS.includes(step)) jobs.push(step);
   }
   return jobs;
+}
+
+/**
+ * **Which pipeline step an `AiJob`'s calls are made inside**, wherever the two
+ * names differ.
+ *
+ * Only two do, and both are the same trick: the nav labels fan out inside
+ * `hierarchy` (there is no `labels` step), and PDF transcription is `job: "pdf"`
+ * inside `extract`. Every other paying step buys an `AiJob` of its own name, so
+ * the map holds the exceptions and the lookup falls through to the name itself.
+ *
+ * The cold check needs it to answer a question the ledger cannot: an `AiJob`
+ * with no rows either never ran or lost them, and the only way to tell is
+ * whether the *step* it would have run inside got that far. See
+ * `ColdExpectation.stepStatuses` in report.ts.
+ */
+export const AI_JOB_STEP: Readonly<Record<string, string>> = {
+  labels: "hierarchy",
+  pdf: "extract",
+};
+
+/**
+ * **The gate that turns findings into a stop**, so the rule is a function a test
+ * can hold rather than a filter buried in the runner.
+ *
+ * A fatal finding means the number this draw produced is not the number it
+ * claims to be, and the next draw would spend money measuring the same wrong
+ * thing — so `oneDraw` throws on a non-empty answer here. What must *not* reach
+ * it is an absence the job's own status explains: a draw whose `hierarchy`
+ * failed before its label fan-out is a paid failure to be counted, and on
+ * 2026-09-03 it stopped the sweep that existed to count it
+ * (evals/results/cost/2026-09-03-04-59-07-1bpfhts0-long-html).
+ */
+export function drawMustStop(findings: readonly Finding[]): Finding[] {
+  return findings.filter((f) => f.fatal);
 }
 
 /* ------------------------------------------------------------- the guards -- */

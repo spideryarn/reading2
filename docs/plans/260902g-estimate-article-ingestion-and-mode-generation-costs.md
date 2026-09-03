@@ -383,6 +383,17 @@ free, which was checked in the code before running rather than assumed.
       duplicate execution, gateway failures, call-count mismatches and unexpected paid steps
       reported rather than hidden. **A fatal finding stops the run**, so the next draw cannot
       spend measuring the same wrong thing.
+      **Except an absence the job's own steps explain** (2026-09-03). A missing row is now read
+      against the job's step statuses: if the step that would have bought it failed, or never ran
+      because something before it did, the finding is `explained-absence` — loud, non-fatal, kept
+      out of the headline figures, and the sweep goes on. The run that forced this is
+      `evals/results/cost/2026-09-03-04-59-07-1bpfhts0-long-html`: draw 2's `hierarchy` was billed
+      $0.2124 and then failed its own range check, so the label fan-out never ran, and the fatal
+      `no-spend` for `labels` stopped a sweep whose entire purpose was to count how often hierarchy
+      fails. Draws 3 and 4 never happened. An absence *nothing* explains is still fatal and still
+      stops — that is the class that cost a silent $0.0333 run, and `ledger-short` is untouched:
+      a call the collector watched being made and the ledger has not got is lost however the step
+      ended, and a failure is not an alibi for a dropped write.
 - [x] Unit tests: `tests/cost-eval.test.ts`, 61 of them, no database and no network. Includes the
       dry pass's **control arm** as a test — the same stubbed step without the overlay records
       `job_step`, which is Product spend.
