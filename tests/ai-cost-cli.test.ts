@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { AiCallRow } from "../src/ai-spend.js";
-import { by, parseArgs } from "../scripts/ai-cost.js";
+import { by, marginPeriod, parseArgs, printMargin } from "../scripts/ai-cost.js";
 
 describe("--month", () => {
   it("runs from the first instant of the month to the first instant of the next", () => {
@@ -189,3 +189,106 @@ describe("--owners and --price", () => {
     expect(() => parseArgs(["--price"])).toThrow(/needs a value/);
   });
 });
+
+/**
+ * **What period a margin is a margin over** — the second P1 of GPT Sol's review
+ * of 2026-09-03, and the one Greg reproduced independently.
+ *
+ * `--price 20` is a *monthly* subscription price, and `printMargin` subtracts
+ * whatever the report's range cost from it. The default range is the whole
+ * current calendar month — `[Sep 1, Oct 1)` — so on 3 September the report
+ * subtracted **two days** of spend from a month's price and headed it as the
+ * contribution margin. Every figure in it was correct; the sentence around them
+ * was not, and it was wrong in the direction that says "we can afford this".
+ */
+describe("the period a --price margin is measured over", () => {
+  const SEP_3 = new Date("2026-09-03T00:36:00.000Z");
+
+  it("knows a completed calendar month when it sees one", () => {
+    const p = marginPeriod(parseArgs(["--month", "2026-08"]), SEP_3);
+    expect(p.kind).toBe("month");
+    expect(p.label).toBe("2026-08");
+  });
+
+  it("knows a month that has not finished yet, and says how much of it has", () => {
+    /* September asked for by name rather than by default, so this pins the
+       arithmetic to a fixed month: `parseArgs([])` reads the system clock, and a
+       test that let it would assert "30 days" until October and then go red for
+       a reason that is nothing to do with the code. */
+    const p = marginPeriod(parseArgs(["--month", "2026-09"]), SEP_3);
+    expect(p.kind).toBe("part-month");
+    if (p.kind !== "part-month") throw new Error("unreachable");
+    expect(p.of).toBe(30);
+    /* Two days and change, said to one decimal rather than rounded to a whole
+       number that would read as a fact. */
+    expect(p.elapsed).toBeCloseTo(2.03, 1);
+  });
+
+  it("says the DEFAULT range is one of those, whatever day it is run on", () => {
+    /* **The case that was actually shipping**, and the one that has to be
+       clock-independent to be worth anything: `npm run cost -- --price 20` with
+       no range asks for the whole current calendar month, whose `until` is by
+       construction in the future. `now` is derived from the range rather than
+       named, so this holds on the 1st of January and on the 30th of June. */
+    const args = parseArgs([]);
+    const twoDaysIn = new Date(Date.parse(args.since as string) + 2 * 24 * 60 * 60 * 1000);
+    const p = marginPeriod(args, twoDaysIn);
+    expect(p.kind).toBe("part-month");
+    if (p.kind !== "part-month") throw new Error("unreachable");
+    expect(p.elapsed).toBeCloseTo(2, 5);
+    expect(p.of).toBeGreaterThanOrEqual(28);
+  });
+
+  it("knows a custom range and --all are not months at all", () => {
+    expect(marginPeriod(parseArgs(["--all"]), SEP_3).kind).toBe("other");
+    expect(
+      marginPeriod(parseArgs(["--since", "2026-08-01", "--until", "2026-08-15"]), SEP_3).kind,
+    ).toBe("other");
+    /* The first half of a month starts on the 1st, which is the trap a
+       "does it start on the 1st" check falls into on its own. */
+    expect(marginPeriod(parseArgs(["--since", "2026-08-01"]), SEP_3).kind).toBe("other");
+  });
+
+  it("does not present a partial month as a monthly margin", () => {
+    const lines = capture(() =>
+      printMargin(
+        20,
+        [1_000_000_000, 2_000_000_000],
+        marginPeriod(parseArgs(["--month", "2026-09"]), SEP_3),
+      ),
+    );
+    const heading = lines[0] ?? "";
+    /* The claim that was false: "per account", full stop, over a month's price
+       and two days' spend. The heading now has to name the period it covers. */
+    expect(heading).not.toMatch(/per account$/);
+    expect(heading).toMatch(/NOT a monthly margin/);
+    expect(lines.join("\n")).toContain("of 30 days");
+    /* And it says where a monthly one comes from, which is the whole point of
+       refusing to print a wrong one. */
+    expect(lines.join("\n")).toMatch(/--month/);
+  });
+
+  it("does present a completed month as a monthly margin", () => {
+    const lines = capture(() =>
+      printMargin(20, [1_000_000_000], marginPeriod(parseArgs(["--month", "2026-08"]), SEP_3)),
+    );
+    expect(lines[0]).toContain("per account per month");
+    expect(lines[0]).toContain("2026-08");
+    expect(lines.join("\n")).not.toContain("NOT a monthly margin");
+  });
+});
+
+/** Collect what a printer wrote, so the sentence around a number can be asserted. */
+function capture(run: () => void): string[] {
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (...args: unknown[]) => {
+    lines.push(args.map(String).join(" "));
+  };
+  try {
+    run();
+  } finally {
+    console.log = original;
+  }
+  return lines.filter((l) => l.trim() !== "");
+}

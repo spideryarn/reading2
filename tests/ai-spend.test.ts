@@ -22,6 +22,8 @@ import {
   currentSpend,
   emptySpend,
   formatNanos,
+  providerCost,
+  type SpendProvenance,
   recordSpend,
   lateCalls,
   resetUnscopedCalls,
@@ -38,13 +40,11 @@ function call(over: Partial<SpendRecord> = {}): SpendRecord {
     answeredBy: "anthropic/claude-sonnet-5",
     upstreamCostNanos: 21_523_500,
     model: "anthropic/claude-sonnet-5",
-    costNanos: 21_523_500,
+    cost: providerCost(21_523_500),
     generationId: "gen-1787844432-JKwGQebcNXfkCfTX5mUq",
     upstream: "Anthropic",
     isByok: false,
     providerAccount: "openrouter",
-    computedCostNanos: null,
-    priceVersion: null,
     credentialFingerprint: "abcdef012345",
     wire: "messages",
     inputTokens: 13,
@@ -117,7 +117,7 @@ describe("collectSpend", () => {
     await expect(
       collectSpend(
         async () => {
-          recordSpend(call({ outcome: "error", costNanos: 4_200_000 }));
+          recordSpend(call({ outcome: "error", cost: providerCost(4_200_000) }));
           throw new Error("stage blew up");
         },
         {
@@ -130,7 +130,7 @@ describe("collectSpend", () => {
 
     expect(seen).toHaveLength(1);
     expect(seen[0]?.calls).toHaveLength(1);
-    expect(seen[0]?.calls[0]?.costNanos).toBe(4_200_000);
+    expect(seen[0]?.calls[0]?.cost).toEqual({ source: "provider", costNanos: 4_200_000 });
     expect(seen[0]?.calls[0]?.outcome).toBe("error");
     /* And the box is shut again, so the next piece of work starts clean. */
     expect(collectingSpend()).toBe(false);
@@ -231,7 +231,10 @@ describe("a call that was started and never recorded", () => {
 
 describe("totalSpend", () => {
   it("adds up what it can", () => {
-    const { nanos, unpriced } = totalSpend([call({ costNanos: 100 }), call({ costNanos: 250 })]);
+    const { nanos, unpriced } = totalSpend([
+      call({ cost: providerCost(100) }),
+      call({ cost: providerCost(250) }),
+    ]);
     expect(nanos).toBe(350);
     expect(unpriced).toBe(0);
   });
@@ -241,9 +244,9 @@ describe("totalSpend", () => {
        across three calls, one of which reported nothing — not across three
        calls that agreed. */
     const { nanos, unpriced } = totalSpend([
-      call({ costNanos: 100 }),
-      call({ costNanos: null }),
-      call({ costNanos: null }),
+      call({ cost: providerCost(100) }),
+      call({ cost: providerCost(null) }),
+      call({ cost: providerCost(null) }),
     ]);
     expect(nanos).toBe(100);
     expect(unpriced).toBe(2);
@@ -259,8 +262,8 @@ describe("totalSpend", () => {
        nothing read it. Found by a GPT Sol review of the code, after an earlier
        review had asked for the field. */
     const { nanos, unpriced } = totalSpend([
-      call({ costNanos: 0, upstreamCostNanos: 4_000, isByok: true }),
-      call({ costNanos: 100, upstreamCostNanos: 100, isByok: false }),
+      call({ cost: providerCost(0), upstreamCostNanos: 4_000, isByok: true }),
+      call({ cost: providerCost(100), upstreamCostNanos: 100, isByok: false }),
     ]);
     expect(nanos).toBe(4_100);
     expect(unpriced).toBe(0);
@@ -271,7 +274,7 @@ describe("totalSpend", () => {
        legitimate `0` under BYOK — would report *zero* where the honest answer is
        *unknown*. */
     const { nanos, unpriced } = totalSpend([
-      call({ costNanos: 0, upstreamCostNanos: null, isByok: true }),
+      call({ cost: providerCost(0), upstreamCostNanos: null, isByok: true }),
     ]);
     expect(nanos).toBe(0);
     expect(unpriced).toBe(1);
@@ -284,7 +287,7 @@ describe("totalSpend", () => {
   it("sums in integers, so a long run does not drift", () => {
     /* Nano-dollars in a plain number rather than dollars in a float: 10,000
        calls at $0.0000001 each is exactly $0.001, not 0.0009999999999. */
-    const many = Array.from({ length: 10_000 }, () => call({ costNanos: 100 }));
+    const many = Array.from({ length: 10_000 }, () => call({ cost: providerCost(100) }));
     expect(totalSpend(many).nanos).toBe(1_000_000);
   });
 });
@@ -310,7 +313,7 @@ describe("spendFields", () => {
   it("names the two problems separately, because they are two problems", () => {
     const fields = spendFields({
       ...emptySpend(),
-      calls: [call({ costNanos: 100 }), call({ costNanos: null })],
+      calls: [call({ cost: providerCost(100) }), call({ cost: providerCost(null) })],
       pending: [{ job: "search", model: "m", startedAt: 0, rowId: "r1" }],
     });
     expect(fields.aiCalls).toBe(2);
@@ -381,14 +384,20 @@ async function rowsFrom(
 
 describe("the sink", () => {
   it("calls a BYOK zero a reported cost, because a zero is an answer", async () => {
-    /* **The mutation that found this:** `costSourceOf` asking `if (costNanos)`
-       instead of `if (costNanos !== null)` passed every test in the suite. It
-       would have put `cost_source: "computed"` on a BYOK call whose credits are
-       legitimately `0`, and migration 0023's CHECK then *rejects the insert* —
-       so the loudest symptom of a one-character slip would be a row that never
-       arrives, on exactly the traffic a per-user spend limit is made of. */
+    /* **The mutation that found this:** the old `costSourceOf` asking
+       `if (costNanos)` instead of `if (costNanos !== null)` passed every test in
+       the suite. It would have put `cost_source: "computed"` on a BYOK call
+       whose credits are legitimately `0`, and migration 0023's CHECK then
+       *rejects the insert* — so the loudest symptom of a one-character slip
+       would be a row that never arrives, on exactly the traffic a per-user spend
+       limit is made of.
+
+       That function is gone: `providerCost` makes the same decision once, at the
+       one place a nullable provider figure enters the union, so there is no
+       longer a second reading of the same null to get wrong. This test now holds
+       `providerCost(0)` to it — a zero is an answer. */
     const rows = await rowsFrom({}, () => {
-      recordSpend(call({ costNanos: 0, upstreamCostNanos: 4_000, isByok: true }));
+      recordSpend(call({ cost: providerCost(0), upstreamCostNanos: 4_000, isByok: true }));
     });
     expect(rows[0]?.costSource).toBe("provider");
     expect(rows[0]?.creditsUsedNanos).toBe(0);
@@ -419,7 +428,7 @@ describe("the sink", () => {
     expect(ordinary[0]?.byokUpstreamNanos).toBeNull();
 
     const byok = await rowsFrom({}, () => {
-      recordSpend(call({ costNanos: 0, upstreamCostNanos: 4_000, isByok: true }));
+      recordSpend(call({ cost: providerCost(0), upstreamCostNanos: 4_000, isByok: true }));
     });
     expect(byok[0]?.byokUpstreamNanos).toBe(4_000);
   });
@@ -430,15 +439,55 @@ describe("the sink", () => {
        carrying money would be a row claiming both that it has a figure and that
        it has not. Rare, and cheap to be right about. */
     const rows = await rowsFrom({}, () => {
-      recordSpend(call({ costNanos: null, upstreamCostNanos: 4_000, isByok: true }));
+      recordSpend(call({ cost: providerCost(null), upstreamCostNanos: 4_000, isByok: true }));
     });
     expect(rows[0]?.costSource).toBe("none");
     expect(rows[0]?.byokUpstreamNanos).toBeNull();
   });
 
+  it("cannot construct a row that carries two cost figures at once", async () => {
+    /* **The write seam's own CHECK, before the database sees it.** `SpendRecord`
+       let a caller set `costNanos` AND `computedCostNanos`; `costSourceOf` then
+       chose `provider` while the projection copied the computed value across, and
+       the row violated `ai_calls_one_cost_source`. A rejected insert is a call
+       that lands in NO ledger at all — the sink logs and returns rather than
+       throwing — so the money would have vanished quietly rather than loudly.
+       No gateway does this today; the contract allowed it, which is the same
+       thing one refactor later. GPT Sol, 2026-09-03.
+
+       The fix is a type: `SpendRecord.cost` is a discriminated union, so the two
+       figures cannot both be present. This asserts the runtime half of it — that
+       every projected row satisfies the CHECK's three cases — because the
+       compiler's half leaves no evidence in a test run. */
+    const rows = await rowsFrom({}, () => {
+      recordSpend(call({ cost: providerCost(21_523_500) }));
+      recordSpend(call({ cost: { source: "computed", computedCostNanos: 4_000, priceVersion: "m@1970-01-01" } }));
+      recordSpend(call({ cost: { source: "none" } }));
+    });
+    /* And the shape itself, refused where it can still be cheap. If this ever
+       stops being an error, `@ts-expect-error` becomes an unused directive and
+       `npm run typecheck` goes red — which is the point: the guarantee lives in
+       the compiler and leaves no trace in a passing test run otherwise. */
+    // @ts-expect-error two cost figures at once is not a SpendProvenance
+    const twoFigures: SpendProvenance = { source: "provider", costNanos: 1, computedCostNanos: 2 };
+    expect(twoFigures.source).toBe("provider");
+
+    expect(rows).toHaveLength(3);
+    for (const r of rows) {
+      const credits = r.creditsUsedNanos !== null;
+      const computed = r.computedCostNanos !== null;
+      const version = r.priceVersion !== null;
+      /* Exactly the three arms of `ai_calls_one_cost_source`, plus the
+         price-version rule `agrees()` holds the filesystem store to. */
+      if (r.costSource === "provider") expect([credits, computed, version]).toEqual([true, false, false]);
+      else if (r.costSource === "computed") expect([credits, computed, version]).toEqual([false, true, true]);
+      else expect([credits, computed, version]).toEqual([false, false, false]);
+    }
+  });
+
   it("says a call nobody could price is `none`, not `computed`", async () => {
     const rows = await rowsFrom({}, () => {
-      recordSpend(call({ costNanos: null, upstreamCostNanos: null, isByok: null }));
+      recordSpend(call({ cost: providerCost(null), upstreamCostNanos: null, isByok: null }));
     });
     expect(rows[0]?.costSource).toBe("none");
   });

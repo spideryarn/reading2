@@ -128,13 +128,32 @@ function backfillPre0023(r: Record<string, unknown>): void {
  * the property without this would make the whole historical ledger
  * `unreadable`, which is the accident `backfillPre0023` above exists because of.
  *
- * **Only when `isByok === true`.** On a BYOK row the old value is the real
- * money and carries straight over. On any other row it was the duplicate, and
- * carrying it over would preserve the very defect the rename was for — so it
- * becomes `null`, exactly as
+ * **Only for the BYOK pocket, and that is three conditions rather than one.** On
+ * a BYOK row the old value is the real money and carries straight over. On any
+ * other row it was the duplicate, and carrying it over would preserve the very
+ * defect the rename was for — so it becomes `null`, exactly as
  * [migration 20260902141103](../../drizzle/20260902141103_byok_upstream_nanos.sql) does to the
  * Postgres rows. `=== true` rather than truthy because `isByok` is
  * `boolean | null` and "we were not told" is not "yes".
+ *
+ * ## The predicate is copied whole, because a two-thirds copy loses rows
+ *
+ * This tested only `isByok === true` until 2026-09-03, and the migration
+ * additionally requires `cost_source = 'provider'` and
+ * `provider_account = 'openrouter'`. The gap is a shape the historical parser
+ * really could produce, because the gateway captured those fields
+ * independently: a BYOK call for which no `cost` figure ever arrived backfills
+ * to `cost_source: 'none'` and *still* carries an upstream value. Keeping that
+ * value made the row fail `agrees()` below — an upstream figure on a
+ * non-`provider` row — so the reader counted a line of real history as
+ * **unreadable**, where the migration would have nulled the value and kept the
+ * row. GPT Sol found it. Two stores must not disagree about what a valid row is,
+ * and the store that disagrees quietly is the one that loses the data.
+ *
+ * Ordering matters and is not incidental: `backfillPre0023` has to have run
+ * first, because on a pre-0023 line `cost_source` and `provider_account` do not
+ * exist yet and this has to read what that backfill decided — which is the same
+ * thing the migration's own `UPDATE` reads, for the same reason.
  *
  * The old key is deleted rather than left alongside, so a round-tripped row
  * equals the row that was written and nothing downstream can read the stale
@@ -145,7 +164,9 @@ function translateByokUpstream(r: Record<string, unknown>): void {
   const old = r.upstreamInferenceNanos;
   delete r.upstreamInferenceNanos;
   if (r.byokUpstreamNanos !== undefined) return;
-  r.byokUpstreamNanos = r.isByok === true ? old : null;
+  const isByokPocket =
+    r.isByok === true && r.costSource === "provider" && r.providerAccount === "openrouter";
+  r.byokUpstreamNanos = isByokPocket ? old : null;
 }
 
 /**
@@ -287,7 +308,26 @@ export const fsCostStore: CostStore = {
         return { rows: [], unreadable: 0 };
       throw err;
     }
-    const rows: AiCallRow[] = [];
+    /* **Keyed by row id, because a lost acknowledgement appends the line
+       twice.** `AiCallRow.id` is minted before the request goes out, and for a
+       realtime turn it is *derived from the event* precisely so that a retry
+       collides — which is what `on conflict do nothing` absorbs on the Postgres
+       store. This one is a file with no unique index, so both lines are on disk
+       and both used to come back, and `totalRows()` counted the money twice.
+       Double-counting is the direction that looks exactly like the thing being
+       measured, so it is the one worth being deliberate about. GPT Sol, 2026-09-03.
+
+       Collapsed on the way OUT rather than on the way in: the file stays
+       append-only and is never rewritten, so the evidence that two writes
+       happened survives on disk while what the ledger *says* matches what
+       Postgres would say about the same events.
+
+       **The last line wins**, which matters only for the case a genuine retry
+       does not produce: two lines sharing an id and differing in content. This
+       file is a log, and the later entry is the more recent statement about the
+       same call. A `Map` also keeps first-seen insertion order, so a row does
+       not move down the file because it was written twice. */
+    const byId = new Map<string, AiCallRow>();
     let unreadable = 0;
     for (const line of text.split("\n")) {
       if (line.trim() === "") continue;
@@ -307,9 +347,9 @@ export const fsCostStore: CostStore = {
       /* Half-open, like every range in this ledger: `until` is the first instant
          *not* included, so two adjacent months cannot both claim a call. */
       if (until && row.startedAt >= until) continue;
-      rows.push(row);
+      byId.set(row.id, row);
     }
-    return { rows, unreadable };
+    return { rows: [...byId.values()], unreadable };
   },
 
   async forJob(jobId: string): Promise<LedgerRead> {

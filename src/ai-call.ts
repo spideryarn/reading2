@@ -58,6 +58,7 @@
  * caller's body so it cannot be overridden by accident.
  */
 import {
+  providerCost,
   type SpendRecord,
   beginSpend,
   keyFingerprint,
@@ -653,14 +654,17 @@ class Meter {
         wire: this.wire,
         model: this.model,
         answeredBy: this.answeredBy,
-        costNanos: this.costNanos,
+        /* **One field, one of three arms** — never a settled figure and a
+           computed one side by side. Nothing on this wire computes anything: it
+           posts to OpenRouter, which either reports a cost or does not, so this
+           is always `provider` or `none` and `providerCost` is the conversion.
+           src/ai-spend.ts's `SpendProvenance` has the argument. */
+        cost: providerCost(this.costNanos),
         upstreamCostNanos: this.upstreamCostNanos,
         /* Hard-coded rather than a field: this file only ever posts to
            OpenRouter, and a variable here would be a place for that to stop
            being true without anything saying so. */
         providerAccount: "openrouter",
-        computedCostNanos: null,
-        priceVersion: null,
         generationId: this.generationId,
         upstream: this.upstream,
         credentialFingerprint: this.credentialFingerprint,

@@ -398,7 +398,18 @@ warns rather than throws.
 `upstreamInferenceNanos`. `translateByokUpstream` in
 [`src/store/ai-calls-fs.ts`](../../src/store/ai-calls-fs.ts) converts it on read under the same
 condition — carried over on a BYOK line, nulled on any other, because there it *was* the duplicate.
-Without that the whole historical file would read as damage.
+Without that the whole historical file would read as damage. **All three conditions, not just
+`isByok`**: it tested one of them until 2026-09-03, and a BYOK line for which no `cost` figure ever
+arrived backfills to `cost_source: 'none'`, kept its upstream value, failed the reader's own
+validation and was counted *unreadable* — where the migration would have nulled the value and kept
+the row. A two-thirds copy of a predicate loses data quietly, which is the whole reason the three
+copies are named together above.
+
+**And the file store now collapses duplicate ids on read.** It is append-only with no unique index,
+so a lost-acknowledgement retry — the ordinary case for a browser posting a live turn — appends the
+line twice, and `totalRows()` counted the money twice. Postgres absorbs the same retry on
+`on conflict do nothing` against an id derived from the event. Collapsed on the way *out*, so both
+writes stay on disk as evidence while what the ledger says matches what Postgres would say.
 
 **Postgres is authoritative for pricing from this change's deploy, and the filesystem history is not
 imported.** GPT Sol's call, taken rather than left to the implementer: that history is development
@@ -432,6 +443,14 @@ reaching a database other than the one on its command line —
 question a subscription price is set from: **what did each account cost over this period, split by
 what kind of work it bought, and how wide is the spread.** Add `--price 20` for the model-cost
 contribution margin at a candidate price.
+
+**`--price` is a MONTH's price, and it is only a monthly margin over a month that has finished.**
+The default range is the current calendar month, so on the 3rd it holds two days of spend — and
+until 2026-09-03 the report subtracted those two days from a month's price and headed the result
+*contribution margin*. It now names the period in the heading and says *NOT a monthly margin* in
+those words over anything that is not a whole finished month. Nothing is prorated, deliberately:
+scaling a part-month up would invent a number nobody measured. For a real monthly figure ask for a
+month that has ended — `--month 2026-08`.
 
 Four things about it are decisions rather than details, and each has a reason that would be
 re-litigated without one:

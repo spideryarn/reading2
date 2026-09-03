@@ -293,14 +293,21 @@ describe("the acceptance endpoints", () => {
     const id = await ticket("spya-lbaaac");
     await post(`/api/live/${id}/usage`, turn({ providerEventId: "resp_dup" }));
     await post(`/api/live/${id}/usage`, turn({ providerEventId: "resp_dup" }));
-    const rows = (await ledger()).filter((r) => r.realtimeSessionId === id);
-    /* The filesystem ledger is append-only and has no unique key, so both lines
-       are written — and they are the SAME line, because the row's id is derived
-       from the event. That is what Postgres's `on conflict do nothing` collapses
-       on the store that counts, and it is the property worth asserting here:
-       every copy is byte-identical, so nothing downstream can tell them apart
-       and count them twice by mistake about *which* row it has. */
-    expect(new Set(rows.map((r) => r.id)).size).toBe(1);
+    const lines = (await ledger()).filter((r) => r.realtimeSessionId === id);
+    /* Both lines are on disk, and that is correct: the file is append-only and
+       is never rewritten, so the evidence that the browser posted twice
+       survives. */
+    expect(lines).toHaveLength(2);
+    const { fsCostStore } = await import("../src/store/ai-calls-fs.js");
+    const rows = (await fsCostStore.read()).rows.filter((r) => r.realtimeSessionId === id);
+    /* **One row, on either store.** The row's id is derived from the event, so
+       the retry collides: Postgres absorbs it on `on conflict do nothing`, and
+       the filesystem ledger — which is append-only and has no unique key, so
+       both lines really are on disk — collapses them by id on read
+       (`fsCostStore.read`). Until 2026-09-03 this asserted only that the two
+       copies shared an id, which was true and was not enough: `totalRows()`
+       added both, and this test was green through it. GPT Sol. */
+    expect(rows).toHaveLength(1);
   });
 
   it("refuses a report the server cannot believe, and writes nothing", async () => {
