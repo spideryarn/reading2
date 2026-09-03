@@ -76,6 +76,7 @@ import type {
   ShelfState,
   ArcFound,
   IdeasFound,
+  IllustratedFound,
   SketchFound,
   QuizFound,
   TimelineFound,
@@ -197,6 +198,23 @@ export interface ArticleReader {
    * `readSketch`'s job on arrival. So: a note, not a refusal to draw.
    */
   loadSketch(slug: string): Promise<SketchFound>;
+
+  /**
+   * The Illustrated plates, plus whether they still paint the current Sketch.
+   *
+   * **Staleness is answered against the SKETCH, not the article**, and this is
+   * the only read here that is like that. src/illustrated.ts §
+   * `inputFingerprint` has the reasoning; the consequence for an adapter is
+   * that it needs the `sketch` alongside the `illustrated`, and needs neither
+   * the blocks nor the tree to answer the question its neighbours all use them
+   * for.
+   *
+   * **It is stale if the Sketch itself is stale, too.** A picture painted from
+   * a Sketch that has since gone stale is two hops from the article, and
+   * reporting it current because nobody has pressed the Sketch button would be
+   * the most confident wrong answer in the mode.
+   */
+  loadIllustrated(slug: string): Promise<IllustratedFound>;
 
   /**
    * The timeline, plus whether it still describes the article.

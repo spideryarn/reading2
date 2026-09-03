@@ -38,12 +38,35 @@
  *
  * ## The two failures it distinguishes
  *
- * `failed` is a message, not a boolean, and it can arrive from two different
- * places: the POST that should have started a job never landed, or the job it
- * did start came back failed. They read the same to a reader and are diagnosed
- * differently, which is why the hooks work them out rather than this component
- * (see `stopped` and `postFailed` in useGlossary.ts, useSummaries.ts, and the
- * hook inside Tweets.tsx).
+ * `failed` is a `StepFailure`, not a boolean and no longer a bare string, and
+ * it can arrive from two different places: the POST that should have started a
+ * job never landed, or the job it did start came back failed. They read the
+ * same to a reader and are diagnosed differently, which is why `useStepJob`
+ * works them out rather than this component.
+ *
+ * ## The Retry, and the button that used to appear instead of it
+ *
+ * Until 2026-09-03 this drew its ordinary run button again under **every**
+ * failure and never asked whether another go could work — while the shelf card
+ * next door had been asking `jobWorthRetrying` since August. One job, one
+ * failure, two different answers depending on which surface the reader
+ * happened to be looking at, and the band is the surface a reader in a mode
+ * actually has.
+ *
+ * So: a failed job that is worth another go gets **Retry**, which is
+ * `POST /api/jobs/:id/retry` and skips the steps that finished — the shelf's
+ * own action, not a second pattern. A failure that another go cannot change
+ * gets **no button at all**, which is also the shelf's answer and for the
+ * reason recorded there: *nothing takes the button's place, because the
+ * sentence already says why*
+ * ([ingest-queue.md](../../docs/project/ingest-queue.md#the-failures-retry-is-not-offered-under)).
+ * A run button under "trying again will not help" is the mistake
+ * docs/project/copy.md exists to stop, and it is worse than a badly worded
+ * sentence because the reader can act on it.
+ *
+ * The ordinary run button comes back only where there is genuinely something
+ * new to ask for: no failure at all, or a POST that never landed and left no
+ * job to retry.
  *
  * ## The job in the way, which there is no longer
  *
@@ -91,7 +114,7 @@
  * first version of this component used `animate-spin`, so consolidating three
  * spinners that each honoured reduced motion produced one that ignored it.
  */
-import { LoaderCircle, X } from "lucide-react";
+import { LoaderCircle, RotateCw, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -102,6 +125,7 @@ import {
   WAITING_TO_CONTINUE,
 } from "../job-state.js";
 import type { Job, JobStep, StepName } from "../types.js";
+import type { StepFailure } from "./useStepJob.js";
 import { useNow } from "./useNow.js";
 
 export function JobProgress({
@@ -128,12 +152,33 @@ export function JobProgress({
    *
    * No Stop: there is no id to stop yet, and a control that cannot act is
    * worse than a wait that says what it is doing. `StepJob.starting`,
-   * src/web/useStepJob.ts. Optional because two of the eight callers watch a
-   * job they did not start (the thread page, the quiz) and have no such gap.
+   * src/web/useStepJob.ts.
+   *
+   * **Optional, and the reason given for that was wrong.** This said until
+   * 2026-09-03 that the thread page and the quiz *"watch a job they did not
+   * start and have no such gap"*. Neither does: `write` in src/web/useQuiz.ts
+   * and `write` in Tweets.tsx both start their own runs, so both had exactly
+   * the gap this prop exists for and both re-armed their button between the
+   * press and the first poll.
+   *
+   * The quiz passes it now (tests/quiz-panel.test.tsx § the gap between
+   * pressing and the job appearing). **The thread still does not**, because
+   * threading it there means four more component prop types in a file this
+   * change was not otherwise touching — a real remaining gap rather than a
+   * decision, recorded here so it is not rediscovered as a mystery. The prop
+   * stays optional for that and for the showcase in DesignPage, which has no
+   * hook behind it.
    */
   starting?: boolean;
-  /** A message to show under the button, or null. Never a boolean — see above. */
-  failed: string | null;
+  /**
+   * Why the last run ended badly, or null.
+   *
+   * **The whole `StepFailure`**, so retryability travels with the sentence and
+   * a caller cannot pass one without the other — src/web/useStepJob.ts. It was
+   * a bare string until 2026-09-03, which is how this component came to draw a
+   * run button under failures another go could not change.
+   */
+  failed: StepFailure | null;
   /**
    * Whether this tab can see the job on screen and cannot move it.
    *
@@ -215,19 +260,40 @@ export function JobProgress({
     );
   }
 
+  /* **Retry when there is a job worth retrying; the run button otherwise; and
+     neither when another go cannot help.** See § The Retry above for why the
+     third case draws nothing rather than falling back to the run button. */
+  const offerRetry = failed?.retryable === true && failed.retry !== null;
+  const offerRun = failed === null || (failed.retryable && failed.retry === null);
   return (
     <>
+      {offerRetry && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          title="Run it again, skipping the stages that already worked"
+          onClick={failed.retry ?? undefined}
+        >
+          <RotateCw size={13} />
+          Retry
+        </Button>
+      )}
       {/* `() => void onRun()` and not `onRun`: React hands a click handler a
           MouseEvent, and a run function whose first parameter is optional would
           take that event as its argument — an object, so truthy, quietly
           forcing every press. The thread page was bitten by exactly this, and
           `write(force?)` has exactly that shape. The default parameter is what
           makes the shorthand dangerous. */}
-      <Button type="button" variant="outline" size="sm" onClick={() => void onRun()}>
-        {icon}
-        {label}
-      </Button>
-      {failed && <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-destructive">{failed}</p>}
+      {offerRun && (
+        <Button type="button" variant="outline" size="sm" onClick={() => void onRun()}>
+          {icon}
+          {label}
+        </Button>
+      )}
+      {failed && (
+        <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-destructive">{failed.message}</p>
+      )}
     </>
   );
 }
