@@ -50,9 +50,37 @@
  */
 
 export default async function handler(req, res) {
-  let handle;
+  /**
+   * ## Why this file holds a stopwatch
+   *
+   * Everything the server records about a request starts its clock inside
+   * src/routes.ts — which is to say **after** the `await import` below has
+   * finished loading a 3.4 MB bundle that statically pulls in jsdom, pg +
+   * drizzle, Stripe and the Anthropic SDK. So a production log line saying
+   * `GET /api/library 200 10ms` is true, and is not the wait. This is the only
+   * place in the program that runs before that import, so it is the only place
+   * the number can be taken.
+   *
+   * Two numbers, not one, and the second is the load-bearing one: moving the
+   * heavy imports behind a handler-local dynamic import would collapse the
+   * `reportBundleImport` figure while merely shifting the same wait later in the
+   * same request. `reportFirstRequest` brackets the whole invocation from
+   * `startedAt`, so it cannot be improved that way — only by the wait actually
+   * going away.
+   *
+   * **The logging is not done here.** This file is plain JavaScript,
+   * deliberately outside the compiled bundle (see the header above), so it
+   * cannot reach src/log.ts — the logger is on the far side of the very import
+   * being measured. So the seam is: take the times here, hand them across, and
+   * let the compiled world decide what to say and when. src/cold-start.ts owns
+   * both decisions, including "once per instance", which is why these calls are
+   * unconditional — a rule kept in two places, one of them in a file no test
+   * can import, is a rule kept in neither.
+   */
+  const startedAt = performance.now();
+  let mod;
   try {
-    ({ default: handle } = await import("../api-dist/vercel.js"));
+    mod = await import("../api-dist/vercel.js");
   } catch (err) {
     res.statusCode = 500;
     res.setHeader("Content-Type", "application/json");
@@ -80,5 +108,23 @@ export default async function handler(req, res) {
     );
     return;
   }
-  await handle(req, res);
+  /* `typeof`, not a bare call: a deployment whose `api-dist/` predates
+     src/cold-start.ts has no such export, and a TypeError here would turn a
+     working request into a 500 over a measurement. The absence of the log line
+     is then the signal, which is the right cost for a diagnostic. */
+  if (typeof mod.reportBundleImport === "function") {
+    mod.reportBundleImport(performance.now() - startedAt);
+  }
+  try {
+    await mod.default(req, res);
+  } finally {
+    /* In a `finally` so a first request that threw still reports its number — a
+       cold start that ends in a 500 is still a cold start, and dropping it would
+       bias the figure towards the requests that went well. Nothing in here can
+       throw and displace that outcome: the `typeof` guard covers a stale bundle,
+       and src/log.ts's `wrap` makes a log call structurally non-throwing. */
+    if (typeof mod.reportFirstRequest === "function") {
+      mod.reportFirstRequest(performance.now() - startedAt);
+    }
+  }
 }

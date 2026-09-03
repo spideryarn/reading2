@@ -1065,22 +1065,47 @@ Greg, 2026-09-02:
 
 ### Stage: Go-live (when we ship this)
 
-**There is no live mode to activate.** The first version of this stage said business verification and
-a payout bank account. That is wrong for this account: `acct_1GHoSxLZ0dGTJEEP` has taken real money
-for Greg's consulting work for years, and reading `/v1/account` on 2026-09-03 gives
-`charges_enabled`, `payouts_enabled` and `details_submitted` all true with an empty `requirements`.
-Going live is configuration in the live half of the dashboard plus a live key — an afternoon, not an
-application. What is genuinely empty over there is every per-mode object: products, prices, the
-portal configuration, webhook endpoints.
+**This stage has said two wrong things about activation; here is the third answer, and why.** It
+first said business verification and a payout bank account. That was then wrong, because the account
+in question was `acct_1GHoSxLZ0dGTJEEP`, which has billed Greg's consulting work for years and reads
+`charges_enabled`, `payouts_enabled` and `details_submitted` all true. It is wrong again now, and in
+the other direction: Spideryarn moved to **its own account** on 2026-09-03
+([billing.md](../project/billing.md#spideryarn-has-its-own-stripe-account)), and a new account
+inherits no activation — Stripe is explicit that it "doesn't inherit any special status" from an
+existing one. So verification *is* required, on `acct_1UBW3NLv4piDbwcb`, and it is Greg's to do.
 
+The lesson is not about Stripe. Both wrong versions were written confidently from a true reading of
+*an* account, and neither said which. An account id in the sentence would have made the staleness
+visible the moment the account changed.
+
+What is genuinely empty in live, and does not cross from the sandbox: products, prices, the portal
+configuration, webhook endpoints, the business name, branding, and every dashboard toggle.
+
+**The live run happens on Greg's Mac, and nowhere else.** Confirmed 2026-09-03: only the Mac can
+reach the production database, and the setup script has to write the live price ids *into* it. The
+shared box is barred from a live key twice over —
+[`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) refuses to carry one and
+[`src/billing/stripe.ts`](../../src/billing/stripe.ts) refuses to build a client from one outside a
+production deployment. So an agent on the box cannot do this step; it can only read the output back.
+
+- [ ] **Greg (manual)**: activate `acct_1UBW3NLv4piDbwcb` — company details, directors, ID, and a
+  payout bank account. Usually near-instant, occasionally 1–3 days for extra ownership checks.
+- [ ] **Greg (manual)**: set the live account's **public details** and **branding** — they do not
+  cross from the sandbox. `stripe:check` fails the business name if it still looks like an internal
+  nickname, because that string prints on the page a customer types their card into.
 - [ ] **Greg (manual)**: create a live secret key at
   [dashboard.stripe.com/apikeys](https://dashboard.stripe.com/apikeys) — note the live URL has **no
   `/test/` segment**, which is how you tell the modes apart. Stripe shows a live secret **once**;
-  after that it can only be rotated. Give it to the agent for the setup run.
-- [ ] Agent, with the live key: `scripts/stripe-setup.ts --apply` — creates the live product, prices
-  and portal configuration and writes the live price ids onto the tier rows. Check its
-  `is the account default` line; a portal configuration that is not the default is one no reader
-  ever sees.
+  after that it can only be rotated.
+- [ ] **Greg, on the Mac**, dry run first and read the `Target:` line before `--apply`:
+  ```
+  DATABASE_URL=<production> VERCEL_ENV=production STRIPE_SECRET_KEY=sk_live_… npm run stripe:setup
+  ```
+  Then the same with `-- --apply`. It creates the live product, prices and portal configuration and
+  writes the live price ids onto the tier rows. Check the `is the account default` line: a portal
+  configuration that is not the default is one no reader ever sees.
+- [ ] **Greg, on the Mac**: `npm run stripe:check` with the same three variables — read-only, and it
+  is the gate. Everything it tests is something a real purchase caught once.
 - [ ] **Greg (manual)**: add the production webhook endpoint at
   [dashboard.stripe.com/webhooks](https://dashboard.stripe.com/webhooks) →
   `https://<prod-host>/api/webhooks/stripe`, subscribed to the four events, and **Reveal secret** to

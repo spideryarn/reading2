@@ -53,7 +53,7 @@ reviewed in [260828at-html-ingest-var-data-sol.md](../plans/260828at-html-ingest
 
 What the 200 *does* hide is the whole class from Vercel's error dashboard, which only sees 5xx —
 [vercel-hosting-deployment.md § the trap](vercel-hosting-deployment.md#the-trap-get_runtime_errors-will-not-show-you-an-application-failure).
-The comment at `src/jobs.ts:443` says why the explicit capture is there: *"the reader sees a red
+The comment in `src/jobs.ts` § `runStep` says why the explicit capture is there: *"the reader sees a red
 card, and without this nobody else ever hears about it."*
 
 ## It is a fifth egress, and the logging rules apply to it

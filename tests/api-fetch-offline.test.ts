@@ -21,6 +21,7 @@
  * order of operations in `apiFetch`, not IndexedDB and not the SDK.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { LibraryResponse } from "../src/types.js";
 
 const getSession = vi.fn();
 const refreshSession = vi.fn();
@@ -274,16 +275,69 @@ describe("a write makes our copy wrong, so it throws the copy away", () => {
   });
 });
 
+/**
+ * **The fixtures here are the shape `GET /api/library` really sends.**
+ *
+ * `src/routes.ts` answers `{ articles: [...] }` — an envelope, not a bare
+ * array — and for the first fortnight of its life the filter below tested
+ * `Array.isArray(body)` and so never ran once. The test that was meant to cover
+ * it invented a bare array, a shape the server has never produced, and passed
+ * against code that did nothing. docs/postmortems/260903e-offline-shelf-filter-never-ran.md.
+ *
+ * So the two cases are deliberately kept apart: the shape that **is** produced
+ * gets filtered, and the shapes that are merely **tolerated** pass through. If
+ * they are ever the same fixture again, the second one is silently standing in
+ * for the first.
+ */
 describe("the offline shelf offers only what it can open", () => {
-  const shelf = [{ slug: "kept" }, { slug: "evicted" }];
+  /* Exactly what the route sends, and **declared as such**: `LibraryResponse`
+     is the type `src/routes.ts` annotates its own `send(...)` with, so a
+     fixture that drifted back to a bare array would now fail `npm run
+     typecheck` rather than quietly testing a shape nobody produces. This
+     is deliberately **not** a cast — `as LibraryResponse` would accept a bare
+     array again and be exactly the reassurance that failed here. Keyed off
+     `keyof` instead, so the envelope's key is checked while the entries stay
+     minimal; a real one has a dozen fields none of which this file cares
+     about. */
+  const shelf: Record<keyof LibraryResponse, { slug: string }[]> = {
+    articles: [{ slug: "kept" }, { slug: "evicted" }],
+  };
 
-  it("drops entries whose prose we no longer hold", async () => {
+  it("drops entries whose prose we no longer hold, keeping the envelope", async () => {
     vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
     readCache.mockResolvedValue({ body: shelf, savedAt: 1000 });
     slugsHeld.mockResolvedValue(new Set(["kept"]));
 
     const res = await apiFetch("/api/library");
-    expect(await res.json()).toEqual([{ slug: "kept" }]);
+    expect(await res.json()).toEqual({ articles: [{ slug: "kept" }] });
+  });
+
+  it("keeps the rest of the envelope untouched", async () => {
+    /* `archived` is **not** a field the route sends today — it is a stand-in
+       for the next one somebody adds. The property under test is that the
+       filter rebuilds the envelope rather than replacing it, so a body saved by
+       a newer deployment keeps whatever else it was carrying. */
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
+    readCache.mockResolvedValue({
+      body: { articles: [{ slug: "kept" }, { slug: "evicted" }], archived: false },
+      savedAt: 1000,
+    });
+    slugsHeld.mockResolvedValue(new Set(["kept"]));
+
+    const res = await apiFetch("/api/library");
+    expect(await res.json()).toEqual({ articles: [{ slug: "kept" }], archived: false });
+  });
+
+  it("passes an unexpected legacy shape through unchanged", async () => {
+    /* A bare array is what an older deployment might have saved, and what the
+       filter used to be written against. It is tolerated, not expected — so it
+       is returned whole rather than filtered or emptied. */
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
+    readCache.mockResolvedValue({ body: [{ slug: "kept" }, { slug: "evicted" }], savedAt: 1000 });
+    slugsHeld.mockResolvedValue(new Set(["kept"]));
+
+    const res = await apiFetch("/api/library");
+    expect(await res.json()).toEqual([{ slug: "kept" }, { slug: "evicted" }]);
   });
 
   it("leaves an unexpected shape alone rather than emptying the shelf", async () => {
@@ -294,13 +348,24 @@ describe("the offline shelf offers only what it can open", () => {
     expect(await res.json()).toEqual({ entries: "surprise" });
   });
 
-  it("does not filter an article payload", async () => {
+  it("leaves an envelope whose articles are not a list alone", async () => {
     vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
-    readCache.mockResolvedValue({ body: [{ slug: "evicted" }], savedAt: 1000 });
+    readCache.mockResolvedValue({ body: { articles: "surprise" }, savedAt: 1000 });
+
+    const res = await apiFetch("/api/library");
+    expect(await res.json()).toEqual({ articles: "surprise" });
+  });
+
+  it("does not filter an article payload", async () => {
+    /* The shelf's own shape, asked for down a different path: what stops the
+       filter here is the path, and nothing else — so the fixture has to be one
+       the filter would otherwise bite. */
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
+    readCache.mockResolvedValue({ body: { articles: [{ slug: "evicted" }] }, savedAt: 1000 });
     slugsHeld.mockResolvedValue(new Set(["kept"]));
 
     const res = await apiFetch("/api/article/x");
-    expect(await res.json()).toEqual([{ slug: "evicted" }]);
+    expect(await res.json()).toEqual({ articles: [{ slug: "evicted" }] });
   });
 });
 
