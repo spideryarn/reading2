@@ -69,6 +69,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_HREF, DESIGN_HREF, PROFILE_HREF } from "./router.js";
 import { ShelfCard } from "./ShelfEntry.js";
 import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
+import { SiteFooter } from "./SiteFooter.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useJobs } from "./useJobs.js";
 import { useLibrarySearch } from "./useLibrarySearch.js";
@@ -449,6 +450,20 @@ export function Library() {
       {searching && <Passages state={passages} query={query} only={unread} />}
 
       {!searching && <Archived shelf={shelf} />}
+
+      {/* Greg's own example of a signed-in page that should carry one
+          (2026-09-03). The shelf has a bottom, and it is where a reader who has
+          been away comes back to — so it is where the policy and the feature
+          list stay reachable long after the landing page stopped being shown to
+          them.
+
+          **`here` because this page is App.tsx's fallback**, exactly as the
+          landing page is signed out: a non-administrator at `/admin` gets the
+          shelf, and so does every unrecognised address, because `parseRoute`
+          has no 404. Without this the row offered those readers a Home link to
+          the shelf they were already looking at. GPT Sol, 2026-09-03.
+          SiteFooter.tsx § `here`. */}
+      <SiteFooter here="library" />
     </main>
   );
 }

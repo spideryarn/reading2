@@ -3293,13 +3293,14 @@ export const readerProfiles = spideryarn.table("reader_profiles", {
  *
  * ## What is deliberately NOT here
  *
- * **The URL.** Not `location.href`, not the query string, not the `/add/`
- * target. This app's addresses carry `?q=` and `?find=`, which are reader-typed
- * search text, and `/add/<a whole third-party URL>`, which may carry a token —
- * and `httpContext` and `urlQueryParams` are already off in both halves of
- * monitoring so that a URL does not leave. `route_kind` and `slug` are the part
- * of the location that may, and they are a closed vocabulary and a validated
- * slug rather than a string that was in the address bar.
+ * **This section used to begin with the URL**, and had gone on saying so for a
+ * day after the `url` column below arrived — it was Greg's call to reverse it,
+ * and the reasoning is on that column. What is still true is the *reason* the
+ * vocabulary existed: this app's addresses carry `?q=` and `?find=`, which are
+ * reader-typed search text, and `/add/<a whole third-party URL>`, which may
+ * carry a token. So the address is now stored knowingly and the reader is told
+ * so (docs/project/privacy.md § What a bug report carries), rather than kept
+ * out.
  *
  * **Article prose.** The diagnostics blob carries block *ids*, never block text
  * — docs/project/block-ids.md is why an id is enough, and src/monitoring-scrub.ts

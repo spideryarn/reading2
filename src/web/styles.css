@@ -3582,8 +3582,19 @@ td.text.has-hit[data-hues="8"] {
 .dock-question-state.own { color: var(--ink-soft); }
 
 /* The placeholders' tooltips carry three lines rather than a label, so they
-   need room the spine's band cards don't. */
-.tooltip.tip-soon { max-width: 22rem; }
+   need room the spine's band cards don't.
+
+   **The `min()` is not decoration, and it was missing until 2026-09-03.** This
+   rule is more specific than `.tooltip` above, so a bare `22rem` here silently
+   defeated that rule's `min(22rem, calc(100vw - 1.75rem))` — the clamp that
+   stops a card becoming wider than the window it is shifting inside. Above
+   380px the two are the same value, which is why nothing showed it: the
+   difference only appears on a narrow phone, and only for `tip-soon`, which by
+   then was every control card in the app. Found by a cross-family review of the
+   Feedback button's card, which adopted this class and inherited the defect
+   with it. Any future override here must carry the `min()` too, or restate the
+   whole clamp. */
+.tooltip.tip-soon { max-width: min(22rem, calc(100vw - 1.75rem)); }
 .tip-soon-head {
   font-weight: 600;
   color: var(--ink);
@@ -10932,7 +10943,10 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
     --logo-w: 2.6rem;
     /* And the Feedback button gives up its word for the same reason and in the
        same breath — FeedbackButton.tsx renders the label in a span this query
-       hides, leaving the icon and its `title`. Both bars reserve this as right
+       hides, leaving the icon and the `aria-label` (the `title` it used to lean
+       on became a hover card on 2026-09-03, and `display: none` takes the word
+       out of the accessibility tree as well as off the screen). Both bars
+       reserve this as right
        padding (§ shell), so leaving it at 7.5rem here would cost the title a
        fifth of a 390px screen for a word nobody can see. */
     --feedback-w: 2.4rem;

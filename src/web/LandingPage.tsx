@@ -57,10 +57,11 @@ import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
 import { Plans } from "./Plans.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { FEATURES_HREF, PRIVACY_HREF } from "./router.js";
+import { FEATURES_HREF } from "./router.js";
 import { SHOTS } from "./shots.js";
 import { SignInControls } from "./SignInControls.js";
 import { Feature, H2, Shot } from "./SiteBits.js";
+import { SiteFooter } from "./SiteFooter.js";
 
 /**
  * The strip a stranger has to read: the product is in beta, sign-up is not
@@ -251,25 +252,21 @@ export function LandingPage() {
         <SignInControls />
       </section>
 
-      <footer className="tw:mt-14 tw:border-t tw:border-border tw:pt-5 tw:text-xs tw:text-ink-faint">
-        <p className="tw:m-0">
-          Spideryarn Reading — beta. Every screenshot is of a real article read in Spideryarn; most
-          are of <em>The Mythology of AI Consciousness</em> by Anil Seth.
-        </p>
-        <p className="tw:mt-2 tw:mb-0">
-          <Link href={FEATURES_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
-            Features
-          </Link>
-          {" · "}
-          <Link href={PRIVACY_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
-            Privacy
-          </Link>
-          {" · "}
-          <a href={`mailto:${CONTACT_EMAIL}`} className="tw:text-ink-faint tw:hover:text-highlight">
-            {CONTACT_EMAIL}
-          </a>
-        </p>
-      </footer>
+      {/* The link row is `SiteFooter` now, on every page that has a bottom —
+          this one wrote its own until 2026-09-03 and had drifted from the
+          features page's copy of it. The sentence stays here because it is
+          about this page's screenshots rather than about the site.
+
+          **`here` because this page is drawn at addresses that are not its
+          own.** Signed out, `App.tsx` answers `/profile`, `/design`, `/admin`,
+          `/add/...` and an unshared `/read/<slug>` with this page — so the
+          address bar says one thing and the reader is looking at another, and
+          without this the row offered them a Home link to the page they were
+          already on. SiteFooter.tsx § `here`. */}
+      <SiteFooter here="library">
+        Spideryarn Reading — beta. Every screenshot is of a real article read in Spideryarn; most
+        are of <em>The Mythology of AI Consciousness</em> by Anil Seth.
+      </SiteFooter>
     </main>
   );
 }

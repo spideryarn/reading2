@@ -27,13 +27,12 @@
  * on every class.
  */
 import { ArrowLeft } from "lucide-react";
-import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { Plans } from "./Plans.js";
-import { PRIVACY_HREF } from "./router.js";
 import { SHOTS } from "./shots.js";
 import { Feature, H2, Shot } from "./SiteBits.js";
+import { SiteFooter } from "./SiteFooter.js";
 
 export function FeaturesPage() {
   useDocumentTitle(pageTitle({ kind: "features" }));
@@ -223,25 +222,12 @@ export function FeaturesPage() {
       <H2>Plans</H2>
       <Plans />
 
-      <footer className="tw:mt-14 tw:border-t tw:border-border tw:pt-5 tw:text-xs tw:text-ink-faint">
-        <p className="tw:m-0">
-          Every screenshot is of a real article read in Spideryarn; most are of{" "}
-          <em>The Mythology of AI Consciousness</em> by Anil Seth.
-        </p>
-        <p className="tw:mt-2 tw:mb-0">
-          <Link href="/" className="tw:text-ink-faint tw:hover:text-highlight">
-            Home
-          </Link>
-          {" · "}
-          <Link href={PRIVACY_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
-            Privacy
-          </Link>
-          {" · "}
-          <a href={`mailto:${CONTACT_EMAIL}`} className="tw:text-ink-faint tw:hover:text-highlight">
-            {CONTACT_EMAIL}
-          </a>
-        </p>
-      </footer>
+      {/* `SiteFooter` since 2026-09-03. It drops its own Features link when it
+          is on this page, so there is nothing to special-case here. */}
+      <SiteFooter>
+        Every screenshot is of a real article read in Spideryarn; most are of{" "}
+        <em>The Mythology of AI Consciousness</em> by Anil Seth.
+      </SiteFooter>
     </main>
   );
 }

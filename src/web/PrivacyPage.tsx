@@ -42,6 +42,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
+import { SiteFooter } from "./SiteFooter.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 
 /**
@@ -449,6 +450,10 @@ export function PrivacyPage() {
           than leaving you to spot it.
         </p>
       </Section>
+
+      {/* The way back out, for a reader who arrived here from the landing page
+          and now wants to know what the thing actually does. SiteFooter.tsx. */}
+      <SiteFooter />
     </main>
   );
 }
