@@ -352,8 +352,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      docs/project/feedback.md. */
   "fb-send": "retry",
   "fb-store": "ours",
-  /* The subscription allowance, `pay-`. All three are registered rather than
-     left to fall through, and the two `blocked` ones are the reason: an
+  /* The subscription allowance, `pay-`. All six are registered rather than
+     left to fall through, and the four `blocked` ones are the reason: an
      unrecognised code means *offer another go*, so "you have used all three of
      your free articles" would have arrived with a Retry button beside it —
      pressing it does not move the count, and a button that cannot work is the
@@ -362,7 +362,16 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      docs/project/billing.md. */
   "pay-free": "blocked",
   "pay-limit": "blocked",
+  "pay-lapsed": "blocked",
   "pay-off": "ours",
+  /* Pressing *Manage billing* with nothing to manage. `blocked` for the same
+     reason as the three above: another press gives the same answer, so a Retry
+     button beside it would be a button that cannot work. */
+  "pay-none": "blocked",
+  /* Stripe had a bad minute. The one `pay-` code where another go is exactly
+     the right thing to offer — see `BILLING_UNREACHABLE`, and note it is a
+     different situation from `pay-off`, which is a deployment with no Stripe. */
+  "pay-down": "retry",
 };
 
 
@@ -2205,7 +2214,17 @@ export const FEEDBACK_NOT_AVAILABLE: ReaderFacingFailure = {
  * the thing `kind` is actually consulted for — should we offer another go —
  * gives the same answer either way.
  *
- * **Both sentences end by saying reading is unaffected**, which is the one thing
+ * **The third sentence is for somebody whose plan has ended**, and it exists
+ * because the other two would lie to them. The free count is lifetime and
+ * includes paid months, so a reader who took forty articles on Reader and
+ * cancelled is past the free allowance permanently — that is the policy Greg
+ * chose on 2026-09-03, over tier-scoping the count or granting a fresh
+ * allowance on cancel. What it must not do is *read* as a policy failure:
+ * "you have added all 3 articles a free account can add", to somebody who has
+ * added forty, looks like arithmetic going wrong. So the ended plan is named,
+ * resubscribing is the way back, and the numbers stay out of it.
+ *
+ * **All three sentences end by saying reading is unaffected**, which is the one thing
  * a reader will actually be worried about and the one promise this product makes
  * about money (Greg, 2026-09-02: *"if a user has hit their quota, they should
  * still be able to read their existing and Public-readable articles"*). Neither
@@ -2222,9 +2241,27 @@ export function ingestQuotaReached(quota: {
   limit: number;
   /** When the allowance resets. Absent for the free tier, whose limit is lifetime. */
   resetAt?: Date;
+  /**
+   * This account had a subscription and no longer has an entitled one.
+   *
+   * From the billing row rather than from the numbers — `Refused.lapsed` in
+   * src/store/pg-billing.ts.
+   */
+  lapsed?: boolean;
 }): ReaderFacingFailure {
   const kept =
     "Everything you have already added stays exactly where it is — reading is never limited.";
+
+  if (quota.lapsed) {
+    return {
+      kind: "blocked",
+      message:
+        `Your subscription has ended, so this account is back to the free allowance of ` +
+        `${quota.limit} articles — and those are already spent. Trying again will not help; ` +
+        `resubscribing from the Upgrade button on your profile page is what adds more. ${kept} ` +
+        "[pay-lapsed]",
+    };
+  }
 
   if (!quota.resetAt) {
     return {
@@ -2270,4 +2307,48 @@ export const BILLING_NOT_AVAILABLE: ReaderFacingFailure = {
     "Subscriptions are not set up on this copy of the app, so there is nothing to buy here just " +
     "now. Trying again will not help — it needs somebody to configure it. Nothing you have is " +
     "affected, and reading carries on as normal. [pay-off]",
+};
+
+/**
+ * Stripe itself refused or could not be reached.
+ *
+ * **Different from `BILLING_NOT_AVAILABLE`, and the difference is what the
+ * reader should do.** That one is a deployment with no Stripe configured, which
+ * no amount of trying will change. This one is a bad minute at Stripe — a
+ * timeout, a rate limit, a 500 from their side — so `retry` is honest and a
+ * Retry button beside it can work.
+ *
+ * It exists because without it every Stripe SDK failure left this app answering
+ * **500 with Stripe's own sentence in it** (GPT Sol, 2026-09-03). That breaks two
+ * rules at once: copy.md's *never show the provider's words*, and the one about
+ * a status meaning what it says — a failure at Stripe is not a fault in this
+ * server's arithmetic.
+ */
+export const BILLING_UNREACHABLE: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "We could not reach Stripe just now, so there is nothing to send you to yet. Nothing has " +
+    "been charged and nothing has changed. Try again in a minute. [pay-down]",
+};
+
+/**
+ * They asked for the billing portal and have never subscribed.
+ *
+ * `blocked` rather than `bug`: nothing is broken and the reader has not done
+ * anything wrong — there is simply no billing history to manage, because the
+ * Stripe customer that would hold one is created by the *first* checkout.
+ *
+ * **It has to say out loud that asking again gives the same answer**, and that
+ * is a rule rather than a flourish: `tests/messages.test.ts` fails a `blocked`
+ * message that does not. The first draft of this one did not, and the test
+ * caught it. It names the way forward, as the `pay-` messages do, and it ends
+ * where they all end: nothing about reading changes.
+ */
+export const NOTHING_TO_MANAGE: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "There is no billing to manage on this account yet — billing details only exist once you " +
+    "have subscribed at least once, so asking again will give the same answer. The Upgrade " +
+    "button on your profile page is where that starts. Everything you have already added stays " +
+    "exactly where it is, and reading is never limited. [pay-none]",
 };
