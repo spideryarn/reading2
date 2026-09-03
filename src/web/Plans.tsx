@@ -14,29 +14,12 @@
  * which the cross-family review (docs/plans/260902k-website-copy-review-sol.md,
  * finding 8) rightly called the wrong direction of ownership.
  *
- * The line under the table is the second half of the landing page's honest
- * strip: the copy is written as if sign-up and payment are open, and until they
- * are, a table of prices with no way to pay needs the sentence beside it, on
- * both pages. Delete `OpensShortly` with the strip, the day sign-up opens.
+ * **It used to carry a second line, and it does not any more.** Until
+ * 2026-09-03 an `OpensShortly` component sat under the table — the second half
+ * of the landing page's honest strip, there because a table of prices with no
+ * way to pay needs a sentence beside it. Stripe went live that day and sign-up
+ * opened to anyone, so Greg had it and the strip deleted together.
  */
-import { CONTACT_EMAIL } from "../site-text.js";
-
-/** [tissue] Until sign-up opens: the one sentence that has to sit beside a price. */
-export function OpensShortly() {
-  const subject = encodeURIComponent("Tell me when Spideryarn Reading sign-up opens");
-  return (
-    <p className="tw:mt-4 tw:text-sm">
-      Sign-up opens shortly.{" "}
-      <a
-        href={`mailto:${CONTACT_EMAIL}?subject=${subject}`}
-        className="tw:text-highlight tw:no-underline tw:hover:underline"
-      >
-        Email us
-      </a>{" "}
-      (it opens your mail app) and we’ll tell you the day it does.
-    </p>
-  );
-}
 
 export function Plans() {
   const cell = "tw:py-2.5 tw:pr-6 tw:align-top";
@@ -78,7 +61,6 @@ export function Plans() {
         Reading is never gated: at your limit you can still read every article you have and every
         public one.
       </p>
-      <OpensShortly />
     </div>
   );
 }
