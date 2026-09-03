@@ -47,6 +47,7 @@ import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import type { Comment } from "../types.js";
 import type { CommentStore } from "./contracts.js";
+import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned } from "./pg.js";
 
@@ -124,7 +125,7 @@ async function listFor(articleId: string): Promise<Comment[]> {
   return rows.map(toComment);
 }
 
-export const pgCommentStore: CommentStore = {
+const rawPgCommentStore: CommentStore = {
   async load(slug: string): Promise<Comment[]> {
     return listFor(await articleIdForOwned(slug));
   },
@@ -752,3 +753,38 @@ export const pgCommentStore: CommentStore = {
     return rows.length;
   },
 };
+
+/**
+ * The comment store, with nothing a database said able to leave it.
+ *
+ * Wrapped **here** rather than only at the selection in src/store/index.ts,
+ * which is where it was — the third store to make this move, after
+ * src/store/pg-jobs.ts and src/store/pg-uploads.ts, and the one that had the
+ * incident. `docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md` names
+ * it as the highest-value change on its list and did not make it.
+ *
+ * **The value is what the tests can see, not what production does.** The
+ * selection in index.ts has wrapped this store since 2026-08-26, so nothing
+ * about a live request changes here. What changes is that
+ * tests/store-comments.test.ts, tests/comment-sweep.test.ts and the parity
+ * suites import *this* object — so their four `toBeInstanceOf(CommentIdTaken)`
+ * assertions are now about the object production runs rather than about a raw
+ * store nothing serves. That is the whole of the postmortem's argument: a
+ * wrapper a test can import its way around is a wrapper the tests do not cover,
+ * and the 409 and the 404 that arrived as 500s were green in two files for four
+ * days for exactly that reason.
+ *
+ * **So this object reaches `guarded()` in src/store/index.ts already wrapped,
+ * and `guardDbStore` hands it straight back.** That idempotence is not a
+ * nicety: a second pass produces a scrubbed error carrying no errno, so a
+ * connection failure that `TRANSIENT_ERRNOS` had classified `STORAGE_BUSY`
+ * ("wait a few seconds and try again") comes back out as `STORAGE_FAILED` ("a
+ * bug; trying again will not help"), which src/jobs.ts persists as `bug` and
+ * which takes the Retry button off the card. Measured, not reasoned — the
+ * SQLSTATE cases survive a second pass because the code is copied onto the
+ * scrubbed error and the errno ones do not. The invariant lives with the
+ * wrapper (src/store/db-errors.ts § Wrapping a wrapped store is a no-op), where
+ * it covers every caller rather than one composition root; pinned by
+ * tests/store-guarded.test.ts § 4.
+ */
+export const pgCommentStore: CommentStore = guardDbStore("comments", rawPgCommentStore);

@@ -480,30 +480,30 @@ function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
    * the dock's Hierarchy button away.
    */
   /**
-   * **This crossover is conditional and the stylesheet's is not, so with the
-   * rail turned off there is a 12px band of widths where they disagree.**
+   * **This crossover is conditional, and since 2026-09-03 nothing else tries to
+   * guess it.**
    *
    * `avail` is the window minus the rail, so the width at which the band stops
    * fitting beside the prose depends on whether the rail is there: 844 with it,
-   * 832 without. `styles.css` § a band with no room is a plain
-   * `@media (max-width: 843px)` and knows nothing about `?spine=0`. So between
-   * **832 and 843 with the rail off**, this function hands the band 288–299px
-   * and squeezes the table to make room, while the stylesheet widens the same
-   * band to the whole window and lays it over the article it just made space
-   * for. Measured, not reasoned: at 832px, `modeW` 288 against a covering band.
+   * 832 without. `styles.css` § a band with no room used to be a plain
+   * `@media (max-width: 843px)`, which knows nothing about `?spine=0`, and
+   * between **832 and 843 with the rail off** the two disagreed: this function
+   * handed the band 288–299px and squeezed the table to make room, while the
+   * stylesheet widened that same band to the whole window and laid it over the
+   * article it had just made space for. Measured, not reasoned: at 832px,
+   * `modeW` 288 against a covering band. Found by GPT Sol reviewing the rail's
+   * halving, 2026-08-28 — and pre-existing rather than introduced by it, since
+   * the same gap sat at 844–855 when the rail was 24px. It is as wide as the
+   * rail, whatever the rail is.
    *
-   * **Pre-existing rather than introduced by the halving**, which only moved it:
-   * the same 12px gap sat at 844–855 when the rail was 24px, and it is 12 wide
-   * because the rail is. Found by GPT Sol reviewing the halving, 2026-08-28.
-   *
-   * Not fixed here, and deliberately not with a fourth hand-copied breakpoint —
-   * a second conditional query would be a *third* thing to keep in step, and the
-   * whole reason `tests/spine-width.test.ts` exists is that there are already
-   * too many. The right fix is to stop the stylesheet guessing: `App.tsx`
-   * already writes `--mode-w` from `fit.modeW`, so it can write the fact itself
-   * as a class or data attribute derived from `fit.modeW === 0`, and the covering
-   * rules key off that instead of off a width. That is a change to App.tsx,
-   * which belongs to whoever owns the mode band.
+   * The fix was not a fourth hand-copied breakpoint. The stylesheet stopped
+   * deriving a fact it cannot see: `App.tsx` writes `band-covers` on `.reader`
+   * from `fit.modeW === 0`, beside the `--mode-w` it already wrote from the same
+   * number, and the covering rules key off the class. So `modeW: 0` below is now
+   * the *only* statement of this crossover on the page, and the rail's width may
+   * move without anything in CSS moving with it.
+   * `tests/spine-width.test.ts` § the band covers the article on a fact, not on
+   * a width holds that line.
    */
   if (MODE_MIN + PROSE_MIN > avail) {
     return {

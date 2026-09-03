@@ -196,6 +196,13 @@ if (STORE === "postgres") {
  * so they cannot leak one — and routes.ts reads `err.code === "ENOENT"` off
  * them to answer 404, which a translation would take away. Narrower blast
  * radius, and the honest reason: the hazard is Drizzle's, not storage's.
+ *
+ * A store that already guards itself at its own export — `pgCommentStore` does,
+ * the way src/store/pg-jobs.ts and src/store/pg-uploads.ts do — passes through
+ * unchanged, because `guardDbStore` is idempotent. There is no special case
+ * here to remember: the invariant lives with the wrapper (db-errors.ts § Wrapping
+ * a wrapped store is a no-op), where it protects every caller and not just this
+ * one.
  */
 function guarded<T extends object>(what: string, pg: T, files: T): T {
   return STORE === "postgres" ? guardDbStore(what, pg) : files;

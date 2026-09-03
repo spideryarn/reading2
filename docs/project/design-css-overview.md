@@ -393,12 +393,17 @@ Everything above is the shelf, where a narrow window breaks *rows*. On the readi
 the **columns**, and the fix is not CSS at all — it is arithmetic in
 [`src/web/layout.ts`](../../src/web/layout.ts), which stops offering gist columns once one will not
 fit beside the prose. `styles.css` § **a narrow window** and § **a short viewport** at the end of the
-file are only what is left over after that: the wordmark, the two bars that were silently clipping
-their own controls, and the mode band going full-screen. **The block-id gutter used to be the fourth
-of those and is not any more**: since 2026-08-31 the prose gutter is 2.1rem of icons at every width,
-so there is nothing left for a narrow window to ration
-([prose-gutter-icons.md](../plans/prose-gutter-icons.md)). That is the shape to aim for — a
-breakpoint disappears when the wide layout stops being extravagant, not when the narrow one gets
+file are only what is left over after that: the wordmark and the two bars that were silently clipping
+their own controls. **Two more used to be on that list and are not any more**, and both left for the
+better reason. Since 2026-08-31 the prose gutter is 2.1rem of icons at every width, so there is
+nothing for a narrow window to ration ([prose-gutter-icons.md](../plans/prose-gutter-icons.md)); and
+since 2026-09-03 the mode band going full-screen is a *class*, not a query — `App.tsx` writes
+`band-covers` on `.reader` from `fit.modeW === 0`. That one could never have been a width: the
+crossover is the window minus the rail, so it moves with `?spine=0`, and the `@media (max-width:
+843px)` that guessed it disagreed with `fitMode` from 832 to 843 with the rail off, laying the band
+over an article the table had just been squeezed to make room for (styles.css § a band with no
+room). That is the shape to aim for — a breakpoint disappears when the wide layout stops being
+extravagant or when somebody who knows the answer writes it down, not when the narrow one gets
 another rule.
 
 Three things worth carrying to whatever is built next:
@@ -407,8 +412,10 @@ Three things worth carrying to whatever is built next:
   one — the width at which layout.ts gives up the last gist column and the prose column *becomes*
   the window. `tests/layout.test.ts` pins the crossover on the TypeScript side; since 2026-08-28
   `tests/spine-width.test.ts` reads the query out of the stylesheet and checks it against the same
-  sum, which is the half a layout test cannot see. Both are needed: the number is written down six
-  times and the compiler checks none of them.
+  sum, which is the half a layout test cannot see. Both are needed: the number is written down five
+  times and the compiler checks none of them. **It was six until 2026-09-03**, and the one that went
+  is the interesting one — see the paragraph above: a derived breakpoint that is only correct in one
+  spine state is not a copy to keep in step, it is a copy to delete.
 - **A row that does not fit must scroll, never clip.** `.dock-modes` had `overflow: hidden` for a
   good reason (rounded corners on a segmented control) and it quietly turned into a machine for
   deleting buttons: 48px of clip over a 245px control, five of six modes unpressable, no scrollbar

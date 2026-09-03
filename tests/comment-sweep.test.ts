@@ -54,6 +54,7 @@ import {
 import { closeDb, getDb } from "../src/db/client.js";
 import { articles, blockIdentities, comments as commentsTable } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
+import { STORAGE_FAILED } from "../src/messages.js";
 import { currentOwnerId } from "../src/owner.js";
 import { pgCommentStore } from "../src/store/pg-comments.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -346,15 +347,39 @@ when("the Postgres comment sweep", () => {
     /* The token is optional in the interface because the filesystem store has
        none. A caller that simply forgot to carry it must not get identity-only
        writes back in silence — `pgSearchStore.finish` refuses for the same
-       reason, and this is the assertion that the refusal is real. */
+       reason, and this is the assertion that the refusal is real.
+     *
+     * ## Asserted by its consequence rather than by its wording, since 2026-09-03
+     *
+     * Both refusals are plain `Error`s: no `status`, no place on
+     * `mayPassThrough`'s class list. So now that `pgCommentStore` is guarded at
+     * its own export (src/store/pg-comments.ts,
+     * docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md's first
+     * recommendation), the sentence naming which rule was broken is replaced by
+     * the generic one before it leaves the store.
+     *
+     * **That was already true of every request production serves** — the
+     * composition root has wrapped this store since 2026-08-26 — and this file
+     * could not see it, because it imported the raw object. Matching the old
+     * wording again would only be matching a code path nothing runs, which is
+     * the whole of that postmortem. The frames survive the scrub, so the throw
+     * site is still in the log; whether these two deserve a `status` of their
+     * own the way `CommentIdTaken` does is a reader-facing copy decision and is
+     * deliberately not settled here. */
     const attempt = await nowPending("spya-swp223");
     await expect(
       pgCommentStore.patch(SLUG, "spya-swp223", { status: "done", answer: "x" }),
-    ).rejects.toThrow(/needs the attempt/);
+    ).rejects.toThrow(STORAGE_FAILED.message);
     // And a patch that would leave the row `pending` while releasing the fence.
     await expect(
       pgCommentStore.patch(SLUG, "spya-swp223", { answer: "x" }, attempt),
-    ).rejects.toThrow(/must end an answer/);
+    ).rejects.toThrow(STORAGE_FAILED.message);
+    /* The harm the two refusals exist to prevent, which no wording stands in
+       for: neither write reached the row. It is still pending, still fenced,
+       and carries none of the answer either call tried to put on it. */
+    const row = (await pgCommentStore.load(SLUG)).find((c) => c.id === "spya-swp223");
+    expect(row?.status).toBe("pending");
+    expect(row?.answer).toBeUndefined();
   });
 
   /**

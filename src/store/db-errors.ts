@@ -407,13 +407,45 @@ export function isGuardedStore(store: unknown): string | undefined {
  * against `(...args: unknown[])` and cast back to `T` on the way out, which is
  * what keeps the caller's types exact. The alternative is one wrapper per
  * store, which is five copies of the same six lines and five chances to forget.
+ *
+ * ## Wrapping a wrapped store is a no-op, and it has to be
+ *
+ * A store now guards itself at its own export (`pgCommentStore`, `pgJobStore`,
+ * `pgUploadStore`) *and* is selected at a composition root that wraps what it
+ * selects, so the same object arrives here twice by ordinary means. A second
+ * wrapper looks free and is not: `scrubDbError` copies a SQLSTATE onto the
+ * error it hands back and has **nothing to copy an errno onto**, so on a second
+ * pass an `ECONNRESET` or `ETIMEDOUT` stops matching `TRANSIENT_ERRNOS` — the
+ * reader's `STORAGE_BUSY` (*wait a few seconds and try again*) becomes
+ * `STORAGE_FAILED` (*a bug, and trying again will not help*), which src/jobs.ts
+ * persists as `bug` and which takes the Retry button off a job that failed on a
+ * connection blip. It logs the failure twice as well, the second time with every
+ * diagnostic field empty.
+ *
+ * Measured on 2026-09-03, not reasoned: the SQLSTATE cases survive a second
+ * pass because the code *is* copied; the errno cases do not. That asymmetry is
+ * why probing the obvious case tells you double-wrapping is harmless.
+ *
+ * So the guard is idempotent here rather than at any one call site — GPT Sol's
+ * review, which pointed out that a check in `guarded()` (src/store/index.ts)
+ * protects one composition path and leaves every other caller able to
+ * double-wrap. The alternative it rejected was teaching `scrubDbError` to carry
+ * a raw errno through on `code`, which collides with the `ENOENT`/404 reading
+ * `scrubDbError` above already warns about.
+ * `tests/store-guarded.test.ts` § 4 asserts the identity.
+ * docs/plans/260903e-sweep-recorded-rather-than-fixed-defects.md.
  */
 export function guardDbStore<T extends object>(what: string, store: T): T {
+  /* Already wrapped — hand it straight back, keeping the *first* wrapper's
+     name. The guard travels with the store from its own export; a composition
+     root's label for the same object is the later and weaker claim. */
+  if (isGuardedStore(store) !== undefined) return store;
+
   const guarded: Record<string, unknown> = {};
-  /* The mark `isGuardedStore` reads. Non-enumerable so that it is invisible to
-     `Object.entries` — including this function's own loop, so wrapping a
-     wrapped store stays harmless — and to anything that copies or serialises a
-     store. A symbol rather than a string key for the same reason. */
+  /* The mark `isGuardedStore` reads, and the thing the line above asks for.
+     Non-enumerable so that it is invisible to `Object.entries` — including this
+     function's own loop — and to anything that copies or serialises a store. A
+     symbol rather than a string key for the same reason. */
   Object.defineProperty(guarded, GUARDED, { value: what, enumerable: false });
   let wrapped = 0;
   for (const [key, value] of Object.entries(store)) {
