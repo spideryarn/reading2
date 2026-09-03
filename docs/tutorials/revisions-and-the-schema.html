@@ -1,0 +1,1140 @@
+<!doctype html>
+<html lang="en">
+<!--
+    TUTORIAL REQUEST
+
+    User prompt: "Run @docs/reusable/write-tutorial.md on revisions and database schema"
+
+    Generated: 2026-09-03
+    Audience:  a product manager or engineer who knows Spideryarn and has never read the code
+    Complexity: complex
+    Written to: docs/reusable/write-tutorial.md
+
+    Source files read:
+      docs/project/database.md            the store, the migrations, the traps, checkpoints
+      docs/project/sql.md                 the taste: columns over JSON, keys, nullable timestamps
+      docs/project/architecture.md        pipeline stages and stage ownership
+      docs/project/ingest-queue.md        the job, the claim, "a finished job publishes the article"
+      docs/postmortems/260902f-a-lost-claim-that-was-never-lost-and-a-publication-that-was-never-buried.md
+      src/db/schema.ts                    all 26 tables, with the reasoning beside each column
+      src/store/pg-revisions.ts           REVISION_CARRY_POLICY, beginRevision, publishRevisionIn
+      src/store/pg.ts                     REVISION_PROJECTIONS, ownedSlug
+      src/store/index.ts                  deleteGlossary is 501 under postgres
+      docs/project/block-ids.md           how ids are carried across a re-extraction, and the limits
+      tests/db-schema-drift.test.ts       the table list
+      data/meditations-on-moloch/         the worked example's real numbers (289 blocks)
+
+    Counts checked against the tree, not remembered: 26 tables; 46 columns on
+    article_revisions (5 mint / 5 derive / 36 carry); 16 carried block columns;
+    13 step names in the CHECK.
+
+    Reviewed by GPT Sol (gpt-5.6-sol, high effort) 2026-09-03; 14 findings, all
+    verified and applied. It caught the column count (I had 44/34 from a grep
+    whose line range clipped two entries), that the identity FK does not guard
+    against re-minting, that the runtime carry-policy check reads the TypeScript
+    declaration rather than the live table despite its comment, and that the
+    lineage guard did NOT fire in the 2026-09-02 incident.
+
+    Diagrams checked in a browser (Claude-in-Chrome, light and dark) and four
+    geometry faults fixed.
+
+    State of the tree when written: dev at 7db8b57c. The Postgres move is
+    essentially complete — writes go straight into a draft revision, and the
+    filesystem store is scaffolding being deleted rather than maintained.
+-->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="What a revision is in Spideryarn, how re-reading an article keeps the reader's work out of the way, and the four things that will stop a draft becoming the article you see.">
+<title>Revisions and the Schema</title>
+<style>
+  :root {
+    --bg: #fbfaf8;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --ink-soft: #5b6470;
+    --rule: #e2e0dc;
+    --accent: #db8a45;
+    --link: #1a5fb4;
+
+    --c-perm:   #6d28d9;  --c-perm-fill:   #eee9fd;
+    --c-rev:    #0f766e;  --c-rev-fill:    #dcf5f1;
+    --c-reader: #b45309;  --c-reader-fill: #fdf1dc;
+    --c-code:   #1d4ed8;  --c-code-fill:   #e2ebfe;
+    --c-ok:     #15803d;  --c-ok-fill:     #ddf5e3;
+    --c-warn:   #b3261e;  --c-warn-fill:   #fdeaea;
+    --c-dead:   #8b929c;  --c-dead-fill:   #ececec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c; --panel: #1e2128; --ink: #e6e6e3; --ink-soft: #a3adba;
+      --rule: #333842; --link: #7fb4ff;
+      --c-perm:   #b79cf5; --c-perm-fill:   #271e3d;
+      --c-rev:    #63d3c1; --c-rev-fill:    #10302c;
+      --c-reader: #f0b167; --c-reader-fill: #3a2c17;
+      --c-code:   #8fb6ff; --c-code-fill:   #1b2740;
+      --c-ok:     #7fd396; --c-ok-fill:     #142b1c;
+      --c-warn:   #f38b84; --c-warn-fill:   #351a19;
+      --c-dead:   #7b828c; --c-dead-fill:   #2a2e35;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2.5rem 1.25rem 6rem;
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 62rem; margin-inline: auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 2.1rem; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 .4rem; }
+  h2 {
+    font-size: 1.42rem; line-height: 1.25; letter-spacing: -0.01em;
+    margin: 3.2rem 0 .8rem; padding-bottom: .35rem; border-bottom: 2px solid var(--rule);
+  }
+  h3 { font-size: 1.1rem; margin: 2rem 0 .5rem; }
+  h4 { font-size: .96rem; margin: 1.4rem 0 .4rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+  p, li { max-width: 46rem; }
+  a { color: var(--link); text-decoration-color: color-mix(in srgb, var(--link) 40%, transparent); text-underline-offset: 2px; }
+  a:hover { text-decoration-color: currentColor; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .875em;
+         background: color-mix(in srgb, var(--ink) 7%, transparent); padding: .1em .35em; border-radius: 3px; }
+  pre { background: color-mix(in srgb, var(--ink) 6%, transparent); border: 1px solid var(--rule);
+        border-radius: 6px; padding: .85rem 1rem; overflow-x: auto; font-size: .84rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; font-size: 1em; }
+  .lede { font-size: 1.06rem; color: var(--ink-soft); max-width: 44rem; }
+  .meta { font-size: .84rem; color: var(--ink-soft); margin: .6rem 0 2rem; }
+  .meta strong { color: var(--ink); font-weight: 600; }
+
+  .callout { border: 1px solid var(--rule); border-left: 4px solid var(--accent);
+             background: var(--panel); border-radius: 5px; padding: .9rem 1.1rem; margin: 1.2rem 0; }
+  .callout p { margin: .4rem 0 0; }
+  .callout .title { font-weight: 650; }
+  .callout.warn { border-left-color: var(--c-warn); background: var(--c-warn-fill); }
+  .callout.key  { border-left-color: var(--c-rev); background: var(--c-rev-fill); }
+  .callout.model { border-left-color: var(--c-perm); background: var(--c-perm-fill); }
+
+  .toc { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 1rem 1.4rem; margin: 1.6rem 0; }
+  .toc ol { margin: .4rem 0; padding-left: 1.3rem; }
+  .toc li { margin: .18rem 0; }
+  .paths { margin-top: 1rem; padding-top: .9rem; border-top: 1px dashed var(--rule); font-size: .93rem; }
+  .paths p { margin: .35rem 0; }
+
+  figure { margin: 1.6rem 0; }
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px;
+            background: var(--panel); padding: .6rem; }
+  svg { display: block; width: 100%; min-width: 700px; height: auto; }
+  figcaption { font-size: .85rem; color: var(--ink-soft); margin-top: .5rem; max-width: 46rem; }
+
+  /* SVG palette, so the diagrams follow the page's theme */
+  .s-perm   { fill: var(--c-perm-fill);   stroke: var(--c-perm);   }
+  .s-rev    { fill: var(--c-rev-fill);    stroke: var(--c-rev);    }
+  .s-reader { fill: var(--c-reader-fill); stroke: var(--c-reader); }
+  .s-code   { fill: var(--c-code-fill);   stroke: var(--c-code);   }
+  .s-ok     { fill: var(--c-ok-fill);     stroke: var(--c-ok);     }
+  .s-warn   { fill: var(--c-warn-fill);   stroke: var(--c-warn);   }
+  .s-dead   { fill: var(--c-dead-fill);   stroke: var(--c-dead);   }
+  .s-panel  { fill: var(--panel);         stroke: var(--rule);     }
+  .box { stroke-width: 1.5; rx: 6; }
+  .t   { fill: var(--ink); font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .t-s { fill: var(--ink-soft); font: 12.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .t-b { fill: var(--ink); font: 13.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-weight: 650; }
+  .t-m { fill: var(--ink); font: 12.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .t-hd { fill: var(--ink-soft); font: 12px -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; letter-spacing: .1em; }
+  .ln { stroke: var(--ink-soft); stroke-width: 1.5; fill: none; }
+  .ln-dash { stroke: var(--ink-soft); stroke-width: 1.3; fill: none; stroke-dasharray: 5 4; }
+
+  table { border-collapse: collapse; width: 100%; max-width: 54rem; margin: 1.1rem 0; font-size: .92rem; }
+  th, td { text-align: left; vertical-align: top; padding: .5rem .7rem; border-bottom: 1px solid var(--rule); }
+  th { font-weight: 650; font-size: .82rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); }
+
+  details { border: 1px solid var(--rule); border-radius: 6px; background: var(--panel);
+            padding: .35rem .9rem; margin: 1rem 0; }
+  details[open] { padding-bottom: .9rem; }
+  summary { cursor: pointer; font-weight: 600; padding: .5rem 0; }
+  summary::marker { color: var(--accent); }
+  details > *:not(summary) { max-width: 46rem; }
+
+  .pass { display: inline-block; font-size: .74rem; letter-spacing: .08em; text-transform: uppercase;
+          color: var(--accent); font-weight: 700; border: 1px solid currentColor;
+          border-radius: 3px; padding: .1em .5em; vertical-align: .25em; margin-right: .5rem; }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0; }
+</style>
+</head>
+<body>
+
+<h1>Revisions and the schema</h1>
+<p class="lede">An article can be read again by the machine — re-fetched, re-extracted, re-summarised —
+without disturbing what the reader has done with it. This is the design that makes that true, what
+it costs, and the places it is thinner than it looks.</p>
+<p class="meta"><strong>9 minutes</strong> to skim · <strong>~30</strong> to read everything ·
+written 2026-09-03, against <code>dev</code> at <code>7db8b57c</code></p>
+
+<h2 id="tldr">TL;DR</h2>
+
+<p>Spideryarn never edits an article in place. Each run of the pipeline builds a whole new
+<strong>revision</strong> off to one side, and the article swaps to it in a single motion at the end
+— so a reader sees the complete old version or the complete new one, never a mixture, and a failed
+run costs them nothing.</p>
+
+<p>A new revision starts as a <strong>copy</strong> of the published one, so asking for one more
+thing — a glossary, a timeline — does not re-do or re-pay for the rest. And everything the reader
+owns (their notes, their archive, their own title, their sharing setting) is deliberately stored
+somewhere a re-extraction cannot reach.</p>
+
+<h2 id="models">Four ways to picture it</h2>
+
+<div class="callout model">
+  <p class="title">1 · A photocopy on the desk</p>
+  <p>The article on the desk is the one everybody reads. To change it, you photocopy it, mark up the
+  copy — for as long as that takes, minutes sometimes — and only at the very end swap the copy for
+  the original in one motion. Nobody ever sees a half-marked page. The original goes in the drawer,
+  not the bin.</p>
+</div>
+
+<div class="callout model">
+  <p class="title">2 · Seat numbers, not the people in them</p>
+  <p>Every paragraph gets a permanent seat number (<code>spya-m4a7tn</code>). Your note is filed
+  against the seat, not against the words, so emptying seat 14 does not throw the note away — the
+  seat number is never reused and never deleted. The catch is how seats are re-assigned after a
+  re-extraction: <strong>by matching the text</strong>. A paragraph whose words are unchanged keeps
+  its seat however far it has moved; a paragraph that was materially rewritten is treated as a new
+  one, and the note about the old wording is kept but no longer attached to anything on the page.</p>
+</div>
+
+<div class="callout model">
+  <p class="title">3 · A shared document you took offline</p>
+  <p>You open a draft at 3:00 and save at 3:20. If somebody else saved at 3:10, your save would
+  quietly bury theirs. So a draft writes down which version it started from, and the save is refused
+  if the world has moved on. Spideryarn calls that column <code>based_on_revision_id</code>.</p>
+</div>
+
+<div class="callout model">
+  <p class="title">4 · A cast list with three columns</p>
+  <p>When the photocopy is made, each of the 46 fields on a revision has to be told what to do:
+  <strong>mint</strong> a fresh value, <strong>derive</strong> it later from the content, or
+  <strong>carry</strong> the old one across. A field nobody has classified is a compile error, not a
+  default — because both possible defaults are wrong in a way nothing would notice.</p>
+</div>
+
+<h2 id="contents">Contents</h2>
+
+<div class="toc">
+<ol>
+  <li><a href="#pass1">What happens, end to end</a> — the shape, no detail</li>
+  <li><a href="#pass2">The five nouns</a> — what each table is and why it exists</li>
+  <li><a href="#pass3">One article, three journeys</a> — the worked example</li>
+  <li><a href="#carry">The carry policy</a> — 46 columns, three fates</li>
+  <li><a href="#refusals">The four refusals</a> — what stops a draft becoming the article</li>
+  <li><a href="#pass4">The genuinely hard parts</a> — races, and a real incident</li>
+  <li><a href="#taste">How the schema is meant to be shaped</a> — the house rules</li>
+  <li><a href="#judgment">Trade-offs, risks and open questions</a></li>
+  <li><a href="#faq">FAQ</a></li>
+  <li><a href="#appendix">Appendix</a> — table dictionary, file map, glossary</li>
+</ol>
+<div class="paths">
+  <p><strong>Two minutes:</strong> <a href="#tldr">TL;DR</a> and <a href="#pass1">§ 1</a>.</p>
+  <p><strong>You are about to add a column or a table:</strong> <a href="#carry">§ 4</a> then
+  <a href="#taste">§ 7</a>.</p>
+  <p><strong>You want to know what could bite us:</strong> <a href="#refusals">§ 5</a>,
+  <a href="#pass4">§ 6</a>, <a href="#judgment">§ 8</a>.</p>
+  <p><strong>Something lost an artefact and you are debugging it:</strong>
+  <a href="#incident">§ 6, the 2026-09-02 incident</a>.</p>
+  <p><strong>You care about the reader's data specifically:</strong> <a href="#pass2">§ 2</a> and
+  <a href="#faq">the FAQ</a>.</p>
+</div>
+</div>
+
+<hr>
+
+<h2 id="pass1"><span class="pass">Pass 1</span> What happens, end to end</h2>
+
+<p>Everything below follows one real article: <em>Meditations On Moloch</em> from Slate Star Codex,
+which lives in the corpus under the slug <code>meditations-on-moloch</code> and comes out as
+<strong>289 blocks</strong> — paragraphs, headings, quotes — the first of which has the id
+<code>spya-m4a7tn</code>. Assume a reader added it weeks ago, left four comments on it, and has just
+asked for a glossary.</p>
+
+<p>Asking for that creates a <strong>job</strong>: a short list of steps — fetch, extract, blocks,
+hierarchy, glossary, and so on — run one at a time. Pasting a new URL creates the same thing with a
+longer list.</p>
+
+<p>Before the first step runs, the job opens a <strong>draft revision</strong>. Every step writes
+into that draft. When the last step finishes, the draft is checked and then <strong>published</strong>,
+which means one thing only: <code>articles.current_revision_id</code> is pointed at it.</p>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 900 320" role="img" aria-label="A timeline showing revision r1 published, then a draft r2 copied from it, then the pointer moving to r2 at publish time">
+  <defs>
+    <marker id="ah1" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 z" fill="currentColor"/>
+    </marker>
+  </defs>
+
+  <text class="t-hd" x="230" y="28" text-anchor="middle">BEFORE</text>
+  <text class="t-hd" x="530" y="28" text-anchor="middle">THE JOB RUNS (SECONDS TO MINUTES)</text>
+  <text class="t-hd" x="785" y="28" text-anchor="middle">AFTER</text>
+
+  <!-- moment markers -->
+  <line class="ln-dash" x1="360" y1="46" x2="360" y2="262"/>
+  <line class="ln-dash" x1="700" y1="46" x2="700" y2="262"/>
+  <text class="t-b" x="360" y="62" text-anchor="middle">beginRevision()</text>
+  <text class="t-b" x="700" y="62" text-anchor="middle">publishRevisionIn()</text>
+
+  <!-- lane labels -->
+  <text class="t-m" x="92" y="98" text-anchor="end">revision r1</text>
+  <text class="t-m" x="92" y="153" text-anchor="end">revision r2</text>
+  <text class="t" x="92" y="218" text-anchor="end">readers see</text>
+
+  <!-- r1 -->
+  <rect class="s-rev box" x="100" y="78" width="600" height="30"/>
+  <text class="t" x="140" y="98">published — the article</text>
+  <rect class="s-dead box" x="700" y="78" width="170" height="30"/>
+  <text class="t-s" x="716" y="98">superseded, kept</text>
+
+  <!-- r2 -->
+  <rect class="s-perm box" x="360" y="133" width="340" height="30" stroke-dasharray="6 4"/>
+  <text class="t" x="378" y="153">draft — steps write here</text>
+  <rect class="s-rev box" x="700" y="133" width="170" height="30"/>
+  <text class="t" x="716" y="153">published</text>
+
+  <!-- copy arrow -->
+  <path class="ln" d="M300,108 C300,124 320,124 352,140" marker-end="url(#ah1)" color="var(--ink-soft)"/>
+  <text class="t-s" x="112" y="126">copies 36 of 46 columns,</text>
+  <text class="t-s" x="112" y="142">all 289 block rows, every step run</text>
+
+  <!-- pointer arrow -->
+  <path class="ln" d="M700,196 L700,176" marker-end="url(#ah1)" color="var(--ink-soft)"/>
+
+  <!-- reader lane -->
+  <rect class="s-panel box" x="100" y="198" width="600" height="30"/>
+  <text class="t" x="140" y="218">r1 — complete, unchanged, all the way through</text>
+  <rect class="s-panel box" x="700" y="198" width="170" height="30"/>
+  <text class="t" x="716" y="218">r2</text>
+
+  <line class="ln" x1="100" y1="278" x2="864" y2="278" marker-end="url(#ah1)" color="var(--ink-soft)"/>
+  <text class="t-s" x="100" y="300">time</text>
+</svg>
+</div>
+<figcaption>The whole design in one picture. The draft exists for the length of the job and nobody
+can see it; the swap at the end is a single <code>UPDATE</code> inside the same transaction that
+finishes the job. <code>publishRevisionIn</code> in <code>src/store/pg-revisions.ts</code> is the
+only thing in the shipped code that writes <code>articles.current_revision_id</code> — test helpers
+do move it directly, which turns out to matter in <a href="#incident">§ 6</a>.</figcaption>
+</figure>
+
+<p>Three consequences fall straight out of that, and they are most of what you need:</p>
+
+<ul>
+  <li><strong>A failed job costs the reader nothing.</strong> The draft is simply never published;
+  the article they had is the article they still have.</li>
+  <li><strong>A partial job is impossible to see.</strong> There is no window in which the paragraphs
+  are new and the outline is old.</li>
+  <li><strong>Re-running one step is cheap</strong>, because the draft starts as a copy. Moloch's
+  glossary job does not re-fetch the page, re-extract it, or re-summarise its 289 paragraphs.</li>
+</ul>
+
+<h2 id="pass2"><span class="pass">Pass 2</span> The five nouns</h2>
+
+<p>There are 26 tables in the schema. Five of them carry this story, and the interesting thing is
+which side of the line each sits on. For Moloch: one <code>articles</code> row, a handful of
+<code>article_revisions</code>, 289 <code>revision_blocks</code> rows <em>per revision</em>, at least
+289 <code>block_identities</code> rows shared by all of them, and four <code>comments</code>.</p>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 900 470" role="img" aria-label="Entity diagram: articles at the top, with permanent tables on the left and per-revision tables on the right">
+  <defs>
+    <marker id="ah2" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 z" fill="currentColor"/>
+    </marker>
+  </defs>
+
+  <!-- articles -->
+  <rect class="s-perm box" x="300" y="16" width="300" height="78"/>
+  <text class="t-b" x="318" y="40">articles</text>
+  <text class="t-s" x="318" y="60">one row per article, for ever</text>
+  <text class="t-m" x="318" y="80">slug · owner_id · current_revision_id</text>
+
+  <!-- divider. The two side headings are drawn LAST, at the foot of this svg, so
+       their opaque backplates paint over the connector arrows rather than under them. -->
+  <line class="ln-dash" x1="450" y1="120" x2="450" y2="452"/>
+
+  <!-- left column -->
+  <rect class="s-perm box" x="30" y="170" width="270" height="66"/>
+  <text class="t-b" x="46" y="194">block_identities</text>
+  <text class="t-s" x="46" y="215">a paragraph's id. No re-extraction</text>
+  <text class="t-s" x="46" y="230">ever deletes one.</text>
+
+  <rect class="s-reader box" x="30" y="300" width="270" height="80"/>
+  <text class="t-b" x="46" y="324">comments</text>
+  <text class="t-s" x="46" y="345">the reader's own words — plus</text>
+  <text class="t-s" x="46" y="360">highlights and referee marks</text>
+
+  <text class="t-s" x="46" y="412">shelf state (archived, their own title,</text>
+  <text class="t-s" x="46" y="429">opens, purpose, sharing) lives on</text>
+  <text class="t-s" x="46" y="446">the articles row itself</text>
+
+  <!-- right column -->
+  <rect class="s-rev box" x="600" y="170" width="280" height="66"/>
+  <text class="t-b" x="616" y="194">article_revisions</text>
+  <text class="t-s" x="616" y="215">one reading of the piece —</text>
+  <text class="t-s" x="616" y="230">46 columns, the artefacts included</text>
+
+  <rect class="s-rev box" x="600" y="300" width="280" height="66"/>
+  <text class="t-b" x="616" y="324">revision_blocks</text>
+  <text class="t-s" x="616" y="345">the paragraphs as this revision</text>
+  <text class="t-s" x="616" y="360">saw them, in order</text>
+
+  <rect class="s-rev box" x="600" y="396" width="280" height="56"/>
+  <text class="t-b" x="616" y="420">revision_step_runs</text>
+  <text class="t-s" x="616" y="440">which step ran, on what, how it ended</text>
+
+  <!-- arrows from articles -->
+  <path class="ln" d="M340,94 C300,120 250,130 220,164" marker-end="url(#ah2)" color="var(--ink-soft)"/>
+  <path class="ln" d="M560,94 C610,120 680,130 720,164" marker-end="url(#ah2)" color="var(--ink-soft)"/>
+  <rect x="384" y="97" width="132" height="17" fill="var(--panel)"/>
+  <text class="t-s" x="450" y="110" text-anchor="middle">current_revision_id</text>
+
+  <!-- revisions to blocks and runs -->
+  <path class="ln" d="M740,236 L740,294" marker-end="url(#ah2)" color="var(--ink-soft)"/>
+  <path class="ln" d="M620,236 C570,260 560,370 594,420" marker-end="url(#ah2)" color="var(--ink-soft)"/>
+
+  <!-- comments to identities -->
+  <path class="ln" d="M165,300 L165,242" marker-end="url(#ah2)" color="var(--ink-soft)"/>
+  <text class="t-s" x="178" y="276">points at the id,</text>
+  <text class="t-s" x="178" y="292">never at the text</text>
+
+  <!-- revision_blocks back to identities -->
+  <path class="ln" d="M600,318 L390,318 L390,206 L306,206" marker-end="url(#ah2)" color="var(--ink-soft)"/>
+  <rect x="404" y="296" width="184" height="20" fill="var(--panel)"/>
+  <text class="t-s" x="410" y="311">must already exist</text>
+
+  <!-- Painted last, over the connector arrows -->
+  <rect x="160" y="116" width="120" height="38" fill="var(--panel)"/>
+  <rect x="618" y="116" width="144" height="38" fill="var(--panel)"/>
+  <text class="t-hd" x="220" y="130" text-anchor="middle">PERMANENT</text>
+  <text class="t-hd" x="690" y="130" text-anchor="middle">ONE EXTRACTION</text>
+  <text class="t-s" x="220" y="149" text-anchor="middle">survives every re-run</text>
+  <text class="t-s" x="690" y="149" text-anchor="middle">replaced wholesale</text>
+</svg>
+</div>
+<figcaption>The line down the middle is the entire design decision. Anything the reader made or chose
+is on the left and cannot be reached by a re-extraction. Anything the machine produced is on the
+right and is replaced in one go.</figcaption>
+</figure>
+
+<details>
+<summary>What each of the five actually holds</summary>
+
+<p><strong><code>articles</code></strong> — one row per article, for as long as the article exists.
+The slug (the thing in the URL), the owner, a short permanent id, and the pointer at the current
+revision. It also carries the reader's relationship with the piece: <code>archived_at</code>,
+<code>title_override</code>, <code>opens</code>, <code>last_opened_at</code>,
+<code>purpose</code> ("why you're reading this one"), and the sharing switch. All of those are here
+<em>on purpose</em> — a re-extraction must not un-archive an article, forget the reader's own title,
+reset the count, or silently change who can see it.</p>
+
+<p><strong><code>article_revisions</code></strong> — one reading of the piece. It holds the title and
+byline as this extraction found them, what was fetched and when, and then the artefacts themselves:
+the outline tree, the glossary, the quotes, the ideas, the timeline, the quiz, the diagram. 46
+columns in all. Several of them are JSON blobs, and <a href="#taste">§ 7</a> says why that is allowed
+here and nowhere else.</p>
+
+<p>"One reading" is the intent rather than a rule the data enforces: a glossary-only job mints and
+publishes a revision without re-reading anything. A more literal name would be <em>one draft-and-
+publish cycle</em>.</p>
+
+<p><strong><code>block_identities</code></strong> — the spine. Keyed on
+<code>(article_id, block_id)</code>, and <em>never deleted from</em>. The comment in the schema is
+blunt about it: <em>"THE SPINE. A block id, once minted, is never deleted from this table."</em></p>
+
+<p><strong><code>revision_blocks</code></strong> — the paragraphs as one revision saw them: the text,
+the HTML, the word count, whether it is a heading or a footnote or sits inside an authored callout,
+and <code>ordinal</code>, which <em>is</em> document order and is written explicitly from the array
+index rather than inferred from anything. Block ids are random and carry no position, so if that
+column is wrong there is nothing left to recover the order from.</p>
+
+<p>It also holds a generated full-text-search column, per paragraph rather than per article, because
+a search hit is supposed to deep-link to the paragraph. It is <em>generated</em> rather than written
+by the pipeline, deliberately: a column somebody has to remember to fill is a column that ends up
+empty for exactly the article that was just re-run, and an empty search vector matches nothing
+without complaining.</p>
+
+<p><strong><code>revision_step_runs</code></strong> — one row per step per revision: which step, what
+its inputs hashed to, which model and prompt version, and whether it finished, is still running, or
+errored. This is what lets the publication check ask <em>"was the outline actually built from these
+paragraphs?"</em> rather than assuming it.</p>
+</details>
+
+<details>
+<summary>Why comments point at an identity rather than at a paragraph row</summary>
+<p>If a comment pointed at <code>revision_blocks</code>, then the next re-extraction would either
+have to keep every old paragraph row for ever, or delete the reader's question along with the
+paragraph. Neither is acceptable — the second obviously, the first because it makes "what does this
+article say now" a question with several answers.</p>
+<p>So the comment's foreign key is on <code>(article_id, block_id)</code> into
+<code>block_identities</code>. If a re-extraction drops the paragraph, the comment is still a valid
+row pointing at a real identity; the reading view sorts it to the end rather than dropping it,
+because <em>it is still the reader's question</em>. It is worth being precise about what that does
+and does not buy: the comment survives and remains reachable, but a comment also stores the exact
+quote it was placed on, so the highlight in the prose has nothing left to attach to. <strong>Kept and
+reachable, not still anchored.</strong></p>
+<p>The same key is composite for a second reason worth knowing: <strong>block ids are unique only
+within an article</strong>. A global unique index would start rejecting perfectly valid rows at
+roughly a hundred articles, and a global upsert would silently overwrite one article's paragraph
+with another's. Nobody may "tidy" these into single-column keys.</p>
+<p>And the foreign key from <code>revision_blocks</code> to <code>block_identities</code> has
+neither <code>cascade</code> nor <code>restrict</code>, which is unusual enough to have been written
+down: identities are never deleted, so that key can only ever fire on an id that was never minted at
+all. <strong>Do not read it as a guard against re-minting</strong>, though — the writer adds any
+newly minted identity before inserting the blocks that use it, so an extraction that decided to give
+a paragraph a fresh id passes this key cleanly. The key catches a corrupt write, not a bad
+judgment.</p>
+</details>
+
+<h2 id="pass3"><span class="pass">Pass 3</span> One article, three journeys</h2>
+
+<p>The same article, now followed through the three things that can happen to it.</p>
+
+<h3>Journey A — the first ingest</h3>
+
+<ol>
+  <li>A job is created with the default step list. It calls <code>beginRevision</code>, which locks
+  the <code>articles</code> row — <em>creating it first if this slug has never been seen</em>, so a
+  brand-new URL and a re-run take the same code path.</li>
+  <li>There is nothing published yet, so there is nothing to copy. The draft is minted with
+  <code>based_on_revision_id = null</code>, which means <em>copied from nothing</em>.</li>
+  <li>Each step runs and writes its product into the draft. <code>blocks</code> writes 289 rows into
+  <code>revision_blocks</code> and mints 289 rows in <code>block_identities</code>.
+  <code>hierarchy</code> writes the tree. <code>glossary</code> writes its column.</li>
+  <li>The last step's transaction publishes the draft and finishes the job together. The pointer
+  moves. The article appears on the shelf.</li>
+</ol>
+
+<h3>Journey B — the reader asks for a glossary six weeks later</h3>
+
+<p>This is the journey the whole design is for.</p>
+
+<ol>
+  <li>A job of <code>{ steps: ["glossary"] }</code> calls <code>beginRevision</code>. Revision
+  <code>r1</code> is current, so the new draft <code>r2</code> gets
+  <code>based_on_revision_id = r1</code>, and <strong>copies</strong>: 36 of the 46 columns, all 289
+  <code>revision_blocks</code> rows, and every <code>revision_step_runs</code> row.</li>
+  <li>The glossary step runs. It reads the blocks and the tree — which are <em>there</em>, in its own
+  draft, precisely because the copy happened at the beginning rather than at the end. It writes the
+  <code>glossary</code> column.</li>
+  <li>At publish, five columns are <strong>derived</strong> fresh from the blocks and tree:
+  <code>word_count</code>, <code>block_count</code>, <code>part_count</code>,
+  <code>section_count</code>, <code>root_gist</code>.</li>
+  <li><code>based_on_revision_id</code> is still <code>r1</code> and the article is still serving
+  <code>r1</code>, so the check passes and the pointer moves to <code>r2</code>.</li>
+</ol>
+
+<p>The reader now has a glossary. Their comments, their archive state, their own title for the piece
+— untouched, because none of that was ever on the revision.</p>
+
+<div class="callout key">
+  <p class="title">Why the copy happens at the beginning, not at the end</p>
+  <p>The obvious design is to leave the new revision's columns empty and fill in the gaps from the
+  old one at publish time. It fails on the first line: <strong>steps read each other</strong>. The
+  glossary reads the blocks and the tree. Fill the gaps at the end, and a glossary-only job spends
+  its whole life looking at a revision with no paragraphs in it.</p>
+  <p>There is a second reason that only shows up later. Filling gaps at publish time cannot tell
+  <em>"no step produced a glossary"</em> from <em>"the reader deleted the glossary"</em>. Copying
+  whatever is actually there, <code>null</code> included, means the question never comes up. (Worth
+  knowing: on Postgres, deleting a glossary currently <strong>does not work</strong> — the glossary
+  panel's "start over" is refused, because it would mutate a revision that has already been
+  published and nobody has decided yet whether that is allowed. See
+  <a href="#judgment">open questions</a>.)</p>
+</div>
+
+<h3>Journey C — the publisher edits the piece, and we re-extract</h3>
+
+<p>Now the article's text has genuinely changed. Stage 2 finds new paragraphs; some old ones are
+gone.</p>
+
+<p>Re-extraction throws away the old markup entirely — the extractor re-parses the page and emits a
+fresh document with none of our ids in it — so ids are re-assigned by <strong>matching the new
+paragraphs against the previous revision's by their text</strong>. That is why the copy at the
+beginning matters twice over: the previous paragraphs are sitting in the draft, ready to match
+against, before the step runs.</p>
+
+<ul>
+  <li><strong>A paragraph whose words are unchanged keeps its id</strong>, however far it has moved.
+  Each old id is consumed once, so several identical short paragraphs cannot be handed the same
+  one.</li>
+  <li><strong>A materially edited paragraph gets a new id</strong> and loses whatever was anchored to
+  it. This is a deliberate choice, not a gap: fuzzy-matching a rewritten paragraph would silently
+  reattach a reader's note to a sentence that no longer says what they annotated. Losing the anchor
+  is the safer failure — but it <em>is</em> a loss, and it is the honest limit of the seat-number
+  model.</li>
+  <li><strong>Old ids are never deleted</strong> from <code>block_identities</code>, so a comment on
+  a paragraph that has gone is still a valid row and still reachable in the comments list.</li>
+  <li><strong>The outline has to be rebuilt too.</strong> If the paragraphs actually changed and the
+  job did not also run <code>hierarchy</code>, publication is refused — see the next section.</li>
+</ul>
+
+<div class="callout warn">
+  <p class="title">The measured cost, for the case that is worst</p>
+  <p>Re-running extraction over the <em>same PDF with the same model and the same prompt</em> keeps
+  32 of 43 ids and mints 11 — because a model asked twice produces one more record than last time
+  and a comma in a different place, where a web page re-parsed twice produces the same paragraphs.
+  That is a real product cost and it wants deciding before anything a reader owns is anchored to an
+  id.</p>
+</div>
+
+<h2 id="carry">The carry policy — 46 columns, three fates</h2>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 900 300" role="img" aria-label="A bar chart of the 46 columns of article_revisions split into 5 mint, 5 derive and 36 carry">
+  <text class="t-b" x="20" y="30">What happens to each column of article_revisions when a draft is minted</text>
+
+  <!-- mint -->
+  <text class="t-m" x="150" y="80" text-anchor="end">mint · 5</text>
+  <g class="s-perm box">
+    <rect x="164" y="64" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="184" y="64" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="204" y="64" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="224" y="64" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="244" y="64" width="16" height="20" rx="3" stroke-width="1.5"/>
+  </g>
+  <text class="t-s" x="278" y="70">never copied — a fresh value for the new row</text>
+  <text class="t-m" x="278" y="88">id · article_id · status · based_on_revision_id · created_at</text>
+
+  <!-- derive -->
+  <text class="t-m" x="150" y="150" text-anchor="end">derive · 5</text>
+  <g class="s-ok box">
+    <rect x="164" y="134" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="184" y="134" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="204" y="134" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="224" y="134" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="244" y="134" width="16" height="20" rx="3" stroke-width="1.5"/>
+  </g>
+  <text class="t-s" x="278" y="140">recomputed at publish, from the blocks and the tree</text>
+  <text class="t-m" x="278" y="158">word_count · block_count · part_count · section_count · root_gist</text>
+
+  <!-- carry -->
+  <text class="t-m" x="150" y="220" text-anchor="end">carry · 36</text>
+  <g class="s-rev box">
+    <rect x="164" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="184" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="204" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="224" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="244" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="264" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="284" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="304" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="324" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="344" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="364" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="384" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="404" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="424" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="444" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="464" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="484" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="504" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="524" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="544" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="564" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="584" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="604" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="624" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="644" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="664" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="684" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="704" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="724" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="744" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="764" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="784" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="804" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="824" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="844" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+    <rect x="864" y="204" width="16" height="20" rx="3" stroke-width="1.5"/>
+  </g>
+  <text class="t-s" x="164" y="248">copied from the published revision, then overwritten by whichever step owns it — if that step runs</text>
+  <text class="t-m" x="164" y="266">title · fetched_at · tree · arc · glossary · quotes · ideas · timeline · quiz · …</text>
+
+  <text class="t-s" x="20" y="292">A column with no classification is a typecheck failure, not a default. Both defaults are wrong in ways nothing would notice.</text>
+</svg>
+</div>
+<figcaption>The map lives in <code>REVISION_CARRY_POLICY</code>
+(<code>src/store/pg-revisions.ts</code>). It is a TypeScript <code>Record</code> keyed on the table's
+own columns, so a column added to the schema will not compile until somebody has decided about
+it.</figcaption>
+</figure>
+
+<p>The design note worth taking away is that <strong>carry-by-default is the dangerous default, not
+the safe one</strong>. An early version built the carry set as "everything except these two short
+lists". A review pushed back, and it was right: a future column recording <em>when we certified this
+revision</em>, or <em>which worker owned it</em>, would be actively harmful copied — new content
+inheriting an old certification.</p>
+
+<p>The sharpest case turned up later and is real rather than hypothetical.
+<code>based_on_revision_id</code> arrived in migration 0047. If it had been classified as
+<em>carry</em>, every draft would have inherited its <em>grandparent</em> as its base, and the
+publication guard would have compared the wrong pair — waving through exactly the race it exists to
+refuse, for ever.</p>
+
+<details>
+<summary>The three ways this map is held together, and the gap between them</summary>
+<p><strong>Compile time.</strong> The <code>Record</code> is keyed on
+<code>keyof typeof articleRevisions.$inferSelect</code>. A column added in TypeScript fails
+<code>npm run typecheck</code> until classified. This is the one that does the work.</p>
+<p><strong>A runtime throw — which is weaker than its own comment says.</strong> There is a function
+that throws if a column has no policy, and its comment claims it catches a column added by a
+hand-written SQL migration, which TypeScript cannot see. It does not: it asks the same TypeScript
+declaration the typecheck already read, so it can only ever restate what the compiler said, and it
+runs when a draft begins rather than at import. Worth knowing as an instance of the class this repo
+keeps writing postmortems about — <em>a comment describing a guard the code does not implement</em> —
+and the reason it is not dangerous here is the third mechanism.</p>
+<p><strong>A test that talks to the database.</strong>
+<code>tests/store-revision-policy.test.ts</code> compares the map against the <em>live table's</em>
+columns, which is the only one of the three that can see a SQL-only migration. It needs a database,
+and it skips without one.</p>
+<p><strong>And the gap.</strong> The <em>block</em> columns are a different story:
+<code>CARRIED_BLOCK_COLUMNS</code> is a list of 16 plain strings, and nothing typechecks them. A
+column left out is silently dropped from every re-extraction draft — which for
+<code>role</code>/<code>treatment</code>/<code>note_id</code> would mean a re-extracted article
+quietly putting its bibliography back into the argument, and for the callout columns would mean an
+authored box re-reading as ordinary prose. <code>tests/store-carried-columns.test.ts</code> asserts
+the list against the table, which is the check that used to be a comment asking a reader to do it by
+eye.</p>
+</details>
+
+<h2 id="refusals">The four refusals</h2>
+
+<p>A draft does not become the article just because the job finished. These are the four checks on
+whether the draft is <em>fit to be an article</em>, all answered as a <strong>409 Conflict</strong>
+rather than a 500, because a draft that is not fit to publish is not a server fault.</p>
+
+<p>They are not the only way a publication can be turned down — a draft that has already been
+published, or belongs to another article, or is being pushed by a worker whose claim has lapsed, is
+each refused on its own. What is worth knowing about these four is that the tree ones are
+<strong>collected</strong>: a draft with three things wrong says all three, because "the tree does
+not cover paragraph 41" and "the tree was built from different paragraphs" are one fix, and reporting
+them one run at a time teaches whoever is fixing it that the check is unreliable.</p>
+
+<table>
+<tr><th>#</th><th>The refusal</th><th>What it is protecting</th></tr>
+<tr>
+  <td>1</td>
+  <td>No paragraphs, or no outline</td>
+  <td>Neither is a readable article. The same bar the filesystem reader set by requiring both files.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>An outline that does not describe these paragraphs</td>
+  <td>Not merely "every id in the outline exists" — that only proves the outline's ids are a subset,
+  and two ordinary mistakes pass it. It is the full structural check: root extent, singleton leaves,
+  exact coverage, order, child partitioning.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>An outline built from <em>different</em> paragraphs</td>
+  <td>The <code>hierarchy</code> step's recorded input hash must equal the hash of this draft's
+  paragraphs. Without it, a text-only re-extraction that keeps every id publishes the old summaries
+  <em>with no stale banner anywhere</em> — an outline that is structurally perfect and describes an
+  article nobody can read any more. A missing hierarchy row is refused too, because "I cannot tell"
+  is not "it is fine".</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>A draft whose base has moved</td>
+  <td>Something else published while this draft was being written. Publishing now would discard it,
+  silently. See below.</td>
+</tr>
+</table>
+
+<div class="callout warn">
+  <p class="title">Refusal 3 is a behaviour change worth knowing about</p>
+  <p>A job of <code>{ steps: ["blocks"] }</code> on its own <strong>fails whenever it actually
+  changed anything</strong> — which is the case anybody cares about. (Re-extract a page that has not
+  moved, get identical paragraphs, and the hash still matches, so it publishes.) That is deliberate:
+  without the check, re-extracting the text while keeping the old outline succeeds and quietly
+  diverges. The fix for anyone who hits it is to run <code>hierarchy</code> as well, which the
+  default step list and the cascade rules already do.</p>
+</div>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 900 300" role="img" aria-label="Two timelines: one where the lineage check passes and the pointer moves, one where a second writer published in between and the publication is refused">
+  <rect class="s-panel box" x="20" y="16" width="410" height="264" stroke-width="1.5"/>
+  <rect class="s-panel box" x="470" y="16" width="410" height="264" stroke-width="1.5"/>
+
+  <text class="t-b" x="44" y="46">Allowed</text>
+  <text class="t-b" x="494" y="46">Refused — and this is the point</text>
+
+  <line class="ln" x1="60" y1="70" x2="60" y2="252" color="var(--ink-soft)"/>
+  <line class="ln" x1="510" y1="70" x2="510" y2="252" color="var(--ink-soft)"/>
+
+  <!-- left events -->
+  <circle cx="60" cy="82" r="5" class="s-rev" stroke-width="1.5"/>
+  <text class="t" x="78" y="87">the article is serving r1</text>
+  <circle cx="60" cy="130" r="5" class="s-perm" stroke-width="1.5"/>
+  <text class="t" x="78" y="135">draft r2 minted · based_on = r1</text>
+  <circle cx="60" cy="178" r="5" class="s-perm" stroke-width="1.5"/>
+  <text class="t" x="78" y="183">steps write into r2</text>
+  <circle cx="60" cy="226" r="5" class="s-ok" stroke-width="1.5"/>
+  <text class="t" x="78" y="231">r1 = r1 — pointer moves to r2</text>
+
+  <!-- right events -->
+  <circle cx="510" cy="82" r="5" class="s-rev" stroke-width="1.5"/>
+  <text class="t" x="528" y="87">the article is serving r1</text>
+  <circle cx="510" cy="124" r="5" class="s-perm" stroke-width="1.5"/>
+  <text class="t" x="528" y="129">draft r2 minted · based_on = r1</text>
+  <circle cx="510" cy="166" r="5" class="s-warn" stroke-width="1.5"/>
+  <text class="t" x="528" y="171">somebody else publishes r3</text>
+  <circle cx="510" cy="208" r="5" class="s-warn" stroke-width="1.5"/>
+  <text class="t" x="528" y="213">r1 ≠ r3 — nothing moves</text>
+  <circle cx="510" cy="250" r="5" class="s-warn" stroke-width="1.5"/>
+  <text class="t" x="528" y="255">PublishRefused, 409</text>
+</svg>
+</div>
+<figcaption>Both sides of the comparison are read inside one transaction, under a lock on the
+<code>articles</code> row. Nothing can publish between the two reads without taking the same lock, so
+a mismatch means one thing only.</figcaption>
+</figure>
+
+<details>
+<summary>Why the base is a recorded column rather than a question asked at publish time</summary>
+<p>The tempting alternative is to ask the article what it is currently serving. That answers with
+whatever landed in the meantime — which is exactly the value the guard is meant to catch. A job runs
+one step per HTTP request and reopens its draft on the next claim, so a draft can be minutes old by
+the time it publishes. The base has to be written on the row when the draft is minted, or it is not
+recoverable at all.</p>
+<p><code>null</code> means two things and both are handled the same way: <em>this is the article's
+first draft</em> (fine, if the article is serving nothing) and <em>this draft was minted before the
+column existed</em> (refused). Fail-closed, at the cost of re-running whatever was in flight during
+that one deploy.</p>
+<p>There is deliberately <strong>no opt-out flag</strong>, and that is a decision rather than an
+omission. The guard used to live in one caller — the pipeline's own session — and standalone
+publication walked straight past it. A guard that lives in one caller is a guard the next caller
+forgets. A field to skip it would be the same hole with a name on it: the caller who most needs the
+check is the one who has not thought about it, and a flag is what a passing agent reaches for when a
+fixture goes red.</p>
+</details>
+
+<h2 id="pass4"><span class="pass">Pass 4</span> The genuinely hard parts</h2>
+
+<details>
+<summary>The lock order, and a lock that locks nothing</summary>
+<p>Two locks are involved — the <code>articles</code> row and the <code>jobs</code> row — and the
+rule is <strong>article before job, everywhere</strong>. Being inside one transaction does not stop
+two transactions taking them in opposite orders and deadlocking, so the publication primitive takes
+the article lock itself whether or not the caller already holds it. Re-locking a row the same
+transaction already has is free.</p>
+<p>The subtler trap is written up separately: <code>SELECT … FOR UPDATE</code> takes a lock on the
+rows the statement <em>returns</em>, so a <code>FOR UPDATE</code> that matches nothing locks nothing.
+"Lock the row, and insert it if it wasn't there" therefore protects nothing at all in the one case it
+was written for, and two concurrent callers both insert. The pattern that works is
+<code>INSERT … ON CONFLICT DO NOTHING</code> targeted at the key, then read the row back and work
+from what came back rather than from what you tried to write — which is what
+<code>lockOrCreateArticle</code> does. It only works at <code>read committed</code>, and every
+transaction in the store now names its isolation level out loud rather than inheriting whatever the
+database role happens to give it.</p>
+</details>
+
+<details>
+<summary>The job fence — a stale worker must not publish</summary>
+<p>A job's claim has a lease. When the lease lapses, the queue may hand the job to somebody else — so
+the original worker, which is still running and does not know, must be stopped from publishing what
+it built.</p>
+<p>The fence is one <code>UPDATE</code> whose <code>WHERE</code> carries the whole condition at once:
+this job, this attempt token, status still <code>running</code>, and a lease that has not lapsed.
+Checking the token and then writing separately would recreate exactly the race the token exists to
+prevent. It is checked for <em>exactly one row</em> — never "at least one", never ignored — before
+anything a reader can see changes, and a zero-row result reaches the caller as a thrown error. A
+quiet return there would mean the next line reports a publication that did not happen.</p>
+</details>
+
+<h3 id="incident">A real incident: 2026-09-02</h3>
+
+<p>Worth reading because it shows exactly how far the lineage guard reaches, and where it stops.</p>
+
+<p>On a shared development database, a reader watched a <code>quotes</code> job publish — "4 quotes"
+appeared in the panel. A <code>timeline</code> job then ran, published, and <strong>the quotes were
+gone</strong>. No error anywhere. Separately, an <code>ideas</code> job made a real 50-second model
+call, succeeded, logged <em>lost the claim mid-step</em>, and then sat there.</p>
+
+<p>The cause of both was a <strong>second writer</strong> — a peer's checkout or a hand-run script on
+the same local database — deleting the article's revisions and republishing. The server's own log
+gives it away: revisions became current that this process never published, and one draft opened with
+<code>basedOn null, blocksCopied 0</code> against an article that had been on the shelf for three
+days, which can only mean the article had no revisions at all at that instant.</p>
+
+<p>Now the part that matters, and it is not the comfortable reading:</p>
+
+<ul>
+  <li><strong>The lineage guard did not fire, and was right not to.</strong> The foreign revision
+  became current 42 seconds <em>before</em> the timeline job opened its draft — so the draft recorded
+  that revision as its base, the base and the pointer agreed at publish time, and the publication was
+  correct by every rule we have. The quotes were lost by the second writer; the timeline job simply
+  carried on from the article as it found it.</li>
+  <li><strong>So know what the guard actually covers.</strong> It refuses a publication that would
+  bury one landing <em>during</em> your draft. It cannot do anything about the state of the world
+  when your draft opens — a draft copied from a damaged article publishes a faithful copy of the
+  damage.</li>
+  <li><strong>The real defect was the recovery.</strong> One error class was being raised for two
+  different events — "somebody else owns this job" (walk away) and "nobody else owns it, but the
+  draft was pulled out from under you" (do not walk away) — and the caller believed only the first
+  reading. The job sat <code>running</code> for 12 minutes 40 seconds, a queued job behind it could
+  not start, and <strong>Stop was accepted with a 200 and did nothing</strong> until the lease
+  lapsed. Split into two error types the same day.</li>
+</ul>
+
+<div class="callout warn">
+  <p class="title">The database can pull a pointer out from under running code</p>
+  <p><code>jobs.draft_revision_id</code> is <code>on delete set null</code>. Delete the draft
+  revision — a fixture reset, a hand-run script, a future "start this article again" button — and
+  Postgres silently removes the pointer from the job row, with nothing in application code involved.
+  This is the shape of thing that is invisible in a code review of either side.</p>
+</div>
+
+<details>
+<summary>Two more places the revision boundary matters, and one where it must not</summary>
+<p><strong>Checkpoints must not be keyed on the revision.</strong> A long PDF is transcribed in
+chunks, and the finished chunks are kept so a retry does not pay for them twice. But a retry is a new
+job, and a new job begins a new draft revision — so a checkpoint keyed on the revision would be
+written on every run and read on none. Nothing would error; the bill would just go up. The key is the
+article and the question.</p>
+<p><strong>The rollback export must cover every table.</strong> A table the exporter has never heard
+of behaves exactly like one it has nothing to say about — which is how a table added on 2026-08-31
+was dropped from every export for a day, with each run reporting success and listing the files it
+<em>did</em> write. Nothing could have gone red: a file that is never written is a file the
+round-trip test never misses. The coverage record now takes its table list <em>from the schema</em>
+and follows foreign keys, not just <code>article_id</code> columns, so a child table keyed only on
+<code>revision_id</code> is in scope for the same reason its parent is.</p>
+<p><strong>The limit that remains:</strong> that guard sees a missing <em>table</em>, not a missing
+<em>column</em>. A new column on an already-exported table is still a hand-written line, and four of
+them have gone missing that way.</p>
+</details>
+
+<h2 id="taste">How the schema is meant to be shaped</h2>
+
+<p>Four house rules, all of them Greg's, all of them worth understanding before proposing a change
+that touches storage.</p>
+
+<h3>Get the database to do the work</h3>
+<p>Constraints, defaults, foreign keys and types are rules that hold for <em>every</em> writer —
+including the script somebody runs once at midnight and the migration that backfills a column three
+months from now. A rule enforced in application code holds only for the callers that went through
+that code. The pattern to copy is the CHECK listing the pipeline's 13 step names: it has caught three
+separate omissions, each time at the insert rather than in a job dying somewhere far away.</p>
+
+<h3>A nullable timestamp says more than a boolean</h3>
+<p>Where a flag is really "off, or on since some moment", store the moment. <code>null</code> is off,
+a date is on, and the same storage carries strictly more truth — for free, with no second column to
+disagree with the first. <code>archived_at</code> and <code>public_at</code> are both this shape. The
+one subtlety: re-asserting it must not move it, or the column quietly comes to mean "when did the
+client last send true".</p>
+
+<h3>Columns, not JSON — with an exception that has to argue for itself</h3>
+<p>A field you filter, sort, join or constrain on is a column. JSON is for a value the database has
+no business reading, and a revision has a few of those on purpose: the glossary, the ideas, the
+diagram, the outline tree. Each is an artefact that only means anything against the article it was
+written for. <strong>The rule is not "never JSON"; it is that a JSON column needs a sentence saying
+why it is not a column.</strong> Wanting an index on something inside the blob is the sign that
+sentence has stopped being true.</p>
+
+<div class="callout warn">
+  <p class="title">Migrating data inside a JSON column, and the operator that lies</p>
+  <p>Postgres's containment operator asks about a whole element, not a value inside one. A migration
+  that renamed a pipeline step reached for the obvious
+  <code>WHERE steps @&gt; '["toc"]'</code> — and the array holds <em>objects</em>, so the answer is
+  always no. The <code>UPDATE</code> succeeded, touched nothing, and the deploy carried on. Both
+  predicates against the same table at the same instant: the wrong one matched 0 rows, the right one
+  matched 3.</p>
+  <p>Two things to take from it. Run the <code>SELECT</code> half first and count the rows — a data
+  migration that matched nothing looks exactly like one that worked. And <strong>check what else was
+  derived from the blob</strong>: the job de-duplication key is a hash of those same step names, so
+  rewriting the steps without recomputing it makes one request look like two.</p>
+</div>
+
+<h3>Two words that must never be confused</h3>
+<p><code>article_revisions.status = 'published'</code> means <em>the pipeline finished this
+revision</em>. <code>articles.visibility = 'public'</code> means <em>a stranger may read this</em>.
+They are two tables apart and the sharing column deliberately never uses the word "published",
+because two meanings of one word is how a mistake gets made at three in the morning.</p>
+
+<h2 id="judgment">Trade-offs, risks and open questions</h2>
+
+<h3>Trade-offs somebody could reasonably decide differently</h3>
+
+<ul>
+  <li><strong>The copy is a real copy.</strong> A 289-block article means 289 rows duplicated for
+  every draft, even one that only wants a glossary. A ~360-block article is roughly 1.3 MiB of copied
+  payload. The alternative — a revision that stores only what changed, and inherits the rest by
+  reference — is far more efficient and much harder to reason about, and would reintroduce the
+  "nobody produced it" versus "the reader deleted it" ambiguity that copy-at-the-beginning removes.
+  For an alpha with one reader, the boring answer wins. It is worth revisiting if storage or write
+  latency ever shows up in a measurement rather than in an argument.</li>
+
+  <li><strong>A retry re-runs completed steps.</strong> An earlier design carried forward from "this
+  job's own previous draft" so attempt 2 would skip attempt 1's finished work. It is not built,
+  because a retry is a <em>new job with a new id</em>, so that phrase resolves to nothing — and "the
+  latest draft for this slug" would pick up another job's draft and resurrect precisely what
+  copying-from-published exists to prevent. Paying for a few model calls on a retry is safer and far
+  simpler. It is a real cost, and it is the honest place to look if retries get expensive.</li>
+
+  <li><strong>Superseded revisions are kept and never demoted.</strong> The sweep clears only
+  abandoned drafts and failed revisions; a revision that was published and then replaced stays
+  exactly as it was, and nothing marks it as replaced — so several rows of one article can carry
+  <code>status = 'published'</code> at once, and only the article's pointer says which is live. It is
+  internally consistent, and it is a surprise waiting for whoever next writes a query that filters on
+  the status alone. (They do go when the article does: deleting an article cascades through its
+  revisions, its paragraph ids and the reader's comments.)</li>
+
+  <li><strong>Deleting a user is currently blocked by their own library.</strong> Every owner key
+  refuses the delete while any row is owned — inherited rather than chosen. Defensible for a reading
+  library, but it means account deletion has to be an export-and-delete workflow somebody builds, not
+  a button in a dashboard.</li>
+</ul>
+
+<h3>Risks — what a reader would actually experience</h3>
+
+<ul>
+  <li><strong>A note quietly stops pointing at anything.</strong> Rewrite a paragraph enough and it
+  gets a new id, so the note is kept in the list but the highlight is gone from the page. Worst on
+  PDFs, where re-reading the same file with the same model loses roughly a quarter of the ids
+  (measured: 11 of 43). Nothing warns the reader. This is the single most likely way somebody feels
+  let down by re-extraction.</li>
+
+  <li><strong>An artefact that no longer describes the article.</strong> Carried glossaries, quotes,
+  timelines and diagrams are shown with a stale label rather than hidden — a deliberate bargain, so
+  the panel is not empty for two minutes and $0.20. It relies on the staleness fingerprint being
+  right; where it is not, the reader is shown a confident interpretation of an article that has
+  moved.</li>
+
+  <li><strong>A backup that looks complete and is not.</strong> The rollback export is the only
+  recovery there is, and it is assembled from a hand-written list. It has silently dropped a whole
+  table for a day. It now takes its table list from the schema — but it still cannot see a
+  <em>column</em> nobody remembered to export, and four have gone missing that way.</li>
+
+  <li><strong>A fact about every paragraph vanishing in a re-extraction.</strong> The revision
+  columns are held by the compiler; the 16 paragraph-level ones are a list of plain strings held only
+  by a test. Miss one and a re-extracted article quietly puts its bibliography back into the main
+  argument, or reads an author's callout box as ordinary prose.</li>
+
+  <li><strong>A rule that only exists in a comment.</strong> Twice now something has been written down
+  as though enforced when it is not: the requirement that a revision claiming a successful fetch must
+  carry a reference to the source document, and the runtime column check described above. Both are
+  the same failure — a reader of the code stops looking because the comment said the guard was
+  there.</li>
+
+  <li><strong>Shared-database noise looks like a bug.</strong> Development runs against one local
+  Postgres shared by several agents and worktrees, so a refused publication on a dev box is often
+  somebody else's script rather than the code under review.</li>
+</ul>
+
+<h3>Open questions</h3>
+
+<ul>
+  <li><strong>May a published revision be changed at all?</strong> Undecided, and it is already
+  costing something visible: the glossary panel's "start over" is refused under Postgres because
+  nobody has ruled on it. Every future "edit this artefact" feature waits behind the same
+  question.</li>
+  <li><strong>Should a reader ever see an old revision?</strong> Everything needed is stored — the
+  rows are all there, keyed and dated. Nothing exposes them. "What changed when this was re-read?"
+  is answerable and unanswered, and it is also the honest answer to a lost anchor.</li>
+  <li><strong>What is the retention policy?</strong> There isn't one for published revisions. Nobody
+  has been hurt by that yet; nobody has measured it either.</li>
+  <li><strong>Renaming a slug.</strong> Every new article's URL ends in a permanent random id, put
+  there specifically so a rename could redirect through it. The lookup is written; the rename is
+  not.</li>
+</ul>
+
+<h2 id="faq">FAQ</h2>
+
+<h4>If a re-extraction deletes a paragraph, what happens to my comment on it?</h4>
+<p>The comment survives and stays in your list — it points at the paragraph's permanent id, and ids
+are never deleted. The reading view sorts such a comment to the end rather than dropping it, because
+it is still the reader's question. What it loses is the highlight in the prose: there is nothing left
+on the page to attach to. The same thing happens if the paragraph was rewritten rather than deleted,
+because a materially edited paragraph is given a new id.</p>
+
+<h4>Can I see the previous version of an article?</h4>
+<p>Not today. The rows are kept — nothing deletes a superseded revision — but nothing in the product
+serves them. It would be a feature, not a migration.</p>
+
+<h4>Is this basically git for articles?</h4>
+<p>It has lineage and it refuses conflicting writes, so the comparison is fair as far as it goes.
+What it does not have is merging, branching, diffs, or any way to look at history. A revision is a
+snapshot, and only the newest one is ever read.</p>
+
+<h4>If I ask for one more thing — say, a timeline — does it re-run the whole article?</h4>
+<p>No. The draft starts as a copy of what is published, so only the timeline step runs. Everything
+else is carried across untouched, and the five derived counts are recomputed at the end.</p>
+
+<h4>Does re-extracting an article lose my archive state, my own title, or my sharing setting?</h4>
+<p>No. All of that is on the <code>articles</code> row, not on the revision, deliberately and for
+exactly this reason.</p>
+
+<h4>What happens if a job dies halfway?</h4>
+<p>Nothing is published, so readers see the article they already had. The abandoned draft is swept
+later — only drafts and failed revisions, only ones no job still points at and no article is serving,
+only ones past the cutoff.</p>
+
+<h4>Why does a carried glossary not claim to be current?</h4>
+<p>Every artefact carries a fingerprint of what it was made from, compared against the paragraphs and
+outline at read time. So a carried glossary on a re-extracted article is <em>shown</em>, and
+<em>labelled stale</em>, until its step re-runs. Carrying it is not a claim that it is current; it is
+the choice to leave the reader something to look at rather than an empty panel.</p>
+
+<h2 id="appendix">Appendix</h2>
+
+<h3>The tables that matter here</h3>
+
+<table>
+<tr><th>Table</th><th>Grain</th><th>Lives on which side</th></tr>
+<tr><td><code>articles</code></td><td>one per article, for ever</td><td>permanent — also holds all the reader's shelf state and the sharing switch</td></tr>
+<tr><td><code>article_revisions</code></td><td>one per draft-and-publish cycle</td><td>per-revision — 46 columns, artefacts included</td></tr>
+<tr><td><code>revision_blocks</code></td><td>one per paragraph per revision</td><td>per-revision — plus a generated per-paragraph search vector</td></tr>
+<tr><td><code>block_identities</code></td><td>one per paragraph id</td><td>permanent — never deleted by a re-extraction; goes only with the article</td></tr>
+<tr><td><code>revision_step_runs</code></td><td>one per step per revision</td><td>per-revision — what ran, on what, how it ended</td></tr>
+<tr><td><code>comments</code></td><td>one per note, highlight or referee mark</td><td>the reader's — keyed to an identity, not to text</td></tr>
+<tr><td><code>jobs</code></td><td>one per ingest or re-run</td><td>queue state — points at the draft it is building</td></tr>
+<tr><td><code>checkpoints</code></td><td>one per article per expensive question</td><td>keyed on the <em>article</em>, never the revision</td></tr>
+</table>
+
+<h3>Where the code is</h3>
+
+<table>
+<tr><th>File</th><th>What is in it</th></tr>
+<tr><td><code>src/db/schema.ts</code></td><td>all 26 tables, in TypeScript, with the reasoning written beside each column. The source of truth.</td></tr>
+<tr><td><code>src/store/pg-revisions.ts</code></td><td>the life of a revision: the carry policy, <code>beginRevision</code>, <code>publishRevisionIn</code>, the refusals, the sweep</td></tr>
+<tr><td><code>src/store/pg-session.ts</code></td><td>the session a running job writes through</td></tr>
+<tr><td><code>src/store/pg.ts</code></td><td>the reader: the projections, and the one sanctioned way to get from a slug to an owner's article</td></tr>
+<tr><td><code>src/store/article-rows.ts</code></td><td>the table-coverage record behind export and rollback</td></tr>
+<tr><td><code>drizzle/</code></td><td>the migrations, applied with <code>npm run db:migrate</code> and never <code>drizzle-kit push</code></td></tr>
+</table>
+
+<h3>The docs behind this</h3>
+<p><code>docs/project/database.md</code> (the operating manual) ·
+<code>docs/project/sql.md</code> (the taste) ·
+<code>docs/project/block-ids.md</code> (the contract everything keys on) ·
+<code>docs/project/architecture.md</code> (the pipeline stages) ·
+<code>docs/project/ingest-queue.md</code> (the job and the claim) ·
+<code>docs/postmortems/260902f-…</code> (the incident in § 6).</p>
+
+<h3>Glossary</h3>
+<table>
+<tr><td><strong>block</strong></td><td>one paragraph, heading, quote, image or list item — the unit everything addresses</td></tr>
+<tr><td><strong>block id</strong></td><td><code>spya-m4a7tn</code>. Minted once, carried across re-extractions by matching the text, unique within an article only</td></tr>
+<tr><td><strong>revision</strong></td><td>one complete reading of an article by the pipeline; one row plus its paragraphs and step runs</td></tr>
+<tr><td><strong>draft</strong></td><td>a revision that is being built and that nobody can see</td></tr>
+<tr><td><strong>publish</strong></td><td>point <code>articles.current_revision_id</code> at a draft. One <code>UPDATE</code>, in one transaction</td></tr>
+<tr><td><strong>step</strong></td><td>one stage of the pipeline — fetch, extract, blocks, hierarchy, glossary, quotes, and eight more</td></tr>
+<tr><td><strong>job</strong></td><td>a queued list of steps to run over one article</td></tr>
+<tr><td><strong>artefact</strong></td><td>something a step produced — the outline, the glossary, the quotes, the diagram</td></tr>
+<tr><td><strong>carry</strong></td><td>copy a column from the published revision into a new draft, to be overwritten if its step runs</td></tr>
+<tr><td><strong>lineage</strong></td><td><code>based_on_revision_id</code> — which revision a draft was copied from</td></tr>
+<tr><td><strong>stale</strong></td><td>an artefact whose fingerprint no longer matches the paragraphs it was made from. Shown, and labelled</td></tr>
+</table>
+
+</body>
+</html>

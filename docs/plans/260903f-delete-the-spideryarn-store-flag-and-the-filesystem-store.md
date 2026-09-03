@@ -1,8 +1,20 @@
 # Delete `SPIDERYARN_STORE` and the filesystem store
 
-**Status, 2026-09-03. Second draft, restaged after GPT Sol returned *not ready* on the first.
-Nothing built. Both of Greg's decisions are in (§ *The two decisions, and what Greg decided*), so
-there is nothing left to ask before stage A starts.**
+**Status, 2026-09-03. Third draft. GPT Sol returned *not ready* on the first and
+*ready with changes* on the second; those changes are in. Nothing built. Both of Greg's decisions
+are in (§ *The two decisions, and what Greg decided*), so there is nothing left to ask before
+stage A starts.**
+
+**The order to build in**, per the second review — note it is not simply A→B→C:
+
+1. **Stage A's manifest**, lightweight, first — it is a ledger the rest is tracked against.
+2. **The smallest vertical slice of stage C** next, *before* B: two parallel test scopes plus a
+   crashed subprocess, proving committed ledger tests stay separate. **C rests on the least
+   mechanical assumption in the plan**, so it is where a wrong belief is cheapest to discover.
+3. **Spike `blocks`** as the representative re-runnable Postgres CLI before committing to all six of
+   stage E.
+
+Then the rest in order: B → D → D′1–3 → E → F (hinge) → G → H → I.
 
 Greg asked on 2026-09-03 whether the database move is finished enough to delete the flag:
 
@@ -45,11 +57,14 @@ manifest that a test can police.
 | `STORE ===`/`!==` comparison sites outside `src/store/index.ts` | **19**, across **10** files — nine under `src/` plus `vite.config.ts` |
 | test files calling `createFsArtifactStore` | **14**, plus `tests/helpers/load-article.ts` |
 | index-selected Postgres seams relying on the central `guardDbStore` | **15** |
-| test files calling `pgReady` | **83** |
+| test files calling `pgReady` | **82** callers; 83 files mention the name (one is prose), and 85 match a looser grep — **exactly the ambiguity stage A exists to settle** |
 | test files hand-rolling `.insert(articles)` | **28** |
-| ungated test files importing `store/index`, `routes` or `api` | **42** |
-| test files importing a condemned filesystem module | **42** — union with the above ≈ **80 candidates** |
+| ungated test files importing `store/index`, `routes` or `api` | **43** |
+| test files importing a condemned filesystem module (incl. helpers) | **67** — union **105 candidates**, deliberately over-inclusive |
 | filesystem-only source | **~3,900 lines**; `src/store/fs.ts` alone is 576 |
+
+Every count in this table was checked by the second review; those it corrected are corrected here.
+**The candidate union is direct-import only** — see stage A on why that is not good enough.
 
 ## Why the flag has to go, beyond tidiness
 
@@ -85,7 +100,7 @@ That knot exists only because the flag exists, and no amount of documentation di
 
 **So the filesystem store is not a data dependency.** But note the correction Sol made to our first
 draft: *"kept alive only by the test suite and two fixture paths"* was **false for the repository as
-a whole** — the six standalone stage CLIs still depend on it. See stage F.
+a whole** — the six standalone stage CLIs still depend on it. See stage E.
 
 ## Both reviewers said yes, and both said not in one commit
 
@@ -125,7 +140,7 @@ re-derive the blocking question from the old docstring.
 still write filesystem artefacts, and running `npm run fetch -- <url>` by hand satisfies the queue's
 fetch step. [`src/fetch.ts`](../../src/fetch.ts) predicts its own death here — *"All of this dies at
 stage 4 with the filesystem store, which is the right time for it to die"* — but AGENTS.md requires
-every stage to stay runnable on its own, and Greg kept the rule. **This is stage F, and Sol called
+every stage to stay runnable on its own, and Greg kept the rule. **This is stage E, and Sol called
 it the plan's missing major stage:** it must land *before* the artefact filesystem machinery is
 deleted, not after.
 
@@ -186,7 +201,7 @@ dropping a file.
   watching arrive."* **Sol's caveat, which changes the shape:** chat's `appendSpoken` legitimately
   returns no attempt, so `Turn.attempt: string` would be **wrong** without splitting the return type.
   This is stage H, not part of the hinge.
-- **The stage CLIs** — decision 2 above, now stage F.
+- **The stage CLIs** — decision 2 above, now stage E.
 
 ## The stages
 
@@ -210,16 +225,30 @@ categories the review separates:
 | **genuine database integration** | Move to Postgres. |
 
 **Our first draft collapsed these three into one bucket and would have deleted adapter tests before
-their adapters.** That was the review's first finding.
+their adapters.** That was the first review's leading finding.
 
-Land the manifest as a test that fails when a file moves category without the list being updated.
+**The manifest's own test is not sufficient, and we asked whether it would be.** It can prove every
+mechanically discovered candidate has an entry and a reason. **It cannot prove the verdict is
+right** — and if discovery and policing use the same predicate, it is precisely a guard that agrees
+with the bug. So the manifest gets **two independent witnesses**:
+
+1. **Generate the candidate universe by a different route than the manifest polices**, including
+   **transitive** imports — a test reaching the filesystem store three modules deep is invisible to
+   a direct-import grep, and our 105-file list is direct-import only.
+2. **A dynamic witness**: run with the filesystem selection and methods instrumented, or throwing a
+   sentinel, and record which suites *actually* touch them. A file's imports are a claim; what it
+   executes is the fact.
+
+**And the manifest is a ledger, not the protection.** The real protection against a wrong
+classification is the per-suite mutation evidence from B and the assertion inventory in G. Do not
+let a green manifest test stand in for either.
 
 ### B — convert the ungated route suites (parallelisable)
 
 The pattern is proved: `tests/helpers/scratch-article.ts`, ~280 ms a seed. Land `serialise: false`
 for unique-slug seeds as you go. **Each converted suite must run green against unchanged production
 code with `postgres` set explicitly, and each gets one mutation watched going red.** That evidence is
-retained — it is part of the final proof in stage E.
+retained — it is part of the final proof in the readiness work.
 
 ### C — ledger isolation, its own reviewed stage
 
@@ -236,9 +265,14 @@ executor/transaction-aware.** Acceptance must prove all five:
 
 ### D — the fixture loader, which is two tools not one
 
-- **A minimal direct-row helper** for tests needing only an article record — this is where the 28
-  hand-rolled `.insert(articles)` sites consolidate.
+- **A minimal direct-row helper** for tests needing only an article record.
 - **A corpus loader** for `db:seed-dev` and rich route tests.
+
+**Do not force all 28 `.insert(articles)` sites through the helper** — the second review's
+correction to us. Many are integration tests deliberately constructing unusual revisions, odd
+ownership, explicit transactions or malformed rows, and routing those through a
+"one ordinary article" helper would quietly delete the very thing they test. **Consolidate only the
+repeated ordinary-row setup**, and leave the deliberate oddities alone.
 
 **Do not collapse them.** `load-article.ts` does far more than insert a readable article: it loads
 raw bytes, creates a job and draft, copies fixture stages **through the real writer**, runs the
@@ -246,18 +280,63 @@ publication guards and publishes. Replacing that with a "minimum coherent direct
 **silently remove integration coverage** — and `scratch-article.ts` already documents why a second
 files-to-Postgres implementation is undesirable. **Tests of publication keep using the real path.**
 
-### D′ — additive, before the hinge
+### D′ — additive, before the hinge — as three separate reviewed commits
 
-- **`guardDbStore` moves onto each of the 15 Postgres exports.** Do this **additively and early**:
-  double wrapping is harmless, so there is no reason to carry it inside the hinge where a mistake is
-  hardest to see. Losing this guard would **leak bound parameters, including article prose, through
-  database errors**, and turn expected 404s and 409s into 500s — the durable fix from
-  [260901d](../postmortems/260901d-a-409-and-a-404-arrived-as-500.md).
-- **Build and test the readiness preflight** (§ *Making the database required*). The hinge only
-  switches it on.
-- **Remove the glossary's *"start over"***, per decision 1.
+They share no failure mode, so they are reviewed apart.
 
-### E — the hinge, one commit, and narrower than the first draft
+**D′1 — make `guardDbStore` idempotent, then move it onto each of the 15 Postgres exports.**
+
+**"Double wrapping is harmless" was wrong, and both this plan's first draft and the docstring said
+it.** `guardDbStore` does not return an already-guarded store unchanged, so the second wrapper wraps
+the first wrapper's methods. Probed directly, 2026-09-03, with a fake `23505`:
+
+| | single wrap | double wrap |
+|---|---|---|
+| `database call failed` log lines | **1** | **2** — `inner.fail`, then `outer.fail` |
+| the error the caller sees | `StoreFailure`, `code="23505"` | `StoreFailure`, `code="23505"` — **unchanged** |
+| the second line's diagnostics | — | **degraded**: no `table`, no `constraint`, no `routine`, and `errorType: "StoreFailure"` — it reports a database failure while naming our own wrapper as the thing that failed |
+
+So the **caller-facing contract survives** — the 404/409 mapping is not broken, which is the half we
+had right — but **one failure produces two diagnostics and the second is misleading.** In a repo
+whose whole problem is checks that agree with the bug, an error log that invents a second database
+failure is not acceptable noise.
+
+**The mark is already there and unused for this**: `isGuardedStore` reads a non-enumerable symbol.
+Return the store unchanged when it is set, **and test that one failure produces exactly one
+diagnostic** before moving any guard. Then the move is genuinely additive.
+
+**Fix the docstring in the same commit.** *"wrapping a wrapped store stays harmless"* is narrowly
+about the mark not being re-enumerated, but it reads as a general guarantee — and it was read that
+way twice on the day this plan was written. Say what it means.
+
+Losing this guard entirely would **leak bound parameters, including article prose, through database
+errors** — the durable fix from
+[260901d](../postmortems/260901d-a-409-and-a-404-arrived-as-500.md).
+
+**D′2 — the suite-registration abstraction, before the readiness flip.** See § *Making the database
+required*: without it, the hinge inherits ~82 files of suite edits.
+
+**D′3 — remove the glossary's *"start over"***, per decision 1.
+
+### E — the stage CLIs move to Postgres, **before** the hinge
+
+Decision 2. **The second review moved this earlier and corrected our reason for it.**
+
+We had placed it before G on the grounds that G deletes the machinery it uses. **That dependency is
+partly false:** several of the six write files *directly* rather than through `artifacts-fs` —
+`src/blocks.ts` and `src/hierarchy.ts` among them — so G would not mechanically break them, and a
+compiler-checked deletion would leave them silently writing files nothing reads. The real reason to
+do it here is better: **doing it before the hinge lets each CLI be proved against Postgres while the
+old path still exists to compare against.** After the hinge there is nothing to check the new
+behaviour against.
+
+**Write the contract first** — one short section covering slug and owner selection, draft and
+session handling, what a re-run does, and what each command prints. Six commands sharing an
+unwritten contract is six different answers to the same question.
+
+**Spike `blocks` first** as the representative re-runnable CLI, before committing to all six.
+
+### F — the hinge, one commit, and narrower than the first draft
 
 Only the atomic policy change, because everything additive has already landed:
 
@@ -268,12 +347,16 @@ Only the atomic policy change, because everything additive has already landed:
 - Remove active environment injection: `.env.example`, `package.json`, `vercel-health.ts`'s
   `EXPECTED` list, `gjd-remote push-env`'s allowlist.
 
-**Moved out of the hinge on review:** the self-guarding exports (→ D′), the glossary (→ D′), the
-readiness infrastructure (→ D′), and the `attempt` types (→ H).
+**The sharper invariant, from the second review: after the hinge, the tombstone is the only
+executable code allowed to read `SPIDERYARN_STORE`.** The 19-site inventory counts comparisons and
+therefore **misses live consumers in `scripts/`** — `scripts/db-seed-dev.ts` reads the raw variable
+via `storeVerdict`, and `scripts/ai-cost.ts` branches on `STORE` and prints
+*"Re-run as: SPIDERYARN_STORE=postgres npm run cost"*. Their obsolete behaviour dies **in the hinge,
+not in stage I**, or the repo spends the interval telling people to set a variable that no longer
+does anything.
 
-### F — the stage CLIs move to Postgres
-
-Decision 2. **Before G**, because G deletes the machinery they currently use.
+**Moved out of the hinge on review:** the self-guarding exports (→ D′1), the glossary (→ D′3), the
+readiness infrastructure (→ D′2), and the `attempt` types (→ H).
 
 ### G — delete the adapters, in reviewable groups
 
@@ -312,13 +395,22 @@ Final grep must cover `src/`, `tests/`, `scripts/`, **`evals/`, `vite.config.ts`
 
 ## Making the database required, without the cure being the disease
 
-After the hinge, ~100 files need a database where 83 gate on one today. **`REQUIRE_POSTGRES=1`
-already exists** — `scripts/check.ts` sets it — so the destination is a **mandatory fail-fast
-preflight** checking `DATABASE_URL`, reachability and schema, once per command, rather than 100+
-per-file probes and 100+ synthetic skips.
+After the hinge, ~100 files need a database where ~82 gate on one today (**stage A settles the exact
+number** — direct counts here ranged 82–85 depending on whether helpers and prose mentions count,
+which is the point of § *Counts are perishable*). **`REQUIRE_POSTGRES=1` already exists** —
+`scripts/check.ts` sets it — so the destination is a **mandatory fail-fast preflight** checking
+`DATABASE_URL`, reachability and schema, once per command, rather than 100+ per-file probes and
+100+ synthetic skips.
 
 **The current helper is not the end state:** under required mode `pgReady` registers a failing test
 **and then still skips its suite**. That is a red line and a skipped suite at the same time.
+
+**D′2 exists because of the arithmetic here.** Building the preflight alone still leaves the hinge
+needing edits in ~82 files to satisfy the *"no `reachable ? describe : describe.skip`"* invariant —
+which would put a mechanical 82-file diff inside the one commit that must stay readable. So **first
+migrate every caller behind one central suite-registration abstraction with its behaviour
+unchanged**, which is reviewable on its own and provably a no-op; then the hinge activates the
+mandatory preflight and removes the skip branch **in one place**.
 
 ### The negative control, and why one failing run does not prove it
 
