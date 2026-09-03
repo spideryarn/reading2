@@ -86,7 +86,10 @@ And on what the tool does that a chat window does not:
 > — Greg, 2026-08-24
 
 The tiebreak the team uses for every close design call, and which a copywriter can use for every
-close copy call: *which option leaves more of the thinking with the reader?*
+close copy call, in the form Greg corrected it to on 2026-09-03: *which option will best help the
+reader form their own rich, updated internal representation — digest, understand, learn, notice,
+integrate, critique?* (Not, as an earlier draft had it, "which leaves more of the thinking with the
+reader": the point is what the reader comes away holding, not how much work is left to them.)
 
 The old app's architecture conversations coined the shortest version of the whole thing, and it is
 still the best two-word category description we have: **"You're not building an editor, you're

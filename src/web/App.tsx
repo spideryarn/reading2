@@ -27,6 +27,7 @@ import { isAdmin } from "../admin.js";
 import { AdminFeedbackPage, AdminHome, AdminUsersPage } from "./AdminPage.js";
 import { LandingPage } from "./LandingPage.js";
 import { PrivacyPage } from "./PrivacyPage.js";
+import { FeaturesPage } from "./FeaturesPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
@@ -326,6 +327,10 @@ export function App() {
        nothing in App.tsx said it was one end of a feature whose other end was
        a whole page. Hence this paragraph. */
     if (route.kind === "privacy") return <PrivacyPage />;
+    /* The fourth, since 2026-09-03, for the same reason as the third: the
+       landing page's "everything it does" link has to land somewhere a
+       stranger can read. */
+    if (route.kind === "features") return <FeaturesPage />;
     if (route.kind !== "read") return <LandingPage />;
     return <ArticlePage slug={route.slug} view={route.view} readerId={null} />;
   }
@@ -409,6 +414,13 @@ function SignedIn({
       <>
         <HomeLogo />
         <PrivacyPage />
+      </>
+    );
+  if (route.kind === "features")
+    return (
+      <>
+        <HomeLogo />
+        <FeaturesPage />
       </>
     );
   // Not under /read/, and so not inside `ArticlePage`'s shared shell: this page
