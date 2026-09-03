@@ -129,11 +129,57 @@ twice — under the plans table and in the footer — and reachable signed out, 
 other two: a price you have to sign up to read is the thing people complain about.
 
 **It holds no numbers of its own.** It renders the same `Plans` component as the other two pages,
-and adds only the three things a table cannot say: that the price shown is the price charged with
-tax already in it, that the allowance counts articles *added* and resets on the day you subscribed,
-and that cancelling leaves you the month you paid for.
+and adds only the four things a table cannot say: that the price shown is the price charged with
+tax already in it, that a *monthly* allowance counts articles *added* and resets on the day you
+subscribed, that the free allowance is a lifetime one and so resets never, and that cancelling
+leaves you the month you paid for.
 
-**And the second copy of the numbers now has a guard.** The trade in `Plans.tsx` — copy rather than
+**The free paragraph deliberately stops short of "every article you have ever added."** That would
+be false: the ingest ledger started empty when billing launched and pre-launch articles were
+grandfathered rather than backfilled, so an account older than the ledger has additions that do not
+count against it. What it says instead is the rule going forwards — articles added while subscribed
+count too, so cancelling hands back no fresh allowance — which is true, and is the half that
+surprises somebody. GPT Sol caught the absolute as a false statement on a sales page, 2026-09-03.
+
+**A signed-in reader is told which plan they are on**, in one line below the table, and a signed-out
+one is told nothing and — the part that matters — causes no request. Greg, 2026-09-03:
+
+> It should show the two pricing options, and explain the 3 free articles, and indicate what you're
+> on now, and ideally always be up to date if we change the pricing details.
+
+The words are `describePlan`'s, from [`src/billing-plan.ts`](../../src/billing-plan.ts) — the same
+function `/profile` renders, rather than a second wording of the same state, so the rule that a
+lapsed reader is never shown *"40 of 3 used"* comes along rather than needing to be remembered
+twice. It carries a link to `/profile` and no Upgrade button: Checkout is two hosted round trips and
+a return to land back on, and that flow already exists in one place.
+
+**It prints the headline, and the `detail` sentence in three states only.** Those are the states
+where the headline alone does not answer the question Greg asked: `lapsed`, whose *"Your plan has
+ended"* names what ended rather than what you are on and collapses "two free slots left" and "none
+left" into one sentence; a `paid` plan that is **cancelling**, which is word-for-word a renewing one
+because the end date lives only in `detail`; and `unknown`, where `detail` is what says reading is
+unaffected and to reload. `free` and a renewing `paid` keep the headline alone, because the table
+just above explains them. Dropping `detail` everywhere was the first version, and GPT Sol was right
+that it failed *"indicate what you're on now"* in the state where a reader most needs the answer.
+
+**Whether to fetch is a `readerId` prop from `App.tsx`, not a question the page asks**, and it is an
+id rather than a boolean **because of the account switch**. A boolean says whether to ask and not
+who asked: on a direct A→B sign-in the route does not change, so React keeps the element in place,
+`useBilling`'s one effect never re-runs, and B reads A's tier and usage. That is the same stale-frame
+bug the shelf carries `<Library key={user.id}>` for, and it was the first version of this page —
+found in review, not in production. The line is now keyed on the reader **inside `PricingPage`** as
+well as by `App.tsx`, deliberately: a guarantee that lives only in the caller is one edit away from
+gone, with nothing in the page to notice.
+
+Two halves of this a screenshot cannot check, both in
+[`tests/pricing-page-current-plan.test.tsx`](../../tests/pricing-page-current-plan.test.tsx). It
+records **every** URL the page asks for and asserts the list is empty when signed out — not that no
+sentence appeared, which passes just as well if the request is made and the answer discarded, and
+not merely that no *billing* URL was asked, which would pass if the plan moved behind another route.
+And it drives the account switch by changing only the prop, with no `key` of its own, so a test that
+would go on passing after somebody deleted the key is not what is standing there.
+
+**And the second copy of the numbers has a guard.** The trade in `Plans.tsx` — copy rather than
 configuration, so a signed-out page needs no fetch — is still the right one, and it still means a
 quota raised with one `UPDATE` leaves the website saying the old number.
 [`tests/plans-match-tiers.test.ts`](../../tests/plans-match-tiers.test.ts) reads `billing_tiers` and
