@@ -640,6 +640,18 @@ What must never happen is the third option: keeping whatever JSON arrived and bu
 it. A table of contents that silently describes two thirds of an article is exactly the failure
 [silent-success.md](../reusable/silent-success.md) is about, and it is worse than the bug.
 
+**A third failure used to hide behind the second, and it looked identical.** On 2026-09-03 this step
+died on `dhammatalks.org/suttas/MN/MN10.html` saying *"it breaks at position 5409 of 13547
+characters"* — which reads like a truncated answer and was not one, since `ranOut` had already ruled
+truncation out. The likeliest reading is a whole tree with another 8,138 characters written after it,
+though nothing kept the response, so that stays a candidate rather than a fact. The stage assumed a
+model's answer *is* its
+JSON, and it is not — it now reads the answer with `parseJsonAnswer`
+([`src/parse-json.ts`](../../src/parse-json.ts)), which finds the document inside a preamble, a
+sign-off or a stray close fence, and `diagnose` names trailing material outright instead of quoting
+an offset that could mean either thing.
+[260903k](../plans/260903k-model-json-answer-extraction-in-the-shared-parse-seam.md).
+
 ## The generation prompt
 
 The structure call sees the whole document in one pass, which is what lets it keep sibling titles
