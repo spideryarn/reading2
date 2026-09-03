@@ -66,7 +66,7 @@ import {
   sortDirParam,
 } from "./params.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { ADMIN_HREF, DESIGN_HREF } from "./router.js";
+import { ADMIN_HREF, DESIGN_HREF, PROFILE_HREF } from "./router.js";
 import { ShelfCard } from "./ShelfEntry.js";
 import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
@@ -312,7 +312,7 @@ export function Library() {
                 }
               >
                 <Link
-                  href="/profile"
+                  href={PROFILE_HREF}
                   className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
                 >
                   <User size={13} />

@@ -84,6 +84,10 @@
  *   POST   /api/jobs/:id/cancel
  *   POST   /api/jobs/:id/retry   the same steps again, skipping what succeeded
  *   POST   /api/jobs/:id/advance run the next step this job has not done yet
+ *   GET    /api/billing/usage    which plan, how much of it is used, what may be bought
+ *   POST   /api/billing/checkout { tierId, currency? } → a hosted Checkout, or the Portal
+ *   POST   /api/billing/portal   → a hosted Customer Portal session
+ *   POST   /api/billing/confirm  { sessionId } → prove a finished Checkout is yours, then sync
  *
  * The job routes return immediately; the work happens on the queue in
  * src/jobs.ts. See docs/project/comments.md, docs/project/library.md and
@@ -274,6 +278,7 @@ import {
   parseCheckoutRequest,
   startCheckout,
 } from "./billing/checkout.js";
+import { readBillingSummary } from "./billing/summary.js";
 import {
   refuseUploadWithoutQuota,
   withIngestSlot,
@@ -6298,11 +6303,10 @@ export async function serveAuthenticatedApi(
   const jobAction = /^\/api\/jobs\/([\w.%-]+)\/(cancel|retry)$/.exec(path);
   const jobAdvance = /^\/api\/jobs\/([\w.%-]+)\/advance$/.exec(path);
   /**
-   * **The three billing routes, and every one of them is a POST behind the
-   * gate.** No slug and no id in any path: each is about the reader who is
-   * signed in, and the only route that takes an identifier at all takes a
-   * Checkout Session id in its *body*, where it is proved to be theirs before
-   * anything is done with it (src/billing/checkout.ts).
+   * **The four billing routes.** No slug and no id in any path: each is about
+   * the reader who is signed in, and the only one that takes an identifier at
+   * all takes a Checkout Session id in its *body*, where it is proved to be
+   * theirs before anything is done with it (src/billing/checkout.ts).
    *
    * They are exact paths, like the shelf's, so `/api/billing/anything` is a 404
    * rather than a quiet match — and none of them is a namespace, for the same
@@ -6310,16 +6314,20 @@ export async function serveAuthenticatedApi(
    * endpoint gets added without anybody re-reading the ordering rules that make
    * checkout safe.
    *
-   * **POST rather than GET, including the one that only reads.** Two of them
-   * create a Stripe object — a Checkout Session is a real, chargeable thing —
-   * and a GET is something a browser prefetches, a crawler follows and a cache
-   * may keep. `confirm` creates nothing; it is a POST because it *writes*, being
-   * the thing that syncs a subscription into `billing_accounts`.
+   * **Three POSTs and one GET, and the split is not about which of them writes.**
+   * `checkout` and `portal` each *create a Stripe object* — a Checkout Session
+   * is a real, chargeable thing — and `confirm` retrieves one and then **writes
+   * a subscription into `billing_accounts`**. A GET is something a browser
+   * prefetches, a crawler follows and a cache may keep, and none of those three
+   * should be. `usage` reads four of our own tables, writes nothing and never
+   * touches the network, so asking for it twice costs nothing and means nothing:
+   * that is a GET.
    * docs/project/billing.md.
    */
   const billingCheckout = path === "/api/billing/checkout";
   const billingPortalRoute = path === "/api/billing/portal";
   const billingConfirm = path === "/api/billing/confirm";
+  const billingUsage = path === "/api/billing/usage";
 
     /* **The second gate, and it guards a prefix rather than a route.**
        Everything under `/api/admin/` is refused to everybody but the one
@@ -7287,10 +7295,17 @@ export async function serveAuthenticatedApi(
      * at a webhook that cannot find them, and it is written out once in
      * src/billing/checkout.ts rather than spread across a route.
      *
-     * The reply carries `kind` as well as `url` so the browser knows which door
-     * it is being sent through — the two look identical to `location.assign`,
-     * and a reader who pressed *Upgrade* and landed in the Portal deserves to be
-     * told why by the page rather than by Stripe.
+     * The reply carries `kind` as well as `url`, so a client *can* tell which
+     * door it is being sent through — the two look identical to
+     * `location.assign`. **Ours does not use it**, and that was a decision
+     * rather than an omission: it navigates immediately, and a sentence rendered
+     * for the half-second before a navigation is a sentence nobody reads. What
+     * the page does instead is not offer Upgrade to an account whose press would
+     * only reach the Portal (`canCheckout`, src/billing-plan.ts), which removes
+     * the case rather than explaining it. The field stays because the two
+     * outcomes really are different and a caller that wanted to wait could say
+     * so. This comment claimed the client explained it; it did not.
+     * GPT Sol, 2026-09-03.
      *
      * **200, not 302.** A redirect would be answered by `fetch` before the page
      * could say anything, and the client is an SPA that navigates itself.
@@ -7330,6 +7345,19 @@ export async function serveAuthenticatedApi(
         throw httpError(400, "Expected { sessionId } from the Checkout return URL");
       }
       send(res, 200, await confirmCheckout(currentOwnerId(), sessionId));
+      return;
+    }
+
+    /**
+     * **What plan this reader is on, and what they have used.** The one billing
+     * route that is a read.
+     *
+     * It never reaches Stripe — see src/billing/summary.ts. A stored period that
+     * has run out comes back as *we cannot say*, rather than as a guess or as
+     * the 503 admission answers, because nothing is being decided here.
+     */
+    if (billingUsage && req.method === "GET") {
+      send(res, 200, await readBillingSummary(currentOwnerId()));
       return;
     }
 

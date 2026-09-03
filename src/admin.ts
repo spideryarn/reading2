@@ -231,9 +231,10 @@ export function describeAdminMiss(userId: string, email: string): string | undef
  *
  * **The only shape in this repo that describes somebody other than the reader
  * asking**, which is why it is worth reading before extending it. Everything on
- * it is a count or a date. Nothing on it names an article, a file, a URL or a
- * sentence: how many pieces somebody has is a fact about the account, and
- * *which* pieces they are is their reading.
+ * it is a count, a date, or — since the billing fields below — a plan the
+ * account is on. Nothing on it names an article, a file, a URL or a sentence:
+ * how many pieces somebody has is a fact about the account, and *which* pieces
+ * they are is their reading.
  * docs/project/admin.md § What it deliberately does not show.
  *
  * ## Why it is here rather than in src/types.ts
@@ -318,6 +319,63 @@ export interface AdminUser {
   spendUnpricedCalls: number;
   /** `YYYY-MM`, UTC — the period the three numbers above cover, never implied. */
   spendMonth: string;
+
+  /* ------------------------------------------------------------ billing ---
+   *
+   * **What this account is entitled to, and how much of it is gone.** The plan
+   * said this would be "one field on `AdminUser`, one column, one per-owner
+   * statement in `pg-admin.ts`"; it is four fields, and the extra three are
+   * each load-bearing rather than decoration:
+   *
+   * - `plan` alone cannot be rendered as a usage figure — "reader" says nothing
+   *   about whether they are near the ceiling, which is the operational
+   *   question this column is for.
+   * - `ingests` without `ingestLimit` is a number with no scale, and the limit
+   *   is a *row* in `billing_tiers` that somebody may raise at any time, so it
+   *   cannot be a constant in the browser.
+   * - `ingestWindow` because the two allowances are measured over different
+   *   spans — a paid one over the billing period, the free one over the
+   *   lifetime of the account — and a bare "3 of 20" that does not say which is
+   *   the same overclaim `spendMonth` exists to prevent one column along.
+   *
+   * **The administrator's own row is exempt from the quota**, and the *page*
+   * says so rather than the wire: the Ingests cell draws an em dash for an
+   * account `isAdmin` recognises, which is a question already answered in the
+   * browser on that same row (`AdminMarker` in src/web/admin-columns.tsx). A
+   * fifth field would be a second opinion about the same two uuids. The plan and
+   * status fields are filled in as usual, because an administrator may hold a
+   * real subscription and it is a fact about the account either way.
+   */
+
+  /** `"free"`, or the id of the tier this account is currently entitled to. */
+  plan: string;
+  /**
+   * The raw Stripe subscription status, when there is a subscription at all.
+   *
+   * Raw text rather than a derived word, for the reason `billing_accounts.status`
+   * is text: entitlement is decided by an allowlist, and a status Stripe adds
+   * next year should show itself on this page rather than be flattened into
+   * whichever of ours it least resembles. **A status that does not entitle sits
+   * beside `plan: "free"`** — which is the lapsed account, and is exactly what
+   * an administrator looking at a support email needs to see.
+   */
+  planStatus?: string;
+  /** Successful ingests over `ingestWindow`, plus reservations still in flight. */
+  ingests: number;
+  /** What that count is measured against — the tier's row, or the free three. */
+  ingestLimit: number;
+  /**
+   * Which span `ingests` covers. `period` is Stripe's, not a calendar month.
+   *
+   * **`stale` is a third value rather than a flavour of `lifetime`**, because
+   * the pair it produces has no scale on its own: a subscription whose stored
+   * period has run out shows a *lifetime* count against a *monthly* tier limit,
+   * so `61 / 20` is two different questions in one fraction. The cell needs to
+   * be able to say so, and `active` in the status column beside it does not —
+   * that is the status of a subscription whose dates we could not read. GPT Sol,
+   * 2026-09-03.
+   */
+  ingestWindow: "period" | "lifetime" | "stale";
 }
 
 /**

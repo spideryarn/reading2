@@ -102,6 +102,14 @@ const ALICE: AdminUser = {
      marker that says so. */
   spendUnpricedCalls: 7,
   spendMonth: "2026-08",
+  /* Alice pays. Both windows are here because the Plan column names which one
+     the count is against, and a paid account's is the Stripe billing period
+     rather than the account's lifetime. */
+  plan: "reader",
+  planStatus: "active",
+  ingests: 4,
+  ingestLimit: 20,
+  ingestWindow: "period",
 };
 
 const BOB: AdminUser = {
@@ -120,6 +128,15 @@ const BOB: AdminUser = {
   spendCalls: 0,
   spendUnpricedCalls: 0,
   spendMonth: "2026-08",
+  /* **Bob is the empty account**, and the billing fields have no absent state
+     for him: a reader with no `billing_accounts` row is on the free tier with
+     nothing used, which is a fact rather than a blank. `planStatus` is the only
+     one that is genuinely absent, because he has never had a subscription — and
+     the Plan cell draws nothing under the word rather than an empty line. */
+  plan: "free",
+  ingests: 0,
+  ingestLimit: 3,
+  ingestWindow: "lifetime",
 };
 
 /**
@@ -131,6 +148,11 @@ const BOB: AdminUser = {
  * on nobody's list.
  */
 const GREG: AdminUser = { ...ALICE, id: ADMIN_USER_ID_LOCAL, email: ADMIN_EMAIL_LOCAL };
+/* Its own uuid, not the one `admin.test.ts` gives `SOMEBODY_ELSE`. Sharing it
+   made `tests/fixture-ids.test.ts` red the moment this constant arrived — two
+   suites naming one row race on a box that runs them side by side. Two of us
+   found that independently and picked different replacements; this is the one
+   that reached `dev` first. */
 const OTHER_ACCOUNT = "3f7b19d4-6c28-4e51-8a03-b5d7e2914c6f";
 
 const jsonOk = (body: unknown) =>
