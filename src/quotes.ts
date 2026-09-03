@@ -885,7 +885,7 @@ ${PROFILE_RULES}`;
  */
 /* Exported for tests/profile-prompts.test.ts, which pins the two things a
    profile must do here: arrive when there is one, and leave no trace when there
-   is not. Same reason src/glossary.ts and src/summarise.ts export theirs. */
+   is not. Same reason src/glossary.ts and src/tweets.ts export theirs. */
 export function renderPrompt(opts: {
   tree: Tree;
   count: number;

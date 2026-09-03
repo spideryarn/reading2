@@ -1,0 +1,18 @@
+# How `gjd-remote` sets this repo up on the remote box, and how it asks later
+# whether the checkout is still healthy. Every key is optional, and a repo with
+# no file at all still works — see docs/project/hetzner-remote-server-box.md and
+# scripts/gjd-remote-config.ts.
+#
+# A key I do not understand is an error naming it, not a default: a misspelt key
+# that quietly does nothing is a setup that reports success having run none.
+
+# Run from the checkout, on the box, in a non-interactive shell (no profile is
+# sourced, so anything not on the default PATH needs its full path). This is
+# also what the convention would have guessed, and it is written out anyway so
+# that the file is the worked example the other repos are copied from.
+setup = "npm ci && npm run setup"
+
+# No `check` yet. It has to be READ-ONLY — doctor runs it against a live
+# checkout — and this repo has nothing that fits: `npm run check` is static
+# analysis over the tree rather than a health question, and `npm run db:check`
+# talks to the database. Add one when there is a command that only looks.

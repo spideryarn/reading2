@@ -108,6 +108,12 @@ describe("the three child counts", () => {
   ] as const;
 
   for (const { name, query, table } of cases) {
+    /* The join, written out per case rather than assembled from `table`, so
+       that the string in the test is the string a reader can compare against
+       the SQL by eye. Drizzle names the child's `article_id` first because the
+       child is the `from`. */
+    const joinedOn = `inner join "articles" on ${table}."article_id" = "articles"."id"`;
+
     it(`${name} counts its own table and no other's`, () => {
       const sql = sqlOf(query);
       expect(sql).toContain(table);
@@ -122,11 +128,29 @@ describe("the three child counts", () => {
          that a child's `owner_id` equals its article's, and the isolation
          reaches every one of these rows through the article — so the article's
          owner is the authoritative answer. Grouping by the child's own column
-         would be the same number until the day it was not. */
+         would be the same number until the day it was not.
+
+         **The whole predicate, not the words in it**, and this assertion has
+         already been through the correction its sibling records
+         (tests/store-block-reads.test.ts § "reaches the article's CURRENT
+         revision"). It read `toContain("inner join")` and an unqualified
+         `/"current_revision_id" is not null/`, and a join written
+         `eq(articles.ownerId, articles.ownerId)` — a tautology on the articles
+         table, so every child row pairs with every article and every owner —
+         passed all three while attributing everybody's questions to everybody.
+         Built and run through `.toSQL()` on 2026-09-03; all three were green.
+         So the relationship is pinned rather than the vocabulary. */
       const sql = sqlOf(query);
+      expect(sql).toContain(joinedOn);
       expect(sql).toMatch(/group by "articles"\."owner_id"/);
-      expect(sql).toContain("inner join");
-      expect(sql).toMatch(/"current_revision_id" is not null/);
+      /* Qualified. Unqualified it would be satisfied by a child table carrying
+         a column of that name, and it is the *article's* publication that
+         decides whether its questions are counted. */
+      expect(sql).toContain('"articles"."current_revision_id" is not null');
+      /* No bound parameters at all, which is a claim worth making: `onTheShelf()`
+         writes its `'_'` as a literal, so a `$1` appearing here would mean the
+         predicate had been rewritten into something this file is not reading. */
+      expect(paramsOf(query)).toEqual([]);
     });
   }
 });

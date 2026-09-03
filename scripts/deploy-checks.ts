@@ -948,11 +948,13 @@ function mimeDrift(
 /**
  * The `[storage.buckets.*]` blocks of `supabase/config.toml`, parsed.
  *
- * **A hand-written parser rather than a TOML library**, and the reason is not
- * laziness: the only TOML parser in `node_modules` is `smol-toml`, which is
- * there transitively through `knip`. Importing a transitive dependency is a
- * build that breaks the day something upstream drops it, and adding a direct
- * one for four scalar keys is a dependency for a comparison.
+ * **A hand-written parser rather than a TOML library.** When this was written
+ * the only TOML parser in `node_modules` was `smol-toml`, there transitively
+ * through `knip`, and importing a transitive dependency is a build that breaks
+ * the day something upstream drops it. Since 2026-09-02 `smol-toml` IS a direct
+ * dependency (scripts/gjd-remote-config.ts), so that objection is gone; this
+ * parser stays because it is a deploy gate that has been watched going red on
+ * exactly these four keys, and swapping it is a change for no drift caught.
  *
  * So it reads exactly what those blocks contain and **throws on anything it
  * does not understand** — an unknown size unit, a key it cannot parse. A

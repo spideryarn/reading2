@@ -1192,9 +1192,9 @@ function Origin({ meta, slug, owner }: { meta: Meta; slug: string; owner: boolea
     );
   }
   /* **`meta.source` is the evidence, not the absent URL.** A missing `meta.json`
-     is tolerated (src/api.ts) and `src/store/import.ts` takes a revision with no
-     URL in either the metadata or the manifest, so an owner can hold an ordinary
-     web article with no address — and "you uploaded this" is a claim about what
+     is tolerated (src/api.ts) and a revision may be published with neither
+     `requested_url` nor `final_url` (src/db/schema.ts), so an owner can hold an
+     ordinary web article with no address — and "you uploaded this" is a claim about what
      they did, assembled from a gap in our own files. GPT Sol, 2026-08-30. The
      other branch says what is actually true: we have no record of one. */
   const uploaded = meta.source === "pdf";

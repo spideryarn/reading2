@@ -14,8 +14,9 @@
  *
  * So the derivation moved out to a leaf with nothing under it, and both stores
  * reach it from above. `src/store/pg-revisions.ts` re-exports it, because
- * `publishRevision`'s return type is built from it and src/store/import.ts
- * reaches for it at that address.
+ * `publishRevision`'s return type is built from it. (The importer reached for
+ * it at that address too, until src/store/import.ts was deleted on 2026-09-01;
+ * the re-export outlived it.)
  *
  * ## The rule this exists to keep
  *

@@ -297,7 +297,13 @@ const EXPECTED: readonly Expected[] = [
         "A test key in production accepts test cards and grants real subscriptions",
     },
   },
-  { name: "STRIPE_PRICE_READER", breaks: null },
+  /* **No `STRIPE_PRICE_*` here, and its absence is deliberate.** It was
+     reported until 2026-09-02, when tiers and their Stripe price ids moved into
+     the `billing_tiers` table so they could be changed without a deploy
+     (docs/project/billing.md). Reporting a variable nothing reads is the
+     mistake this list's own header is about: it offers an operator a name they
+     cannot use, one line above the key that really does matter. Whether the
+     tiers are configured is a database question now, not an environment one. */
 ];
 
 /**

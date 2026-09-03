@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { AiCallRow } from "../src/ai-spend.js";
-import { by, parseArgs } from "../scripts/ai-cost.js";
+import { by, parseArgs, duplicateJobSteps } from "../scripts/ai-cost.js";
 
 describe("--month", () => {
   it("runs from the first instant of the month to the first instant of the next", () => {
@@ -187,5 +187,119 @@ describe("--owners and --price", () => {
     expect(() => parseArgs(["--price", "0"])).toThrow(/positive number of dollars/);
     expect(() => parseArgs(["--price", "-5"])).toThrow(/positive number of dollars/);
     expect(() => parseArgs(["--price"])).toThrow(/needs a value/);
+  });
+});
+
+/**
+ * **Would it have fired on the actual incident?** — the bar
+ * docs/reusable/improve-the-codebase.md sets for a check added after the fact.
+ *
+ * On 2026-08-30 one article's `hierarchy` step ran eleven times at once under a
+ * single job id, and nothing ever asked the ledger about it: the two big ones
+ * were spotted by eye three days later and the six on `read` were never found
+ * at all. docs/postmortems/260902c-the-truncation-retry-cost-storm.md.
+ *
+ * So the first test below is that shape, built to scale, rather than a
+ * two-and-two case that would pass against a check counting rows instead of
+ * collectors.
+ */
+describe("steps that ran more than once", () => {
+  /** The six fields `duplicateJobSteps` reads; the rest of a row is irrelevant. */
+  const row = (over: Partial<AiCallRow>): AiCallRow =>
+    ({
+      scopeKind: "job_step",
+      runId: "run-1",
+      jobId: "job-1",
+      stepName: "hierarchy",
+      isByok: false,
+      costSource: "provider",
+      creditsUsedNanos: 1_000,
+      byokUpstreamNanos: null,
+      computedCostNanos: null,
+      ...over,
+    }) as AiCallRow;
+
+  it("finds the eleven runs of one step that nobody ever looked for", () => {
+    /* Three calls per run, because the step really did make several — which is
+       the distinction the check turns on. Counting *rows* would say 33 and mean
+       nothing; counting collectors says 11 and means eleven executions. */
+    const rows = Array.from({ length: 11 }, (_, run) =>
+      Array.from({ length: 3 }, (_, call) =>
+        row({ runId: `run-${run}`, id: `call-${run}-${call}` }),
+      ),
+    ).flat();
+    const found = duplicateJobSteps(rows);
+    expect(found).toHaveLength(1);
+    expect(found[0]?.jobId).toBe("job-1");
+    expect(found[0]?.stepName).toBe("hierarchy");
+    expect(found[0]?.runs).toBe(11);
+    expect(found[0]?.calls).toBe(33);
+    /* And what it cost, which is the argument for reading it at all: eleven
+       runs of a step that should have run once, billed eleven times. */
+    expect(found[0]?.nanos).toBe(33_000);
+  });
+
+  it("says nothing about one run that made forty calls, which is what steps do", () => {
+    /* **The case that makes this useful rather than noisy.** Every one of these
+       rows shares a `job_id`, a `step_name` AND a `run_id`: one execution that
+       fanned out into forty calls, which `summarise` really does. Counting rows
+       instead of collectors would report every ordinary step in the ledger.
+
+       It is also the boundedness half: a healthy ledger returns an empty list,
+       so the report prints no line at all — no threshold to tune and nothing
+       that fires on ordinary traffic. */
+    const rows = Array.from({ length: 40 }, (_, i) => row({ id: `call-${i}` }));
+    expect(duplicateJobSteps(rows)).toEqual([]);
+  });
+
+  it("ignores a row that is not a job step, whatever it happens to carry", () => {
+    /* `scopeKind` is the row's own word for what it was. A `cli` or `request`
+       row carrying a job id is not a step the queue ran, and reading it as one
+       would give this line a quiet third meaning. */
+    const rows = [
+      row({ scopeKind: "cli", runId: "run-a" }),
+      row({ scopeKind: "cli", runId: "run-b" }),
+      row({ scopeKind: "request", runId: "run-c" }),
+      row({ scopeKind: "request", runId: "run-d" }),
+    ];
+    expect(duplicateJobSteps(rows)).toEqual([]);
+  });
+
+  it("does not pile every unattributed call into one enormous group", () => {
+    /* A chat answer or a search has no job and no step. Grouped under a shared
+       `—` key they would look like hundreds of runs of one thing, which is the
+       wall of output this must not produce. */
+    const rows = [
+      row({ runId: "run-a", jobId: null, stepName: null }),
+      row({ runId: "run-b", jobId: null, stepName: null }),
+      row({ runId: "run-c", jobId: "job-9", stepName: null }),
+      row({ runId: "run-d", jobId: "job-9", stepName: null }),
+    ];
+    expect(duplicateJobSteps(rows)).toEqual([]);
+  });
+
+  it("keeps two steps of one job apart, and two jobs running the same step", () => {
+    const rows = [
+      row({ runId: "run-a", jobId: "job-1", stepName: "hierarchy" }),
+      row({ runId: "run-b", jobId: "job-1", stepName: "summarise" }),
+      row({ runId: "run-c", jobId: "job-2", stepName: "hierarchy" }),
+    ];
+    expect(duplicateJobSteps(rows)).toEqual([]);
+  });
+
+  it("puts the most-repeated step first, whatever order the ledger is in", () => {
+    /* The report shows the worst few and counts the rest, so which ones are at
+       the top is what a reader actually sees. */
+    const rows = [
+      row({ runId: "run-a", jobId: "job-1", stepName: "hierarchy" }),
+      row({ runId: "run-b", jobId: "job-1", stepName: "hierarchy" }),
+      row({ runId: "run-c", jobId: "job-2", stepName: "summarise" }),
+      row({ runId: "run-d", jobId: "job-2", stepName: "summarise" }),
+      row({ runId: "run-e", jobId: "job-2", stepName: "summarise" }),
+    ];
+    expect(duplicateJobSteps(rows).map((r) => [r.jobId, r.runs])).toEqual([
+      ["job-2", 3],
+      ["job-1", 2],
+    ]);
   });
 });

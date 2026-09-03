@@ -1030,14 +1030,19 @@ export async function assertProduced(
  *
  * 1. `freeSlug` believes the slug is unclaimed and hands it out.
  * 2. The pipeline runs, and is paid for.
- * 3. `importArticle` (src/store/import.ts) derives its article id from the slug,
- *    so it resolves to the article that was **already there**.
- * 4. Different owner ⇒ the import refuses, at the end, after the money.
- * 5. **Same owner ⇒ it replaces that article and deletes-then-reinserts its
- *    reader state** — comments, chat threads, saved searches, glossary
- *    lookups — and every write reports success.
+ * 3. The job settles, and `publishRevisionIn` (src/store/pg-revisions.ts)
+ *    resolves the slug through `ownedSlug`, so it lands on the article that was
+ *    **already there**.
+ * 4. Different owner ⇒ nothing is found and the publication refuses, at the
+ *    end, after the money.
+ * 5. **Same owner ⇒ that article's current revision is moved to the document
+ *    just fetched**, and every write reports success.
  *
- * Case 5 is silent data loss, and it is what asking the live store fixes.
+ * Case 5 is silent data loss, and it is what asking the live store fixes. Steps
+ * 3–5 were `importArticle` (src/store/import.ts) until that file was deleted on
+ * 2026-09-01, and it was worse: it deleted and reinserted the article's reader
+ * state as well — comments, chat threads, saved searches, glossary lookups. The
+ * importer has gone; the collision it made expensive has not.
  *
  * ## Owner-scoped, deliberately, and what that leaves open
  *
@@ -1748,7 +1753,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * block-**range** pair (`buildArcColumn` in src/web/tree.ts), and an entry
      * whose range matches no node is dropped from the reading view without a
      * word. A rebuilt tree may legitimately choose different boundaries, and
-     * `arc` has no stamp at all, so it stays "done" and simply loses entries.
+     * `arc` never gets the chance to notice: `cascadeForce` (src/jobs.ts) only
+     * names steps **already in the job**, so a job of `steps: ["hierarchy"]` does
+     * not run `arc` at all — and a stamp that is never consulted is no defence.
+     * (This paragraph said *"`arc` has no stamp at all"* when it was written on
+     * 2026-08-27, in `414f3f96`. `arc` gained one two days later, in the
+     * `StepDefinition` below; the hazard survived the fix, for the reason just
+     * given, so the decision here is unchanged and only its reason is.)
      *
      * The tree's own comment in src/web/tree.ts has said as much all along:
      * *"ids are positional and a re-run of `npm run hierarchy` renumbers them"*.

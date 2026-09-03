@@ -1396,14 +1396,15 @@ export function notBuiltYet(noun: string): string {
  * found nothing.
  *
  * **No artefact in the database is in that second state, and none can be.** All
- * four builders refuse to write an empty result, each with the same reason
+ * three builders refuse to write an empty result, each with the same reason
  * spelled out beside the throw — src/glossary.ts § buildGlossary,
- * src/ideas.ts, src/summarise.ts, src/tweets.ts: *writing it would make the
- * step report done for ever after.* Checked against every stored artefact on
+ * src/ideas.ts, src/tweets.ts: *writing it would make the
+ * step report done for ever after.* There were four until src/summarise.ts went
+ * with Summary mode on 2026-08-31. Checked against every stored artefact on
  * 2026-08-29; every one is absent or non-empty.
  *
  * So this sentence is **insurance, not a screen anybody reaches today**, and it
- * is left in with that said out loud rather than deleted, because the four
+ * is left in with that said out loud rather than deleted, because the three
  * throws are one refactor away from being relaxed for an article that genuinely
  * has no jargon — and the failure mode if they are is the client calling the
  * owner a liar about their own pipeline.

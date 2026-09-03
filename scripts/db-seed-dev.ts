@@ -83,7 +83,7 @@ import { ADMIN_EMAIL_LOCAL, ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import { articles } from "../src/db/schema.js";
 import { isLocalDatabaseUrl, withoutPassword } from "../src/db/ssl.js";
-import { loadEnvLocal } from "../src/env.js";
+import { loadEnvLocal, resolveTargetUrl } from "../src/env.js";
 import { type OwnerId, runAsOwner } from "../src/owner.js";
 import { postgresBlobStore } from "../src/store/blobs.js";
 import { pgArticleReader } from "../src/store/pg.js";
@@ -106,7 +106,16 @@ function die(message: string): never {
   process.exit(1);
 }
 
-const url = process.env.DATABASE_URL;
+/* **`shellWins: false`, said out loud rather than inherited from whichever
+   sibling this was copied from.** This script has no remote mode: there is no
+   `--allow-remote`, and the only valid target is this repo's own local Docker
+   stack, settled below against `supabase status` rather than against the
+   connection string. So letting a shell `DATABASE_URL` win would buy nothing —
+   a value disagreeing with the stack is refused either way — while reopening
+   the `~/.zshrc` case src/env.ts's precedence rule exists to close. The four
+   migrate/check-shaped scripts choose the other way, and src/env.ts §
+   `resolveTargetUrl` carries both reasons. */
+const url = resolveTargetUrl({ shellWins: false });
 if (!url) {
   die(
     "DATABASE_URL must be set.\n" +
