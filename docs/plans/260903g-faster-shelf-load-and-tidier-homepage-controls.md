@@ -727,3 +727,45 @@ assumed**, because it is the shelf parity test and this work touches the shelf: 
 
 `tests/api-fetch-offline.test.ts` is **24 passed** — which is the point of Stage 2, not a
 contradiction of it.
+
+## All five stages are on `dev`, and one number was re-checked by the orchestrator
+
+Pushed 2026-09-03 as `627a7a20`. The merge of `dev` produced **a semantic conflict rather than a
+textual one**, worth recording because git reported success: Stage 4 made `stripeClient()` async so
+the SDK leaves module scope, and `dev` had meanwhile gained a `scripts/stripe-setup.ts` that reaches
+straight through it for `.accounts`. Both sides merged cleanly and the result did not compile. One
+`await`; the other six call sites were already async. Caught by `npm run typecheck`, which is the
+argument for running it after a merge and not only after an edit.
+
+**Stage 4's headline was re-measured independently**, on a quiet box rather than taking the report's
+word for it — load 4.7 across 16 cores, which the harness itself calls *"quiet enough to compare"*:
+
+```
+  api-dist/vercel.js (the whole bundle)   1646 ms   199 MB
+  jsdom                                   1056 ms   147 MB     ← no longer in it
+  drizzle-orm/node-postgres                821 ms   279 MB
+  drizzle-orm/pg-core                      771 ms   251 MB
+```
+
+1,646 ms against the ~2,371 ms before. The bundle now costs less than jsdom alone would add to it,
+which is the check that it really did leave module scope — and the guard test
+`tests/cold-start-lazy-imports.test.ts` fails if it ever comes back.
+
+**Two guards fired on the orchestrator during this**, both doing exactly their job: the harness
+refused a stale bundle (*"api-dist/vercel.js is stale: src/db/schema.ts is newer than it"*), and the
+API build refused a client shell from a different commit. Neither is a fault; both are the shape of
+check [silent-success.md](../reusable/silent-success.md) argues for, seen working.
+
+### Left open, deliberately
+
+- **`@anthropic-ai/sdk`, ~87–215 ms.** Stage 4 stopped and reported rather than pressing on, which
+  is what it was told to do. The honest cost is ~50 edits across every pipeline stage plus a rename
+  so a missed site is a compile error, and it moves `beginSpend()` — which registers a call *before*
+  the stream opens — to after an `await`, which `tests/messages-stream.test.ts` has concurrency cases
+  about. **Greg's call.**
+- **`tests/diagram-css.test.ts` is red on `dev` and is not this work's.** It reads
+  `src/web/styles.css`, last changed by `f3b8861d` (the signed-out marketing-page redesign); nothing
+  here touches CSS. Checked in isolation, not merely observed in a batch.
+- **The production numbers still do not exist.** Everything above is this box. The two `health` log
+  lines from Stage 1 will produce the real figure on the next deploy, and until they do, the title of
+  this plan remains a hypothesis with strong local support rather than a measured fact.
