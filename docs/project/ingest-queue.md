@@ -1438,8 +1438,8 @@ leaves the box eight seconds after it finishes (`KEEP_DONE_MS`), because the art
 the shelf directly below and that is the better place to look at it. A **failed** one never leaves
 at all, deliberately: the card is the only account of what went wrong, and clearing it on a timer
 would take that away while the reader was still reading it. And the server keeps **fifty finished
-jobs per reader**, [*preferring failures*](#the-failures-retry-is-not-offered-under) when it prunes,
-for the same reason.
+jobs per reader**, favouring failures where the two kinds compete for a slot, for the same reason
+(the rule is `src/store/pg-jobs.ts` § `trimFinished`).
 
 So the box meant to say *here is what is happening now* was, on any shelf more than a few weeks old,
 a column of every import that had ever gone wrong — sitting above the shelf, which is the actual
