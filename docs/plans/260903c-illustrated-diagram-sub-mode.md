@@ -157,17 +157,30 @@ bill. The bill is one full-article Claude call to write the brief, plus one imag
 | the brief call | **not yet priced**, but 75 s / 6,300 output tokens on one article and **141 s / 13,449 output tokens** on the other |
 
 **The brief call is the bill, not the pictures**, and that inverts the first draft's assumption.
-13,449 output tokens of Sonnet is roughly $0.20 on its own before the input side, so an article is
-plausibly **$0.25–0.35 all in — more than Sketch's $0.20, not a seventh of it.** Nothing goes in
-front of a reader until stage 2 has measured it through the ledger rather than estimated it here.
 
-If it lands there, the cheap levers, in order: the brief's answer is verbose (a 3,000-character
-`prompt` field plus 13 vignettes), so cap the vignette count and the prompt length before reaching
-for a cheaper tier. Note also that a reference image costs about 2,000 input image tokens, so the
-zoom plates are ~2.5× the overview's image cost — which is still small change next to the brief.
+**Measured through the ledger by stage 2's eval, three runs over two articles:**
 
-Stage 2's eval harness reports the **total** per article, and stage 4's empty-state copy quotes that
-number and no other.
+| article | plates | brief $ | plates $ | brief out tokens | brief time | plate times |
+|---|---|---|---|---|---|---|
+| noema | 3/3 | **$0.2222** | $0.0443 | 17,723 | 175 s | 34/30/34 s |
+| constitution | 3/3 | **$0.3593** | $0.0438 | 33,055 | 334 s | 31/27/25 s |
+| noema, again | 3/3 | **$0.2740** | $0.0447 | 22,908 | 223 s | 33/27/25 s |
+
+**$0.27–$0.40 an article, of which 86–89% is the brief call.** So this is dearer than Sketch's $0.20,
+not a seventh of it, and the picture is the cheap part — which is worth saying twice because every
+intuition about this feature points the other way.
+
+**That is a product decision for Greg**, and it is in the list at the end. If it should be cheaper,
+the levers in order: cap the vignette count (up to ~34 across three plates today) and the length of
+the three ~500-word compositions, both of which are prompt edits; only then consider a cheaper tier
+for the brief. The reference image on each zoom plate costs about 2,000 input image tokens, which is
+real but is small change beside the brief.
+
+**Latency is the other number.** Worst case measured: 334 s of brief plus 83 s of plates = **417 s
+against the 760 s lease**. Comfortable for three plates; a fourth plate on a long article is not, so
+`MAX_PLATES` and `STEP_BUDGET_MS` have to be set together rather than separately.
+
+Stage 4's empty-state copy quotes the measured number and no other.
 
 ### Article figures are deferred, and Greg's version of it is not achievable
 
@@ -286,11 +299,25 @@ interface IllustratedVignette {
 }
 ```
 
-`readIllustrated` drops any vignette that fails, counts what it dropped, and the composition prompt
-is built **only from the survivors**. The count is the number to watch: it rising is the prompt
-drifting off the article. What this does *not* prove is in
+`readIllustrated` drops any vignette that fails and counts what it dropped. The count is the number
+to watch: it rising is the prompt drifting off the article. What this does *not* prove is in
 [§ What this reverses](#what-this-reverses-and-what-it-does-not) — read that before quoting this
 section as a safety claim.
+
+**A drop protects the reader's navigation, not the picture, and an earlier draft of this plan said
+otherwise.** It claimed the composition prompt is "built only from the survivors". It is not, and it
+could not be without destroying the thing that makes the plate good: the brief model writes **one
+self-contained composition** in prose, and a dropped vignette cannot be excised from that paragraph
+without mangling it. So a dropped vignette may still be drawn. What the drop buys is that it does not
+appear in the reader's *what it depicts* list — the only part of this feature that makes a claim
+about *where in the article* something came from — and that it is counted. Stage 2 found this while
+building and wrote the correction into the file header rather than quietly matching the plan, which
+is the right way round.
+
+The two honest routes to the stronger claim, neither taken in v1: a second call that rewrites the
+prompt from the survivors (~$0.02 and 30 s), or making the model emit the composition as a structured
+list of placements we assemble ourselves — which is the better design and costs the free-flowing
+prose the pictures are currently good because of.
 
 **The quote check is block-local, and that is the correction that matters.** The spike searched the
 whole article, which accepts a quote lifted from somewhere the vignette does not claim to be about.
@@ -300,7 +327,15 @@ documented as the one to use "wherever a match is being read as a claim that the
 text", which is exactly this. Plus a **minimum length** (say 4 words and 20 characters), or "the"
 matches everything.
 
-**Two of the spike's three drops were the spike's own fault, and that is the useful finding.** It
+**The block-local rule earned its place on the very first real run, and this is the most valuable
+thing in the validator.** Both of the drops on the first eval article were *verbatim, contiguous,
+genuine* sentences of the article — taken from the **block next door**. An article-wide search passes
+both of them, and the reader then clicks a row and lands in a paragraph that does not contain what
+they just read. Four such drops on the second run. Sol asked for this from the code alone, before
+there was anything to measure.
+
+**Two of the earlier spike's three drops were the spike's own fault, and that is the other useful
+finding.** It
 used a naive `String.includes`, so `brain's` failed against the article's `brain’s` and a plain
 `tie-breakers` failed against a curly-quoted one. `quote-match.ts` **already folds** curly quotes,
 all three dashes and the non-breaking space — deliberately with a table of same-length single
