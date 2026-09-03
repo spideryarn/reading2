@@ -142,8 +142,6 @@ const ALLOWED: Readonly<Record<string, string>> = {
   "src/log-redaction.ts":
     "Knows the credential names precisely so it can keep them out of logs.",
   "src/vercel-health.ts": "Reports which credentials are configured, never their values.",
-  "src/web/PrivacyPage.tsx":
-    "Names provider hostnames in <a href> links to their privacy policies — a privacy policy has to name the subprocessors it discloses. No transport of any kind. The file, not `src/web/`: the browser really can spend, and src/web/live/useLiveConversation.ts is below for exactly that.",
   "scripts/gjd-remote-env.ts":
     "The allowlist of which .env.local keys may travel to the remote box. It exists precisely to name credentials — an allowlist that could not write them down would be a blocklist — and it copies a file over scp. It never reads a value and never speaks to a provider.",
   "scripts/gjd-remote.ts":
