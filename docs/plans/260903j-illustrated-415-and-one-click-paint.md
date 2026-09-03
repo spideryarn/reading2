@@ -131,9 +131,9 @@ than inventing a third way.
 **And `assets` — which is in `DEFAULT_INGEST_STEPS` — has been failing the same way, silently, on
 every article ingested on production since 2026-08-30** (production ingest was itself broken until
 that day, so the window starts there rather than at 2026-08-29). It reaches Storage through the
-identical `CONTENT_TYPE` → `putIfAbsent` path (`src/collect-assets.ts:623`), and it **catches the
-error and carries on**: `reasonFor(err)` returns null for a Storage error, so `collect-assets.ts:636`
-pushes the error's *name* — `"Error"` — onto `storageErrors`, marks the image `failed`, and leaves it
+identical `CONTENT_TYPE` → `putIfAbsent` path (`src/collect-assets.ts` § `storeRawSource`), and it **catches the
+error and carries on**: `reasonFor(err)` returns null for a Storage error, so the catch in
+`collect-assets.ts` pushed the error's *name* — `"Error"` — onto `storageErrors`, marks the image `failed`, and leaves it
 hot-linked. The step reports success, `"N images stored, M left hot-linked"`. The only trace is one
 pino line carrying `storageErrors: ["Error"]` with no status, no message and no URL.
 
@@ -165,7 +165,7 @@ problem was.
    check; `bucketDrift` must report a missing MIME type as drift (assert the case that actually
    happened — `{pdf, html}` running against the five declared — not a synthetic one); and the
    target-selection must be tested, because it is now load-bearing for a write.
-5. **`storageErrors` says what failed.** `src/collect-assets.ts:656` pushes `(err as Error).name`,
+5. **`storageErrors` says what failed.** The catch in `src/collect-assets.ts` pushed `(err as Error).name`,
    which is `"Error"` for every Storage refusal. It carries the message and the status instead —
    still no URLs, still nothing sensitive, but enough to tell "the publisher" from "us".
 4. **The postmortem**, `docs/postmortems/260903f-the-bucket-allowlist-drifted-again-on-production.md`,
