@@ -61,7 +61,9 @@ listed here; the names under each are files in `docs/project/`.
 - **[design-css-overview.md](docs/project/design-css-overview.md)** — the map for anything visual:
   the stylesheets and their order, which mechanism owns a given rule, the colour and type tokens.
   Its live counterpart is `/design`.
-  <br>↳ `colour-scales.md` · `icons.md`
+  <br>↳ `colour-scales.md` · `icons.md` ·
+  `marketing-pages.md` (the signed-out pages, and how to shoot a screenshot that shows what it
+  claims to)
 - **[security-map.md](docs/project/security-map.md)** — start here for security: the untrusted
   parties (none of them is another reader) and where each defence physically lives.
   <br>↳ `security.md` (the deep dive) · `auth.md` · `admin.md` (the one view across owners) ·
