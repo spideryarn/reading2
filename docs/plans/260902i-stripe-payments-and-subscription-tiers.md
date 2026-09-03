@@ -102,8 +102,26 @@ would have stopped a free one, and refused the twenty-first with Stripe's own re
 *Checkout, portal and the reader-facing UI* and *Admin visibility* stages. What remains is Greg's
 review, the Portal-configuration check, comp subscriptions and go-live.
 
-**188 billing tests across 11 files**, re-run together on 2026-09-03 before the commit rather than
-taken from three separate agents' reports, and `npm run typecheck` clean over all 1,102 files.
+**273 tests across 19 files** — every billing suite plus the guards that catch this feature's own
+recurring mistakes (`fixture-ids`, `store-transaction-isolation`, `doc-links`) — re-run together on
+2026-09-03 after merging `dev`, rather than taken from four separate agents' reports. `npm run
+typecheck` clean over all 1,121 files.
+
+**One decision left for Greg, and it is about money rather than code.** A double-click on Upgrade
+can produce two payable Checkout Sessions, because nothing spans the subscription check and
+`sessions.create` — two subscriptions and two invoices if both are completed. This plan weighed and
+accepted that (reusing an open Session needs stored session state and expiry handling), but it was an
+agent's call, not Greg's, and being charged twice is the kind of thing a customer notices and
+remembers. **Stripe's own "limit customers to one subscription" Checkout setting is the cheapest
+close**, and nothing here configures or checks it. The net that would otherwise catch it,
+`chooseSubscription`'s multiple-live anomaly, **has a hole**: it counts only *entitled* subscriptions
+as live, so an `active` beside an `unpaid` is two real invoices and no anomaly logged.
+
+**A caveat on the two guard suites above.** `tests/billing-quota-race.test.ts` asserts that one
+transaction *blocks* on another's row lock, so it is sensitive to how loaded the box is: it went red
+three times in a fifteen-file run and green in the same fifteen-file run immediately after, and green
+in isolation every time. Treat a lone red there as contention until a second run agrees — but never
+assume it, because that suite is also the only thing standing between us and unmetered ingests.
 
 Two things the round trip found that no test could:
 
