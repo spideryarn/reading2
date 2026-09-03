@@ -840,7 +840,7 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
           A redraw that came back failed left the picture standing and said
           nothing, which reads as a completed run that changed nothing — after
           two minutes and $0.20. The server's own words, per copy.md. ⟨Sol⟩. */}
-      {!view.job && view.failed && <p className="sk-failed">{view.failed}</p>}
+      {!view.job && view.failed && <p className="sk-failed">{view.failed.message}</p>}
 
       {notes.length > 0 && <p className="sk-note">{notes.join(" ")}</p>}
 

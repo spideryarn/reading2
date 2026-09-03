@@ -158,6 +158,7 @@ import {
   ListTree,
   MessageCircle,
   MessageCircleQuestionMark,
+  Paintbrush,
   PenLine,
   RefreshCw,
   ScanLine,
@@ -248,6 +249,9 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
      "no raw document" state a few rows down. */
   quiz: MessageCircleQuestionMark,
   sketch: PenLine,
+  /* A paintbrush beside the sketch's pen: the same argument, painted rather
+     than drawn. docs/project/diagram.md § Illustrated. */
+  illustrated: Paintbrush,
 };
 
 /**

@@ -1,0 +1,537 @@
+{
+  "startedAt": "2026-09-03T05:38:10.620Z",
+  "slug": "evalcost-41wlze3j-long-html-1-spya-dw4wx4",
+  "store": "postgres",
+  "databaseTarget": "postgresql://postgres:***@127.0.0.1:54362/postgres",
+  "evalOwnerId": "00000000-0000-4000-8000-000000000002",
+  "environmentOwnerId": "f4d08b58-5573-4811-9887-e26c114fb324",
+  "node": "v26.8.1",
+  "article": {
+    "blocks": 186,
+    "words": 16855
+  },
+  "notes": [
+    "Per-interaction costs and per-article costs must never be added together. An article is paid for once; an interaction is paid for every time somebody presses something.",
+    "`expected` says whether the round was meant to be cold or warm; `cache` says what it was, read off the calls. A read counts as pre-existing when no earlier call in the round wrote a cache — so chat's tool loop reading its own first call is still a cold round. A round that was not what it was labelled is a finding about the measurement, not a price, and no cold/warm ratio is taken from it.",
+    "Every call here is made under scopeKind `eval` and ownerId EVAL_OWNER_ID, so none of it lands in `npm run cost`'s Product bucket (scripts/ai-cost.ts defines Product as scopeKind !== \"eval\") and every row resolves to the eval owner's article rather than to a null article_id under the environment owner.",
+    "`referee-claims` and `embeddings` are ARTICLE costs measured here only because they are not pipeline steps and so cannot be draws in run.ts. `referee-mirror` is NOT one of them — it stores nothing and is re-paid on every press and every reload, which makes it a repeated reader cost. It was classified the other way until 2026-09-03.",
+    "`referee-candidates` runs two turns that do different work — the fit brief, then the names — so both numbers are real and their ratio means nothing. It is the most expensive turn in the app by design: 12k output tokens and up to 30 web search results.",
+    "Unpriced calls are unknown, not zero: a total carrying them is short by an unknown amount."
+  ],
+  "taskNotes": {
+    "chat": "One chat turn through `converse`, with the production tool loop on. Round 2 carries round 1's turn as history, which is what makes it warm — the article message is byte-identical for the life of a conversation (tests/article-prompt.test.ts) and the breakpoint sits after it.",
+    "remember": "One Remember turn — the reader says what they took from the piece and finds out. It is `converse` with `kind: \"remember\"`, which is the whole difference: a different system prompt, and the stance appended to the FINAL user message (src/converse.ts § `stanceLine`), below the breakpoint, so the stance costs nothing in cache terms. `balanced` is the stance the picker starts on. It bills under the `chat` AI job, so read its number beside chat's rather than as a new line in the model table. The wire validation in `streamChat` (thread kind, MAX_REMEMBER_CHARS) is not an input to the model call, so no thread is needed.",
+    "explain": "One explanation of a selection, through `explain`. It has a real per-article cache breakpoint, so round 2 explains a *different* quote from the same article and should read the prefix warm. `deep` is off — the web-search extra is a thing the reader asks for, and pricing it is a separate question.",
+    "glossary-lookup": "One glossary term checked on the web, through the production `lookUpTerm` (src/term-lookup.ts). **It is `explain` with a different selection, deliberately** — the glossary was built as the same mechanism rather than a second one — so this number should come out at `explain`'s, and the point of running it is that we have never checked. The glossary entry is fabricated rather than generated: a term is a name plus the block it appears in, so a real word out of a real block is a real anchor, and running the `glossary` mode here would put an article cost inside an interaction. The store it writes to is a sink, so the eval owner's article is left as it was found.",
+    "search": "One passage search, through `findPassages`. Its prompt is the article and then the criterion, with the breakpoint between them, so round 2 uses a different criterion and reads the same article warm.",
+    "quiz-mark": "One quiz answer marked, through `markAnswer` — the interaction the baseline found the cache worth 7× on. The question, reference answer and evidence are fabricated from the article's own blocks rather than read from a generated quiz, because a quiz is a mode run.ts already prices; what is being priced here is the *marking* call, and its prompt shape does not depend on where the question came from.",
+    "referee-criterion": "One referee criterion run, through `runCriterion` — the per-turn referee call, and the one referee task a reader repeats. `{kind: \"single\"}` is the simplest of the three configs; the diverging and literature kinds send different prompts and would each be their own measurement.",
+    "referee-candidates": "The fourth referee task — finding reviewers — and it is `converse` with `kind: \"candidates\"` rather than a runner of its own: the shortlist is parsed out of the reply (src/referee-candidates.ts § `readShortlist`), never sent to it, so there is no stored state to fabricate. **The app's most expensive turn by design**: a 240s timeout, 12k output tokens and Exa web search set to 30 results (src/converse.ts). **Two turns, and their ratio is not a cache measurement** — round 1 is the fit brief and searches barely at all, round 2 asks for names and does nearly all the searching, so they are two prices rather than one price twice. Pricing only the brief would have reported the cheap half of the interaction as the whole of it.",
+    "referee-claims": "**A per-ARTICLE artefact, not a per-interaction one** — it is generated once and stored, like a mode. It is measured here rather than in run.ts only because it is not a pipeline step and so cannot be a draw there. Add it to the article's cost, never to a reader's.",
+    "referee-mirror": "**A repeated per-INTERACTION cost, not a stored artefact** — this was classified the other way and it was wrong. `runMirror` writes nothing at all: no pending row, no attempt, no result (src/routes.ts § runMirror, \"a remark is a prompt to look at your own sentence again, not an artefact, and a reload asking for one again is a referee asking again\"; src/web/useMirror.ts says \"one button, one run, nothing stored\"). So a referee pays this on every press and again after every reload. Add it to the reader's cost, never to the article's. It needs at least one comment with a body — `mirrorStream` returns without a model call when there are none, above the API-key check, so a run with no comments would look free and have bought nothing. One is fabricated here for that reason. **One round**: mirror is never given the article and sends no `cache_control` at all (src/referee-mirror.ts § the messages one run sends), so there is no prefix a second press could read warm — which is part of why repeating it is not cheap.",
+    "dictation": "One recording (evals/dictation/clips/short.webm) transcribed through `transcribe`, with the article's vocabulary in scope as the composer's mic has. **One round, because there is no article prefix and no explicit cache breakpoint** — not because nothing can warm. The earlier wording claimed the second, and it is false: `DICTATION_MODEL` is a Gemini model (src/models.ts) and Gemini caches implicitly, by default, with no breakpoint asked for. The clip is committed and the vocabulary comes from a fixed article, so a rerun inside the cache lifetime resends identical bytes. That is why the round is checked against its calls (`roundCache`) rather than assumed cold. The number scales with the seconds of audio, so it is a rate rather than a per-press price.",
+    "embeddings": "The article embeddings a diagram buys, through `articleVectors` — **an article cost, not an interaction cost** (the plan's Principles classifies Force/Drift embeddings as a cold first-open article purchase). **One round**: `articleVectors` memoises on slug + block hash in this process, so a second call would be a free cache hit rather than a warm read, and reporting it as `warm: $0` would be a lie about the provider. `src/similar.ts` still buys its own vectors separately, so a reader who opens both Force and Drift can pay this twice — a known debt, not measured here."
+  },
+  "rounds": [
+    {
+      "task": "chat",
+      "round": 1,
+      "expected": "cold",
+      "cache": {
+        "kind": "warm",
+        "read": 43053
+      },
+      "asLabelled": false,
+      "calls": 1,
+      "nanos": 27526600,
+      "unpriced": 0,
+      "tokens": {
+        "input": 43091,
+        "output": 1884,
+        "cacheRead": 43053,
+        "cacheWrite": 0,
+        "reasoning": 347
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 26759,
+      "detail": "4169 chars, 0 tool event(s)"
+    },
+    {
+      "task": "chat",
+      "round": 2,
+      "expected": "warm",
+      "cache": {
+        "kind": "warm",
+        "read": 43053
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 22954600,
+      "unpriced": 0,
+      "tokens": {
+        "input": 44510,
+        "output": 1143,
+        "cacheRead": 43053,
+        "cacheWrite": 0,
+        "reasoning": 441
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 15016,
+      "detail": "2084 chars, 0 tool event(s)"
+    },
+    {
+      "task": "remember",
+      "round": 1,
+      "expected": "cold",
+      "cache": {
+        "kind": "cold",
+        "readWithinRound": 0
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 129347000,
+      "unpriced": 0,
+      "tokens": {
+        "input": 46322,
+        "output": 1358,
+        "cacheRead": 0,
+        "cacheWrite": 46246,
+        "reasoning": 847
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 17587,
+      "detail": "1496 chars, 0 tool event(s)"
+    },
+    {
+      "task": "remember",
+      "round": 2,
+      "expected": "warm",
+      "cache": {
+        "kind": "warm",
+        "read": 46246
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 23947200,
+      "unpriced": 0,
+      "tokens": {
+        "input": 46855,
+        "output": 1348,
+        "cacheRead": 46246,
+        "cacheWrite": 0,
+        "reasoning": 886
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 18434,
+      "detail": "1384 chars, 0 tool event(s)"
+    },
+    {
+      "task": "explain",
+      "round": 1,
+      "expected": "cold",
+      "cache": {
+        "kind": "cold",
+        "readWithinRound": 0
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 108797000,
+      "unpriced": 0,
+      "tokens": {
+        "input": 41765,
+        "output": 443,
+        "cacheRead": 0,
+        "cacheWrite": 41674,
+        "reasoning": 0
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 7201,
+      "detail": "1396 chars, 0 web search(es), 0 citation(s)"
+    },
+    {
+      "task": "explain",
+      "round": 2,
+      "expected": "warm",
+      "cache": {
+        "kind": "warm",
+        "read": 41674
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 13636800,
+      "unpriced": 0,
+      "tokens": {
+        "input": 41765,
+        "output": 512,
+        "cacheRead": 41674,
+        "cacheWrite": 0,
+        "reasoning": 0
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 7512,
+      "detail": "1527 chars, 0 web search(es), 0 citation(s)"
+    },
+    {
+      "task": "glossary-lookup",
+      "round": 1,
+      "expected": "cold",
+      "cache": {
+        "kind": "warm",
+        "read": 41674
+      },
+      "asLabelled": false,
+      "calls": 1,
+      "nanos": 13258800,
+      "unpriced": 0,
+      "tokens": {
+        "input": 41731,
+        "output": 481,
+        "cacheRead": 41674,
+        "cacheWrite": 0,
+        "reasoning": 0
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 7790,
+      "detail": "\"learning\" — 1414 chars, 0 web search(es)"
+    },
+    {
+      "task": "glossary-lookup",
+      "round": 2,
+      "expected": "warm",
+      "cache": {
+        "kind": "warm",
+        "read": 41674
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 13318800,
+      "unpriced": 0,
+      "tokens": {
+        "input": 41731,
+        "output": 487,
+        "cacheRead": 41674,
+        "cacheWrite": 0,
+        "reasoning": 0
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 7476,
+      "detail": "\"learning\" — 1567 chars, 0 web search(es)"
+    },
+    {
+      "task": "search",
+      "round": 1,
+      "expected": "cold",
+      "cache": {
+        "kind": "cold",
+        "readWithinRound": 0
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 106379000,
+      "unpriced": 0,
+      "tokens": {
+        "input": 37482,
+        "output": 1270,
+        "cacheRead": 0,
+        "cacheWrite": 37430,
+        "reasoning": 189
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 14267,
+      "detail": "7 hit(s)"
+    },
+    {
+      "task": "search",
+      "round": 2,
+      "expected": "warm",
+      "cache": {
+        "kind": "warm",
+        "read": 37430
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 20616000,
+      "unpriced": 0,
+      "tokens": {
+        "input": 37480,
+        "output": 1303,
+        "cacheRead": 37430,
+        "cacheWrite": 0,
+        "reasoning": 369
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 14381,
+      "detail": "8 hit(s)"
+    },
+    {
+      "task": "quiz-mark",
+      "round": 1,
+      "expected": "cold",
+      "cache": {
+        "kind": "cold",
+        "readWithinRound": 0
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 102190000,
+      "unpriced": 0,
+      "tokens": {
+        "input": 39910,
+        "output": 255,
+        "cacheRead": 0,
+        "cacheWrite": 39640,
+        "reasoning": 0
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 5286,
+      "detail": "771 chars"
+    },
+    {
+      "task": "quiz-mark",
+      "round": 2,
+      "expected": "warm",
+      "cache": {
+        "kind": "warm",
+        "read": 39640
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 11340000,
+      "unpriced": 0,
+      "tokens": {
+        "input": 39911,
+        "output": 287,
+        "cacheRead": 39640,
+        "cacheWrite": 0,
+        "reasoning": 0
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 5070,
+      "detail": "871 chars"
+    },
+    {
+      "task": "referee-criterion",
+      "round": 1,
+      "expected": "cold",
+      "cache": {
+        "kind": "cold",
+        "readWithinRound": 0
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 132095500,
+      "unpriced": 0,
+      "tokens": {
+        "input": 37826,
+        "output": 3756,
+        "cacheRead": 0,
+        "cacheWrite": 37767,
+        "reasoning": 1523
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 38958,
+      "detail": "6866 bytes of outcome"
+    },
+    {
+      "task": "referee-criterion",
+      "round": 2,
+      "expected": "warm",
+      "cache": {
+        "kind": "warm",
+        "read": 37767
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 47671400,
+      "unpriced": 0,
+      "tokens": {
+        "input": 37826,
+        "output": 4000,
+        "cacheRead": 37767,
+        "cacheWrite": 0,
+        "reasoning": 4000
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 47105,
+      "error": "The AI service ran out of room before it wrote anything, which usually means it was given too much at once. Sending the same thing again will hit the same ceiling; asking about a shorter stretch of the article should get an answer. [ai-no-room]"
+    },
+    {
+      "task": "referee-candidates",
+      "round": 1,
+      "expected": "cold",
+      "cache": {
+        "kind": "cold",
+        "readWithinRound": 0
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 122524000,
+      "unpriced": 0,
+      "tokens": {
+        "input": 41802,
+        "output": 1802,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 633
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 22384,
+      "detail": "3193 chars, 0 tool event(s)"
+    },
+    {
+      "task": "referee-candidates",
+      "round": 2,
+      "expected": "warm",
+      "cache": {
+        "kind": "warm",
+        "read": 328715
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 261172000,
+      "unpriced": 0,
+      "tokens": {
+        "input": 355261,
+        "output": 8707,
+        "cacheRead": 328715,
+        "cacheWrite": 0,
+        "reasoning": 4793
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 107138,
+      "detail": "7924 chars, 0 tool event(s)"
+    },
+    {
+      "task": "referee-claims",
+      "round": 1,
+      "expected": "cold",
+      "cache": {
+        "kind": "cold",
+        "readWithinRound": 0
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 215684500,
+      "unpriced": 0,
+      "tokens": {
+        "input": 38282,
+        "output": 12000,
+        "cacheRead": 0,
+        "cacheWrite": 38241,
+        "reasoning": 12000
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 115455,
+      "error": "The AI service ran out of room before it wrote anything, which usually means it was given too much at once. Sending the same thing again will hit the same ceiling; asking about a shorter stretch of the article should get an answer. [ai-no-room]"
+    },
+    {
+      "task": "referee-mirror",
+      "round": 1,
+      "expected": "cold",
+      "cache": {
+        "kind": "cold",
+        "readWithinRound": 0
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 11484000,
+      "unpriced": 0,
+      "tokens": {
+        "input": 3757,
+        "output": 397,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 386
+      },
+      "models": [
+        "anthropic/claude-sonnet-5"
+      ],
+      "elapsedMs": 8045,
+      "detail": "859 bytes of result"
+    },
+    {
+      "task": "dictation",
+      "round": 1,
+      "expected": "cold",
+      "cache": {
+        "kind": "cold",
+        "readWithinRound": 0
+      },
+      "asLabelled": true,
+      "calls": 1,
+      "nanos": 148250,
+      "unpriced": 0,
+      "tokens": {
+        "input": 452,
+        "output": 15,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0
+      },
+      "models": [
+        "google/gemini-3.1-flash-lite"
+      ],
+      "elapsedMs": 4038,
+      "detail": "34 chars in 4036 ms"
+    },
+    {
+      "task": "embeddings",
+      "round": 1,
+      "expected": "cold",
+      "cache": {
+        "kind": "unknown",
+        "why": "a call reported no cache-read count, so whether it was cold is unknown rather than established — and unknown is not evidence of coldness"
+      },
+      "asLabelled": false,
+      "calls": 2,
+      "nanos": 984480,
+      "unpriced": 0,
+      "tokens": {
+        "input": 16408,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0
+      },
+      "models": [
+        "voyage-4"
+      ],
+      "elapsedMs": 1794,
+      "detail": "102 vector(s) over 102 row(s)"
+    }
+  ]
+}

@@ -77,6 +77,7 @@ import type { Article } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
@@ -185,6 +186,88 @@ export type Dropped = QuoteDrops;
 /** A fresh set of counters. One per run, threaded through by hand so nothing sums two runs. */
 export function noneDropped(): Dropped {
   return { unfound: 0, otherVoice: 0, wrongLength: 0, overlapping: 0, overCap: 0, malformed: 0 };
+}
+
+/**
+ * **The 0–1 scores the model did not give us. Counts of FIELDS, not of quotes.**
+ *
+ * Its own shape rather than four more counters on `Dropped`, and the three
+ * reasons are all in what `QuoteDrops` already is:
+ *
+ * - **Nothing here costs the reader a quote.** Every counter on `Dropped` is a
+ *   line that is not in the list; every counter here is a line that IS in the
+ *   list, carrying one number fewer. Summing the two would be nonsense, and a
+ *   type you have to be warned not to add up is the wrong type.
+ * - **`Dropped` rides the artefact and crosses to a visitor**
+ *   (`Quotes.discarded`, and src/public-types.ts § `PublicQuotes`), because it
+ *   is a fact about the list on their screen and the panel says so in a
+ *   sentence. This is a fact about our prompt. It is logged and shown to
+ *   nobody — a reader cannot act on a score the model failed to write.
+ * - Every `quotes.json` written before today lacks these, so putting them on
+ *   the stored shape would make the type a claim the data does not support.
+ *
+ * **Absent and rejected are counted apart because they are different
+ * failures.** Absent is a field the model never wrote; rejected is one it wrote
+ * wrong — not a number, not finite, or outside 0–1, which `score()` refuses
+ * rather than clamps. A counter that only fired inside `score()` would never
+ * see the first, which for the glossary (whose prompt *requires* both scores)
+ * is precisely the contract violation worth watching.
+ *
+ * **Per field, and at parse time.** Per field rather than per quote because
+ * "`striking` always missing" and "both missing" are different diagnoses. At
+ * parse time — inside `place`, over the quotes it accepted — because the
+ * question is *did the model obey us*, which is about its answer and not about
+ * what survived `dedupeOverlaps` and `MAX_QUOTES` afterwards.
+ *
+ * Here a missing score is **by design**: the prompt permits omitting one, and
+ * `priorityOf` takes a `max` over whichever arrived. A *rejected* one is not —
+ * a model that started writing `"high"` for `0.8` would quietly stop the panel
+ * offering prioritised order and nothing anywhere would say so.
+ * docs/reusable/silent-success.md;
+ * docs/plans/260903c-threshold-sliders-hide-below-threshold-items.md § Stage 1.
+ *
+ * The twin of `GlossaryScoreDrops` in src/glossary.ts. Keep them alike.
+ */
+export interface QuoteScoreDrops {
+  /** `importance` was not there at all. */
+  importanceAbsent: number;
+  /** `importance` was there and `score()` refused it. */
+  importanceRejected: number;
+  /** `striking` was not there at all. */
+  strikingAbsent: number;
+  /** `striking` was there and `score()` refused it. */
+  strikingRejected: number;
+}
+
+/** A fresh set. One per run, threaded by hand so nothing sums two runs. */
+export function noQuoteScoreDrops(): QuoteScoreDrops {
+  return { importanceAbsent: 0, importanceRejected: 0, strikingAbsent: 0, strikingRejected: 0 };
+}
+
+/**
+ * Read one 0–1 score and say, in the counters, what happened to it.
+ *
+ * **`undefined` is absent; everything else `score()` refuses is rejected.** A
+ * JSON `null` therefore lands in `rejected` — the model wrote a value and it
+ * was not a number, and calling that "absent" would let a model answer `null`
+ * every time without ever moving the counter that means it stopped obeying.
+ *
+ * Called only where a quote is about to be kept, so a quote dropped for any of
+ * `Dropped`'s six reasons never contributes a missing score.
+ */
+function scoreCounting(
+  value: unknown,
+  scores: QuoteScoreDrops,
+  absent: "importanceAbsent" | "strikingAbsent",
+  rejected: "importanceRejected" | "strikingRejected",
+): number | undefined {
+  if (value === undefined) {
+    scores[absent]++;
+    return undefined;
+  }
+  const kept = score(value);
+  if (kept === undefined) scores[rejected]++;
+  return kept;
 }
 
 /** Where one occurrence of a quote sits. */
@@ -395,7 +478,19 @@ interface Placed {
  * article with a needle that has no shape. Then `locate`, which is the
  * expensive and the load-bearing one.
  */
-export function place(raw: unknown, blocks: readonly Block[], dropped: Dropped): Placed[] {
+export function place(
+  raw: unknown,
+  blocks: readonly Block[],
+  dropped: Dropped,
+  /**
+   * The scores the model did not give us — `QuoteScoreDrops`, mutated in place.
+   *
+   * **Optional**, and a fresh set when it is left out, so a caller that only
+   * cares what was thrown away does not have to invent one. `buildQuotes`
+   * always passes one through.
+   */
+  scores: QuoteScoreDrops = noQuoteScoreDrops(),
+): Placed[] {
   const out: Placed[] = [];
   for (const item of Array.isArray(raw) ? raw : []) {
     /* Per element, before any field is read. A `null` or a bare string in the
@@ -446,8 +541,13 @@ export function place(raw: unknown, blocks: readonly Block[], dropped: Dropped):
        real ones. */
     const exact = at.block.text.slice(at.span.start, at.span.end);
     const reason = text(q.reason);
-    const importance = score(q.importance);
-    const striking = score(q.striking);
+    const importance = scoreCounting(
+      q.importance,
+      scores,
+      "importanceAbsent",
+      "importanceRejected",
+    );
+    const striking = scoreCounting(q.striking, scores, "strikingAbsent", "strikingRejected");
     out.push({
       text: exact,
       blockId: at.blockId,
@@ -604,9 +704,22 @@ export function buildQuotes(
     /** Ids from the list this run is replacing — see `idsByText`. */
     inherit?: Map<string, string> | null;
     dropped: Dropped;
+    /**
+     * The scores the model did not give us — `QuoteScoreDrops`, mutated in
+     * place. **Optional, unlike `dropped`**, because it never reaches the
+     * artefact this function returns: nothing is stored and nothing is shown,
+     * so a caller that does not log has no use for it. `generateQuotes` always
+     * passes one. The same arrangement as `buildGlossary`'s.
+     */
+    scores?: QuoteScoreDrops;
   },
 ): Quotes {
-  const placed = dedupeOverlaps(place(parsed.quotes, opts.blocks, opts.dropped), opts.dropped);
+  const placed = dedupeOverlaps(
+    /* `undefined` falls through to `place`'s own default, so the one place a
+       fresh set is minted stays in one place. */
+    place(parsed.quotes, opts.blocks, opts.dropped, opts.scores),
+    opts.dropped,
+  );
 
   /* Ids already spent, so a fresh quote cannot be minted onto an id the
      inheritance is about to hand to a different one. */
@@ -756,6 +869,13 @@ export interface QuotesRun {
   blocks: number;
   words: number;
   dropped: Dropped;
+  /**
+   * The scores this run asked for and did not get — `QuoteScoreDrops`.
+   *
+   * Beside `dropped` and not inside it, and **not on the artefact**: read the
+   * docstring on `QuoteScoreDrops` before moving either of those.
+   */
+  scores: QuoteScoreDrops;
   model: string;
   inputTokens: number;
   outputTokens: number;
@@ -1089,7 +1209,9 @@ export async function generateQuotes(opts: {
     /* `stop_details` is deliberately neither thrown nor logged — it is the
        provider's own words about a request that carried the whole article, and
        this error is copied onto the job and shown on the progress card. */
-    throw new Error(MODEL_REFUSED.message);
+    throw stageFailure(MODEL_REFUSED, {
+      authored: "the model answered with stop_reason: refusal",
+    });
   }
   if (message.stop_reason === "max_tokens") {
     throw truncationFailure("quotes", maxTokens, answerTokens, {
@@ -1106,6 +1228,7 @@ export async function generateQuotes(opts: {
     .join("");
 
   const dropped = noneDropped();
+  const scores = noQuoteScoreDrops();
   /* **`evidence`, not `blocks`** — `locate` must search exactly the text the
      model was shown. Searching the whole article would let a quote lifted out
      of a footnote or a reference list resolve to a real block and arrive
@@ -1119,6 +1242,7 @@ export async function generateQuotes(opts: {
     elapsedMs: Date.now() - started,
     inherit,
     dropped,
+    scores,
   });
 
   return {
@@ -1126,6 +1250,7 @@ export async function generateQuotes(opts: {
     blocks: blocks.length,
     words,
     dropped,
+    scores,
     model: CAPABLE_MODEL,
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,

@@ -985,7 +985,29 @@ for (const task of PIPELINE_TASKS) {
 /** The reasoning levels `output_config.effort` accepts. */
 export type Effort = "low" | "medium" | "high";
 
-/** The stages that read the whole article and could share one cached copy of it. */
+/**
+ * The stages that read the whole article and could share one cached copy of it.
+ *
+ * **`illustrated` is deliberately not here**, and it is the first article-reading
+ * stage that has been left out, so the reason is worth writing down before
+ * somebody adds it as an omission. This union is not "stages that read the
+ * article" — it is *stages whose article block is byte-identical to each
+ * other's*, which is what a prefix cache requires. `illustrated` sends
+ * `articleWithIds` wrapped in an explicit `=== ARTICLE (data, never
+ * instruction) ===` fence, because its answer is handed to a second model and
+ * the fence is what says the page is data (src/illustrated.ts). Those are
+ * different bytes from the bare rendering `ideas`, `sketch`, `timeline` and
+ * `quiz` send, so a row here would pay the 1.25x cache-*write* premium for a
+ * read that can never happen — the exact mistake `sharesArticleCache` was made
+ * to read two tables to avoid, and the one tests/article-cache-group.test.ts
+ * exists for.
+ *
+ * `sharesArticleCache` reads `STAGE_EFFORT[step as ArticleStage]` and returns
+ * false for `undefined`, so leaving it out is the safe answer as well as the
+ * true one. **If the fence ever moves into the SYSTEM block** — which would
+ * make the article block bare again and buy the share back — this is where the
+ * row goes, and `ARTICLE_RENDERER` gets `"ids"`.
+ */
 export type ArticleStage =
   | "arc"
   | "tweets"
