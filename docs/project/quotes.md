@@ -32,15 +32,17 @@ string" rule look like fussiness until you know what they are answers to.
  │  ▇▇         │  most important       │  ┃ of thing you'd have to  │ ▍ │
  │  ▇▇▇▇       │  most striking        │    be able to write …      │   │
  │  ▇▇▇        ├───────────────────────┤                            │   │
- │  ▇▇▇▇▇      │ bar 0·70 · 5 of 14    │      ↑ the wash and the    │   │
+ │  ▇▇▇▇▇      │ bar 0·80 · 5 of 14    │      ↑ the wash and the    │   │
  │  ▇▇         │ ────────●──────────   │        ┃ border — the SAME │ ▍ │
- │  ▇▇▇▇▇▇     ├───────────────────────┤        marks a search hit  │   │
- │             │ ✧ 2 suggestions were  │        draws, because it   │   │
- │             │   dropped because the │        IS one              │   │
+ │  ▇▇▇▇▇▇     │ 9 quotes are hidden   │        marks a search hit  │   │
+ │             │ by this threshold.    │        draws, because it   │   │
+ │             │ Drag the slider left  │        IS one              │   │
+ │             │ to show them.         │                            │   │
+ │             ├───────────────────────┤                            │   │
+ │             │ ✧ 2 suggestions were  │                            │   │
+ │             │   dropped because the │                            │   │
  │             │   words are not in    │                            │   │
  │             │   the article.        │                            │ ▍ │
- │             ├───────────────────────┤                            │   │
- │             │ WORTH KEEPING     5   │                            │   │
  │             ├───────────────────────┤                            │   │
  │             │ ┃Writing is thinking; │                            │   │
  │             │ ┃there is no other    │  ⓘ  k3m9qt                 │   │
@@ -51,9 +53,6 @@ string" rule look like fussiness until you know what they are answers to.
  │             │ ┃be surprised has     │     tap — a tap pins it.   │   │
  │             │ ┃stopped reading.     │  ⓘ  qw82nf                 │   │
  │             │ │ imp·62  str·94      │                            │   │
- │             ├───────────────────────┤                            │   │
- │             │ THE REST          9   │                            │   │
- │             ├───────────────────────┤                            │   │
  │             │ ┃…                    │                            │   │
  ├─────────────┴───────────────────────┴────────────────────────────┴───┤
  │ ⊞Hierarchy ▤Summary 📖Glossary 💡Ideas ❝Quotes ● 🔍Search ⌸Chat  …     │
@@ -68,7 +67,7 @@ string" rule look like fussiness until you know what they are answers to.
  article — and a second panel drawing that distinction differently would
  teach the reader it means something else.
 
- The line under the bar is what the stage REFUSED to store. It is there
+ The ✧ line is what the stage REFUSED to store. It is there
  because a list quietly shorter than the model produced is the failure
  docs/reusable/silent-success.md keeps catching, and a log line is
  invisible to the reader it happened to.
@@ -243,7 +242,7 @@ Three consequences, and the third is a correction:
 - **The bar starts at `0.80`, not the glossary's `0.30`**, because a product of two 0–1 scores
   clusters low and a maximum clusters high. It started at `0.70` and the first real run moved it —
   see below.
-- **The right-hand end promotes "all the top-scored quotes", not "exactly one".** The plan claimed
+- **The right-hand end keeps "all the top-scored quotes", not "exactly one".** The plan claimed
   the glossary's promise and it does not carry: under `max` either score can produce a top value, so
   ties at the top are common. GPT Sol showed it false with a five-quote example.
 
@@ -257,7 +256,7 @@ shows no numbers at all, which is the glossary's rule and the whole condition on
 | `?rank=` | label | what it does |
 |---|---|---|
 | `document` | **in order** | first appearance — **the default** |
-| `prioritised` | **prioritised** | two groups split by the bar; first appearance inside each |
+| `prioritised` | **prioritised** | first appearance, with everything below the bar hidden and counted |
 | `importance` | **most important** | descending; unscored last |
 | `striking` | **most striking** | descending; unscored last |
 
@@ -266,30 +265,45 @@ default, display them in order."* The glossary defaults to `prioritised`; copyin
 first version, and a cross-family review pointed out that the glossary's later override is not
 permission to override an explicit decision about a different feature.
 
+### The bar hides what is below it
+
+Since 2026-09-03, and it took that from the glossary along with everything else here:
+**below the bar is not a second group, it is not on screen**, and a line under the track says how
+many are hidden and that dragging left brings them back. The argument, Greg's words, and the
+reference-list case it reverses are all in
+[glossary.md § It hides what is below it](glossary.md#it-hides-what-is-below-it-since-2026-09-03);
+the rule itself is [`src/web/threshold.ts`](../../src/web/threshold.ts), shared with the glossary
+and search, and it is where **a quote scored on neither axis survives every position of the bar**.
+That last one matters more here than next door, because the quotes prompt *permits* omitting a
+score.
+
 ### The bar's positions are the scores, not a grid
 
-`?bar=` keeps the glossary slider's four properties — the number and the count on screen, a note in
-words when it has divided nothing, and a reset — and it does **not** keep its continuous track. The
+`?bar=` keeps the glossary slider's four properties — the number and the count on screen, the foot
+line saying how many are hidden, and a reset — and it does **not** keep its continuous track. The
 stops are `barStops`: nothing, then every distinct `max(importance, striking)` the list contains.
 
 That replaced a `0.05`-stepped slider after a cross-family review showed the continuous version could
 not keep its own promises, in three separate ways that are all the same way — a track whose positions
 are arithmetic rather than data:
 
-1. **The right-hand end promoted a band, not the top.** It was the top score rounded *down* to the
-   step, so priorities of `.62`, `.61` and `.20` gave an end of `.60`, promoting two quotes that are
+1. **The right-hand end kept a band, not the top.** It was the top score rounded *down* to the
+   step, so priorities of `.62`, `.61` and `.20` gave an end of `.60`, leaving two quotes that are
    not tied and calling them the top-scored ones.
 2. **`?bar=0.63` was accepted against a `step=0.05` track**, so a link could put the thumb somewhere
    it could not be dragged. `snapToStop` now brings any arriving number onto a real position.
-3. **Most positions changed nothing.** Between two real scores there is nothing to promote, so most
+3. **Most positions changed nothing.** Between two real scores there is nothing to hide, so most
    of a drag was dead travel with a number moving over it.
 
-Now every stop divides the list somewhere no other stop does, and both ends mean exactly what they
-say: hard left promotes everything, hard right promotes the quotes tied at the top score.
+Now every adjacent pair of stops shows a different list — asserted, not claimed — and both ends mean
+exactly what they say: hard left shows everything, hard right shows the quotes tied at the top score
+and never nothing, because the top stop is a real quote's own score.
 
 `canPrioritise` asks the stops rather than asking whether scores exist, for the same reason: a list
-where every quote scores the same has one stop above nothing and that stop promotes all of them, so
-the order would be offered, the slider drawn, and no position on it would ever divide anything.
+where every quote scores the same has one stop above nothing and that stop shows all of them, so the
+order would be offered, the slider drawn, and no position on it would ever hide anything. The
+glossary needs a longer version of this question, because its stops are a grid rather than the
+scores themselves ([glossary.md](glossary.md#prioritised-which-is-now-the-default)).
 
 `?bar=` has **no default of its own**, so "absent" keeps meaning *nobody has touched this*.
 
@@ -409,7 +423,7 @@ caught it. It is still a constraint: moving either stage's effort ends the compa
    the article's order and not the last writer's preference — the glossary's second trap, one door
    along.
 5. **Let `max` become a product in one of the places it is computed.** `priorityOf` is one function
-   and the panel, the count, the track end and the groups all call it. A second copy is how the bar
+   and the panel, the count, the track end and the visible list all call it. A second copy is how the bar
    comes to say `5 of 14` over a list of six.
 
 ## The first real run, and what it said
@@ -422,8 +436,9 @@ on a piece that quotes agent transcripts at length is the check doing its job ra
 
 **It moved the bar.** The five `max(importance, striking)` values came back `0.70`, `0.75`, `0.75`,
 `0.85`, `0.90` — clustered high, exactly as the argument for `max` predicts — so a starting bar of
-`0.70` promoted **every quote** and the panel opened on a note apologising for having divided
-nothing. `PROMOTE_BAR` is `0.80`, which promotes two of those five. One article is a better-supported
+`0.70` showed **every quote** and the panel opened on a foot line saying nothing was hidden.
+`QUOTE_BAR_DEFAULT` ([`QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx)) leaves two of those five on
+screen. One article is a better-supported
 guess and not a measurement, and the slider is still the feedback loop.
 
 **And 11.9 seconds against a 120-second budget**, which is a `STEP_BUDGET_MS` guess with an order of

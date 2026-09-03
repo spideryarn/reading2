@@ -4832,9 +4832,11 @@ td.text.has-hit[data-hues="8"] {
 
 /* ---- the list ---- */
 
-/* The scroller. A `div` rather than the `ol` it was until 2026-08-26, because
-   `prioritised` order splits the terms into two headed groups and a heading is
-   not a list item. Each group keeps its own `ol` inside this. */
+/* The scroller. A `div` wrapping one `ol` rather than being the `ol` itself:
+   that came in on 2026-08-26 when `prioritised` order drew two headed groups,
+   and the headings went again on 2026-09-03 when the threshold started hiding
+   what is below it. The wrapper stays because it is the element the CSS
+   scrolls, and unpicking it would move `min-height: 0` for nothing. */
 .gloss-list {
   flex: 1;
   margin: 0;
@@ -4844,41 +4846,15 @@ td.text.has-hit[data-hues="8"] {
      same `min-height: 0` the chat scroller needs, and for the same reason. */
   min-height: 0;
 }
-.gloss-group-list {
+.gloss-list-items {
   margin: 0;
   padding: 0;
   list-style: none;
 }
-/* The divider that says what promoted the group under it. Sticky, because the
-   whole point of a two-group list is knowing which group you are looking at,
-   and in a band this narrow the first group can be a screenful on its own.
-   `top: 0` against `.gloss-list` as the scroll container — see
-   docs/reusable/css-sticky-containing-block.md for the way that goes wrong. */
-.gloss-group-head {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  align-items: baseline;
-  gap: 0.35rem;
-  margin: 0;
-  padding: 0.45rem 0.7rem 0.3rem;
-  border-bottom: 1px solid var(--rule);
-  /* `--panel`, which is what `.mode-band` itself paints. A sticky heading with
-     no background of its own is transparent, and the terms scroll through it. */
-  background: var(--panel);
-  color: var(--ink-faint);
-  font-family: var(--font-ui);
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: lowercase;
-}
-.gloss-group-count {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-weight: 400;
-}
+/* `.gloss-group-head` and `.gloss-group-count` lived here until 2026-09-03 —
+   the sticky "worth knowing first" / "the rest" divider (gone 2026-09-03; the
+   name is what the list *is*, not what it used to be divided into). The threshold hides
+   what is below it now, so there is one list and nothing to head. */
 
 .gloss-term { border-bottom: 1px solid var(--rule); }
 .gloss-term:last-child { border-bottom: none; }
@@ -11888,25 +11864,11 @@ table.only-prose thead { display: none; }
 .quotes-stale svg { flex: none; color: var(--highlight-ink); transform: translateY(1px); }
 
 .quotes-list { flex: 1; overflow-y: auto; }
-.quotes-group { border-bottom: 1px solid var(--rule); }
-.quotes-group:last-child { border-bottom: none; }
-/* The divider that names the rule which promoted the group under it. A
-   threshold with no visible divider is a judgment made silently. */
-.quotes-group-head {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0;
-  padding: 0.35rem 0.7rem;
-  background: var(--surface-raised);
-  color: var(--ink-faint);
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.quotes-group-count { margin-left: auto; font-weight: 400; letter-spacing: 0; }
-.quotes-group-list { margin: 0; padding: 0; list-style: none; }
+/* `.quotes-group`, `.quotes-group-head` and `.quotes-group-count` lived here
+   until 2026-09-03 — the "worth keeping" / "the rest" divider and the section
+   that wrapped each group. The bar hides what is below it now, so there is one
+   list and nothing to head. */
+.quotes-list-items { margin: 0; padding: 0; list-style: none; }
 
 /* One row: the sentence, and the furniture beside it. `align-items: start` so
    the ⓘ sits level with the quote's first line rather than floating in the

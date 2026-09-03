@@ -19,7 +19,7 @@ that only changes a sentence.
 | Mode | Param | Priority | Default | Below the bar today |
 |---|---|---|---|---|
 | Glossary | `?gate=` | `difficulty × centrality` | `PRIORITY_GATE = 0.30` | second group, *"the rest"* |
-| Quotes | `?bar=` | `max(importance, striking)` | `PROMOTE_BAR = 0.80` | second group, *"the rest"* |
+| Quotes | `?bar=` | `max(importance, striking)` | `QUOTE_BAR_DEFAULT = 0.80` | second group, *"the rest"* |
 | Search | `?conf=` | `confidence` 0–100 | `PRIORITY_CONF = 50` | **hidden**, list and prose marks both |
 
 So Search already does what Greg is asking for, and the job is to make the other two match it. That
@@ -279,7 +279,7 @@ groups, and § *The threshold, and whose it is* still describes grouping),
 this hides"* comment in `search-hits.ts`.
 
 **One doc bug found on the way in, fold it in here:** [url-state.md](../project/url-state.md) line
-43 says an absent `?bar=` reads as `0.70`. It is `PROMOTE_BAR = 0.80`
+43 says an absent `?bar=` reads as `0.70`. It is `QUOTE_BAR_DEFAULT = 0.80`
 ([`QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx)), which `quotes.md` gets right.
 
 **Done looks like:** screenshots seen, docs true, GPT Sol's review of the code answered, committed
@@ -293,3 +293,42 @@ and pushed to `dev`.
   for silently-rejected scores. One consequence for stage 2 worth noting: Greg's *"in the interim,
   always show them"* rule is close to a no-op on real data, so it costs nothing to hold and there is
   no risk of it producing a list of unscored terms with the scored ones hidden behind the bar.
+- **2026-09-03** — stage 2 built, then reviewed by GPT Sol on the code. Four findings, all fixed;
+  the first two were reproduced by hand before anything was touched.
+  1. **Blocker — `canPrioritise` ignored the slider's own grid.** It asked whether two raw scores
+     differed, but the slider only stops on hundredths and the track ends at the top score floored
+     to one, so `[0.501, 0.509]` was offered a prioritised order whose every reachable position
+     showed both terms. The same arithmetic was wrong about binary floating point in both
+     directions: `0.58 / 0.01` is `57.99999999999999`, so the naive floor answered `0.57`, and
+     `0.57` answered `0.56`. One helper now owns the grid — `floorToGateStep` in
+     [`GlossaryPanel.tsx`](../../src/web/GlossaryPanel.tsx), rounding the quotient before flooring
+     and dividing by 100 rather than multiplying by `0.01` — `gateTop` splits the data-derived end
+     of the track out of `gateMax`, and `canPrioritise` asks whether any score sits **strictly below
+     that top stop**. `gateTop` deliberately excludes the one-step floor that keeps the rendered
+     input from having zero width: that floor is a fact about drawing a slider, and letting it into
+     the data-derived top made `canPrioritise` answer true for a glossary whose scores all round to
+     `0.00` — a bar that can only show all or hide all, which is the same no-op from the other end. **Quotes needed nothing:** its stops *are* the scores (`barStops`), so there
+     is no grid to fall between and the top stop is a real quote's score; the property is now
+     asserted there rather than claimed.
+  2. **Glossary could paint one frame with a hidden term still emphasised.** `useGlossaryMode`
+     nulls `selected` during render, but the value the prose draws from is `Reader`'s state and it
+     arrived through a passive effect — so the panel could commit without the row while `TableView`
+     still emphasised the term. Now a `useLayoutEffect`, matching quotes and search, and the comment
+     that claimed otherwise is corrected.
+  3. **"In the glossary" lowered a dormant gate.** With `?sort=document&gate=0.80`, opening a `0.20`
+     term rewrote a gate nothing was hiding with. `gateToReveal` now takes the list, the id and the
+     sort, and answers null in any order `effectiveSort` does not put a slider on screen.
+  4. **Stale terminology.** `PROMOTE_BAR` → `QUOTE_BAR_DEFAULT`, `.gloss-group-list` →
+     `.gloss-list-items`, `.quotes-group-list` → `.quotes-list-items`, and the comments still
+     explaining an unscored quote going into "the lower group". The 260831j plan and its two review
+     prompts keep the old name — they are a dated record of a conversation about the constant as it
+     was — with a pointer added at the one place the plan defines it.
+
+  Two tests are worth knowing about. `tests/glossary-band-selection.test.tsx` is new and mounts the
+  real band through `NuqsAdapter`, drags the real slider, and asserts that the selection is cleared
+  in the **layout** phase, using a sibling that subscribes to the same `?gate=` so its own effects
+  bracket the band's. It was watched fail against `useEffect`
+  (`["probe:layout","band:null","probe:passive"]`) before the fix went in. The source-text greps in
+  `tests/glossary-band-wiring.test.ts` stay for the wiring a mounted test cannot reach —
+  `openTermInGlossary` lives in `Reader`, which is not mountable here — and now check that the sort
+  is handed to `gateToReveal` rather than merely that it is called.
