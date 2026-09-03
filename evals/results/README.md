@@ -62,6 +62,27 @@ deliberately *not* prices and the report says so at length: two generations bill
 wrote nothing, one round labelled cold that read a cache an earlier run had written, and one call
 whose cache state the provider does not report.
 
+## `hierarchy-effort-2026-09-03.md` — does the structure pass need to think at `medium`?
+
+Written by `npm run eval:hierarchy-structure`, on a 16,846-word fixture. **Provisionally keep
+`medium`, on caution rather than proof.** `low` is 36% cheaper and 47% faster; its trees need 2.6×
+the boundary repair and dropped a proposed section in 3 of 7 draws against 0 of 10. That justifies
+staying put and does **not** establish that `medium` builds better trees — every measure is
+mechanical and no person has looked at a tree.
+
+Two things in it are corrections to itself, kept because they are the useful part: the "`low`
+invents its own boundaries" story is **withdrawn** (`l1OnHeadings` is 96.7% vs 95.8%, so `low`'s
+extra parts do start on author headings), and so is the claim about a length threshold (the short
+and long runs use different articles, so length and article are confounded).
+
+Read the resolution-floor table before quoting any other row: the shipping recipe disagrees with
+*itself* by as much as it disagrees with `low` on title retention and heading-boundary fidelity, so
+those two rows say nothing. The runs it reads are the six `2026-09-03-09/10-*` directories under
+[`hierarchy-structure/`](hierarchy-structure).
+
+The 2026-08-30 runs in that directory are **not** one series with these: their `incumbent` arm was
+`effort: "high"` while production ran `"medium"`, which is the bug this run had to fix first.
+
 ## `prompt-caching-*.md` — the article is really being cached
 
 Written by `npm run eval:caching`, 2026-08-26, against the live API. Three articles, each searched

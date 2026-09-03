@@ -9,6 +9,12 @@
  *   npx tsx evals/illustrated/run.ts --check <brief.json> --stored …    # free: read it back as the browser does
  *   npx tsx evals/illustrated/run.ts --hostile                          # the article that attacks the brief model
  *
+ * `<slug>.raw.json` is the model's answer saved before anything touched it, so
+ * when the model fences its JSON the file is not quite JSON and the extension is
+ * a small lie. Being verbatim is the point — it is the only file that can
+ * reproduce a fault — so `--check` strips the fence instead, the way the
+ * shipping stage does. `<slug>.brief.json` is always real JSON.
+ *
  * It spends money through `generateIllustrated`, which is the shipping stage —
  * **not through a copy of the prompt**. A harness with its own copy measures a
  * recipe nothing runs, which is the trap `evals/hierarchy-structure/` names in
@@ -43,7 +49,7 @@ import {
   readStoredIllustrated,
 } from "../../src/illustrated-plate.js";
 import type { IllustratedRun } from "../../src/illustrated.js";
-import { parseJsonFrom } from "../../src/parse-json.js";
+import { parseJsonFrom, stripFence } from "../../src/parse-json.js";
 import type { SpendRecord } from "../../src/ai-spend.js";
 import type { Sketch } from "../../src/sketch-scene.js";
 import type { Block } from "../../src/types.js";
@@ -182,7 +188,13 @@ async function checkOnly(
   target: Target,
   opts: { stored: boolean },
 ): Promise<void> {
-  const raw = parseJsonFrom<unknown>(await readFile(file, "utf-8"), file);
+  /* **`stripFence` first, exactly as `parseJson` in src/illustrated.ts does it.**
+     `<slug>.raw.json` is the model's own answer, saved before anything touched
+     it, so it may still be wrapped in a ```json fence — and it was on
+     2026-09-03. Without this the free re-check throws `MalformedJson` on
+     precisely the answers worth re-checking, which is the "harness takes a
+     different road from the shipping stage" trap this file's header names. */
+  const raw = parseJsonFrom<unknown>(stripFence(await readFile(file, "utf-8")), file);
   const sketch = parseJsonFrom<Sketch>(await readFile(target.sketch, "utf-8"), target.sketch);
   const read = opts.stored ? readStoredIllustrated : readModelBrief;
   const { illustrated, report } = read(raw, {

@@ -129,7 +129,20 @@ import { findQuote } from "./quote-match.js";
 import type { Sketch, SketchScene } from "./sketch-scene.js";
 import type { BlockId } from "./types.js";
 
-export const ILLUSTRATED_VERSION = "illustrated/1";
+/**
+ * **The version, and the only one.** Stamped onto every artefact this file
+ * writes, and compared against the artefact's `version` in src/store/pg.ts to
+ * answer `outdated` — so it has to be one constant, and until 2026-09-03 it was
+ * two. `illustrated.ts` had its own `PROMPT_VERSION` beside this one, equal by
+ * coincidence rather than by construction, and bumping only that one gave every
+ * freshly drawn artefact `outdated: true` for ever: written as `illustrated/1`
+ * here, compared against `illustrated/2` there. `illustrated.ts` now re-exports
+ * this, so there is nothing to keep in step.
+ *
+ * Bump it whenever `SYSTEM` or `renderPrompt` changes what the model is asked.
+ * It also feeds `inputFingerprint`, so a bump marks every stored plate stale.
+ */
+export const ILLUSTRATED_VERSION = "illustrated/2";
 
 /**
  * **How many plates one run may draw**, and it is one character to change.
