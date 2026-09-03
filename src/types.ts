@@ -1105,14 +1105,36 @@ export interface Meta {
    */
   unverified?: boolean;
   /**
-   * Mean per-page recall against the PDF's own text layer. Absent for a scan.
+   * Recall against the PDF's own text layer, pooled over the checked pages.
+   * Absent for a scan.
    *
-   * Read it with `pagesChecked`, always. A mean over one page of seventeen is
+   * **Not a mean of per-page recalls**, which is what this said until
+   * 2026-09-03 and what the metadata page's tooltip repeated to readers. It is
+   * `matchedTokens / baselineTokens` (src/pdf-read.ts), summed across every
+   * scored page before dividing — so it is weighted by how much text each page
+   * carried, and a dense page counts for more than a title page. The
+   * difference is not academic on a document with one 12-word page and sixteen
+   * full ones.
+   *
+   * Read it with `pagesChecked`, always. A figure over one page of seventeen is
    * arithmetically fine and means nothing, and the number on its own cannot
    * tell you which it is.
    */
   recall?: number;
-  /** How many pages the recall above is a mean of. `0` on a scan, where nothing could be checked. */
+  /**
+   * How many pages the recall above was computed over — **not** the pages that
+   * passed, and **not** simply the pages that had a text layer. `0` on a scan,
+   * where nothing could be checked.
+   *
+   * `scored` in src/pdf-score.ts owns the definition, and it drops two kinds of
+   * page: those with no baseline text to compare against, and end-of-document
+   * reference lists, which do have a text layer and are excluded because the
+   * model transcribes them only partly. So `pages - pagesChecked` is the number
+   * left out of the comparison, and the reason is not recoverable from here —
+   * anything the reader is told about *why* has to be hedged accordingly
+   * (src/web/Metadata.tsx § CameFrom). This docstring claimed the simple
+   * text-layer rule until GPT Sol read the scorer, 2026-09-03.
+   */
   pagesChecked?: number;
   /**
    * Specific things the transcription checker complained about, in its own
