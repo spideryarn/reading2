@@ -498,9 +498,18 @@ stores an absent period, and meters against it.
 ## Setting it up
 
 ```bash
-npx tsx scripts/stripe-setup.ts            # say what it would do
-npx tsx scripts/stripe-setup.ts --apply    # do it
+npm run stripe:setup           # say what it would do
+npm run stripe:setup -- --apply    # do it
+npm run stripe:check           # read-only: is this account fit to take money?
 ```
+
+`stripe:check` writes nothing. It is what you run against **live** before trusting it, and against a
+sandbox to see whether the two agree: the business name a customer reads on the Checkout page, the
+statement descriptor, the tax code without which nothing sells, `tax_behavior`, every currency
+against its row, the portal's cancel and card-update features, and whether any endpoint is listening
+for the webhook that grants entitlement. `✗` exits non-zero. It exists because every check it makes
+is one a real purchase found on 2026-09-03 and no unit test can —
+[`scripts/stripe-check.ts`](../../scripts/stripe-check.ts) says which.
 
 Idempotent by `lookup_key`, not by product name — a name is a label a human may edit, and matching
 on one is how you end up with two $10 prices and two cohorts of customers on different ones. It
@@ -722,6 +731,7 @@ Comp subscriptions for journalists and QA, and go-live. The order is in
 | [`src/billing/subscription.ts`](../../src/billing/subscription.ts) | Reading a Stripe subscription into the fields entitlement needs, and refusing everything unrecognised. Pure. |
 | [`src/billing/webhook.ts`](../../src/billing/webhook.ts) | Verification. |
 | [`src/billing/checkout.ts`](../../src/billing/checkout.ts) | The three billing routes: the order that makes the mapping durable, the Portal redirect, and the proof that a Checkout Session belongs to the reader asking about it. |
+| [`scripts/stripe-check.ts`](../../scripts/stripe-check.ts) | Read-only. Whether an account is actually fit to take money, one check per thing a real purchase has caught. |
 | [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts) | Reserve, settle, count. The lock. |
 | [`src/billing/admission.ts`](../../src/billing/admission.ts) | Which requests spend a slot, the refusal a reader sees, and the release. The only caller of `reserveIngest`. |
 | [`src/billing-plan.ts`](../../src/billing-plan.ts) | What `/profile` is told and what it says. Pure — no database, no network, no React, so the browser can have it. |

@@ -1073,14 +1073,26 @@ Going live is configuration in the live half of the dashboard plus a live key �
 application. What is genuinely empty over there is every per-mode object: products, prices, the
 portal configuration, webhook endpoints.
 
+**The live run happens on Greg's Mac, and nowhere else.** Confirmed 2026-09-03: only the Mac can
+reach the production database, and the setup script has to write the live price ids *into* it. The
+shared box is barred from a live key twice over —
+[`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts) refuses to carry one and
+[`src/billing/stripe.ts`](../../src/billing/stripe.ts) refuses to build a client from one outside a
+production deployment. So an agent on the box cannot do this step; it can only read the output back.
+
 - [ ] **Greg (manual)**: create a live secret key at
   [dashboard.stripe.com/apikeys](https://dashboard.stripe.com/apikeys) — note the live URL has **no
   `/test/` segment**, which is how you tell the modes apart. Stripe shows a live secret **once**;
-  after that it can only be rotated. Give it to the agent for the setup run.
-- [ ] Agent, with the live key: `scripts/stripe-setup.ts --apply` — creates the live product, prices
-  and portal configuration and writes the live price ids onto the tier rows. Check its
-  `is the account default` line; a portal configuration that is not the default is one no reader
-  ever sees.
+  after that it can only be rotated.
+- [ ] **Greg, on the Mac**, dry run first and read the `Target:` line before `--apply`:
+  ```
+  DATABASE_URL=<production> VERCEL_ENV=production STRIPE_SECRET_KEY=sk_live_… npm run stripe:setup
+  ```
+  Then the same with `-- --apply`. It creates the live product, prices and portal configuration and
+  writes the live price ids onto the tier rows. Check the `is the account default` line: a portal
+  configuration that is not the default is one no reader ever sees.
+- [ ] **Greg, on the Mac**: `npm run stripe:check` with the same three variables — read-only, and it
+  is the gate. Everything it tests is something a real purchase caught once.
 - [ ] **Greg (manual)**: add the production webhook endpoint at
   [dashboard.stripe.com/webhooks](https://dashboard.stripe.com/webhooks) →
   `https://<prod-host>/api/webhooks/stripe`, subscribed to the four events, and **Reveal secret** to
