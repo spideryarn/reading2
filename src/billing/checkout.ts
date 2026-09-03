@@ -184,12 +184,12 @@ function returnUrls(): { success: string; cancel: string } {
  * and what a reader must never see. 503 rather than 500: this deployment cannot
  * sell anything, and it is not a fault in what was asked for.
  */
-function billingClient(deps: CheckoutDeps): StripeCheckout {
+async function billingClient(deps: CheckoutDeps): Promise<StripeCheckout> {
   if (deps.stripe) return deps.stripe;
   /* Annotated rather than returned directly: this line is where the real client
      is checked against `StripeCheckout`, so an SDK whose signatures moved is a
      compile error here instead of a runtime surprise on the route that sells. */
-  const client: StripeCheckout = stripeClient();
+  const client: StripeCheckout = await stripeClient();
   return client;
 }
 
@@ -494,7 +494,7 @@ export async function startCheckout(
   deps: CheckoutDeps = {},
 ): Promise<CheckoutStarted> {
   return await orBillingUnavailable("checkout", async () => {
-    const stripe = billingClient(deps);
+    const stripe = await billingClient(deps);
     const tier = await tierToSell(request.tierId);
     /* **The price's own mode, checked against the deployment's.** A row written
        by a run of scripts/stripe-setup.ts against the other mode's key is the way
@@ -574,7 +574,7 @@ export async function openPortal(
   deps: CheckoutDeps = {},
 ): Promise<{ url: string }> {
   return await orBillingUnavailable("portal", async () => {
-    const stripe = billingClient(deps);
+    const stripe = await billingClient(deps);
     const account = await readAccount(ownerId);
     if (!account?.stripeCustomerId) {
       throw httpError(409, NOTHING_TO_MANAGE.message);
@@ -611,7 +611,7 @@ export async function confirmCheckout(
       throw httpError(400, "Expected { sessionId } to be a Stripe Checkout Session id");
     }
 
-    const stripe = billingClient(deps);
+    const stripe = await billingClient(deps);
     /* **The account is read before the session**, so a reader who has never
        checked out cannot make this server retrieve arbitrary session ids. */
     const account = await readAccount(ownerId);

@@ -151,13 +151,16 @@ function signingSecret(): string {
  * The signature covers a timestamp as well as the payload, and the SDK enforces
  * a tolerance window, so a captured delivery cannot be replayed indefinitely.
  */
-export function verifyEvent(raw: Buffer, signature: string | undefined): Stripe.Event {
+export async function verifyEvent(
+  raw: Buffer,
+  signature: string | undefined,
+): Promise<Stripe.Event> {
   if (!signature) throw new WebhookRefused(400, "No stripe-signature header");
   const secret = signingSecret();
 
   let event: Stripe.Event;
   try {
-    event = stripeClient().webhooks.constructEvent(raw, signature, secret);
+    event = (await stripeClient()).webhooks.constructEvent(raw, signature, secret);
   } catch (err) {
     /* The reason is never echoed to the caller. "No signatures found matching
        the expected signature" and "timestamp outside the tolerance zone" are
@@ -253,7 +256,7 @@ export async function serveStripeWebhook(
   try {
     const raw = await readRawBody(req);
     const signature = req.headers["stripe-signature"];
-    event = verifyEvent(raw, Array.isArray(signature) ? signature[0] : signature);
+    event = await verifyEvent(raw, Array.isArray(signature) ? signature[0] : signature);
   } catch (err) {
     const status = err instanceof WebhookRefused ? err.status : 400;
     /* Logged with the reason, answered without it. */

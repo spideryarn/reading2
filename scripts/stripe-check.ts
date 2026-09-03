@@ -232,7 +232,7 @@ async function main(): Promise<void> {
   loadEnvLocal();
   const problem = stripeConfigProblem();
   if (problem) throw new Error(problem);
-  const stripe = stripeClient();
+  const stripe = await stripeClient();
 
   console.log(`\nStripe check — ${expectedLivemode() ? "LIVE" : "test"} mode. Reads only; changes nothing.\n`);
 
