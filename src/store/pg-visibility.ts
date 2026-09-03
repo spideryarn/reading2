@@ -37,6 +37,7 @@ import { getDb } from "../db/client.js";
 import { articleVisibilityChanges, articles } from "../db/schema.js";
 import { currentOwnerId } from "../owner.js";
 import type { Visibility, VisibilityState, VisibilityStore } from "./contracts.js";
+import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { ownedSlug } from "./owned-slug.js";
 
@@ -91,7 +92,7 @@ export function lockedArticleQuery(
     .limit(1);
 }
 
-export const pgVisibilityStore: VisibilityStore = {
+const rawPgVisibilityStore: VisibilityStore = {
   async set(slug: string, to: Visibility, rightsConfirmed: boolean): Promise<VisibilityState> {
     return getDb().transaction(async (tx) => {
       const [row] = await lockedArticleQuery(tx, slug);
@@ -129,3 +130,6 @@ export const pgVisibilityStore: VisibilityStore = {
     }, READ_COMMITTED);
   },
 };
+
+/** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
+export const pgVisibilityStore: VisibilityStore = guardDbStore("visibility", rawPgVisibilityStore);

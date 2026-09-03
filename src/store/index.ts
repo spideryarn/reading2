@@ -190,7 +190,19 @@ if (STORE === "postgres") {
 }
 
 /**
- * Every Postgres store goes through here, and only the Postgres ones do.
+ * Which of the two a seam gets — and, for the Postgres one, a second guard.
+ *
+ * **The wrapping here is now redundant, and deliberately so.** Every Postgres
+ * store this helper is handed already comes out of `guardDbStore` at its own
+ * export (`pgCommentStore` in pg-comments.ts, and so on for all seventeen), so
+ * `guardDbStore` sees a store that is already marked and hands the same object
+ * straight back. Guarding at the export is what makes the guard travel with the
+ * store rather than depend on whoever selects it — the 2026-08-27 accident in
+ * docs/postmortems/260827c-unguarded-job-store-and-the-migration-that-migrated-the-laptop.md
+ * was three selection sites, one of which forgot. Keeping the call here costs
+ * nothing (the early return in db-errors.ts, proved by
+ * tests/store-guard-idempotent.test.ts) and means a store added tomorrow is
+ * wrapped even if its author has read none of this.
  *
  * The filesystem stores are not wrapped, deliberately. They bind no parameters,
  * so they cannot leak one — and routes.ts reads `err.code === "ENOENT"` off
