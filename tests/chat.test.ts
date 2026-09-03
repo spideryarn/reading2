@@ -267,21 +267,24 @@ describe("fitView in a mode — the band replaces the columns", () => {
   });
 
   /**
-   * **The number the stylesheet has to agree with.**
+   * **The number the stylesheet used to have to agree with, and no longer
+   * carries at all.**
    *
-   * styles.css § a band with no room widens the fixed `.mode-band` to the window
-   * below `843px`, and this was the only thing keeping that literal honest
-   * until 2026-08-28. They were out of step for a while and the failure was
-   * total rather than untidy: `fitMode` handed the band `modeW: 0` from 855
+   * styles.css § a band with no room widened the fixed `.mode-band` to the
+   * window below `843px`, and this was the only thing keeping that literal
+   * honest until 2026-08-28. They were out of step for a while and the failure
+   * was total rather than untidy: `fitMode` handed the band `modeW: 0` from 855
    * down, the CSS widened it only from 743 down, and between those two every
    * mode was a correctly-positioned element nought pixels wide. Nothing threw.
-   * Move either number and this test is what tells you about the other.
    *
-   * It is no longer the only thing: `tests/spine-width.test.ts` reads the query
-   * out of styles.css and checks it against `MODE_MIN + PROSE_MIN + SPINE_W - 1`
-   * directly, which is the half this test cannot do — this one only knows what
-   * layout.ts believes, and both halves of the pair are needed to catch a drift
-   * in the stylesheet alone.
+   * **The literal went on 2026-09-03**, because it could not be right in both
+   * spine states: the crossover is the window *minus the rail*, so it is 844
+   * with the rail on and 832 with `?spine=0`, and a media query cannot see a
+   * query parameter. `App.tsx` writes `band-covers` from `fit.modeW === 0` and
+   * the stylesheet keys off that instead — so the assertion below is now the
+   * *whole* statement of the crossover rather than one of a pair, and moving it
+   * moves the page. `tests/spine-width.test.ts` is what stops the query coming
+   * back.
    */
   it("hands over to the stylesheet at exactly 844/843", () => {
     expect(band(844).modeW).toBe(MODE_MIN); // still a band beside the prose

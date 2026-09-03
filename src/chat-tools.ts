@@ -52,7 +52,9 @@
  * as src/converse.ts, which has the fuller version of the argument.
  */
 import { Readability } from "@mozilla/readability";
-import { JSDOM } from "jsdom";
+/* jsdom on first use rather than at module scope — src/jsdom-lazy.ts says why.
+   `articleLinks` below stays synchronous. */
+import { jsdom } from "./jsdom-lazy.js";
 import type { Block, Meta, ToolRun } from "./types.js";
 import { isSearchable } from "./block-policy.js";
 import { FetchFailure, fetchDocument } from "./fetch.js";
@@ -796,6 +798,7 @@ function linkFrom(
 }
 
 export function articleLinks(blocks: Block[], baseUrl?: string): ArticleLink[] {
+  const { JSDOM } = jsdom();
   const dom = new JSDOM("<!doctype html><template></template>");
   const template = dom.window.document.querySelector("template");
   if (!template) return [];
@@ -932,6 +935,7 @@ async function readWebPage(url: unknown, ctx: ToolContext): Promise<ToolOutcome>
        ingested read the same. `doc.url` and not the requested one: it is the
        base relative links resolve against, and a `doi.org` address is not where
        the piece lives. */
+    const { JSDOM } = jsdom();
     const dom = new JSDOM(doc.text, { url: doc.url });
     const parsed = new Readability(dom.window.document).parse();
     const body = parsed?.textContent?.trim();

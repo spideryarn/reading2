@@ -26,8 +26,10 @@ import { HomeLogo } from "./HomeLogo.js";
 import { isAdmin } from "../admin.js";
 import { AdminFeedbackPage, AdminHome, AdminUsersPage } from "./AdminPage.js";
 import { LandingPage } from "./LandingPage.js";
+import { NotFoundPage } from "./NotFoundPage.js";
 import { PrivacyPage } from "./PrivacyPage.js";
 import { FeaturesPage } from "./FeaturesPage.js";
+import { PricingPage } from "./PricingPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
@@ -370,6 +372,22 @@ export function App() {
        landing page's "everything it does" link has to land somewhere a
        stranger can read. */
     if (route.kind === "features") return <FeaturesPage />;
+    /* The fifth, and the least arguable of them: a price somebody has to sign
+       up to read is the thing people complain about, and this is the page one
+       person sends another. */
+    /* `readerId={null}` is what stops the page asking `/api/billing/usage` who
+       this is — a 401 on the one page a stranger is most likely to be sent, for
+       a line that is not about them. PricingPage.tsx § which plan. */
+    if (route.kind === "pricing") return <PricingPage readerId={null} />;
+    /* **The sixth, since 2026-09-03, and the only one that is not a page
+       somebody was sent.** A stranger at an address nobody minted is exactly
+       the reader this gate's default fails: the pitch at `/asdf` is a plausible
+       page for an address that means nothing, which is the silence the 404 page
+       exists to break — and it is worse signed out than signed in, because a
+       stranger has no corner logo and no shelf to notice they are not on.
+       Bare, like `PrivacyPage` above: `NotFoundPage` draws its own way home.
+       docs/plans/260903j-not-found-page.md. */
+    if (route.kind === "not-found") return <NotFoundPage signedIn={false} />;
     if (route.kind !== "read") return <LandingPage />;
     return <ArticlePage slug={route.slug} view={route.view} readerId={null} />;
   }
@@ -418,7 +436,16 @@ function SignedIn({
   // The shelf is home, so it gets no way-home logo — a link to the page you are
   // already on is a dead control, and Library.tsx names the app in its own
   // `<h1>` anyway. Everywhere else, the corner. See HomeLogo.tsx.
-  if (route.kind === "library") return <Library />;
+  /* **`key`, and it is the account switch rather than a hint to React.** A
+     direct A→B sign-in keeps this element in the same place in the tree, so
+     without a key React reuses the instance and `useShelf`'s state — the shelf,
+     the Undo strip's title, an open rename — survives into the new reader's
+     first commit. The hook clears all of it, but a passive effect runs *after*
+     that commit, so there is a frame with A's articles under B's session. The
+     key removes the frame by removing the instance. GPT Sol's review of
+     docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md
+     § Stage 5, 2026-09-03. */
+  if (route.kind === "library") return <Library key={user.id} readerId={user.id} />;
   // The corner logo, because this is not home and the reader may have arrived
   // straight here from a bookmarklet with no shelf behind them.
   if (route.kind === "add")
@@ -462,6 +489,28 @@ function SignedIn({
         <FeaturesPage />
       </>
     );
+  if (route.kind === "pricing")
+    return (
+      <>
+        <HomeLogo />
+        {/* **`key`, for the same reason the shelf above has one.** A direct A→B
+            sign-in leaves the route alone, so without this React keeps the
+            instance and `useBilling`'s one effect never re-runs — B would read
+            A's tier and A's usage count. Keyed and identified, like `Library`.
+            GPT Sol's review of this change, 2026-09-03. */}
+        <PricingPage key={user.id} readerId={user.id} />
+      </>
+    );
+  /* An address nobody minted, with the corner logo every other standalone page
+     gets — signed in there *is* a shelf for it to link at, which is the same
+     reason the privacy page is bare above and dressed here. NotFoundPage.tsx. */
+  if (route.kind === "not-found")
+    return (
+      <>
+        <HomeLogo />
+        <NotFoundPage signedIn />
+      </>
+    );
   // Not under /read/, and so not inside `ArticlePage`'s shared shell: this page
   // has no article behind it. docs/project/reader-profile.md.
   if (route.kind === "profile")
@@ -473,15 +522,20 @@ function SignedIn({
     );
   /* **The admin pages, and the check here is not the gate.**
 
-     A reader who is not the administrator gets the shelf, exactly as they would
-     for `/nonsense` — router.ts has no 404 page by design, and an address you
-     are not allowed to use is an address that does not mean anything to you.
+     A reader who is not the administrator gets the shelf — **and since
+     2026-09-03 that is no longer the same thing as `/nonsense`**, which now has
+     a page of its own (NotFoundPage.tsx). This one deliberately did not follow
+     it. The reason is the one docs/project/admin.md already gives for the
+     server answering 403 rather than 404: these pages exist, visibly, in the
+     bundle every signed-in reader downloads, so pretending the address means
+     nothing buys nothing and costs a true sentence.
+
      Nothing is being hidden by it: these components are in the bundle every
      signed-in reader downloads, so the only refusal that counts is the server's
      on `/api/admin/`, and it would refuse a hand-written `fetch` from this page
      just the same. src/admin.ts § the two halves. */
   if (route.kind === "admin") {
-    if (!isAdmin(user.id)) return <Library />;
+    if (!isAdmin(user.id)) return <Library key={user.id} readerId={user.id} />;
     return (
       <>
         <HomeLogo />
@@ -2293,7 +2347,24 @@ function Reader({
          fills. It is `fit.alone` and nothing computed here on purpose — the
          same fact under two definitions is how `proseVisible` came to exist.
          layout.ts § `Fit.alone`, styles.css § plain, centred. */
-      className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}`}
+      /* `band-covers` is the same idea and exists for a sharper reason: it is
+         the *stylesheet's* only way to know that the mode band has no room
+         beside the prose and is lying over it instead. That crossover is
+         `MODE_MIN + PROSE_MIN` against the window **minus the rail**, so it
+         moves with `?spine=0` — and a media query cannot see a query
+         parameter. It was one for six days (`@media (max-width: 843px)`), and
+         from 832 to 843 with the rail off the two disagreed: layout.ts
+         squeezed the table to make room for a band the stylesheet had already
+         thrown over the article.
+
+         So the fact is written here, from the one number that computes it,
+         beside the `--mode-w` it is derived from. `fit.modeW === 0` is also
+         true when no band is open at all, which is why every rule keyed off
+         this class also names `.mode-band` — styles.css § a band with no room,
+         tests/spine-width.test.ts. */
+      className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}${
+        fit.modeW === 0 ? " band-covers" : ""
+      }`}
       /* The wrapper must be as wide as its content for the sticky bars inside it
          to have anywhere to slide — a sticky element is clamped to its containing
          block, so one exactly its own width has a sticky range of zero and never

@@ -14,7 +14,10 @@ written, and a fourth was found by a review. What is checked mechanically and
 what a person has to re-read are both listed below.
 
 Written 2026-09-02, when there were still no real readers, which is the cheapest moment to write
-one.
+one. **That moment has passed**: Stripe went live on 2026-09-03, sign-up is open to anyone and
+there are paying readers, so the two soft spots listed under *Still open* below stopped being
+theoretical the same day. The page's own wording was moved from "alpha" to "beta" then, and its
+`LAST_UPDATED` bumped with it.
 
 > We're still in Alpha, so this doesn't have to be fancy/long. But let's aim to be clear about what
 > we store/process and why, and what models & third-parties/subprocessors etc. […] We want it to be
@@ -30,9 +33,10 @@ Asked, on the day, because none of them could be read off the code:
 1. **Who is responsible.** Greg Detre, sole trader, in the UK — but *"if possible for now let's not
    even mention me"*. So the page says "built and run by one person in London, United Kingdom" and
    gives the address. **This is the one soft spot in the policy**: UK GDPR's Article 13 wants the
-   controller *identified*, and "one person in London" identifies nobody. It is a defensible alpha
-   position with an address that reaches a real human on it, and it is the first thing to change
-   when there are readers who are not friends of Greg's.
+   controller *identified*, and "one person in London" identifies nobody. It was a defensible
+   position while every reader was a friend of Greg's, and it has an address that reaches a real
+   human on it — but there are paying readers as of 2026-09-03, so the condition it was waiting on
+   has been met. It is the first thing to change.
 2. **Deletion and export**: *"email us and we'll do it"*. True today — there is no
    account-deletion endpoint, only per-article delete — and the page says so in those words rather
    than implying a button. Build the button and this paragraph changes.
@@ -77,7 +81,7 @@ in London, and that server logs hold a status rather than an answer.
 **Still open, and each needs a decision rather than a sentence:**
 
 1. **The controller is not identified.** Sol's verdict is unambiguous — Article 13 wants the
-   controller's identity, there is no alpha exception, and an email address is mitigation rather than
+   controller's identity, there is no beta exception, and an email address is mitigation rather than
    compliance. Greg's instruction stands and is recorded above; this is the thing to revisit first.
 2. **No transfer safeguard is named** for sending data to US providers. Linking a provider's consumer
    privacy policy is not a transfer mechanism, and the page currently does no more than that.
@@ -129,7 +133,7 @@ arrangement would have hidden, which is the point of telling them.
 
 ## What protects us, and what was deliberately left out
 
-Four paragraphs at the foot, and they are the whole of it: **this is alpha** (don't put anything
+Four paragraphs at the foot, and they are the whole of it: **this is beta** (don't put anything
 sensitive in it, we may reset data), **what you add is your responsibility** (the one that actually
 matters for a tool whose whole job is ingesting other people's writing), **not for under-18s**, and
 **this page will change**.

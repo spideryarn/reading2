@@ -62,6 +62,8 @@
     "eval:quiz": "tsx evals/quiz.ts",
     "eval:embeddings": "tsx evals/embedding-retrieval.ts",
     "eval:dictation-vocab": "tsx evals/dictation/bench-vocabulary-sources.ts",
+    "eval:dictation-gate": "tsx evals/dictation/gate-models.ts",
+    "eval:dictation-models": "tsx evals/dictation/bench-models.ts",
     "typecheck:committed": "tsx scripts/typecheck-committed.ts"
   },
   "keywords": [],

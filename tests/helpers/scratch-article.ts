@@ -37,11 +37,14 @@
  * that loader, so the zero-copy refusal, the raw-source check and the publish
  * guards all still run. There is no second path here to keep honest.
  *
- * ## The lock, and what it costs
+ * ## The lock, and why these seeds do not take it
  *
- * `loadArticleIntoPg` takes `RUN_LOCK` (./run-lock.ts) around its load window,
- * which serialises every seed in the whole test run. Measured 2026-09-01, 16
- * concurrent processes each seeding one *uniquely named* article:
+ * `loadArticleIntoPg` **can** take `RUN_LOCK` (./run-lock.ts) around its load
+ * window, and when it does it serialises that seed against every other suite
+ * holding the same key. **Nothing here asks it to**, and that is deliberate:
+ * `serialise` defaults to `false` (./load-article.ts § `LoadOptions.serialise`)
+ * and this file never passes it. Measured 2026-09-01, 16 concurrent processes
+ * each seeding one *uniquely named* article:
  *
  * ```
  * with the lock     max seed 4.9–6.1s   (the last one waits for fifteen turns)
@@ -65,11 +68,27 @@
  *
  * That is fixed at the source: the insert is conflict-tolerant and the row is
  * read back and compared (src/store/artifacts-pg.ts § `writeRawSource`,
- * tests/store-raw-source-race.test.ts). So the shared row is now genuinely safe
- * unserialised, and for these suites the lock really is pure queue. It is kept
- * anyway for now, because removing it is a change to `loadArticleIntoPg`'s
- * contract and belongs in one deliberate commit rather than as a side effect of
- * converting a test file.
+ * tests/store-raw-source-race.test.ts). So the shared row is genuinely safe
+ * unserialised, and these seeds run without the queue.
+ *
+ * **This paragraph used to end by saying the lock was "kept anyway for now".**
+ * It was not, and the three-commit sequence is the interesting part — all on
+ * 2026-09-01:
+ *
+ * - `9671fcfa` (13:20) wrote the paragraph. **It was true when written.**
+ * - `df7a7980` (14:45) flipped `serialise` to opt-in in `./load-article.ts` and
+ *   did not touch this file. The paragraph became false here, and nothing said
+ *   so.
+ * - `e3ef75fd` (15:13) **edited this very paragraph** — adding the `raw_sources`
+ *   narrative above — and left its top and tail describing the world before the
+ *   flip.
+ *
+ * So it was not merely un-updated: it was revised, twice, by people looking
+ * straight at it. It then stayed wrong for two days and was believed by a plan,
+ * by the brief drawn out of it, and by that plan's reviewer —
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § B0, which also got this attribution wrong on the first attempt and blamed
+ * `df7a7980` for prose it never touched.
  */
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";

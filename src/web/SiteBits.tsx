@@ -38,7 +38,7 @@
 import { ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "./Link.js";
-import { FEATURES_HREF, PRIVACY_HREF } from "./router.js";
+import { FEATURES_HREF, PRICING_HREF, PRIVACY_HREF } from "./router.js";
 import type { Shot as ShotRecord } from "./shots.js";
 
 /** The width the page shell runs to. Prose inside it stays much narrower. */
@@ -89,6 +89,13 @@ export function SiteNav({ here }: { here: "home" | "features" }) {
               Features
             </Link>
           )}
+          {/* Greg, 2026-09-03, when Stripe went live: pricing wants a link at
+              the top, not only in the footer. `sm:` for the same reason Privacy
+              is — the bar is measured to fit at 320px with two links in it, and
+              a third always-on entry puts it back over. */}
+          <Link href={PRICING_HREF} className={`${link} tw:hidden tw:sm:inline`}>
+            Pricing
+          </Link>
           <Link href={PRIVACY_HREF} className={`${link} tw:hidden tw:sm:inline`}>
             Privacy
           </Link>

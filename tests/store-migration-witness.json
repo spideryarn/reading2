@@ -15,14 +15,13 @@
   "notInstrumented": [
     "src/store/blobs-fs.ts \u2014 selected by credentials, out of scope"
   ],
-  "knownBlindSpot": "tests/store-fs-write-chains.test.ts loads ai-calls-fs under a second module id (import('...?copy=2')) and vi.mocks node:fs/promises, so the instrument cannot see it. That duplication is the file's own subject. One file, explained, not a hole.",
   "unresolved": [
     "tests/gjd-remote-tab-lifecycle.test.ts"
   ],
   "counts": {
     "testFilesOnDisk": 588,
     "touchesFilesystemStore": 88,
-    "runsAndTouchesNothing": 499,
+    "runsAndTouchesNothing": 498,
     "unresolved": 1
   },
   "touched": {
@@ -1109,7 +1108,6 @@
     "tests/step-job-force.test.tsx",
     "tests/stop-details.test.ts",
     "tests/store-artefact-manifest.test.ts",
-    "tests/store-artefacts-pg.test.ts",
     "tests/store-block-reads.test.ts",
     "tests/store-carried-columns.test.ts",
     "tests/store-checkpoints.test.ts",
@@ -1177,5 +1175,9 @@
     "tests/worktree-port.test.ts",
     "tests/worktree-sweep.test.ts",
     "tests/zoomable.test.ts"
+  ],
+  "knownBlindSpots": [
+    "tests/store-fs-write-chains.test.ts loads ai-calls-fs under a second module id (import('...?copy=2')) and vi.mocks node:fs/promises, so the instrument cannot see it. That duplication is the file's own subject.",
+    "THE INSTRUMENT RECORDS CALLS, NOT READS. A test that imports a non-function export from a condemned module and merely reads it executes nothing the proxy can observe, so it lands in ranAndTouchedNothing. Found by GPT Sol reviewing stage A, 2026-09-03: tests/store-artefacts-pg.test.ts reads PATHS from artifacts-fs and was filed as touching nothing. A static sweep for runtime imports of a condemned module across all test files found that to be the only member of the class, and it now has a registry entry carrying evidence 'static-only'. THIS IS WHY ranAndTouchedNothing IS NOT PROOF ON ITS OWN, and why the registry's hole check re-derives the static universe on every run rather than trusting this file."
   ]
 }
