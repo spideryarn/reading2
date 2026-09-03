@@ -131,7 +131,7 @@ const BOB: AdminUser = {
  * on nobody's list.
  */
 const GREG: AdminUser = { ...ALICE, id: ADMIN_USER_ID_LOCAL, email: ADMIN_EMAIL_LOCAL };
-const OTHER_ACCOUNT = "9a1f4c2e-7b3d-4a58-9e12-0c6d8f5a41b7";
+const OTHER_ACCOUNT = "3f7b19d4-6c28-4e51-8a03-b5d7e2914c6f";
 
 const jsonOk = (body: unknown) =>
   new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
