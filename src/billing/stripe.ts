@@ -39,7 +39,6 @@
  */
 import Stripe from "stripe";
 
-import { type PaidTier, tierSpec } from "./tiers.js";
 
 /**
  * The Stripe API version every call is made against.
@@ -187,27 +186,6 @@ export function assertLivemode(livemode: boolean, what: string): void {
         `${expected ? "live" : "test"}-mode Stripe objects`,
     );
   }
-}
-
-/**
- * The `price_…` a tier is sold at.
- *
- * Created by `scripts/stripe-setup.ts` and pasted into the environment. Not a
- * secret — it appears in Checkout — so these travel on the `gjd-remote
- * push-env` allowlist with the rest of the configuration.
- *
- * @throws {StripeConfigError} when unset, because a checkout with no price is
- * a 503, not an empty basket.
- */
-export function priceIdFor(tier: PaidTier): string {
-  const spec = tierSpec(tier);
-  const id = process.env[spec.envVar]?.trim();
-  if (!id) {
-    throw new StripeConfigError(
-      `${spec.envVar} is not set — run \`npx tsx scripts/stripe-setup.ts --apply\` and put the price id in .env.local`,
-    );
-  }
-  return id;
 }
 
 /** Reset the memoised client. Tests only; the key is read from the env. */

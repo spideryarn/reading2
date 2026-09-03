@@ -2,10 +2,11 @@
 
 Everything the reader sees in the browser. The page has **three regions**: the **spine** (where you
 are in the article), the **prose** (what you are reading), and between them a **band** belonging to
-whichever mode is on. The first two are permanent; the band is the surface glossary, summaries,
-ideas, quotes, search, diagram and chat take turns in.
+whichever mode is on. The first two are permanent; the band is the surface the modes take turns in —
+[the list is below](#the-modes-in-the-band), and naming them here as well only means one of the two
+goes stale.
 
-**Two of the ten modes open no band at all**, and the default is one of them. `plain` is the article
+**Two of the thirteen modes open no band at all**, and the default is one of them. `plain` is the article
 by itself — no band, and no gist columns either — and it is what a bare `/read/<slug>` shows since
 2026-08-31; `hierarchy` is the granularity columns beside the prose, which is what the default used
 to be. So *a mode is open* and *a band is open* are separate questions
@@ -26,6 +27,16 @@ of compression, down the page for position and across for detail. Read that firs
   invariants a stream needs and a single response does not.
 - **Never substitute generated text for the prose,** and render model output as text, not HTML.
 - **One payload, no network on zoom** — meta, blocks and tree arrive together.
+- **Pressing a mode with nothing in it runs it; arriving at one does not.** Five surfaces are backed
+  by a paid step — Glossary, Ideas, Quotes, Timeline, and the Sketch picture inside Diagram — and
+  since 2026-09-02 a press on the bar's button starts the job with no second click. A pasted link, a
+  Back step and a link in from the metadata page all show the empty state and its button, and spend
+  nothing: the press is recorded as data by the control that saw it
+  ([`src/web/activation.ts`](../../src/web/activation.ts)), because a mount is not a click. One
+  automatic attempt per `(slug, step)` per tab session is what keeps a failure from looping —
+  [glossary.md § That decision was reversed](glossary.md#that-decision-was-reversed-on-2026-09-02-and-the-loop-is-still-closed-structurally),
+  which is the decision this reverses and the reason it still holds.
+  [`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts) is the whole rule, in one place.
 
 ## The docs
 
@@ -43,6 +54,10 @@ of compression, down the page for position and across for detail. Read that firs
 
 ### The modes in the band
 
+- **[260828aw-outline-mode.md](../plans/260828aw-outline-mode.md)** — the whole document as one
+  nested list, deep where you are reading and shallow everywhere else. The plan is the reference:
+  there is no `outline.md` yet, and it shares the tree with
+  [granularity-zoom.md](granularity-zoom.md) rather than having a structure of its own.
 - **[glossary.md](glossary.md)** — the terms this piece uses, defined from the piece and underlined
   wherever it uses them. Open it for the two bugs from the previous version it is shaped around.
 - **[summaries.md](summaries.md)** — a sentence on every part of the article, the depth control that
@@ -63,6 +78,10 @@ of compression, down the page for position and across for detail. Read that firs
   notice written in the past tense on purpose. Open it for how much of it is actually built.
 - **[diagram.md](diagram.md)** — the article's shape as a picture: three of them, what each can and
   cannot promise, the five that were cut, and why nothing was installed to draw them.
+
+The last two band modes — **chat** and **remember**, and the quiz that is remember's other half — are
+under the next heading instead, because what they are about is a passage rather than the whole piece.
+That is eleven of the thirteen; `plain` and `hierarchy` are the two that open no band.
 
 ### Marking a passage, and asking about one
 
@@ -112,8 +131,10 @@ of compression, down the page for position and across for detail. Read that firs
 - **[copy.md](copy.md)** — the words a reader sees when something fails, why they all live in one
   file, and the bracketed code at the end of every message.
 - **[website-text.md](website-text.md)** — the pages that are about Spideryarn rather than about an
-  article: the privacy policy and what in it is pinned by a test, the landing page, and the one
-  address a reader writes to.
+  article: the landing page, and the one address a reader writes to.
+- **[privacy.md](privacy.md)** — what we do with a reader's data and the page that says so: the four
+  decisions Greg made, what a bug report carries, and which claims are pinned by a test rather than
+  by somebody remembering.
 
 ## Where the code is
 

@@ -207,7 +207,7 @@ describe("a job the server received and refused", () => {
     expect(polls()).toBe(1);
 
     await act(async () => {
-      await ideas?.find();
+      await ideas?.regenerate();
     });
     await settle();
 
@@ -240,7 +240,7 @@ describe("a job the server received and refused", () => {
     await answerPolls();
 
     await act(async () => {
-      await ideas?.find();
+      await ideas?.regenerate();
     });
     await settle();
     await answerPolls();
@@ -248,7 +248,7 @@ describe("a job the server received and refused", () => {
 
     refusing = false;
     await act(async () => {
-      await ideas?.find();
+      await ideas?.regenerate();
     });
     await settle();
     await answerPolls();

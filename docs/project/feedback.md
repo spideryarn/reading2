@@ -193,10 +193,18 @@ all.
 
 ## Reading the reports
 
-There is no admin view. The first ones get read with `psql` against the `feedback` table
-([database.md](database.md)) and in Sentry
-([sentry-error-monitoring.md](sentry-error-monitoring.md)). Building a view is worth doing once
-there are reports to read.
+**[`/admin/feedback`](admin.md)**, since 2026-09-02 — every reader's reports, newest first, with
+the mirror state written as words. `psql` against the `feedback` table
+([database.md](database.md)) still works, and Sentry
+([sentry-error-monitoring.md](sentry-error-monitoring.md)) still has its copy.
+
+**The page exists because Sentry was the only reader, and Sentry is the *second* destination.**
+Greg filed a report on production on 2026-09-02 and asked where it had gone; it was answered out
+of Sentry, because no agent holds a production `DATABASE_URL` and Vercel's runtime logs never
+return in time. That works only for reports Sentry received — which is exactly the set that
+`mirror_attempted_at is not null and mirrored_at is null` excludes, and that query is advertised
+two paragraphs down as the way to find a stranded report. A mirror being the only way to read the
+original is backwards. [260902l-admin-feedback-page.md](../plans/260902l-admin-feedback-page.md).
 
 Two columns worth knowing when you do:
 

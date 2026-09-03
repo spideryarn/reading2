@@ -40,7 +40,7 @@ const HOISTED = vi.hoisted(() => {
 });
 
 import { mintId } from "../src/ids.js";
-import { MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
+import { MAX_FEEDBACK_ANSWER_CHARS, MAX_FEEDBACK_URL_CHARS } from "../src/types.js";
 import type { FeedbackReport, FeedbackSubmission, NewFeedback } from "../src/store/contracts.js";
 import { acceptAny, AUTHED_HEADERS, TEST_EMAIL } from "./helpers/authed.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
@@ -208,7 +208,7 @@ function minimal(extra: Record<string, unknown> = {}): Record<string, unknown> {
     body: "Open an article and press the button and nothing at all happens",
     kind: "problem",
     consented: false,
-    routeKind: "read",
+    url: "https://www.spideryarn.com/read/an-article?q=footnotes",
     slug: "an-article",
     buildCommit: "abc1234",
     ...extra,
@@ -310,7 +310,7 @@ describe("POST /api/feedback", () => {
       body: "Open an article and press the button and nothing at all happens",
       kind: "problem",
       consented: false,
-      routeKind: "read",
+      url: "https://www.spideryarn.com/read/an-article?q=footnotes",
       slug: "an-article",
       buildCommit: "abc1234",
       diagnostics: null,
@@ -581,10 +581,50 @@ describe("POST /api/feedback", () => {
     expect(written).not.toContain("MY_SECRET");
   });
 
-  it("refuses a route kind that is not one of ours", async () => {
-    const reply = await call(minimal({ routeKind: "wherever" }));
-    expect(reply.status).toBe(400);
-    expect(String(reply.body.error)).not.toContain("wherever");
+  /**
+   * **What replaced the closed vocabulary**, 2026-09-02. `route_kind` was ten
+   * route names and a CHECK; it is now the address, and `isWebUrl` at the seam
+   * is the whole of the validation — src/db/schema.ts § `url`.
+   *
+   * The case that matters is the first one. This value is rendered by the
+   * admin inbox, and `javascript:` in an `href` is the bug the allowlist in
+   * src/urls.ts exists to stop; the inbox renders it as text as well, which is
+   * belt and braces rather than the rule.
+   */
+  it("refuses an address that is not http(s)", async () => {
+    for (const url of ["javascript:alert(1)", "data:text/html,<script>", "not a url at all"]) {
+      const reply = await call(minimal({ url }));
+      expect([url, reply.status]).toEqual([url, 400]);
+      /* The error never quotes the value back — the same rule every other
+         refusal here follows, so a log line cannot become the payload. */
+      expect(String(reply.body.error)).not.toContain(url);
+    }
+  });
+
+  it("refuses an address past the cap, and takes one exactly at it", async () => {
+    const pad = (n: number) => `https://www.spideryarn.com/read/a?q=${"x".repeat(n)}`;
+    const exact = pad(MAX_FEEDBACK_URL_CHARS - pad(0).length);
+    expect(await call(minimal({ url: `${exact}x` })).then((r) => r.status)).toBe(400);
+    /* 201, like every other accepted report here — a row was created. */
+    expect(await call(minimal({ url: exact })).then((r) => r.status)).toBe(201);
+  });
+
+  /**
+   * **A bundle loaded before the change still gets its report filed.**
+   *
+   * The one endpoint where a client and a server disagreeing is likely to be
+   * the very thing the reader is trying to report, so an absent `url` is
+   * `null` in the row rather than a 400 — the same call
+   * `LEGACY_ANSWER_FIELDS` makes for the old three answers. A *present* value
+   * that is not an address is still refused, because that can only be a client
+   * we wrote getting it wrong.
+   */
+  it("files a report from an older bundle that sends no url at all", async () => {
+    const body = minimal();
+    delete body.url;
+    const reply = await call(body);
+    expect(reply.status).toBe(201);
+    expect(submitted[0]).toMatchObject({ url: null, slug: "an-article" });
   });
 
   it("refuses an anonymous request, and takes the same one signed in", async () => {

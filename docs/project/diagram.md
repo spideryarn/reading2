@@ -1150,18 +1150,19 @@ rides free; Trail at its widest, where there is only one chip group and
 everything fits. The costly combination — Drift at the ideal width — was in
 neither.
 
-`.diag-head` has no `flex-wrap`, so it cannot gain a flex line at any width: it
+`.band-head` has no `flex-wrap`, so it cannot gain a flex line at any width: it
 shrinks its heading instead.
 
 **And that argument had the same shape as the two before it — true about the
 thing it named, and not the whole story.** A row that cannot gain a flex line
 can still get taller, because the flexible item inside it wraps its own text
 once it has been shrunk far enough. The only thing stopping that here was that
-`.diag-head`'s heading is the single unbreakable word "Diagram" — a fact about
+`.band-head`'s heading is the single unbreakable word "Diagram" — a fact about
 today's copy, which would stop being true the moment the heading became two
-words. `.diag-head h2` now declares `min-width: 0`, `overflow: hidden`,
-`text-overflow: ellipsis` and `white-space: nowrap`, the same four
-`.chat-head h2` has carried all along, and
+words. `.band-head h2` now declares `min-width: 0`, `overflow: hidden`,
+`text-overflow: ellipsis` and `white-space: nowrap` — since 2026-09-02 for
+every band's head, not only this one, which is what the single `.band-head`
+family in `styles.css` § mode band is for — and
 [`tests/diagram-css.test.ts`](../../tests/diagram-css.test.ts) holds them there.
 `min-width: 0` is the load-bearing one: without it a flex item's automatic
 minimum is its longest word, so it never shrinks far enough for
@@ -1169,7 +1170,7 @@ minimum is its longest word, so it never shrinks far enough for
 
 **Then measured, at last** — 2026-08-31, on a throwaway preview page since
 deleted, 96 widths from 180px to 560px in 4px steps. The icon costs no height at any of them, in either
-row: `.diag-head` is 40.91px shown or hidden, at 288px and at 400px alike, and
+row: `.band-head` is 40.91px shown or hidden, at 288px and at 400px alike, and
 `.diag-opts` is 53.77px at 288 and 29.78px at 400 either way — the difference
 between those two being the chip groups wrapping on their own, which is what
 tells you the icon has genuinely left that row. The heading stays on one line at
@@ -1480,6 +1481,24 @@ glossary, and three consequences follow from it rather than from taste:
 
 - **Never the default and never in an ingest.** `sketch` is off
   `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED`, so nothing sweeps it in.
+- **Picking the Sketch chip draws it, if nobody ever has.** Since 2026-09-02,
+  and it is the chip's `onClick` that arms it, never `?diagram=` — that is query
+  state, so Back and Forward move it, and a pasted
+  `?mode=diagram&diagram=sketch` must not buy a two-minute call. *Opening
+  Diagram costs nothing*: the mode lands on a picture drawn from the tree, so
+  the bar's Diagram button arms nothing at all.
+  [`src/web/activation.ts`](../../src/web/activation.ts),
+  [`useAutoRun.ts`](../../src/web/useAutoRun.ts), and
+  [glossary.md § That decision was reversed](glossary.md#that-decision-was-reversed-on-2026-09-02-and-the-loop-is-still-closed-structurally)
+  for the loop it has to close and how. One automatic attempt per article per
+  tab session; the button is the only retry.
+- **`useSketch` grew a second verb for it.** `ensure` is unforced and is what
+  both the automatic draw and the empty state's button call — a forced press
+  landing inside the automatic start's window would be a different `work_key`,
+  which stage 1 does not de-duplicate, and the reader would pay twice.
+  `regenerate` is forced and keeps the reasoning the old single verb had: a
+  redraw is offered beside a picture that is current, where an unforced run
+  would skip while the reader watched two minutes go by.
 - **The empty state says the price before the press**, not after it — a reader
   who presses a button and then watches a spinner for two minutes with no idea
   why is owed the sentence.

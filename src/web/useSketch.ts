@@ -2,8 +2,8 @@
  * **Fetching the Sketch picture, and asking for one when there is none.**
  *
  * Shaped on [`useIdeas.ts`](./useIdeas.ts), which is the nearest neighbour:
- * one GET, one verb, and the job half delegated to
- * [`useStepJob`](./useStepJob.ts). Everything that file says about a 404 being
+ * one GET, the two verbs `ensure` and `regenerate`, and the job half delegated
+ * to [`useStepJob`](./useStepJob.ts). Everything that file says about a 404 being
  * the ordinary case, and about a failed revalidation not being allowed to blank
  * a good artefact, applies here for the same reasons and is not repeated.
  *
@@ -31,6 +31,8 @@ import { readSketch, type Sketch, type SketchFault } from "../sketch-scene.js";
 import type { BlockId, Job, SketchResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
+import { useAutoRun } from "./useAutoRun.js";
+import { useOrderedRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 
 export type SketchStatus = "loading" | "ready" | "none" | "error";
@@ -61,8 +63,29 @@ export interface UseSketch {
    * not on the record.
    */
   stalled: boolean;
-  /** Draw it — the only verb, and always forced. See `find` below. */
-  draw(useProfile?: boolean): Promise<void>;
+  /** The POST has gone and the queue has not seen it yet. `StepJob.starting`. */
+  starting: boolean;
+  /** The run in flight was started automatically. `UseIdeas.automatic`. */
+  automatic: boolean;
+  /**
+   * **Draw it if nobody has** — unforced, for the automatic run and for the
+   * button in the empty state.
+   *
+   * There was no unforced entry point at all until 2026-09-02, because the only
+   * caller was a button and forcing was right for it. It is wrong for the two
+   * of them together: `work_key` includes `force`, so a forced press landing
+   * during an unforced automatic start is a second key and a second two-minute,
+   * $0.20 job. useIdeas.ts § `ensure`.
+   */
+  ensure(useProfile?: boolean): Promise<void>;
+  /**
+   * **Draw it again** — forced, for a redraw offered beside a picture that is
+   * already there, where an unforced run would skip while the reader watched a
+   * two-minute job change nothing. Safe to force because the step replaces
+   * rather than appends, and `sketch` is in `FORCE_ONLY_WHEN_NAMED` so nothing
+   * else is swept in with it.
+   */
+  regenerate(useProfile?: boolean): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -86,9 +109,16 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
    */
   const order = blockOrder.join(",");
 
-  const load = useCallback(async () => {
+  /**
+   * The read itself — the parse, the 404 branch and the error copy, which are
+   * this mode's own. `current()` after every `await`, before any state is
+   * set: false means this reply is about an article, or an artefact, the hook
+   * has since moved on from. See src/web/useOrderedRead.ts.
+   */
+  const load = useCallback(async (current: () => boolean) => {
     try {
       const res = await apiFetch(`/api/sketch/${encodeURIComponent(slug)}`);
+      if (!current()) return;
       if (res.status === 404) {
         // The ordinary case, not a fault: `sketch` is off DEFAULT_INGEST_STEPS,
         // so most articles have never had one drawn. This is what the button is
@@ -104,6 +134,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
         return;
       }
       const loaded = await readJson<SketchResponse>(res);
+      if (!current()) return;
       const ids = order ? (order.split(",") as BlockId[]) : [];
       const { sketch: checked, report } = readSketch(loaded.sketch, { blockOrder: ids });
 
@@ -132,6 +163,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
       setError(null);
       setStatus("ready");
     } catch (err) {
+      if (!current()) return;
       setError((err as Error).message);
       // A failed revalidation must not take the picture away — useIdeas.ts
       // § load has the reasoning, and it is the same one.
@@ -139,23 +171,37 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
     }
   }, [slug, order]);
 
+  /* **The ordering is not this hook's**: an ordinary `reload` joins the read
+     already in flight, a post-job `refresh` trails it rather than racing it, and
+     only the newest reply may commit. src/web/useOrderedRead.ts, shared with the
+     seven other artefact readers — this one lost that race until 2026-09-02
+     (tests/artefact-read-race.test.tsx). */
+  const { reload, refresh } = useOrderedRead(load);
+
   useEffect(() => {
-    void load();
-  }, [load]);
+    void reload();
+  }, [reload]);
 
-  const queue = useStepJob(slug, "sketch", load);
+  const queue = useStepJob(slug, "sketch", refresh);
 
-  const draw = useCallback(
+  /* Two verbs, split on `force`. See the interface above, and useIdeas.ts. */
+  const ensure = useCallback(
     async (useProfile = true) => {
-      /* **Always forced**, for the reason `useIdeas.find` gives: the button is
-         offered beside a picture that is current, and an unforced run would
-         skip while the reader watched a two-minute job change nothing. Safe to
-         force because the step replaces rather than appends, and `sketch` is in
-         `FORCE_ONLY_WHEN_NAMED` so nothing else is swept in with it. */
+      await queue.start({ useProfile });
+    },
+    [queue],
+  );
+  const regenerate = useCallback(
+    async (useProfile = true) => {
       await queue.start({ force: true, useProfile });
     },
     [queue],
   );
+
+  /* **Armed by the Sketch chip, not by opening Diagram.** Opening the mode
+     costs nothing and lands on a picture drawn from the tree; picking this
+     picture is the gesture that spends. src/web/DiagramPanel.tsx. */
+  const auto = useAutoRun(slug, "sketch", status, ensure, reload);
 
   return {
     status,
@@ -171,7 +217,10 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
     job: queue.job,
     failed: queue.failed,
     stalled: queue.stalled,
-    draw,
+    starting: queue.starting,
+    automatic: auto && (queue.job !== null || queue.starting),
+    ensure,
+    regenerate,
     cancel: queue.cancel,
   };
 }

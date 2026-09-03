@@ -489,13 +489,11 @@ describe("the schema keeps the promises the plan makes", () => {
     await inRollback(async (c) => {
       await seed(c);
       const other = "22222222-2222-2222-2222-222222222222";
-      await c.query(
-        `insert into auth.users (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
-         values ($1,'00000000-0000-0000-0000-000000000000','authenticated','authenticated',
-                 'schema-test-two@example.invalid','x',now(),now())
-         on conflict (id) do nothing`,
-        [other],
-      );
+      await seedAuthUser(c, {
+        id: other,
+        email: "schema-test-two@example.invalid",
+        onConflictDoNothing: true,
+      });
       const running = (id: string, owner: string) =>
         c.query(
           `insert into spideryarn.jobs
@@ -536,13 +534,11 @@ describe("the schema keeps the promises the plan makes", () => {
     await inRollback(async (c) => {
       await seed(c);
       const other = "22222222-2222-2222-2222-222222222222";
-      await c.query(
-        `insert into auth.users (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
-         values ($1,'00000000-0000-0000-0000-000000000000','authenticated','authenticated',
-                 'schema-test-two@example.invalid','x',now(),now())
-         on conflict (id) do nothing`,
-        [other],
-      );
+      await seedAuthUser(c, {
+        id: other,
+        email: "schema-test-two@example.invalid",
+        onConflictDoNothing: true,
+      });
       const mint = (id: string, slug: string, owner: string, key: string | null, reserves = true) =>
         c.query(
           `insert into spideryarn.jobs

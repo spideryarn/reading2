@@ -88,6 +88,7 @@ import type { SummaryNode } from "./tree.js";
 import { useRenderCount } from "./perf.js";
 import { CHAIN_MS, measureRow, stepTarget } from "./keynav.js";
 import { activeSectionIndex } from "./position.js";
+import { armActivation } from "./activation.js";
 import { SketchView } from "./SketchView.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 
@@ -1278,8 +1279,8 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
 
   return (
     <aside className="mode-band diag" aria-label="Diagram">
-      <div className="diag-head">
-        <Network size={14} className="diag-head-icon" />
+      <div className="band-head">
+        <Network size={14} className="band-head-icon" />
         <h2>Diagram</h2>
         {/* **The scatter's caveat lives in this row, and the reason is that this
             row cannot wrap.** It was four lines of prose above the picture until
@@ -1370,7 +1371,17 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
                      tests/arrows-belong-to-the-article.test.tsx holds it. */
                   tabIndex={0}
                   className={`diag-kind${k === kind ? " on" : ""}`}
-                  onClick={() => onKind(k)}
+                  onClick={() => {
+                    /* **The gesture seam for the sketch**, and the reason the
+                       token is minted here rather than in `onKind`: `?diagram=`
+                       is query state, so Back and Forward move it too, and a
+                       pasted `?mode=diagram&diagram=sketch` must not buy a
+                       two-minute, $0.20 model call. Opening Diagram itself
+                       costs nothing, so only this chip arms anything.
+                       src/web/activation.ts. */
+                    if (k === "sketch") armActivation(slug, "sketch");
+                    onKind(k);
+                  }}
                   data-diag-kind={k}
                 >
                   <Icon size={12} />
@@ -2143,7 +2154,7 @@ function kept(p: UseProjection): { what: string; how: string } {
  * > It uses up valuable vertical real estate. Hide it behind a tooltip or
  * > warning icon or something.
  *
- * It is rendered in `.diag-head` rather than on the controls strip, and **why**
+ * It is rendered in `.band-head` rather than on the controls strip, and **why**
  * is at the call site: that row cannot wrap, and the strip can.
  *
  * Two things it keeps, because a hover card on its own would drop both.

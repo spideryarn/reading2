@@ -181,8 +181,8 @@ export function SummaryPanel({ root, deep, onDeep, atRow, onJump }: Props) {
 
   return (
     <aside className="mode-band summ" aria-label="Summary">
-      <div className="summ-head">
-        <Layers size={14} className="summ-head-icon" />
+      <div className="band-head">
+        <Layers size={14} className="band-head-icon" />
         <h2>Summary</h2>
       </div>
 

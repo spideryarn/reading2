@@ -1928,14 +1928,33 @@ describe.skipIf(!reachable)("Postgres, on the database's clock", () => {
          started at, and there would be nothing to cross. */
       await tx.execute(sql`select 1`);
 
-      /* The lease runs out a second from here — written on **another**
-         connection, because inside this transaction it would be invisible to
-         everybody else and the point is that the row really has expired. */
+      /* **The wait comes first, and the expiry is written after it.** The wall
+         clock has to move past this transaction's `now()`, and the obvious
+         order — write a lease a second out, then sleep two — leaves the row
+         `running` with a lapsed lease for the whole of that sleep, which is a
+         fixture any *other* process may lawfully settle: `advanceJobWith` opens
+         with an unscoped `store.settleExpired()`, so one dev server mid-ingest
+         on this same local database clears this row's `attempt_id` and
+         `lease_expires_at` while the test is asleep on it. The failure then
+         arrives here as `expected null to be true` — a null because the columns
+         the two booleans read are gone — which reads as a product bug and is
+         somebody else's pump. Watched, and reproduced by running the sweep from
+         a second connection inside the sleep, on 2026-09-02.
+
+         Sleeping first and expiring after leaves the row expired for the two
+         statements below rather than for two seconds. Nothing can make it
+         zero — a `running` row past its lease is exactly what the global sweep
+         is for — so this shrinks the window rather than closing it.
+
+         Written on **another** connection, because inside this transaction it
+         would be invisible to everybody else and the point is that the row
+         really has expired. A second *behind* `clock_timestamp()`, which is
+         still a second *ahead* of the `now()` pinned above. */
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
       await getDb()
         .update(jobs)
-        .set({ leaseExpiresAt: sql`clock_timestamp() + interval '1 second'` })
+        .set({ leaseExpiresAt: sql`clock_timestamp() - interval '1 second'` })
         .where(eq(jobs.id, id));
-      await new Promise((resolve) => setTimeout(resolve, 2_000));
 
       const crossing = await tx.execute<{ frozen: boolean; really: boolean }>(sql`
         select now() < lease_expires_at as frozen,

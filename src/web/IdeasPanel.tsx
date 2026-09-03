@@ -132,7 +132,15 @@ export function IdeasPanel({
   /* **Returns nothing for a visitor**, which is what makes every call site
      below one line rather than a conditional: this whole block is a profile
      tick and a button that spends a model call, and a visitor has neither. */
-  const run = (label: string) =>
+  /**
+   * @param again whether this is the button offered **beside a list that is
+   *   already there**, which is the whole of the difference between the two
+   *   verbs. The empty state's button must be `ensure` — the identical,
+   *   unforced request the automatic run makes — or a press landing inside the
+   *   auto-start window carries a different `work_key`, is not de-duplicated,
+   *   and buys a second model call. useIdeas.ts § `ensure`.
+   */
+  const run = (label: string, again = false) =>
     owner && (
       <div className="gloss-run">
         <UseProfile
@@ -141,12 +149,14 @@ export function IdeasPanel({
           hasProfile={owner.hasProfile}
           slug={owner.slug}
           disabled={owner.job !== null}
+          automatic={owner.automatic}
         />
         <JobProgress
           job={owner.job}
+          starting={owner.starting}
           failed={owner.failed}
           stalled={owner.stalled}
-          onRun={() => owner.find(withProfile)}
+          onRun={() => (again ? owner.regenerate(withProfile) : owner.ensure(withProfile))}
           onCancel={owner.cancel}
           label={label}
           step="ideas"
@@ -158,8 +168,8 @@ export function IdeasPanel({
 
   return (
     <aside className="mode-band gloss ideas" aria-label="Ideas">
-      <div className="gloss-head">
-        <Lightbulb size={14} className="gloss-head-icon" />
+      <div className="band-head">
+        <Lightbulb size={14} className="band-head-icon" />
         <h2>Ideas</h2>
         {ideas && (
           <span className="gloss-count">
@@ -220,7 +230,7 @@ export function IdeasPanel({
                 <TriangleAlert size={13} />
                 These describe an older version of the article.
               </p>
-              {run("Find them again")}
+              {run("Find them again", true)}
             </div>
           ) : owner?.outdated ? (
             <div className="gloss-stale">
@@ -228,7 +238,7 @@ export function IdeasPanel({
                 <TriangleAlert size={13} />
                 These were written by an older version of the prompt.
               </p>
-              {run("Find them again")}
+              {run("Find them again", true)}
             </div>
           ) : null}
 
@@ -303,7 +313,7 @@ export function IdeasPanel({
           {/* Below the list, not above it: this is the thing you reach for
               after reading them and disagreeing, not before. */}
           {owner && !owner.stale && !owner.outdated && (
-            <div className="ideas-again">{run("Find them again")}</div>
+            <div className="ideas-again">{run("Find them again", true)}</div>
           )}
         </>
       )}

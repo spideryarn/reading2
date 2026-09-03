@@ -426,6 +426,48 @@ different ledgers with different money in them, and this repo has a whole sectio
 reaching a database other than the one on its command line —
 [database.md](database.md#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like).
 
+### The pricing report — per owner, by category, with the spread
+
+`npm run cost` answers *"where did the money go"*. `npm run cost -- --owners` answers the different
+question a subscription price is set from: **what did each account cost over this period, split by
+what kind of work it bought, and how wide is the spread.** Add `--price 20` for the model-cost
+contribution margin at a candidate price.
+
+Four things about it are decisions rather than details, and each has a reason that would be
+re-litigated without one:
+
+- **Postgres only, and it never reads whole rows.** The aggregate is a `GROUP BY` in
+  [`src/store/ai-calls-spend-pg.ts`](../../src/store/ai-calls-spend-pg.ts) — `CostStore` was
+  deliberately *not* widened, on GPT Sol's call: *"Do not widen `CostStore` merely to preserve
+  filesystem parity for a pricing query whose source of truth is Postgres."* On the filesystem store
+  the report refuses and says so.
+- **The categories are named for the mechanism, not for a provenance the schema cannot prove.**
+  `scope_kind` does **not** separate ingest from reading: a reader asking for Glossary posts to
+  `POST /api/jobs` and is recorded `job_step`, exactly like base ingest. So the category is
+  *default-step work*, never *base upload*. There is an exhaustive `unknown` bucket, the report names
+  the scope/job/step triples inside it, and `assertCategoriesCoverRows` throws if the per-category
+  counts stop adding up to the ledger's own — see
+  [`src/cost-categories.ts`](../../src/cost-categories.ts).
+- **Zero-spend accounts are in the denominator.** A `GROUP BY ai_calls.owner_id` cannot see somebody
+  who made no calls, so a spread over its result is a spread over *spending* accounts and biases
+  every figure upward. Until Stripe's subscriber set exists, the population is every account the Auth
+  service knows about, and the report labels it as that rather than as "subscribers".
+- **Cash is allocated in the report and never written to a row.** OpenRouter's ~5.5% is a fee on
+  *buying credits*, not a per-token markup, so it applies to the credits pocket and to neither BYOK
+  nor `computed`. The result is a **model-cost contribution margin** — Stripe's fees, hosting and
+  every unmetered spend in [`src/spend-declarations.ts`](../../src/spend-declarations.ts) are still to
+  come out of it.
+
+The coverage header is printed first and is not a preamble: without it a total of $2.54 looks
+identical whether it is the whole truth or the 8% of calls that happened to report a cost, and this
+ledger has already spent a fortnight in the second state. It names the database, the credential, the
+settled/computed/unpriced counts, the live sessions that reported nothing, and the denominator. The
+reconciliation gap prints the three conditions it holds under — *current key, current UTC month, as
+of now* — or says why it is omitted.
+
+`/admin/users` carries the same per-owner figure for the current UTC month —
+[admin.md § The spend column](admin.md#the-spend-column-and-the-two-things-that-keep-it-honest).
+
 ### `durationMs` is per **call**, and three different ways of adding it up are wrong
 
 **This has produced a wrong number in three separate workstreams on one day — 2026-08-30 — and in

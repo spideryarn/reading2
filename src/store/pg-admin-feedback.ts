@@ -49,7 +49,7 @@
  * ## What may go in that list
  *
  * The admin pages may show the account metadata documented for `/admin/users`,
- * and **the support report the reader submitted**: their three answers, an
+ * and **the support report the reader submitted**: what they wrote, an
  * attachment they deliberately added, diagnostics they ticked a box for, and
  * Spideryarn's own fixed correlation metadata. Identifiers may not be followed
  * into articles, comments or notes — a `slug` here is a string to look up by
@@ -68,7 +68,6 @@ import type {
   FeedbackDiagnosticsPayload,
   FeedbackEnvironment,
   FeedbackKind,
-  FeedbackRouteKind,
 } from "../types.js";
 import { ADMIN_FEEDBACK_DEFAULT_LIMIT, ADMIN_FEEDBACK_MAX } from "../types.js";
 
@@ -91,7 +90,7 @@ const LIST_COLUMNS = {
   body: feedbackTable.body,
   kind: feedbackTable.kind,
   consented: feedbackTable.consented,
-  routeKind: feedbackTable.routeKind,
+  url: feedbackTable.url,
   slug: feedbackTable.slug,
   buildCommit: feedbackTable.buildCommit,
   environment: feedbackTable.environment,
@@ -102,6 +101,29 @@ const LIST_COLUMNS = {
   mirroredAt: feedbackTable.mirroredAt,
   sentryEventId: feedbackTable.sentryEventId,
   createdAt: feedbackTable.createdAt,
+  /**
+   * **The same instant, at the precision the column actually holds.**
+   *
+   * `timestamptz` is microseconds; a JavaScript `Date` is milliseconds, so
+   * `createdAt.toISOString()` — which is what the wire report carries, and
+   * rightly — is a *truncation*. Building the keyset cursor from it made the
+   * tie-break comparisons in `after()` compare a rounded value against a
+   * precise one, so `created_at = <cursor>` matched nothing and paging
+   * stopped dead at the first row of any group sharing a timestamp.
+   *
+   * Caught by tests/admin-feedback-store.test.ts § *keeps a stable order when
+   * the timestamps are equal*, 2026-09-02 — a test written for the ordering
+   * and which found the cursor instead.
+   *
+   * `to_char` rather than `::text` so the shape is ISO-8601 with a `T` and a
+   * `Z`: `decodeFeedbackCursor` holds it to something `Date.parse` accepts,
+   * and Postgres's own text form uses a space and an offset, which is
+   * implementation-defined territory for that parser.
+   *
+   * **Never on the wire report.** It is read off the raw row into the cursor
+   * and nowhere else, so the exact-key fence in the test stays exact.
+   */
+  createdAtExact: sql<string>`to_char(${feedbackTable.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
 };
 
 /** The shape `LIST_COLUMNS` comes back as, so `toListed` is checked at its call sites. */
@@ -112,7 +134,7 @@ interface ListRow {
   body: string;
   kind: string | null;
   consented: boolean;
-  routeKind: string;
+  url: string | null;
   slug: string | null;
   buildCommit: string | null;
   environment: string;
@@ -123,14 +145,16 @@ interface ListRow {
   mirroredAt: Date | null;
   sentryEventId: string | null;
   createdAt: Date;
+  /** See `LIST_COLUMNS`. Read into the cursor, never onto the report. */
+  createdAtExact: string;
 }
 
 /**
  * A row as a report.
  *
- * The two casts are the honest ones `pg-feedback.ts` also makes: `route_kind`
- * and `environment` are `text` columns with CHECK constraints built from the
- * same arrays the TypeScript unions come from, so a value outside the union
+ * The three casts are the honest ones `pg-feedback.ts` also makes: `route_kind`,
+ * `environment` and `kind` are `text` columns with CHECK constraints built from
+ * the same arrays the TypeScript unions come from, so a value outside the union
  * cannot be in the column.
  */
 function toListed(row: ListRow): AdminFeedbackReport {
@@ -140,12 +164,13 @@ function toListed(row: ListRow): AdminFeedbackReport {
     reporterEmail: row.reporterEmail,
     body: row.body,
     /* The same honest cast `routeKind` and `environment` get below, and for the
-       same reason: the column is `text` with a CHECK, so the database knows the
-       vocabulary and the driver hands back a `string`. src/types.ts §
-       FEEDBACK_KINDS. */
+       same reason: the column is `text` with a CHECK built from the very array
+       the union comes from (src/types.ts § FEEDBACK_KINDS), so a value outside
+       it cannot be in the column. `null` passes through as itself — it means
+       *they did not say*, which is a real answer. */
     kind: row.kind as FeedbackKind | null,
     consented: row.consented,
-    routeKind: row.routeKind as FeedbackRouteKind,
+    url: row.url,
     slug: row.slug,
     buildCommit: row.buildCommit,
     environment: row.environment as FeedbackEnvironment,
@@ -174,12 +199,17 @@ function toListed(row: ListRow): AdminFeedbackReport {
  * This is longer and the compiler reads it.
  */
 function after(cursor: FeedbackCursor) {
-  const when = new Date(cursor.createdAt);
+  /* **Cast in SQL, never through a JavaScript `Date`.** The column is
+     microseconds and a `Date` is milliseconds, so `new Date(cursor.createdAt)`
+     rounds — and a rounded value on the equality side of a tie-break matches
+     nothing, which stops paging at the first row of any group sharing an
+     instant. `createdAtExact` above is where the precise value comes from. */
+  const when = sql`${cursor.createdAt}::timestamptz`;
   return or(
-    lt(feedbackTable.createdAt, when),
-    and(eq(feedbackTable.createdAt, when), lt(feedbackTable.ownerId, cursor.ownerId)),
+    sql`${feedbackTable.createdAt} < ${when}`,
+    and(sql`${feedbackTable.createdAt} = ${when}`, lt(feedbackTable.ownerId, cursor.ownerId)),
     and(
-      eq(feedbackTable.createdAt, when),
+      sql`${feedbackTable.createdAt} = ${when}`,
       eq(feedbackTable.ownerId, cursor.ownerId),
       lt(feedbackTable.id, cursor.id),
     ),
@@ -216,7 +246,9 @@ export async function listFeedbackAcrossOwners(
     .limit(capped + 1);
 
   const page = rows.slice(0, capped).map(toListed);
-  const last = page[page.length - 1];
+  /* The **raw** row, not the mapped report — the cursor needs the precise
+     timestamp, and the report deliberately does not carry it. */
+  const last = rows[page.length - 1];
   const hasMore = rows.length > capped;
   return {
     reports: page,
@@ -225,7 +257,7 @@ export async function listFeedbackAcrossOwners(
        one, which the caller has not seen and must not be skipped past. */
     nextCursor:
       hasMore && last
-        ? { createdAt: last.createdAt, ownerId: last.ownerId, id: last.id }
+        ? { createdAt: last.createdAtExact, ownerId: last.ownerId, id: last.id }
         : null,
   };
 }

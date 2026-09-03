@@ -285,4 +285,64 @@ export interface AdminUser {
   opens: number;
   /** ISO. The most recent open across all their articles, if there is one. */
   lastReadAt?: string;
+
+  /* ------------------------------------------------------------- spend ---
+   *
+   * **What this account's reading cost us in model calls**, over a period the
+   * page has to name. Greg asked for the column explicitly (2026-09-02) and GPT
+   * Sol withdrew its objection on two conditions, both of which are why there
+   * are four fields here rather than one:
+   *
+   * > A bare currency number would overclaim.
+   *
+   * - **A defined period**, so it is `spendMonth` and not "recently". A number
+   *   whose window is implied is a number two people will read differently.
+   * - **A visible partial marker**, so `spendUnpricedCalls` travels beside the
+   *   money. 207 of this box's 243 rows reported no cost at all; a `$0.00`
+   *   drawn from those would be a lie the page tells confidently.
+   *
+   * `spendCalls` is the third leg of the same argument: zero calls and zero
+   * dollars are different facts, and only one of them means "nothing happened".
+   *
+   * Eval and dev-CLI spend is excluded — see `productSpendByOwner` in
+   * src/store/ai-calls-spend-pg.ts. It is ours rather than a reader's, and on a
+   * per-account page it would draw whoever's owner id the environment was
+   * carrying as costing forty times what anybody else does.
+   */
+
+  /** Model spend over `spendMonth`, in nano-dollars. Credits + BYOK + computed. */
+  spendNanos: number;
+  /** Metered calls behind that figure. `0` means nothing happened, not "free". */
+  spendCalls: number;
+  /** How many of those reported no cost, so the figure above is short. */
+  spendUnpricedCalls: number;
+  /** `YYYY-MM`, UTC — the period the three numbers above cover, never implied. */
+  spendMonth: string;
+}
+
+/**
+ * Nano-dollars as a string, **for the browser** — a deliberate second copy of
+ * `formatNanos` in [src/ai-spend.ts](ai-spend.ts), and the reason is a bundle
+ * boundary rather than an oversight.
+ *
+ * That module opens with `import { AsyncLocalStorage } from "node:async_hooks"`,
+ * because the spend collector is a request-scoped store. Importing one formatter
+ * from it would pull the whole ledger, the gateway request shapes and pino into
+ * the client bundle — exactly the accident `tests/client-imports.test.ts` was
+ * written for, when four lines from `src/converse.ts` grew the bundle 24KB and
+ * put `OPENROUTER_API_KEY` in it. The remedy that test names is to put the
+ * shared thing in a module that imports nothing, and this is that module.
+ *
+ * **The two must agree**, and `tests/admin-spend-column.test.ts` holds them
+ * against each other rather than trusting this comment: a report and a page
+ * showing different dollars for the same account is a bug that would be argued
+ * about for an hour before anybody suspected the formatter.
+ */
+export function formatSpendNanos(nanos: number): string {
+  const dollars = nanos / 1e9;
+  /* Eight decimals under a hundredth of a cent, because `$0.0000` on a call
+     that really cost something reads as free — the rounding-to-zero that
+     `formatNanos` was caught doing on a live probe. */
+  if (nanos !== 0 && Math.abs(dollars) < 0.0001) return `$${dollars.toFixed(8)}`;
+  return `$${dollars.toFixed(4)}`;
 }

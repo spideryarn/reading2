@@ -201,11 +201,7 @@ function guarded<T extends object>(what: string, pg: T, files: T): T {
   return STORE === "postgres" ? guardDbStore(what, pg) : files;
 }
 
-const reader: ArticleReader = guarded(
-  "reader",
-  pgArticleReader as ArticleReader,
-  fsArticleReader,
-);
+const reader: ArticleReader = guarded("reader", pgArticleReader, fsArticleReader);
 
 export const loadArticle = reader.loadArticle.bind(reader);
 export const listArticles = reader.listArticles.bind(reader);

@@ -22,11 +22,12 @@
  */
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { FREE, FREE_LIFETIME_INGESTS, tierSpec } from "../src/billing/tiers.js";
-import type { Entitlement, PaidTier } from "../src/billing/tiers.js";
+import { FREE, FREE_LIFETIME_INGESTS } from "../src/billing/tiers.js";
+import type { Entitlement, TierRow } from "../src/billing/tiers.js";
 import { loadEnvLocal } from "../src/env.js";
 import { releaseReservation, reserveIngest, usageFor } from "../src/store/pg-billing.js";
 import { pgReady } from "./helpers/pg-ready.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 /**
  * **Before `pgReady`, or this whole file skips for the wrong reason.**
@@ -57,29 +58,45 @@ const dbIt = reachable ? it : it.skip;
  */
 const OWNER = "0b111a99-0000-4000-8000-00000000c0da";
 
+/** What the fixture tier allows, so the expectations read as one number. */
+const READER_INGESTS = 20;
+
 /** The configured Reader price, and the map `reserveIngest` resolves it through. */
 const READER_PRICE = "price_reader_for_tests";
-const PRICES: ReadonlyMap<string, PaidTier> = new Map([[READER_PRICE, "reader"]]);
+const PRICES: readonly TierRow[] = [
+  {
+    id: "reader",
+    productName: "Spideryarn Reader",
+    description: "20 articles a month.",
+    ingestsPerPeriod: 20,
+    lookupKey: "spideryarn_reader_monthly",
+    stripePriceId: READER_PRICE,
+    livemode: false,
+    active: true,
+    sortOrder: 10,
+    amounts: { usd: 1000 },
+  },
+];
 
 const PERIOD = { start: "2026-09-01T00:00:00Z", end: "2026-10-01T00:00:00Z" };
 
 const PAID: Entitlement = {
-  tier: "reader",
-  limit: tierSpec("reader").ingestsPerPeriod,
+  tier: "paid",
+  tierId: "reader",
+  limit: READER_INGESTS,
   periodStart: new Date(PERIOD.start),
   periodEnd: new Date(PERIOD.end),
 };
 
 async function seedOwner(): Promise<void> {
   if (!pool) return;
-  /* `auth.users` is Supabase's, and the owner FK points into it. Minimal row,
-     and `on conflict do nothing` so re-runs are cheap. */
-  await pool.query(
-    `insert into auth.users (id, instance_id, aud, role, email)
-     values ($1, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', $2)
-     on conflict (id) do nothing`,
-    [OWNER, `quota-race-${OWNER}@spideryarn.local`],
-  );
+  /* `auth.users` is Supabase's, and the owner FK points into it. `on conflict
+     do nothing` so re-runs are cheap. */
+  await seedAuthUser(pool, {
+    id: OWNER,
+    email: `quota-race-${OWNER}@spideryarn.local`,
+    onConflictDoNothing: true,
+  });
 }
 
 /**
@@ -200,7 +217,7 @@ describe("the entitlement is read under the lock, not handed in", () => {
     const admitted = await reserveIngest(OWNER, undefined, PRICES);
     expect(admitted).toMatchObject({ kind: "admitted" });
     if (admitted.kind !== "admitted") throw new Error("expected an admission");
-    expect(admitted.entitlement).toMatchObject({ tier: "reader", limit: tierSpec("reader").ingestsPerPeriod });
+    expect(admitted.entitlement).toMatchObject({ tier: "paid", tierId: "reader", limit: READER_INGESTS });
   });
 
   /* An entitled status on a price this build does not sell is free, not Reader.
@@ -208,7 +225,7 @@ describe("the entitlement is read under the lock, not handed in", () => {
      month for something nobody costed. */
   dbIt("falls to free when the subscription is on an unrecognised price", async () => {
     await makePaid();
-    const admitted = await reserveIngest(OWNER, undefined, new Map());
+    const admitted = await reserveIngest(OWNER, undefined, []);
     if (admitted.kind !== "admitted") throw new Error("expected an admission");
     expect(admitted.entitlement.tier).toBe("free");
   });
@@ -321,13 +338,13 @@ describe("the refusal says what a reader needs", () => {
     await pool.query(
       `insert into spideryarn.ingest_events (owner_id, reserved_at, succeeded_at)
        select $1, now(), now() from generate_series(1, $2)`,
-      [OWNER, tierSpec("reader").ingestsPerPeriod],
+      [OWNER, READER_INGESTS],
     );
     const refused = await reserveIngest(OWNER, undefined, PRICES);
     expect(refused).toMatchObject({
       kind: "refused",
-      used: tierSpec("reader").ingestsPerPeriod,
-      limit: tierSpec("reader").ingestsPerPeriod,
+      used: READER_INGESTS,
+      limit: READER_INGESTS,
       resetAt: end,
     });
   });

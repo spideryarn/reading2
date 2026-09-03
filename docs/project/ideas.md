@@ -238,6 +238,26 @@ length caused a production outage. A piece has three to ten ideas. So:
 That deletes a whole class of the glossary's complexity: no FORBIDDEN checklist, no `existingFor`, no
 `passes`, no "a stale list is not appended to".
 
+### It starts itself when you press the mode
+
+Since 2026-09-02, pressing **Ideas** in the bottom bar on an article that has never had one starts
+the job — no second button. Only a *press* does: a pasted `?mode=ideas` link, a Back step, and a
+link in from the metadata page all show the empty state and its button, and spend nothing. A press is
+recorded as data by the bar itself ([`src/web/activation.ts`](../../src/web/activation.ts)), because
+a mount is not a click.
+
+The loop that made Greg choose a button in the first place —
+[glossary.md § That decision was reversed](glossary.md#that-decision-was-reversed-on-2026-09-02-and-the-loop-is-still-closed-structurally)
+— is closed structurally: one automatic attempt per `(slug, step)` per tab session, claimed before
+the request goes out. The two verbs exist for the same reason: `ensure` is unforced and is what
+**both** the automatic run and the empty state's button call, because `work_key` is computed from the
+request and two keys are two paid jobs; `regenerate` is forced and is the *Find them again* button beside a
+result that is already there. [`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts).
+
+An automatic run has nobody to ask about the reader's profile, so it uses it and the panel says so —
+*Using your profile* — rather than showing a tickbox it has disabled.
+
+
 **Ids are still inherited across a regeneration, and the promise is weaker than the glossary's.**
 `idsByName` matches on the normalised name, which works there because *"United States of America"*
 comes back spelled the same way twice. An idea's name is a sentence and a regeneration will

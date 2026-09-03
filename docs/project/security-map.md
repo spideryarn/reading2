@@ -131,7 +131,7 @@ was checked against the source rather than taken on trust:
 It also refuses to work at all on the filesystem store — `requirePostgres()` answers 501 — so a
 misconfigured dev server cannot serve a half-implemented public path.
 
-**What is deliberately *not* here:** diagram mode. `src/web/visitor.ts`'s `COSTS` table marks it
+**What is deliberately *not* here:** diagram mode. `src/web/visitor.ts`'s `POLICY` table marks it
 owners-only unconditionally, because all three of its pictures POST for embeddings and spend money —
 two of four did until the free one, Tree, was cut on 2026-08-30;
 the gate is real on the server too, since `/api/similar/:slug` and `/api/projection/:slug` sit

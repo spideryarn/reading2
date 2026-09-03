@@ -276,7 +276,7 @@ interface Props {
   /**
    * **Owner only, and there is no visitor half.**
    *
-   * `src/web/visitor.ts` names `timeline` in `COSTS`, so a visitor pressing the
+   * `src/web/visitor.ts` gives `timeline` an `owners-only` policy, so a visitor pressing the
    * button gets a boundary they can read rather than this panel. That is stated
    * there rather than left to the fail-closed fall-through — see the comment on
    * the entry. Making it shareable is a follow-up that wants a general answer
@@ -312,12 +312,19 @@ export function TimelinePanel({
   const withYear = years.size !== 1;
   const filled = events.some((e) => e.dating.kind === "dated" && e.dating.when.yearFilled);
 
-  const run = (label: string) => (
+  /**
+   * @param again beside a timeline that is already there, so the run is forced.
+   *   The empty state's button is not: it has to make the identical, unforced
+   *   request the automatic run makes, or the two carry different `work_key`s
+   *   and the reader pays twice. useTimeline.ts § `ensure`.
+   */
+  const run = (label: string, again = false) => (
     <JobProgress
       job={owner.job}
+      starting={owner.starting}
       failed={owner.failed}
       stalled={owner.stalled}
-      onRun={() => owner.find()}
+      onRun={() => (again ? owner.regenerate() : owner.ensure())}
       onCancel={owner.cancel}
       label={label}
       step="timeline"
@@ -328,8 +335,8 @@ export function TimelinePanel({
 
   return (
     <aside className="mode-band gloss timeline" aria-label="Timeline">
-      <div className="gloss-head">
-        <Clock size={14} className="gloss-head-icon" />
+      <div className="band-head">
+        <Clock size={14} className="band-head-icon" />
         <h2>Timeline</h2>
         {timeline && (
           <span className="gloss-count">
@@ -371,7 +378,7 @@ export function TimelinePanel({
                 <TriangleAlert size={13} />
                 This describes an older version of the article.
               </p>
-              {run("Read it again")}
+              {run("Read it again", true)}
             </div>
           ) : owner.outdated ? (
             <div className="gloss-stale">
@@ -379,7 +386,7 @@ export function TimelinePanel({
                 <TriangleAlert size={13} />
                 This was read by an older version of the prompt.
               </p>
-              {run("Read it again")}
+              {run("Read it again", true)}
             </div>
           ) : null}
 
@@ -479,7 +486,7 @@ export function TimelinePanel({
               Nothing-to-re-run is a statement about this article, and a stale
               artefact is by definition about a different one. */}
           {events.length > 0 && !owner.stale && !owner.outdated && (
-            <div className="tl-again">{run("Read it again")}</div>
+            <div className="tl-again">{run("Read it again", true)}</div>
           )}
         </>
       )}

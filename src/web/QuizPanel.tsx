@@ -267,8 +267,8 @@ export function QuizPanel({
 
   return (
     <aside className="mode-band gloss quiz" aria-label="Quiz">
-      <div className="gloss-head">
-        <MessageCircleQuestionMark size={14} className="gloss-head-icon" />
+      <div className="band-head">
+        <MessageCircleQuestionMark size={14} className="band-head-icon" />
         <h2>Remember</h2>
         {subMode}
       </div>

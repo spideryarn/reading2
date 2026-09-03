@@ -64,7 +64,6 @@ import type {
   FeedbackDiagnostics,
   FeedbackEnvironment,
   FeedbackKind,
-  FeedbackRouteKind,
   GlossaryEntry,
   GlossaryLookup,
   GlossaryFound,
@@ -1151,7 +1150,7 @@ export interface AdminStore {
    * The one method in this file that returns a reader's own sentences, and the
    * one place the admin rule *"counts and dates, never a sentence"* has an
    * exception. What makes it legitimate is consent and nothing else: the reader
-   * typed those three answers into a box labelled with what happens to them.
+   * typed that report into a box labelled with what happens to them.
    * docs/project/feedback.md § The one rule is the boundary; it does not move
    * because a second page found it convenient.
    *
@@ -1176,9 +1175,12 @@ export interface AdminStore {
   readFeedbackAcrossOwners(ownerId: string, id: string): Promise<AdminFeedbackDetail | null>;
   /**
    * **One report's screenshot bytes, whoever filed it** — for
-   * `GET /api/admin/feedback/:id/screenshot`.
+   * `GET /api/admin/feedback/:ownerId/:id/screenshot`.
    *
-   * `null` for a report that has none *and* for an id that is not a report:
+   * Keyed on the **pair**, like `readFeedbackAcrossOwners` above and for the
+   * same reason.
+   *
+   * `null` for a report that has none *and* for a pair that is not a report:
    * both are a 404 from the route, and distinguishing them would buy the caller
    * nothing it is allowed to do anything with.
    *
@@ -1470,7 +1472,6 @@ export type {
   FeedbackDiagnostics,
   FeedbackEnvironment,
   FeedbackKind,
-  FeedbackRouteKind,
 } from "../types.js";
 
 /**
@@ -1524,7 +1525,14 @@ export interface NewFeedback {
    * only one of them is a bug in the collector.
    */
   consented: boolean;
-  routeKind: FeedbackRouteKind;
+  /**
+   * **The address they were at, whole.** `routeKind`, a name from a closed
+   * list, until 2026-09-02 — src/db/schema.ts § `url` has why it changed.
+   * Validated by the route with `isWebUrl` and capped at
+   * `MAX_FEEDBACK_URL_CHARS`. `null` from a bundle loaded before the change —
+   * src/db/schema.ts says why an old report is filed rather than refused.
+   */
+  url: string | null;
   /** The article they were on, where there was one. Validated by the route. */
   slug: string | null;
   /** `__SPIDERYARN_BUILD_COMMIT__` — the string the release and the source maps went up under. */

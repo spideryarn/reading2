@@ -57,7 +57,6 @@
 import { useState } from "react";
 import { MessageSquareWarning } from "lucide-react";
 
-import type { FeedbackRouteKind } from "../types.js";
 import { FeedbackDialog } from "./FeedbackDialog.js";
 import { useRoute } from "./router.js";
 
@@ -67,45 +66,28 @@ interface Props {
 }
 
 /**
- * The route the reader is on, in the closed vocabulary the table stores.
+ * **Where they were, as the address bar has it.**
  *
- * `FEEDBACK_ROUTE_KINDS` in src/types.ts mirrors `Route["kind"]` by hand — the
- * server and src/db/schema.ts import that file and cannot import the router —
- * and the two are held together by the exhaustive map below rather than by
- * hope: add a route and this stops compiling.
+ * This was a `Record<Route["kind"], FeedbackRouteKind>` until 2026-09-02 — an
+ * exhaustive map from the router's union onto a ten-value vocabulary that the
+ * server, `src/types.ts` and a SQL CHECK each held their own copy of. Greg
+ * removed it: *"I think it's fine (and even advantageous) to store the url with
+ * the Feedback - if that means we can get rid of the route_kind and simplify
+ * things"*.
  *
- * `unknown` is in the vocabulary on purpose and is never produced here. It is
- * there so that a report from a page added later still has somewhere to land,
- * because a report that cannot be filed because the reader was on a new page is
- * the worst way to lose the one that mattered.
+ * The exhaustive map was doing one job well — adding a route to the app was a
+ * compile error until somebody said what a report from it should be called —
+ * and one badly, which was costing a database migration per page. `/privacy`
+ * shipped filing its reports as `unknown` rather than pay it. The compile error
+ * is gone with it, and nothing replaces it, because there is nothing left to
+ * decide: every page has an address.
+ *
+ * `location.href` and not a reconstruction, because the point of it is to be
+ * what the reader was actually looking at, query string and all. The server
+ * still refuses anything that is not an `http(s)` address (`isWebUrl`), and
+ * docs/project/privacy.md § What a bug report carries tells the reader this
+ * happens.
  */
-const ROUTE_KINDS: Record<ReturnType<typeof useRoute>["kind"], FeedbackRouteKind> = {
-  library: "library",
-  read: "read",
-  add: "add",
-  "add-upload": "add-upload",
-  design: "design",
-  profile: "profile",
-  admin: "admin",
-  login: "login",
-  callback: "callback",
-  /* **The one page that files as `unknown`, deliberately and temporarily.**
-     Adding `"privacy"` to the vocabulary means widening the CHECK on
-     `feedback.route_kind`, and that migration was written and then held back
-     on 2026-09-02: the journal it would land in also carries another agent's
-     in-flight migration, so committing mine would publish a journal entry
-     whose `.sql` nobody else has. Greg's call — wait for theirs to land.
-
-     `unknown` is exactly what this costs, and the comment above says why it is
-     survivable: a report filed under the wrong label is recoverable, a report
-     refused by a constraint is not. What it loses is the ability to count bug
-     reports from the policy page, which is not a thing anybody wants to count.
-
-     **The follow-up is a one-line migration**: add `'privacy'` to
-     `FEEDBACK_ROUTE_KINDS` (src/types.ts), to the CHECK in src/db/schema.ts,
-     and change this line. docs/project/website-text.md § What is still open. */
-  privacy: "unknown",
-};
 
 export function FeedbackButton({ readerEmail }: Props) {
   const route = useRoute();
@@ -130,12 +112,12 @@ export function FeedbackButton({ readerEmail }: Props) {
         onClose={() => setOpen(false)}
         readerEmail={readerEmail}
         where={{
-          routeKind: ROUTE_KINDS[route.kind],
-          /* The slug and nothing else off the address. Never `location.href`:
-             in this app it carries `?q=` and `?find=`, which are the reader's
-             own typing, and `/add/<a whole third-party URL>`, which may carry a
-             credential. The plan's § Always — where they were has the argument,
-             and src/feedback-payload.ts enforces it a second time. */
+          url: location.href,
+          /* **The slug stays, beside the URL rather than inside it.** It is
+             validated, it is the join onto an article, and "how many reports
+             mention this piece" should be a `WHERE` rather than a `LIKE` over
+             an address — docs/project/sql.md. Deriving it from the URL later
+             would be a second parser for a fact the client already has. */
           slug: route.kind === "read" ? route.slug : null,
         }}
       />

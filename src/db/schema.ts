@@ -3268,7 +3268,32 @@ export const feedback = spideryarn.table(
      * answers, and only one of them is a bug in the collector.
      */
     consented: boolean("consented").notNull(),
-    routeKind: text("route_kind").notNull(),
+    /**
+     * **The address the reader was at, whole** — `route_kind`, a closed
+     * vocabulary of ten route names, until 2026-09-02.
+     *
+     * The vocabulary existed to keep the address bar out of this table, and it
+     * was Greg's call to reverse that: *"I think it's fine (and even
+     * advantageous) to store the url with the Feedback"*. What it cost was a
+     * migration for every new page, and a 500 on a valid report whenever its
+     * four hand-mirrored copies drifted. `isWebUrl` at the seam
+     * (src/urls.ts) and the length CHECK below are what replace it, and this
+     * column is `text` because a URL has no vocabulary to close.
+     *
+     * The whole address reaches Sentry too, deliberately — see
+     * docs/project/privacy.md § What a bug report carries, which is where the
+     * reader is told so.
+     *
+     * **Nullable, and that is the stale-tab case rather than laziness.** A
+     * reader whose bundle was loaded before this deploy posts `routeKind` and
+     * no `url` at all, and this is the one endpoint where a client and a server
+     * disagreeing is likely to be the very thing they are trying to report. So
+     * an old report is filed with `null` here rather than refused — the same
+     * call `LEGACY_ANSWER_FIELDS` in src/routes.ts makes one field over. `null`
+     * means *an old client*, and it stops meaning anything once those bundles
+     * are gone.
+     */
+    url: text("url"),
     /** The article they were on, where there was one. No FK — see the header. */
     slug: text("slug"),
     /** `__SPIDERYARN_BUILD_COMMIT__`, so a report names a deploy and its source maps. */
@@ -3334,30 +3359,46 @@ export const feedback = spideryarn.table(
     /** The same CHECK every other minted id is held to — `mintId()`, one regex. */
     check("feedback_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
     /**
-     * **The two closed vocabularies, written out by hand** — like
-     * `comments_status` and `checkpoints_namespace` above, and unlike the
-     * temptation.
+     * **The closed vocabulary, written out by hand** — like `comments_status`
+     * and `checkpoints_namespace` above, and unlike the temptation.
      *
-     * `FEEDBACK_ROUTE_KINDS` and `FEEDBACK_ENVIRONMENTS` in src/types.ts are the
-     * same lists, and building these constraints *from* those arrays was tried
-     * and reverted: it would make this file import src/types.ts at **runtime**,
-     * and src/store/public-slug.ts imports this one — so the public read path's
+     * `FEEDBACK_ENVIRONMENTS` in src/types.ts is the same list, and building
+     * this constraint *from* that array was tried and reverted: it would make
+     * this file import src/types.ts at **runtime**, and
+     * src/store/public-slug.ts imports this one — so the public read path's
      * import graph would grow a node, which tests/public-imports.test.ts calls a
      * regression whatever the node is.
      *
-     * So the lists are in two places, and the drift is caught **behaviourally**
+     * So the list is in two places, and the drift is caught **behaviourally**
      * instead: tests/feedback-store.test.ts files a report under every value of
-     * each union and watches the database take it. A value added to a union and
+     * the union and watches the database take it. A value added to the union and
      * not to the CHECK below goes red there, at the insert, which is where it
      * would have hurt.
+     *
+     * **There were two of these until 2026-09-02.** `feedback_route_kind` held
+     * ten route names, and it is gone with the column — see `url` above for why,
+     * and note the shape of the argument, because it applies to the next
+     * constraint somebody is tempted to write: a vocabulary that has to be
+     * widened by migration every time the product grows a page is a vocabulary
+     * whose escape hatch gets used, and an escape hatch in use is worse data
+     * than no constraint.
      */
-    check(
-      "feedback_route_kind",
-      sql`${t.routeKind} in ('library', 'read', 'add', 'add-upload', 'design', 'profile', 'admin', 'login', 'callback', 'unknown')`,
-    ),
     check(
       "feedback_environment",
       sql`${t.environment} in ('production', 'preview', 'development', 'test')`,
+    ),
+    /**
+     * **Non-empty and capped**, which is the whole of what this column
+     * promises. `MAX_FEEDBACK_URL_CHARS` in src/types.ts is the same 2048, and
+     * it is written out here for the runtime-import reason above.
+     *
+     * That the value is an `http(s)` address is `isWebUrl`'s job at the route,
+     * not this constraint's: a URL grammar in SQL would be a second, worse
+     * parser, and the one place that decides what a web URL is already exists.
+     */
+    check(
+      "feedback_url_shape",
+      sql`${t.url} is null or (length(btrim(${t.url})) > 0 and length(${t.url}) <= 2048)`,
     ),
     /**
      * Non-empty when present, and **capped**.
@@ -3540,6 +3581,139 @@ export const checkpoints = spideryarn.table(
 );
 
 /* --------------------------------------------------------------- billing -- */
+
+/**
+ * **What we sell — as rows, so it can be changed without a deploy.**
+ *
+ * Greg's call, 2026-09-02, asked for after the tiers had already been built as
+ * constants: *"instead of adding them as environment variables, could we add
+ * them to the database, so that it's easier to modify (e.g. for agents, in UI,
+ * etc)"*. He was offered ids-only, ids-and-quotas, or the whole table, and took
+ * the whole table with the costs stated.
+ *
+ * **This table is the source of truth and Stripe follows it.** Edit a row (or
+ * insert one), run `npx tsx scripts/stripe-setup.ts --apply`, and the script
+ * creates or replaces the Stripe product and price to match and writes
+ * `stripe_price_id` back. Nothing is ever pasted into an environment file, on
+ * any machine — which is the whole point, and why `STRIPE_PRICE_READER` and its
+ * siblings are gone.
+ *
+ * ## What that bought, and what it cost
+ *
+ * `PaidTier` used to be a TypeScript union of two literals, so the compiler
+ * refused an unknown tier and `tests/billing-tiers.test.ts` could check the
+ * invariants over constants. Tier ids are now strings from a database and none
+ * of that is available. The invariants did not go away; they moved **into the
+ * schema**, where they hold for every writer including a hand-typed `UPDATE` at
+ * midnight, which is what docs/project/sql.md § *Get the database to do the
+ * work* asks for. See the CHECKs below.
+ *
+ * The one invariant a CHECK cannot express — a dearer tier must not allow fewer
+ * ingests, which is a statement about *pairs* of rows — is asserted in
+ * `tests/billing-tiers.test.ts` against the seeded rows instead.
+ *
+ * ## Sold, not merely defined
+ *
+ * `stripe_price_id` is null until the setup script has run. A tier with no
+ * price cannot be sold and is not offered — `entitlementForRow` will never
+ * match a subscription to it, because matching happens by price id.
+ */
+export const billingTiers = spideryarn.table(
+  "billing_tiers",
+  {
+    /**
+     * Internal id — `reader`, `researcher`. Appears in logs and in
+     * `billing_accounts` reporting, never to a customer.
+     *
+     * The primary key rather than a surrogate uuid: it is a short stable name
+     * chosen by a person, it is what a human editing this table will type, and
+     * a second key would only add a number to remember.
+     */
+    id: text("id").primaryKey(),
+    /** Customer-visible, on the Stripe product and the Checkout page. */
+    productName: text("product_name").notNull(),
+    description: text("description").notNull(),
+    /** New article ingests allowed per billing period. */
+    ingestsPerPeriod: integer("ingests_per_period").notNull(),
+    /**
+     * The stable handle Stripe indexes, and what makes the setup script
+     * idempotent. **Never change one on a tier that has been sold**: it is how
+     * a re-run finds the price it made last time rather than minting a second
+     * one that nobody notices until two customers are on different prices.
+     */
+    lookupKey: text("lookup_key").notNull(),
+    /** Written back by the setup script. Null means "not yet created in Stripe". */
+    stripePriceId: text("stripe_price_id"),
+    /** Which side of Stripe's test/live divide the price above came from. */
+    livemode: boolean("livemode"),
+    /**
+     * Off the pricing page without deleting the row.
+     *
+     * Deleting a tier somebody is subscribed to would orphan their
+     * entitlement; this is how a tier stops being *offered* while existing
+     * subscribers keep working, which is the ordinary way tiers retire.
+     */
+    active: boolean("active").notNull().default(true),
+    /** Cheapest first on the pricing page. Nothing else reads it. */
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    /* A tier that allows nothing is not a tier, and a negative one would make
+       every account instantly over its limit. */
+    check("billing_tiers_ingests_positive", sql`${t.ingestsPerPeriod} > 0`),
+    /* The id is typed by a person and reaches logs and URLs. Same shape as the
+       slug rules elsewhere: lower-case, no spaces, no surprises. */
+    check("billing_tiers_id_format", sql`${t.id} ~ '^[a-z][a-z0-9_-]{1,30}$'`),
+    /* Two tiers sharing a lookup key would fight over one Stripe price on
+       every run of the setup script. */
+    unique("billing_tiers_lookup_key").on(t.lookupKey),
+    /* And two tiers sharing a price id would make `price_id → tier` ambiguous,
+       which is the lookup entitlement is decided by. */
+    unique("billing_tiers_price_id").on(t.stripePriceId),
+  ],
+);
+
+/**
+ * **What a tier costs, one row per currency.**
+ *
+ * A child table rather than `amount_usd`/`amount_gbp`/`amount_eur` columns, and
+ * the reason is the request this whole change came from: adding a currency has
+ * to be something a person or an agent can *do*, and with columns it is a
+ * migration. Here it is an insert.
+ *
+ * docs/project/sql.md prefers columns over JSON, and this is neither — it is
+ * the ordinary relational answer to a repeating group, which is what a set of
+ * per-currency amounts is.
+ *
+ * **Amounts are chosen, never converted at run time.** A customer seeing €8.62
+ * knows they are being shown somebody else's price. The seeded numbers were set
+ * at roughly GBP/USD 1.35 and EUR/USD 1.16 and rounded up to whole units,
+ * landing 4–8% above spot — headroom on purpose, because Stripe prices are
+ * immutable and one set at spot goes underwater on the next move.
+ */
+export const billingTierPrices = spideryarn.table(
+  "billing_tier_prices",
+  {
+    tierId: text("tier_id")
+      .notNull()
+      .references(() => billingTiers.id, { onDelete: "cascade" }),
+    /** ISO 4217, lower case, as Stripe spells it. */
+    currency: text("currency").notNull(),
+    /** In the smallest unit — cents, pence, cents. */
+    unitAmount: integer("unit_amount").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tierId, t.currency] }),
+    /* Free is the absence of a subscription, not a zero-priced one. */
+    check("billing_tier_prices_amount_positive", sql`${t.unitAmount} > 0`),
+    /* Stripe's currency codes are three lower-case letters. A `USD` here would
+       be accepted by us and rejected by Stripe, one run of the setup script
+       later and a long way from the row somebody typed. */
+    check("billing_tier_prices_currency_format", sql`${t.currency} ~ '^[a-z]{3}$'`),
+  ],
+);
 
 /**
  * **One row per owner, and every owner gets one** — the anchor the ingest quota

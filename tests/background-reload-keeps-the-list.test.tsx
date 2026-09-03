@@ -347,7 +347,7 @@ describe("a job the server received and refused", () => {
     runResult = null;
     queueError = "You are out of credit for today.";
     await act(async () => {
-      await ideasHook?.find();
+      await ideasHook?.regenerate();
     });
 
     expect(ideasHook?.failed).toBe("You are out of credit for today.");
@@ -360,7 +360,7 @@ describe("a job the server received and refused", () => {
     runResult = null;
     queueError = null;
     await act(async () => {
-      await ideasHook?.find();
+      await ideasHook?.regenerate();
     });
 
     expect(ideasHook?.failed).toBe("Couldn't start the job.");

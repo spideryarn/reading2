@@ -217,8 +217,8 @@ export function GlossaryPanel({
 
   return (
     <aside className="mode-band gloss" aria-label="Glossary">
-      <div className="gloss-head">
-        <BookA size={14} className="gloss-head-icon" />
+      <div className="band-head">
+        <BookA size={14} className="band-head-icon" />
         <h2>Glossary</h2>
         {glossary && (
           <span className="gloss-count">
@@ -288,9 +288,11 @@ export function GlossaryPanel({
               hasProfile={owner.hasProfile}
               slug={owner.slug}
               disabled={owner.job !== null}
+              automatic={owner.automatic}
             />
             <Progress
               job={owner.job}
+              starting={owner.starting}
               failed={owner.failed}
               stalled={owner.stalled}
               onRun={() => owner.find(withProfile)}
@@ -336,9 +338,11 @@ export function GlossaryPanel({
                   hasProfile={owner.hasProfile}
                   slug={owner.slug}
                   disabled={owner.job !== null}
+                  automatic={owner.automatic}
                 />
                 <Progress
                   job={owner.job}
+                  starting={owner.starting}
                   failed={owner.failed}
                       stalled={owner.stalled}
                   onRun={() => owner.find(withProfile)}
@@ -361,9 +365,11 @@ export function GlossaryPanel({
                   hasProfile={owner.hasProfile}
                   slug={owner.slug}
                   disabled={owner.job !== null}
+                  automatic={owner.automatic}
                 />
                 <Progress
                   job={owner.job}
+                  starting={owner.starting}
                   failed={owner.failed}
                       stalled={owner.stalled}
                   onRun={() => owner.find(withProfile)}
@@ -1477,6 +1483,8 @@ function Foot({
       <div className="gloss-foot">
         <Progress
           job={job}
+          /* There is a job, so there is nothing to be waiting for. */
+          starting={false}
           failed={null}
           /* Unreachable here: this branch only renders with a job of our own,
              and one article cannot have two active ones. */
@@ -1570,6 +1578,7 @@ function Foot({
  */
 function Progress(props: {
   job: Job | null;
+  starting: boolean;
   failed: string | null;
   stalled: boolean;
   onRun(): Promise<void>;

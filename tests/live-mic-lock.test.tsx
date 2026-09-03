@@ -150,8 +150,23 @@ const THREAD = "spya-thra01";
  * tests, where it is the subject rather than a step on the way.
  */
 const wiring: LiveWiring = {
-  ticket: async () => ({ token: "ek_test", expiresAt: 0, model: "m", seed: [], tailId: null }),
+  ticket: async () => ({
+    token: "ek_test",
+    expiresAt: 0,
+    model: "m",
+    seed: [],
+    tailId: null,
+    sessionId: "live-session-mic",
+  }),
   runTool: async () => ({ content: "", label: "", detail: "" }),
+  /* The accounting posts, accepted and forgotten. This file is about the
+     microphone lock; what the meter says is tests/live-meter.test.ts and the
+     meter section of tests/live-session-flow.test.tsx. They are required on the
+     interface rather than optional precisely so that a new wiring cannot
+     silently meter nothing. */
+  liveConnected: async () => "accepted",
+  liveUsage: async () => "accepted",
+  liveClose: async () => "accepted",
 };
 
 function mount() {

@@ -31,7 +31,7 @@
  * sorts at the low end rather than being banished with the unknowns.
  */
 
-import type { AdminUser } from "../admin.js";
+import { type AdminUser, formatSpendNanos } from "../admin.js";
 import type { SortableColumn } from "./lib/DataTable.js";
 import { localeText, numberOrMissing } from "./lib/table-sort.js";
 import { exactly, timeAgo } from "./relative-time.js";
@@ -68,6 +68,10 @@ export const ADMIN_CHIP_ORDER = [
   "signedUp",
   "lastSignIn",
   "lastRead",
+  /* Third among the numbers, above the counts. "Who is expensive" is the
+     question this page gained on 2026-09-02 and the one a subscription price is
+     argued from; how many articles somebody has is context for it. */
+  "spend",
   "articles",
   "uploads",
   "questions",
@@ -86,6 +90,53 @@ function When({ iso, now, absent }: { iso: string | undefined; now: number; abse
   const ago = timeAgo(iso, now);
   if (!ago) return <span title={absent}>—</span>;
   return <span title={exactly(iso) ?? absent}>{ago}</span>;
+}
+
+/**
+ * **What one account's reading cost us**, and the two things that stop the
+ * number overclaiming.
+ *
+ * GPT Sol withdrew its objection to this column on exactly two conditions, and
+ * both of them are in this component rather than in a doc:
+ *
+ * > It does need a defined period — e.g. "current UTC month" — and a visible
+ * > partial/unpriced marker. A bare currency number would overclaim.
+ *
+ * So: the period is on the cell, from the row's own `spendMonth` rather than
+ * from the browser's clock, and a "· N unpriced" line is drawn whenever any call
+ * behind the figure reported no cost. That marker is not an edge case — on
+ * 2026-09-02 the local ledger had 207 of 243 rows reporting nothing, and a
+ * confident `$1.63` drawn over that would be a page lying quietly.
+ *
+ * **An account with no calls draws an em dash, not `$0.0000`.** A zero with a
+ * currency sign on it reads as a measurement, and "we recorded nothing for this
+ * person" is the one thing it is not — the same distinction `pocket()` in
+ * scripts/ai-cost.ts refuses to blur. The sort still treats it as zero, because
+ * for ranking who is expensive it genuinely is one.
+ */
+function Spend({ user }: { user: AdminUser }) {
+  const period = `over ${user.spendMonth} (UTC)`;
+  if (user.spendCalls === 0) {
+    return <span title={`No model calls recorded ${period}`}>—</span>;
+  }
+  return (
+    <div className="tw:min-w-0">
+      <div title={`${user.spendCalls} model call(s) ${period}`}>
+        {formatSpendNanos(user.spendNanos)}
+      </div>
+      {user.spendUnpricedCalls > 0 && (
+        <div
+          className="tw:truncate tw:text-xs tw:text-muted-foreground"
+          title={
+            `${user.spendUnpricedCalls} of those call(s) reported no cost, so the figure above ` +
+            "is short by an unknown amount"
+          }
+        >
+          · {user.spendUnpricedCalls} unpriced
+        </div>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -182,6 +233,26 @@ export function adminColumns(now: number): SortableColumn<AdminUser>[] {
         ends: ["longest ago first", "most recent first"],
       },
       cell: ({ row }) => <When iso={row.original.lastReadAt} now={now} absent="Never opened one" />,
+    },
+    {
+      id: "spend",
+      header: "Spend",
+      accessorFn: (u) => u.spendNanos,
+      sortDescFirst: true,
+      sortingFn: numberOrMissing<AdminUser>(),
+      meta: {
+        label: "Spend",
+        /* The period is in the hint and again in every cell's `title`, and that
+           is not belt-and-braces: a currency figure with no window is the one
+           thing GPT Sol would not let this column ship as. It reads the row's
+           own `spendMonth` rather than the browser's clock, so a page left open
+           across a month boundary says which month the server actually
+           measured. */
+        hint: "Model cost this UTC month — not eval or CLI spend, which is ours",
+        ends: ["cheapest first", "most expensive first"],
+        numeric: true,
+      },
+      cell: ({ row }) => <Spend user={row.original} />,
     },
     counted("articles", "Articles", "Articles", "How many are on their shelf", (u) => u.articles),
     counted("archived", "Archived", "Archived", "How many they have taken off it", (u) => u.archived),

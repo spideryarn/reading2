@@ -26,6 +26,20 @@
  * union can grow a member that says nothing new, and a count would go green on
  * exactly that.
  *
+ * ## One test went with the fall-through, 2026-09-02
+ *
+ * *"never shows a visitor a bare mode id where a product noun belongs"* existed
+ * because `visitorGap` ended in a fail-closed fall-through that had only the
+ * mode id to hand `ownersOnly` — which is how a visitor came to read *"referee
+ * is for whoever added this article"*. There is no fall-through: the policy is
+ * a total `Record<Mode, VisitorPolicy>`, an unlisted mode does not compile, and
+ * the owner-facing word is `MODE_LABEL[mode]`, so restating that here would
+ * assert the implementation back at itself. What it was really protecting — that
+ * the visitor reads a product noun — is *"calls referee Referee"* below, which
+ * checks the whole sentence against the wording somebody chose. The sweeps over
+ * `MODES` are unaffected; two of them remain.
+ * docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md § T1.3.
+ *
  * **The assertions are about the `kind`, not the prose**, following the rule
  * docs/project/copy.md sets for the failure messages: copy should stay
  * rewritable without turning a test red, and a test that pins a sentence
@@ -116,10 +130,11 @@ describe("what a visitor is told, mode by mode", () => {
   /**
    * **`timeline` is in this list deliberately, not by falling through.**
    *
-   * `visitorGap`'s fall-through is fail-closed, so a mode nobody names is
-   * owners-only anyway — which is exactly why naming it matters: *private
-   * because somebody decided* and *private because somebody forgot* are
-   * indistinguishable in the code, and this is the first. Greg, 2026-08-31:
+   * `visitorGap` used to end in a fail-closed fall-through, so a mode nobody
+   * named was owners-only anyway — which is exactly why naming it mattered:
+   * *private because somebody decided* and *private because somebody forgot*
+   * are indistinguishable in the code, and this is the first. The policy record
+   * is total now, so every row is a decision by construction. Greg, 2026-08-31:
    * making it public-readable "could be a follow-up", and wants a general
    * design for every mode rather than a fifth hand-written table.
    * docs/plans/260831i-timeline-mode.md § Making a mode public-readable.
@@ -136,35 +151,6 @@ describe("what a visitor is told, mode by mode", () => {
           kind: "owners-only",
           feature: expect.any(String),
         });
-      }
-    }
-  });
-
-  /**
-   * **No live mode falls through, and the sentence is the proof.**
-   *
-   * `visitorGap`'s last line is fail-closed by design and stays: a mode added
-   * next month is owners-only until somebody says otherwise. But it hands
-   * `ownersOnly` the bare mode id, and that function's contract is a *product
-   * noun* — "capitalised, because it names a control the visitor just pressed"
-   * — so anything reaching it reads to a visitor as *"referee is for whoever
-   * added this article…"*, lower-case, in the band and in the dock tooltip.
-   * That is what `referee` did until 2026-09-02.
-   * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C2.
-   *
-   * So the guard is: **the noun in the sentence is never the mode id**. Derived
-   * from `MODES` rather than listed, like `markedModes` itself, so the next
-   * mode is checked whether or not whoever adds it remembers this file. It
-   * pins no prose — `ownersOnly` stays rewritable — only that the word poured
-   * into it is one somebody chose.
-   */
-  it("never shows a visitor a bare mode id where a product noun belongs", () => {
-    for (const mode of MODES) {
-      for (const flags of [NOTHING_BUILT, EVERYTHING_BUILT]) {
-        const gap = visitorGap(mode, flags);
-        if (gap?.kind !== "owners-only") continue;
-        expect(gap.feature, mode).not.toBe(mode);
-        expect(gap.feature, mode).toBe(gap.feature[0]?.toUpperCase() + gap.feature.slice(1));
       }
     }
   });
@@ -270,8 +256,8 @@ describe("what a visitor is told, mode by mode", () => {
        fall-through until 2026-09-02, and this comment used to call that the
        arrangement working rather than an omission. It was both: the policy was
        right and the *sentence* was not, because the fall-through has only the
-       mode id to name the button with. It has a `COSTS` entry now, and the
-       sweep above forbids any live mode going back to falling through.
+       mode id to name the button with. It has an `owners-only` row in the total
+       `POLICY` record now, and there is no fall-through left to reach.
        docs/plans/260831an-referee-mode-for-peer-reviewers.md. */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
       ["chat", "diagram", "referee", "remember", "search", "timeline"].sort(),

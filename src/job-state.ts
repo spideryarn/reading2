@@ -137,6 +137,17 @@ export interface JobDisplay {
 export const WAITING_TO_CONTINUE = "Waiting to continue.";
 
 /**
+ * **The request has gone and the queue has not answered yet.**
+ *
+ * Not a job state — there is no job to have one — which is why it is a bare
+ * constant here rather than a member of `displayJob`'s table. It is the gap
+ * between a press (or a mode starting itself) and the first poll that sees what
+ * the press made, and without a word for it `JobProgress` drew its run button
+ * again inside that gap. src/web/JobProgress.tsx § `starting`.
+ */
+export const STARTING = "Starting…";
+
+/**
  * Past what this step has ever taken. **It names the way out**, because the
  * one thing worse than a long wait is a long wait you cannot end.
  *

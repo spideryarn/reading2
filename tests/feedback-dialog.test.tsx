@@ -111,7 +111,7 @@ function show(open: boolean) {
         open,
         onClose: () => {},
         readerEmail: "reader@example.com",
-        where: { routeKind: "read" as const, slug: "a-piece" },
+        where: { url: "https://www.spideryarn.com/read/a-piece?q=footnotes", slug: "a-piece" },
       }),
     );
   });
@@ -197,7 +197,7 @@ describe("the feedback dialog", () => {
        nothing, and this is what proves the toggle starts unpressed. */
     expect(sent.kind).toBeNull();
     expect(sent.consented).toBe(false);
-    expect(sent.routeKind).toBe("read");
+    expect(sent.url).toBe("https://www.spideryarn.com/read/a-piece?q=footnotes");
     expect(sent.slug).toBe("a-piece");
     expect(isSpideryarnId(String(sent.id))).toBe(true);
     /* **The whole point of the default-off box.** Not an empty object, not a

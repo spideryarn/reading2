@@ -84,7 +84,9 @@
  * Hierarchy and Summary are the article restated, Glossary and Search are ways
  * into it, Chat is a conversation about it. Then Questions (yours), Tweets
  * (the article rewritten for somewhere else) and Metadata (the machinery).
- * A new mode goes in MODES_UI; anything else goes after them.
+ * A new mode goes in MODES_UI, **and the compiler now asks for it** — a `Mode`
+ * with no row there is a typecheck error, not a button nobody notices is
+ * missing (`ModesMissingFromDock`). Anything else goes after them.
  *
  * `Thread` became `Tweets` in the same breath, matching the page's own name
  * (Tweets.tsx, `/read/<slug>/tweets`) and the route the button already pointed
@@ -117,7 +119,13 @@ import {
   X,
   Quote,
 } from "lucide-react";
+/* The one name each mode has, and the bar is one of four places that used to
+   spell it out for itself. src/title-text.ts imports nothing under src/web/, so
+   this direction is safe — the server composes a page title from the same
+   record. See `ModeUi` below. */
+import { MODE_LABEL } from "../title-text.js";
 import type { Comment } from "../types.js";
+import { armActivationForMode } from "./activation.js";
 import { useDockFit } from "./dock-fit.js";
 import { DEFAULT_MODE, type Mode, type Panel } from "./params.js";
 import { Link } from "./Link.js";
@@ -295,11 +303,27 @@ interface Props {
  * Short version: it runs from the article restated, through the ways into it,
  * to the conversation about it, and Chat is last because it is the one furthest
  * from the article's own words.
+ *
+ * **A new mode is a row here, and the compiler asks for it** — see
+ * `ModesMissingFromDock` below. Until 2026-09-02 nothing did: this was annotated
+ * `{ mode: Mode; … }[]`, which widened every row's `mode` to the whole union and
+ * said only that each entry *is* a mode, never that every mode *is* an entry.
+ * The word on the button is not a row here at all any more; it comes from
+ * `MODE_LABEL`.
  */
-const MODES_UI: {
+interface ModeUi {
   mode: Mode;
   icon: typeof Info;
-  label: string;
+  /**
+   * One sentence in the tooltip, which is the only per-mode string this table
+   * still holds. The **name** is `MODE_LABEL[mode]` (src/title-text.ts) — a
+   * total, compiler-checked record that the tab title and the shared-inventory
+   * dialog already read, so renaming a mode is one edit and cannot leave the
+   * bar and the tab saying different words. It had a `label` field of its own
+   * until 2026-09-02, and all thirteen pairs matched, which is what a copy
+   * looks like right up until it does not.
+   * docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md § T1.2.
+   */
   blurb: string;
   /**
    * **Keep the word when every other button loses one.**
@@ -314,7 +338,15 @@ const MODES_UI: {
    * glyphs and one word, and the word is the exit.
    */
   keepLabel?: true;
-}[] = [
+}
+
+/* `satisfies` and deliberately **not** `as const satisfies`, which is what
+   `STEP_ORDER` in src/pipeline.ts uses for the same check. `satisfies` alone
+   already keeps each row's `mode` as its literal — that is the only field
+   `ModesMissingFromDock` reads — while `as const` would additionally make the
+   element type a union of thirteen distinct shapes, twelve of which have no
+   `keepLabel` key at all, so `m.keepLabel` below would stop compiling. */
+const MODES_UI = [
   /* **First, because it is the way out.** Greg asked for it in those terms —
      *"the first (and largest?) icon in the bottom-bar, to make it easy for the
      user to use that to get out of a mode to the text"*, 2026-08-31 — and it is
@@ -336,14 +368,12 @@ const MODES_UI: {
   {
     mode: "plain",
     icon: AlignLeft,
-    label: "Plain",
     blurb: "Just the article — no columns, no panel",
     keepLabel: true,
   },
   {
     mode: "hierarchy",
     icon: ListTree,
-    label: "Hierarchy",
     blurb: "The article's own shape, one column per level of detail",
   },
   /* Straight after Hierarchy, because it answers the same question — what shape
@@ -354,21 +384,18 @@ const MODES_UI: {
   {
     mode: "outline",
     icon: Focus,
-    label: "Outline",
     blurb:
       "The whole document in one list, with more detail on the part you are reading and less on the rest",
   },
   {
     mode: "summary",
     icon: Layers,
-    label: "Summary",
     blurb:
       "The article, its parts and its sections, a sentence on each — as deep into the piece as you ask",
   },
   {
     mode: "glossary",
     icon: BookA,
-    label: "Glossary",
     blurb: "The terms this piece uses in a non-obvious way, defined from the piece itself",
   },
   /* Straight after Glossary, because the order runs outwards from the article's
@@ -379,7 +406,6 @@ const MODES_UI: {
   {
     mode: "ideas",
     icon: Lightbulb,
-    label: "Ideas",
     blurb: "The propositions this piece needs you to hold — the ones it assumes, and the ones it adds",
   },
   /* Next again, and it belongs at this end of the order for the same reason
@@ -391,7 +417,6 @@ const MODES_UI: {
   {
     mode: "quotes",
     icon: Quote,
-    label: "Quotes",
     blurb: "The lines worth keeping — the piece's own sentences, chosen and checked against it",
   },
   /* **After Ideas and before Search**, which is Greg's placement (2026-08-31)
@@ -405,7 +430,6 @@ const MODES_UI: {
   {
     mode: "timeline",
     icon: Clock,
-    label: "Timeline",
     blurb: "When the piece says these things happened, in order — and how sure it actually is",
   },
   /* Search was **two** dimmed placeholders in the `SOON` list this file used to
@@ -422,7 +446,6 @@ const MODES_UI: {
   {
     mode: "search",
     icon: Search,
-    label: "Search",
     blurb: "Find a passage by the words it uses, or by what it says",
   },
   /* **Straight after Search, because it is Search's kind of thing** — a pass
@@ -444,7 +467,6 @@ const MODES_UI: {
   {
     mode: "referee",
     icon: ClipboardCheck,
-    label: "Referee",
     blurb: "Reviewing this for somebody? Your criteria, its claims, and a second look at your own notes",
   },
   /* Diagram sits between the ways *into* the article and the conversation about
@@ -453,13 +475,11 @@ const MODES_UI: {
   {
     mode: "diagram",
     icon: Network,
-    label: "Diagram",
     blurb: "The article's shape as a picture: as an outline, as a graph, or as paragraphs placed by meaning",
   },
   {
     mode: "chat",
     icon: MessagesSquare,
-    label: "Chat",
     blurb: "Ask about this article — answers point back at the paragraphs they came from",
   },
   /* Last, and one step further out than Chat, which is the end of the ordering
@@ -481,10 +501,35 @@ const MODES_UI: {
   {
     mode: "remember",
     icon: Speech,
-    label: "Remember",
     blurb: "Say what you took from this and find out where it holds up — not saved notes or flashcards",
   },
-];
+] satisfies readonly ModeUi[];
+
+/**
+ * **Every `Mode` that `MODES_UI` above does not give a button.** Always `never`.
+ *
+ * Add a mode to `MODES` (src/web/params.ts) and forget the row above, and this
+ * line goes red naming the mode you forgot: `T extends never` is a constraint,
+ * and the default it is checked against stops being `never` the moment a mode
+ * has no row. Same idiom, same reasoning as `StepsMissingFromOrder` in
+ * src/pipeline.ts.
+ *
+ * What goes wrong without it is silent rather than loud: the mode is reachable
+ * by URL, `MODE_LABEL` names it in the tab title, and the bar simply has no
+ * button for it — a mode nobody can press and nothing complains about. The only
+ * thing that noticed was a runtime pairing assertion in a *visitor-trace* test.
+ *
+ * **That test stays**, and this does not replace it: a union discards
+ * multiplicity and order, so a duplicated row and Greg's hand-set order are
+ * both invisible here. tests/public-network-trace.test.tsx is what holds those.
+ *
+ * **Exported only so it survives.** `noUnusedLocals` deletes an unreferenced
+ * type alias, which would take the check with it; nothing imports this and
+ * nothing should.
+ */
+export type ModesMissingFromDock<
+  T extends never = Exclude<Mode, (typeof MODES_UI)[number]["mode"]>,
+> = T;
 
 /**
  * What the bar has in it, as one string, so `useDockFit` re-measures when the
@@ -663,7 +708,7 @@ export function Dock({ slug, view, mode, onMode, marked, signedIn, visitor, draw
             See DockModes below. Off the reading view there is no band to switch,
             so the same five degrade to links back to it. */}
         {mode !== undefined && onMode ? (
-          <DockModes mode={mode} onMode={onMode} marked={marked} />
+          <DockModes slug={slug} mode={mode} onMode={onMode} marked={marked} />
         ) : (
           MODES_UI.map((m) => (
             <DockLink
@@ -671,7 +716,7 @@ export function Dock({ slug, view, mode, onMode, marked, signedIn, visitor, draw
               href={readHref(slug, withMode(search, m.mode), "article")}
               current={false}
               icon={m.icon}
-              label={m.label}
+              label={MODE_LABEL[m.mode]}
               /* `dock-mode` says *this is one of the modes* on a page where
                  they are thirteen loose links rather than one segment, so
                  § the bar's fit ladder can take their labels at rung 1 the way
@@ -923,10 +968,13 @@ export function withMode(search: string, mode: Mode): string {
 const MARKED = "tw:opacity-55";
 
 function DockModes({
+  slug,
   mode,
   onMode,
   marked,
 }: {
+  /** The article a press is about, for the activation token. */
+  slug: string;
   mode: Mode;
   onMode(next: Mode): void;
   marked?: ReadonlyMap<Mode, string> | undefined;
@@ -979,7 +1027,7 @@ function DockModes({
             className="tip-soon"
             content={
               <>
-                <div className="tip-soon-head">{m.label}</div>
+                <div className="tip-soon-head">{MODE_LABEL[m.mode]}</div>
                 <p>{m.blurb}</p>
                 {/* A supplement, never the message. The sentence that actually
                     explains the boundary is in the band this button opens —
@@ -1004,13 +1052,21 @@ function DockModes({
                  narrow widths and an accessible name computed from the text
                  would go with it — leaving a screen reader six radio buttons
                  called nothing at all. */
-              aria-label={m.label}
+              aria-label={MODE_LABEL[m.mode]}
               /* Every button, not a roving one. See the note above the
                  radiogroup: with no arrow keys to move within the group, a
                  single tab stop would leave twelve of the thirteen modes
                  unreachable by keyboard. */
               tabIndex={0}
               onClick={(e) => {
+                /* **The one place in the app that knows a mode was pressed**,
+                   which is why the token is minted here and not in `onMode` —
+                   `setMode` is a query-state setter, and Back and Forward move
+                   it too. Four of the thirteen modes open on an artefact
+                   nobody has paid for yet, and this is what tells that panel
+                   the difference between a press and a pasted link.
+                   src/web/activation.ts. */
+                armActivationForMode(slug, m.mode);
                 onMode(m.mode);
                 // A real click leaves the keyboard to the article; Enter and
                 // Space (detail 0) leave focus where the reader put it. See the
@@ -1025,7 +1081,7 @@ function DockModes({
                   text costs the sighted reader a hover and costs a screen
                   reader nothing — which is why the label is the thing that
                   gives way rather than the button. See § the bar's fit ladder. */}
-              <span className={`dock-btn-label${m.keepLabel ? " always" : ""}`}>{m.label}</span>
+              <span className={`dock-btn-label${m.keepLabel ? " always" : ""}`}>{MODE_LABEL[m.mode]}</span>
             </button>
           </Tooltip>
         ))}

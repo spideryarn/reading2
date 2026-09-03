@@ -12,8 +12,11 @@
  *    `StepStamp` names and appear nowhere on disk. Spell them the second way
  *    and `stampOf` returns `{}`, `sameStamp` answers false on every comparison,
  *    and the step re-runs on every job for ever.
- * 2. **a missing `STAMP_SOURCE` row**, which makes `stampFor` answer `null` for
- *    exactly the same result, one door along.
+ * 2. **a `STAMP_SOURCE` row that says the wrong thing**, which makes `stampFor`
+ *    answer `null` for exactly the same result, one door along. A *missing* row
+ *    is a typecheck error since that table went total (src/store/artifacts.ts),
+ *    but `quiz: null` — "this step stamps nothing" — still compiles and still
+ *    costs a model call on every job for ever, so this file keeps asking.
  *
  * The first draft of the plan had bug 1 in it; GPT Sol caught it before a line
  * was written. Neither is visible to a test that the artefact parses, or that
@@ -183,10 +186,13 @@ beforeEach(async () => {
 });
 
 describe("what the store records when the quiz step has run", () => {
-  it("has a STAMP_SOURCE row, without which stampFor answers null in silence", () => {
+  it("names the quiz artefact in STAMP_SOURCE, and does not say null", () => {
     /* Stated on its own because it is the one that fails *before* anything can
-       be measured: with no row, `stampFor` returns `null` for every article and
-       the assertion below would fail for a reason nobody would read as this. */
+       be measured: with `null` or the wrong kind, `stampFor` returns `null` for
+       every article and the assertion below would fail for a reason nobody
+       would read as this. The row can no longer be *absent* — the table is
+       `Record<StepName, ArtifactKind | null>` and the compiler demands one —
+       so what is left to get wrong is the value, which is what this asks. */
     expect(STAMP_SOURCE.quiz).toBe("quiz");
   });
 

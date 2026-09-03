@@ -53,7 +53,6 @@ import type {
   FeedbackDiagnosticsPayload,
   FeedbackEnvironment,
   FeedbackKind,
-  FeedbackRouteKind,
 } from "../types.js";
 import {
   FEEDBACK_HOURLY_CAP,
@@ -92,7 +91,7 @@ const REPORT_COLUMNS = {
   body: feedbackTable.body,
   kind: feedbackTable.kind,
   consented: feedbackTable.consented,
-  routeKind: feedbackTable.routeKind,
+  url: feedbackTable.url,
   slug: feedbackTable.slug,
   buildCommit: feedbackTable.buildCommit,
   environment: feedbackTable.environment,
@@ -122,7 +121,7 @@ interface ReportRow {
   kind: string | null;
   consented: boolean;
   /** `text` in the database, a closed union in TypeScript — see `toReport`. */
-  routeKind: string;
+  url: string | null;
   slug: string | null;
   buildCommit: string | null;
   environment: string;
@@ -139,7 +138,7 @@ interface ReportRow {
 /**
  * A row as a report.
  *
- * The three casts are honest rather than hopeful: `route_kind`, `environment` and
+ * The two casts are honest rather than hopeful: `environment` and
  * `kind` are `text` columns with CHECK constraints holding the **same** values
  * the TypeScript unions do (src/db/schema.ts), so a value outside the union
  * cannot be in the column. `kind` is checked for null first, because null is a
@@ -153,7 +152,7 @@ function toReport(row: ReportRow): FeedbackReport {
     body: row.body,
     kind: row.kind === null ? null : (row.kind as FeedbackKind),
     consented: row.consented,
-    routeKind: row.routeKind as FeedbackRouteKind,
+    url: row.url,
     slug: row.slug,
     buildCommit: row.buildCommit,
     environment: row.environment as FeedbackEnvironment,
@@ -279,7 +278,7 @@ export const pgFeedbackStore: FeedbackStore = {
           body: input.body,
           kind: input.kind,
           consented: input.consented,
-          routeKind: input.routeKind,
+          url: input.url,
           slug: input.slug,
           buildCommit: input.buildCommit,
           environment: input.environment,
@@ -304,7 +303,7 @@ export const pgFeedbackStore: FeedbackStore = {
           id: report.id,
           chars: charsIn(input),
           consented: input.consented,
-          routeKind: input.routeKind,
+          url: input.url,
           slug: input.slug,
           screenshotBytes: report.screenshotBytes,
           diagnosticsVersion: report.diagnostics?.version ?? null,
