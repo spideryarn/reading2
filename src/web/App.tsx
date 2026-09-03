@@ -137,6 +137,7 @@ import {
   resolveMatcher,
   orderParam,
   confParam,
+  currentAt,
   runParam,
   runsParam,
   resolveRuns,
@@ -3691,12 +3692,10 @@ export function ConversationBand({
       startNew();
     }
   }, [loaded, ownKind, startNew]);
-  /* Read, never written, and not a subscription: `?at=` is already tracked by
-     useReadingPosition in the parent, so this component re-renders whenever it
-     changes and `location.search` is current. It is passed to the model so that
-     "this bit" and "what he just said" resolve to where the reader actually is.
-     Same read-at-render trick Dock.tsx uses for its carried query string. */
-  const at = new URLSearchParams(location.search).get("at");
+  /* Read, never written, and not a subscription — see `currentAt` in
+     params.ts. It is passed to the model so that "this bit" and "what he just
+     said" resolve to where the reader actually is. */
+  const at = currentAt();
 
   /**
    * The stance the next Remember answer will be asked for.
@@ -4423,16 +4422,14 @@ function useSummaryMode(article: Article) {
     [article.tree, article.blocks],
   );
 
-  /* Read, never written, and not a subscription: `?at=` is already tracked by
-     useReadingPosition in the parent, so this component re-renders whenever it
-     changes and `location.search` is current. Same read-at-render trick
-     ConversationBand uses, and Dock.tsx for its carried query string.
+  /* Read, never written, and not a subscription — see `currentAt` in
+     params.ts.
 
      Turned into a row index here rather than passed down as an id, because the
      panel's question is "is the reader inside this range", and a range is a
      pair of row indices — comparing ids would be comparing random strings for
      order, which is the one thing block-ids.md forbids. */
-  const at = new URLSearchParams(location.search).get("at");
+  const at = currentAt();
   const atRow = useMemo(() => {
     if (at === null) return null;
     const i = article.blocks.findIndex((b) => b.id === at);

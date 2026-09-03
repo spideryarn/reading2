@@ -70,13 +70,16 @@ import { Client } from "pg";
 import { readRawDocument } from "../src/store/raw-document.js";
 import { controlVerdict, readinessFailures, type Seeds } from "./corpus-verdict.js";
 import { isLocalDatabaseUrl, sslDecisionFor, withoutPassword } from "../src/db/ssl.js";
-import { loadEnvLocal } from "../src/env.js";
+import { loadEnvLocal, resolveTargetUrl } from "../src/env.js";
 
 /* Shell beats file, same as db-migrate.ts and db-repair-migration-ledger.ts: the
-   target of a check is an argument, not configuration. */
-const fromShell = process.env.DATABASE_URL;
+   target of a check is an argument, not configuration. src/env.ts holds the rule
+   and the reasoning for both camps. */
+/* Kept explicit even though `resolveTargetUrl` calls it too: this script reads
+   other variables out of `.env.local` as well, and the load being visible here
+   is what says so. It memoises, so the second call costs nothing. */
 loadEnvLocal();
-const url = fromShell ?? process.env.DATABASE_URL;
+const url = resolveTargetUrl({ shellWins: true });
 const SEED_BAD = process.argv.includes("--seed-a-bad-row");
 
 if (!url) {

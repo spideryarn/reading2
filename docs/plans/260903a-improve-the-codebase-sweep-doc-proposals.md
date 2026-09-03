@@ -79,6 +79,37 @@ one command*:
 and adding some is a decision rather than a tidy-up — which is why this run did not make it. A hook
 catches the agent who did not read the recipe, which is the population the guard exists for.
 
+### 3. `docs/reusable/improve-the-codebase.md` — one sentence, from this run's own failures
+
+**Why**: the doc already says *"Count every instance before you plan the fix"* and explains one
+reason counts arrive low (each agent reads one slice). **This run got a count wrong twice, and
+neither time was for that reason.** Both were the same new mechanism:
+
+- **T1.4** arrived as one module-scope lock. There are ten. The audit found the one its postmortem
+  named and stopped.
+- **T1.9** claimed three raw reads of `?at=`. There are two — the third site's comment said "same
+  read-at-render trick as `Dock.tsx`", and the agent filed `Dock.tsx` as a hit. Dock reads the whole
+  query string for a different job entirely.
+
+Both are the *same* failure: **an agent read a citation and recorded it as an instance.** That is
+worth naming, because this doc's own best advice — start from what the codebase already says about
+itself — is exactly what produces it. Comments that cross-reference each other are a strong signal
+that duplication exists *and* an unreliable guide to how much.
+
+**Before**, in *Count every instance before you plan the fix*, after *"…so it sees the copies inside
+its slice and none of the outermost ones."*:
+
+> **A dedup that leaves a copy alive is worse than none: the next reader believes it is done.**
+
+**After** — the same paragraph, with one sentence inserted before that line:
+
+> **And a citation is not an instance.** The comments that say "same trick as X" are how you find
+> the cluster, and they are not a census of it: X may be doing a different job, and the sites nobody
+> cross-referenced are invisible to this method entirely. Grep for the idiom, then count what the
+> grep returns.
+>
+> **A dedup that leaves a copy alive is worse than none: the next reader believes it is done.**
+
 ---
 
 ## Applied, for your review

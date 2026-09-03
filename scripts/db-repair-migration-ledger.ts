@@ -77,16 +77,18 @@ import {
   type ProbeRow,
   type Reconciliation,
 } from "./migration-reconciliations.js";
-import { loadEnvLocal } from "../src/env.js";
+import { loadEnvLocal, resolveTargetUrl } from "../src/env.js";
 
 /* Same precedence rule as db-migrate.ts, and for the same reason: the target of
    a repair is an argument, not configuration, so a `DATABASE_URL=…` on the
    command line must beat `.env.local` rather than being buried by it. That
    inversion is what once applied a remote migration to a laptop and said
-   `✓`. src/env.ts § loadEnvLocal, and docs/reusable/silent-success.md. */
-const fromShell = process.env.DATABASE_URL;
+   `✓`. src/env.ts § resolveTargetUrl, and docs/reusable/silent-success.md. */
+/* Kept explicit even though `resolveTargetUrl` calls it too: this script reads
+   other variables out of `.env.local` as well, and the load being visible here
+   is what says so. It memoises, so the second call costs nothing. */
 loadEnvLocal();
-const url = fromShell ?? process.env.DATABASE_URL;
+const url = resolveTargetUrl({ shellWins: true });
 
 const APPLY = process.argv.includes("--apply");
 const FORGET_ORPHANS = process.argv.includes("--forget-orphans");

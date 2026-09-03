@@ -321,8 +321,9 @@ describe("the environment a deployment needs", () => {
        `VERCEL` above: otherwise a machine that has it set changes what every
        test in this block means. */
     vi.stubEnv("VERCEL_ENV", "");
+    /* No STRIPE_PRICE_* — tiers live in `billing_tiers` since 2026-09-02, so
+       there is no such variable to stub. */
     vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_fixture");
-    vi.stubEnv("STRIPE_PRICE_READER", "price_fixture");
   }
 
   /** Only the warnings, since ssl and store have their own tests above. */
@@ -543,7 +544,6 @@ describe("the environment a deployment needs", () => {
   it("stays quiet about a deployment that simply has no payments", async () => {
     completeEnv();
     vi.stubEnv("STRIPE_SECRET_KEY", "");
-    vi.stubEnv("STRIPE_PRICE_READER", "");
 
     const answer = await call("GET");
 

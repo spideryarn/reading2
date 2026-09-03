@@ -85,8 +85,8 @@ decided — nothing is waiting on Greg. The first stage is built (✅); the buil
 
 ### Where the build stands
 
-*Last updated 2026-09-02 17:45. The date is in the text rather than the heading so that links to
-this section survive it being updated — an earlier dated heading broke `billing.md`'s link on the
+*Last updated 2026-09-02, end of day. The date is in the text rather than the heading so that links
+to this section survive it being updated — an earlier dated heading broke `billing.md`'s link on the
 first edit, which is what `tests/doc-links.test.ts` is for.*
 
 **Verdict: important work left.** Everything that can be built without the database is built,
@@ -121,22 +121,24 @@ none, and a dozen had accumulated in a day.
 
 
 
-Worktree `stripe-payments`, branch `worktree-stripe-payments`.
+The worktree `stripe-payments` was removed on 2026-09-02 after `npm run worktree:check` passed;
+everything below is on `origin/dev`.
 
-**What exists**, all of it on `dev` or about to be:
+**What exists**, all of it on `dev`:
 
 | | |
 |---|---|
-| Stripe objects | Product, $10/mo price, Customer Portal configuration, created in test mode by [`scripts/stripe-setup.ts`](../../scripts/stripe-setup.ts) and idempotent by `lookup_key`. A Checkout Session and a Portal session were both minted by hand to prove the account works end to end. |
+| Stripe objects | Product, two monthly prices each carrying USD/GBP/EUR through `currency_options`, and a Customer Portal configuration — created in test mode by [`scripts/stripe-setup.ts`](../../scripts/stripe-setup.ts), which reads the `billing_tiers` rows and makes Stripe match them. Idempotent by `lookup_key`. Six real Checkout Sessions were minted by hand, one per price point, to prove all six amounts land. |
 | [`src/billing/stripe.ts`](../../src/billing/stripe.ts) | The only place a client is constructed. Pinned API version, mode guards, 10-second timeout. |
-| [`src/billing/tiers.ts`](../../src/billing/tiers.ts) | What each tier allows. `Entitlement` is a discriminated union, so a period start without an end is a state the compiler refuses. |
+| `billing_tiers` + `billing_tier_prices` | **The tiers are database rows, not environment variables** — Greg's call, so they can be changed by an agent or a UI without a deploy. `PaidTier` is therefore no longer a compile-time union. Read through [`src/store/pg-tiers.ts`](../../src/store/pg-tiers.ts) (30-second cache). |
+| [`src/billing/tiers.ts`](../../src/billing/tiers.ts) | Pure types and helpers over those rows. `Entitlement` is a discriminated union, so a period start without an end is a state the compiler refuses. |
 | [`src/billing/subscription.ts`](../../src/billing/subscription.ts) | Reading a Stripe subscription, where the Basil period-move trap lives. Refuses everything unrecognised, towards free. |
 | [`src/billing/webhook.ts`](../../src/billing/webhook.ts) | Verification over the exact bytes, its own raw-body reader, fail-closed on an unset secret, and the route itself at an exact pre-auth path. |
-| [`src/billing/sync.ts`](../../src/billing/sync.ts) | Ask Stripe, write it down, under the customer's row lock. **Never executed.** |
-| [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts) | Reserve, settle, count. The lock, and the anchor row created before it. **Never executed against a database.** |
-| schema + 2 migrations | `billing_accounts`, `ingest_events`, `jobs.ingest_event_id` with a composite FK. **Generated, never applied.** |
+| [`src/billing/sync.ts`](../../src/billing/sync.ts) | Ask Stripe, write it down, under the customer's row lock. **Never executed** — the webhook's tests inject a sync. |
+| [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts) | Reserve, settle, count. The lock, and the anchor row created before it. Exercised by the race suite against the real database. |
+| schema + 4 migrations | `billing_accounts`, `ingest_events`, `jobs.ingest_event_id` with a composite FK; then `billing_tiers`, `billing_tier_prices` and their seed. Applied locally, not yet on production. |
 | `pay-` copy | Three messages, registered in `CODE_KINDS` so none arrives with a Retry button that cannot work. |
-| [billing.md](../project/billing.md) | The evergreen doc, under [security-map.md](../project/security-map.md). |
+| [billing.md](../project/billing.md) | The evergreen doc, under [security-map.md](../project/security-map.md) — including how to add a tier or a currency. |
 
 **What is still unbuilt**: the wiring. `reserveIngest` has no caller in `POST /api/jobs` and
 `settleReservation` has none in `settleIn`, so the quota is enforced nowhere yet — everything above
@@ -154,23 +156,22 @@ the client cannot send. Harmless in that direction; the mirror of it would be a 
 people use to report 500s. Whoever ships the `/privacy` page should add it to that array in the
 same change — and `tests/feedback-store.test.ts` cannot see either half, because it iterates the
 `types.ts` list.
-**Next**, in order:
 
-1. `npm run db:migrate`, then **run `tests/billing-quota-race.test.ts`** — the first time the
-   mechanism is exercised through the real code rather than the standalone spike. Do not skip
-   past this because the spike passed; they are different things.
-2. The settlement tests Sol asked for and nobody has written: reserve a slot, attach it to a real
+**Next**, in order — the first item on the old list (migrate, then run the race suite for real) is
+done, and what it found is above:
+
+1. The settlement tests Sol asked for and nobody has written: reserve a slot, attach it to a real
    job, and assert that `done` publishes *and* charges in one commit, that `error` and cancel
    release, that an injected settlement failure rolls back the publication, and that a cancel
    racing a final publication settles exactly once.
-3. `reserveIngest` into `POST /api/jobs`; `settleReservation` into both branches of `settleIn`;
+2. `reserveIngest` into `POST /api/jobs`; `settleReservation` into both branches of `settleIn`;
    `ingestEventId` threaded through `EnqueueRequest` → `enqueue()` → the job INSERT. Retries go
    through admission like anything else.
-4. Checkout and portal routes — **and the customer→owner mapping must be durable before a
+3. Checkout and portal routes — **and the customer→owner mapping must be durable before a
    Checkout Session exists**, not written by the browser's return callback, which is not reliable
    (Sol, and the webhook's "unmapped" case assumes it).
-5. `/profile`, browser check, admin columns.
-6. Comp subscriptions, then go-live.
+4. `/profile`, browser check, admin columns.
+5. Comp subscriptions, then go-live.
 
 ### The coordination problem this work kept hitting
 

@@ -30,7 +30,7 @@ import {
   readActualSchema,
 } from "../src/db/schema-drift.js";
 import { sslDecisionFor, withoutPassword } from "../src/db/ssl.js";
-import { loadEnvLocal } from "../src/env.js";
+import { loadEnvLocal, resolveTargetUrl } from "../src/env.js";
 
 /**
  * **The shell's `DATABASE_URL`, read before `.env.local` can bury it.**
@@ -41,12 +41,14 @@ import { loadEnvLocal } from "../src/env.js";
  * remote stayed four migrations behind — and a checker that silently examines
  * the wrong database is a worse failure than no checker, because it is the one
  * that gets believed. docs/reusable/silent-success.md.
+ *
+ * The rule itself, and the two camps it settles, are in src/env.ts.
  */
-const fromShell = process.env.DATABASE_URL;
-
+/* Kept explicit even though `resolveTargetUrl` calls it too: this script reads
+   other variables out of `.env.local` as well, and the load being visible here
+   is what says so. It memoises, so the second call costs nothing. */
 loadEnvLocal();
-
-const url = fromShell ?? process.env.DATABASE_URL;
+const url = resolveTargetUrl({ shellWins: true });
 if (!url) {
   console.error(
     "DATABASE_URL is not set.\n" +
