@@ -403,10 +403,15 @@ export function useHoverCard<T>({
     };
 
     const over = (event: PointerEvent) => {
-      /* Mouse and pen only. A touch fires `pointerover` on the tap and never
-         fires the leaving one, so on an iPad this would open a card that stays
-         until something else is tapped — and the tap the reader made was
-         probably the start of a selection. docs/project/touch.md. */
+      /* Mouse and pen only. A touch fires `pointerover` on the tap, and the tap
+         the reader made was probably the start of a selection rather than a
+         request for a card. docs/project/touch.md.
+
+         **The invariant, learned the expensive way: every listener on the hover
+         path has to say what it does with a touch pointer**, because a finger
+         fires all of these events — including the leaving ones this comment used
+         to claim it never fired. `leave` below was left unguarded on the strength
+         of that sentence. docs/postmortems/260903g-the-touch-card-closed-itself-on-every-tap.md. */
       if (event.pointerType === "touch") return;
       const target = event.target as Element | null;
       const hit = target?.closest?.(selector) as HTMLElement | null;
@@ -618,8 +623,19 @@ export function useHoverCard<T>({
       event.stopPropagation();
     };
 
-    /* Leaving the window entirely, which fires no `pointerover` at all. */
-    const leave = () => close();
+    /**
+     * Leaving the window entirely, which fires no `pointerover` at all.
+     *
+     * **Mouse and pen only, for the same reason `over` is.** A lift fires this
+     * too — a touch pointer cannot hover, so the spec destroys it at `pointerup`
+     * and fires `pointerleave` on the way out — so without the guard every tap
+     * closed the card it had just opened, for a week.
+     * docs/postmortems/260903g-the-touch-card-closed-itself-on-every-tap.md.
+     */
+    const leave = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+      close();
+    };
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape") shut();
     };

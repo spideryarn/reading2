@@ -132,8 +132,27 @@ export interface UploadStore {
   /** Write a freshly minted record. Never used to update one. */
   create(record: UploadRecord): Promise<void>;
 
-  /** Take exclusive ownership, exactly once, or say who got there first. */
-  claim(id: string, options: { owner?: string; now?: Date }): Promise<ClaimResult>;
+  /**
+   * Take exclusive ownership, exactly once, or say who got there first.
+   *
+   * `arrived` says the caller has **seen the object in Storage** — a successful
+   * `head` on the staging key, which only `POST /api/jobs` does
+   * (`uploadHasArrived`, src/routes.ts). It suppresses the grant-expiry refusal
+   * and nothing else.
+   *
+   * That is not a loophole, it is the expiry's own reason ceasing to apply. The
+   * grant's window exists to stop us claiming an upload whose bytes never came;
+   * once they demonstrably have, the question it was asked to answer has been
+   * answered better, from the authoritative place. Without this a reader refused
+   * on quota, who upgrades two hours later, is told their file expired while we
+   * are holding it — and a very slow PUT that starts inside the window and ends
+   * outside it lands in the same dead end. GPT Sol, 2026-09-03, twice.
+   *
+   * **It does not touch `status`.** A `claimed`, `verified` or `expired` record
+   * still refuses, because those are about what has already happened to the
+   * upload rather than about time.
+   */
+  claim(id: string, options: { owner?: string; now?: Date; arrived?: boolean }): Promise<ClaimResult>;
 
   /**
    * Move to a terminal state, **refusing an illegal transition loudly**.

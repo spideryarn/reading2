@@ -35,7 +35,7 @@ export interface UploadProgress {
 }
 
 /** What `POST /api/uploads` hands back. */
-interface Grant {
+export interface Grant {
   uploadId: string;
   url: string;
   expiresAt: string;
@@ -134,7 +134,7 @@ function put(
          text is not ours to publish and is usually meaningless to a person. The
          status is enough to look it up. */
       console.error("upload failed", xhr.status, xhr.responseText.slice(0, 400));
-      reject(new Error(uploadFailure(realStatus(xhr))));
+      reject(refusal(realStatus(xhr)));
     };
     xhr.onerror = () => {
       note("transport-failed", null);
@@ -173,6 +173,28 @@ function realStatus(xhr: XMLHttpRequest): number {
 }
 
 /**
+ * A refusal from Storage, **carrying the status as well as the sentence**.
+ *
+ * The status is what lets `uploadEngine` tell one refusal from another without
+ * matching on prose. One case needs it and it is the ambiguous one: a retried
+ * PUT that comes back `409` means *the object is already at our staging key*,
+ * which — since the key is ours and nobody else can write it — means the first
+ * attempt actually landed and the browser was told otherwise. That is a reason
+ * to go on and queue the ingest, not a reason to show `[st-dup]` and stop.
+ *
+ * `status` on the error rather than a second reject path, because every caller
+ * that does not care goes on reading `err.message` exactly as before.
+ */
+export interface UploadRefused extends Error {
+  /** What Storage *meant* — see `realStatus`, which is not `xhr.status`. */
+  status: number;
+}
+
+function refusal(status: number): UploadRefused {
+  return Object.assign(new Error(uploadFailure(status)), { status });
+}
+
+/**
  * The sentence for a refusal from Storage rather than from us.
  *
  * Three of these the reader can act on and the rest they cannot, which is the
@@ -201,27 +223,48 @@ const NETWORK_FAILED =
   "The upload stopped before it finished — that is usually the connection rather than the file. Try again. [st-net]";
 
 /**
- * Choose a file, and end up with an upload id the queue can be pointed at.
+ * **Where to put this file, and permission to put it there.** The first half.
  *
- * It deliberately does **not** queue anything. The reader is still on the shelf
- * with the file in their browser's memory, and the page that owns an ingest is
- * `/add/upload/<id>` — which has an address, so it can be reloaded and sent.
- * Doing both here would mean the bytes and the job were started from a page
- * with no way back to either.
+ * This used to be the first four lines of a function called `uploadPdf` that
+ * went on to `await put(...)` and only then returned the grant — which made the
+ * upload id, and therefore the address `/add/upload/<id>`, unavailable until the
+ * last byte had gone. That was fine while the shelf's job was to wait; it is the
+ * exact thing in the way now that the reader is meant to press Add and leave
+ * (docs/plans/260903j-background-pdf-upload-so-add-does-not-wait.md).
+ *
+ * So the two halves are two exported functions. **Neither's behaviour changed**
+ * — `put`, `realStatus` and `uploadFailure` below are untouched, and they are
+ * where all the hard-won detail is. Only the seam moved. GPT Sol pointed out
+ * that the plan's "the transport is not touched" could not be true of the
+ * module's *exports*, whatever it was true of.
+ *
+ * Hashing is here rather than in the caller because it is part of what the
+ * request says: `sha256` is a checksum of the transfer to come, not an identity
+ * (see `sha256Hex`). It is also the slow part for a large file — tens of
+ * milliseconds per megabyte — which is why `uploadEngine` shows a phase for it.
  */
-export async function uploadPdf(
-  file: File,
-  options: { onProgress?: (p: UploadProgress) => void; signal?: AbortSignal } = {},
-): Promise<Grant> {
+export async function requestGrant(file: File, signal?: AbortSignal): Promise<Grant> {
   const sha256 = await sha256Hex(file);
-  const grant = await readJson<Grant>(
+  return readJson<Grant>(
     await apiFetch("/api/uploads", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ filename: file.name, bytes: file.size, sha256 }),
-      ...(options.signal ? { signal: options.signal } : {}),
+      ...(signal ? { signal } : {}),
     }),
   );
-  await put(grant.url, file, options.onProgress, options.signal);
-  return grant;
+}
+
+/**
+ * **Send the bytes.** The second half, and the one that takes the minutes.
+ *
+ * Resolves when Storage has the whole file and not before — see `put`, where
+ * every one of the four handlers is load-bearing.
+ */
+export function putFile(
+  grant: Grant,
+  file: File,
+  options: { onProgress?: (p: UploadProgress) => void; signal?: AbortSignal } = {},
+): Promise<void> {
+  return put(grant.url, file, options.onProgress, options.signal);
 }

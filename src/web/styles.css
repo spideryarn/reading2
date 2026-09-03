@@ -5391,11 +5391,31 @@ td.text.has-hit[data-hues="8"] {
   font-family: var(--font-ui);
   font-size: 0.79rem;
 }
+/* The card's two ways out: "open in a new tab" on a link, and "in the glossary"
+   on a term.
+
+   **The padding is the tap target, and it is not behind a media query.** These
+   were 17px tall, which a browser pass at 390×844 flagged on 2026-09-03. The
+   obvious answer — grow them under `(pointer: coarse)` — is the one this
+   codebase has already been stopped for once, because that query describes only
+   the *primary* pointer and a touchscreen laptop is neither thing (touch.md).
+   Everything else here decides per event, from `pointerType`, and CSS cannot
+   see that.
+
+   So everyone gets the bigger target, and the reason that costs nothing is
+   Fable's, 2026-09-03: on touch the small button already satisfies WCAG 2.5.8,
+   because tapping the words a second time is the equivalent control the
+   exception is written for — so this is comfort rather than compliance, and 44px
+   would be paying Apple's price for a primary control that this is not. **The
+   reader with no second route is the one holding a mouse**, for whom a click on
+   the words selects text and this button is the only way through. ~30px,
+   one rule, no device detection. */
 .prose-card-link,
 .prose-card-open {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+  padding-block: 0.4rem;
   color: var(--ink-faint);
   font-family: inherit;
   font-size: inherit;
@@ -5408,7 +5428,9 @@ td.text.has-hit[data-hues="8"] {
    not jump about between one term and the next. */
 .prose-card-open {
   margin-left: auto;
-  padding: 0;
+  /* Horizontal only. A `padding: 0` shorthand here — which is what this was —
+     silently puts back the 17px target the rule above exists to fix. */
+  padding-inline: 0;
   border: none;
   background: none;
   cursor: pointer;

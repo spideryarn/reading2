@@ -76,7 +76,8 @@
  *   GET    /api/referee/scan/:slug          the deterministic injection scan of the stored raw
  *                                           source — no model, no cost, and no verdict
  *   POST   /api/uploads          { filename, bytes, sha256 } → where to PUT a PDF, and for how long
- *   GET    /api/uploads/:id      what became of one upload
+ *   GET    /api/uploads/:id      what became of one upload, and whether its bytes have arrived
+ *   DELETE /api/uploads/:id      the reader pressed Stop: pending → expired
  *   GET    /api/jobs             every ingest job this server knows about
  *   POST   /api/jobs             { url } | { uploadId } | { slug, steps?, force? }
  *   GET    /api/jobs/:id         one job, for the progress indicator to poll
@@ -272,7 +273,12 @@ import { describeAdminMiss, isAdmin } from "./admin.js";
 import type { NewFeedback, Visibility } from "./store/contracts.js";
 import { ADMIN_FEEDBACK_DEFAULT_LIMIT, decodeFeedbackCursor } from "./types.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
-import { placingFailed, UPLOAD_MISSING, UPLOAD_UNAVAILABLE } from "./messages.js";
+import {
+  placingFailed,
+  UPLOAD_MISSING,
+  UPLOAD_STILL_ARRIVING,
+  UPLOAD_UNAVAILABLE,
+} from "./messages.js";
 import { WEBHOOK_PATH, serveStripeWebhook } from "./billing/webhook.js";
 import {
   confirmCheckout,
@@ -302,6 +308,7 @@ import { uploadGrants } from "./store/blobs.js";
 import { uploadProblem } from "./uploads.js";
 import {
   asOf,
+  cancelUpload,
   claimUpload,
   isUploadId,
   mintUpload,
@@ -4603,10 +4610,21 @@ async function mintAnUpload(body: unknown): Promise<{
   };
 }
 
-/** An upload record as a client may see it. Our hash is included; the claimed one is not. */
-function publicUpload(record: UploadRecord): Record<string, unknown> {
+/**
+ * An upload record as a client may see it. Our hash is included; the claimed one
+ * is not.
+ *
+ * `arrived` is **not** on the record — it is asked of Storage by the caller and
+ * passed in, because the record has no idea. It is what a page waiting on
+ * another tab's transfer polls: reload `/add/upload/<id>` mid-upload and the
+ * page that comes back holds no `File` and no XHR, so watching for the object is
+ * the only way it can know when the ingest may be queued. Without it that page
+ * would have to poll by re-POSTing `/api/jobs`, which is a mutation on a loop.
+ */
+function publicUpload(record: UploadRecord, arrived: boolean): Record<string, unknown> {
   return {
     uploadId: record.id,
+    arrived,
     filename: record.filename,
     status: record.status,
     ...(record.sha256 ? { sha256: record.sha256 } : {}),
@@ -4617,7 +4635,93 @@ function publicUpload(record: UploadRecord): Record<string, unknown> {
 }
 
 /**
+ * **Have the bytes actually arrived?** The readiness gate.
+ *
+ * Asked of Storage, before anything is claimed, enqueued or reserved. Until
+ * 2026-09-03 nobody had to ask: `/add/upload/<id>` did not exist until the last
+ * byte had landed, because the shelf navigated only after the transfer resolved.
+ * The reader now gets that address at byte **zero** so they can walk away from
+ * the upload (docs/plans/260903j-background-pdf-upload-so-add-does-not-wait.md),
+ * and three ordinary gestures then queue a job over a file that is not there:
+ * reload the page, open the address in a second tab, or press Stop and reload.
+ * `acquireUpload` answers each of those with `refuse("missing")`, which is
+ * **terminal** — so the reader's own reload destroyed their upload.
+ *
+ * ## Why the object rather than a `ready` column
+ *
+ * A column would need a writer, and the only candidate is the browser saying
+ * *I have finished* — which is a claim by the party we are checking up on, and a
+ * second source of truth that can disagree with the bucket. The object is the
+ * fact itself, and it cannot drift from itself.
+ *
+ * **And a `head` is a true test of a *completed* upload, not a proxy for one.**
+ * Measured against the local Supabase stack on 2026-09-03: a PUT aborted at
+ * 320 KB of 5 MB leaves **no object at all**, and re-PUTting the same grant then
+ * succeeds. There is no half-written object for this to mistake for a whole one,
+ * because the write is not resumable. The table is in the plan.
+ *
+ * `head` answers `null` for absent and **throws for everything else** — a
+ * Storage 503 read as "absent" would turn an outage into "your file never
+ * arrived", which is the lie a reader acts on by uploading 11 MB again
+ * (`RawSourceStore.head`, src/store/blobs.ts). So a bad day here is a 500, not a
+ * refusal.
+ */
+async function uploadHasArrived(uploadId: string): Promise<boolean> {
+  return (await blobStore().head(stagingKey(uploadId))) !== null;
+}
+
+/**
+ * The job or article this upload already became, **without spending a slot**.
+ *
+ * Split out of `queueAnUpload` on 2026-09-03 for one reason, and it is a
+ * question of ordering rather than of tidiness: `withIngestSlot` wraps that
+ * function, and `admitIngest` **throws 402 before the callback runs**
+ * (src/billing/admission.ts). So a reader with one slot left who reloads
+ * `/add/upload/<id>` — or whose second tab posts alongside the first — could be
+ * refused for having no allowance, when the correct answer was the job their
+ * first request already made. The refusal was about a slot nobody needed.
+ * GPT Sol, 2026-09-03, reviewing the plan for the background upload.
+ *
+ * `null` means *nothing yet*, which is the only case that goes on to admission.
+ *
+ * It reads the record's status rather than trying the claim, because trying the
+ * claim is what takes it. Two genuinely fresh requests both see `pending` here
+ * and both go on; `claimUpload` still decides between them, and the loser
+ * recovers inside `queueAnUpload` exactly as it always did. This removes the
+ * **common** repeat from the admission path, not the race.
+ */
+async function resolveExistingUpload(uploadId: string): Promise<UploadOutcome | null> {
+  const owner = currentOwnerId();
+  const record = await readUpload(uploadId, owner);
+  /* **Here rather than in `queueAnUpload`**, so that an id belonging to nobody
+     is a 404 before a slot is reserved for it, too. */
+  if (!record) throw httpError(404, "No such upload");
+  if (record.status === "pending") return null;
+  /* **Stopped by the reader, or its grant swept.** `cancelUpload` puts a record
+     here, so this is the answer to *I pressed Stop and then reloaded the
+     address*. It has to come before the job lookup: an `expired` upload has no
+     job and no slug, and without this it fell through to *"already being turned
+     into an article"*, which is the opposite of what happened. */
+  if (record.status === "expired") throw httpError(410, UPLOAD_MISSING.message);
+
+  const already = await jobForUpload(uploadId);
+  if (already) return { kind: "job", job: already };
+  /* Retention has taken the job and the record still names the article — the
+     case `queueAnUpload` documents at length below. Re-read there rather than
+     reusing `record`, because `noteSlug` lands after `enqueue` returns. */
+  const fresh = await readUpload(uploadId, owner);
+  if (fresh?.slug) return { kind: "article", slug: fresh.slug };
+  /* Claimed, no job, no slug: `enqueue` threw between the claim and `noteSlug`.
+     Unrecoverable, and pre-existing — see the plan's last stage. */
+  throw httpError(409, "That upload is already being turned into an article.");
+}
+
+/**
  * `POST /api/jobs { uploadId }` — take ownership of an upload and queue it.
+ *
+ * **Called only for an upload that is `pending` and whose bytes are there** —
+ * `resolveExistingUpload` and `uploadHasArrived` run in front of it, outside the
+ * quota slot. What is left here is the fresh case and the race.
  *
  * The order is the whole of it: **claim, then enqueue.** Claiming is a
  * create-only file, so two tabs racing produce one winner and one `taken`; if
@@ -4633,14 +4737,28 @@ function publicUpload(record: UploadRecord): Record<string, unknown> {
  */
 async function queueAnUpload(uploadId: string, slot: IngestSlot): Promise<UploadOutcome> {
   const owner = currentOwnerId();
-  const record = await readUpload(uploadId, owner);
-  if (!record) throw httpError(404, "No such upload");
-
-  const claim = await claimUpload(uploadId, { owner });
+  /* **`arrived`, because the route has just looked.** `uploadHasArrived` ran a
+     `head` on the staging key immediately above this call, so the question the
+     grant's expiry stands in for — *did the bytes ever come?* — has been
+     answered from the authoritative place. Suppressing the expiry refusal is
+     what stops a reader who upgrades after a late quota 402, or whose PUT
+     started inside the two hours and finished outside them, being told their
+     file expired while we are holding it. `UploadStore.claim` has the rest. */
+  const claim = await claimUpload(uploadId, { owner, arrived: true });
   if (!claim.ok) {
+    /* **`unknown` is a 404, and it used to be a 409.** The `readUpload` that
+       answered it moved out to `resolveExistingUpload`, and without this line
+       a vanished record fell through the `taken` branch to "already being
+       turned into an article" — a sentence about a record that is not there.
+       Not reachable through the route, which resolves first; reachable by
+       anything that calls this directly, which is what makes it worth stating. */
+    if (claim.why === "unknown") throw httpError(404, "No such upload");
     if (claim.why === "expired") throw httpError(410, UPLOAD_MISSING.message);
     /* `taken`. If the first claim got as far as a job, that job is the answer —
-       this is the same request arriving twice, not a conflict. */
+       this is the same request arriving twice, not a conflict. **Reached only
+       by the genuine race now** — two fresh requests that both saw `pending`
+       before either claimed — because `resolveExistingUpload` answers the
+       common repeat before a slot is ever reserved. */
     const already = await jobForUpload(uploadId);
     if (already) return { kind: "job", job: already };
     /**
@@ -4661,8 +4779,11 @@ async function queueAnUpload(uploadId: string, slot: IngestSlot): Promise<Upload
      * import's job is trimmed like any other success, and that is the case a
      * reader actually comes back to. What is durable here is the **article**,
      * and the upload record has named it since the moment `enqueue` returned —
-     * uploads are swept on their grant, never trimmed by count, so the record
-     * outlives the job by design.
+     * upload records are never trimmed by count, so the record outlives the job
+     * by design. (This used to add "swept on their grant", which was simply
+     * false: `sweepable` in src/source.ts has no production caller and nothing
+     * deletes an upload record or its staging object. Nothing here depends on
+     * the sweep; the claim was wrong rather than load-bearing.)
      *
      * Re-read rather than reusing `record` above: `noteSlug` lands after
      * `enqueue` returns, so a second request arriving in that window would
@@ -7300,10 +7421,30 @@ export async function serveAuthenticatedApi(
        picker to confirm what landed. Read-only in the strict sense: an expired
        grant is *reported* as expired without the record being rewritten, so a
        poll cannot be a mutation. See `asOf`. */
+    /* `DELETE /api/uploads/:id` — **the reader pressed Stop.**
+       `pending → expired`, so a reload of `/add/upload/<id>` is answered rather
+       than polled at for the two hours of the grant, and so that *"nothing was
+       added"* is a claim the server backs rather than one the browser asserts
+       about itself. `cancelUpload` for the race against a queue request that
+       got there first: it loses, quietly, and the ingest goes on.
+
+       200 either way, with `cancelled` saying which. A Stop that arrived too
+       late is not an error the reader did anything wrong to cause, and the page
+       is about to show them the running job it lost to. */
+    if (upload && req.method === "DELETE") {
+      const id = part(upload, 1);
+      const stopped = await cancelUpload(id, currentOwnerId());
+      send(res, 200, { uploadId: id, cancelled: stopped });
+      return;
+    }
     if (upload && req.method === "GET") {
-      const found = await readUpload(part(upload, 1), currentOwnerId());
+      const id = part(upload, 1);
+      const found = await readUpload(id, currentOwnerId());
       if (!found) throw httpError(404, "No such upload");
-      send(res, 200, publicUpload(asOf(found)));
+      /* **After the ownership check, never before.** A `head` on a staging key
+         derived from an id is a yes-or-no about somebody else's file, and this
+         route already answers 404 for an upload that is not the reader's. */
+      send(res, 200, publicUpload(asOf(found), await uploadHasArrived(id)));
       return;
     }
     if (allJobs && req.method === "POST") {
@@ -7316,9 +7457,32 @@ export async function serveAuthenticatedApi(
         /* No other field survives `checkUploadOrigin`, so there is nothing to
            forward: an upload is always the default ingest.
 
-           **A new ingest, so it takes a quota slot** — and no slug to name the
-           reservation with, because the article's name comes from the upload
-           record's filename inside `queueAnUpload`. */
+           **Three steps, and the order is the point.** Each of the first two is
+           outside the quota slot, because neither of them is a new ingest:
+
+           1. `resolveExistingUpload` — the answer for a reload, a second tab or
+              a double-click is the job that already exists, and asking for it
+              inside `withIngestSlot` meant a reader with nothing left was told
+              402 about a slot nobody needed (GPT Sol, 2026-09-03).
+           2. `uploadHasArrived` — the readiness gate. The reader reaches this
+              address at byte zero now, so "the file is not there yet" is an
+              ordinary state and must cost nothing: no claim, no job, no slot.
+              Queueing anyway is what `acquireUpload` refuses **terminally**.
+           3. and only then a **new ingest, which takes a quota slot** — with no
+              slug to name the reservation with, because the article's name comes
+              from the upload record's filename inside `queueAnUpload`. */
+        const existing = await resolveExistingUpload(uploadId);
+        if (existing?.kind === "article") {
+          send(res, 200, { article: existing.slug });
+          return;
+        }
+        if (existing) {
+          send(res, 202, publicJob(existing.job));
+          return;
+        }
+        if (!(await uploadHasArrived(uploadId))) {
+          throw httpError(409, UPLOAD_STILL_ARRIVING.message);
+        }
         const outcome = await withIngestSlot({ ownerId: currentOwnerId() }, (slot) =>
           queueAnUpload(uploadId, slot),
         );
