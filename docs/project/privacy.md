@@ -202,6 +202,7 @@ same job. Neither is worth it for one page.
 **It renders signed out.** That is the only structurally interesting thing about the route and it is
 the point of the page: the person who most wants to know what we do with an article is the one
 deciding whether to hand us one. So it joins `/login` as an exception in
-[`App.tsx`](../../src/web/App.tsx)'s signed-out branch, and the landing page's footer links to it.
-`/profile` links to it too, for a reader who signed in months ago and will never see that footer
-again.
+[`App.tsx`](../../src/web/App.tsx)'s signed-out branch, and **every page with a bottom links to
+it** — the shared footer row, [website-text.md § The footer](website-text.md#the-footer). That
+includes `/profile` and the shelf, for a reader who signed in months ago and will never see the
+landing page again.

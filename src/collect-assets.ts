@@ -64,7 +64,9 @@
  * for documents, and content addressing is what makes it non-negotiable: the
  * name we store *is* a claim about the contents.
  */
-import { JSDOM } from "jsdom";
+/* jsdom on first use rather than at module scope — src/jsdom-lazy.ts says why.
+   `imageUrlsIn` below stays synchronous. */
+import { jsdom } from "./jsdom-lazy.js";
 
 import {
   type AssetEntry,
@@ -270,6 +272,7 @@ const politeFetch: AssetFetch = (url, opts) => fetchAsset(url, { ...opts, attemp
  * represent honestly.
  */
 export function imageUrlsIn(blocks: readonly Block[]): string[] {
+  const { JSDOM } = jsdom();
   const dom = new JSDOM("<!doctype html><template></template>");
   const template = dom.window.document.querySelector("template");
   if (!template) return [];

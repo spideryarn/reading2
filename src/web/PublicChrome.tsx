@@ -324,6 +324,16 @@ export function ReauthRequiredPage() {
             controls itself and leaves `/read/:slug` in the address bar, so
             signing in lands the reader back on this piece (auth-return.ts). */}
         <ClearDeadSessionButton label={SIGN_IN_AGAIN} />
+        {/* **No `SiteFooter` here, and this comment is the reason it is
+            missing.** These two pages have a bottom and would take the row
+            happily, and an earlier draft of this change gave it to them: a
+            reader told they cannot have this article is a plausible reader for
+            "what does this thing do". But they are at a `/read/` address, and
+            Greg's exclusion is written about the path — *"NOT on any `/read/*`
+            pages"*. A cross-family review called the reinterpretation
+            rationalising and was right: the brief is the brief until Greg says
+            otherwise, and this is the cheap direction to be wrong in.
+            SiteFooter.tsx § Where it goes. */}
       </main>
     </>
   );
@@ -358,6 +368,7 @@ export function NotSharedPage() {
           Not shared
         </h1>
         <p className="tw:m-0 tw:text-sm tw:text-ink-faint">{NOT_SHARED}</p>
+        {/* No footer, for the reason `ReauthRequiredPage` gives above. */}
       </main>
     </>
   );

@@ -126,7 +126,22 @@ export type CollateralMechanism =
   | "step-context-paths"
   | "fixture-loader"
   | "shared-symbol"
-  | "import-only";
+  | "import-only"
+  /**
+   * **The one mechanism that does not honour the category's promise**, and it is
+   * here rather than made into a fourth category because the file's *store use*
+   * really is incidental — what is not incidental is that it names a condemned
+   * module in an `import`.
+   *
+   * `DATA_ROOT_ENV` from [data-root.ts](../src/store/data-root.ts) is the only
+   * instance: two suites give each claim its own scratch root and then assert
+   * the roots are **still empty**, which is an assertion that nothing was
+   * written rather than a dependency on writing. But stage G cannot delete
+   * `data-root.ts` without editing both files, so "nobody edits this file" is
+   * false for them and saying otherwise would lose two files at the moment they
+   * matter. GPT Sol, reviewing stage A, 2026-09-03.
+   */
+  | "condemned-symbol-import";
 
 /** How the verdict was reached: watched executing, or read off the graph. */
 export type Evidence = "dynamic" | "static-only";
@@ -163,14 +178,40 @@ export type StoreEntry =
  * Finalised in stage A. A file added here is a claim that somebody read it.
  */
 export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
+  /**
+   * **The entry the dynamic witness could not produce**, and the reason the
+   * registry does not take its silence as proof.
+   *
+   * The instrument records *calls*: it proxies each condemned export and notes
+   * an `apply`. This file imports `PATHS` — a plain object of filenames — and
+   * only ever *reads* it, so nothing was ever applied and the witness filed the
+   * file under "ran and touched nothing". GPT Sol found it by reading the
+   * instrument rather than trusting its output, 2026-09-03, and it is the whole
+   * of the class: a static sweep for runtime imports of a condemned module
+   * across every test file turns up exactly one other candidate, and none in
+   * `ranAndTouchedNothing`.
+   */
+  "tests/store-artefacts-pg.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["shared-symbol"],
+    evidence: "static-only",
+    reason:
+      "The Postgres artefact store's own suite, which borrows `PATHS` from the filesystem adapter " +
+      "so that the two agree about what an artefact of each kind is called. A constant, read and " +
+      "never called. The names have to move somewhere neutral before `artifacts-fs.ts` goes, and " +
+      "then this file is Postgres-only — the same move `pg-chat.ts`'s two symbols need.",
+  },
+
   "tests/a-claim-that-lost-its-draft.test.ts": {
     category: "shared-mechanism-collateral",
-    mechanisms: ["ledger-redirect", "step-context-paths"],
+    mechanisms: ["ledger-redirect", "step-context-paths", "condemned-symbol-import"],
     reason:
       "Pins `JobDraftGone` — a claimant whose draft is deleted mid-step must end the job rather " +
       "than log `lost the claim`. It already pins the flag to postgres and takes the run lock; " +
       "every filesystem touch is the ledger the redirect hands it plus the `dir` string `runStep` " +
-      "computes before calling the step.",
+      "computes before calling the step. **But it imports `DATA_ROOT_ENV` from `data-root.ts` to " +
+      "point itself at a scratch root, so stage G has to touch it** — the store use is incidental, " +
+      "the import is not.",
   },
   "tests/acquire-extract-blocks-end-to-end.test.ts": {
     category: "store-agnostic-fake",
@@ -310,12 +351,15 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
   },
   "tests/claim-session-postgres.test.ts": {
     category: "shared-mechanism-collateral",
-    mechanisms: ["ledger-redirect", "step-context-paths"],
+    mechanisms: ["ledger-redirect", "step-context-paths", "condemned-symbol-import"],
     reason:
       "The flip's acceptance test: `claimSession` picks the Postgres session and a job published " +
       "through it reaches the shelf. It gives every claim its own empty scratch root and asserts " +
       "the roots are **still empty** afterwards — so its filesystem contact is an assertion that " +
-      "nothing was written there, which is the opposite of a dependency.",
+      "nothing was written there, which is the opposite of a dependency. **Those assertions are " +
+      "load-bearing and it imports `DATA_ROOT_ENV` to make them**, so stage G must re-express them " +
+      "rather than delete them: with no filesystem store there is no root to prove empty, and the " +
+      "claim quietly stops being tested.",
   },
   "tests/comment-referee-mark.test.ts": {
     category: "shared-mechanism-collateral",
@@ -376,6 +420,21 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "writing the blocks does not mint. Its own writes are direct Drizzle inserts; the article " +
       "underneath them comes from `loadArticleIntoPg`. It also reads `data/` corpus JSON directly " +
       "with `readFile`, which the graph walk cannot see and stage G's corpus decision still owns.",
+  },
+  /**
+   * **Arrived from `dev` after the registry was written, and the hole check
+   * caught it** — which is the whole reason that check re-derives the import
+   * graph live rather than reading a stored answer. Named, classified, kept.
+   */
+  "tests/hierarchy-eval-incumbent-parity.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Holds the eval harness's incumbent arm against `PRODUCTION_EFFORT` so an isolated arm " +
+      "cannot silently answer a question production does not have. It compares two constants and " +
+      "executes no storage at all; it reaches a condemned module only because the eval graph " +
+      "imports the app. Nothing here changes when the filesystem store goes.",
   },
   "tests/illustrated-pg.test.ts": {
     category: "shared-mechanism-collateral",

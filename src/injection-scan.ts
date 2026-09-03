@@ -86,7 +86,9 @@
  * matter as much as the hostile ones.
  */
 
-import { JSDOM, VirtualConsole } from "jsdom";
+/* jsdom on first use rather than at module scope — src/jsdom-lazy.ts says why.
+   Everything this file exports stays synchronous. */
+import { jsdom } from "./jsdom-lazy.js";
 
 /* ------------------------------------------------------------------ kinds -- */
 
@@ -163,6 +165,7 @@ export function scanRawSource(source: { kind: "html" | "pdf"; text?: string }): 
  * about real-world stylesheets and its complaints are not ours.
  */
 export function scanHtml(html: string): HtmlSourceScan {
+  const { JSDOM, VirtualConsole } = jsdom();
   const dom = new JSDOM(html, { virtualConsole: new VirtualConsole() });
   const doc = dom.window.document;
   const body = doc.body;

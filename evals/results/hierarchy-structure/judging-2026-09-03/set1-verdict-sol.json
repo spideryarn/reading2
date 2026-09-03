@@ -1,0 +1,44 @@
+{
+  "ranking": ["D", "E", "B", "A", "C"],
+  "unusable": [],
+  "boundaryFaults": {
+    "A": [
+      "\"Overview and Meta-Learning\" welds the opening overview to \"Meta-Learning\".",
+      "\"GPT-3's Capabilities\" welds \"Flexing GPT\" to \"Baking The Cake\".",
+      "\"Blessings of Scale and the Scaling Hypothesis\" welds \"Blessings Of Scale\" to \"Scaling Hypothesis\".",
+      "\"Prospects and Critiquing the Critics\" welds \"Prospects\" to \"Critiquing The Critics\".",
+      "\"Appendix\" groups the agency argument with \"Backlinks\" and the reference material."
+    ],
+    "B": [
+      "\"GPT-3 Overview\" welds \"Meta-Learning\", \"Flexing GPT\", and \"Baking The Cake\".",
+      "\"Scaling Laws And Hypothesis\" welds \"Scaling\", \"Blessings Of Scale\", and \"Scaling Hypothesis\"."
+    ],
+    "C": [
+      "\"GPT-3 Emerges\" welds \"Meta-Learning\", \"Flexing GPT\", and \"Baking The Cake\".",
+      "\"Scaling\" welds \"Scaling\" to \"Blessings Of Scale\".",
+      "\"Scaling Hypothesis\" absorbs \"Why Does Pretraining Work?\", \"Prospects\", and \"Critiquing The Critics\".",
+      "\"Appendix\" groups the agency argument with \"Backlinks\" and the reference material."
+    ],
+    "D": [
+      "\"Appendix\" groups the agency argument with \"Backlinks\" and the reference material."
+    ],
+    "E": [
+      "\"Appendix\" groups the agency argument with \"Backlinks\" and the reference material."
+    ]
+  },
+  "missingCuts": [],
+  "titles": {
+    "A": "names",
+    "B": "names",
+    "C": "names",
+    "D": "names",
+    "E": "names"
+  },
+  "gists": {
+    "A": "claims",
+    "B": "claims",
+    "C": "claims",
+    "D": "claims",
+    "E": "none"
+  }
+}

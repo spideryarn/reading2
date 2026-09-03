@@ -140,13 +140,29 @@ placement being discarded, or a number that reads like a score and is not
 [`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx) is the idiom to copy: a row of chips wrapped in
 one `TooltipGroup`, each card `className="tip-soon"` and `keepSide`.
 
+The **Feedback button** joined on 2026-09-03, on the same ask, and it is the one card here that is
+not part of a row — no `TooltipGroup`, its own 240ms delay
+([`FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx)). It still wants `keepSide`, for a reason
+worth knowing before copying the idiom to any other corner control: the button is hard against the
+right edge, so a 22rem card cannot centre on it, and without `keepSide` the default `flip` treats
+that as *not fitting* and throws the card onto the cross axis — landing it left of the button, over
+the article's own title. The exclusion the button's fixed corner already buys off
+([feedback.md](feedback.md)) would have come straight back in through its tooltip.
+
 **A `title` attribute is not a small version of this**, and that is the argument for every one of
 them: it waits about a second, cannot be styled, truncates at the OS's idea of a line, and does not
 exist at all on a touch device. `title` attributes are a regression here rather than a shortcut, and
-they are invisible on a laptop because they still show *something* — so two test files assert their
-absence as well as the cards' presence
+they are invisible on a laptop because they still show *something* — so three test files assert
+their absence as well as the cards' presence
 ([`tests/diagram-panel-hover.test.tsx`](../../tests/diagram-panel-hover.test.tsx),
-[`tests/referee-tooltips.test.tsx`](../../tests/referee-tooltips.test.tsx)).
+[`tests/referee-tooltips.test.tsx`](../../tests/referee-tooltips.test.tsx),
+[`tests/feedback-button-tooltip.test.tsx`](../../tests/feedback-button-tooltip.test.tsx)).
+
+**Deleting a `title` can take an accessible name with it**, and that is the trap the Feedback button
+found. Its label is `display: none` below the narrow breakpoint, so with the `title` gone the button
+was an unlabelled icon on exactly the widths where no tooltip can be opened either. An `aria-label`
+replaced it, pinned by the same test — and nothing on a wide screen, where the visible word names
+the button perfectly well, would ever have shown that it was missing.
 
 ### Two things about testing a card in jsdom
 

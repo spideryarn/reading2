@@ -60,7 +60,7 @@ interface Witness {
   readonly touched: Readonly<Record<string, readonly string[]>>;
   readonly ranAndTouchedNothing: readonly string[];
   readonly unresolved: readonly string[];
-  readonly knownBlindSpot: string;
+  readonly knownBlindSpots: readonly string[];
 }
 
 const witness = JSON.parse(
@@ -218,14 +218,28 @@ describe("the store-migration registry", () => {
     },
   );
 
-  it("records its one known blind spot rather than leaving it out", () => {
-    /* `tests/store-fs-write-chains.test.ts` loads `ai-calls-fs` under a second
-       module id and mocks `node:fs/promises`, so the instrument cannot see it —
-       which is the file's own subject. Named in the witness, and this asserts
-       the naming survives an edit, because an unexplained absence is
-       indistinguishable from an oversight. */
-    expect(witness.knownBlindSpot).toMatch(/store-fs-write-chains/);
+  it("records the blind spots the instrument has, rather than leaving them out", () => {
+    /* **Two, and the second is the one that cost something.** The first is
+       `store-fs-write-chains`, which loads `ai-calls-fs` under a second module id
+       and mocks `node:fs/promises` — the file's own subject, so the instrument
+       cannot see it by construction.
+
+       The second was found by GPT Sol reviewing this stage rather than by us
+       running it: **the instrument records calls, not reads**, so a test that
+       imports a non-function export and merely reads it executes nothing the
+       proxy observes. `store-artefacts-pg` reads `PATHS` and was filed under
+       "ran and touched nothing". We had told the reviewer there was one blind
+       spot; there were two, and the claim was in the JSON.
+
+       This assertion is what stops a future edit quietly dropping either. An
+       unexplained absence is indistinguishable from an oversight. */
+    expect(witness.knownBlindSpots.join(" ")).toMatch(/store-fs-write-chains/);
+    expect(witness.knownBlindSpots.join(" ")).toMatch(/CALLS, NOT READS/);
     expect(existsSync(path.join(REPO, "tests/store-fs-write-chains.test.ts"))).toBe(true);
+    /* And the file the second blind spot hid is now classified, not merely
+       described — the record and the remedy have to travel together. */
+    expect(Object.keys(STORE_MIGRATION)).toContain("tests/store-artefacts-pg.test.ts");
+    expect(witness.ranAndTouchedNothing).not.toContain("tests/store-artefacts-pg.test.ts");
   });
 
   it("has an empty lane map until stage T-C fills it", () => {

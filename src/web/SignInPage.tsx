@@ -26,6 +26,7 @@
  */
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { SignInControls } from "./SignInControls.js";
+import { SiteFooter } from "./SiteFooter.js";
 
 export function SignInPage() {
   useDocumentTitle(pageTitle({ kind: "login" }));
@@ -38,6 +39,13 @@ export function SignInPage() {
       </p>
 
       <SignInControls />
+
+      {/* **The one page here that is a dead end without it.** Somebody sent to
+          `/login` by a password-reset email has no landing page behind them and
+          no shelf in front of them, so this row is their only way to find out
+          what they are signing in to, or what happens to what they add.
+          SiteFooter.tsx. */}
+      <SiteFooter />
     </main>
   );
 }

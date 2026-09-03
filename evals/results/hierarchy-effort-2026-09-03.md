@@ -1,11 +1,21 @@
 # Does hierarchy's structure pass need to think at `medium`? — `medium` vs `low`
 
-Run 2026-09-03. **Provisionally keep `medium`, on caution rather than on proof.**
+Run 2026-09-03. **`low` won, and the free tree beat both paid `medium` arms.** This document reversed
+its own conclusion; the earlier one is preserved below because how it was wrong is the useful part.
 
-On one long article, `low` was 36% cheaper and 47% faster, produced more top-level parts, and
-produced more range-repair events — including three successful draws where a proposed section was
-dropped, against none in ten `medium` draws. Those mechanical proxies justify staying put. **They do
-not establish that `medium` builds better trees**, and nothing here has asked a human.
+On one long article `low` is 36% cheaper and 47% faster. The mechanical proxies favoured `medium` —
+2.6× less boundary repair, no dropped sections — and on that basis this file first said "provisionally
+keep `medium`". **Then the trees were judged blind, and four independent judgments across two model
+families and two independent draw sets ranked them identically: `low` first, the free heading tree
+second, both `medium` arms below both, Luna last.**
+
+The repair counts were measuring the wrong artefact. They describe the model's raw *proposal*; the
+judges rated the *delivered* tree, after `planChildRanges` has mended it. `low` proposes more
+messily and the repair machinery fixes it into a tree that navigates better.
+
+**What this does not license is flipping production on the strength of one article.** See the
+judging section's caveats — but the mechanical case for `medium` does not survive contact with the
+only question that matters.
 
 **Why it was run.** Hierarchy structure is 14% of a long article's ingest, the one paid step every
 article pays, and ~80% of its output tokens are reasoning. Both Fable and GPT Sol independently
@@ -96,7 +106,14 @@ each the measures are views of one underlying behaviour:
 - *gists* — length and retention
 - *heading metadata* — source-heading share
 
-**Repair is the family that carries the verdict.** `low` needs 2.6× the blocks moved, 2.2× the
+**Repair looked like the family that carried the verdict, and it does not.** The blind judging below
+rated the *built* trees, which are what `run.ts` saves and what a reader would get — after
+`planChildRanges` has mended them. Everything in this family describes the model's raw proposal
+before that mending. `low` proposes more messily and the repair machinery absorbs it; on the
+delivered artefact the judges preferred `low` four times out of four. Read this family as evidence
+about proposals, and about the failure rate when mending cannot save a draw — not about quality.
+
+`low` needs 2.6× the blocks moved, 2.2× the
 largest single repair, and dropped one depth-2 section in 3 of its 7 successful draws — at
 `root > child 12 > child 3`, `root > child 7 > child 2` and `root > child 8 > child 2`, in trees of
 57, 30 and 33 titles. `medium` dropped none in ten. On a two-tailed Fisher's exact that is p ≈ 0.05,
@@ -122,33 +139,73 @@ compare arms on it, don't gate on it." Gist retention's same-recipe gap of 0.009
 per-draw values spanning 0.48–0.62, so it is an unstable denominator, and the 2.4-point arm gap is
 about 1.6 standard errors — a weak directional observation, nothing more.
 
-## The judgment
+## The blind judging, which reversed the verdict
 
-**Provisionally keep `medium`.** The case for `low` is real and should not be understated: $0.076 a
-draw — 36% of the structure call, ~23% of hierarchy end to end — and **latency is the better half**,
-141 seconds down to 74, halving the step that is 88% of the ingest wait, on the one stage a reader
-sits through.
+[`blind.ts`](../../evals/hierarchy-structure/blind.ts) shuffles the trees per document, hides the
+mapping in a key file the judge never sees, and always adds the free heading tree to the lineup as a
+non-model anchor. Two draw sets were judged, each by two models from **different families** — GPT
+Sol and Claude Fable — asked one question: *reading this article for the first time with the tree as
+your only map, which carving would you actually navigate by?*
 
-Against it: `low`'s trees need substantially more mending to be legal, and three times in seven a
-section the model proposed did not survive that mending. That is enough to justify caution and not
-enough to call a quality difference. Every measure here is mechanical; the blind comparison in
-[`blind.ts`](../../evals/hierarchy-structure/blind.ts) was not run, and no person has looked at a
-single tree from either arm.
+| set | judge | 1st | 2nd | 3rd | 4th | 5th |
+|---|---|---|---|---|---|---|
+| 1 | Sol | `low` | **headings (free)** | `medium` | `medium` | Luna |
+| 1 | Fable | `low` | **headings (free)** | `medium` | `medium` | Luna |
+| 2 | Sol | `low` | **headings (free)** | `medium` | `medium` | — |
+| 2 | Fable | `low` | **headings (free)** | `medium` | `medium` | — |
 
-So the honest position is: **the default holds because it is the default and nothing here dislodged
-it** — not because this run showed `medium` is better.
+**Four for four, on independent draws with different label shuffles.** Both judges also placed the
+two `medium` arms adjacent to each other, which is the within-judge sanity check: the same recipe
+landed next to itself.
 
-**What would settle it**, roughly in order of value:
+**The fault they name against `medium` is welding** — fusing two of the author's own arguments into
+one part. Sol: *"'GPT-3 Overview' welds 'Meta-Learning', 'Flexing GPT', and 'Baking The Cake'."*
+Fable, having checked the block numbers: *"the first node silently absorbs the article's own
+Meta-Learning and Flexing GPT sections (blocks 2–7), so the reader can't jump to the meta-learning
+demonstration."*
 
-1. **A blind human comparison** on the trees already on disk. They are saved under each run's
-   `trees/`, it costs nothing but attention, and it is the only thing that can convert repair counts
-   into a statement about quality.
-2. **Replication on two or three more long articles.** One article cannot separate "`low` is worse"
-   from "`low` is worse on Gwern's scaling-hypothesis essay".
-3. **Re-run after the repair work.** Fable's proposal to make an unresolvable *end* non-fatal, and
-   Sol's to repair the smallest subtree rather than redraw, both raise `low`'s floor more than
-   `medium`'s, because `low` produces more of the faults they forgive. If either lands, this
-   comparison changes shape and $0.076 plus 67 seconds a reader is worth asking twice.
+That is the same behaviour the mechanical table recorded as `medium` making fewer parts (7.30 against
+9.29), which this document first described as "consolidating harder" — a neutral framing that turned
+out to be the defect.
+
+**On Luna**, the family-bias worry ran the other way and lost: Sol is OpenAI-family and Luna is an
+OpenAI model, and Sol still ranked it last. Fable marked it `unusable`, its titles `generic` and its
+gists `topic-labels` — the last being a prompt violation, since gists must be claims.
+
+### The free tree cannot simply replace the paid one
+
+It has **zero gists** — 0 of 201 nodes — and the judges were explicitly told a gistless tree can win
+on boundaries alone. Granularity zoom shows gists at the level above, so a tree without them is not
+the product.
+
+The finding is narrower and more useful than "the free tree wins": **the author's own headings carve
+this article better than the paid call does, and what the paid call is actually buying is titles and
+gists.** Which points straight at an experiment nobody has run — `headings-seeded` and
+`headings-listed` already exist as arms in [`arms.ts`](../../evals/hierarchy-structure/arms.ts):
+give the model the boundaries and let it write the prose.
+
+### What this still does not settle
+
+- **One article.** Four judgments of two draw sets of *the same piece*. "Gwern's scaling-hypothesis
+  essay is well-headed and `medium` over-consolidates it" is equally consistent with all of it, and
+  that essay has 24 headings for 184 blocks.
+- **The judges are models.** `blind.ts` names the weakness: a model judging model output tends to
+  prefer writing that resembles its own. Two families agreeing mitigates it; it does not remove it,
+  and the free tree placing second on both is the strongest evidence against pure style preference.
+- **`low` still failed outright once in eight** where `medium` failed none in ten. Nothing in the
+  judging touches that, because a failed draw has no tree to judge.
+
+## What to do
+
+1. **Do not flip production on this.** One article is not enough to move a default, and the failure
+   rate is unmeasured at any useful n.
+2. **Run the same judging on two or three more long articles** — the cheapest decisive step, since
+   the draws for a new article cost about $0.35 and the judging is a couple of model calls.
+3. **Run `headings-seeded`.** If the author's boundaries plus model-written gists beat everything
+   here, the effort question stops mattering: the expensive part of the call would be doing work the
+   headings already did for free.
+4. **Then re-ask the effort question**, after the repair work Fable and Sol proposed, which raises
+   `low`'s floor more than `medium`'s.
 
 ## Appendix: the short/mid corpus, and why it proves nothing about length
 

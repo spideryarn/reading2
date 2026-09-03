@@ -714,7 +714,8 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`src/shelf.ts`](../../src/shelf.ts) | archived, renamed, opened — `data/<slug>/shelf.json` |
 | [`src/library-search.ts`](../../src/library-search.ts) | searching every article at once, filesystem half |
 | [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) | the same two things, in SQL |
-| [`src/web/useShelf.ts`](../../src/web/useShelf.ts) | the shelf and its verbs, client side, including Undo |
+| [`src/web/useShelf.ts`](../../src/web/useShelf.ts) | the shelf and its verbs, client side, including Undo — and **which of the saved copy and the live answer wins** |
+| [`src/web/lib/cached-shelf.ts`](../../src/web/lib/cached-shelf.ts) | reading the saved shelf back, and refusing to draw a body an older deployment wrote |
 | [`src/web/useLibrarySearch.ts`](../../src/web/useLibrarySearch.ts) | the debounced half of the box, and dropping late responses |
 | [`src/web/library-hits.ts`](../../src/web/library-hits.ts) | **the four parameters a hit's link must carry**, the browser's fold, and the query-term rule |
 | [`src/reading-time.ts`](../../src/reading-time.ts) | `~54 min`, said once for both the card and the masthead |
@@ -725,6 +726,7 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`tests/article-rename.test.tsx`](../../tests/article-rename.test.tsx) | the pencil on the article and on its metadata page, mounted — cancelled, cleared, unchanged, and a write that fails |
 | [`tests/library-hits.test.ts`](../../tests/library-hits.test.ts), [`tests/store-shelf-pg.test.ts`](../../tests/store-shelf-pg.test.ts) | the link's parameters; and the Postgres half, which had never had a query run against it |
 | [`tests/library-sorting.test.ts`](../../tests/library-sorting.test.ts) | the sorting rules, asserted against a **real TanStack table** rather than a stand-in |
+| [`tests/shelf-cached-paint.test.tsx`](../../tests/shelf-cached-paint.test.tsx) | the race between the saved copy and the live answer, **both directions** — and one test that says out loud what it cannot prove |
 | [`tests/store-shelf-reads.test.ts`](../../tests/store-shelf-reads.test.ts) | **how many questions the shelf asks, and about what** — two, whatever it holds, and neither about a block |
 | [`tests/table-sort.test.ts`](../../tests/table-sort.test.ts), [`tests/relative-time.test.ts`](../../tests/relative-time.test.ts) | the URL round-trip and `sinkLast`; and where "days ago" stops helping |
 
@@ -733,6 +735,52 @@ rule rather than a preference: this page is chrome, and chrome is what shadcn an
 adopted for ([web-client.md § Tailwind and shadcn](web-client.md#tailwind-and-shadcn-components)).
 The reading view stays hand-written, because its geometry is not something utilities can say. Every
 class needs the `tw:` prefix — unprefixed names silently do nothing.
+
+## A repeat visit draws the shelf before the server answers
+
+Since 2026-09-03 the homepage paints the copy of the shelf it already has while it fetches the live
+one. Greg named the thing this is for:
+
+> it was the delay "Reading the shelf" for a logged-in user with fewer than a dozen articles that I
+> noticed most.
+>
+> — Greg, 2026-09-03
+
+That message is `useSlow(articles === null)` at 600ms, and the wait behind it is a serverless cold
+start rather than anything the shelf does
+([260903g](../plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md) § Stage 5 for the
+contract, and § *It is the serverless cold start* for the measurement).
+
+**No new machinery**: the copy is the one `apiFetch` has been saving since the offline work, read
+back by [`src/web/lib/cached-shelf.ts`](../../src/web/lib/cached-shelf.ts) and validated there,
+because a body written by an older deployment can be missing a field the card now draws. Which of
+the two answers wins is [`useShelf`](../../src/web/useShelf.ts)'s `issued`/`settled` pair, and the
+rules are in its docstring: the copy paints only while the network has not spoken since the read
+began; an older live answer that lands after a newer one is dropped; a transport failure or a 5xx
+keeps what is on screen and adds the error; a final 401 or a change of reader clears it; a request
+that went out for the previous reader is dropped when it lands, or it would undo that clear a frame
+later; nothing commits after unmount.
+
+**Who the reader is now has to be decided twice, and both times up front.** The hook is told, by a
+`readerId` prop from `SignedIn`, rather than asking `lastKnownUser()`. And a response's partition
+belongs to **whoever's token the server is about to check**: `accessToken` in
+[`lib/api.ts`](../../src/web/lib/api.ts) hands back a `Credential` — the token and the reader id out
+of the same session object — so a second lookup cannot have moved on in between. Both halves matter
+because a direct A→B sign-in calls `rememberUser(B)` and never `forgetUser(A)`: before this, a reply
+that started as A's and arrived after the switch was filed under B, and reading the cache on every
+repeat visit is what turned that from an offline oddity into A's titles on B's homepage. `App.tsx`
+also keys `<Library>` by `user.id`, so an account switch builds a new hook rather than clearing an
+old one a frame late.
+
+Two things it does **not** do, both deliberate. It does not filter through `onlyWhatWeHave`: that is
+right offline and wrong here, where the live answer is already in flight and an article whose prose
+was evicted is still perfectly openable. And it does not promise the message never appears —
+IndexedDB is asynchronous, and a blocked read can outlast 600ms.
+
+The price is a moment of staleness: a rename or an archive patches the React list and not the saved
+body, so the first paint can show an old title or a card the reader deleted, and counts and order can
+jump when the live answer lands. Accepted rather than overlooked — renames are cosmetic and Delete is
+archive.
 
 ## Offline, the shelf lists only what it can open
 

@@ -64,16 +64,21 @@ whose cache state the provider does not report.
 
 ## `hierarchy-effort-2026-09-03.md` — does the structure pass need to think at `medium`?
 
-Written by `npm run eval:hierarchy-structure`, on a 16,846-word fixture. **Provisionally keep
-`medium`, on caution rather than proof.** `low` is 36% cheaper and 47% faster; its trees need 2.6×
-the boundary repair and dropped a proposed section in 3 of 7 draws against 0 of 10. That justifies
-staying put and does **not** establish that `medium` builds better trees — every measure is
-mechanical and no person has looked at a tree.
+Written by `npm run eval:hierarchy-structure`, on a 16,846-word fixture. **`low` won the blind
+judging, and the free heading tree beat both paid `medium` arms** — four judgments, two model
+families, two independent draw sets, identical ranking every time. `low` is also 36% cheaper and 47%
+faster. Luna came last and one judge called it unusable.
 
-Two things in it are corrections to itself, kept because they are the useful part: the "`low`
-invents its own boundaries" story is **withdrawn** (`l1OnHeadings` is 96.7% vs 95.8%, so `low`'s
-extra parts do start on author headings), and so is the claim about a length threshold (the short
-and long runs use different articles, so length and article are confounded).
+**The document reversed itself and keeps the reasoning, which is the part worth reading.** The
+mechanical proxies favoured `medium` (2.6× less repair, no dropped sections) and it first concluded
+"keep `medium`". Those proxies describe the model's raw *proposal*; the judges rated the *delivered*
+tree, after repair. Two further self-corrections are recorded in it: the "`low` invents its own
+boundaries" story is withdrawn (`l1OnHeadings` is 96.7% vs 95.8%), and so is a claimed length
+threshold (the short and long runs use different articles, so length and article are confounded).
+
+**Do not flip production on it** — one article — and note the free tree has *no gists*, so it cannot
+replace the paid call. The finding it points at is that the author's headings carve better than the
+paid call does, which makes `headings-seeded` the experiment nobody has run.
 
 Read the resolution-floor table before quoting any other row: the shipping recipe disagrees with
 *itself* by as much as it disagrees with `low` on title retention and heading-boundary fidelity, so

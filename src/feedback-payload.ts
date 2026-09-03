@@ -1,10 +1,13 @@
 /**
  * **What a bug report is allowed to carry, decided once, for both ends.**
  *
- * docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md. The three
- * answers, the route kind and the slug are columns and live in src/db/schema.ts;
+ * docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md. The body,
+ * the kind, the address and the slug are columns and live in src/db/schema.ts;
  * this file owns the two parts of a report that are *shaped* rather than named —
- * the opt-in diagnostics blob and the pasted screenshot.
+ * the opt-in diagnostics blob and the pasted screenshot. (It said "the three
+ * answers, the route kind and the slug" until 2026-09-03; the three boxes became
+ * one `body` on 2026-09-02 and the route kind became the whole URL the same day.
+ * docs/project/feedback.md.)
  *
  * ## Why it is its own module, and what it may import
  *
