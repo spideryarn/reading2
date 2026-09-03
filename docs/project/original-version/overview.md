@@ -4,7 +4,10 @@
 map to it**: where it is, what we've already taken, what's worth reading before you rebuild
 something it already solved, and what we're deliberately leaving behind.
 
-**Location:** `/Users/greg/dev/spideryarn/reading` — local only, `git@github.com:spideryarn/reading.git`,
+**Location:** `/Users/greg/dev/spideryarn/reading` — local only (Greg's Mac; the remote box cannot
+reach it — its marketing and vision docs are copied verbatim into
+[docs/research/260902k-old-version-materials/](../../research/260902k-old-version-materials/README.md)),
+`git@github.com:spideryarn/reading.git`,
 live at <https://www.spideryarn.com>. Every path in this folder is a path *inside that repo* unless
 it starts with `../` or is otherwise linked.
 

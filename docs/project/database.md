@@ -1128,14 +1128,14 @@ files — which is what makes it worth a section rather than a comment.
 The trap is that the two places pull in **opposite directions**, so there is no single right answer
 to copy.
 
-**As a hash input, the two spellings must collapse.** `hashBlocks`
-([`src/source-hash.ts:94-105`](../../src/source-hash.ts)) uses loose `!= null`, which catches `null`
+**As a hash input, the two spellings must collapse.** `src/source-hash.ts` § `hashBlocks` uses
+loose `!= null`, which catches `null`
 and `undefined` in one test, and then `?? ""` so both normalise to the same bytes. They have to: the
 same article read from either store must hash identically, or every `sourceHash` comparison in the
 pipeline says "the text changed" when nothing did.
 
-**As a presence signal, the two spellings must not collapse.** `publicArticle`
-([`src/public/dto.ts:337-340`](../../src/public/dto.ts)) uses strict `!== null`, and its comment
+**As a presence signal, the two spellings must not collapse.** `src/public/dto.ts` §
+`publicArticle` uses strict `!== null`, and its comment
 explains why truthiness would be worse — an artefact is always truthy, so the day one can be falsy
 while present, truthiness would report it as never built. The whole payload rests on
 present-versus-absent.

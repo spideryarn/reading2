@@ -76,6 +76,12 @@ for now. Greg, 2026-09-02: *"For now, let's just add this to docs/research/, and
 add blog posts and/or pages that describe the thinking/evidence behind our product decisions."* Not
 on the homepage.
 
+The old version's own marketing material — Greg's 2025 vision doc, his taglines, a dictated
+conversation with an AI marketing persona, and six AI research reports — is copied verbatim into
+[docs/research/260902k-old-version-materials/](../research/260902k-old-version-materials/README.md),
+because the old repo exists only on Greg's Mac. Each file says who is thought to have written it;
+none of it is his word on the website until he has read it again.
+
 ## Whose words
 
 > I want it to use my words rather than AI-generated, and it may not be clear what came from me vs

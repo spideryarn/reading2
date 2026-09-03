@@ -24,10 +24,11 @@
  * over. On `long-html` that is ~$3.40 of scaffolding bought per mode.
  *
  * Instead: **ingest once, then run each mode as its own job against the adopted
- * article.** `runStep` marks the article cache only when a *later step of the
- * same job* will read it (src/pipeline.ts § `sharesArticleCache`), a single-mode
- * job's `later` list is empty, and Anthropic's cache is explicit-only — so
- * nothing an earlier job wrote can be read by a later one. Adoption is the
+ * article.** `runStep` marks the article cache only when *another step of the
+ * same job* would read it (src/pipeline.ts § `cacheArticleForStep`), a
+ * single-mode job has no other step in either direction, and Anthropic's cache
+ * is explicit-only — so nothing an earlier job wrote can be read by a later
+ * one. Adoption is the
  * designed path: a job arriving with neither URL nor upload is
  * `{kind: "adopted"}` (src/jobs.ts § `enqueue`).
  *
@@ -175,6 +176,7 @@ import {
   aggregateByStep,
   checkAdoption,
   checkCold,
+  checkBatchedDraw,
   checkColdDraw,
   type DrawOutcome,
   type DrawPhase,
@@ -703,6 +705,13 @@ async function oneDraw(req: DrawRequest): Promise<Draw> {
   draw.findings.push(
     ...checkColdDraw(ledger.rows, { phase: spec.phase, batchedModes: req.batchedModes }),
   );
+  /* **The batched draw's own question**, which is the mirror of the one above:
+     not "did anything read what it should not have" but "did anybody read what
+     we paid to write". It is the only phase where a cache read is expected, so
+     it is the only phase where a missing one is evidence — and it went unasked
+     for the whole of the 2026-09-03 sweep, whose numbers proved the bug in
+     260903c to a reader and to nothing automatic. report.ts § `checkBatchedDraw`. */
+  draw.findings.push(...checkBatchedDraw(ledger.rows, spec.phase));
   await checkpoint();
 
   printDraw(draw);

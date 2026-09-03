@@ -91,7 +91,7 @@ import {
   DEFAULT_INGEST_STEPS,
   FORCE_ONLY_WHEN_NAMED,
   type PipelineStep,
-  sharesArticleCache,
+  cacheArticleForStep,
   STEP_ORDER,
   STEPS,
   stepIsDone,
@@ -547,13 +547,16 @@ async function runStep(
       step.detail = detail;
     },
     signal: controller.signal,
-    /* Only pay to cache the article if something still to come in *this job*
-       can read it. `job.steps` is the whole plan, so the steps after this one
-       are the ones that could — see `sharesArticleCache`, and
-       docs/project/prompt-caching.md for why the answer is usually no. */
-    cacheArticle: sharesArticleCache(
-      step.name,
-      job.steps.slice(job.steps.indexOf(step) + 1).map((s) => s.name),
+    /* Mark the article when any *other* step of this job is in the same cache
+       group — in either direction. The list used to be `slice(i + 1)`, later
+       steps only, which marked the stage that writes the entry and never the one
+       that reads it; the reader is the last member of its group by construction,
+       so it sent no breakpoint and read nothing. Both halves of the reasoning are
+       on `cacheArticleForStep`, which now owns the argument shape precisely so
+       that it is testable without a job. docs/project/prompt-caching.md. */
+    cacheArticle: cacheArticleForStep(
+      job.steps.map((s) => s.name),
+      job.steps.indexOf(step),
     ),
     ...(job.profile !== undefined && { profile: job.profile }),
   };

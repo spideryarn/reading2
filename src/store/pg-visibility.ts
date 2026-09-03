@@ -40,6 +40,7 @@ import type { Visibility, VisibilityState, VisibilityStore } from "./contracts.j
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { ownedSlug } from "./owned-slug.js";
+import { requireSlug } from "./require-slug.js";
 
 /**
  * **404, not 403**, for a slug that is not yours — the same rule and the same
@@ -94,6 +95,20 @@ export function lockedArticleQuery(
 
 const rawPgVisibilityStore: VisibilityStore = {
   async set(slug: string, to: Visibility, rightsConfirmed: boolean): Promise<VisibilityState> {
+    /* **Before any query.** Without this a malformed slug — a pasted title after
+       a URL decoder has had it — reached `lockedArticleQuery`, matched nothing,
+       and came back as `notFound`'s **404** where it should be a **400**: "there
+       is no such article" about a string that could not name one.
+
+       Nothing was ever exposed by it — `ownedSlug` still scoped the query — but
+       it is the same drift tests/store-slug-guard.test.ts was written for, in a
+       seventh place, and that file's header predicted it in as many words: *"a
+       fix simply failed to reach one of six copies, which is the shape that
+       predicts the seventh."* Found while `requireSlug` was being extracted into
+       its own leaf, 2026-09-03. This method is now in that test's family, so it
+       cannot drift back unnoticed. */
+    requireSlug(slug);
+
     return getDb().transaction(async (tx) => {
       const [row] = await lockedArticleQuery(tx, slug);
       if (!row) throw notFound(slug);

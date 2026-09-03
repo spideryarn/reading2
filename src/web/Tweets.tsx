@@ -86,6 +86,7 @@ import { apiFetch, readJson } from "./lib/api.js";
 import { JobProgress } from "./JobProgress.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
 import { useHasProfile } from "./useProfile.js";
+import { useExperimental } from "./useExperimental.js";
 
 /** Clear of the fixed bottom bar, stated against `--dock-h`. See Metadata.tsx. */
 const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-space)_+_2rem)]";
@@ -119,6 +120,11 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
    */
   const [reloadError, setReloadError] = useState<string | null>(null);
   const slow = useSlow(loaded.status === "loading");
+
+  /* **The bar is told which modes this reader sees; it does not go and get it.**
+     One shared store behind the hook, so this page and the reading view cannot
+     disagree for the length of a toggle. Dock.tsx § experimental. */
+  const experimental = useExperimental();
 
   /* The tab: the article first, then which of its pages this is — and `Tweets`
      rather than `Thread`, because that is what the button in the Dock says.
@@ -316,7 +322,7 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
       {/* No `drawer` prop, so Questions is a link back to the article — the
           same arrangement as the metadata page, and for the same reason. See
           Dock.tsx. */}
-      <Dock slug={slug} view="tweets" />
+      <Dock slug={slug} view="tweets" experimental={experimental} />
     </>
   );
 }

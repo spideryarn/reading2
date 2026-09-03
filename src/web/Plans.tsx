@@ -39,9 +39,13 @@ export function OpensShortly() {
 }
 
 export function Plans() {
-  const cell = "tw:py-2 tw:pr-6 tw:align-top";
+  const cell = "tw:py-2.5 tw:pr-6 tw:align-top";
   return (
-    <div>
+    /* Capped rather than filling the page shell. Three rows of two or three
+       words each, stretched across 1152px, read as a spreadsheet with the data
+       missing; the eye has to travel the width of the page to join a plan to its
+       price. The shell went wide for the pictures, not for this. */
+    <div className="tw:max-w-2xl">
       <table className="tw:mt-4 tw:w-full tw:border-collapse tw:text-sm">
         <thead>
           <tr className="tw:border-b tw:border-border tw:text-left tw:text-xs tw:uppercase tw:tracking-wide tw:text-ink-faint">

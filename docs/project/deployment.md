@@ -923,10 +923,16 @@ writes to a local filesystem, which a serverless host does not have:
   **How to find this class of failure yourself** — the route answers `200` and
   Vercel's error dashboard stays empty, so the recipe matters:
   [logging.md § where to look](logging.md#where-to-look-when-production-breaks)
-- **`deleteGlossary`** — still refused by `notMigrated` in
-  [`src/store/index.ts`](../../src/store/index.ts), which is the right failure.
-  It nulls the glossary on a *published* revision, and whether a published
-  revision may be mutated at all is an open decision in step 11
+- **`deleteGlossary`** — **fixed 2026-09-03.** It was refused by `notMigrated` in
+  [`src/store/index.ts`](../../src/store/index.ts) on the belief that mutating a
+  *published* revision was an open decision. It was not open — nothing else
+  mutates a published revision in place; every job drafts and publishes, per
+  [database.md](database.md) — and the delete is now the one deliberate
+  exception, built in
+  [260903e-glossary-delete-in-postgres.md](../plans/260903e-glossary-delete-in-postgres.md).
+  It also answers **409** when a live queued or running job holds a draft for
+  the article, so the reader is told to wait for the job and press the button
+  again rather than the delete racing that job's publish.
 
 Greg, 2026-08-26, chose to ship with these broken rather than wait for them.
 
