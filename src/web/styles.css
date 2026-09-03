@@ -12862,3 +12862,32 @@ table.only-prose thead { display: none; }
   .fb-button-text { display: none; }
   .fb-button { justify-content: center; padding: 0; }
 }
+
+/* ---------------------------------------------------------------- metadata --
+   Every <button> on the Metadata page inherits the type around it.
+
+   Greg, 2026-09-03, on that page: *"clean up their display (some of them seem
+   larger than others somehow?)"*. They were, and the cause is one line up in
+   tailwind.css § note 4: **we import preflight nowhere**, deliberately, because
+   it would reset everything inside `.prose` — the one place we render the
+   article author's own HTML and cannot enumerate the tags. So a `<button>` keeps
+   the UA's own `font`, which in Chrome is 13.333px Arial, and no Tailwind class
+   contests it: `tw:text-inherit` is `color`, and `tw:text-sm` sets a size while
+   leaving the family alone.
+
+   The visible result was the collapsible section headings. A shut section's
+   heading is a button (Metadata.tsx § Section) carrying the h2's 0.68rem
+   uppercase classes on its parent and nothing of its own, so it drew half again
+   the size of every heading beside it, in a different typeface. Everything else
+   on the page was subtler: the right size in the wrong face.
+
+   Scoped to this page rather than added globally. A bare `button { font:
+   inherit }` is the part of preflight everybody wants, but twenty components in
+   this file already declare their own (grep `font: inherit`) and were built
+   looking at the UA default underneath them — a global reset is a change to all
+   of them at once, in a tree several agents are working in.
+
+   In `app`, so it is a floor rather than a ceiling: utilities outrank it
+   (tailwind.css § the @layer statement), and `tw:font-mono` on the fingerprint
+   and `tw:text-sm` on Delete still win. */
+.metadata-page button { font: inherit; }
