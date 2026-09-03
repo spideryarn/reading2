@@ -102,17 +102,18 @@ values ('scholar', 'Spideryarn Scholar', 'For people who read for a living.', 50
         'spideryarn_scholar_monthly', 30);
 ```
 
-**A description should not restate the allowance.** `/profile` renders
-`ingests_per_period` structurally and the description beside it, so a description that repeats the
-number is a second copy that the one-`UPDATE` quota change above does not touch — raise the quota to
-50 and the sentence goes on saying 20. The two seeded rows predate this line and do repeat it, which
-is redundant rather than wrong; whoever next edits them should take the first sentence out.
+**A description must not restate the allowance.** `/profile` renders `ingests_per_period`
+structurally and puts the description beside it, so a description that opens by repeating the number
+is a second copy the one-`UPDATE` quota change above does not touch — raise the quota to 50 and the
+sentence goes on saying 20. The two seeded rows did repeat it, which read on screen as *"20 articles
+a month. 20 articles a month. Reading what you have already added is always free."* until a browser
+run caught it on 2026-09-03; `drizzle/20260903090000_…` took the first sentence back out.
 
 Then, for either:
 
 ```bash
-npx tsx scripts/stripe-setup.ts            # says what it would do
-npx tsx scripts/stripe-setup.ts --apply    # creates the Stripe objects, writes the id back
+npm run stripe:setup                     # says what it would do
+npm run stripe:setup -- --apply          # creates the Stripe objects, writes the id back
 ```
 
 **Changing an amount works the same way** — edit the row, run the script. Stripe prices are
@@ -498,10 +499,59 @@ stores an absent period, and meters against it.
 ## Setting it up
 
 ```bash
-npm run stripe:setup           # say what it would do
-npm run stripe:setup -- --apply    # do it
-npm run stripe:check           # read-only: is this account fit to take money?
+npm run stripe:setup                     # say what it would do — the sandbox, and this laptop
+npm run stripe:setup -- --apply          # do it
+npm run stripe:check                     # read-only: is this account fit to take money?
+
+npm run stripe:setup -- --prod           # the same three, against LIVE and the production database
+npm run stripe:setup -- --prod --apply
+npm run stripe:check -- --prod
 ```
+
+**`--prod` is how you reach production, and naming the target on the command line is not.**
+Both scripts call `loadEnvLocal()`, so `.env.local` beats the shell by design ([`src/env.ts`](../../src/env.ts));
+`DATABASE_URL=… STRIPE_SECRET_KEY=… npm run stripe:setup` therefore talks to the sandbox and the
+laptop whatever you type. The Stripe half fails loudly — a test key with `VERCEL_ENV=production`
+trips the mode guard — and **the database half fails silently**, creating live prices and writing
+their ids to your laptop while printing success. `--prod` takes both credentials from `.env.prod`
+together, so a mismatched pair has to be written into that one file rather than assembled by
+accident on a command line. [`scripts/stripe-target.ts`](../../scripts/stripe-target.ts),
+[260903h](../plans/260903h-stripe-scripts-reach-production.md).
+
+What `--prod` requires, before anything is created: a `DATABASE_URL` that **`pg`'s own parser**
+resolves to a hosted Supabase host (`*.pooler.supabase.com`, or `db.<ref>.supabase.co`) over TLS.
+That is an allowlist, and it is deliberately not a list of local spellings to refuse — the version
+that was accepted `local%68ost`, `2130706433` and `postgresql:///postgres`, because `new URL` and
+`pg` do not agree on what the host is. It then wants that database to match `SUPABASE_URL` in the
+same file, both credentials present and non-empty, and a Stripe key that opens Spideryarn's own
+account. It does **not** check that the row contents or `.env.prod` are current.
+
+**Do it in this order**, because only the first step is free:
+
+1. `npm run stripe:check -- --prod` — read-only.
+2. Read the three identity lines it prints: the `.env.prod` it read, the `Target:` database, and the
+   account id. If any is not what you expect, stop.
+3. `npm run stripe:setup -- --prod` — the dry run. Read what it says it would change.
+4. `npm run stripe:setup -- --prod --apply`.
+5. `npm run stripe:check -- --prod` again.
+
+Every run prints its target before it does anything — including a run that is about to fail on a bad
+key, since that is when you most want to know what it was aimed at:
+
+```
+Stripe setup — LIVE mode, API 2026-08-26.dahlia
+  Target: postgresql://spideryarn_app.alschkahzfagtppxspfq@aws-0-eu-west-2.pooler.supabase.com:6543/postgres
+  Account: acct_1UBW3NLv4piDbwcb
+```
+
+A mistyped flag is refused rather than ignored: `--prodd` would otherwise mean "the sandbox", which
+is not what the person typing it meant.
+
+**A `prod_…` id is not enough to tell the modes apart.** Read back on 2026-09-03,
+`prod_VBu1bNwCZAIWwc` exists in *both* accounts — same id, `livemode=false` in one and `true` in the
+other, created fifty minutes apart. So two runs' output can look identical while touching different
+accounts, and it is worth knowing before you compare a sandbox run against a live one. The account
+id and the `Target:` line are what distinguish them.
 
 `stripe:check` writes nothing. It is what you run against **live** before trusting it, and against a
 sandbox to see whether the two agree: the business name a customer reads on the Checkout page, the
@@ -631,9 +681,16 @@ four events in `HANDLED_EVENTS`, with its own permanent `whsec_…` revealed on 
 page. That secret is per-endpoint and unrelated to the API keys; it goes in the Vercel production
 environment.
 
-`npm run stripe:check` fails if nothing is listening at that URL, because a live account with no
-endpoint takes money and grants nothing — the one failure mode where every other check passes and
-the customer is simply not served.
+**Done on 2026-09-03**: endpoint `we_1UBXjMLv4piDbwcbrLUPudWD`, and both `STRIPE_SECRET_KEY` and
+`STRIPE_WEBHOOK_SECRET` set on Vercel Production. Until that day **neither was set there at all**,
+so live Checkout would have answered 503 however well the Stripe account was configured — the
+account and the deployment are two separate places to finish the job, and `stripe:check` only sees
+the first.
+
+`npm run stripe:check -- --prod` fails if nothing is listening at that URL, because a live account
+with no endpoint takes money and grants nothing — the one failure mode where every other check
+passes and the customer is simply not served. It checks Stripe's side; what it cannot see is whether
+the deployment holds the secrets, which is `vercel env ls production`.
 
 ## The three billing routes
 

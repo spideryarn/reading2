@@ -59,6 +59,7 @@ import { MessageSquareWarning } from "lucide-react";
 
 import { FeedbackDialog } from "./FeedbackDialog.js";
 import { useRoute } from "./router.js";
+import { ControlTip, Tooltip } from "./Tooltip.js";
 
 interface Props {
   /** Shown in the dialog, never sent — the server takes the address from the auth gate. */
@@ -95,18 +96,60 @@ export function FeedbackButton({ readerEmail }: Props) {
 
   return (
     <>
-      <button
-        type="button"
-        className="fb-button"
-        onClick={() => setOpen(true)}
-        title="Send feedback about this page"
+      {/* **A card rather than the `title` attribute it replaced**, on Greg's ask
+          of 2026-09-03. `title` waits about a second, cannot be styled,
+          truncates at the OS's idea of a line, and does not exist on a touch
+          device at all — docs/project/tooltips.md § `ControlTip`, whose rule
+          against `title` two other test files already assert; this one is the
+          third (tests/feedback-button-tooltip.test.tsx).
+
+          `keepSide` because this button is hard against the right edge, and a
+          22rem card that cannot centre on it would otherwise be thrown onto the
+          cross axis and land *left* of the button, over the article's title.
+          Bottom, because there is nothing above it. */}
+      <Tooltip
+        placement="bottom"
+        keepSide
+        className="tip-soon"
+        content={
+          <ControlTip
+            head="Feedback"
+            what="Opens a box for a bug or a suggestion about whatever you were just doing."
+            /* The unguessable half, and it is the half a reader hesitates
+               over: what rides along with their words.
+
+               **Three things go, on three different conditions, and an earlier
+               draft of this line collapsed them into two.** The address and the
+               email are unconditional; the diagnostics blob is the tick-box's
+               and nothing else's; the screenshot is sent whenever the reader
+               attached one, tick-box or not (FeedbackDialog.tsx builds the body
+               with `screenshot` outside the `consented` branch). GPT Sol caught
+               the version that promised the box covered the screenshot too —
+               and a tooltip that over-promises about privacy is worse than one
+               that says nothing, because the reader acts on it.
+               docs/project/privacy.md § What a bug report carries. */
+            how="It carries this page's address and your email address, so we can write back. Extra diagnostics go only if you tick the box, and a screenshot only if you attach one."
+          />
+        }
       >
-        <MessageSquareWarning size={15} />
-        {/* Given up below the narrow breakpoint, the way the wordmark gives up
-            its word — styles.css § feedback. The icon and the title attribute
-            carry it from there. */}
-        <span className="fb-button-text">Feedback</span>
-      </button>
+        <button
+          type="button"
+          className="fb-button"
+          onClick={() => setOpen(true)}
+          /* **The accessible name, now that `title` is not supplying one.**
+             Below the narrow breakpoint the word is `display: none`, which
+             takes it out of the accessibility tree as well as off the screen —
+             so without this the button is an unlabelled icon on exactly the
+             widths where a tooltip cannot be opened either. */
+          aria-label="Feedback"
+        >
+          <MessageSquareWarning size={15} />
+          {/* Given up below the narrow breakpoint, the way the wordmark gives
+              up its word — styles.css § feedback. The icon and the
+              `aria-label` carry it from there. */}
+          <span className="fb-button-text">Feedback</span>
+        </button>
+      </Tooltip>
       <FeedbackDialog
         open={open}
         onClose={() => setOpen(false)}

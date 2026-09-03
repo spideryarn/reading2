@@ -38,6 +38,7 @@ import {
   fsJobStore,
   reattachAttemptForTests,
   forgetForTests,
+  stampFinishedForTests,
 } from "../src/store/jobs-fs.js";
 import { pgJobStore, releaseStepIn } from "../src/store/pg-jobs.js";
 import type { Job, JobStep, OwnerId } from "../src/types.js";
@@ -256,14 +257,19 @@ function settledIds(settled: ExpirySettlement[]): string[] {
 }
 
 /**
- * **Each store, plus the two states its own API cannot reach.**
+ * **Each store, plus the three states its own API cannot reach.**
  *
- * A lease that has passed, and a job that has ended while still carrying its
- * token. Both are real — the second is one forgotten `attemptId: null` away in
- * any transition somebody adds later — and neither can be produced through the
- * contract, which is rather the point of a fence. Without an equivalent on both
- * sides the two adapters would be tested to different depths and "parity" would
- * be doing no work.
+ * A lease that has passed, a job that has ended while still carrying its token,
+ * and a chosen `finishedAt`. All three are real — the second is one forgotten
+ * `attemptId: null` away in any transition somebody adds later — and none can
+ * be produced through the contract, which is rather the point of a fence.
+ * Without an equivalent on both sides the two adapters would be tested to
+ * different depths and "parity" would be doing no work.
+ *
+ * `stampFinished` joined them on 2026-09-03, when retention started ordering by
+ * when a job finished rather than by when it was queued. Every terminal
+ * transition reads the clock for itself, so no sequence of `JobStore` calls can
+ * tie two finishes or put three of them in an order other than the calls'.
  */
 interface Adapter {
   name: string;
@@ -271,6 +277,8 @@ interface Adapter {
   available: boolean;
   expire(id: string): Promise<void>;
   reattach(id: string, attempt: string): Promise<void>;
+  /** Rewrite an already-terminal job's `finishedAt`. The job must have ended. */
+  stampFinished(id: string, iso: string): Promise<void>;
   forgetAll(ids: string[]): Promise<void>;
 }
 
@@ -284,6 +292,9 @@ const ADAPTERS: Adapter[] = [
     },
     async reattach(id, attempt) {
       reattachAttemptForTests(id, attempt);
+    },
+    async stampFinished(id, iso) {
+      await stampFinishedForTests(id, iso);
     },
     /* By id. `resetForTests` alone cleared the maps and left every record in
        `data/_jobs/` — which is where a job actually lives — so each run of this
@@ -316,6 +327,12 @@ const ADAPTERS: Adapter[] = [
     },
     async reattach(id, attempt) {
       await getDb().update(jobs).set({ attemptId: attempt }).where(eq(jobs.id, id));
+    },
+    async stampFinished(id, iso) {
+      await getDb()
+        .update(jobs)
+        .set({ finishedAt: new Date(iso) })
+        .where(eq(jobs.id, id));
     },
     async forgetAll(ids) {
       await getDb().delete(jobs).where(inArray(jobs.id, ids));
@@ -1636,18 +1653,32 @@ for (const adapter of ADAPTERS) {
 
     /* ------------------------------------------------------------ retention --
 
-       **The only two cases here whose scope is the whole owner**, which is why
+       **The only cases here whose scope is the whole owner**, which is why
        the file has an owner nobody else uses — see the head of it. `keep` is a
-       plain number in both, and it can be, because every finished job this
-       owner has is one of these lines. Written against a shared owner it would
-       have to count first, and then it would be asserting arithmetic against
-       whatever else happened to be in the database that morning. */
+       plain number in all of them, and it can be, because every finished job
+       this owner has is one of these lines. Written against a shared owner they
+       would have to count first, and then they would be asserting arithmetic
+       against whatever else happened to be in the database that morning. */
 
-    /** Queue it, claim it, end it. The three lines every case below repeats. */
+    /**
+     * Queue it, claim it, end it. The three lines every case below repeats.
+     *
+     * **The claim is asserted, not assumed.** It used to be called for its
+     * effect and its outcome dropped on the floor — so when it came back `busy`
+     * the next line failed instead, as `StaleAttemptError: no longer held by
+     * this attempt`, which describes a fence bug and is not what happened. On a
+     * box where several worktrees share one local Postgres that is a real
+     * event: `claim` refuses on the `queue_state` singleton if any other
+     * claimant is mid-decision, and on a concurrency cap counted across the
+     * *whole* `jobs` table, neither of which this suite's private owner keeps
+     * anybody out of. `expectClaimed` is the rest of the file's answer to
+     * exactly that and says which reason it was — docs/reusable/silent-success.md,
+     * in its reporting form. It does not retry, on purpose.
+     */
     async function endJob(job: Job, key: string, ending: "done" | "error"): Promise<void> {
       await store.enqueueOrGet(job, { workKey: key, reservesName: false });
       const attempt = mintAttempt();
-      await store.claim(job.id, OWNER, attempt, LEASE, CAP);
+      expectClaimed(await store.claim(job.id, OWNER, attempt, LEASE, CAP));
       await store.finish(job.id, attempt, {
         status: ending,
         steps: job.steps,
@@ -1677,22 +1708,117 @@ for (const adapter of ADAPTERS) {
       expect(left).not.toContain(ended[2]!.id);
     });
 
+    /**
+     * **A success survives a history that is already nothing but failures.**
+     *
+     * The case the old rule could not pass, and the reason the rule changed:
+     * the preference for failures was absolute, so once an owner held
+     * `KEEP_FINISHED` of them every success was past the offset the moment it
+     * was written — deleted by the very `trimFinished` its own ending ran
+     * (src/jobs.ts § `noteEnded`). The client learns a job finished by polling
+     * for a terminal row, so no completion was ever announced, for any mode.
+     * docs/postmortems/260903e-successes-deleted-before-failures-so-no-job-is-ever-announced-done.md.
+     *
+     * **Three and one, not fifty and one.** The first draft of this used fifty
+     * to match `KEEP_FINISHED`, arguing the bug is about a full boundary. That
+     * was wrong: `keep` is an argument, so the boundary is wherever the caller
+     * puts it, and three failures against `keep` 3 is the identical shape.
+     * Fifty bought nothing and cost a second per adapter and a hundred rows a
+     * run in a local database every worktree on this box shares — which is a
+     * complaint the postmortem above makes about this very suite.
+     *
+     * Watched red first: both adapters deleted the success and kept every
+     * failure.
+     */
+    it("keeps a success that ends into a history already full of failures", async () => {
+      const failures: Job[] = [];
+      for (let i = 0; i < 3; i++) {
+        const job = aJob({ createdAt: new Date(Date.now() - (60 - i) * 60_000).toISOString() });
+        await endJob(job, `full${i}`, "error");
+        failures.push(job);
+      }
+      const success = aJob({ createdAt: new Date().toISOString() });
+      await endJob(success, "fullDone", "done");
+
+      /* One over the line, so exactly one row goes and there is no ambiguity
+         about which side it came off. */
+      expect(await store.trimFinished(OWNER, 3)).toBe(1);
+      const left = (await store.list(OWNER)).map((j) => j.id);
+      expect(left).toContain(success.id);
+      // The slot came off the back of the failures, not the front: the one that
+      // finished longest ago is the one nobody needs any more.
+      expect(left).not.toContain(failures[0]!.id);
+      expect(left).toContain(failures[2]!.id);
+    });
+
+    /**
+     * **The clock is when a job finished, not when it was queued.**
+     *
+     * Jobs run several at a time (src/jobs.ts § `DEFAULT_JOB_CONCURRENCY`) and
+     * take wildly different times, so a job queued first routinely ends last.
+     * Ranked by `createdAt` such a job sits well down its kind and can be swept
+     * by its own ending — which is the bug, with the failure preference taken
+     * out of it.
+     *
+     * **Written to this exact shape on purpose.** A vaguer version — three
+     * successes ended in creation order — is kept identically by both rules and
+     * proves nothing. Here the two rules disagree about every slot: by creation
+     * the survivors are B and C, by finish they are A and C.
+     *
+     * The instants are stamped rather than taken from the clock. Real time would
+     * make the green result depend on three `finish` calls landing in three
+     * different milliseconds — flaky rather than wrong, which is worse.
+     *
+     * Watched red first: both adapters kept B and C and deleted A.
+     */
+    it("keeps the job that finished last, however early it was queued", async () => {
+      const base = Date.parse("2026-09-03T09:00:00.000Z");
+      const at = (minutes: number): string => new Date(base + minutes * 60_000).toISOString();
+      // Queued a minute apart, so the old rule has a definite answer to be wrong
+      // with rather than a tie.
+      const a = aJob({ createdAt: at(0) });
+      const b = aJob({ createdAt: at(1) });
+      const c = aJob({ createdAt: at(2) });
+      for (const [i, job] of [a, b, c].entries()) await endJob(job, `late${i}`, "done");
+      // A was queued first and ended last — the slow one.
+      await adapter.stampFinished(b.id, at(10));
+      await adapter.stampFinished(c.id, at(11));
+      await adapter.stampFinished(a.id, at(12));
+
+      expect(await store.trimFinished(OWNER, 2)).toBe(1);
+      const left = (await store.list(OWNER)).map((j) => j.id);
+      expect(left).toContain(a.id);
+      expect(left).toContain(c.id);
+      expect(left).not.toContain(b.id);
+    });
+
     it("breaks a tie in the timestamps by id rather than by luck", async () => {
       /**
-       * **The part that drifts silently.** `created_at` is not a total order —
-       * two jobs queued in the same millisecond are common enough — and with no
-       * tie-break the two adapters answer from different accidents: Postgres
-       * from whatever order the planner returned, the filesystem store from the
-       * insertion order of a `Map`. Both look right until the day they disagree
-       * about which record still exists.
+       * **The part that drifts silently.** Neither timestamp is a total order —
+       * two jobs queued in the same millisecond are common enough, and since
+       * 2026-09-03 the first key is `finishedAt`, which two endings inside one
+       * request can share just as easily. With no tie-break the two adapters
+       * answer from different accidents: Postgres from whatever order the
+       * planner returned, the filesystem store from the insertion order of a
+       * `Map`. Both look right until the day they disagree about which record
+       * still exists.
        *
-       * So the rule is written down here: **same timestamp, lowest id goes.**
+       * So the rule is written down here: **both timestamps tied, lowest id
+       * goes.**
        *
-       * **They are finished in the opposite order to their ids**, which is the
-       * part that gives this teeth. Written the other way round it passed
-       * against a filesystem store with no tie-break at all, because the order
-       * it was handed them happened to be the order it should have sorted them
-       * into — a green tick for a rule nobody had implemented.
+       * **The fixture changed with the clock, and it had to.** It used to tie
+       * only `createdAt` and end the three in the opposite order to their ids —
+       * which under a `finishedAt` key is not a tie at all, so the case would
+       * have passed without the tie-break existing: a green tick for a rule
+       * nobody had implemented, the exact hazard this comment is about. So
+       * `finishedAt` is now stamped to one instant for all three through the
+       * `Adapter` seam, which is the only way to say it — every terminal
+       * transition reads the clock for itself.
+       *
+       * **And they are ended in the same order as their ids**, which is what
+       * gives it teeth now: an implementation with no tie-break keeps whichever
+       * two it was handed first, `aaa` and `aab` — the opposite of the answer
+       * below.
        *
        * The ids are built rather than minted, and differ only in a trailing
        * letter, because `id` is compared by Postgres under the database's
@@ -1706,7 +1832,8 @@ for (const adapter of ADAPTERS) {
       const tied = ["aaa", "aab", "aac"].map((tail) =>
         aJob({ id: `${stem}${tail}`, createdAt: stamp }),
       );
-      for (const [i, job] of [...tied].reverse().entries()) await endJob(job, `tie${i}`, "done");
+      for (const [i, job] of tied.entries()) await endJob(job, `tie${i}`, "done");
+      for (const job of tied) await adapter.stampFinished(job.id, stamp);
 
       expect(await store.trimFinished(OWNER, 2)).toBe(1);
       const left = (await store.list(OWNER)).map((j) => j.id);

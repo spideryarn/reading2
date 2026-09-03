@@ -16,6 +16,7 @@ this sits under.
 | [`src/web/LandingPage.tsx`](../../src/web/LandingPage.tsx) | `/` — the hero, the pictures, the bento, the plans, the sign-in panel |
 | [`src/web/FeaturesPage.tsx`](../../src/web/FeaturesPage.tsx) | `/features` — every mode, grouped |
 | [`src/web/SiteBits.tsx`](../../src/web/SiteBits.tsx) | the furniture both pages share, so they cannot drift into two |
+| [`src/web/SiteFooter.tsx`](../../src/web/SiteFooter.tsx) | the footer row, which these two pages share with the other four — `variant="marketing"` keeps this design's spacing |
 | [`src/web/Plans.tsx`](../../src/web/Plans.tsx) | the three plans, on both pages |
 | [`src/web/shots.ts`](../../src/web/shots.ts) | every screenshot: file, pixel size, alt text |
 | `styles.css` § the site | the `site-*` classes — the whole visual language, in one block |

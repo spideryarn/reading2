@@ -660,7 +660,10 @@ export interface BeginRevisionResult {
  * **The reason given here until 2026-09-03 was neither of those**, and it was
  * false: *"`hierarchy`, `arc`, `tweets` and `glossary` update the published
  * revision in place"*. True when it was written, and untrue from the D1b work
- * onwards — every step drafts and publishes now. It was a restatement of
+ * onwards — every pipeline *job* takes the draft-and-publish path, this
+ * function being where it starts, and `pgGlossaryStore.deleteGlossary` is the
+ * one deliberate exception. (Per job, not per step: one draft carries every
+ * step of a job — see `openOrBeginJobDraft` below.) It was a restatement of
  * src/db/schema.ts's own stale claim, which is how one wrong sentence became
  * three; see the correction there for what it cost.
  *
