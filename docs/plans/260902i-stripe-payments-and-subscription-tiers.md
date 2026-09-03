@@ -99,23 +99,28 @@ read off the subscription **item**. The same account then admitted an ingest whe
 would have stopped a free one, and refused the twenty-first with Stripe's own renewal date on it.
 
 `/profile`, the refusal's upgrade link and the two admin columns landed the same evening — see the
-*Checkout, portal and the reader-facing UI* and *Admin visibility* stages. What remains is Greg's
-review, the Portal-configuration check, comp subscriptions and go-live.
+*Checkout, portal and the reader-facing UI* and *Admin visibility* stages. The Portal configuration
+was read back from Stripe on 2026-09-03 and is right — invoice history, payment method, cancel at
+period end, no `subscription_update` while there is one tier to be on — and its login link is now on
+(see below). What remains is Greg's review, comp subscriptions and go-live.
 
 **273 tests across 19 files** — every billing suite plus the guards that catch this feature's own
 recurring mistakes (`fixture-ids`, `store-transaction-isolation`, `doc-links`) — re-run together on
 2026-09-03 after merging `dev`, rather than taken from four separate agents' reports. `npm run
 typecheck` clean over all 1,121 files.
 
-**One decision left for Greg, and it is about money rather than code.** A double-click on Upgrade
-can produce two payable Checkout Sessions, because nothing spans the subscription check and
-`sessions.create` — two subscriptions and two invoices if both are completed. This plan weighed and
-accepted that (reusing an open Session needs stored session state and expiry handling), but it was an
-agent's call, not Greg's, and being charged twice is the kind of thing a customer notices and
-remembers. **Stripe's own "limit customers to one subscription" Checkout setting is the cheapest
-close**, and nothing here configures or checks it. The net that would otherwise catch it,
-`chooseSubscription`'s multiple-live anomaly, **has a hole**: it counts only *entitled* subscriptions
-as live, so an `active` beside an `unpaid` is two real invoices and no anomaly logged.
+**The double-charge question is closed, by deciding not to.** Greg, 2026-09-03: *"we can stop
+worrying about this unlikely edge case for now."* The investigation and the three options it ruled
+out are in
+[billing.md § Subscribing twice](../project/billing.md#subscribing-twice-looked-at-and-deliberately-left-open);
+the short version is that Stripe's own setting redirects a Checkout page *as it loads*, so it would
+not have closed the two-tab case either, and it depends on an account-wide field on an account that
+also bills Greg's consulting customers.
+
+The investigation left one thing behind that is worth keeping: `chooseSubscription`'s anomaly counts
+only *entitled* subscriptions, so an `active` beside an `unpaid` is two collectable invoices and
+nothing logged. That is the alarm, not the guard, and it is cheap — count over non-terminal statuses,
+from the raw Stripe list before unreadable shapes are filtered out (GPT Sol's addition). Not done.
 
 **A caveat on the two guard suites above.** `tests/billing-quota-race.test.ts` asserts that one
 transaction *blocks* on another's row lock, so it is sensitive to how loaded the box is: it went red
@@ -1060,17 +1065,40 @@ Greg, 2026-09-02:
 
 ### Stage: Go-live (when we ship this)
 
-- [ ] **Greg (manual)**: activate live mode — business verification and a payout bank account;
-  Stripe requires the account holder.
+**There is no live mode to activate.** The first version of this stage said business verification and
+a payout bank account. That is wrong for this account: `acct_1GHoSxLZ0dGTJEEP` has taken real money
+for Greg's consulting work for years, and reading `/v1/account` on 2026-09-03 gives
+`charges_enabled`, `payouts_enabled` and `details_submitted` all true with an empty `requirements`.
+Going live is configuration in the live half of the dashboard plus a live key — an afternoon, not an
+application. What is genuinely empty over there is every per-mode object: products, prices, the
+portal configuration, webhook endpoints.
+
+- [ ] **Greg (manual)**: create a live secret key at
+  [dashboard.stripe.com/apikeys](https://dashboard.stripe.com/apikeys) — note the live URL has **no
+  `/test/` segment**, which is how you tell the modes apart. Stripe shows a live secret **once**;
+  after that it can only be rotated. Give it to the agent for the setup run.
+- [ ] Agent, with the live key: `scripts/stripe-setup.ts --apply` — creates the live product, prices
+  and portal configuration and writes the live price ids onto the tier rows. Check its
+  `is the account default` line; a portal configuration that is not the default is one no reader
+  ever sees.
+- [ ] **Greg (manual)**: add the production webhook endpoint at
+  [dashboard.stripe.com/webhooks](https://dashboard.stripe.com/webhooks) →
+  `https://<prod-host>/api/webhooks/stripe`, subscribed to the four events, and **Reveal secret** to
+  get its `whsec_…`. Per-endpoint, and unrelated to the API keys.
 - [ ] **Greg (manual)**: set live `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in Vercel env
   (production) — no Vercel credential exists on this box. There is **no `STRIPE_PRICE_*` variable
-  to set**: price ids live in `billing_tier_prices`, written by `scripts/stripe-setup.ts`, and
-  running that script against the live key is the step that populates them.
-- [ ] Agent, via API with the live key: recreate product/price/portal config; create the
-  production webhook endpoint at `https://<prod-host>/api/webhooks/stripe` subscribed to the four
-  events; hand Greg the signing secret for the Vercel step.
+  to set**: price ids live in `billing_tier_prices`, written by the setup run above.
+- [ ] **Greg (manual)**: the Checkout page says **"Greg Detre Consulting Ltd"** and the card
+  statement will read `GREG DETRE CONSULTING`. Decide whether that is the name a Spideryarn customer
+  should see on the page they pay on, and on their bank statement a month later.
 - [ ] Release check: retrieve and validate the configured live price (active, recurring monthly,
-  amount/currency, livemode).
+  amount/currency, livemode) — and buy one subscription with a real card, then cancel it.
+
+**Unverified, and worth one look before trusting it.** Greg opted the account into a
+"next-generation portal experience" on the Billing → Customer portal settings page (2026-09-03). Web
+research found no mention of it in Stripe's documentation or changelog at all, so nobody can say
+whether it changes how API-created `billing_portal.configurations` or `billingPortal.sessions.create`
+behave. Open the Portal from `/profile` on production once and look, rather than assuming.
 
 ### ✅ Stage: External critique of the plan
 
