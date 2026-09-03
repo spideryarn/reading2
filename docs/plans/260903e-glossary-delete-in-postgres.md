@@ -375,5 +375,21 @@ schema comment restated it, `pg-revisions.ts` cited it as a *reason*, `pg.ts` bu
 changed the implementation without anyone revisiting the sentence. Meanwhile
 `docs/project/database.md:220` had it right all along: *"A `done` ending publishes the draft."*
 
-**Stage 2b — outstanding**: the integration test through the real claim/session path, the remaining
-source comments, and the browser check.
+**Stage 2b — done.** `tests/glossary-delete-then-rebuild.test.ts` drives the real claim/session
+path — a real `jobs` row, `advanceJobWith` over the real `STEPS`, `openPgStoreSession`, a real
+draft, the commit, the publication — with only `STEPS.glossary.run` stubbed, so no model call. Three
+moves: an unforced run while the list is there **skips** (the control, without which "it ran after
+the delete" proves nothing), the delete, then an unforced run that **runs the step and publishes a
+new revision** serving the new terms. Red first both ways: with the delete removed, and with the
+stub writing the old list back.
+
+The four stale comments are corrected. `src/db/schema.ts` turned out to **contradict itself** — it
+listed `hierarchy` among the four writing in place and then said `hierarchy` was not one of them.
+Nobody had noticed.
+
+**The browser check found the feature works and the reader still cannot tell.** `DELETE` answered
+200, the list emptied, the job ran, the new glossary landed — and the panel never refreshed until a
+manual reload. **Not this work's bug**: `trimFinished` deletes a success in the same call that marks
+it done once an owner holds 50 failures, so no job is ever announced `done`, for any mode.
+docs/postmortems/260903e-successes-deleted-before-failures-so-no-job-is-ever-announced-done.md —
+which ranks the fix and says why it was not taken here.
