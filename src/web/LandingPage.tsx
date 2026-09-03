@@ -54,8 +54,8 @@
  * shadcn. Note the `tw:` prefix on every class.
  */
 import { CONTACT_EMAIL } from "../site-text.js";
-import { Plans } from "./FeaturesPage.js";
 import { Link } from "./Link.js";
+import { Plans } from "./Plans.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { FEATURES_HREF, PRIVACY_HREF } from "./router.js";
 import { SHOTS } from "./shots.js";
@@ -79,9 +79,9 @@ function BetaStrip() {
         href={`mailto:${CONTACT_EMAIL}?subject=${subject}`}
         className="tw:text-highlight tw:no-underline tw:hover:underline"
       >
-        Leave your email
+        Email us
       </a>{" "}
-      and we’ll tell you the day it does.
+      (it opens your mail app) and we’ll tell you the day it does.
     </p>
   );
 }
@@ -156,7 +156,11 @@ export function LandingPage() {
 
       {/* Greg, 2025-07-14, on the highlighting feature, lightly trimmed;
           the last sentence is a product fact from docs/project/search.md. */}
-      <Shot shot={SHOTS.meaning} title="Search by what a passage says, not what it says exactly.">
+      <Shot
+        shot={SHOTS.meaningPanel}
+        title="Search by what a passage says, not what it says exactly."
+        width="tw:mx-auto tw:max-w-sm"
+      >
         Type in basically anything — a word, a phrase, a description — and it highlights the areas
         of the text that are relevant. It leaves you as the arbiter of whether something is worth
         considering more closely; you can scan it rapidly. Every hit is marked in the prose and
@@ -165,10 +169,11 @@ export function LandingPage() {
 
       <H2>And the rest of it</H2>
       <ul className="tw:mt-4 tw:flex tw:flex-col tw:gap-4">
-        {/* Greg, 2026-08-24, the granularity-zoom brief, compressed. */}
+        {/* Greg, 2026-08-24, the granularity-zoom brief, compressed; and
+            2026-08-25, "I also always want to be able to see the full text". */}
         <Feature name="Every level of detail at once.">
-          Scroll right for more detail, down to progress through the article. The far right is
-          always the author’s own words.
+          Scroll right for more detail, down to progress through the article — and the full text
+          is always there beside it.
         </Feature>
         {/* Greg, 2026-08-26 (ideas) and 2026-08-31 (quotes). */}
         <Feature name="The ideas it introduces, and the ones it needs you to hold.">
@@ -190,10 +195,12 @@ export function LandingPage() {
         <Feature name="For peer reviewers.">
           A mode that helps a referee read a paper without reading it for them.
         </Feature>
-        {/* Greg, 2026-09-03, answer 2's postscript. */}
-        <Feature name="Public articles share their annotations.">
-          The expensive AI annotations on a public-readable article are there for everyone who
-          opens it.
+        {/* Greg, 2026-09-03, answer 2's postscript. What is shared is the
+            generated work — outline, gists, glossary, ideas, quotes — and not
+            the owner's comments, chats or searches (PrivacyPage.tsx). */}
+        <Feature name="Public articles share their AI annotations.">
+          The expensive generated work on a public-readable article — its outline, glossary,
+          ideas and quotes — is there for everyone who opens it. Your own notes stay yours.
         </Feature>
       </ul>
       <p className="tw:mt-6">
@@ -209,9 +216,10 @@ export function LandingPage() {
           Generated text lives at generated altitudes; the author’s prose is never quietly
           rewritten, and it is always one column away.
         </Feature>
-        {/* docs/project/vision.md § Principles 4, and block-ids.md. */}
-        <Feature name="Every claim the AI makes is tied to a passage you can press.">
-          Nothing it says floats free of the article.
+        {/* docs/project/vision.md § Principles 4, and the rule in
+            src/converse.ts: a statement about the article cites its block. */}
+        <Feature name="When the AI says what the article says, it cites the passage.">
+          One press and you are reading the author, not the model.
         </Feature>
         {/* Greg, 2026-09-03, answer 1; the tiebreak as he corrected it the same
             day, from his notes on "rich updated internal representations". */}

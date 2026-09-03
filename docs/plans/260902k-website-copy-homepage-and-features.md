@@ -67,6 +67,35 @@ punctuated — the source and date are in a comment beside it), **a product fact
 the code (a mode name, a price, a count), or **connective tissue**, kept to the minimum and marked in
 the file header as the part the next interview replaces. No agent-written line is presented as his.
 
+## The review, and what it changed
+
+GPT Sol reviewed the diff and the copy against the brief on 2026-09-03
+([260902k-website-copy-review-sol.md](260902k-website-copy-review-sol.md), prompt in
+[260902k-website-copy-review-prompt.md](260902k-website-copy-review-prompt.md)). Eight findings;
+each checked against the code before acting.
+
+1. **Provenance, high — right.** Three sentences carried comments attributing them to Greg or to
+   a product fact when they were an agent's: "a term is a word you look up; an idea is a claim you
+   hold" (vision.md, agent-written; question 7 unanswered), "in a second or two" (the old landing
+   page), and "the far right is always the author's own words" (an agent placeholder the interview
+   guide itself lists). All three replaced with his words or a checked fact.
+2. **The strip, high — partly.** Sol wanted "alpha" back. Greg chose beta copy with an honest
+   strip, so "beta" stays; but Sol was right that `/features` showed prices with no strip and
+   that "Leave your email" implied a form. The strip's sentence now sits under the plans table on
+   both pages (`OpensShortly` in `Plans.tsx`) and says it opens a mail app.
+3. **Chat promises, high — right.** `src/converse.ts` requires a citation only when a statement
+   is about the article, and permits summarising when asked. Both pages now say exactly that.
+4. **"Everything it does", medium — right.** Summary mode and Plain mode were missing; added as
+   rows, and the zoom caption names Hierarchy.
+5. **Diagram caption, medium — right.** There is no tree; the four are force, drift, trail and
+   sketch, and the picture is force. Caption and alt text corrected.
+6. **Public articles, medium — right.** Visitors get the generated artefacts, not the owner's
+   comments, chats or searches. Both pages now name what is shared and what stays private.
+7. **Free plan, low — right.** "3, for life"; "a successfully added article counts".
+8. **`Plans` ownership, low — right.** Moved to `Plans.tsx`.
+
+Sol found nothing in vision.md, the route, the asset test or the removed images.
+
 ## Out of scope, flagged
 
 - The privacy page says "alpha" in five places. It is a policy with its own review process

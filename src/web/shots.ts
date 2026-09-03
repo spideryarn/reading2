@@ -84,7 +84,7 @@ export const SHOTS = {
     src: ideasShot,
     file: "ideas.png",
     w: 720,
-    h: 1469,
+    h: 982,
     alt: "The Ideas panel: the propositions the piece assumes and the ones it introduces.",
   },
   quotes: {
@@ -99,7 +99,7 @@ export const SHOTS = {
     file: "diagram.png",
     w: 720,
     h: 1469,
-    alt: "A diagram of the article's shape, one dot per paragraph, with the current section marked.",
+    alt: "The force diagram: the article's sections as dots, joined where they share distinctive words, with the current section marked.",
   },
   ask: {
     src: askShot,

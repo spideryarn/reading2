@@ -30,60 +30,10 @@ import { ArrowLeft } from "lucide-react";
 import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
+import { Plans } from "./Plans.js";
 import { PRIVACY_HREF } from "./router.js";
 import { SHOTS } from "./shots.js";
 import { Feature, H2, Shot } from "./SiteBits.js";
-
-/**
- * The three plans, as docs/plans/260902i-stripe-payments-and-subscription-tiers.md
- * set them on 2026-09-02, and as `billing_tiers` holds them. Rendered on both
- * pages. **The numbers here are copy, not configuration**: the source of truth
- * is the database, and when a quota changes there this table is a second copy
- * that has to be changed by hand — which is the trade the plan made so that a
- * signed-out page needs no fetch. Reading is never gated, in Greg's words
- * (2026-09-02): *"if a user has hit their quota, they should still be able to
- * read their existing and Public-readable articles, just not incur extra
- * spend."*
- */
-export function Plans() {
-  const cell = "tw:py-2 tw:pr-6 tw:align-top";
-  return (
-    <div>
-      <table className="tw:mt-4 tw:w-full tw:border-collapse tw:text-sm">
-        <thead>
-          <tr className="tw:border-b tw:border-border tw:text-left tw:text-xs tw:uppercase tw:tracking-wide tw:text-ink-faint">
-            <th className={cell}>Plan</th>
-            <th className={cell}>Articles</th>
-            <th className={cell}>Price</th>
-          </tr>
-        </thead>
-        <tbody className="tw:text-foreground">
-          <tr className="tw:border-b tw:border-border">
-            <td className={cell}>Free</td>
-            <td className={cell}>3, to try it</td>
-            <td className={cell}>—</td>
-          </tr>
-          <tr className="tw:border-b tw:border-border">
-            <td className={cell}>Reader</td>
-            <td className={cell}>20 a month</td>
-            <td className={cell}>$10 · £8 · €9 a month</td>
-          </tr>
-          <tr>
-            <td className={cell}>Researcher</td>
-            <td className={cell}>150 a month</td>
-            <td className={cell}>$50 · £40 · €45 a month</td>
-          </tr>
-        </tbody>
-      </table>
-      {/* Greg, 2026-09-02, rephrased to the reader. */}
-      <p className="tw:mt-4 tw:text-sm">
-        An article counts when you add it; everything you do with it afterwards is included. Reading
-        is never gated: at your limit you can still read every article you have and every public
-        one.
-      </p>
-    </div>
-  );
-}
 
 export function FeaturesPage() {
   useDocumentTitle(pageTitle({ kind: "features" }));
@@ -125,16 +75,31 @@ export function FeaturesPage() {
       </Shot>
       {/* Greg, 2026-08-24, the granularity-zoom brief, compressed; the last
           sentence is docs/project/vision.md § Principles 1. */}
-      <Shot shot={SHOTS.zoom} title="Zoom.">
+      <Shot shot={SHOTS.zoom} title="Zoom, in Hierarchy mode.">
         The article at several levels of detail at once: scroll right for more, down to progress
-        through it. Scan through quickly to get a sense of the landscape, or burrow deeply. The far
-        right is always the author’s own words.
+        through it. Scan through quickly to get a sense of the landscape, or burrow deeply — and
+        the full text is always there beside it.
       </Shot>
-      {/* Greg, 2026-08-26, the diagram request, trimmed. */}
+      <ul className="tw:mt-4 tw:flex tw:flex-col tw:gap-4">
+        {/* Greg, 2026-08-26, the summary request, and 2026-08-31 ("just keeping
+            'Gist' only is sufficient"). Summary mode, src/modes.ts. */}
+        <Feature name="Summary.">
+          One sentence on every part of the piece, and every section of every part, as deep as
+          you ask — beside the prose, never instead of it.
+        </Feature>
+        {/* Plain mode: the article alone, with the band closed. */}
+        <Feature name="Or just the article.">
+          Plain mode is the prose and nothing else. Every other mode is a step away from it and a
+          step back.
+        </Feature>
+      </ul>
+      {/* Greg, 2026-08-26, the diagram request, trimmed; the four names are
+          DIAGRAMS in src/web/diagram.ts, and the picture is the first of them. */}
       <Shot shot={SHOTS.diagram} title="Diagram." width="tw:mx-auto tw:max-w-sm">
-        Maps of the structure of the piece — its outline as a tree, its sections joined by the
-        words they share, and its paragraphs placed by what they are about — with where you are
-        marked on each.
+        Maps of the structure of the piece, with where you are marked on each. Pictured:{" "}
+        <strong className="tw:text-foreground">force</strong>, the sections as dots, joined where
+        they share distinctive words. The other three: <em>drift</em> and <em>trail</em>, one dot
+        per paragraph placed by what it is about; <em>sketch</em>, drawn by the model.
       </Shot>
 
       <H2>The text, with a clever friend’s notes in it</H2>
@@ -144,10 +109,13 @@ export function FeaturesPage() {
         terms this piece uses in a non-obvious way, defined from the piece itself, underlined
         wherever they occur. Point at one and the card comes to you.
       </Shot>
-      {/* Greg, 2026-08-26, the ideas request. */}
+      {/* Greg, 2026-08-26, the ideas request, and nothing else: question 7 of
+          the interview is unanswered, so the line that used to follow this
+          ("a term is a word you look up; an idea is a claim you hold", from
+          vision.md, an agent's) is out until he says it or something like it. */}
       <Shot shot={SHOTS.ideas} title="Ideas." width="tw:mx-auto tw:max-w-sm">
-        The new ideas the text introduces, and the key ideas it requires you to understand. A term
-        is a word you look up; an idea is a claim you hold.
+        The new ideas the text introduces, and the key ideas it requires you to understand —
+        split into what you need to bring and what this piece adds.
       </Shot>
       {/* Greg, 2026-08-31, the quotes request. */}
       <Shot shot={SHOTS.quotes} title="Quotes." width="tw:mx-auto tw:max-w-sm">
@@ -185,14 +153,16 @@ export function FeaturesPage() {
       <Shot shot={SHOTS.ask} title="Select a sentence.">
         That bookmarks it. Optionally add a comment. And, if you want one, ask for an answer — an
         explanation from the surrounding argument, researching the web when it judges it needs to.
-        The answer starts arriving in a second or two, and the article never leaves the screen.
+        The answer streams in as it is written, and the article never leaves the screen.
       </Shot>
       <ul className="tw:mt-4 tw:flex tw:flex-col tw:gap-4">
-        {/* docs/project/chat-tools.md; docs/project/vision.md § Anti-goals. */}
+        {/* docs/project/chat-tools.md, and the two rules in src/converse.ts: a
+            statement about the article cites its block; no summarising unless
+            the reader asks. */}
         <Feature name="A chat that cites.">
-          Ask a longer question and every claim in the answer links back into the article. It can
-          search the piece, your library or the web — and it will not summarise the article for
-          you, on purpose.
+          Ask a longer question, and whenever the answer says what the article says, it links to
+          the passage. It can search the piece, your library or the web — and it does not
+          summarise the article unless you ask it to. You are reading it.
         </Feature>
         {/* Greg, 2026-08-31, the live-conversation request. */}
         <Feature name="Or say it out loud.">
@@ -228,10 +198,14 @@ export function FeaturesPage() {
 
       <H2>Your shelf, and everyone’s</H2>
       {/* Greg, 2026-08-25 (library) and 2026-09-03, answer 2's postscript. */}
+      {/* What a public visitor gets is the generated work, not the owner's
+          comments, chats or searches — PrivacyPage.tsx says so, and this must
+          agree with it. */}
       <Shot shot={SHOTS.library} title="The library.">
         Every article you have added, one click from where you left off. Make one public-readable
-        and it shares its expensive AI annotations, so that everyone who opens it can benefit from
-        them.
+        and it shares its expensive AI annotations — the outline, gists, glossary, ideas and
+        quotes — so that everyone who opens it can benefit from them. Your own comments, chats
+        and searches stay yours.
       </Shot>
       <ul className="tw:mt-4 tw:flex tw:flex-col tw:gap-4">
         {/* Greg, 2026-08-26, the reader-profile request, rephrased. */}
