@@ -57,6 +57,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Arc, ArcFound } from "../types.js";
+import { useOrderedRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
@@ -95,9 +96,15 @@ export function useArc(slug: string, fromPayload: Arc | undefined): UseArc {
   const [stale, setStale] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  /**
+   * The read itself — the parse, the 404 branch and the stale-reads-as-absent
+   * rule, which are this hook's own. `current()` after every `await`, before
+   * any state is set. See src/web/useOrderedRead.ts.
+   */
+  const load = useCallback(async (current: () => boolean) => {
     try {
       const res = await apiFetch(`/api/arc/${encodeURIComponent(slug)}`);
+      if (!current()) return;
       if (res.status === 404) {
         /* Not a fault: nobody has written one. The effect below is what turns
            this into a job, and this is the state it waits in. */
@@ -108,12 +115,14 @@ export function useArc(slug: string, fromPayload: Arc | undefined): UseArc {
         return;
       }
       const found = await readJson<ArcFound>(res);
+      if (!current()) return;
       setStale(found.stale);
       /* **Stale reads as no arc**, deliberately. See `arc` on `UseArc`. */
       setArc(found.stale ? null : found.arc);
       setError(null);
       setStatus(found.stale ? "absent" : "ready");
     } catch (err) {
+      if (!current()) return;
       setError((err as Error).message);
       /* A failed revalidation must not take a good arc off the screen — `load`
          runs again every time a job finishes, not only on the first read. Only
@@ -123,14 +132,23 @@ export function useArc(slug: string, fromPayload: Arc | undefined): UseArc {
     }
   }, [slug]);
 
+  /* **The ordering is not this hook's**: an ordinary `reload` joins the read
+     already in flight, a post-job `refresh` trails it rather than racing it, and
+     only the newest reply may commit. src/web/useOrderedRead.ts, shared with the
+     seven other artefact readers — this one lost that race until 2026-09-02
+     (tests/artefact-read-race.test.tsx). Arc is the one that could sometimes
+     repair itself afterwards, because a later job completion reads again; a
+     reader who asks for nothing more still keeps the pre-job arc for ever. */
+  const { reload, refresh } = useOrderedRead(load);
+
   /* Only when the payload had none. With one, there is nothing to read: the
      payload's arc is the same artefact this route would return. */
   useEffect(() => {
     if (fromPayload) return;
-    void load();
-  }, [fromPayload, load]);
+    void reload();
+  }, [fromPayload, reload]);
 
-  const queue = useStepJob(slug, "arc", load);
+  const queue = useStepJob(slug, "arc", refresh);
 
   /* Ask for one, once, per article. `started` is keyed on the slug rather than
      being a boolean, so opening a second article in the same mount asks again

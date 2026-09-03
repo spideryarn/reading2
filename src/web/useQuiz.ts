@@ -42,6 +42,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Job, Quiz, QuizQuestionId, QuizResponse } from "../types.js";
+import { useOrderedRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
@@ -191,9 +192,16 @@ export function useQuiz(slug: string): UseQuiz {
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [answered, setAnswered] = useState<Set<QuizQuestionId>>(() => new Set());
 
-  const load = useCallback(async () => {
+  /**
+   * The read itself — the parse, the 404 branch and the error copy, which are
+   * this mode's own. `current()` after every `await`, before any state is
+   * set: false means this reply is about an article, or an artefact, the hook
+   * has since moved on from. See src/web/useOrderedRead.ts.
+   */
+  const load = useCallback(async (current: () => boolean) => {
     try {
       const res = await apiFetch(`/api/quiz/${encodeURIComponent(slug)}`);
+      if (!current()) return;
       if (res.status === 404) {
         /* The ordinary case, and here the commonest by some distance: `quiz` is
            off `DEFAULT_INGEST_STEPS`, so most articles have never had questions
@@ -206,12 +214,14 @@ export function useQuiz(slug: string): UseQuiz {
         return;
       }
       const loaded = await readJson<QuizResponse>(res);
+      if (!current()) return;
       setQuiz(loaded.quiz);
       setStale(loaded.stale);
       setOutdated(loaded.outdated);
       setError(null);
       setStatus("ready");
     } catch (err) {
+      if (!current()) return;
       setError((err as Error).message);
       /* **A failed revalidation must not take the questions away.** `load` is
          not only the opening read — `onFinished` calls it again every time a
@@ -223,14 +233,21 @@ export function useQuiz(slug: string): UseQuiz {
     }
   }, [slug]);
 
+  /* **The ordering is not this hook's**: an ordinary `reload` joins the read
+     already in flight, a post-job `refresh` trails it rather than racing it, and
+     only the newest reply may commit. src/web/useOrderedRead.ts, shared with the
+     seven other artefact readers — this one lost that race until 2026-09-02
+     (tests/artefact-read-race.test.tsx). */
+  const { reload, refresh } = useOrderedRead(load);
+
   useEffect(() => {
-    void load();
-  }, [load]);
+    void reload();
+  }, [reload]);
 
   /* The job half — the poll, the running job, and what a refused or dead run
      says to the reader — is src/web/useStepJob.ts, shared with the glossary,
      the summaries, the ideas and the timeline. */
-  const queue = useStepJob(slug, "quiz", load);
+  const queue = useStepJob(slug, "quiz", refresh);
 
   const write = useCallback(async () => {
     await queue.start({

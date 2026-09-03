@@ -22,9 +22,10 @@
  *
  * See docs/project/glossary.md.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Glossary, GlossaryEntry, GlossaryLookup, GlossaryResponse, Job } from "../types.js";
 import { useAutoRun } from "./useAutoRun.js";
+import { useOrderedRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 import { apiFetch, fetchOk, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
@@ -64,19 +65,27 @@ type GlossaryStatus = "loading" | "none" | "ready" | "error";
  *
  * ## Generations, not a flag
  *
+ * **The mechanism now lives in [`useOrderedRead`](./useOrderedRead.ts)**, shared
+ * with the seven other artefact readers, which had none of it and each lost the
+ * race this hook was fixed for
+ * (docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md
+ * § T2.1). The reasoning stays here, because this is where it was worked out and
+ * the glossary is the surface that exercises every verb of it.
+ *
  * `live` guards a *slug change*. It cannot order two operations on one slug: a
  * GET issued before a DELETE can land after it and put the list the reader just
  * threw away back on screen. So every fetch takes the generation it started in,
- * and a reply from an older one is dropped. This replaces the `pushed` ref,
- * which was the same idea aimed at a narrower case.
+ * and a reply from an older one is dropped — `current()` in `load` below. This
+ * replaces the `pushed` ref, which was the same idea aimed at a narrower case.
  *
- * **`clear` bumps it and `patchEntry` does not**, which is not an oversight.
- * The list `clear` discards has been deleted, so a reply describing it is news
- * about nothing. But bumping in `patchEntry` would cancel an in-flight reload,
- * and the commonest reason one is in flight is that a job has just finished —
- * so a reader who checked a term at the wrong moment would silently never see
- * the new terms. The opposite risk, a read that started before the lookup was
- * stored landing after it, is repaired by the trailing fetch instead.
+ * **`clear` discards the generation and `patchEntry` does not**, which is not an
+ * oversight. The list `clear` discards has been deleted, so a reply describing
+ * it is news about nothing. But discarding in `patchEntry` would cancel an
+ * in-flight reload, and the commonest reason one is in flight is that a job has
+ * just finished — so a reader who checked a term at the wrong moment would
+ * silently never see the new terms. The opposite risk, a read that started
+ * before the lookup was stored landing after it, is repaired by the trailing
+ * fetch (`armRefresh`) instead.
  */
 export interface GlossaryRead {
   status: GlossaryStatus;
@@ -112,7 +121,8 @@ export interface GlossaryRead {
    *
    * The new terms then never appear. So a request in flight is not an answer to
    * this question: `refresh` arms a **trailing** fetch that runs after the
-   * current one instead of joining it.
+   * current one instead of joining it. Both verbs are `useOrderedRead`'s, and
+   * dedupe without the trailing read is precisely the bug above rebuilt.
    */
   refresh(): Promise<void>;
   /** Empty the list now. `reset()` deletes the artefact and must not go on showing it. */
@@ -145,42 +155,19 @@ export function useGlossaryRead(slug: string): GlossaryRead {
   const [profileChanged, setProfileChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  /* Bumped by every mutation and by every fetch. A reply carrying an older
-     number than the current one is news about a list that no longer exists. */
-  const generation = useRef(0);
-  /* The request in flight, so a second caller joins it instead of starting one.
-     Cleared in `finally`, including on the throw. */
-  const inFlight = useRef<Promise<void> | null>(null);
-  /* Somebody asked for fresh data while a request was already out. That request
-     may have read the database before the change they are asking about, so it
-     is not an answer — one more fetch runs when it lands. A flag rather than a
-     queue: two changes during one request still only need one more read. */
-  const trailing = useRef(false);
-  /* `fetchNow` calls itself to run the trailing fetch, and a `useCallback`
-     cannot name itself. */
-  const fetchLatest = useRef<() => Promise<void>>(async () => {});
-
-  const fetchNow = useCallback(async (): Promise<void> => {
-    if (inFlight.current) return inFlight.current;
-    const mine = ++generation.current;
-    /* `| undefined`, and declared before it is assigned, so the `finally` below
-       can ask whether the entry it is about to clear is still its own. Without
-       that check this sequence loses the dedupe: request A is in flight;
-       `clear()` nulls the entry; `reload()` starts request B and stores it; A's
-       `finally` then nulls B's entry, and the next `reload()` starts a third
-       request instead of joining B. Not a correctness bug — the generation
-       counter still drops the stale replies — but it is the duplicate request
-       this whole change is about, rebuilt in the mechanism meant to prevent it.
-
-       The `undefined` is load-bearing rather than cosmetic: `let run: Promise<void>`
-       does not typecheck, because TypeScript cannot see that the `finally` runs
-       only after an `await`. GPT Sol found that this change had been made
-       without re-running the typechecker. */
-    let run: Promise<void> | undefined;
-    run = (async () => {
+  /**
+   * The read itself. Everything about *ordering* it — the dedupe, the trailing
+   * fetch, and which reply is allowed to commit — is `useOrderedRead` below.
+   *
+   * `current()` after every `await`: false means this reply is about a list the
+   * hook has since thrown away (a `clear()`, or another article), and committing
+   * it would put the discarded one back on screen.
+   */
+  const load = useCallback(
+    async (current: () => boolean): Promise<void> => {
       try {
         const res = await apiFetch(`/api/glossary/${encodeURIComponent(slug)}`);
-        if (mine !== generation.current) return;
+        if (!current()) return;
         if (res.status === 404) {
           /* The ordinary case, not a fault: most articles have no glossary, and
              this is what the panel's button is for. */
@@ -194,7 +181,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
           return;
         }
         const loaded = await readJson<GlossaryResponse>(res);
-        if (mine !== generation.current) return;
+        if (!current()) return;
         setGlossary(loaded.glossary);
         setStale(loaded.stale);
         setOutdated(loaded.outdated);
@@ -207,7 +194,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
         setError(null);
         setStatus("ready");
       } catch (err) {
-        if (mine !== generation.current) return;
+        if (!current()) return;
         /* Said out loud, unlike the hook this replaced. That one swallowed a
            failed read because the underlines are an enhancement over the prose
            and nothing rendered the message — but the panel renders it, and it
@@ -223,36 +210,12 @@ export function useGlossaryRead(slug: string): GlossaryRead {
            the built code. The error is shown either way; `GlossaryPanel` puts
            it above the list. */
         setStatus((was) => (was === "loading" ? "error" : was));
-      } finally {
-        if (inFlight.current === run) inFlight.current = null;
-        /* Somebody asked for fresh data while this was out. Only if we are
-           still the current generation — a `clear()` since then means this
-           article's list is being rebuilt and a read now would race it. */
-        if (trailing.current && mine === generation.current) {
-          trailing.current = false;
-          void fetchLatest.current();
-        }
       }
-    })();
-    inFlight.current = run;
-    return run;
-  }, [slug]);
-  fetchLatest.current = fetchNow;
+    },
+    [slug],
+  );
 
-  /* "The list has changed" — see `refresh` on the interface. A request already
-     out may predate the change, so it is not an answer to this. */
-  const refresh = useCallback(async (): Promise<void> => {
-    if (!inFlight.current) return fetchNow();
-    trailing.current = true;
-    /* Awaited twice on purpose. The first await is the request already out; its
-       `finally` is what launches the trailing one and puts it in `inFlight`, so
-       the second await is that. Returning after the first would resolve before
-       the refresh this function promised had happened — nothing awaits it
-       today, which is exactly why the contract should not be left lying. GPT
-       Sol, reviewing the built code. */
-    await inFlight.current;
-    if (inFlight.current) await inFlight.current;
-  }, [fetchNow]);
+  const { reload, refresh, armRefresh, discard } = useOrderedRead(load);
 
   /**
    * A new article clears the old one's list — **during render, not in an
@@ -271,12 +234,6 @@ export function useGlossaryRead(slug: string): GlossaryRead {
   const [readingSlug, setReadingSlug] = useState(slug);
   if (readingSlug !== slug) {
     setReadingSlug(slug);
-    generation.current++;
-    inFlight.current = null;
-    /* An armed refresh belongs to the article we have just left. Leaving it set
-       would spend one GET fetching the new article for a change that happened
-       in the old one. */
-    trailing.current = false;
     setStatus("loading");
     setGlossary(null);
     setStale(false);
@@ -290,20 +247,11 @@ export function useGlossaryRead(slug: string): GlossaryRead {
      touch `status` — so the block above is the only place `loading` is ever
      re-entered, and it is entered once per article. */
   useEffect(() => {
-    void fetchNow();
-    /* Nothing armed survives unmount. Without this, a request outstanding when
-       the reader closes the article can finish, find `trailing` set, and launch
-       a GET for a page nobody is on. The generation check makes it harmless;
-       it is still a request nobody wanted. */
-    return () => {
-      trailing.current = false;
-    };
-  }, [fetchNow]);
+    void reload();
+  }, [reload]);
 
   const clear = useCallback(() => {
-    generation.current++;
-    inFlight.current = null;
-    trailing.current = false;
+    discard();
     setGlossary(null);
     setStale(false);
     setOutdated(false);
@@ -315,7 +263,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
        then failed too, indefinitely. GPT Sol, reviewing the built code. */
     setError(null);
     setStatus("none");
-  }, []);
+  }, [discard]);
 
   /**
    * **Does not bump the generation**, unlike `clear`, and the asymmetry is the
@@ -337,7 +285,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
    * by then.
    */
   const patchEntry = useCallback((id: string, lookup: GlossaryLookup) => {
-    if (inFlight.current) trailing.current = true;
+    armRefresh();
     setGlossary((current) =>
       current
         ? {
@@ -350,7 +298,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
           }
         : current,
     );
-  }, []);
+  }, [armRefresh]);
 
   return {
     status,
@@ -360,7 +308,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
     profiled,
     profileChanged,
     error,
-    reload: fetchNow,
+    reload,
     refresh,
     clear,
     patchEntry,
@@ -478,9 +426,10 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
      the summaries. It carries the reasoning that used to be copied here.
      `refresh`, not `reload`: a finished job has just written a new list, and a
      request already in flight read the old one. See `refresh` on
-     `GlossaryRead` for the sequence this gets wrong the other way, and note
-     that this is the one thing the four copies did *not* agree about — the
-     other three have no trailing fetch to reach for. */
+     `GlossaryRead` for the sequence this gets wrong the other way. This was the
+     one thing the copies did *not* agree about — none of the others had a
+     trailing fetch to reach for — until 2026-09-02, when all eight moved onto
+     src/web/useOrderedRead.ts and all eight now pass `refresh` here. */
   const queue = useStepJob(slug, "glossary", refresh);
 
   const run = useCallback(

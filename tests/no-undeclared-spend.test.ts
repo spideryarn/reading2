@@ -112,6 +112,16 @@ const GUARDED_TRANSPORTS = [
 const CREDENTIALS = ["OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"];
 
 /**
+ * Files allowed to *name* a host or a credential, and nothing more — prose
+ * that tells the reader where their words go. Narrower than ALLOWED on purpose:
+ * a raw fetch or a client in one of these is still an offence.
+ */
+const MAY_NAME: Readonly<Record<string, string>> = {
+  "src/web/PrivacyPage.tsx":
+    "The privacy policy links to the provider's own. It names the host and never calls it.",
+};
+
+/**
  * Files allowed to have the capability without being a declared bypass.
  *
  * Every line is a reason, and a file that is here for no reason is the failure
@@ -516,10 +526,14 @@ export function capabilitiesOf(file: string, source: string): Scan {
 export function offenceFor(file: string, scan: Scan): string | null {
   /* A test may *name* an endpoint — one that could not write `openrouter.ai`
      could not check that the seam sends there — but it may not construct a
-     client, reach a guarded transport, or hand the string to `fetch`. */
-  const caps = file.startsWith("tests/")
-    ? scan.findings.filter(isTransport).filter((f) => !f.what.startsWith("names "))
-    : scan.findings;
+     client, reach a guarded transport, or hand the string to `fetch`. A file in
+     MAY_NAME gets the same, and only the same: the licence is for the word, so
+     a `fetch` growing beside it is still an offence. An ALLOWED entry would
+     have covered that fetch too, which GPT Sol pointed out on 2026-09-02. */
+  const caps =
+    file.startsWith("tests/") || file in MAY_NAME
+      ? scan.findings.filter(isTransport).filter((f) => !f.what.startsWith("names "))
+      : scan.findings;
   if (caps.length === 0) return null;
   if (ALLOWED[file]) return null;
 
@@ -637,6 +651,22 @@ describe("no undeclared spend", () => {
       offenceFor("tests/x.test.ts", {
         ...naming,
         findings: [{ file: "tests/x.test.ts", what: "raw fetch at a provider" }],
+      }),
+    ).not.toBeNull();
+  });
+
+  it("lets prose name a host, and lets it do nothing else", () => {
+    const page = Object.keys(MAY_NAME)[0]!;
+    const naming: Scan = {
+      findings: [{ file: page, what: "names openrouter.ai" }],
+      declarationIds: new Set(),
+      parseErrors: 0,
+    };
+    expect(offenceFor(page, naming)).toBeNull();
+    expect(
+      offenceFor(page, {
+        ...naming,
+        findings: [...naming.findings, { file: page, what: "raw fetch at a provider" }],
       }),
     ).not.toBeNull();
   });

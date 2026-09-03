@@ -237,8 +237,8 @@ export function SearchPanel({
 
   return (
     <aside className="mode-band srch" aria-label="Search this article">
-      <div className="srch-head">
-        <SearchIcon size={14} className="srch-head-icon" aria-hidden />
+      <div className="band-head">
+        <SearchIcon size={14} className="band-head-icon" aria-hidden />
         <h2>Search</h2>
       </div>
 

@@ -655,10 +655,12 @@ export interface StepStamp {
  * than a file, and the stamp fields are read out of it exactly the same way —
  * see `stampOf` below and src/store/artifacts-pg.ts.
  *
- * Three steps are deliberately absent. `fetch`, `extract` and `blocks` record
- * nothing about what they were made from, so their stamp is `null` and the only
- * question that can be asked of them is presence — which is why the truncation
- * hazard was invisible for them and why `has` had to start parsing.
+ * **Total, and three rows are an explicit `null`.** `fetch`, `extract` and
+ * `blocks` record nothing about what they were made from, so their stamp is
+ * `null` and the only question that can be asked of them is presence — which is
+ * why the truncation hazard was invisible for them and why `has` had to start
+ * parsing. They are written down rather than left out so that the two cases can
+ * be told apart: see the note on the table itself.
  *
  * `hierarchy` reads its stamp off **`labels.json`, not `tree.json`**, and that is
  * worth stating because it looks backwards. The tree is the headline artefact,
@@ -667,7 +669,14 @@ export interface StepStamp {
  * `structureHash` besides. So it is the only output of stage 4 that can answer
  * "is this still about the current article".
  */
-export const STAMP_SOURCE: Partial<Record<StepName, ArtifactKind>> = {
+export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
+  /* The three that stamp nothing — stated, not omitted. `stampFor` reads a
+     `null` here exactly as it read a missing key before, so behaviour is
+     unchanged; what changed is that "we decided this step has no stamp" and
+     "somebody forgot a row" are now different things on the page. */
+  fetch: null,
+  extract: null,
+  blocks: null,
   hierarchy: "labels",
   assets: "assets",
   arc: "arc",
@@ -676,12 +685,17 @@ export const STAMP_SOURCE: Partial<Record<StepName, ArtifactKind>> = {
   ideas: "ideas",
   quotes: "quotes",
   timeline: "timeline",
-  /* **Missing here means `stampFor` answers `null` silently**, so the step is
-     never current and re-runs on every job for ever — writing a perfectly good
-     artefact each time, with nothing going red, because the artefact parses and
-     every id resolves. That is the same failure as spelling the artefact's
-     stamp fields `inputHash`/`promptVersion`/`model`, one door along, and
-     tests/quiz.test.ts asks for this row by name.
+  /* **A row here is no longer optional: leave one out and `npm run typecheck`
+     names the step.** It used to be a `Partial`, and a missing row made
+     `stampFor` answer `null` silently — so the step was never current and
+     re-ran on every job for ever, writing a perfectly good artefact each time
+     with nothing going red, because the artefact parses and every id resolves.
+     The compiler now catches the omission; what it cannot catch is a *wrong*
+     answer, so `null` still means "this step stamps nothing", and writing it
+     for a step that does stamp something buys back the whole failure. That is
+     the same failure as spelling the artefact's stamp fields
+     `inputHash`/`promptVersion`/`model`, one door along, and
+     tests/quiz-step-registration.test.ts asks for this row by name and value.
 
      **And deliberately NO `BASELINE` row.** There is no id inheritance across
      runs (src/pipeline.ts § the `quiz` step), and `readBaseline` throws for a

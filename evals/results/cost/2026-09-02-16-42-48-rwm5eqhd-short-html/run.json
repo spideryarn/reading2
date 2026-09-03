@@ -1,0 +1,91 @@
+{
+  "meta": {
+    "startedAt": "2026-09-02T16:42:47.870Z",
+    "commit": "1cd0a277375fe064436c6323666f8916ce5948be",
+    "gitDirty": true,
+    "srcPatchSha256": "4c6a9a5e306879d6cdd4e5bddfed05232c751a816c05fa2bab23b8fdd4844118",
+    "store": "postgres",
+    "databaseTarget": "postgresql://postgres:***@127.0.0.1:54362/postgres",
+    "evalOwnerId": "00000000-0000-4000-8000-000000000002",
+    "environmentOwnerId": "f4d08b58-5573-4811-9887-e26c114fb324",
+    "scenario": "per-mode",
+    "node": "v26.8.1",
+    "effort": {
+      "pipelineEnvOverride": null,
+      "hierarchy": "medium",
+      "labels": "module-private in src/labels.ts — pinned by commit + srcPatchSha256",
+      "articleStages": {
+        "arc": "high",
+        "tweets": "high",
+        "glossary": "medium",
+        "quotes": "medium",
+        "ideas": "high",
+        "sketch": "high",
+        "timeline": "high",
+        "quiz": "high"
+      }
+    }
+  },
+  "runTag": "rwm5eqhd",
+  "notes": [
+    "Stage 1 (fetch) is a fixture read, so the elapsed time excludes real-world fetch latency. It costs no model call, so the money is unaffected.",
+    "There is no `labels` step: nav labels fan out inside `hierarchy`, so every label call carries stepName=hierarchy and job=labels. The hierarchy/labels split is in `byAiJob`.",
+    "Per-step wall clock is max(finishedAt) - min(startedAt). sum(durationMs) is printed beside it and is several times larger wherever a step fanned out; it is not a wait.",
+    "Unpriced rows are unknown, not zero. A total carrying them is short by an unknown amount.",
+    "Pipeline cache breakpoints are conditional and off by default (`sharesArticleCache`), so an ordinary ingest marks nothing and these are cold numbers in that sense too. Checked in the code: `sharesArticleCache` returns false for anything that is not an ArticleStage, and `hierarchy` is not one — so nothing an ingest writes can be read warm by a later draw.",
+    "`scenario` says whether the modes were measured one per job (`per-mode`) or several in one (`batched-modes`). The two are different numbers and must never be aggregated together.",
+    "`observedSpend` is what each step's own collector saw, from AdvanceParts.onStepSpend. Its `calls` is what the ledger is reconciled against. Its `writeFailures` is a LOWER BOUND: collectSpend calls onDone before draining its writes, so a write that rejects late is not counted there — which is exactly why the check is calls-made against rows-kept."
+  ],
+  "draws": [
+    {
+      "fixture": "short-html",
+      "fixtureFile": "tests/fixtures/data-root/data/writes/raw.html",
+      "fixtureSha256": {
+        "measured": "728a75e7d96b2727aad5cb35b66966fdb724e1999999438e8fba3a13cdfd4dc4",
+        "manifest": "728a75e7d96b2727aad5cb35b66966fdb724e1999999438e8fba3a13cdfd4dc4",
+        "matches": true
+      },
+      "fixtureBytes": 9280,
+      "repeat": 1,
+      "order": 1,
+      "slug": "evalcost-rwm5eqhd-short-html-1-spya-z3dvcz",
+      "url": "https://cost-eval.invalid/rwm5eqhd/short-html-1",
+      "jobId": "spya-evhndf",
+      "elapsedMs": 28657,
+      "jobStatus": "done",
+      "steps": [
+        {
+          "name": "fetch",
+          "status": "done",
+          "detail": "9 KB (fixture short-html)"
+        },
+        {
+          "name": "extract",
+          "status": "done",
+          "detail": "Writes and Write-Nots"
+        },
+        {
+          "name": "blocks",
+          "status": "done",
+          "detail": "19 blocks, 19 new ids (0 kept)"
+        },
+        {
+          "name": "hierarchy",
+          "status": "done",
+          "detail": "13 sections over 19 blocks"
+        },
+        {
+          "name": "assets",
+          "status": "done",
+          "detail": "1 images stored"
+        }
+      ],
+      "blocks": {
+        "observed": 19,
+        "manifest": 19,
+        "matches": true
+      },
+      "gistableBlocks": 18
+    }
+  ]
+}

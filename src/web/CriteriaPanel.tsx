@@ -295,12 +295,21 @@ export function CriteriaBand({
      effect, with no dependency on the results, so it runs on unmount and only
      on unmount — folding it into the cleanup above would clear the marks on
      every frame and set them again immediately, which is a visible flicker of
-     every highlight on the page. The trap `GlossaryBand` documents. */
+     every highlight on the page. The trap `GlossaryBand` documents.
+
+     **Both halves, and this is the third copy of the same rule.** Until
+     2026-09-02 this cleared `onFound` and left `openKey` set, so leaving
+     Referee handed the next mode a key naming a passage nobody marks any more.
+     The note on `TimelineBand`'s five effects in App.tsx says *"a fix to one of
+     these belongs in all three"* — it said *"in both"* until referee became the
+     third — and tests/passage-mode-cleanup.test.tsx is the executable form of
+     it. docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md § T0.2. */
   useEffect(
     () => () => {
       onFound([]);
+      onOpenKey(null);
     },
-    [onFound],
+    [onFound, onOpenKey],
   );
 
   const toggle = useCallback(

@@ -17,14 +17,20 @@
  * forcing a step does to the steps after it and none of the other three
  * recorded it. Every paragraph below existed in one, two or three of the four.
  *
- * ## The read half is not here
+ * ## The read half is next door
  *
- * Each surface still owns its own GET, its own `status` and its own artefact
- * state. That half is genuinely not identical yet — `useGlossary` has
- * generations, a dedupe and trailing fetches that the other three have none of
- * — and unifying it *changes behaviour*, so it is its own piece of work
- * (docs/plans/260828aj-simplification-wave-2.md § 2.6). What this hook takes is the job
- * half, where the four really were the same code.
+ * Each surface still owns its own GET, its own `status`, its own 404 branch and
+ * its own artefact state — those differ substantively and stay put. What was
+ * genuinely shared is the *ordering* of the reads, which `useGlossary` alone had
+ * (generations, a one-in-flight dedupe and a trailing fetch) and the seven
+ * others did not, and which changing behaviour made its own piece of work
+ * (docs/plans/260828aj-simplification-wave-2.md § 2.6). That landed on
+ * 2026-09-02 as **[`useOrderedRead`](./useOrderedRead.ts)** — read it beside
+ * this file, because the two halves meet at one line: the `onFinished` a caller
+ * passes here must be the read's `refresh`, never its `reload`. A `reload`
+ * *joins* the GET already in flight, which may have read the artefact before the
+ * job wrote it, and the new one is then lost for good
+ * (tests/artefact-read-race.test.tsx).
  *
  * ## Who uses it
  *
@@ -172,6 +178,9 @@ function writesStep(job: Job, step: StepName): boolean {
  *   step** reaches `done` — so the surface can reload whatever it just wrote.
  *   The filtering is here so that no caller has to remember it; all four had
  *   written the same two-clause `if`.
+ *
+ *   **Pass the read's `refresh`, not its `reload`** — `useOrderedRead`, and § The
+ *   read half is next door above. Every one of the eight does now.
  *
  *   `onFinished` rather than watching for a status change, because `useJobs`
  *   already knows which jobs it has announced and which were merely on the

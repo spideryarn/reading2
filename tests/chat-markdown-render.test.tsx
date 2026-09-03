@@ -120,7 +120,7 @@ describe("the structure", () => {
   });
 
   it("never gives an answer a heading that outranks the panel's own", () => {
-    // `.chat-head` has the `h2`. A `#` in an answer must not claim the page.
+    // `.band-head` has the `h2`. A `#` in an answer must not claim the page.
     paint("# Top\n\n###### Deep");
     expect(all("h1, h2, h3")).toHaveLength(0);
     expect(all(".fmt-h").map((h) => h.tagName)).toEqual(["H4", "H6"]);
