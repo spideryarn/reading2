@@ -11,8 +11,8 @@
  *  - under a product a missing factor is fatal, under a maximum it is merely
  *    conservative — so `priorityOf` computes over whichever scores exist;
  *  - a product rarely ties at the top, a maximum ties often, because **either**
- *    score can produce the top value — so the right-hand end promotes every
- *    quote tied at the top and not "exactly one". The plan claimed the
+ *    score can produce the top value — so the right-hand end keeps every quote
+ *    tied at the top and not "exactly one". The plan claimed the
  *    glossary's promise and GPT Sol showed it false twice: first the claim, and
  *    then the `0.05`-banded track that could not have kept it either way. The
  *    track is the scores themselves now — `barStops`.
@@ -25,16 +25,14 @@ import {
   barNote,
   barStops,
   canPrioritise,
-  countAbove,
   discardedNote,
   effectiveRank,
-  groupQuotes,
   priorityOf,
-  PROMOTE_BAR,
+  QUOTE_BAR_DEFAULT,
   rankQuotes,
   rowScores,
   snapToStop,
-  splitsOnBar,
+  visibleQuotes,
 } from "../src/web/QuotesPanel.js";
 import { noneDropped } from "../src/quotes.js";
 import type { Quote } from "../src/types.js";
@@ -48,6 +46,18 @@ function q(id: string, importance?: number, striking?: number): Quote {
     ...(importance === undefined ? {} : { importance }),
     ...(striking === undefined ? {} : { striking }),
   };
+}
+
+/**
+ * The foot line the panel would print, composed the way `BarSlider` composes
+ * it: one `visibleQuotes` pass, and the counts out of it handed to `barNote`.
+ *
+ * A helper rather than a call to `barNote(list, bar)`, because `barNote`
+ * deliberately takes counts and not a list — that is what keeps the sentence
+ * and the `N of M` above it from being two passes that could disagree.
+ */
+function noteFor(quotes: Quote[], bar: number): string {
+  return barNote(visibleQuotes(quotes, bar).hiddenCount, quotes.length);
 }
 
 describe("priorityOf", () => {
@@ -65,62 +75,150 @@ describe("priorityOf", () => {
   it("is undefined when the model scored neither, and never zero", () => {
     /* The distinction the whole condition on these scores rests on: a quote the
        model declined to score is not one it scored as trivial. `0` would sort
-       it as the worst thing in the list; `undefined` puts it in the lower group
-       without claiming anything about it. */
+       it as the worst thing in the list; `undefined` shows it at every position
+       of the bar without claiming anything about it — threshold.ts. */
     expect(priorityOf(q("a"))).toBeUndefined();
     expect(priorityOf(q("a", 0, 0))).toBe(0);
   });
 });
 
-describe("countAbove", () => {
-  it("counts on or above the bar, and skips the unscored", () => {
+describe("visibleQuotes", () => {
+  it("shows what is on or above the bar, and every unscored quote", () => {
+    /* Greg's interim rule, 2026-09-03: "In the interim, always show them." A
+       quote the model scored on neither axis is not one it scored as trivial,
+       and the quotes prompt explicitly permits omitting both. */
     const list = [q("a", 0.9, 0.1), q("b", 0.7, 0.7), q("c", 0.2, 0.3), q("d")];
-    expect(countAbove(list, 0.7)).toBe(2);
-    expect(countAbove(list, 0.95)).toBe(0);
-    expect(countAbove(list, 0)).toBe(3); // `d` has nothing to compare
+    const out = visibleQuotes(list, 0.7);
+    expect(out.visible.map((x) => x.id)).toEqual(["a", "b", "d"]);
+    expect(out.hiddenCount).toBe(1);
+    expect(out.unscoredCount).toBe(1);
+    // The identity a drifting count would break.
+    expect(out.visible.length + out.hiddenCount).toBe(list.length);
+  });
+
+  it("can hide every scored quote and still show the unscored one", () => {
+    const out = visibleQuotes([q("a", 0.9), q("d")], 0.95);
+    expect(out.visible.map((x) => x.id)).toEqual(["d"]);
+    expect(out.hiddenCount).toBe(1);
   });
 });
 
 describe("canPrioritise", () => {
-  it("needs a score and something to compare it against", () => {
+  it("needs two distinct scored priorities", () => {
     expect(canPrioritise([])).toBe(false);
     expect(canPrioritise([q("a", 0.9)])).toBe(false); // one quote is not an order
     expect(canPrioritise([q("a"), q("b")])).toBe(false); // no scores at all
-    expect(canPrioritise([q("a", 0.9), q("b")])).toBe(true);
+    expect(canPrioritise([q("a", 0.9), q("b", 0.1)])).toBe(true);
   });
 
   /**
-   * **A reachable split, not merely a score.** Having scores is not enough, and
-   * "are there scores" was a proxy that happened to be right most of the time:
-   * every quote scoring the same has one stop above nothing and that stop
-   * promotes all of them, so the order would be offered, the slider drawn, and
-   * no position on it would ever divide anything. GPT Sol, 2026-08-31.
+   * **The rule the hiding change tightened, 2026-09-03.** `[0.90, unscored]`
+   * used to answer true, because the unscored quote formed *"the rest"* and the
+   * bar at `0.90` therefore divided the list. Once the unscored quote always
+   * survives, **no reachable position of the bar hides anything** — the order
+   * would be offered and the slider drawn over a control that visibly does
+   * nothing, which is the exact thing this question exists to stop.
    */
-  it("refuses a list no position on the slider could divide", () => {
+  it("refuses a list where the unscored quote was the only thing below the bar", () => {
+    expect(canPrioritise([q("a", 0.9), q("b")])).toBe(false);
+    expect(visibleQuotes([q("a", 0.9), q("b")], 0.9).hiddenCount).toBe(0);
+  });
+
+  /**
+   * **A reachable filter, not merely a score.** Having scores is not enough:
+   * every quote scoring the same gives one stop, and that stop shows all of
+   * them. The all-zero case is the same shape and is the one GPT Sol named,
+   * 2026-08-31.
+   */
+  /**
+   * **The property the glossary had to be rewritten to hold, asserted here to
+   * record that this panel already holds it.**
+   *
+   * GPT Sol's blocker on the built code was that the glossary offered the order
+   * whenever two scores differed, while its slider could only stop on
+   * hundredths — so `[0.501, 0.509]` got a prioritised order whose every
+   * reachable position showed both terms. Quotes cannot have that bug, and the
+   * reason is `barStops`: the track's positions **are** the scores, so there is
+   * no grid to fall between, and the top stop is a real quote's score with
+   * every lower-scoring quote strictly beneath it. Nothing to fix here, and this
+   * is the test that says why rather than a comment claiming it.
+   */
+  it("offers the order exactly when the top of the track hides something", () => {
+    const lists = [
+      [],
+      [q("a", 0.9)],
+      [q("a"), q("b")],
+      [q("a", 0.9), q("b")],
+      [q("a", 0.9), q("b", 0.1)],
+      [q("a", 0.5), q("b", 0.5)],
+      [q("a", 0, 0), q("b", 0, 0)],
+      /* A hundredth apart, which the glossary's grid could not have reached and
+         this track can, because it is not a grid. */
+      [q("a", 0.501), q("b", 0.509)],
+    ];
+    for (const list of lists) {
+      const stops = barStops(list);
+      const top = stops[stops.length - 1]!;
+      expect(canPrioritise(list)).toBe(visibleQuotes(list, top).hiddenCount > 0);
+    }
+  });
+
+  it("refuses a list no position on the slider could filter", () => {
     expect(canPrioritise([q("a", 0, 0), q("b", 0, 0)])).toBe(false);
     expect(canPrioritise([q("a", 0.5), q("b", 0.5)])).toBe(false);
-    // ...and every stop of a list that CAN be divided is a real division.
-    const real = [q("a", 0.9), q("b", 0.4), q("c", 0.4)];
-    expect(canPrioritise(real)).toBe(true);
-    expect(barStops(real).some((b) => splitsOnBar(real, b))).toBe(true);
   });
 });
 
 describe("barStops", () => {
-  it("is nothing, then every score the list actually contains", () => {
-    expect(barStops([q("a", 0.62, 0.1), q("b", 0.2), q("c")])).toEqual([0, 0.2, 0.62]);
+  /**
+   * **The synthetic `0` went on 2026-09-03**, and it is the subtle half of the
+   * hiding change. While the bar grouped, `0` was a real position: it emptied
+   * "the rest" into the top group. Now that it hides, `0` and the lowest real
+   * score show exactly the same list — every score is `>= 0` and the unscored
+   * survive everywhere — so the first step of the drag would have been the
+   * no-op this function exists to prevent.
+   */
+  it("is every score the list actually contains, and nothing else", () => {
+    expect(barStops([q("a", 0.62, 0.1), q("b", 0.2), q("c")])).toEqual([0.2, 0.62]);
   });
 
   it("collapses a repeated score to one position", () => {
-    // Two stops that promote the same set are one stop, or the drag has dead
+    // Two stops that show the same list are one stop, or the drag has dead
     // travel in it and the reader cannot tell working from broken.
-    expect(barStops([q("a", 0.5), q("b", 0.5)])).toEqual([0, 0.5]);
+    expect(barStops([q("a", 0.5), q("b", 0.5)])).toEqual([0.5]);
+  });
+
+  /**
+   * **Every ADJACENT pair, not merely some pair.** The old test asserted that
+   * *some* stop divided the list, which does not prove what the comment claims
+   * — a track can satisfy that and still have a dead step in the middle of it,
+   * which is exactly what the leading `0` was. This is the assertion the
+   * docstring's promise actually needs.
+   */
+  it("gives a different visible list at every adjacent pair of stops", () => {
+    const lists = [
+      [q("a", 0.62, 0.1), q("b", 0.2), q("c")],
+      [q("a", 0.9, 0.42), q("b", 0.9, 0.88), q("c", 0.85, 0.9), q("d", 0.7, 0.7)],
+      [q("a", 0.62), q("b", 0.61), q("c", 0.2), q("d")],
+      [q("a", 0, 0), q("b", 0.4), q("c")],
+    ];
+    for (const list of lists) {
+      const stops = barStops(list);
+      for (let i = 1; i < stops.length; i += 1) {
+        const below = visibleQuotes(list, stops[i - 1]!).visible.map((x) => x.id);
+        const above = visibleQuotes(list, stops[i]!).visible.map((x) => x.id);
+        expect(above).not.toEqual(below);
+        // And strictly fewer, never a different set of the same size: the bar
+        // only ever takes rows away as it rises.
+        expect(above.length).toBeLessThan(below.length);
+      }
+    }
   });
 
   /**
    * **The correction.** The old track was `0.05`-stepped and ended at the top
    * score rounded DOWN to the step — so priorities of `.62`, `.61` and `.20`
-   * gave an end of `.60`, which promotes two quotes that are not tied and calls
+   * gave an end of `.60`, which keeps two quotes that are not tied and calls
    * them the top-scored ones. GPT Sol, 2026-08-31.
    */
   it("ends where the top score is, not at the bottom of its band", () => {
@@ -128,22 +226,29 @@ describe("barStops", () => {
     const stops = barStops(list);
     const end = stops[stops.length - 1];
     expect(end).toBe(0.62);
-    expect(countAbove(list, end!)).toBe(1);
+    expect(visibleQuotes(list, end!).visible.map((x) => x.id)).toEqual(["a"]);
   });
 
-  it("promotes every quote genuinely tied at the top, and only those", () => {
+  it("keeps every quote genuinely tied at the top, and only those", () => {
     const list = [q("a", 0.9, 0.42), q("b", 0.9, 0.88), q("c", 0.85, 0.9), q("d", 0.7, 0.7)];
     const stops = barStops(list);
-    expect(countAbove(list, stops[stops.length - 1]!)).toBe(3); // a, b and c all reach 0.9
+    // a, b and c all reach 0.9.
+    expect(visibleQuotes(list, stops[stops.length - 1]!).visible.map((x) => x.id)).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
   });
 
-  it("makes the left-hand end promote everything", () => {
+  it("makes the left-hand end show everything", () => {
     const list = [q("a", 0.9), q("b", 0.2)];
-    expect(countAbove(list, barStops(list)[0]!)).toBe(2);
+    expect(visibleQuotes(list, barStops(list)[0]!).hiddenCount).toBe(0);
   });
 
-  it("has one position when nothing can be divided", () => {
+  it("has one position when nothing can be filtered", () => {
     expect(barStops([q("a", 0, 0), q("b", 0, 0)])).toEqual([0]);
+    // No scores at all: `[0]` so the input still has a track to render, though
+    // `canPrioritise` is false and the slider is never drawn.
     expect(barStops([q("a"), q("b")])).toEqual([0]);
   });
 });
@@ -155,15 +260,15 @@ describe("snapToStop", () => {
    * `?bar=0.63` against a `step=0.05` track and put the thumb where it could
    * not be dragged.
    */
-  it("brings an off-grid link onto a division that exists", () => {
-    expect(snapToStop([0, 0.2, 0.62], 0.63)).toBe(0.62);
-    expect(snapToStop([0, 0.2, 0.62], 0.05)).toBe(0);
+  it("brings an off-grid link onto a position that exists", () => {
+    expect(snapToStop([0.2, 0.62], 0.63)).toBe(0.62);
+    expect(snapToStop([0.2, 0.62], 0.05)).toBe(0.2);
   });
 
   it("does not fall all the way back for a value just above the top", () => {
     // "The largest stop at or below" would answer 0.2 here, which is a bigger
     // lie than rounding up by a hundredth.
-    expect(snapToStop([0, 0.2, 0.9], 0.92)).toBe(0.9);
+    expect(snapToStop([0.2, 0.9], 0.92)).toBe(0.9);
   });
 
   it("answers the only stop when there is only one", () => {
@@ -171,32 +276,23 @@ describe("snapToStop", () => {
   });
 });
 
-describe("splitsOnBar", () => {
-  it("is about both sides being occupied, not about scores existing", () => {
-    const list = [q("a", 0.9), q("b", 0.2)];
-    expect(splitsOnBar(list, 0.5)).toBe(true);
-    expect(splitsOnBar(list, 0)).toBe(false); // everything above
-    expect(splitsOnBar(list, 1)).toBe(false); // nothing above
-    expect(splitsOnBar([], 0.5)).toBe(false);
-  });
-});
-
 describe("effectiveRank", () => {
-  it("falls back to document only when there is nothing to bar at all", () => {
+  it("falls back to document only when no position of the bar would filter", () => {
     expect(effectiveRank([q("a"), q("b")], "prioritised")).toBe("document");
     expect(effectiveRank([q("a", 0.9), q("b", 0.1)], "prioritised")).toBe("prioritised");
   });
 
   /**
    * **The rule the slider reversed**, and the one most likely to be got wrong by
-   * somebody tidying this up. A list whose *current* bar divides nothing does
-   * NOT fall back: cancelling would take the slider away with it and strand a
-   * reader mid-drag, and an undivided list here is not silent — the bar is on
-   * screen with its number and `barNote` says what happened.
+   * somebody tidying this up. A list whose *current* bar hides nothing does NOT
+   * fall back: cancelling would take the slider away with it and strand a
+   * reader mid-drag, and a list nothing is hidden from is not silent — the bar
+   * is on screen with its number and the foot line says how many are hidden,
+   * including when the answer is none.
    */
-  it("does not fall back merely because the bar divides nothing", () => {
+  it("does not fall back merely because the bar hides nothing", () => {
     const list = [q("a", 0.9), q("b", 0.8)];
-    expect(splitsOnBar(list, 0)).toBe(false);
+    expect(visibleQuotes(list, 0.8).hiddenCount).toBe(0);
     expect(effectiveRank(list, "prioritised")).toBe("prioritised");
   });
 
@@ -208,11 +304,35 @@ describe("effectiveRank", () => {
 });
 
 describe("barNote", () => {
-  it("speaks only when the bar has divided nothing, and says which way", () => {
+  /* The foot line, verbatim. It is the reader's one route back from a bar they
+     have raised too far, so the wording is asserted rather than matched
+     loosely — and "clears" is deliberately not in it, because an unscored quote
+     survives without clearing anything. */
+  it("says how many are hidden, in every state", () => {
     const list = [q("a", 0.9), q("b", 0.2)];
-    expect(barNote(list, 0.5)).toBeNull();
-    expect(barNote(list, 0)).toMatch(/every quote/i);
-    expect(barNote(list, 1)).toMatch(/no quote/i);
+    expect(noteFor(list, 0.5)).toBe(
+      "1 quote is hidden by this threshold. Drag the slider left to show it.",
+    );
+    expect(noteFor(list, 0.2)).toBe("Nothing is hidden by this threshold.");
+    expect(noteFor(list, 1)).toBe(
+      "All 2 quotes are hidden by this threshold. Drag the slider left to show them.",
+    );
+    expect(noteFor([q("a", 0.9), q("b", 0.2), q("c", 0.1)], 0.5)).toBe(
+      "2 quotes are hidden by this threshold. Drag the slider left to show them.",
+    );
+  });
+
+  /**
+   * **Dragging cannot reach the all-hidden state here**, unlike next door: the
+   * top stop is a real quote's score, so that quote always survives. The
+   * sentence exists anyway, because `?bar=` is a number in a URL — and the
+   * browser pass must not expect an empty list at the top of this mode.
+   */
+  it("cannot be reached by dragging, because the top stop is a real score", () => {
+    const list = [q("a", 0.9), q("b", 0.2), q("c")];
+    for (const stop of barStops(list)) {
+      expect(visibleQuotes(list, stop).visible.length).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -233,38 +353,41 @@ describe("rankQuotes", () => {
     expect(rankQuotes(tied, "importance").map((x) => x.id)).toEqual(["c", "a", "b"]);
   });
 
-  it("is the groups flattened, so the two can never disagree", () => {
+  it("is the one visible list, so the panel and its count cannot disagree", () => {
     const flat = rankQuotes(list, "prioritised", 0.5).map((x) => x.id);
-    const grouped = groupQuotes(list, "prioritised", 0.5).flatMap((g) => g.quotes.map((x) => x.id));
-    expect(flat).toEqual(grouped);
+    expect(flat).toEqual(visibleQuotes(list, 0.5).visible.map((x) => x.id));
   });
 });
 
-describe("groupQuotes", () => {
-  it("is one unheaded group for every rank but prioritised", () => {
-    const groups = groupQuotes([q("a", 0.9), q("b", 0.1)], "document");
-    expect(groups).toHaveLength(1);
-    expect(groups[0]?.label).toBeNull();
+describe("the prioritised rank, which filters rather than groups", () => {
+  /* Rewritten 2026-09-03. These used to pin the two-group version — "worth
+     keeping" over the survivors and "the rest" under them. What they protect
+     now is the same two properties in the new shape: the order of what is shown
+     is the article's own, and an unscored quote is never treated as a low one.
+     docs/plans/260903c-threshold-sliders-hide-below-threshold-items.md. */
+  it("returns the whole list for every rank but prioritised", () => {
+    const list = [q("a", 0.9), q("b", 0.1)];
+    expect(rankQuotes(list, "document")).toHaveLength(2);
+    expect(rankQuotes(list, "importance")).toHaveLength(2);
   });
 
-  it("draws no divider when the bar has divided nothing", () => {
-    const groups = groupQuotes([q("a", 0.9), q("b", 0.8)], "prioritised", 0.1);
-    expect(groups).toHaveLength(1);
-    expect(groups[0]?.label).toBeNull();
+  it("returns the whole list when the bar has hidden nothing", () => {
+    const list = [q("a", 0.9), q("b", 0.8)];
+    expect(rankQuotes(list, "prioritised", 0.1).map((x) => x.id)).toEqual(["a", "b"]);
   });
 
-  it("splits into two, each in the order the article says them", () => {
+  it("hides what is below the bar, keeping the order the article says them", () => {
     const list = [q("a", 0.2), q("b", 0.9), q("c", 0.1), q("d", 0.95)];
-    const groups = groupQuotes(list, "prioritised", 0.5);
-    expect(groups.map((g) => g.label)).toEqual(["worth keeping", "the rest"]);
-    // Inside a group the order is first appearance — the model chooses nothing.
-    expect(groups[0]?.quotes.map((x) => x.id)).toEqual(["b", "d"]);
-    expect(groups[1]?.quotes.map((x) => x.id)).toEqual(["a", "c"]);
+    // `b` before `d` because the piece says it first, not because it scored
+    // lower — the model chooses nothing about the sequence.
+    expect(rankQuotes(list, "prioritised", 0.5).map((x) => x.id)).toEqual(["b", "d"]);
   });
 
-  it("puts an unscored quote in the lower group without scoring it", () => {
-    const groups = groupQuotes([q("a", 0.9), q("b")], "prioritised", 0.5);
-    expect(groups[1]?.quotes.map((x) => x.id)).toEqual(["b"]);
+  it("shows an unscored quote without scoring it", () => {
+    expect(rankQuotes([q("a", 0.9), q("b")], "prioritised", 0.5).map((x) => x.id)).toEqual([
+      "a",
+      "b",
+    ]);
   });
 });
 
@@ -358,9 +481,9 @@ describe("discardedNote", () => {
 describe("the constants", () => {
   it("starts the bar high, where a maximum lives", () => {
     /* Not a taste assertion: two scores of 0.7 make 0.49 under a product and
-       0.70 under a maximum, so the glossary's 0.30 would promote nearly
-       everything here and the divider would say nothing. */
-    expect(PROMOTE_BAR).toBeGreaterThan(0.5);
+       0.70 under a maximum, so the glossary's 0.30 would show nearly everything
+       here and the bar would be hiding nothing worth hiding. */
+    expect(QUOTE_BAR_DEFAULT).toBeGreaterThan(0.5);
     expect(priorityOf(q("a", 0.7, 0.7))).toBe(0.7);
   });
 
@@ -368,7 +491,7 @@ describe("the constants", () => {
     /* It is snapped to a real stop before anything reads it, so it never has to
        be on any grid — which is the whole reason the track stopped being a grid.
        What it must still be is inside the scale. */
-    expect(PROMOTE_BAR).toBeLessThanOrEqual(1);
-    expect(snapToStop(barStops([q("a", 0.9), q("b", 0.4)]), PROMOTE_BAR)).toBe(0.9);
+    expect(QUOTE_BAR_DEFAULT).toBeLessThanOrEqual(1);
+    expect(snapToStop(barStops([q("a", 0.9), q("b", 0.4)]), QUOTE_BAR_DEFAULT)).toBe(0.9);
   });
 });

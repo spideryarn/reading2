@@ -21,11 +21,11 @@
  * [the order of work](../../docs/plans/260825f-postgres-migration.md#the-order-of-work):
  * *"Do not catch a Postgres error and fall back to files."*
  *
- * The corollary is the `notMigrated` helper below. Two glossary **writes** have
- * no Postgres implementation yet, and in `postgres` mode they must fail loudly
- * rather than quietly write a file that the reader will never read back. A
- * write that lands in the store nobody is reading is the worst available
- * outcome: it reports success and loses the data.
+ * The corollary was the `notMigrated` helper in [live.ts](live.ts): a write with
+ * no Postgres implementation must fail loudly rather than quietly write a file
+ * the reader will never read back. A write that lands in the store nobody is
+ * reading is the worst available outcome — it reports success and loses the
+ * data.
  *
  * **`notMigrated` can only guard what comes through this file.** For most of
  * 2026-08-26 chat and meaning-search did not: src/routes.ts imported their
@@ -36,14 +36,12 @@
  * proposed extending `notMigrated` to cover them and it could not: the call
  * never arrived. They refused at their own `save()` in the interim.
  *
- * **That interim is over.** `chatStore`, `searchStore` and
- * `glossaryLookupStore` are wired below and routes.ts calls them, so those
- * writes come through this file like everything else and the two `save()`
- * guards are gone. What is left of `notMigrated` is one method:
- * `deleteGlossary`, which nulls the glossary on a *published* revision, and
- * whether a published revision may be mutated at all is the open decision step
- * 11 carries. So the glossary panel's "start over" does not work under
- * `postgres` yet, and that is written down rather than waiting to be found.
+ * **Nothing in this file refuses any more.** `chatStore`, `searchStore` and
+ * `glossaryLookupStore` are wired below and routes.ts calls them; `deleteGlossary`
+ * was the last one holding out, and it was built on 2026-09-03
+ * (docs/plans/260903e-glossary-delete-in-postgres.md). The helper still exists
+ * for the next seam that needs it, and `SEAM_ASYMMETRIES` in
+ * [live.ts](live.ts) is what keeps a refusal from being mistaken for a store.
  *
  * ## The other thing this file is the boundary for
  *
@@ -91,7 +89,7 @@ import {
   fsSearchStore,
   fsShelfStore,
 } from "./fs.js";
-import { notMigrated, STORE } from "./live.js";
+import { STORE } from "./live.js";
 import { fsRealtimeSessionStore } from "./realtime-sessions-fs.js";
 import { pgRealtimeSessionStore } from "./realtime-sessions-pg.js";
 import { pgAdminStore } from "./pg-admin.js";
@@ -99,6 +97,7 @@ import { pgArticleReader } from "./pg.js";
 import { pgChatStore } from "./pg-chat.js";
 import { pgCommentStore } from "./pg-comments.js";
 import { pgFeedbackStore } from "./pg-feedback.js";
+import { pgGlossaryStore } from "./pg-glossary.js";
 import { pgGlossaryLookupStore } from "./pg-lookups.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
@@ -328,18 +327,25 @@ export const lookUpTerm = makeLookUpTerm({
 });
 
 /**
- * Throwing the glossary away, which is **still 501 under `postgres`**.
+ * Throwing the glossary away, so the article can find a new one.
  *
- * The SQL is trivial. What is not settled is whether it may run at all: it
- * nulls `article_revisions.glossary` on the *published* revision, and that
- * table says immutable once published. Step 11 of
- * docs/plans/260826e-postgres-storage-implementation.md owns that decision, so this
- * stays refused rather than being quietly made an exception — and the visible
- * cost is that the glossary panel's "start over" does not work in `postgres`
- * mode.
+ * The glossary panel's **Start again**, and one method: null the list on the
+ * article's current revision and say whether there was one to null. It answered
+ * 501 under `postgres` until 2026-09-03, which meant the button worked for
+ * nobody but a developer on a laptop.
+ *
+ * **It can now answer 409**, and that is the one thing a reader can be told here
+ * that they could not before: while a live job holds a draft of this article,
+ * the delete is refused, because every draft carries the glossary forward and
+ * publishing one after the delete would put the old list back. The panel shows
+ * the message and does not fall through to a run.
+ * src/store/pg-glossary.ts; docs/plans/260903e-glossary-delete-in-postgres.md.
  */
-const glossary: Pick<GlossaryStore, "deleteGlossary"> =
-  STORE === "postgres" ? { deleteGlossary: notMigrated("Deleting the glossary") } : fsGlossaryStore;
+const glossary: Pick<GlossaryStore, "deleteGlossary"> = guarded(
+  "glossary",
+  pgGlossaryStore,
+  fsGlossaryStore,
+);
 
 export const deleteGlossary = glossary.deleteGlossary;
 

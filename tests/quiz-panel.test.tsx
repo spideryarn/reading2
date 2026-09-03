@@ -35,6 +35,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BlockId, Quiz, QuizQuestion } from "../src/types.js";
 import type { Attempt, UseQuiz } from "../src/web/useQuiz.js";
+import { STARTING } from "../src/job-state.js";
 
 /**
  * Dictation is mocked, and only so that rule 4 above can be tested at all.
@@ -126,6 +127,11 @@ function owner(over: Partial<UseQuiz> = {}): UseQuiz {
     error: null,
     job: null,
     failed: null,
+    /* Nothing pressed, so nothing is in flight. The case where this is true is
+       the gap between the press and the first poll, and the panel had no way to
+       know about it at all until 2026-09-03 — see "the button between the press
+       and the poll" below. */
+    starting: false,
     /* The tab can reach the server — src/job-state.ts § `driverStalled`. */
     stalled: false,
     attempt: null,
@@ -510,5 +516,31 @@ describe("the answer box", () => {
     const [answer] = buttons("Answer");
     expect(answer?.disabled).toBe(true);
     expect(host.textContent).toContain("cannot be marked against them");
+  });
+});
+
+/**
+ * **The button between the press and the first poll.**
+ *
+ * A quiz build takes forty seconds and costs about $0.07, and for the first
+ * second of it there is no job in the polled list — so without `starting` the
+ * panel drew *Write the questions* again and a reader who pressed once was
+ * invited to press twice. Every other band had been passing this prop since it
+ * existed; the quiz had not, because `useQuiz` did not expose it and
+ * `JobProgress` carried a comment claiming the quiz *"watch[es] a job it did
+ * not start"*. It starts its own.
+ */
+describe("the gap between pressing and the job appearing", () => {
+  it("takes the button away rather than offering a second press", () => {
+    paint(owner({ quiz: null, status: "none", starting: true }));
+    expect(buttons("Write the questions"), "the button was still there to press again").toEqual([]);
+    expect(host.textContent).toContain(STARTING);
+  });
+
+  it("offers it when nothing is in flight", () => {
+    /* The control, on screen first: an empty `buttons()` above proves nothing
+       unless the same panel does draw one when it should. */
+    paint(owner({ quiz: null, status: "none", starting: false }));
+    expect(buttons("Write the questions").length).toBe(1);
   });
 });

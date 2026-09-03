@@ -180,26 +180,4 @@ export const SEAM_ASYMMETRIES: Readonly<Record<string, SeamAsymmetry>> = {
       "lines written against a module docs/plans/260831b-finish-the-database-move.md " +
       "deletes. A Feedback button that accepts a report and drops it is worse than none.",
   },
-  GlossaryStore: {
-    missing: "postgres",
-    why:
-      "**The decision this was waiting on has been made, and this entry outlived it.** " +
-      "It said the blocker was step 11 of docs/plans/260826e-postgres-storage-implementation.md " +
-      "deciding whether a published revision may be mutated. It decided yes, and the " +
-      "answer is in src/db/schema.ts on article_revisions: 'Immutable in its text' — " +
-      "and glossary is named there as one of the four columns written onto an " +
-      "already-published revision in a single UPDATE, which src/store/artifacts-pg.ts " +
-      "does on every glossary run today. Nulling the column is that same write. " +
-      "So this is no longer refused on principle; it is simply unbuilt. " +
-      "The one thing to settle when building it, which is implementation rather than " +
-      "permission: nulling the column does not change the step's fingerprint " +
-      "(FINGERPRINT_COLUMNS in src/store/pg.ts hashes tree/title/byline/siteName, the " +
-      "step's INPUTS), so check whether an ordinary run re-runs glossary afterwards or " +
-      "whether the revision_step_runs row still says done — if the latter, the delete " +
-      "must remove that row too, or 'start again' deletes a glossary nothing regenerates. " +
-      "Found by the 2026-09-03 sweep, docs/plans/260903d-improve-the-codebase-second-sweep.md.",
-    productionGap:
-      "The glossary panel's 'start over' does not work on the deployed app: it answers " +
-      "501 and the reader is stuck with the glossary they have.",
-  },
 };

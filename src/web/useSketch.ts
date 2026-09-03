@@ -33,7 +33,7 @@ import { apiFetch, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
-import { useStepJob } from "./useStepJob.js";
+import { type StepFailure, useStepJob } from "./useStepJob.js";
 
 export type SketchStatus = "loading" | "ready" | "none" | "error";
 
@@ -55,7 +55,7 @@ export interface UseSketch {
   slug: string;
   error: string | null;
   job: Job | null;
-  failed: string | null;
+  failed: StepFailure | null;
   /**
    * This tab can see the job on screen and cannot move it. A pass-through:
    * `StepJob.stalled` in src/web/useStepJob.ts carries the reasoning, and

@@ -171,7 +171,12 @@ conservative, which is why the glossary drops those entries to the lower group i
 
 ### The bar starts at 0.70, not 0.30
 
-`PROMOTE_BAR = 0.70`, where the glossary's `PRIORITY_GATE` is `0.30`, and the difference is not taste:
+`PROMOTE_BAR = 0.70` — **renamed `QUOTE_BAR_DEFAULT` and raised to `0.80` on 2026-09-03**, when the
+bar started hiding rather than grouping and "promote" stopped describing what it does
+([260903c](260903c-threshold-sliders-hide-below-threshold-items.md)). The old name is left standing
+in the rest of this file and in its review prompts, which are a dated record of a conversation about
+the constant as it was then. Where the glossary's `PRIORITY_GATE` is `0.30`, and the difference is
+not taste:
 **a product of two 0–1 scores clusters low and a maximum clusters high.** Two scores of 0.7 make 0.49
 under a product and 0.70 under a maximum. A bar copied across from the glossary would promote nearly
 every quote and the divider would say nothing.

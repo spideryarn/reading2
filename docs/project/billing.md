@@ -452,8 +452,44 @@ carry: the ids are rows.
 `stripe listen`, so one machine's value is wrong on another's.
 
 Greg's manual surface is the account, the keys, and the few dashboard-only settings — customer
-email receipts, dispute auto-cancellation, the dunning schedule, and live-mode activation.
-Everything else is the script.
+email receipts, dispute auto-cancellation and the dunning schedule. Everything else is the script.
+
+**Live mode needs no activating.** `acct_1GHoSxLZ0dGTJEEP` has taken real payments for Greg's
+consulting work for years: read back on 2026-09-03, `charges_enabled`, `payouts_enabled` and
+`details_submitted` are all true with nothing in `requirements`. So going live is configuration in
+the live half of the dashboard and a live key, not an application. Everything else about Stripe is
+per-mode and starts empty over there — products, prices, portal configuration, webhook endpoints.
+
+### Subscribing twice: looked at, and deliberately left open
+
+Nothing spans the "do they already subscribe?" check and `checkout.sessions.create`, so in principle
+a reader could hold two payable Checkout pages at once and complete both. Measured on 2026-09-03: a
+test customer already holding an `active` subscription was served a full "Subscribe with obligation
+to pay" page for a second one, so the gap is real rather than theoretical.
+
+**Greg's call, 2026-09-03: not worth closing.** It takes two Checkout pages opened before either is
+paid, and then two card forms filled in on purpose — `useBilling`'s `if (busy) return` already eats
+the double-click, and `hasOpenSubscription` already turns the ordinary second attempt into the
+Portal.
+
+What was weighed and passed over, so nobody re-derives it:
+
+- **Stripe's own [Limit customers to one subscription](https://dashboard.stripe.com/settings/checkout#subscriptions)**
+  (Settings → Checkout and Payment Links). No documented API — `/v1/account`'s `settings` has no
+  Checkout section — so it is a dashboard click, per mode. It **redirects a Checkout page as it
+  loads**; it is not a refusal at `sessions.create`, so it would not have closed the two-tab case
+  anyway. When its destination is the Portal it also depends on `login_page.enabled`, which would
+  silently make it do nothing — and that field is **account-wide**, on an account that also bills
+  Greg's consulting work.
+- **Reusing an open Session** — the actual close, and it needs stored session state plus expiry
+  handling.
+- **An idempotency key** on `sessions.create` — no help, because the window here is a second tab
+  rather than a second click.
+
+If it ever does happen, the thing that should say so is `chooseSubscription`'s anomaly — and it has
+a hole: it counts only *entitled* subscriptions, so an `active` beside an `unpaid` is two collectable
+invoices and nothing logged. Counting over non-terminal statuses instead, from the raw Stripe list
+before unreadable shapes are filtered out, is the fix if this is ever picked back up.
 
 ## The webhook
 

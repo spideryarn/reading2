@@ -176,9 +176,11 @@ export const STEP_ORDER = [
   /* Straight after `glossary`, and that is not cosmetic: the two send
      byte-identical article bytes at the same effort, so a job asking for BOTH
      pays for the article once (src/models.ts § ARTICLE_RENDERER). Two separate
-     jobs share nothing — `cacheArticle` below only marks a prefix a later step
-     of the same job will read — so this buys the reader who asks for both at
-     once and nobody else. docs/project/quotes.md. */
+     jobs share nothing — `cacheArticle` below only marks a prefix another step
+     of the SAME job will read — so this buys the reader who asks for both at
+     once and nobody else. And it bought nobody anything at all until 2026-09-03,
+     when `quotes` started sending a breakpoint of its own: see
+     `cacheArticleForStep`. docs/project/quotes.md. */
   "quotes",
   "ideas",
   /* Beside `ideas`, and that is the same argument `quotes` makes two rows up:
@@ -322,6 +324,75 @@ export function sharesArticleCache(step: StepName, later: readonly StepName[]): 
 }
 
 /**
+ * **Should the step at `index` mark the article with a cache breakpoint?**
+ *
+ * This is `sharesArticleCache` applied to a whole job, and it exists as its own
+ * named function because the shape of its argument is the thing that went wrong
+ * and stayed wrong for eight days. `src/jobs.ts` used to build the list inline as
+ * `job.steps.slice(i + 1)` — *later* steps only — which marks the stage that
+ * **writes** the entry and never the one that **reads** it. The reader is the last
+ * member of its group by construction, so it sent no `cache_control`, and a
+ * request that carries no breakpoint performs no lookup however warm the entry is.
+ * Every batched pair paid the 1.25x write premium and collected nothing.
+ * docs/postmortems/260903c-the-conditional-article-cache-breakpoint-marks-the-writer-but-never-the-reader.md.
+ *
+ * **So: every *other* step of this job, in both directions, and position-blind.**
+ * Caching is a two-party protocol and both parties have to carry the marker.
+ *
+ * **Why there is no "…and the earlier one actually ran" test**, which the
+ * postmortem originally recommended and Fable talked us out of. The filter would
+ * be `status === "done"`, and `done` does not mean *a warm entry exists*: a job
+ * that stalls and resumes an hour later has `done` earlier steps whose entries
+ * expired long ago, so the marker is exactly as speculative with the test as
+ * without it. What the test would really buy is one avoided write premium in the
+ * narrow case "earlier group member was `skipped`, none later" — about 1.3¢ on a
+ * 17,000-word article — and it would cost a load-bearing dependency on `runStep`
+ * mutating `job.steps` in place as it walks, which a reorder of the `StepContext`
+ * construction would silently break.
+ *
+ * What it costs when it guesses wrong is bounded and small: the write premium on
+ * one cold prefix, about 1.3¢ on a 17,000-word article. **Per group, not per
+ * job** — an all-mode job where only one member of each of the three groups
+ * actually runs wastes three of them, about 3.9¢ here, scaling with length. GPT
+ * Sol, who also pointed out that `skipped` no more proves the absence of a warm
+ * entry than `done` proves the presence of one.
+ *
+ * **The asymmetry is what decides it, and it is worth writing down** because it
+ * points the other way from the instinct that built the original optimisation.
+ * A marker sent onto a *cold* prefix costs 0.25x that prefix; a marker withheld
+ * from a *warm* one costs 0.9x. Wrongly marking is 3.6x cheaper than wrongly
+ * withholding, so where this predicate has to guess, it should guess *yes*.
+ *
+ * That same asymmetry is an argument for marking unconditionally — the way every
+ * stage did before `24335207` — and we are deliberately not taking it, because
+ * the break-even is a rate nobody has measured. **Two rates, and they are not
+ * the same number:** per *call*, always-marking wins above a warm-hit rate of
+ * 0.25/(0.25 + 0.9) ≈ 21.7%; per *pair*, where a first press always pays 0.25x
+ * and only a second press inside the TTL collects 0.9x, it wins above a
+ * conversion rate of 0.25/0.9 ≈ 27.8%. Measure whichever you are actually going
+ * to observe, and say which. Deciding it by argument is precisely the class of
+ * mistake the postmortem is about.
+ */
+export function cacheArticleForStep(steps: readonly StepName[], index: number): boolean {
+  const step = steps[index];
+  /* Both guards are defensive rather than reachable, and saying so is the point:
+     `orderSteps` (src/jobs.ts) puts every job's names through a `Set` before one
+     exists, so a job cannot hold a step twice and an index always lands. A
+     forced re-run is a flag on the one entry, not a second copy of it.
+
+     Filtering by position anyway, because it is the shape that stays correct if
+     that ever changes: a name filter would drop the other copy of a repeated
+     step along with this one, turning a genuine pair into a lone step that marks
+     nothing. GPT Sol talked the first version of this comment out of claiming the
+     repeat was a real job shape. */
+  if (step === undefined) return false;
+  return sharesArticleCache(
+    step,
+    steps.filter((_, i) => i !== index),
+  );
+}
+
+/**
  * Steps the positional force-cascade must not sweep in — `cascadeForce`, in
  * src/jobs.ts. Forcing an earlier step does **not** force one of these; they
  * have to be named.
@@ -449,11 +520,16 @@ export interface StepContext {
   /**
    * Whether this step should pay to cache the article it is about to send.
    *
-   * True only when a *later step in this same job* renders the same article the
+   * True when **any other step of this same job** renders the same article the
    * same way and asks the model to think about it at the same effort — which is
-   * what `sharesArticleCache` decides. A cache write costs 1.25x, so marking a
+   * what `cacheArticleForStep` decides. A cache write costs 1.25x, so marking a
    * prefix nobody reads is a straight loss, and on the ordinary ingest path
-   * (which stops at `arc`) nobody does read it.
+   * (which now carries no article stage at all) nobody would.
+   *
+   * **"Any other", not "a later one".** It said later until 2026-09-03, and that
+   * marked the step that writes the entry and never the one that reads it — a
+   * request with no `cache_control` performs no lookup, so every batched pair
+   * paid the premium and collected nothing. `cacheArticleForStep` has the story.
    *
    * Steps that do not read the whole article ignore this.
    */
@@ -1274,7 +1350,10 @@ async function acquireUpload(
   const refuse = async (reason: RejectReason): Promise<never> => {
     await rejectUpload(upload.id, reason);
     const failure = rejectionFailure(reason);
-    throw stageFailure(failure.kind, failure.message);
+    /* The whole `ReaderFacingFailure`, not its two halves passed separately:
+       `rejectionFailure` already wrote the reader a sentence per reason, and
+       that sentence is what src/jobs.ts persists. src/job-failure.ts. */
+    throw stageFailure(failure);
   };
 
   const store = blobStore();
@@ -2221,6 +2300,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              is the thing to watch when a glossary starts feeling wrong, and it
              is invisible unless it is written down. */
           unmatched: run.unmatched,
+          /* **The scores the prompt requires and did not get** — src/glossary.ts
+             § `GlossaryScoreDrops`. `*Absent` is the model ignoring an instruction
+             that says both are mandatory; `*Rejected` is it answering `"high"`
+             where a number belongs. Either one silently costs the panel its
+             prioritised order, and this line is the only place it shows.
+             Counts, never a term. docs/project/logging.md. */
+          difficultyAbsent: run.scores.difficultyAbsent,
+          difficultyRejected: run.scores.difficultyRejected,
+          centralityAbsent: run.scores.centralityAbsent,
+          centralityRejected: run.scores.centralityRejected,
         },
         `glossary ${ctx.slug}: ${total} terms (${run.added} new, pass ${run.glossary.passes})`,
       );
@@ -2318,6 +2407,15 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           overlapping: run.dropped.overlapping,
           overCap: run.dropped.overCap,
           malformed: run.dropped.malformed,
+          /* **Fields, not quotes** — src/quotes.ts § `QuoteScoreDrops`. Nothing here
+             cost anyone a quote; each is a number the model did not give us, or
+             gave us wrong. An omission is permitted by this stage's prompt and a
+             rejection is not, so they are separate keys. Counts, never a quote.
+             docs/project/logging.md. */
+          importanceAbsent: run.scores.importanceAbsent,
+          importanceRejected: run.scores.importanceRejected,
+          strikingAbsent: run.scores.strikingAbsent,
+          strikingRejected: run.scores.strikingRejected,
           /* The profile's LENGTH, never the profile — it is the reader's own
              words about themselves. docs/project/logging.md. */
           profileChars: ctx.profile?.length ?? 0,

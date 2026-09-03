@@ -104,12 +104,12 @@ import type { BlockId, SearchRun } from "../types.js";
 import type { SavedSearch } from "./useSearch.js";
 import type { Found } from "./search-hits.js";
 import {
-  confNote,
+  applyConf,
   CONF_STEP,
-  countAbove,
   MIN_FIND_CHARS,
   PRIORITY_CONF,
 } from "./search-hits.js";
+import { hiddenNote } from "./threshold.js";
 import type { HitOrder, Matcher } from "./params.js";
 import { PALETTE_BY_HUE } from "./hit-colours.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
@@ -1015,6 +1015,23 @@ function SortBar({
 }
 
 /**
+ * The foot line: how many passages the bar is holding back, and the way back.
+ *
+ * The same sentence the other two thresholds print, with this panel's noun —
+ * all three hide rather than group since 2026-09-03, and threshold.ts holds the
+ * copy and the argument for it. It replaced a `confNote` that spoke only when
+ * the bar had hidden everything or nothing, which made an absent line
+ * ambiguous.
+ *
+ * **It takes the counts, not the list**, so the sentence and the `N of M` above
+ * it come out of the same `applyConf` call rather than two passes that could
+ * disagree.
+ */
+function confNote(hidden: number, total: number): string {
+  return hiddenNote(hidden, total, { one: "passage", many: "passages" });
+}
+
+/**
  * The bar the prioritised order hangs on, and the reader's hand on it.
  *
  * Greg, 2026-08-26: *"a 'Prioritised' ordering/filtering ... that orders by
@@ -1030,9 +1047,9 @@ function SortBar({
  *   that happens to move nobody still gives;
  * - **the track ends where the data does** (`confMax`), so no part of it is
  *   dead;
- * - **it says when it has hidden nothing, or everything** (`confNote`) — and
- *   this matters more here than it did for the glossary, because a glossary's
- *   gate only ever reorders, while this one takes rows away;
+ * - **it says how many it has hidden** (`hiddenNote`), in every state including
+ *   none and all — the same foot line the other two thresholds now print, since
+ *   all three hide rather than group (threshold.ts);
  * - **it can be put back** without the reader having to remember 50.
  *
  * A native `<input type="range">` for the reasons the glossary's is one:
@@ -1050,9 +1067,12 @@ function ConfSlider({
   moved: boolean;
   onGate(gate: number | null): void;
 }) {
-  const kept = countAbove(all, gate);
-  const note = confNote(all, gate);
-  const count = `${kept} of ${all.length}`;
+  /* **One pass, and every number below comes out of it.** The rows, the
+     `N of M` and the foot line have to agree, and the way they cannot disagree
+     is for there to be one result rather than a filter beside a counter. */
+  const { visible, hiddenCount } = applyConf(all, gate);
+  const count = `${visible.length} of ${all.length}`;
+  const note = confNote(hiddenCount, all.length);
 
   return (
     <div className="srch-gate">
@@ -1095,10 +1115,14 @@ function ConfSlider({
         title="How sure the model has to be for a passage to stay on screen. Left keeps more, right keeps fewer. Hidden passages lose their marks in the article too."
         /* A thumb position is a number nobody can hear, and the count is what
            the reader is actually aiming at. */
-        aria-valuetext={`${gate} out of 100, keeping ${count} passages`}
+        aria-valuetext={`${gate} out of 100, showing ${count} passages`}
         onChange={(e) => onGate(Number.parseInt(e.target.value, 10))}
       />
-      {note && <p className="srch-gate-note">{note}</p>}
+      {/* Always, never conditionally: a line that is sometimes absent for a
+          *different* reason teaches the reader nothing, and "Nothing matched"
+          under a slider is otherwise ambiguous between the search finding
+          nothing and the reader having hidden it all. */}
+      <p className="srch-gate-note">{note}</p>
     </div>
   );
 }

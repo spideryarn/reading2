@@ -40,8 +40,34 @@ whether to hand us one.
 
 ## The landing page
 
-[`LandingPage.tsx`](../../src/web/LandingPage.tsx) — the pitch, the screenshots, the prominent
-**Alpha** sign, and the sign-in controls on the page rather than behind a link. Its own header
-carries the decisions; the one worth repeating here is that **a claim on it is checked against the
-code, never against a doc about the code** — it said "six diagrams" for a day, having been written
-from a doc, when there were four.
+[`LandingPage.tsx`](../../src/web/LandingPage.tsx) — the pitch, three screenshots, the **Beta**
+badge and the honest strip, and the sign-in controls on the page rather than behind a link. Its own
+header carries the decisions; the one worth repeating here is that **a claim on it is checked
+against the code, never against a doc about the code** — it said "six diagrams" for a day, having
+been written from a doc, when there were four.
+
+**Rewritten 2026-09-03 in Greg's words.** The words come from an interview
+([260902k-spideryarn-reading-interview-guide.md](../research/260902k-spideryarn-reading-interview-guide.md))
+and from his dated quotes in the feature docs, and every sentence in the file carries a comment
+saying which — or `[tissue]`, for the few connecting lines an agent wrote. The rule and the reason
+are in [positioning.md § Whose words](positioning.md#whose-words).
+
+**Beta copy, honest strip.** The copy reads as if the product is in beta and paid, which is what
+Greg asked for on 2026-09-02 (*"we should write the copy as if we're in Beta and taking
+payments"*), while sign-up is still an invite list and Stripe is still being built. So one strip,
+`BetaStrip` in the file, says sign-up opens shortly and offers a `mailto:` to the contact address.
+**Delete the component the day sign-up opens**; nothing else on the page knows about it.
+
+## The features page
+
+[`FeaturesPage.tsx`](../../src/web/FeaturesPage.tsx) at `/features`, since 2026-09-03: every mode
+with a screenshot and a sentence of intent, then the plans. Reachable signed out, like the privacy
+policy and for the same reason. The three plans are rendered by its `Plans` component on both
+pages, and **the numbers there are copy, not configuration** — the source of truth is the
+`billing_tiers` table ([billing.md](billing.md)), and a quota changed there has to be changed here
+by hand. The screenshots, their sizes and how they were made are in
+[`src/web/shots.ts`](../../src/web/shots.ts), which `tests/landing-assets.test.ts` checks against
+the bytes on disk.
+
+The plan for both pages, with the simpler options passed over, is
+[260902k-website-copy-homepage-and-features.md](../plans/260902k-website-copy-homepage-and-features.md).

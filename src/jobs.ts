@@ -73,7 +73,7 @@ import {
   type JobStore,
 } from "./store/jobs.js";
 import { STORE } from "./store/live.js";
-import { failureKindOf, jobWorthRetrying } from "./job-failure.js";
+import { failureKindOf, jobWorthRetrying, readerFailureOf } from "./job-failure.js";
 import { slugWithShortId, urlKey } from "./ingest.js";
 import { runInJob } from "./job-scope.js";
 import { errorFields, log, type Log, since } from "./log.js";
@@ -91,7 +91,7 @@ import {
   DEFAULT_INGEST_STEPS,
   FORCE_ONLY_WHEN_NAMED,
   type PipelineStep,
-  sharesArticleCache,
+  cacheArticleForStep,
   STEP_ORDER,
   STEPS,
   stepIsDone,
@@ -99,7 +99,7 @@ import {
   stepLabel,
   urlForSlug,
 } from "./pipeline.js";
-import { INTERRUPTED, type FailureKind } from "./messages.js";
+import { INTERRUPTED, STEP_STOPPED, type FailureKind } from "./messages.js";
 import type { Job, JobStep, JobUpload, StepName } from "./types.js";
 
 /* `JobStatus` and `StepStatus` were on this line too and nothing imported them
@@ -547,13 +547,16 @@ async function runStep(
       step.detail = detail;
     },
     signal: controller.signal,
-    /* Only pay to cache the article if something still to come in *this job*
-       can read it. `job.steps` is the whole plan, so the steps after this one
-       are the ones that could — see `sharesArticleCache`, and
-       docs/project/prompt-caching.md for why the answer is usually no. */
-    cacheArticle: sharesArticleCache(
-      step.name,
-      job.steps.slice(job.steps.indexOf(step) + 1).map((s) => s.name),
+    /* Mark the article when any *other* step of this job is in the same cache
+       group — in either direction. The list used to be `slice(i + 1)`, later
+       steps only, which marked the stage that writes the entry and never the one
+       that reads it; the reader is the last member of its group by construction,
+       so it sent no breakpoint and read nothing. Both halves of the reasoning are
+       on `cacheArticleForStep`, which now owns the argument shape precisely so
+       that it is testable without a job. docs/project/prompt-caching.md. */
+    cacheArticle: cacheArticleForStep(
+      job.steps.map((s) => s.name),
+      job.steps.indexOf(step),
     ),
     ...(job.profile !== undefined && { profile: job.profile }),
   };
@@ -719,7 +722,6 @@ async function runStep(
        fail a second time inside the recovery. The walk's outer catch ends the
        job through `endAsStorageFailure`. See `DraftGoneError`. */
     if (err instanceof DraftGoneError) throw err;
-    const message = (err as Error).message;
     /* A cancel unwinds through here too — the `throw new Error("Cancelled")`
        above, and any step that honours the signal by throwing. The reader
        pressing Stop is not a fault of the step's, and giving it an `error`
@@ -730,7 +732,8 @@ async function runStep(
        an error's own text can carry the URL, or whatever a remote server put
        in a body, and rule 3 in src/log.ts is that `redact` cannot reach
        anything inside `msg`. The full error goes in the object, where it can. */
-    if (controller.signal.aborted) {
+    const stopped = controller.signal.aborted;
+    if (stopped) {
       jlog.debug(
         { step: step.name, ms: since(stepStarted), ...spendFields(spend) },
         `step cancelled: ${step.name} — ${job.slug}`,
@@ -752,18 +755,56 @@ async function runStep(
         `step failed: ${step.name} — ${job.slug}`,
       );
     }
+    /**
+     * **The two sentences this ending has, and which one goes where.**
+     *
+     * `readerFailureOf` is the whole of the seam docs/project/copy.md §
+     * The seam between the two audiences describes: what a step threw is the
+     * *diagnostic*, and it stays on the error for `captureFailure` and the log
+     * line above; the reader gets whatever the throw site declared, or a
+     * generic sentence naming the step when it declared nothing.
+     *
+     * These were one string until 2026-09-03, and that is how a source-file
+     * reference, band arithmetic and — through six stages before them —
+     * provider prose reached readers' screens. src/job-failure.ts.
+     *
+     * **A cancel does not ask that question at all**, and for the first six
+     * hours of the seam's life it did. Two things were wrong with the answer:
+     * the generic copy can say the problem *"has been recorded"* when the
+     * branch above deliberately skipped `captureFailure`, and a refusal racing
+     * with Stop left a `blocked` sentence — *asking again will be refused* — on
+     * a step of a job that `recordFailureKind` was about to make retryable. The
+     * reader is not owed a failure's account of a thing they chose. GPT Sol,
+     * stage 2 review.
+     */
+    const reader = stopped ? STEP_STOPPED : readerFailureOf(err, step.label);
     step.status = "error";
-    step.error = message;
+    /* **The reader's sentence on both fields, and it has to be both.** The band
+       renders `job.error` and the shelf card renders `step.error`
+       (src/web/JobProgress.tsx, src/web/AddArticle.tsx), so writing one of them
+       safely leaves the leak alive on the other surface — which is why
+       tests/step-failure-seam.test.ts asserts the persisted pair rather than
+       any rendered HTML. */
+    step.error = reader.message;
     step.finishedAt = new Date().toISOString();
-    if (controller.signal.aborted) {
-      markCancelled(job, message);
+    if (stopped) {
+      markCancelled(job, reader.message);
       /* Not on a cancel: the reader stopped it, and a stopped job is always
-         worth starting again. */
+         worth starting again. `STEP_STOPPED` is `retry` and agrees, which is
+         the pairing that came apart when this branch shared the failure
+         sentence. */
       recordFailureKind(job, undefined);
       return { outcome: "cancelled" };
     }
     job.status = "error";
-    job.error = message;
+    job.error = reader.message;
+    /* **Still `failureKindOf(err)` and not `reader.kind`**, which are the same
+       value whenever the throw site declared one and differ only for a failure
+       that declared nothing: `reader.kind` is then `retry` by fallback, and
+       `undefined` is the honest record of nobody having said. Both answer *yes*
+       to `jobWorthRetrying`, so nothing on screen turns on the difference —
+       what turns on it is a later reader of the row being able to tell a
+       claimed `retry` from an absent one. */
     recordFailureKind(job, failureKindOf(err));
     job.finishedAt = new Date().toISOString();
     delete job.cancelling;
@@ -952,11 +993,20 @@ async function lostTheClaim(
  *
  * ## The message, and the kind
  *
- * **`PublishRefused`'s own words, or one of ours.** That message is ours — a
- * slug and a list of reasons naming revision ids — and it is the one a person
- * can act on. Anything else may be a driver error with the article in it, and
- * this string goes onto the job card and into the `jobs` row.
- * src/store/db-errors.ts is the rule this is one end of.
+ * **One of ours, on every door — including the refusal.** This used to make an
+ * exception for `PublishRefused`, whose message *is* ours, on the reasoning
+ * that being ours made it fit to show. Being ours and being fit to show a
+ * reader are different things, and it was neither slug nor secret that made the
+ * difference: the message reads *"the tree was built from different blocks
+ * (hierarchy ran against `<hash>`, these blocks are `<hash>`) — re-run
+ * hierarchy"*, which is an instruction to whoever runs this app given to
+ * somebody who cannot run anything. It was the last raw diagnostic on a
+ * reader-facing field after `runStep`'s seam closed, and GPT Sol found it in
+ * the stage 2 review. The reasons now go on the log line instead.
+ *
+ * Everything else here was already one of ours, and for a stronger reason: a
+ * driver error's message can carry the article. src/store/db-errors.ts is the
+ * rule this is one end of.
  *
  * **`failureKindOf(err)` is preserved rather than overwritten.** It used to be
  * hard-coded `retry` for everything that was not the refusal, which threw away
@@ -1024,15 +1074,34 @@ async function endAsStorageFailure(args: {
      method, so on the `open-session` door there may have been no scrubbing at
      all — which makes the rule stricter here, not looser. */
   jlog.error(
-    { errorType: err instanceof Error ? err.name : typeof err },
+    {
+      errorType: err instanceof Error ? err.name : typeof err,
+      /* **The refusal's reasons, and only its reasons.** They are ours and they
+         are the diagnostic — hashes, run statuses, and tree problems that name
+         node ids and block indices (src/tree-invariants.ts), never article
+         prose. They arrive here because they stopped going onto `job.error`;
+         see below. The `instanceof` is what keeps the rule above intact: a
+         driver error's message is still never logged. */
+      ...(err instanceof PublishRefused ? { reasons: err.reasons } : {}),
+    },
     `${DOOR_LINES[door]} — ${job.slug}`,
   );
   job.status = "error";
   /* Before the sentence, because the sentence's last clause is read back off
      the field this writes. See `RETRY_IS_SAFE`. */
   recordFailureKind(job, failureKindOf(err) ?? "retry");
-  job.error =
-    err instanceof PublishRefused ? err.message : endingSentence(job, doorSentence(door));
+  /* **The door's own sentence, for every door and every error.** This read
+     `err instanceof PublishRefused ? err.message : …` until 2026-09-03, on the
+     reasoning that the refusal's message is ours and therefore fit to show. It
+     is ours and it is not fit to show: `Refusing to publish "<slug>": the tree
+     was built from different blocks (hierarchy ran against <hash>, these blocks
+     are <hash>) — re-run hierarchy` is an instruction to whoever runs this app,
+     addressed to a reader who cannot run anything. It was the last raw
+     diagnostic left on a reader-facing field after `runStep`'s seam was closed,
+     found by GPT Sol reviewing stage 2. The reasons are on the log line above;
+     `COULD_NOT_PUBLISH` is what the card says. docs/project/copy.md § The seam
+     between the two audiences. */
+  job.error = endingSentence(job, doorSentence(door));
   job.finishedAt = new Date().toISOString();
   delete job.cancelling;
   return await endJob(job, attempt, endingFrom(job, "error"), jlog, startedMs, session);
