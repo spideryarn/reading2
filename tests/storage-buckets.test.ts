@@ -26,6 +26,7 @@ import {
   narrowings,
   storageBucketProblems,
   targetLine,
+  whyNotLocalStorage,
   whyNotProductionStorage,
 } from "../scripts/storage-buckets.js";
 
@@ -123,13 +124,81 @@ describe("which project the command is about to touch", () => {
   });
 
   it("classifies production positively, so what it cannot read it refuses", () => {
-    expect(whyNotProductionStorage("https://abc123.supabase.co")).toBeNull();
-    expect(whyNotProductionStorage("http://abc123.supabase.co")).toContain("not https");
+    const REF = "abcdefghijklmnopqrst";
+    expect(whyNotProductionStorage(`https://${REF}.supabase.co`)).toBeNull();
+    expect(whyNotProductionStorage(`http://${REF}.supabase.co`)).toContain("not https");
     expect(whyNotProductionStorage("https://local%68ost")).toContain("localhost");
-    expect(whyNotProductionStorage("https://abc123.supabase.co.attacker.net")).toContain(
+    expect(whyNotProductionStorage(`https://${REF}.supabase.co.attacker.net`)).toContain(
       "attacker.net",
     );
     expect(whyNotProductionStorage("not a url")).toContain("not a parsable URL");
+  });
+
+  it("wants a project-ref-shaped host, not merely something under supabase.co", () => {
+    /* `<ref>.supabase.co` was `[a-z0-9]+\.supabase\.co` until 2026-09-03, which
+       is every label Supabase itself serves — `api.supabase.co`, and whatever a
+       typo produces. A project ref is twenty characters, so that is the shape
+       to require: nothing in this repo has ever had another, and a wrong
+       refusal is loud and says what it wanted, while a wrong acceptance is a
+       `--prod --apply` writing somewhere else. GPT Sol, 2026-09-03. */
+    expect(whyNotProductionStorage("https://x.supabase.co")).toContain("twenty");
+    expect(whyNotProductionStorage("https://api.supabase.co")).toContain("twenty");
+    expect(whyNotProductionStorage("https://alschkahzfagtppxspfq.supabase.co")).toBeNull();
+  });
+});
+
+/**
+ * **The default mode writes too**, and until 2026-09-03 it wrote wherever
+ * `SUPABASE_URL` happened to point.
+ *
+ * `chooseStorage` took the environment's URL on trust, so a shell — or a
+ * `.env.local` — holding remote credentials made `npx tsx
+ * scripts/check-buckets.ts --apply` a write to a hosted project, with a
+ * `Target:` line that truthfully named it and nothing that asked whether that
+ * was meant. GPT Sol reproduced it with `https://wrongproject.supabase.co`,
+ * 2026-09-03.
+ *
+ * That is the same shape as the accident this whole file exists for: a command
+ * whose printed verdict is about a project other than the one the person
+ * running it had in mind. So the safe mode is now the one that has to prove
+ * itself — positively, the way `whyNotProductionStorage` does, because a guard
+ * that lists what to refuse accepts everything it has not heard of.
+ */
+describe("the default mode is the local stack, and has to prove it", () => {
+  const REMOTE = {
+    SUPABASE_URL: "https://wrongproject.supabase.co",
+    SUPABASE_SERVICE_ROLE_KEY: "some-other-projects-service-key",
+  };
+
+  it("refuses a hosted project without --prod, rather than writing to it", () => {
+    expect(() => chooseStorage({ prod: false, env: REMOTE, found: null })).toThrow(/--prod/);
+  });
+
+  it("refuses any host that is not loopback, not just supabase.co ones", () => {
+    const staging = { ...REMOTE, SUPABASE_URL: "https://storage.staging.example.com" };
+    expect(() => chooseStorage({ prod: false, env: staging, found: null })).toThrow(
+      /not the local Supabase stack/,
+    );
+  });
+
+  it("says what it wanted, so a wrong refusal is fixable", () => {
+    expect(() => chooseStorage({ prod: false, env: REMOTE, found: null })).toThrow(/127\.0\.0\.1/);
+  });
+
+  it("accepts the two spellings of the container, and nothing that merely looks like them", () => {
+    expect(whyNotLocalStorage("http://127.0.0.1:54361")).toBeNull();
+    expect(whyNotLocalStorage("http://localhost:54361")).toBeNull();
+    /* WHATWG normalises this to 127.0.0.1 and `fetch` dials loopback, so
+       refusing it would be a wrong refusal — the two agree because they are the
+       same parser, which is exactly what is not true of `pg` and
+       `isLocalDatabaseUrl` (src/db/ssl.ts). */
+    expect(whyNotLocalStorage("http://2130706433:54361")).toBeNull();
+    expect(whyNotLocalStorage("http://127.0.0.1.attacker.net")).toContain("attacker.net");
+    /* Userinfo runs to the LAST `@`, so this dials the attacker; the loopback
+       address is sitting in the username. */
+    expect(whyNotLocalStorage("http://127.0.0.1@attacker.net")).toContain("attacker.net");
+    expect(whyNotLocalStorage("postgres://127.0.0.1:54362/postgres")).toContain("postgres:");
+    expect(whyNotLocalStorage("not a url")).toContain("not a parsable URL");
   });
 
   it("never puts the service key in the line it prints", () => {

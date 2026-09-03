@@ -856,8 +856,36 @@ describe("reading the bucket blocks out of supabase/config.toml", () => {
 
   it("throws on a mime list it cannot read", () => {
     expect(() => declaredBuckets("[storage.buckets.x]\nallowed_mime_types = [oops]\n")).toThrow(
-      /cannot read the list entry/,
+      /not valid TOML/,
     );
+  });
+
+  it("throws on a list holding something that is not a mime type", () => {
+    /* Valid TOML, wrong contents — the case a parser gets right and a type
+       check has to catch afterwards. */
+    expect(() => declaredBuckets("[storage.buckets.x]\nallowed_mime_types = [1, 2]\n")).toThrow(
+      /allowed_mime_types/,
+    );
+  });
+
+  it("throws on an assignment it cannot parse, rather than defaulting it", () => {
+    /* **A gate that fails open on a file it could not read.** The hand-written
+       parser did `if (!pair) continue` on any line its regex missed, and then
+       flush() supplied `public: false`, `fileSizeLimit: null`,
+       `allowedMimeTypes: null` — the defaults. So this block parsed as
+       private/unlimited/any-MIME, compared equal to a bucket in exactly that
+       state, and the deploy gate recorded "no drift" about a config file it had
+       not understood a single line of. GPT Sol reproduced it, 2026-09-03; it is
+       the same class as the 415, where a check printed a tick about something
+       other than the thing it was asked about. */
+    const empties = ["[storage.buckets.sources]", "public =", "file_size_limit =", "allowed_mime_types ="].join("\n");
+    expect(() => declaredBuckets(empties)).toThrow(/not valid TOML/);
+  });
+
+  it("throws on a value of the wrong type rather than reading it as false", () => {
+    /* `value === "true"` made every non-`true` spelling of `public` a silent
+       `false`, including `"yes"` and `1`. */
+    expect(() => declaredBuckets('[storage.buckets.x]\npublic = "yes"\n')).toThrow(/public/);
   });
 
   it("defaults a bucket that declares nothing to private with no limits", () => {

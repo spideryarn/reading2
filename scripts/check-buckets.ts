@@ -20,6 +20,12 @@
  * since 2026-08-27. Use `--prod`, which reads `.env.prod` and prints the project
  * it reached.
  *
+ * It does not work in the other direction either, and now says so: on a machine
+ * whose `.env.local` or shell *does* hold remote credentials, that command used
+ * to make the default, unflagged mode a **write** to a hosted project. Without
+ * `--prod` this command refuses anything that is not the container on this
+ * machine — `whyNotLocalStorage` in scripts/storage-buckets.ts.
+ *
  * ## Why this is not obvious, and why it needed a postmortem
  *
  * **Declaring a bucket in `config.toml` does not change one that already
