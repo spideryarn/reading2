@@ -611,6 +611,30 @@ in this run**:
 New, and also Greg's:
 
 4. **T3.3, the pool on reload** — wants a measurement, not an opinion.
+5. **Raise vitest's global `testTimeout` from its 5-second default.** ⭐ **My recommendation: yes, to
+   30s** — but it is a one-line repo-wide policy change affecting every agent's runs, with a
+   trade-off, so it is named here rather than applied.
+
+   **The measurement.** `vitest.config.ts` sets no `testTimeout`, so everything runs on vitest's 5s
+   default. Every one of tonight's ~60 spurious failures was a timeout at that boundary, and the
+   suites that hit it — `tests/pdf-chunk-concurrency.ts`, `pdf-seam-hyphens`, `block-policy-prompts`,
+   `health-schema`, `ai-calls-spend-pg` — legitimately take **5–9 seconds** doing real work (parsing
+   a PDF, building twelve prompts). **None of them sets its own timeout.** They are not slow because
+   something is wrong; they are within a factor of two of the default, so they fail whenever the box
+   is busy, which on this machine is most of the time.
+
+   **The repo already argues for this, in the paragraph T1.2 corrected**
+   ([testing.md](../project/testing.md)): *"Being generous costs nothing except when something really
+   is stuck; being tight costs whoever is unlucky."* That is exactly this case, and the guidance is
+   currently applied per-file by whoever gets bitten — `tests/lockfile.test.ts` has 60s, and got it
+   the day somebody lost time to it.
+
+   **The trade-off, named rather than buried:** a genuinely hung test would take 30s to fail instead
+   of 5s. Against tonight, where the 5s default produced a gate nobody could read and hid one real
+   regression behind six false ones, that looks like a good trade — but it is a policy about every
+   agent's runs, not a fix to a defect, and the evidence for it is confounded by the very load it is
+   about. **Greg's call.** The narrower alternative is per-file timeouts on the five named above,
+   which is more edits and does not cover the sixth suite to drift over the line.
 
 ### Not doing, and why
 
