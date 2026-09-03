@@ -121,8 +121,23 @@ and `tests/pdf-bundle-trace.test.ts` goes 2/2 green with `api-dist/` present. Or
 HEAD`, Sentry still gets client maps then API maps, and `no-secrets-in-bundle` stays scoped to the
 browser bundle.
 
-**Risk**: `npm run build` gets slower for everyone who runs it by hand (by 400 ms), and `--fast`
-skips it. Both acceptable; `--fast` already declares it is not the gate.
+**Risk**: `npm run build` gets slower for everyone who runs it by hand, by about 400 ms. Acceptable.
+
+**The second thing the first draft got wrong, found while building it.** `--fast` skipped the build
+step outright, which after this change left `--fast` **permanently red** — the test gate would still
+want `api-dist/`. A mode nobody can use is the same bug as a gate nobody can pass, one flag along.
+So `--fast` now narrows the step to `build:api` rather than skipping it: the client build is the slow
+half, and the API pass is the one the test gate needs. On a tree that has never had a client build it
+fails loudly, naming the fix, from `scripts/client-shell.ts` — verified:
+
+```
+Cannot read the built client shell at …/dist/index.html: ENOENT …
+Run `npm run build`, which builds the client and then this.
+(`build:api` on its own needs a `dist/` that already exists.)
+```
+
+That is the right answer for `--fast` on a clean checkout: it is a shortcut for a tree you have
+already built once, and it now says so rather than failing somewhere else.
 
 **Also in this stage, because they define `npm run build` as client-only in prose**:
 `docs/project/dev-and-deployment-overview.md`, `docs/project/setup-dev.md`,
@@ -384,21 +399,35 @@ rather than trusting this list.
   flips the default store under ~100 test files at once. This is Stage D of
   [260831b](260831b-finish-the-database-move.md) and stays there.
 
-## T1.9 · Three copies of "Escape closes this dialog", and three raw reads of `?at=`
+## T1.9 · Three copies of "Escape closes this dialog", and ~~three~~ **two** raw reads of `?at=`
 
-**Evidence: proved from the code.**
+**Evidence: proved from the code.** **Done — `eee69715`.**
 
-`src/web/ChatDialog.tsx:160`, `AnnotateDialog.tsx:151` and `CommentDialog.tsx:152` each define the
-same six-line `useEffect` that adds and removes a `keydown` listener testing `e.key !== "Escape"`.
-`Dock.tsx:619` is deliberately different — capture phase, `stopImmediatePropagation`, and a comment
-saying it must win a race against `CommentDialog`'s — and stays as it is.
+`src/web/ChatDialog.tsx`, `AnnotateDialog.tsx` and `CommentDialog.tsx` each defined the same
+`useEffect` adding and removing a bubble-phase `keydown` listener testing `e.key !== "Escape"`. They
+now call `useEscapeToClose`.
 
-`new URLSearchParams(location.search).get("at")` is inlined at `src/web/App.tsx:3697`, `:4434` and in
-`Dock.tsx`, each with a comment pointing at one of the others. [url-state.md](../project/url-state.md)
-frames every URL read as going through `src/web/params.ts`; these three bypass it.
+**`Dock.tsx` stays out, and that is the interesting half.** Its drawer also closes on Escape and must
+win a race against `CommentDialog`'s listener, so it uses the capture phase and
+`stopImmediatePropagation`. Before, that fact lived in a comment pointing at a copy; now the hook
+says why Dock is not one of its callers and Dock says why it is not one, so **the race has two named
+parties instead of one comment and three anonymous copies** — which is the actual win here, more than
+the six lines saved.
 
-Both are trivial and neither is urgent. They are here because three sites with cross-referencing
-comments is what "the author knew and had nowhere to put it" looks like.
+### The count was wrong, again, and in the direction the sweep keeps failing
+
+The plan said `?at=` was read raw at **three** sites, the third being `Dock.tsx`. **There are two**,
+both in `App.tsx`. `Dock.tsx` reads `carriedSearch(location.search)` — the *whole* query string, to
+carry view state across a link, a different job. The two `App.tsx` comments name Dock as the source
+of the read-at-render *pattern*, and this plan read that as a third instance of the thing.
+
+That is the second miscount in this sweep (T1.4 was the first, in the other direction), and both came
+from **trusting a citation instead of running the grep**. Worth recording as the method's own failure
+mode: an audit agent reads a comment saying "same trick as X" and files X as a hit.
+
+`currentAt()` now lives in `src/web/params.ts`, which [url-state.md](../project/url-state.md) already
+frames as the one home for URL reads, and it carries the call sites' reasoning about why the read is
+synchronous at render rather than through `useQueryState`.
 
 ## T1.10 · The guard for the most expensive recurring accident is wired into nothing
 
@@ -445,18 +474,38 @@ file wins    scripts/db-seed-dev.ts:97,109   loadEnvLocal() first, no capture
              scripts/db-reown.ts:113,142
 ```
 
-Both of the second pair document the trap in their own headers and **deliberately decline the fix**,
-cross-referencing each other and printing a `Target:` line instead. So this is an acknowledged
-divergence rather than a miss, and the blast radius is bounded: both additionally call
-`refuseUnlessOurDatabase` / `isLocalDatabaseUrl` (`scripts/db-reown-rules.ts`), which asks the
-Supabase CLI for its own `DB_URL` rather than trusting the connection string.
+~~Both of the second pair document the trap in their own headers and **deliberately decline the
+fix**~~ — **this was wrong, and the lane that built it said so.** Their headers *describe* the trap
+and answer it with a printed `Target:` line; neither weighs capturing the shell value and rejects it.
+So the divergence was undeclared in substance even where it looked documented, which is worse than
+the plan thought rather than better.
 
-**The risk is the next script**, which copies the nearest sibling of its genre and gets the weaker
-half without the compensating guard — the exact mechanism improve-the-codebase.md describes. The fix
-is one exported `resolveTargetUrl()` that the six share, so the choice is made once, in one place,
-with the reasoning attached to it rather than to four copies of it.
+There **is** a good reason for their answer, and it is not the one they give: **neither script has a
+remote mode at all.** There is no `--allow-remote`, the only valid target is this repo's own local
+Docker stack, and both settle that against `supabase status` rather than against the connection
+string (`scripts/db-reown-rules.ts`). Shell-wins would therefore change nothing but the failure
+message, while reopening the `~/.zshrc` case that `src/env.ts`'s whole precedence rule exists to
+close — and the old app's stack really is running next door on port 54342. That reason is now
+written down where the choice is made.
 
-**Deliberately scoped as local-only**: nothing in this stage runs against the remote.
+**The risk was always the next script**, which copies the nearest sibling of its genre and inherits a
+rule nobody chose — the exact mechanism improve-the-codebase.md describes.
+
+**As built**: `resolveTargetUrl({ shellWins })` in [`src/env.ts`](../../src/env.ts), beside the rule
+it excepts rather than in `db-reown-rules.ts`, which answers the different question "is this our
+stack". The option is **required**, so the seventh script has to choose. Behaviour is unchanged at
+all six call sites (four `true`, two `false`).
+
+**The part that is better than this plan asked for.** It reads `INHERITED` — the snapshot `src/env.ts`
+takes at module load — rather than a `const` the caller captures. The four shell-wins copies each
+depended on their capture running *above* `loadEnvLocal()`, so an import reordered or a helper
+introduced above them would silently turn shell-wins into file-wins with nothing to show for it.
+Reading the snapshot makes the answer order-independent, which **ends the ordering trap rather than
+documenting it**.
+
+**Deliberately scoped as local-only**: nothing in this stage ran against any database, remote or
+local. The resolver was verified as a pure function against injected environments, which is most of
+why it was worth extracting.
 
 ---
 
@@ -731,11 +780,11 @@ deployed artefacts, and anything visible only in a browser.
 
 - [x] Plan reviewed by GPT Sol — **"not ready"**, and right on both counts. Re-cut below.
 - [x] T2.2 — the SSRF question: answered, and the comment corrected
-- [ ] Stage 1 — gates
+- [x] Stage 1 — gates · `453f3784`, pushed
 - [ ] Stage 2a — store
-- [ ] Stage 2b — ledger, tautology, target
-- [ ] Stage 2c — dead code and false comments
-- [ ] Stage 3 — client tidyups
+- [x] Stage 2b — ledger, tautology, target · `8e6f1f2e`, pushed
+- [x] Stage 2c — dead code and false comments · `453f3784`, pushed
+- [x] Stage 3 — client tidyups · `eee69715`, pushed
 - [ ] The four important-doc edits, prepared and awaiting Greg
 
 ## What the review changed
