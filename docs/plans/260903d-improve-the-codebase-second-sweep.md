@@ -673,6 +673,49 @@ made it *lucky* is that the item the verdict did overturn, T2.1, was the one I
 had held. **Next run: hold all of it, or do not open the review until the safe
 part is committed and say so in the prompt.**
 
+## Where it ended
+
+**Five of six gates green, and the sixth could not be measured on this box tonight.** Said plainly
+rather than rounded up, because this plan's own subject is red results you cannot trust.
+
+```
+  ✓ typecheck    clean          ✓ cycles       clean
+  ✓ build        clean          ✓ chain        clean
+  ? test         see below      ✓ committed    clean
+```
+
+The full suite reported 15 failed files / 57 failed tests at load average **92**, with ~90 vitest
+processes from other worktrees. Re-run, that fell to 7 files / 9 tests, of which **7 of 9 were
+5-second timeouts** — including one on a pure AST walk, which nothing but CPU can affect. The
+remaining two are `store-jobs-parity`'s global-cap cases, **reproduced above as shared-database
+contamination rather than a defect**.
+
+**What was verified rather than assumed**, because `processSingleton` keeps state on `globalThis`,
+which is per *worker* and not per test file — so two suites sharing a worker would now share the
+`streaming` map where each previously got a fresh one. That is a real mechanism, not just a worry:
+
+- `tests/comment-referee-mark.test.ts` (19 failures in the loaded run) — **passes**
+- `tests/public-network-trace.test.tsx` (16 failures in the loaded run) — **passes**
+- the eight chat suites that drive stop and supersede through `streaming` — `chat-cancel-before-begin`,
+  `chat-delete-live-turn`, `chat-live-turn`, `chat-arrival-race`, `chat-edit-guard`,
+  `chat-invariants`, `chat-error-scope`, `chat-handoff` — **37 tests, all pass**
+- `tests/turn-order.test.ts`, `tests/turn-order-across-reload.test.ts`,
+  `tests/store-transaction-isolation.test.ts`, `tests/doc-links.test.ts` — **21 tests, all pass**
+
+So nothing red is attributable to this sweep's changes, and the two that are genuinely red are red
+for a reason this plan documents and no re-run can clear. **A green `npm run check` on this box
+requires the other ten worktrees to be idle, which is the finding, not an excuse.**
+
+| | before | after |
+|---|---|---|
+| `npm run check` | **red on `dev`** — a guard the previous sweep wrote, going off | five gates green; `test` classified, nothing attributable |
+| unpinned `isolationLevel` literals | 3 new ones outside the allow-list | **0** |
+| false "not wired up yet" claims about live billing | 5 across 4 files | **0** |
+| `routes.ts` locks with no durable half | 2 (`turnOrder`, `streaming`) | **0**, one with a red-test reproduction |
+| `rowsOf` call sites still inline | 2 of 5 | **0** |
+| `at()` declarations | 2 | **1** |
+| shared-database cost | "timing-sensitive suites flake" | **measured: it returns false results, and here is the row count** |
+
 ## What the review changed
 
 `260903d-improve-the-codebase-second-sweep-review-sol.md`. **Not ready**, and the headline finding
