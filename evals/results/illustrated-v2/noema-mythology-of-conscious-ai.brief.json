@@ -1,0 +1,187 @@
+{
+  "version": "illustrated/1",
+  "style": "An antique hand-drawn map, ink and wash on aged parchment, with the essay's argument laid out as a route of little vignette-scenes linked by dotted paths, funnels, forks and a looping road — a register suited to an essay that keeps returning to journeys, thresholds and the shape of a curve.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Map of the Mythology",
+      "prompt": "Draw an antique hand-inked map on aged, faintly browned parchment, sepia and iron-gall ink with pale wash colour, no lettering or labels anywhere on the page. At the very top, a small humanoid machine sits loosely wrapped in a chain, posture ambiguous. From it, two dotted paths descend into a bordered hilly region: on the left a robed figure holds a huge human-silhouette-shaped lens up to a distant machine, warping its look; on the right, two devices on a plinth — a mouth-shaped speaking device crowded by admirers, and an ignored coiled-ribbon shape in shadow. Both paths funnel down to a single large pastry bun with a faint face-like swirl in its glaze, small figures crowding round pointing. From this bun, one path descends into a second bordered region, rockier and rooted, containing three vignettes side by side: a cross-sectioned neuron sparking while tiny particles are swept from it; a coffee cup on a table with grey arrows arcing down from a drawn brain and black arrows rising back up; and a framed slate showing a drawn rainstorm falling inside it while the surrounding parchment stays dry. These three funnel down to a stone pillar leaning at an angle with a jagged crack down its middle. From the cracked pillar the road forks in two: one fork leads to a row of small machine-figures being assembled one after another, each with a faint pained expression; the other fork leads to a glass dish holding a small pale folded tissue blob, faintly glowing. Both forks rejoin at the bottom of the map in a single unadorned human figure standing and breathing, visible soft breath-mist rising from it. A looping dotted road runs from this breathing figure all the way back up to the chained machine at the top, closing the loop. Compose the whole page top to bottom as a single continuous route with small hills, borders, and light marginal foliage kept sparse and out of the way of every scene, each vignette large enough to read clearly. No words, no signage, no inscriptions anywhere on the parchment.",
+      "vignettes": [
+        {
+          "block": "spya-e68t9h",
+          "quote": "with consciousness comes moral status, the potential for suffering and, perhaps, rights",
+          "depicts": "At the top of the map, a small humanoid machine sits wrapped loosely in a chain, its posture uncertain — neither clearly free nor clearly a prisoner, marking the opening question the whole map hangs from.",
+          "node": "op1"
+        },
+        {
+          "block": "spya-h4mwb2",
+          "quote": "the tendency to see things through the lens of being human",
+          "depicts": "A robed figure holds up a huge lens shaped like a human silhouette, peering at a distant machine through it, the lens distorting the machine into a humanlike shape.",
+          "node": "bias1"
+        },
+        {
+          "block": "spya-k6fpme",
+          "quote": "Nobody, as far as I know, has claimed that DeepMind’s AlphaFold is conscious",
+          "depicts": "Two devices side by side on a plinth: one shaped like a mouth mid-speech, ringed by admiring onlookers, the other a coiled protein-ribbon shape sitting in shadow, ignored.",
+          "node": "bias2"
+        },
+        {
+          "block": "spya-k850tu",
+          "quote": "like a face in a piece of toast or Mother Teresa in a cinnamon bun",
+          "depicts": "The two paths from the biases converge on a large coiled pastry bun with a faint swirl in its glaze that could be read as a face, small figures crowding round pointing at it.",
+          "node": "conv1"
+        },
+        {
+          "block": "spya-un9fjn",
+          "quote": "some neurons fire spikes of activity apparently to clear waste products created by metabolism",
+          "depicts": "A single cell-like neuron sits in cross-section, tiny sparks flickering along its branches while small particles are swept away from it, unlike anything drawn beside it made of wire.",
+          "node": "arg1"
+        },
+        {
+          "block": "spya-f3bgh0",
+          "quote": "The conscious experience of a coffee cup is underpinned by the content of the brain’s predictions",
+          "depicts": "A coffee cup on a table, with faint grey arrows arcing down from a drawn brain shape toward it, and black arrows rising back up from the cup toward the brain.",
+          "node": "arg3"
+        },
+        {
+          "block": "spya-npjt4j",
+          "quote": "A simulation of a rainstorm does not make anything actually wet",
+          "depicts": "A framed window or slate showing a drawn rainstorm falling inside it, while the parchment surrounding the frame stays visibly dry and uncreased.",
+          "node": "arg4"
+        },
+        {
+          "block": "spya-ymbpwn",
+          "quote": "is a very strong assumption that looks increasingly shaky",
+          "depicts": "The three technical paths converge on a stone pillar standing at an angle, a jagged crack running down its middle where the paths meet.",
+          "node": "conv2"
+        },
+        {
+          "block": "spya-vs0vpj",
+          "quote": "the accidental emergence of consciousness in cerebral organoids (brain-like structures typically grown from human embryonic stem cells)",
+          "depicts": "The other path from the cracked pillar leads to a glass dish holding a small pale, folded tissue-like blob, faintly glowing, set apart from any wires or circuitry.",
+          "node": "eth2"
+        },
+        {
+          "block": "spya-w8z40d",
+          "quote": "more breath than thought and more meat than machine",
+          "depicts": "At the foot of the map a single unadorned human figure stands breathing, a soft visible breath-mist rising from it; a looping dotted road runs from this figure back up to the chained machine at the top.",
+          "node": "close1"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-the-temptations",
+      "title": "Why We're Tempted",
+      "prompt": "Draw the inside of one region of an antique hand-inked map, sepia ink and pale wash on aged parchment, no lettering anywhere. At the top of this plate, a cluster of small figures each perform an ordinary task — one hunched over a puzzle sheet, one fitting pieces of furniture together, one walking a path toward a small shop — set apart, at a short distance, from a single still figure simply sitting and feeling, doing nothing. From this cluster two dotted paths fork downward through a bordered hilly enclosure. The left path passes first a robed figure holding a human-silhouette-shaped lens up to a distant machine, bending its outline; then beneath it a wobbling tall pile of stones with one human figure triumphant at its top; then beneath that two speaking-mouth-shaped devices ringed by admiring figures, one glowing brighter than the other; then beneath that a seated figure speaking with a tangled scribbled scroll unrolling from its mouth. The right path passes first a steep rising curved line with several figures standing at different points along it, each leaning forward as if at its very summit; then beneath it a small human figure drifting upward inside a soft round cloud, eyes closed, floating free of the ground. Both paths rejoin at the bottom of the plate in one large coiled pastry bun, a faint face-like swirl in its glaze, a small crowd gathered around it pointing and marveling. Keep the composition flowing top to bottom, the two forking paths visually distinct with dotted ink lines, each vignette large and clearly readable, with only sparse marginal foliage kept out of the way of the scenes. No words, no signage, no inscriptions anywhere on the page.",
+      "vignettes": [
+        {
+          "block": "spya-nj888h",
+          "quote": "solving a crossword puzzle, assembling some furniture, navigating a tricky family situation, walking to the shop",
+          "depicts": "A cluster of small figures each doing one ordinary task — one bent over a puzzle sheet, one fitting together pieces of furniture, one walking along a path toward a shop — set apart from any single figure simply sitting still and feeling.",
+          "node": "A"
+        },
+        {
+          "block": "spya-h4mwb2",
+          "quote": "the tendency to see things through the lens of being human",
+          "depicts": "A robed figure raises a lens shaped like a human silhouette to their eye, looking at a machine through it so the machine appears bent into a humanlike outline.",
+          "node": "B1"
+        },
+        {
+          "block": "spya-cke6sj",
+          "quote": "on an exponential curve, every point is an inflection point",
+          "depicts": "A steeply rising curved line drawn across the parchment, with several small figures standing at different points along it, each one leaning forward as though they stand exactly at its summit.",
+          "node": "C1"
+        },
+        {
+          "block": "spya-her4zk",
+          "quote": "our unfortunate habit of putting the human species at the top of every pile",
+          "depicts": "A tall wobbling pile of stones or objects with a single human figure perched triumphantly at its very top, arms raised.",
+          "node": "B2"
+        },
+        {
+          "block": "spya-v4sduf",
+          "quote": "floating off to eternity in a silicon-enabled cloud",
+          "depicts": "A small human figure lies back, drifting upward inside a soft rounded cloud shape, eyes closed, limbs slack, floating away from the ground below.",
+          "node": "C2"
+        },
+        {
+          "block": "spya-k6fpme",
+          "quote": "OpenAI’s ChatGPT or Anthropic’s Claude have been the focus of most of the excitement about artificial consciousness",
+          "depicts": "Two speaking-mouth-shaped devices stand side by side surrounded by a ring of admiring small figures, one device slightly larger and glowing brighter than the other.",
+          "node": "B3"
+        },
+        {
+          "block": "spya-t29n67",
+          "quote": "it would be far better to say that they “confabulate.”",
+          "depicts": "A seated figure speaks confidently, a tangled jumbled scroll of scribbles unrolling from its open mouth, the figure's expression untroubled and sure of itself.",
+          "node": "B4"
+        },
+        {
+          "block": "spya-k850tu",
+          "quote": "like a face in a piece of toast or Mother Teresa in a cinnamon bun",
+          "depicts": "All the small paths converge on one large coiled pastry bun with a faint swirl in its glaze suggesting a face, a crowd of figures gathered close, pointing and marveling at it.",
+          "node": "D"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-the-computation",
+      "title": "Why It's Probably Not There",
+      "prompt": "Draw the inside of the second region of an antique hand-inked map, sepia ink and pale wash on aged parchment, no lettering anywhere. At the top of this plate, a tall ornate structure balances entirely on a single small stone at its base, looming precariously. From this structure four dotted paths fan downward through a bordered rocky, root-veined enclosure. The first path leads to a brain shown in cross-section where neural tissue and fine wire circuitry blend together with no visible seam between them. The second leads to a mechanical steam-engine governor, two heavy balls swinging outward on hinged arms closing a valve, a self-contained clockwork mechanism with no operator. The third leads to a robed philosopher unrolling a scroll toward a small living, breathing creature rather than any machine. The fourth leads to a stomach-and-intestine diagram drawn inside a framed slate, food entering at the top but nothing within it changing. From the brain vignette, a further branch leads to a row of small brain-slice shapes being lifted out one by one and replaced with silicon chip shapes, a philosopher figure watching from the side. From the stomach vignette, a further branch leads to a second philosopher figure standing before a swirling cloud containing many small nested worlds, gazing into it while onlookers gather behind him. All four main paths, together with their branches, converge at the bottom of the plate on a single stone pillar standing at a slight lean, a wide jagged crack running down its length. Keep the composition flowing top to bottom, paths rendered as dotted ink lines fanning and rejoining clearly, each vignette large enough to read plainly, with only sparse marginal foliage kept out of the way of the scenes. No words, no signage, no inscriptions anywhere on the page.",
+      "vignettes": [
+        {
+          "block": "spya-wepmnr",
+          "quote": "The very idea of conscious AI rests on the assumption that consciousness is a matter of computation",
+          "depicts": "A tall ornate structure balances entirely on a single small stone at its base, the structure looming large and precarious above it.",
+          "node": "E"
+        },
+        {
+          "block": "spya-b0086e",
+          "quote": "there’s no sharp separation between “mindware” and “wetware” as there is between software and hardware in a computer",
+          "depicts": "A brain shown in cross-section where neural tissue and fine wire circuitry blend into each other with no visible seam or dividing line between them.",
+          "node": "F1"
+        },
+        {
+          "block": "spya-sq9v5k",
+          "quote": "the cognitive scientist Tim van Gelder gave an influential example, in the form of the governor of a steam engine",
+          "depicts": "A mechanical steam-engine governor with two heavy balls swinging outward on hinged arms, closing a valve, drawn as a self-contained clockwork mechanism with no operator at all.",
+          "node": "F2"
+        },
+        {
+          "block": "spya-hj5y6s",
+          "quote": "This is the idea — called biological naturalism by the philosopher John Searle",
+          "depicts": "A robed philosopher figure unrolls a scroll, presenting it toward a small living, breathing creature rather than toward any machine.",
+          "node": "F3"
+        },
+        {
+          "block": "spya-npjt4j",
+          "quote": "A simulation of the digestive system does not actually digest anything",
+          "depicts": "A diagram of a stomach and coiled intestine drawn inside a framed slate, food entering at the top but nothing changing or breaking down within it.",
+          "node": "F4"
+        },
+        {
+          "block": "spya-ahtr6e",
+          "quote": "the popular “neural replacement” thought experiment, most commonly associated with Chalmers",
+          "depicts": "A row of small brain-slice shapes being lifted out one by one and replaced with silicon chip shapes, a philosopher figure standing to one side watching.",
+          "node": "G1"
+        },
+        {
+          "block": "spya-bcnvp2",
+          "quote": "associated most closely with the philosopher Nick Bostrom, and still, somehow, an influential idea among the technorati",
+          "depicts": "A philosopher figure stands before a swirling cloud containing many small nested worlds, gazing into it as small onlookers gather behind him.",
+          "node": "G2"
+        },
+        {
+          "block": "spya-ymbpwn",
+          "quote": "computation is sufficient for consciousness — is a very strong assumption that looks increasingly shaky",
+          "depicts": "A stone pillar standing at a slight lean, a wide jagged crack running down its length where the four paths above all converge upon it.",
+          "node": "H"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "openai/gpt-image-2",
+  "slug": "noema-mythology-of-conscious-ai",
+  "profileHash": null
+}
