@@ -50,7 +50,7 @@ import {
 } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Meta, Tree, Tweet, TweetThread } from "./types.js";
-import { parseJsonFrom, stripFence } from "./parse-json.js";
+import { parseJsonAnswer } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
@@ -295,15 +295,15 @@ ${skeleton}`;
 }
 
 /**
- * Read the model's answer, fence and all.
+ * Read the model's answer, fence, preamble, sign-off and all.
  *
- * `stripFence` then `parseJsonFrom`, never a bare `JSON.parse` — src/parse-json.ts
- * § `stripFence` has the reasoning, and the short version is that nothing in this
- * file logs and that is not enough, because a thrown error is logged where it is
- * caught and V8 quotes the input in it.
+ * `parseJsonAnswer`, never a bare `JSON.parse` — src/parse-json.ts has the
+ * reasoning, and the short version is that nothing in this file logs and that is
+ * not enough, because a thrown error is logged where it is caught and V8 quotes
+ * the input in it.
  */
 function parseJson(raw: string): { tweets: string[] } {
-  return parseJsonFrom(stripFence(raw), "the tweet-thread response");
+  return parseJsonAnswer(raw, "the tweet-thread response");
 }
 
 /**

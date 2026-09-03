@@ -78,7 +78,7 @@ import {
 } from "./openrouter-stream.js";
 import { ProviderRefused, classifyEnd, openRouterStream } from "./ai-call.js";
 import { hitExtractor } from "./search-hits-stream.js";
-import { stripFence } from "./parse-json.js";
+import { objectEnd, stripFence } from "./parse-json.js";
 import {
   ANSWER_OVERFLOWED,
   ANSWER_OVERFLOWED_FIXED_ASK,
@@ -427,7 +427,7 @@ export type AskKind = "editable" | "fixed";
  * *remainder* fail to balance, even though the object itself was whole, and
  * reported `[ai-overflowed]` for an answer that was actually fine.
  *
- * `objectEnd` below is the version that survives both cases: it scans forward
+ * `objectEnd` is the version that survives both cases: it scans forward
  * from the opening `{` and returns the index where THAT bracket's own nesting
  * first returns to zero — the object's own matching `}` — ignoring everything
  * before `from` and everything after that point, trailing prose included.
@@ -436,6 +436,20 @@ export type AskKind = "editable" | "fixed";
  * reason — a literal `{` in a quoted example must not be counted as nesting.
  * If the text runs out before nesting returns to zero, the object never
  * closed — that is the cut-off case.
+ *
+ * **`objectEnd` lives in src/parse-json.ts now**, not below. It was private to
+ * this file while `parseHits` was the only caller that dug its JSON out of a
+ * longer response — and src/parse-json.ts said as much, in a sentence that two
+ * paid production steps disproved on 2026-09-03. Eleven stages reach the same
+ * scan through `parseJsonAnswer` there. What `parseHits` keeps for itself is
+ * the three-way mapping below — no `{` at all and balanced-but-invalid both
+ * become `PROVIDER_UNREADABLE`, while never closing becomes
+ * `ANSWER_OVERFLOWED` — because those are reader-facing sentences and a
+ * `MalformedJson` cannot tell them apart. **Do not re-express this in terms of
+ * `parseJsonAnswer`**: it is also deliberately more lenient, reading a
+ * trailing sign-off with a stray `{` in it that a stage's parse now refuses.
+ * Search shows the reader its result and an empty one is arguable; a stage
+ * writes an artefact nobody sees again.
  */
 export function parseHits(text: string, ask: AskKind = "fixed"): unknown {
   const trimmed = stripFence(text);
@@ -454,47 +468,6 @@ export function parseHits(text: string, ask: AskKind = "fixed"): unknown {
   } catch {
     throw new Error(PROVIDER_UNREADABLE.message, { cause: "malformed-json" });
   }
-}
-
-/**
- * Where the object starting at index 0 of `text` closes — the index of its
- * own matching `}` — or -1 if `text` runs out before it does.
- *
- * Not a JSON validator — it does not check bracket TYPES match (`{` closed by
- * `]` still counts as the nesting returning to zero) or that the result is
- * otherwise well-formed; `JSON.parse` right after this is what actually
- * validates the shape, and catches that case as "malformed" rather than "cut
- * off". This only answers the narrower question `parseHits` needs: does the
- * FIRST structure in `text` close before the text runs out, and if so,
- * exactly where — stopping there rather than continuing to look at whatever
- * comes after is what keeps trailing prose from being mistaken for more of
- * the object. See the docstring above for the two ways getting this wrong
- * broke a real case.
- */
-function objectEnd(text: string): number {
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (ch === "\\") escaped = true;
-      else if (ch === '"') inString = false;
-      continue;
-    }
-    if (ch === '"') {
-      inString = true;
-      continue;
-    }
-    if (ch === "{" || ch === "[") {
-      depth++;
-    } else if (ch === "}" || ch === "]") {
-      depth--;
-      if (depth === 0) return i;
-    }
-  }
-  return -1;
 }
 
 /**
