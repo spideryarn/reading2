@@ -237,11 +237,18 @@ describe("the store seams are found by reading the contract, not a list", () => 
        by the plain `: CommentStore` case alone, so without this the unwrapping
        could break and the list would silently shrink to "the stores annotated
        without a type operator" while staying green — and it would lose
-       `GlossaryStore`, the one seam in this repo that is actually missing its
-       Postgres side. `fsGlossaryStore` is now the only `Pick`-declared adapter,
-       so it carries this on its own. */
+       `GlossaryStore` entirely, whose adapters are both declared through
+       `Pick<GlossaryStore, "deleteGlossary">` (`lookUpTerm` is orchestration
+       that index.ts builds, not a store method on either side).
+
+       Both are named, not just one. Until 2026-09-03 this line asserted
+       `fsGlossaryStore` alone, because the Postgres side did not exist; asking
+       only for the files side now would go on passing if `pgGlossaryStore`
+       stopped being recognised — and the Postgres side is the one production
+       runs. src/store/pg-glossary.ts. */
     const glossary = SEAMS.get("GlossaryStore") ?? [];
     expect(glossary.map((i) => i.name)).toContain("fsGlossaryStore");
+    expect(glossary.map((i) => i.name)).toContain("pgGlossaryStore");
     /* And the plain-annotation path, on the seam that used to take the `Pick`
        route: `pgArticleReader` must still be found as an `ArticleReader`, or
        the reader seam would look one-sided. */

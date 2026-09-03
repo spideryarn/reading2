@@ -432,6 +432,16 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
    * finished", and opening the app does not make every job that ever succeeded
    * finish again — without this, a fresh load fires the callback once per
    * historical record and the library refetches once for each.
+   *
+   * **This is the client's only completion signal, and it requires a terminal
+   * row to stay pollable long enough to be seen.** There is no other way the
+   * tab learns a job succeeded: no event, and a job's absence from the list is
+   * indistinguishable from "not written yet". So whatever decides how long a
+   * finished job survives is deciding whether a completion is ever announced —
+   * that is `trimFinished` and `KEEP_FINISHED` in src/jobs.ts, which say the
+   * matching sentence at their end. When they deleted a success in the same
+   * call that marked it done, every panel waiting on one sat empty for ever:
+   * docs/postmortems/260903e-successes-deleted-before-failures-so-no-job-is-ever-announced-done.md.
    */
   const recordCompletions = (jobs: Job[], first: boolean) => {
     for (const job of jobs) {
@@ -528,7 +538,9 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
    * list, which is a second account of the same fact and can be a second stale;
    * the server answers the question directly because it has just done the work.
    *
-   * **Errors do not end it either.** The `catch` used to sit outside the loop:
+   * **A transient error does not end it either** — only a final 401 and a 404
+   * do, and `noteAdvanceFailure` is where both are named. The `catch` used to
+   * sit outside the loop:
    * a failed advance waited and gave up, on the reasoning that the status poll
    * beside it would start a fresh driver within eight seconds. True while that
    * poll ran for ever. It does not run while the tab is hidden — so the thing
@@ -544,10 +556,29 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
    */
   /** Count a failed advance. False means stop the loop rather than wait. */
   const noteAdvanceFailure = (id: string, err: unknown): boolean => {
-    if (statusOf(err) === 401) {
+    const status = statusOf(err);
+    if (status === 401) {
       noteAuthFailure(readable(err));
       return false;
     }
+    /* **404 is the one rejection that cannot come good.** `POST
+       /api/jobs/:id/advance` answers it only when `advanceJob` finds no row
+       (src/routes.ts), and a deleted row does not come back — so retrying is a
+       request every eight seconds, for as long as the tab is open, to be told
+       the same thing, silently. Retention is one way a driven job vanishes:
+       docs/postmortems/260903e-successes-deleted-before-failures-so-no-job-is-ever-announced-done.md.
+
+       No count, and no clearing of an existing one: `pruneDriverFailures` owns
+       that, and drops any entry whose job is no longer going on the next poll.
+       Nothing renders a count for a job that is not in the list anyway.
+
+       **Stopping is safe even if the 404 was a lie** — a dev server mid-restart,
+       something in front of it answering for the route. `apply` starts a driver
+       for every queued or running job in each list it receives, and the `finally`
+       in `drive` has released the id by then, so a job that is really still
+       going gets a fresh loop on the next poll. That is what makes this
+       one-way door a door and not a cliff. */
+    if (status === 404) return false;
     set({
       driverFailures: {
         ...snapshot.driverFailures,

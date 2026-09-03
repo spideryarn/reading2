@@ -4,9 +4,9 @@
  * A successful job leaves the "Add an article" box after eight seconds,
  * because the article it made is on the shelf below. **A failed one never left
  * at all** — the card is the only account of what went wrong — and the server
- * keeps fifty per reader, preferring failures when it prunes. So the box that
- * says "here is what is happening now" filled up with every import that had
- * ever gone wrong. Since 2026-08-27 anything that ended before the tab was
+ * keeps fifty per reader, favouring failures where the two kinds compete for a
+ * slot. So the box that says "here is what is happening now" filled up with
+ * every import that had ever gone wrong. Since 2026-08-27 anything that ended before the tab was
  * opened is folded behind a disclosure, and that line is `earlier`.
  *
  * The rule worth pinning is the one that fails quietly: **when in doubt, show
