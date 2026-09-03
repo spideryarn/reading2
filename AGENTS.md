@@ -38,7 +38,8 @@ listed here; the names under each are files in `docs/project/`.
   `export.md` (one article's data, out)
 - **[reading-view-overview.md](docs/project/reading-view-overview.md)** — everything the reader
   sees: the spine, the prose, and the band the modes take turns in.
-  <br>↳ `web-client.md` (where the client code is) · `granularity-zoom.md` ·
+  <br>↳ `web-client.md` (where the client code is) · `new-mode.md` (the checklist) ·
+  `granularity-zoom.md` ·
   `column-context.md` (the gist column's fisheye) · `glossary.md` · `summaries.md` ·
   `ideas.md` (the propositions the piece assumes) ·
   `quotes.md` (the lines worth keeping) ·

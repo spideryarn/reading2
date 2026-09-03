@@ -6,8 +6,8 @@ questions and proposals, not a build. There is an interactive mockup on real tre
 ([260903b-…-sol-design-memo.md](260903b-one-structure-mode-hierarchy-and-outline-merged-sol-design-memo.md)),
 and a prior-art survey
 ([260903a-fisheye-hierarchy-ui-prior-art.md](../research/260903a-fisheye-hierarchy-ui-prior-art.md)).
-The questions for Greg are at the [bottom](#questions-for-greg); the stages after them are
-provisional until those are answered.
+Greg's answers to the nine questions are under [Decisions](#decisions); the stages after them
+follow those answers.
 
 ## What Greg asked for
 
@@ -92,7 +92,7 @@ Checked against the tree at `4b0163c9` and the corpus in `data/`, 2026-09-03.
   [web-client.md § Adding a mode](../project/web-client.md#adding-a-mode) (the client) and
   [architecture.md § Adding an artefact-backed mode](../project/architecture.md#adding-an-artefact-backed-mode)
   (the pipeline and store). A `docs/project/new-mode.md` would be a third copy of the same list
-  unless it is only a signpost to those two — see [question 8](#questions-for-greg).
+  unless it is only a signpost to those two — see [decision 8](#decisions).
 - **A mode band is capped at 400px** — `MODE_IDEAL` in [`layout.ts`](../../src/web/layout.ts),
   shrinking to `MODE_MIN` 288 before the prose gives up a pixel. Two useful columns do not fit in
   that, so a second column for Outline is not the small change P6 below calls it: the new mode
@@ -215,7 +215,7 @@ changes the proposal:
   the mockup's.
 - **Overflow: a centred window with explicit edge rows — "12 earlier", "9 later" — rather than
   ticks.** The two are the same shape with the far rows drawn as a count instead of hairlines;
-  which reads better is for Greg ([question 3](#questions-for-greg)).
+  which reads better is for Greg ([decision 3](#decisions): both, behind a switch).
 - **An outlined taper plus bracket, not a filled wedge**, one per boundary, in the parent depth's
   tint. The spine→column-1 taper is the informative one (a part's physical share to its one row).
 - **Adaptive depth should be uneven**, and stage 4's rule should be: authored headings as
@@ -253,36 +253,38 @@ between two fisheye panels. The nearest LLM-era reader, TreeReader (2025), is on
 expand-on-demand summaries over a paper's *authored* sections. Greg's belief that the combination
 is unbuilt held up.
 
-## Questions for Greg
+## Decisions
 
-Where I have a recommendation it is first.
+Greg answered the nine questions one at a time on 2026-09-03. Recorded here; the plan above is
+left as it was proposed so the reasoning survives.
 
-1. **Column 2's purview.** Sol and I now both say: the current section's *siblings*, current one
-   expanded — not only its children as the mockup draws. Your words, "just the siblings and/or
-   parents", read that way too. Confirm?
-2. **Split by fit, or fixed?** Sol: parts alone in column 1, always, and the rest in column 2 —
-   stable over fit. The mockup rebalances and its column 1 sometimes carries the sections. I now
-   agree with Sol; the mockup is the counter-example to look at.
-3. **When a level will not fit**: a strip of hairline ticks with a readable window (the mockup),
-   or a centred window with "12 earlier / 9 later" edge rows (Sol)? Both keep the level whole.
-   Is either the progress hairline you removed, in another coat?
-4. **Does the `<table>` survive?** `?text=0` — the compact whole-article contents table — is the
-   one capability the band-based mode does not replace. Sol: let it go, and rebuild a "full
-   contents" sheet from the Structure projection if it turns out to be missed. Do you use it?
-5. **Inspect without moving.** Should hovering or first-tapping a row retarget the columns and
-   connector while the prose stays put, with a second action to jump — or does every row jump, as
-   today? Sol's idea; it costs two "current" states on screen.
-6. **Depth: uneven** (a long part four deep beside a short one at three) is what Sol and I both
-   recommend; uniform pads short parts with one-child nodes. Confirm?
-7. **The arc's home.** Out of Structure entirely (Sol and I), or out *and* one line under the
-   current part? And is Argument v1 orientation from the existing arc, or the fuller
-   claims / support / omissions view — different artefacts, and Sol asks that they not be
-   smuggled into one.
-8. **`new-mode.md`.** The checklist exists in two halves already. Recommend a short
-   `docs/project/new-mode.md` that is *only* a signpost to both plus the one thing neither says
-   (the mode's URL params and dock row), rather than a third copy — or nothing, and a line in
-   `reading-view-overview.md`. Which?
-9. **The name.** Structure (Sol, and the mockup), or something else.
+1. **Column 2 lists the current part's sections, with the current one expanded** — its neighbours
+   as one-liners, its own gist and paragraphs nested under it. Not only its contents, which is
+   what the mockup draws.
+2. **The split of levels across columns is chosen by fit, not fixed.** Against Sol's
+   recommendation and mine: he argued a split that moves changes what column 2 *means* at a part
+   boundary. Greg chose fuller columns. So the row-displacement measurement from
+   [260828aw § What actually moves](260828aw-outline-mode.md#what-actually-moves) becomes this
+   mode's acceptance test, and a fixed split is the fallback if it churns.
+3. **Overflow: build ticks and edge counters both, behind a switch, and decide in the browser** on
+   the Constitution's 23-paragraph section.
+4. **`?text=0` goes** with Hierarchy. Rebuild a full-contents sheet from the Structure projection
+   only if it turns out to be missed.
+5. **Rows jump, as today; hovering shows a card** (the spine's tooltip machinery) with the row's
+   gist and children. No look-without-going in v1 — Greg: "use your judgment", and this is it.
+6. **Depth is uneven.** A long part gets a fourth level; a short one stays at three; no filler
+   nodes. The client becomes depth-agnostic first.
+7. **Argument v1 is the existing arc and nothing more** — every sentence in order, the current
+   one large, doors into the prose, an established / here / ahead division — and the arc leaves
+   Structure entirely. The claims/support/omissions view is a separate plan if it ever comes.
+8. **`docs/project/new-mode.md` is the one consolidated checklist**, extracted from
+   [web-client.md § Adding a mode](../project/web-client.md#adding-a-mode) and
+   [architecture.md § Adding an artefact-backed mode](../project/architecture.md#adding-an-artefact-backed-mode),
+   with pointers left behind. Greg: "consider this approved" — done in the same piece of work as
+   this plan rather than waiting for the Argument stage.
+9. **The name is Structure.** `?mode=structure`; the Outline naming sweep from
+   [260828aw § A name collision](260828aw-outline-mode.md#a-name-collision-to-settle) happens when
+   Outline is folded in.
 
 ## Stages (provisional, Sol's order)
 
@@ -296,8 +298,8 @@ Where I have a recommendation it is first.
 3. **If Structure wins, delete Hierarchy's presentation**: the pills, `?cols=`, the ContextPanels;
    `TableView` stays as the prose renderer until it is a one-column article, then becomes a block
    list. Decide `?text=0`.
-4. **Argument mode**, the arc out of Structure, `new-mode.md` (or not) per question 8, and the
-   Outline naming sweep from 260828aw.
+4. **Argument mode**, the arc out of Structure, and the Outline naming sweep from 260828aw.
+   (`new-mode.md` is already done — decision 8.)
 5. **Structure goes focus-path-generic** — no absolute depth anywhere in the client.
 6. **Adaptive, uneven depth** in stage 4, with a four-deep and an uneven fixture so the tests can
    exercise the arm ([silent-success.md](../reusable/silent-success.md)).
