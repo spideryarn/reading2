@@ -23,7 +23,7 @@
  * for the family of bug this belongs to.
  */
 import { execFileSync } from "node:child_process";
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -95,6 +95,36 @@ if (projects.length === 0) {
   process.exit(1);
 }
 
+/**
+ * **The compiler itself, checked before anything is asked of it.**
+ *
+ * Every failure below is phrased as a fact about a project's file list, so a
+ * compiler that never ran gets described as a project that includes nothing.
+ * That is what happened on 2026-09-03 in a linked worktree whose `node_modules`
+ * had never been populated: `execFileSync` threw ENOENT, the catch read
+ * `err.stdout` and found nothing there, and all three projects were reported as
+ * `resolved 0 files. Usually an "include"/"exclude" inherited through
+ * "extends"` — which sends the reader into tsconfig.base.json, where nothing is
+ * wrong, for as long as it takes them to doubt the message.
+ *
+ * The verdict was never wrong; only the cause was. But a check that fails for
+ * the wrong stated reason costs about as much as one that does not fail, which
+ * is why this is worth a guard of its own rather than a better sentence in the
+ * one below.
+ *
+ * `npm ci` is what puts the binary here; `npm run worktree:setup` is what runs
+ * it in a linked worktree (docs/project/worktrees.md).
+ */
+const TSC = path.join(ROOT, "node_modules", ".bin", "tsc");
+if (!existsSync(TSC)) {
+  console.error(
+    `✗ ${path.relative(ROOT, TSC)} is not here, so no project can be checked.\n` +
+      `  This is a missing install, not a missing "include": run npm ci, or\n` +
+      `  npm run worktree:setup if this is a linked worktree.`,
+  );
+  process.exit(1);
+}
+
 const covered = new Set<string>();
 let failed = false;
 
@@ -107,13 +137,28 @@ for (const project of projects) {
     // the count below is the list tsc really used, not one we recomputed from
     // include/exclude and could get wrong in the same way tsc did.
     output = execFileSync(
-      path.join(ROOT, "node_modules/.bin/tsc"),
+      TSC,
       ["--noEmit", "--listFiles", "-p", project],
       { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
   } catch (err) {
     ok = false;
-    output = String((err as { stdout?: string }).stdout ?? "");
+    /* A compile failure and a failure to *run* the compiler arrive through the
+       same catch, and only the first one carries stdout. Without this the
+       second falls through to the empty-project branch below and is reported as
+       an include/exclude problem — the guard on TSC above catches the common
+       cause of that, and this catches the rest (an unexecutable binary, a
+       killed process, ENOMEM). */
+    const stdout = (err as { stdout?: string }).stdout;
+    if (stdout === undefined) {
+      console.error(
+        `✗ ${rel}: tsc did not run, so this project was not checked.\n` +
+          `  ${(err as Error).message}`,
+      );
+      failed = true;
+      continue;
+    }
+    output = String(stdout);
   }
 
   const errors = output.split("\n").filter((line) => /error TS\d+:/.test(line));
