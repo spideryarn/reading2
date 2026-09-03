@@ -54,18 +54,30 @@ an `on conflict do nothing` that meets a conflicting row from outside its own sn
 never reached — and nothing in `src/` retries `40001`, so the whole transaction is lost and the
 reader is told it was "a moment's trouble". Measured, 2026-09-01, both arrival orders.
 
-So pin it where the transaction opens, as [`pg-session.ts`](../../src/store/pg-session.ts) §
-`READ_COMMITTED` and [`pg-feedback.ts`](../../src/store/pg-feedback.ts) do, and prove the pin by
-asking the transaction — `select current_setting('transaction_isolation')` inside it, down a
-connection whose default is *wrong*, which is what
+So pin it where the transaction opens, and prove the pin by asking the transaction —
+`select current_setting('transaction_isolation')` inside it, down a connection whose default is
+*wrong*, which is what
 [`tests/store-session-isolation.test.ts`](../../tests/store-session-isolation.test.ts) sets up.
 Asserting that an option was passed is not the same check and does not survive a refactor.
 
-**The rest of `src/store/` still inherits its level.** Of 21 Postgres transactions, two files pin:
-`pg-session.ts` (three) and `pg-feedback.ts` (one). The unpinned ones that depend on the level are in
-`pg-revisions.ts`, `pg-chat.ts`, `pg-searches.ts`, `pg-referee-criteria.ts`, `pg-referee-claims.ts`,
-`pg-visibility.ts` and `pg-jobs.ts` — every one of them takes a lock or an upsert and then reads.
-Pinning them is a separate, mechanical piece of work.
+**Every transaction in `src/store/` and `src/billing/` names its level**, from
+[`READ_COMMITTED`](../../src/store/isolation.ts) — a leaf module so that a file which wants the
+constant does not inherit the read layer behind `pg.ts`. Until 2026-09-03 four of twenty-four pinned
+and the rest took whatever the role gave them; the seventeen were pinned in one go, because deciding
+per call site which transactions "depend on the level" is a judgement every new author would have to
+make again, correctly, about code they are writing for the first time.
+
+The one deliberate exception is [`article-rows.ts`](../../src/store/article-rows.ts) § `SNAPSHOT`,
+which wants `repeatable read` and `read only`: one consistent picture of a whole article for an
+export is what that level is actually for.
+
+**And the rule is held by a test rather than by this paragraph.**
+[`tests/store-transaction-isolation.test.ts`](../../tests/store-transaction-isolation.test.ts)
+parses every `.transaction(` in both directories and resolves its options *through the identifier* to
+the level actually named, so a shared constant quietly redefined fails in every file that imports it,
+and a new transaction that says nothing fails on its own line. It refuses to accept the mere presence
+of the word `isolationLevel`, which would be the same tautology as a join assertion that never names
+its `ON` predicate.
 
 It hides, because the collision needs the row to be absent and it is absent only the first time
 anybody writes it. Suspect it whenever a duplicate-key error names a table keyed by something that is

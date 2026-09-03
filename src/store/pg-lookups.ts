@@ -31,25 +31,12 @@
 import { asc, eq } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { articles, glossaryLookups } from "../db/schema.js";
+import { glossaryLookups } from "../db/schema.js";
 import type { LookupsByTerm } from "../glossary-lookups.js";
 import { currentOwnerId } from "../owner.js";
 import type { Citation, GlossaryLookup } from "../types.js";
 import type { GlossaryLookupStore } from "./contracts.js";
-import { notFound, ownedSlug, requireSlug } from "./pg.js";
-
-/** The article's uuid, or a tagged 404 — the same shape src/api.ts throws. */
-async function articleIdFor(slug: string): Promise<string> {
-  requireSlug(slug);
-  const rows = await getDb()
-    .select({ id: articles.id })
-    .from(articles)
-    .where(ownedSlug(slug))
-    .limit(1);
-  const found = rows[0];
-  if (!found) throw notFound(slug);
-  return found.id;
-}
+import { articleIdForOwned } from "./pg.js";
 
 function toLookup(row: typeof glossaryLookups.$inferSelect): GlossaryLookup {
   return {
@@ -79,11 +66,11 @@ async function lookupsFor(articleId: string): Promise<LookupsByTerm> {
 
 export const pgGlossaryLookupStore: GlossaryLookupStore = {
   async load(slug: string): Promise<LookupsByTerm> {
-    return lookupsFor(await articleIdFor(slug));
+    return lookupsFor(await articleIdForOwned(slug));
   },
 
   async save(slug: string, termId: string, lookup: GlossaryLookup): Promise<LookupsByTerm> {
-    const articleId = await articleIdFor(slug);
+    const articleId = await articleIdForOwned(slug);
     /* `do update`, not `do nothing`. Re-checking a term is an ordinary thing to
        do — the web moves, and the reader is entitled to a fresher answer — and
        the file's behaviour is last-write-wins. A `do nothing` here would look

@@ -61,6 +61,7 @@ import { and, desc, eq, inArray, isNull, lte, or, type SQL, sql } from "drizzle-
 
 import { getDb } from "../db/client.js";
 import { guardDbStore, lockUnavailable, violatesConstraint } from "./db-errors.js";
+import { READ_COMMITTED } from "./isolation.js";
 import { leaseIsOver, liveAttempt } from "./job-fence.js";
 import { jobs, queueState } from "../db/schema.js";
 import { INTERRUPTED } from "../messages.js";
@@ -746,7 +747,7 @@ const rawPgJobStore: JobStore = {
       }
 
       return claimIn(tx, id, owner, attempt, leaseMs);
-    });
+    }, READ_COMMITTED);
   },
 
 

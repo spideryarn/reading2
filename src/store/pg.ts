@@ -199,6 +199,90 @@ export function ownedByReader() {
 }
 
 /**
+ * **The article's uuid for a slug this reader owns, or a tagged 400 / 404.**
+ *
+ * Three guarantees, in the order they are checked, and each one used to be a
+ * private decision in six different files:
+ *
+ * 1. **The slug is a slug.** `requireSlug` throws a 400 before any query, so a
+ *    pasted title never reaches Postgres and never gets answered as though it
+ *    named something.
+ * 2. **It is scoped to the owner.** `ownedSlug`, never `eq(articles.slug, …)` —
+ *    `articles.slug` is globally unique, so the bare comparison finds a real
+ *    article belonging to somebody else and every method downstream would then
+ *    read and write it. The referee reading a stranger's paper is exactly the
+ *    reader this matters for.
+ * 3. **A miss is a 404, not a 403.** "There is no such article" is all a
+ *    stranger should learn about a slug they do not own; a 403 confirms it
+ *    exists.
+ *
+ * ## Why it lives here
+ *
+ * It was copied into `pg-chat.ts`, `pg-searches.ts`, `pg-referee-claims.ts`,
+ * `pg-referee-criteria.ts`, `pg-lookups.ts` and `pg-comments.ts`, and by
+ * 2026-09-03 **five of the six called `requireSlug` and `pg-comments.ts` did
+ * not** — so a malformed slug reaching a comment method fell through to a query
+ * and came back as this function's own 404. Nothing was leaked; a fix simply
+ * failed to reach one of six copies, which is the shape that predicts the
+ * seventh. docs/plans/260903a-improve-the-codebase-sweep.md § T1.2, and
+ * tests/store-slug-guard.test.ts asks all six the question.
+ *
+ * `notFound`, `requireSlug` and `ownedSlug` are already here, so this is where
+ * the invariant lives rather than a new home for it.
+ *
+ * ## The two variants that stay where they are
+ *
+ * `articleIdFor` in `src/store/ai-calls-pg.ts` and
+ * `src/store/realtime-sessions-pg.ts` look like copies and are **not**: they take
+ * an explicit owner rather than the ambient one, and they return `null` rather
+ * than throwing, because a ledger row for an article since deleted must not take
+ * a report down. Different contract, different function.
+ *
+ * The `db` parameter is `Pick<…, "select">` in this file's house style, so both
+ * a handle and a transaction satisfy it — a caller inside a transaction must
+ * pass its `tx`, or the lookup reads outside the lock it is about to take.
+ */
+export async function articleIdForOwned(
+  slug: string,
+  db: Pick<ReturnType<typeof getDb>, "select"> = getDb(),
+): Promise<string> {
+  requireSlug(slug);
+  const rows = await db.select({ id: articles.id }).from(articles).where(ownedSlug(slug)).limit(1);
+  const found = rows[0];
+  if (!found) throw notFound(slug);
+  return found.id;
+}
+
+/**
+ * **Take the article row, so nothing else in this article writes until we commit.**
+ *
+ * A serialising lock on a row that is already known to exist, held by four
+ * stores that keep one run or one thread per article: chat, searches, referee
+ * claims and referee criteria all read the current state and then write a new
+ * one, and two requests doing that at once would otherwise both win.
+ *
+ * **It is safe only because the id came from `articleIdForOwned`**, so the row
+ * is there to be locked. `select … for update` locks the rows the statement
+ * *returns*, so the same call made with an id that might not exist would lock
+ * nothing while reading as though it locked something — which is
+ * docs/postmortems/260901f-a-for-update-that-locks-nothing.md, whose audit table
+ * clears these four call sites for exactly this reason. Anything that wants to
+ * lock a row it may have to create wants
+ * [`lockOrCreateArticle`](pg-revisions.ts) instead.
+ *
+ * Named `lockArticleRow` rather than `lockArticle` because `pg-revisions.ts`
+ * has a `lockArticle(tx, slug)` of its own with a different contract — it takes
+ * a *slug*, returns the whole row, and is allowed to find nothing. Two functions
+ * with one name and two contracts is how the wrong one gets called.
+ */
+export async function lockArticleRow(
+  tx: Pick<ReturnType<typeof getDb>, "select">,
+  articleId: string,
+): Promise<void> {
+  await tx.select({ id: articles.id }).from(articles).where(eq(articles.id, articleId)).for("update");
+}
+
+/**
  * **What counts as an article on somebody's shelf**, in SQL.
  *
  * Two rules, and neither is obvious from the outside:
@@ -1196,8 +1280,13 @@ const STEP_STORAGE: Record<StepName, string[]> = {
  *
  * **`coalesce(fetched_at, articles.created_at)`, never `fetched_at` alone.** On
  * the filesystem `addedAt` is `meta.fetchedAt` where stage 2 recorded one and
- * the mtime of `blocks.json` otherwise, and src/store/import.ts seeds both
- * `created_at` columns from that same mtime so the two agree exactly.
+ * the mtime of `blocks.json` otherwise. In Postgres `fetched_at` is written from
+ * the raw manifest at stage 1 (src/store/artifacts-pg.ts), and
+ * `articles.created_at` is the fallback for a revision that never had one —
+ * the article-level added-time that `REVISION_CARRY_POLICY` § `createdAt` in
+ * src/store/pg-revisions.ts sends the reader here for. (src/store/import.ts used
+ * to seed both `created_at` columns from that same mtime so the two agreed
+ * exactly; it was deleted on 2026-09-01.)
  *
  * Ordering on `fetched_at` by itself puts every article that never got one at
  * the TOP, because Postgres sorts NULLs first under DESC. That is what this
@@ -1744,8 +1833,11 @@ export function scalarInputsQuery(
         where ${revisionBlocks.revisionId} = ${articleRevisions.id}), '{}')`,
       /* Typed as the union rather than as `string`, and the CHECK constraint
          `revision_blocks_treatment` in src/db/schema.ts is what makes that a
-         statement rather than a hope — the column cannot hold anything else,
-         and `checkNoteFields` refuses an import that tries. */
+         statement rather than a hope — the column cannot hold anything else.
+         (`checkNoteFields` used to be named here as a second enforcer; it was
+         deleted unused with src/block-fields.ts on 2026-09-01, so **the CHECK is
+         now the only one** — docs/plans/260831b-finish-the-database-move.md
+         § Stage 4, and tests/block-roles.test.ts records what went with it.) */
       treatments: sql<(Block["treatment"] | null)[]>`coalesce((
         select array_agg(${revisionBlocks.treatment} order by ${revisionBlocks.ordinal})
         from ${revisionBlocks}

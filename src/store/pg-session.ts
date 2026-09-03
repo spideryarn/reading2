@@ -96,6 +96,7 @@ import {
 } from "./artifacts-pg.js";
 import { createPgCheckpointStore } from "./checkpoints-pg.js";
 import { guardDbStore } from "./db-errors.js";
+import { READ_COMMITTED } from "./isolation.js";
 import { DraftGoneError, StaleAttemptError } from "./jobs.js";
 import type { JobEnding } from "./jobs.js";
 import { finishIn, releaseStepIn } from "./pg-jobs.js";
@@ -136,55 +137,19 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
  */
 const NOTHING_UNCONVERTED: ReadonlySet<StepName> = new Set<StepName>();
 
-/**
- * **`read committed`, asked for rather than inherited — every transaction here.**
- *
- * It is PostgreSQL's default, so on an ordinary database this changes nothing.
- * It is written into the `begin` because the correctness of what happens inside
- * these three transactions *depends* on it, and a `default_transaction_isolation`
- * set on the role or the database would take it away silently: nothing errors,
- * nothing fails on a laptop, and the failures arrive as a first ingest that
- * cannot write its document.
- *
- * Two things inside want it, and both are **insert conflict-tolerantly, then
- * read what you waited for**:
- *
- * - `writeRawSource` (src/store/artifacts-pg.ts) inserts `on conflict do
- *   nothing` into `raw_sources` and reads the row back to compare it.
- * - `lockOrCreateArticle` (src/store/pg-revisions.ts) does the same shape for
- *   the `articles` row: `on conflict do nothing`, then re-read.
- *
- * **What actually goes wrong is not the read back.** Measured rather than
- * reasoned about, 2026-09-01: at `repeatable read` an `insert … on conflict do
- * nothing` that meets a conflicting row from outside its own snapshot raises
- * `40001 could not serialize access due to concurrent update` at the *insert*,
- * whichever order the two transactions arrive in — waiting for an uncommitted
- * writer and finding an already-committed one both do it. So the read back is
- * never reached, and `do nothing` is not the escape at `repeatable read` that
- * it is at `read committed`.
- *
- * The outcome is the one the pin is for, and it is the worse one: **nothing in
- * `src/` catches or retries `40001`**, so the serialization failure aborts the
- * whole commit — artefacts, step completion, publication, job ending — and
- * reaches the reader through `guardDbStore` as *"could not reach its database
- * just then … usually a moment's trouble"*, which is a lie about something that
- * would happen every time two readers add the same new document at once. That
- * is docs/postmortems/260901f-a-for-update-that-locks-nothing.md arriving
- * through a different door.
- *
- * `settleJob` and `beginStep` are pinned as well as `commit`, because both
- * reach `lockOrCreateArticle` or a `for update` on the `jobs` row and neither
- * has any reason to run at a level nobody chose. GPT Sol's final review,
- * finding 3, docs/plans/260901d-final-review-sol.md — its verdict is right and
- * its mechanism is not; it predicted an invisible row on the read back.
- * The one other place in the repo that says this out loud is
- * src/store/pg-feedback.ts, which pins its own.
- *
- * Proved rather than asserted: tests/store-session-isolation.test.ts drives
- * this file's `commit` down a connection whose `default_transaction_isolation`
- * is `repeatable read` and asks the transaction itself what level it got.
- */
-const READ_COMMITTED = { isolationLevel: "read committed" } as const;
+/* **`READ_COMMITTED` was defined here, and moved to [isolation.ts](isolation.ts)
+   on 2026-09-03** when every transaction in the store started naming its level
+   rather than four of twenty-four. The argument and the measurement behind it
+   went with it; this note is the pointer.
+
+   All three transactions below — `commit`, `settleJob` and `beginStep` — are
+   pinned, because each reaches `lockOrCreateArticle` or a `for update` on the
+   `jobs` row and none has any reason to run at a level nobody chose. GPT Sol's
+   final review, finding 3, docs/plans/260901d-final-review-sol.md.
+
+   tests/store-session-isolation.test.ts is the check that this file's `commit`
+   really gets it, asked of the transaction itself down a connection whose
+   default is wrong. */
 
 /** What the transaction decided that only the caller may say out loud. */
 interface Announcement {
