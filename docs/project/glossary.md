@@ -771,6 +771,12 @@ the one committed directory in the repo was a `DELETE` away from any unknown art
 `candidateDirs` resolves `example/` for the fixture's own slug and no other, so what the guard now
 stops is a `DELETE` addressed to `example` itself, which is nobody's to write to.
 
+**In Postgres the delete can also answer 409**, if a queued or running job already holds a draft for
+the article — deleting the published glossary underneath a job in flight would otherwise be
+overwritten right back when that job publishes. The reader is told a job is running and to press
+Start again once it finishes.
+[260903e-glossary-delete-in-postgres.md](../plans/260903e-glossary-delete-in-postgres.md).
+
 **A stale glossary is not appended to.** The article underneath it moved, so the old entries describe
 a piece that no longer exists and folding new ones in would produce a list half-describing each. That
 decision is one line in `generateGlossary` and it is the line to read if the behaviour ever looks

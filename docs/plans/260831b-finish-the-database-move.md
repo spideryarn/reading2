@@ -312,6 +312,8 @@ credentials and checks project identity. Nothing to fix.
 **~~Three store methods lack a Postgres implementation.~~** Wrong — only `deleteGlossary` does.
 `pgVisibilityStore.set` and `pgAdminStore.listUsersAcrossOwners` both exist; the 501s are the
 filesystem side. A small piece of work, not a stage.
+*(Correction, 2026-09-03: `deleteGlossary` is now built too — see
+[260903e-glossary-delete-in-postgres.md](260903e-glossary-delete-in-postgres.md). None does.)*
 
 **A dead seam nobody listed: `revisionLifecycle`.** `src/store/revisions.ts` says no production module
 imports it; the only reference is a guard test. Deleted in stage 4.
@@ -431,6 +433,8 @@ No switchover, no behaviour change a reader would notice, and nothing that can b
   branch does not exist** and is stage 3 item 2, where Sol calls it a hard prerequisite.
 - Fix `deleteGlossary`, whose Postgres side is a 501. *(Not built. Small, and nothing depends on
   it — it is the last of the three store methods this plan once wrongly claimed were all missing.)*
+  *(Correction, 2026-09-03: built. See
+  [260903e-glossary-delete-in-postgres.md](260903e-glossary-delete-in-postgres.md).)*
 
 ### Stage 2 — every stage returns its product
 

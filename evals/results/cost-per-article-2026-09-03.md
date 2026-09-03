@@ -273,7 +273,7 @@ the ones that touch quality are Greg's call rather than an engineer's.
 
 | # | Change | Measured saving | Ease | Tradeoff |
 |---|---|---|---|---|
-| 1 | **Fix the article-cache breakpoint** so the *reader* marks too ([260903c](../../docs/postmortems/260903c-the-conditional-article-cache-breakpoint-marks-the-writer-but-never-the-reader.md)) | **18.6%** of a batched job — $0.1406 of $0.7558 measured | One condition in `src/jobs.ts`, plus a both-sides test | **None.** The premium is already being paid; today it buys nothing. |
+| 1 | ~~**Fix the article-cache breakpoint** so the *reader* marks too~~ ([260903c](../../docs/postmortems/260903c-the-conditional-article-cache-breakpoint-marks-the-writer-but-never-the-reader.md)) | **18.6%** of a batched job — **$0.1406 of $0.7558, predicted then measured on all three groups**: every reader now reads exactly its writer's prefix (25,428 / 25,428 / 27,234) | **Done** 2026-09-03 — `cacheArticleForStep`, a both-sides test, a call-site test that goes red on the old walk, and a `checkBatchedDraw` gate so the class is visible next time | **None.** The premium was already being paid; it bought nothing. |
 | 2 | **Keep modes on demand** (status quo) | The modes are 79–90% of a fully-pressed article. Not pressing them is the whole saving | Already true | One eager exception: `arc` auto-fires on owner open (`src/web/useArc.ts`). Changing it costs the L0 column until a press. |
 | 3 | **Effort on the five expensive modes** — sketch, timeline, hierarchy structure, quiz, ideas | Those five are **72% of a long article**. Reasoning is 36% of all spend | A per-stage constant already exists (`STAGE_EFFORT`) | **Quality, unmeasured.** `effort-vs-quality` covers `arc` and `glossary` only — neither is on this list. Measure before turning any dial. |
 | 4 | **Bound reasoning on the tasks that hit the ceiling** | Three paid failures here: $0.2157 + $0.0477 + $0.2124 = **$0.4758 for nothing**, 6.5% of the whole sweep | Ceilings are per-call parameters | Answer depth, and a ceiling that is too low converts a good answer into a truncated one — which is how `hierarchy` got to `medium`. |
@@ -281,10 +281,22 @@ the ones that touch quality are Greg's call rather than an engineer's.
 | 6 | ~~Duplicate embedding purchase~~ | Tiny | **Done** by a peer, 2026-09-03 (`src/similar.ts` onto the `article-vectors.ts` seam) | — |
 | 7 | ~~Duplicate job execution~~ | **$10.47–$10.81 of $31.22 historically** — a third of all spend ever | **Done** 2026-09-02 | — |
 
-**The two that are worth doing now are 1 and 4**, because neither trades against quality. One is a
-bug with a saving attached. The other is money we are demonstrably setting fire to: three
-generations in this run were billed in full and wrote nothing, all by exhausting a reasoning budget
-before producing a first token.
+**One qualification on row 1, because the percentage flatters it.** The waste only occurs in a job
+carrying two modes of one cache group, and **the reading view never makes one** — every mode button
+enqueues a single step ([`src/web/useStepJob.ts:385`](../../src/web/useStepJob.ts)), and an ordinary
+ingest carries no article stage at all. The shape comes from the API, the CLI and this eval. So
+little real money has been lost; the fix is worth having because the first "generate these three"
+affordance would otherwise have shipped a 1.25× tax that collects nothing, invisibly, on exactly the
+shape the optimisation exists to reward.
+
+**The two that were worth doing now were 1 and 4**, because neither trades against quality. **1 is
+done** — a bug with a saving attached, fixed and verified on a paid run the same day; the batched
+numbers in this report are therefore the *pre-fix* ones and stay that way, because they are what the
+finding rests on. **4 is still open**: money we are demonstrably setting fire to, three generations
+in this run billed in full for nothing, all by exhausting a reasoning budget before producing a first
+token. It is left open rather than done because the fix is a per-call ceiling and nothing has
+measured what the right one is — a ceiling set too low turns a good answer into a truncated one,
+which is a quality trade in disguise and so Greg's call, not an engineer's.
 
 **Number 3 is the big one and it is not an engineering decision.** Reasoning tokens are 36% of
 everything measured — $1.11 of $3.08 — and they are billed as output at $10/MTok and never shown to

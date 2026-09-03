@@ -276,6 +276,13 @@
      arithmetic (the column widths, `minWidth`, and the two breakpoints at the
      end of this file), so px is the unit it belongs in. GPT Sol, 2026-08-28. */
   --spine-w: 12px;
+  /* The reading cell's own horizontal padding — the gutter's column on the left
+     (§ the gutter) and an ordinary breathing space on the right. Named because
+     two rules need the same two numbers: `td.text` sets them as padding, and
+     the centred masthead (§ plain, centred) insets itself by them so the title
+     starts on the same pixel as the first line of the article under it. */
+  --text-pad-l: 2.1rem;
+  --text-pad-r: 1.4rem;
   /* **How much horizontal room the mode band takes from the table**, set inline
      in pixels by App from `fit.modeW`. Declared here so every rule below can
      add it unconditionally: `+ 0px` is a no-op, which is what makes the default
@@ -960,7 +967,7 @@ td.gist .title::before {
    column's shadow. It does not — only `.pin-left` is pinned, and it is on the
    other side of the prose. GPT Sol, 2026-08-31.) */
 td.text {
-  padding: var(--block-pad) 1.4rem var(--block-pad) 2.1rem;
+  padding: var(--block-pad) var(--text-pad-r) var(--block-pad) var(--text-pad-l);
   position: relative;
   border-bottom: 0;
   /* One gutter slot's height. **On the cell rather than on `.blk-gutter`**,
@@ -11252,6 +11259,81 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    landscape phone, and it removes a row reading `Text verbatim` above a column
    of the author's paragraphs, which is not a loss at any size. */
 table.only-prose thead { display: none; }
+
+/* **And when it is the only column, it sits in the middle of the window.**
+   Greg, 2026-09-03: *"In Plain mode, can you centre the text on the page?"* —
+   the article had the whole width and used the left 738px of it, which on a
+   1600px screen is 850px of empty page down one side.
+
+   **The table moves, not the prose inside its cell**, and that is the whole
+   reason this is one declaration rather than a section. Four things are drawn
+   against the cell's own edges and would every one of them be left behind by
+   text that moved on its own: the gutter is absolutely positioned at the
+   cell's left (§ the gutter), a search hit paints an inset shadow at x=0
+   (§ has-hit), `row-active` fills the cell, and the hover target *is* the
+   cell. Moving the column moves all four, and no rule above has to learn that
+   a mode exists.
+
+   The margin it divides is made by `PROSE_ALONE_MAX_REM` in layout.ts — read
+   that for the width and for why the condition is "no other column" rather than
+   "Plain mode". A `max-width` here could not do it: this table is
+   `table-layout: fixed` with a `<col>` carrying an inline pixel width, and a
+   fixed table is at least as wide as its columns whatever `max-width` says.
+   Measured, 2026-09-03 — the rule was written that way first and changed
+   nothing at all.
+
+   **`.text-alone`, not `table.only-prose`**, though the two look
+   interchangeable from here. `only-prose` above is also true with a band open,
+   where the prose is the table's only column and the band has already taken
+   the space this would centre into; centring there would push the article away
+   from the panel it is being read against. layout.ts § `Fit.alone`. */
+.reader.text-alone table.zoom { margin-inline: auto; }
+
+/* And the masthead goes over the column rather than staying at the left edge
+   of a window it no longer shares with anything. Same width — `--table-w` is
+   written inline by App from `fit.tableW`, so the number lives once, in
+   layout.ts — and the same auto margins.
+
+   **It tracks the prose from about 1046px of window upwards, and not below**,
+   which is a smaller claim than the obvious one and the measurements are in
+   docs/plans/plain-mode-and-the-way-out.md § Centring the column. This bar
+   reserves `--logo-w` on its left for the corner wordmark and `--feedback-w` on
+   its right for the button (§ header), and under about 1046px that reservation
+   is wider than the margin the centred column leaves — so `max-width` stops
+   controlling anything and the title stays where it has always been while the
+   prose slides left towards it. The gap closes smoothly (114px at 800, 20px at
+   1000, 0 at 1040) and there is no jump; below 812px neither of them has moved
+   at all. **That misalignment is not new** — the title was at 160 and the prose
+   at 46 before any of this — and correcting it would mean this rule doing the
+   centring arithmetic itself with both of those widths in it, which is a
+   third place for `PROSE_ALONE_MAX_REM` to be got wrong. GPT Sol asked for the
+   claim to say where it holds, 2026-09-03; it is the claim that was wrong
+   rather than the rule.
+
+   Above that, measured: the title lands 4px left of the first line of prose,
+   because centring inside this bar's asymmetric padding is not quite centring
+   inside the window.
+
+   The bars themselves stay full-bleed, deliberately: the controls row and the
+   dock are chrome that spans the window in every mode, and the masthead is the
+   one piece of *the article* above the fold. */
+.reader.text-alone .masthead-inner {
+  /* The reading column *inside* the cell's own padding, which is what lands the
+     title on the prose's own left edge rather than 34px to the left of it.
+     `--text-pad-*` at the top of this file is the one place those two numbers
+     live, and `--table-w` is written inline by App from `fit.tableW`, so
+     `PROSE_ALONE_MAX_REM` is not copied into CSS.
+
+     **Expressed as a narrower box rather than as padding on this one, so that
+     it costs nothing when the cap is not biting.** Below 812px of window the
+     table already fills the row, `--table-w` is the whole of it, and this
+     max-width is wider than the bar has to give — the rule then does nothing
+     at all, which is what a masthead already pushed rightwards by the corner
+     wordmark wants. Padding would have indented it again on exactly those
+     widths. */
+  max-width: calc(var(--table-w) - var(--text-pad-l) - var(--text-pad-r));
+  margin-inline: auto;
+}
 
 /* ------------------------------------------------------------- lightbox --
    One figure, as big as the window will allow — Lightbox.tsx, opened by the ⤢
