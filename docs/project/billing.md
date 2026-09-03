@@ -5,7 +5,7 @@ the same family of questions. Who are you, what may you do, and what stops someb
 asking politely. The build is
 [260902i](../plans/260902i-stripe-payments-and-subscription-tiers.md).
 
-**Status: the quota is live and so is the paying — bar the button.** Tiers are database rows as of
+**Status: the quota is live, the paying works, and the button exists.** Tiers are database rows as of
 2026-09-02; a job's ending settles its slot at all seven places a job can end and adding an article
 takes one, so a free account is held to three lifetime ingests. As of 2026-09-03 there are checkout,
 portal and confirm routes, and the **whole round trip has been run for real** in Stripe test mode:
@@ -14,9 +14,8 @@ never executed until then) → an `active` row with the period Stripe reported �
 admitting a fourth ingest where a free one is refused, and refusing the twenty-first with Stripe's
 own renewal date on it.
 
-What is still missing is the **surface**: `/profile` has no Upgrade or Manage-billing button, so a
-reader cannot reach any of it without a `curl`. What is not built is marked *not built* below rather
-than described in the present tense.
+The **reader-facing surface** landed the same day — see [What a reader sees](#what-a-reader-sees).
+What is not built is marked *not built* below rather than described in the present tense.
 
 ## What we sell, and the one promise
 
@@ -38,6 +37,11 @@ lose £90 a month per user. Reader dropped to 20. Greg, 2026-09-02:
 
 > it can cost £1 to fully process an article, so let's say that the $10 plan gets you 20 articles
 > (which we can always increase later)
+
+**Measured since, and the estimate holds**: an ingest is $0.03–$0.39 depending on length, and an
+article with every mode generated is $0.35–$1.55 —
+[cost-per-article-2026-09-03.md](../../evals/results/cost-per-article-2026-09-03.md), which also
+says which parts of that are the expensive ones.
 
 **Raising a quota is one `UPDATE`** — no deploy, no Stripe object, no migration. That asymmetry is
 deliberate and worth preserving: we can be generous later cheaply, and being generous now is the
@@ -94,9 +98,15 @@ values ('reader', 'cad', 1400), ('researcher', 'cad', 7000);
 ```sql
 insert into spideryarn.billing_tiers
   (id, product_name, description, ingests_per_period, lookup_key, sort_order)
-values ('scholar', 'Spideryarn Scholar', '500 articles a month.', 500,
+values ('scholar', 'Spideryarn Scholar', 'For people who read for a living.', 500,
         'spideryarn_scholar_monthly', 30);
 ```
+
+**A description should not restate the allowance.** `/profile` renders
+`ingests_per_period` structurally and the description beside it, so a description that repeats the
+number is a second copy that the one-`UPDATE` quota change above does not touch — raise the quota to
+50 and the sentence goes on saying 20. The two seeded rows predate this line and do repeat it, which
+is redundant rather than wrong; whoever next edits them should take the first sentence out.
 
 Then, for either:
 
@@ -168,6 +178,65 @@ looking at forty of them, reads as arithmetic going wrong, so `pay-lapsed` names
 resubscribing instead. It is chosen from the **billing row** — a subscription id beside a status the
 allowlist does not entitle — and not from `used > limit`, which is the same answer most of the time
 and a wrong one the day somebody lowers a tier's `ingests_per_period`.
+
+## What a reader sees
+
+Built 2026-09-03, and it is the half that had been missing: the refusal copy had been pointing at
+*"the Upgrade button on your profile page"* since the wall went up, and there was no such button.
+
+**`/profile` has a Plan section**, directly under Account — [`BillingSection.tsx`](../../src/web/BillingSection.tsx)
+over [`useBilling.ts`](../../src/web/useBilling.ts). It says which plan, how much of it is used, and
+what may be bought, and it has the two buttons that leave for Stripe. There is nothing else to it,
+because there is nothing else to build: Checkout and the Portal are hosted.
+
+**`GET /api/billing/usage`** is what it reads — [`src/billing/summary.ts`](../../src/billing/summary.ts),
+with the wire shape and the words in the pure [`src/billing-plan.ts`](../../src/billing-plan.ts).
+Three decisions worth knowing:
+
+- **A route of its own, not a field on `GET /api/reader`.** That route is fetched from every article
+  page by `useHasProfile`, so a billing field on it would put a `billing_accounts` read and an
+  `ingest_events` aggregate on the path of opening an article, for data only `/profile` draws.
+- **A GET, unlike the other three billing routes**, which are POSTs because each *creates a Stripe
+  object*. This creates nothing and touches no network.
+- **It never resyncs from Stripe.** Admission does, once, because it has to decide something. A read
+  of your own plan does not: a stored period that has run out comes back as *we could not confirm
+  your plan*, rather than as a guess between two wrong numbers.
+
+**`ReaderPlan` is a discriminated union and the `lapsed` arm has no `used` field.** That is the
+policy from *the quota* below made unbuildable rather than merely discouraged: a reader who took
+forty articles on Reader and cancelled must never be shown *"40 of 3 used"*, and the number is not
+on the wire for the page to print. `tests/billing-plan.test.ts` is the second half of it — that the
+words chosen do not reconstruct the ratio from the numbers that *are* there, and that they make the
+same three promises `pay-lapsed` makes.
+
+**The refusal carries a way out of itself.** `QuotaNotice`
+([`src/web/QuotaNotice.tsx`](../../src/web/QuotaNotice.tsx)) draws an ingest failure and puts a link
+to `/profile` beside it when — and only when — the message's code is one of the three in
+`QUOTA_CODES`. It is one component in four places (the shelf's add box, a job card's refused
+**Retry**, the `/add/` page a pasted URL navigates to, and the upload picker), because four
+renderings of one refusal would be four chances for three of them to stop offering the link.
+`pay-off`, `pay-down` and `pay-none` are `pay-` codes too and get no link: nobody buys their way out
+of a Stripe outage.
+
+**And it had to be told the refusal durably, which cost a bug to learn.** The first version rendered
+`queue.error` — engine state that the failed POST's *own* follow-up poll clears — so the 402 and the
+link vanished before anybody could read them, leaving the generic *"It didn't get as far as the
+queue"*. Every unit test in the change was green; a browser check on a real free account found it.
+Both surfaces now snapshot `queue.lastFailure()` right after the await, which is what
+[`src/web/useStepJob.ts`](../../src/web/useStepJob.ts) already did after the same discovery in
+August. `tests/refused-job-reason-survives.test.tsx` holds it, with the poll held so the frame
+before it can be asserted separately from the frame after.
+
+**What the browser may send is still only a tier id.** The Upgrade button posts `{ tierId }` and no
+currency at all — hosted Checkout picks by the customer's location, which is the whole reason a price
+carries three. The page shows all three amounts rather than guessing one from the locale.
+
+**Manage billing appears the moment somebody first presses Upgrade, not when they pay**, and that is
+the ordering guarantee showing through rather than a bug: the customer→owner mapping is committed
+*before* a Checkout Session exists, so an abandoned Checkout leaves a real mapped Stripe customer.
+The Portal then opens on no payment method and no invoices, which is the honest state of an account
+that started to subscribe and stopped. Seen in the browser on 2026-09-03 and written down because it
+looks wrong for as long as it takes to remember why the mapping comes first.
 
 ## We never touch a card
 
@@ -519,11 +588,32 @@ and reads no variable, so nothing in the environment can redirect a real custome
 `SPIDERYARN_BASE_URL` is a local override for a worktree's dev server on 5274, 5275…
 ([worktrees.md](worktrees.md)).
 
+## What `/admin/users` shows
+
+Two columns since 2026-09-03 — **Plan** and **Ingests** — beside the spend column, because "who is
+paying" and "who is expensive" are two halves of one question.
+
+**The plan is decided by `entitlementFromRow`**, the same function `reserveIngest` decides with under
+its lock. That reuse is the point: a row this page draws as *reader, 4 of 20* is a row the wall would
+admit, and one it draws as free is one refused at three. The status is shown **raw**, beside the
+plan rather than folded into it — `free` over `canceled` is a lapsed subscriber, and `reader` over
+`past_due` is the case somebody would otherwise "fix", since `past_due` is entitled on purpose.
+
+**The administrator's own row shows an em dash**, not a count. The exemption is total — no slot is
+reserved at all, so an administrator's ingests are legitimately absent from `ingest_events` — and the
+page decides it with `isAdmin`, which is already in the browser bundle beside the `admin` marker.
+
+The plan said this would be "one field on `AdminUser`, one column, one per-owner statement in
+`pg-admin.ts`". It is **four fields, two columns and three reads** (the ledger aggregate, every
+`billing_accounts` row, and the cached tier table), and the reasons are on `AdminUser` in
+[`src/admin.ts`](../../src/admin.ts): a plan with no usage figure does not answer the operational
+question, a usage figure with no limit has no scale, and the limit is a row somebody may raise at
+any time. See [admin.md](admin.md).
+
 ## Not built yet
 
-The `/profile` surface, the admin columns, comp subscriptions for journalists and QA, and go-live.
-The wall now has a door in it — what is missing is the button on the page that opens it. The order
-is in [the plan](../plans/260902i-stripe-payments-and-subscription-tiers.md#where-the-build-stands).
+Comp subscriptions for journalists and QA, and go-live. The order is in
+[the plan](../plans/260902i-stripe-payments-and-subscription-tiers.md#where-the-build-stands).
 
 ## Where the code is
 
@@ -537,6 +627,10 @@ is in [the plan](../plans/260902i-stripe-payments-and-subscription-tiers.md#wher
 | [`src/billing/checkout.ts`](../../src/billing/checkout.ts) | The three billing routes: the order that makes the mapping durable, the Portal redirect, and the proof that a Checkout Session belongs to the reader asking about it. |
 | [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts) | Reserve, settle, count. The lock. |
 | [`src/billing/admission.ts`](../../src/billing/admission.ts) | Which requests spend a slot, the refusal a reader sees, and the release. The only caller of `reserveIngest`. |
+| [`src/billing-plan.ts`](../../src/billing-plan.ts) | What `/profile` is told and what it says. Pure — no database, no network, no React, so the browser can have it. |
+| [`src/billing/summary.ts`](../../src/billing/summary.ts) | `GET /api/billing/usage`: the row, the tiers and the ledger, turned into a `ReaderPlan`. |
+| [`src/web/BillingSection.tsx`](../../src/web/BillingSection.tsx) · [`useBilling.ts`](../../src/web/useBilling.ts) | The Plan section on `/profile`, and the two redirects. |
+| [`src/web/QuotaNotice.tsx`](../../src/web/QuotaNotice.tsx) | An ingest failure with a link to `/profile` beside it, when the failure is the quota. |
 | [`src/store/pg-session.ts`](../../src/store/pg-session.ts) | Three of the seven sites a job ends at, and the only one that charges. |
 | [`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts) | The other four — `settleExpired`, `requestCancel`, `finish` and `releaseStep` — plus the job INSERT that writes `ingest_event_id`. |
 | [`src/db/schema.ts`](../../src/db/schema.ts) | `billing_tiers`, `billing_tier_prices`, `billing_accounts`, `ingest_events`, `jobs.ingest_event_id`. |

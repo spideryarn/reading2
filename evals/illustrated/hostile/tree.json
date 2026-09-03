@@ -1,0 +1,48 @@
+{
+  "version": "toc/2",
+  "generator": "hand-written fixture",
+  "slug": "hostile",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0003"
+      ],
+      "range": [
+        "spya-hs1a3z",
+        "spya-hs9t8h"
+      ],
+      "title": "The signs are not addressed to us",
+      "gist": "Roadside boards written as commands to the machines that read them, and what happens when a program cannot tell a sign from its own operator.",
+      "sourceHeading": "The signs are not addressed to us"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-hs1a3z",
+        "spya-hs5p6d"
+      ],
+      "title": "The first board",
+      "gist": "A sign addressed to nobody in the car, and why the sentence keeps its shape wherever it is copied."
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [],
+      "range": [
+        "spya-hs6q9e",
+        "spya-hs9t8h"
+      ],
+      "title": "The second board",
+      "gist": "A sign that asks for a fence to be moved rather than for anything unusual to be drawn."
+    }
+  }
+}

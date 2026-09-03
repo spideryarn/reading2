@@ -25,6 +25,7 @@ import { useEffect, useRef, useState } from "react";
 import { FileText, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type ChosenFile, formatBytes, uploadProblem } from "../uploads.js";
+import { QuotaNotice } from "./QuotaNotice.js";
 import { addUploadHref, navigate } from "./router.js";
 import { uploadPdf } from "./upload.js";
 
@@ -263,9 +264,12 @@ export function UploadPicker() {
           to somebody using a screen reader — and the button they just pressed
           gives no other feedback. */}
       <div aria-live="polite">
-        {problem && (
-          <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-destructive">{problem}</p>
-        )}
+        {/* **`POST /api/uploads` refuses at the door when there is no room
+            left** — a non-reserving eligibility check, so nobody transfers
+            11 MB to be told no (docs/project/billing.md § *Which requests spend
+            a slot*). It carries the same refusal sentence the job route does, so
+            it gets the same link beside it. QuotaNotice.tsx. */}
+        <QuotaNotice message={problem} className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-destructive" />
 
         {chosen && (
           <div className="tw:mt-2 tw:flex tw:items-baseline tw:gap-2 tw:text-xs tw:text-muted-foreground">

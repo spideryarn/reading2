@@ -8,7 +8,8 @@
  * chat, explain, search, quiz marking, the three referee runs, dictation, the
  * PDF reader, and embeddings. It said "the six" until 2026-09-02 and had been
  * ten for a while; a count in prose is a fact nothing keeps in step, so `grep`
- * for `openRouterStream(` and `openRouterJson(` rather than trusting this
+ * for `openRouterStream(`, `openRouterJson(` and `openRouterImage(` rather than
+ * trusting this
  * sentence. Between the two files there is no third way to spend money, and
  * [`tests/ai-call.test.ts`](../tests/ai-call.test.ts) scans `src/` to keep it
  * that way.
@@ -53,7 +54,7 @@
  * needs `zdr`, the PDF reader talks to OpenAI and must forbid fallback, and
  * embeddings talks to Voyage. Leaving each caller to pass its own was the second
  * draft, and Sol rejected that too: a field six callers set independently is a
- * field that drifts. So it is `AI_JOB_PROVIDER` below — exhaustive, so a seventh
+ * field that drifts. So it is `AI_JOB_ROUTE` below — exhaustive, so a seventh
  * job cannot be added without somebody deciding, and injected *after* the
  * caller's body so it cannot be overridden by accident.
  */
@@ -64,6 +65,10 @@ import {
   keyFingerprint,
   recordSpend,
 } from "./ai-spend.js";
+/* `sniffImage` says what a picture actually is, from its signature. Reused
+   rather than re-implemented so this repo has one statement of the PNG magic
+   bytes; `assets.ts` imports nothing at all, so this closes no cycle. */
+import { imageDimensions, sniffImage } from "./assets.js";
 import { NOT_CONFIGURED, providerHttpFailure } from "./messages.js";
 /* **A type-only import, and that is load-bearing rather than tidy.** A value
    import here closes a cycle: `models.ts` imports `EMBEDDING_MODEL` from
@@ -239,14 +244,70 @@ export function classifyEnd(
    table is not the same as accepting that. GPT Sol asked for it twice. */
 const OPENROUTER_BASE = "https://openrouter.ai/api";
 
-/** The two paths this app posts to. A union, so a seventh cannot be invented. */
-export type OpenRouterPath = "/v1/chat/completions" | "/v1/embeddings";
+/** The three paths this app posts to. A union, so a fourth cannot be invented. */
+export type OpenRouterPath =
+  | "/v1/chat/completions"
+  | "/v1/embeddings"
+  /* Pictures. `openRouterImage` below is the only thing that sends here, and
+     `illustrate` is the only job routed to it. */
+  | "/v1/images";
+
+/**
+ * **The jobs whose answer is a picture** — one member, and it is deliberately
+ * not in `ChatJob`.
+ *
+ * `openRouterStream` and `openRouterJson` take a `ChatJob`; `openRouterImage`
+ * takes an `ImageJob`. The route table below covers both, because there is one
+ * table of "where does this go and how is it billed" and splitting it would be
+ * two places for a job to be missing from. The *entry points* stay narrow, so
+ * `openRouterJson("illustrate", …)` — which would post a picture request to
+ * chat/completions and record it as a chat call — does not compile.
+ */
+export type ImageJob = "illustrate";
+
+/** Every job with a row in `AI_JOB_ROUTE`: everything this file can send. */
+export type RoutedJob = ChatJob | ImageJob;
+
+/**
+ * Where one job goes, how hard we insist on getting there, and what the ledger
+ * should call it.
+ *
+ * **`wire` is stated, never derived.** It used to be
+ * `path === "/v1/embeddings" ? "embeddings" : "chat"`, which was correct while
+ * there were two paths and became a silent lie the moment there were three: an
+ * image call would have been written to `ai_calls` with `wire: "chat"`, the row
+ * would have been accepted, and nothing anywhere would have failed. The only
+ * symptom is a `SUM(output_tokens)` that adds a plate's image tokens to a
+ * paragraph's words — docs/reusable/silent-success.md, and a cross-family
+ * review caught it before it shipped. `tests/ai-call.test.ts` holds this column
+ * against `AI_JOB_WIRE`, which is the other, independent statement of the same
+ * fact.
+ */
+interface Route {
+  path: OpenRouterPath;
+  wire: Wire;
+  /**
+   * OpenRouter's provider-routing block, or **`null` for "send no `provider`
+   * key at all"**, which is not the same as `{}`.
+   *
+   * The distinction exists because of one job. Every chat row here was measured
+   * on chat/completions; none of them has ever been tried against `/v1/images`,
+   * and `env-proposal` below is the write-up of what an unverified field in a
+   * request body costs — `require_parameters` turned a `temperature: 0` into a
+   * 404 with no endpoints left, which the feature reported as "the model could
+   * not be reached". The spike of 2026-09-03 got a 200 from a body with no
+   * `provider` in it, so that is the body we send. Setting this to an object
+   * later is a one-line change and a measurement somebody has to make first.
+   */
+  provider: Record<string, unknown> | null;
+}
 
 /**
  * **Where each job goes, and how hard we insist on getting there** — the two
  * things this app has been most quietly wrong about, in one row per job.
  *
- * A `Record`, exhaustive over every job on this wire, for the reason
+ * A `Record`, exhaustive over `RoutedJob` — every job this file can send, which
+ * since 2026-09-03 is the chat jobs plus the one image job — for the reason
  * [`AI_JOB_WIRE`](models.ts) gives: a job nobody assigned would otherwise
  * *work* — OpenRouter routes it somewhere, answers, and the only symptom is the
  * bill or a missing guarantee.
@@ -281,20 +342,20 @@ export type OpenRouterPath = "/v1/chat/completions" | "/v1/embeddings";
  * dropped `cache_control`, which is not a degraded answer but a full-price
  * answer that looks identical to a cheap one.
  */
-export const AI_JOB_ROUTE: Record<
-  ChatJob,
-  { path: OpenRouterPath; provider: Record<string, unknown> }
-> = {
+export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
   chat: {
     path: "/v1/chat/completions",
+    wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
   explain: {
     path: "/v1/chat/completions",
+    wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
   search: {
     path: "/v1/chat/completions",
+    wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
   /* **Mirror — the referee's own notes read back to them** (src/referee-mirror.ts).
@@ -315,6 +376,7 @@ export const AI_JOB_ROUTE: Record<
      and nothing in the answer would look any different. */
   "referee-mirror": {
     path: "/v1/chat/completions",
+    wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
   /* **Criteria — the referee's own questions run over the paper**
@@ -336,6 +398,7 @@ export const AI_JOB_ROUTE: Record<
      tool never ran. */
   "referee-criteria": {
     path: "/v1/chat/completions",
+    wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
   /* **Claims — what the paper says about itself, and where it takes it up**
@@ -355,6 +418,7 @@ export const AI_JOB_ROUTE: Record<
      from a cheap one, and this is the largest single prompt in the mode. */
   "referee-claims": {
     path: "/v1/chat/completions",
+    wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
   /* **Candidates — who could review this paper, for an editor**
@@ -376,6 +440,7 @@ export const AI_JOB_ROUTE: Record<
      nothing anywhere says the search tool was never offered. */
   "referee-candidates": {
     path: "/v1/chat/completions",
+    wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
   /* The same policy as `explain` and for the same two reasons. The upstream is
@@ -386,17 +451,20 @@ export const AI_JOB_ROUTE: Record<
      exactly like a cheap one. */
   "quiz-mark": {
     path: "/v1/chat/completions",
+    wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
   dictation: {
     path: "/v1/chat/completions",
+    wire: "chat",
     provider: { zdr: true, require_parameters: true },
   },
   pdf: {
     path: "/v1/chat/completions",
+    wire: "chat",
     provider: { require_parameters: true, allow_fallbacks: false },
   },
-  embeddings: { path: "/v1/embeddings", provider: {} },
+  embeddings: { path: "/v1/embeddings", wire: "embeddings", provider: {} },
   /* **Forbids fallback — and my first reason for it was wrong.** I wrote that a
      silent fallback would substitute a different *model*; GPT Sol corrected it:
      provider fallback picks a different **upstream** for the model you asked
@@ -410,6 +478,7 @@ export const AI_JOB_ROUTE: Record<
      model having a bad day. */
   eval: {
     path: "/v1/chat/completions",
+    wire: "chat",
     provider: { require_parameters: true, allow_fallbacks: false },
   },
   /* **`gjd-remote push-env`'s key-name classifier** — the only call in the app
@@ -441,7 +510,25 @@ export const AI_JOB_ROUTE: Record<
      docs/research/260902b-env-key-proposal-spike.md. */
   "env-proposal": {
     path: "/v1/chat/completions",
+    wire: "chat",
     provider: { require_parameters: true },
+  },
+  /* **The one row that is not a chat completion.** `openRouterImage` sends it;
+     `openRouterStream` and `openRouterJson` cannot, because `illustrate` is not
+     a `ChatJob`.
+
+     `provider: null` — no routing block at all, rather than an empty one. The
+     reason is directly above, on `Route.provider`: nothing in that column has
+     been measured against this endpoint, the spike that proved the endpoint
+     works sent no `provider` key, and `env-proposal` two rows up is this repo's
+     write-up of what an unverified body field costs.
+
+     `wire: "images"` is why this table has a `wire` column at all. Derived from
+     the path, this row would have said `"chat"`. */
+  illustrate: {
+    path: "/v1/images",
+    wire: "images",
+    provider: null,
   },
 };
 
@@ -481,6 +568,12 @@ export type ChatJob = Exclude<
   | "ideas"
   | "sketch"
   | "timeline"
+  /* **The brief, not the plate.** `illustrated` writes the words an image model
+     draws from and goes down the Messages wire like every other article-reading
+     stage; `illustrate` two entries below is the picture itself, excluded for a
+     different reason. Two jobs, one feature, and the pair is the reason both
+     names appear in this list — src/illustrated.ts. */
+  | "illustrated"
   /* Generation only. `quiz-mark` is a separate `Task` and stays IN — it is a
      request-path call on chat/completions and needs a route below. */
   | "quiz"
@@ -492,6 +585,15 @@ export type ChatJob = Exclude<
      than the second, which is the type doing exactly what the docstring says.
      src/live.ts, and docs/project/ai-gateway.md. */
   | "live_conversation"
+  /* **Not a pipeline stage, on this wire, and still not a chat completion.**
+     `illustrate` posts to `/v1/images`, whose answer is `data: [{ b64_json }]`
+     with no `choices` anywhere in it — so every parser `openRouterStream` and
+     `openRouterJson` hand their body to would read it as an empty reply. It has
+     a row in `AI_JOB_ROUTE` (which is keyed on `RoutedJob`, not on this type)
+     and its own entry point, `openRouterImage`. Excluding it here is what makes
+     `openRouterJson("illustrate", …)` a compile error rather than a picture
+     recorded as a chat call. */
+  | "illustrate"
 >;
 
 /**
@@ -776,7 +878,7 @@ export type AiRequestBody = {
  * body rather than trusting this.
  */
 /** The row for a job, with the same guard and the same message as `pathFor`. */
-function routeFor(job: ChatJob): (typeof AI_JOB_ROUTE)[ChatJob] {
+function routeFor(job: RoutedJob): Route {
   const route = AI_JOB_ROUTE[job];
   if (!route) {
     throw new Error(
@@ -793,7 +895,9 @@ function outgoing(
 ): string {
   return JSON.stringify({
     ...body,
-    provider: routeFor(job).provider,
+    /* Every chat row has one; the conditional is for `Route.provider`'s `null`,
+       which only the image route uses and which never reaches here. */
+    ...(routeFor(job).provider ? { provider: routeFor(job).provider } : {}),
     usage: { include: true },
     ...(streaming
       ? { stream: true, stream_options: { include_usage: true } }
@@ -861,13 +965,18 @@ function prepare(
 }
 
 /**
- * Which shape this job's request goes out in.
+ * Which shape this job's request goes out in, and therefore what its ledger row
+ * calls itself.
  *
- * Read off the routing table rather than kept as a second list, so a seventh job
- * cannot be given a path and forget to be given a wire.
+ * **Read off the row, not computed from the path.** This was
+ * `path === "/v1/embeddings" ? "embeddings" : "chat"` — right while there were
+ * two paths, and a silent lie the moment there were three: the image endpoint
+ * would have been billed as chat, the row would have been written, and nothing
+ * would have gone red. A cross-family review found it before the third path
+ * landed. See `Route.wire`.
  */
-function wireFor(job: ChatJob): Wire {
-  return routeFor(job).path === "/v1/embeddings" ? "embeddings" : "chat";
+function wireOf(job: RoutedJob): Wire {
+  return routeFor(job).wire;
 }
 
 function send(
@@ -973,7 +1082,7 @@ export async function* openRouterStream(
 ): AsyncGenerator<StreamChunk> {
   /* Before the meter — see `prepare`: no attempt, no record. */
   const prepared = prepare(job, body, true, options.apiKey);
-  const meter = new Meter(job, body.model, wireFor(job), prepared.fingerprint);
+  const meter = new Meter(job, body.model, wireOf(job), prepared.fingerprint);
   let outcome: SpendRecord["outcome"] = "ok";
   /**
    * Whether the loop below ran to its own end.
@@ -1097,7 +1206,7 @@ export async function openRouterJson(
 ): Promise<JsonCall> {
   /* Before the meter — see `prepare`: no attempt, no record. */
   const prepared = prepare(job, body, false, options?.apiKey);
-  const meter = new Meter(job, body.model, wireFor(job), prepared.fingerprint);
+  const meter = new Meter(job, body.model, wireOf(job), prepared.fingerprint);
   let outcome: SpendRecord["outcome"] = "ok";
   try {
     const response = await send(prepared, options?.signal);
@@ -1105,6 +1214,13 @@ export async function openRouterJson(
     /* Read once, before the status is judged. A failed body still has to be
        consumed or the connection leaks, and reading it twice throws. */
     const text = await response.text();
+    /* **The images seam does this the other way round on purpose**, parsing the
+       body and metering any `usage` in it *before* judging the status, because
+       a `429` there arrives carrying the cost of a plate that was already drawn
+       (`openRouterImage` below). It has not been changed here, and that is a
+       gap rather than a decision: no non-2xx on this wire has been *observed*
+       carrying usage, and nobody has looked. If you are here because a chat
+       call's money went missing, this is the line. */
     if (!response.ok) {
       outcome = "error";
       throw new ProviderRefused(response.status, text, response.headers);
@@ -1127,6 +1243,316 @@ export async function openRouterJson(
     meter.sawUpstream(record?.provider);
     return {
       json,
+      answeredBy: meter.answeredBy,
+      generationId: meter.generationId,
+    };
+  } catch (err) {
+    if (outcome === "ok")
+      outcome = abortedBy(err, options?.signal) ? "aborted" : "error";
+    throw err;
+  } finally {
+    meter.finish(outcome);
+  }
+}
+
+/* --------------------------------------------------------------- pictures -- */
+
+/**
+ * **A picture, on the same gateway and in a shape nothing else here speaks.**
+ *
+ * `POST /v1/images` with `openai/gpt-image-2`, for the Illustrated diagram
+ * sub-mode — docs/plans/260903c-illustrated-diagram-sub-mode.md.
+ *
+ * It is in this file, beside `openRouterJson`, rather than in a file of its
+ * own, because what this file is *for* is that there is no second way to spend
+ * money: one key, one base URL, one `Meter`, one `finally`. A separate module
+ * that read `OPENROUTER_API_KEY` and called `fetch` would be exactly the hole
+ * the header describes, drawn in a nicer shape — and
+ * `tests/no-undeclared-spend.test.ts` would have had to be told to allow it.
+ *
+ * ## Where it chafes, and what was done about each
+ *
+ * 1. **There is no `choices` array.** The answer is `data: [{ b64_json,
+ *    media_type }]`. So it has its own request type and its own reader, and
+ *    reuses neither of the chat ones. `openRouterJson` could have carried the
+ *    body as `unknown`, but then every caller would decode base64 itself —
+ *    which is the one step that can silently produce zero bytes.
+ * 2. **No `provider` block and no `usage: {include: true}`.** Both are chat-wire
+ *    furniture that has never been sent to this endpoint. The spike of
+ *    2026-09-03 posted five fields and got a complete `usage` object back
+ *    unasked, so asking for it would be a guess on the one call whose failure
+ *    mode is a 400. See `Route.provider`.
+ * 3. **The bill is zero on purpose.** `openai/gpt-image-2` is served on
+ *    somebody else's key, so OpenRouter answers `is_byok: true`, `usage.cost:
+ *    0`, and puts the real figure in
+ *    `usage.cost_details.upstream_inference_cost` ($0.013237 for the measured
+ *    plate). **Nothing here does anything about that**, and that is the point:
+ *    `Meter.saw` already reads both fields and `normaliseByokUpstream` in
+ *    [`ai-spend.ts`](ai-spend.ts) already puts the second one in
+ *    `byok_upstream_nanos` under the three conditions the database CHECK
+ *    enforces. A second money path here would be a second answer to a question
+ *    that has one.
+ *
+ * Everything that makes a call accountable is shared unchanged: `apiKey`,
+ * `keyFingerprint`, `OPENROUTER_BASE`, `ATTRIBUTION`, `send`, `generationIdOf`,
+ * `abortedBy`, `ProviderRefused` and the private `Meter` — begun before the
+ * fetch, finished exactly once in a `finally`, so a throw still writes a row.
+ */
+
+/** One reference image, inline. `input_references` takes 0-16 of them. */
+export interface ImageReference {
+  /** `data:image/png;base64,…` — the whole picture in the URL. */
+  dataUrl: string;
+}
+
+/**
+ * What a caller asks for.
+ *
+ * Named fields rather than `AiRequestBody`'s `Record<string, unknown>`, and
+ * that is the `env-proposal` lesson applied at the type level: this endpoint
+ * 404s on a parameter its upstream does not know, so a free-form body would be
+ * a place for an unmeasured field to arrive without anybody deciding.
+ */
+export interface ImageRequest {
+  model: string;
+  prompt: string;
+  /** `"2:3"`, `"1:1"`, … Omitted from the body when absent, so the model's default stands. */
+  aspectRatio?: string;
+  /** `low | medium | high | auto`. Omitted when absent. */
+  quality?: string;
+  /**
+   * `png | jpeg | webp`. Omitted when absent, and worth 22× the bytes.
+   *
+   * **This parameter is not in the model's `supported_parameters`** from
+   * `GET /api/v1/images/models`, and it is honoured anyway — measured twice on
+   * 2026-09-03, at `1:1` and at the `2:3` this app actually sends: the response
+   * came back `media_type: "image/jpeg"` with the signature `ff d8 ff e0` to
+   * agree, at 73 KB and 159 KB against the 3.5 MB the same plate costs as PNG.
+   *
+   * That gap between the capability list and the behaviour is the reason
+   * `readPlate` decides the media type **from the signature and never from the
+   * claim**: if a future model quietly ignores this and returns PNG, the bytes
+   * say so on the way in, rather than a `.jpeg` object being served as a lie
+   * three stages downstream.
+   */
+  outputFormat?: string;
+  /** 0–100, for `jpeg` and `webp`. Omitted when absent. */
+  outputCompression?: number;
+  /** Style and content references. **Omitted entirely when empty**, never sent as `[]`. */
+  inputReferences?: readonly ImageReference[];
+}
+
+/**
+ * One picture, and the two handles that make the call reconcilable afterwards.
+ *
+ * **No cost on here, deliberately.** A `usdCost: number | null` would have to
+ * be one of two different numbers on a BYOK call — what OpenRouter charged (0)
+ * or what the inference was worth (0.0132) — and collapsing those into one
+ * nullable field is precisely the ambiguity
+ * `drizzle/20260902141103_byok_upstream_nanos.sql` was written to remove, at
+ * the cost of a doubled total that only TypeScript knew better than. The money
+ * is on the ledger row, where it has three named columns and a CHECK; a caller
+ * that wants it reads `collectSpend`'s report. `ms` is left off for the same
+ * reason in miniature: the row has `duration_ms`, and a caller can hold a clock.
+ */
+export interface ImageCall {
+  /** The decoded bytes, validated. */
+  image: Uint8Array;
+  /** What the bytes actually are, from the signature — not from what the provider claimed. */
+  mediaType: string;
+  /** Which model answered, when the response says. `null` on this endpoint today. */
+  answeredBy: string | null;
+  /** `x-generation-id`, for reconciling this call later. */
+  generationId: string | null;
+}
+
+/**
+ * The request as it goes out.
+ *
+ * `n: 1` is ours rather than the caller's: a plate is a plate, and a number a
+ * caller could pass is a number that can quadruple a bill by being wrong.
+ * `tests/ai-call-images.test.ts` asserts these bytes rather than trusting this.
+ */
+function outgoingImage(job: ImageJob, body: ImageRequest): string {
+  const route = routeFor(job);
+  const references = body.inputReferences ?? [];
+  return JSON.stringify({
+    model: body.model,
+    prompt: body.prompt,
+    n: 1,
+    ...(body.aspectRatio === undefined ? {} : { aspect_ratio: body.aspectRatio }),
+    ...(body.quality === undefined ? {} : { quality: body.quality }),
+    ...(body.outputFormat === undefined ? {} : { output_format: body.outputFormat }),
+    ...(body.outputCompression === undefined ? {} : { output_compression: body.outputCompression }),
+    /* **Absent rather than `[]`.** 0-16 is the documented range and an empty
+       array is a value inside it that nothing has been measured against;
+       omission is what the spike sent when it sent none. */
+    ...(references.length === 0
+      ? {}
+      : {
+          input_references: references.map((reference) => ({
+            type: "image_url",
+            image_url: { url: reference.dataUrl },
+          })),
+        }),
+    /* `null` today, so nothing goes out. Read off the table so that setting it
+       is one edit rather than two. */
+    ...(route.provider ? { provider: route.provider } : {}),
+  });
+}
+
+/** The images response, in the shape the spike of 2026-09-03 measured. */
+interface ImageBody {
+  data?: unknown;
+  usage?: unknown;
+  model?: unknown;
+  provider?: unknown;
+}
+
+/**
+ * **How big a picture is allowed to be before we call it an attack.**
+ *
+ * Not tuning knobs — a plate at `quality: "low"` and `2:3` measured 1024x1536
+ * and 3.5 MB, so every bound here is several times what the feature produces.
+ * They exist because the bytes arrive from outside this process. Stage 3 reads
+ * the dimensions out of the header rather than decoding — src/assets.ts
+ * § `imageDimensions` — so nothing downstream allocates width x height x 4 any
+ * more, but a picture claiming 20000x20000 is still either broken or hostile
+ * and refusing it here costs one `if`.
+ */
+const MAX_IMAGE_BYTES = 32 * 1024 * 1024;
+const MAX_IMAGE_EDGE = 8192;
+const MAX_IMAGE_PIXELS = 33_554_432;
+
+/**
+ * **The first plate, decoded and checked — and every failure is a sentence of
+ * ours.**
+ *
+ * Not one word of the provider's body reaches the thrown error, for the reason
+ * `ProviderRefused` gives at length: a mangled or refusing response is exactly
+ * where an upstream echoes back what we sent it, and what we sent is a prompt
+ * quoted from the reader's article.
+ *
+ * **The signature decides what these bytes are; the provider's `media_type` is
+ * only allowed to agree.** Taking the claim would mean the name we hand to the
+ * blob store is a promise nobody checked — the same rule `sniffImage`'s own
+ * docstring makes for a downloaded figure, which is why this reuses it rather
+ * than writing a fourth copy of the PNG signature.
+ */
+function readPlate(body: ImageBody | null): { image: Uint8Array; mediaType: string } {
+  const first = Array.isArray(body?.data) ? body.data[0] : null;
+  const plate = (first ?? null) as { b64_json?: unknown; media_type?: unknown } | null;
+  const b64 = plate?.b64_json;
+  if (typeof b64 !== "string" || b64.length === 0)
+    throw new Error("the images endpoint answered with no picture in it");
+  /* Base64 that is not base64 does not throw here — `Buffer.from` decodes as
+     much as it can and hands back the rest — so an empty result is the only
+     signal there is, and a zero-byte "plate" written to the blob store would be
+     a silent success of exactly the kind docs/reusable/silent-success.md is
+     about. */
+  const image = new Uint8Array(Buffer.from(b64, "base64"));
+  if (image.byteLength === 0)
+    throw new Error("the images endpoint's picture did not decode");
+  if (image.byteLength > MAX_IMAGE_BYTES)
+    throw new Error("the images endpoint's picture is implausibly large");
+  const sniffed = sniffImage(image);
+  if (!sniffed)
+    throw new Error("the images endpoint answered with bytes that are not a picture");
+  const claimed = plate?.media_type;
+  if (typeof claimed === "string" && claimed !== sniffed.contentType)
+    throw new Error(
+      `the images endpoint called its picture ${claimed} and sent ${sniffed.contentType}`,
+    );
+  /* **Both formats now, and the change is a widening rather than a rewrite.**
+     This was PNG-only while the dimension read was private to this file and
+     said so; src/assets.ts § `imageDimensions` is the shared version, and a
+     JPEG claiming 20000x20000 is exactly as much of a decode bomb as a PNG
+     claiming it. `null` still means we could not tell, and the byte cap above
+     is what stands behind that case. */
+  const size = imageDimensions(image);
+  if (
+    size &&
+    (size.width < 1 ||
+      size.height < 1 ||
+      size.width > MAX_IMAGE_EDGE ||
+      size.height > MAX_IMAGE_EDGE ||
+      size.width * size.height > MAX_IMAGE_PIXELS)
+  ) {
+    throw new Error("the images endpoint's picture claims implausible dimensions");
+  }
+  return { image, mediaType: sniffed.contentType };
+}
+
+/**
+ * **A whole image call, from the fetch to the spend record, in one frame.**
+ *
+ * Same lifecycle guarantee as `openRouterJson`: the meter is finished on every
+ * path, refusals included, because the call is what cost money and it has
+ * happened whatever the caller decides next. A 200 whose body carries usage but
+ * no usable picture is therefore recorded as a call that cost money and
+ * `"error"` — which is what it was.
+ *
+ * **`job` is first and is an `ImageJob`**, which is both halves of the type
+ * doing its work: `openRouterImage("chat", …)` will not compile, and neither
+ * will `openRouterJson("illustrate", …)`. It is a parameter rather than a
+ * constant inside for the reason `openRouterJson`'s is — a `grep` for
+ * `openRouterImage(` should say which job is spending, and the day there is a
+ * second image job the shape does not have to change. See `ChatJob`.
+ */
+export async function openRouterImage(
+  job: ImageJob,
+  body: ImageRequest,
+  options?: { signal?: AbortSignal; apiKey?: string },
+): Promise<ImageCall> {
+  /* Before the meter — see `prepare`: no attempt, no record. A missing key
+     must not leave a spend row for a call that never left the process. */
+  const key = apiKey(options?.apiKey);
+  const prepared = {
+    key,
+    payload: outgoingImage(job, body),
+    url: `${OPENROUTER_BASE}${routeFor(job).path}`,
+  };
+  const meter = new Meter(job, body.model, wireOf(job), keyFingerprint(key));
+  let outcome: SpendRecord["outcome"] = "ok";
+  try {
+    const response = await send(prepared, options?.signal);
+    meter.generationId = generationIdOf(response);
+    /* Read once, before the status is judged: a failed body still has to be
+       consumed or the connection leaks, and reading it twice throws. */
+    const text = await response.text();
+    let json: unknown = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      /* Swallowed and never rethrown: V8 puts a prefix of the offending input
+         into the `SyntaxError`, and the input here wraps a prompt quoted from
+         the article. `readPlate` throws our own sentence a line below. */
+    }
+    const record = json as ImageBody | null;
+    /* **The usage is read before the status is judged, and before the picture
+       is read.** Both orders were wrong once and in the same direction — money
+       the provider told us about, thrown away because of what we decided to do
+       next:
+         - a `200` that generated a plate and then refused to hand it over is
+           still billed for the plate it generated;
+         - a **`429` whose body carries `usage`** is a call the provider priced,
+           and rejecting it on the status before parsing recorded an unpriced
+           error row for a plate that had already cost $0.013 (GPT Sol,
+           2026-09-03). Nothing about a non-2xx makes its `usage` less true.
+       The body is still never quoted: `ProviderRefused` gets the text and
+       decides what may be said about it, and nothing from it reaches a message
+       of ours. */
+    if (record?.usage) meter.saw(record.usage);
+    meter.sawModel(record?.model);
+    meter.sawUpstream(record?.provider);
+    if (!response.ok) {
+      outcome = "error";
+      throw new ProviderRefused(response.status, text, response.headers);
+    }
+    const plate = readPlate(record);
+    return {
+      image: plate.image,
+      mediaType: plate.mediaType,
       answeredBy: meter.answeredBy,
       generationId: meter.generationId,
     };

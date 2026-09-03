@@ -53,6 +53,11 @@ import {
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
   readSketchFile,
 } from "./sketch.js";
+import {
+  isStale as illustratedIsStale,
+  PROMPT_VERSION as ILLUSTRATED_PROMPT_VERSION,
+} from "./illustrated.js";
+import type { Illustrated } from "./illustrated-plate.js";
 import { readRaw } from "./fetch.js";
 import { isSlug } from "./ingest.js";
 import { errorFields, log } from "./log.js";
@@ -74,6 +79,7 @@ import type {
   GlossaryFound,
   IdeasFound,
   QuotesFound,
+  IllustratedFound,
   SketchFound,
   QuizFound,
   TimelineFound,
@@ -720,6 +726,65 @@ export async function loadSketch(slug: string): Promise<SketchFound> {
     stale:
       !blocksFile || !tree || sketchIsStale(sketch, blocksFile.blocks, tree, sketchMeta ?? null),
     outdated: sketch.version !== SKETCH_PROMPT_VERSION,
+  };
+}
+
+/**
+ * The Illustrated plates on their own — the filesystem half of
+ * `loadIllustrated`. docs/project/diagram.md § Illustrated.
+ *
+ * Shaped on `loadSketch` directly above, and differing in the one way that
+ * matters: **it reads `sketch.json` rather than the blocks and the tree**,
+ * because what this artefact was painted from is the scene. src/illustrated.ts
+ * § `inputFingerprint`.
+ *
+ * `stale` is true in two cases and they are not the same fact, but the panel
+ * has one sentence for both: the Sketch on disk is not the one this was painted
+ * from, **or** that Sketch has itself gone stale against the article. The
+ * second is what stops a picture two hops from the article reporting itself
+ * current because nobody has pressed the Sketch button.
+ *
+ * A **404 is the ordinary case**, exactly as for Sketch: this step is off
+ * `DEFAULT_INGEST_STEPS` and most articles have never had a plate painted.
+ */
+export async function loadIllustrated(slug: string): Promise<IllustratedFound> {
+  requireSlug(slug);
+
+  const dir = await articleDir(slug);
+  if (!dir) {
+    throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
+  }
+  const illustrated = await readJson<Illustrated>(path.join(dir, "illustrated.json"));
+  /* **An empty plate list counts as none**, the same rule `SHAPE` keeps at the
+     store boundary and `readSketchFile` keeps for the scene: a file can arrive
+     from an import or a hand edit with nothing in it, and a panel handed that
+     would draw an empty band and report success. */
+  if (!illustrated || !Array.isArray(illustrated.plates) || illustrated.plates.length === 0) {
+    throw Object.assign(
+      new Error(
+        `No illustration for "${slug}" yet. Paint one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["illustrated"] }.`,
+      ),
+      { status: 404 },
+    );
+  }
+  const sketch = await readSketchFile(dir);
+  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
+  const tree = await readJson<Tree>(path.join(dir, "tree.json"));
+  const sketchMeta = await readJson<Meta>(path.join(dir, "meta.json"));
+  /* No Sketch at all is stale rather than an error: there is still a picture to
+     look at, and "we cannot tell" has to answer not-current here as it does
+     everywhere else in this file. */
+  const stale =
+    !sketch ||
+    illustratedIsStale(illustrated, sketch) ||
+    !blocksFile ||
+    !tree ||
+    sketchIsStale(sketch, blocksFile.blocks, tree, sketchMeta ?? null);
+  return {
+    illustrated,
+    stale,
+    outdated: illustrated.version !== ILLUSTRATED_PROMPT_VERSION,
   };
 }
 

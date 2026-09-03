@@ -62,6 +62,7 @@ import { EMBEDDING_MODEL, EmbeddingFailure, embedAll } from "./embeddings.js";
 import { isEmbeddable } from "./block-policy.js";
 import { hashBlocks } from "./source-hash.js";
 import { log } from "./log.js";
+import { processSingleton } from "./process-state.js";
 
 /**
  * The shortest passage worth a vector.
@@ -184,8 +185,27 @@ export interface ArticleVectors {
 
 /** `${slug}:${hashBlocks(blocks)}:${RECIPE}` → the vectors. */
 const CACHE = new Map<string, ArticleVectors>();
-/** The same key → the request in flight, so N readers do not buy N copies. */
-const INFLIGHT = new Map<string, Promise<ArticleVectors>>();
+/**
+ * The same key → the request in flight, so N readers do not buy N copies.
+ *
+ * **Kept on the process rather than the module, and here it guards two things.**
+ * A Vite reload re-evaluates every server module inside the *same* process
+ * without cancelling the request in flight
+ * ([process-state.ts](process-state.ts)). A plain module-scope map is empty in
+ * the second copy, so the next reader buys a second set of embeddings while the
+ * first is still being paid for — **and `MAX_INFLIGHT` is counted off this map,
+ * so a second copy silently doubles the cap** from four concurrent articles to
+ * eight. `CACHE` above stays module-scope on purpose: a duplicated cache is a
+ * cold cache, which costs a lookup, not a call.
+ *
+ * Found by GPT Sol reviewing
+ * docs/plans/260903d-improve-the-codebase-second-sweep.md § T2.2.
+ */
+const INFLIGHT = processSingleton<Map<string, Promise<ArticleVectors>>>(
+  "article-vectors.inflight",
+  "2026-09-03-map",
+  () => new Map(),
+);
 
 /**
  * The blocks worth embedding, with their positions kept.

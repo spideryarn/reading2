@@ -403,9 +403,44 @@ judge the rule as it stands, never re-tuned.
 
 ## `cost/` — what does one article actually cost us?
 
-**Not runnable yet**; the plan is
-[260902g](../docs/plans/260902g-estimate-article-ingestion-and-mode-generation-costs.md). Two
-pieces of it are already here and are worth reading before anybody re-derives them:
+```
+npm run eval:cost -- --preflight                          # free: every gate, no money
+npm run eval:cost -- --fixture short-html --all-modes      # ingest, then one job per mode
+npm run eval:cost:interactions -- --slug <slug> --list     # the twelve per-interaction tasks
+```
+
+**The answer, 2026-09-03: an ingest costs $0.03 on a 561-word essay and $0.33 on a 16,855-word one;
+pressing every mode button takes those to $0.35 and $1.55.** The write-up is
+[results/cost-per-article-2026-09-03.md](results/cost-per-article-2026-09-03.md) — per-article ×
+per-step, the range, cost per 1,000 words, the per-interaction table, the observed variation in
+long-article hierarchy, what is ranked most expensive and why, and the reproduction command for
+every figure. The plan is
+[260902g](../docs/plans/260902g-estimate-article-ingestion-and-mode-generation-costs.md).
+
+It drives the **production** queue rather than a copy of it — `run.ts` replaces stage 1 with a
+fixture read and overlays `withSpendAttribution({ scopeKind: "eval" })` on every step, so what is
+priced is what ships. `interactions.ts` calls the request-path functions directly for the things
+that are not pipeline steps. `report.ts` is the arithmetic and has no IO; `fixtures.ts` is the
+committed three-article corpus, with its two gaps written down rather than left to be assumed.
+
+Four things in it are worth copying into the next eval that measures money:
+
+- **A cold assertion that can be falsified, not argued.** On a per-mode draw *any* cache read is
+  fatal. The reason the modes can be priced cheaply — one ingest, then eight single-mode jobs
+  against the adopted article — is that a single-mode job marks no breakpoint and Anthropic's cache
+  is explicit-only. That is a claim about the provider, so it is checked on every draw rather than
+  asserted in a comment. Null cache telemetry is fatal too: unknown is not evidence of coldness.
+- **Calls made reconciled against rows kept.** Sink write failures are swallowed and a Postgres
+  read cannot report a row that was never inserted, so `AdvanceParts.onStepSpend` hands the runner
+  each step collector's count. The first paid run spent $0.0333 and the ledger kept neither row,
+  with every gate green.
+- **A paid failure is not a price.** A generation billed in full that wrote nothing is recorded,
+  excluded from every per-article figure and listed separately. Two of them turned up.
+- **A round labelled cold is checked against its calls.** One `chat` cold round read a cache an
+  earlier run had written; the runner noticed and withheld the ratio rather than printing a 1.2×
+  that would have read as a fact about caching.
+
+Two earlier pieces are kept because they are worth reading before anybody re-derives them:
 
 - **`baseline/`** — what the ledgers we already had could be made to say, with the scripts that
   say it. Every figure reproduces (`final-numbers.py`); the reproduction command is at the top of
@@ -413,13 +448,20 @@ pieces of it are already here and are worth reading before anybody re-derives th
   and **$0.61** on a 21,000-word one, and **a third of all the AI spend in our history was
   duplicate execution** from a bug since fixed.
 - **`feasibility.md`** — how an eval drives the *production* queue and still keeps its spend out
-  of the Product bucket, without changing the cost machinery: wrap each step's `run` in
-  `withSpendAttribution({ scopeKind: "eval" })`. It also records the trap that `enqueue`'s
-  `pump()` will run the job with the production registry and silently ignore your overlay.
+  of the Product bucket, without changing the cost machinery. It also records the trap that
+  `enqueue`'s `pump()` will run the job with the production registry and silently ignore your
+  overlay.
 
 The rule the rest of this file already follows applies double here: **eval rows are excluded from
 `npm run cost` by design**, so a cost eval has to report its own spend rather than read it out of
 the product report.
+
+It has already paid for itself once. Pricing what a reader who presses two mode buttons pays found
+that the article cache has **never** worked for a pair of stages — the writer pays the premium and
+the reader sends no breakpoint, so it reads nothing —
+[260903c](../docs/postmortems/260903c-the-conditional-article-cache-breakpoint-marks-the-writer-but-never-the-reader.md).
+Nothing was red, every artefact was correct and the whole suite passed. It was found by measuring
+money and by nothing else.
 
 ## `embedding-retrieval.ts` — which embedding model finds the right passage in *our* articles?
 

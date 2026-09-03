@@ -158,6 +158,7 @@ import {
   ListTree,
   MessageCircle,
   MessageCircleQuestionMark,
+  Paintbrush,
   PenLine,
   RefreshCw,
   ScanLine,
@@ -184,7 +185,7 @@ import { isWebUrl } from "../urls.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam } from "./params.js";
-import { LIBRARY_HREF, carriedSearch, readHref } from "./router.js";
+import { LIBRARY_HREF, PROFILE_HREF, carriedSearch, readHref } from "./router.js";
 import { SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { EditableTitle, useArticleRename } from "./TitleEditor.js";
@@ -248,6 +249,9 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
      "no raw document" state a few rows down. */
   quiz: MessageCircleQuestionMark,
   sketch: PenLine,
+  /* A paintbrush beside the sketch's pen: the same argument, painted rather
+     than drawn. docs/project/diagram.md § Illustrated. */
+  illustrated: Paintbrush,
 };
 
 /**
@@ -761,7 +765,7 @@ export function Metadata({
                 <span className="tw:text-[0.7rem] tw:uppercase tw:tracking-[0.03em] tw:text-ink-faint">
                   About you
                 </span>
-                <Link href="/profile" className="tw:text-xs tw:text-highlight">
+                <Link href={PROFILE_HREF} className="tw:text-xs tw:text-highlight">
                   Edit on your profile →
                 </Link>
               </div>

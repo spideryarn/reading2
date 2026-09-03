@@ -333,9 +333,10 @@ silently, because fixing one is never the same edit as un-naming it.
 
 **And the paragraph's own prediction came true on 2026-09-03.** A `npm run check` run on a box
 carrying eleven worktrees came back with seven failures. Six were 5-second timeouts in suites that
-pass in isolation; the seventh was real. Telling them apart cost a second full pass — so re-run a red
-suite alone before believing it, and do not run the inference backwards and assume a red suite is
-noise. [260903d](../plans/260903d-improve-the-codebase-second-sweep.md) § T1.2.
+pass in isolation; the seventh was a real regression that a guard had caught. Telling them apart cost
+a second full pass, and the expensive half was not the re-run — it was that the noise and the signal
+were indistinguishable until it finished.
+[260903d](../plans/260903d-improve-the-codebase-second-sweep.md) § T1.2.
 
 ## A green run here proves less than it looks like
 

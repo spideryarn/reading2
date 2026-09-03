@@ -624,6 +624,8 @@ export type GlossaryFound = Omit<GlossaryResponse, "profileChanged">;
 /** As `ThreadFound`, for the ideas. */
 export type IdeasFound = Omit<IdeasResponse, "profileChanged">;
 export type SketchFound = Omit<SketchResponse, "profileChanged">;
+/** As `ThreadFound`, for the illustration. */
+export type IllustratedFound = Omit<IllustratedResponse, "profileChanged">;
 /** As `ThreadFound`, for the quotes. */
 export type QuotesFound = Omit<QuotesResponse, "profileChanged">;
 
@@ -1011,6 +1013,33 @@ export interface SketchResponse {
   /** The article is the same and we would draw it differently now. */
   outdated: boolean;
   /** You are not who you were when we drew it. */
+  profileChanged: boolean;
+}
+
+/**
+ * The Illustrated plates as the panel receives them —
+ * docs/project/diagram.md § Illustrated.
+ *
+ * `unknown` for the same reason `SketchResponse.sketch` is: the real type lives
+ * in src/illustrated-plate.ts, which imports *this* file, and the client has to
+ * run it through `readIllustrated` on arrival anyway.
+ *
+ * **`stale` means something different here than anywhere else, and the panel's
+ * sentence has to say so.** Everywhere else it means *the article moved*. Here
+ * it means *the Sketch moved* — a forced Sketch redraw changes the scene with
+ * every article byte identical, so this is the one artefact whose freshness is
+ * about another artefact. src/illustrated.ts § `inputFingerprint`. A stale
+ * illustration is a picture of an argument nobody is looking at any more, which
+ * is a stronger claim than a stale Sketch's, not a softer one.
+ */
+export interface IllustratedResponse {
+  /** An `Illustrated`, unvalidated. Run it through `readIllustrated`. */
+  illustrated: unknown;
+  /** The Sketch moved underneath these plates. */
+  stale: boolean;
+  /** The Sketch is the same and we would paint it differently now. */
+  outdated: boolean;
+  /** You are not who you were when it was painted. */
   profileChanged: boolean;
 }
 
@@ -2014,8 +2043,14 @@ export type StepName =
      contiguous. */
   | "quiz"
   /* The picture a model draws of the argument — docs/project/diagram.md § Sketch.
-     Last in the list and last in `STEP_ORDER`: nothing reads what it writes. */
-  | "sketch";
+     Nothing reads what it writes except the one below. */
+  | "sketch"
+  /* The same argument painted, docs/project/diagram.md § Illustrated. **The only
+     step here whose input is another step's artefact rather than the article**,
+     so it is last in `STEP_ORDER` and it *refuses* rather than pulls: a request
+     for it alone arrives as `steps: ["illustrated"]` and nothing puts `sketch`
+     in front of it. src/pipeline.ts § illustrated. */
+  | "illustrated";
 
 export type JobStatus = "queued" | "running" | "done" | "error" | "cancelled";
 export type StepStatus = "pending" | "running" | "done" | "skipped" | "error";

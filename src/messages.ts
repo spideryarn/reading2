@@ -1896,6 +1896,7 @@ export const OWNED_ARTEFACT = {
   ideas: "your list of ideas",
   quotes: "your set of quotes",
   sketch: "your sketch diagram",
+  illustrated: "your illustrated diagram",
   /* `satisfies`, not an annotation. `Partial<Record<StepName, string>>` as the
      declared type makes every value `string | undefined`, and the coverage
      check in tests/messages.test.ts would then be unsatisfiable without a cast
@@ -2535,6 +2536,46 @@ export function ingestQuotaReached(quota: {
       `You have added all ${quota.limit} articles this billing period covers. Trying again will ` +
       `not help until your allowance starts again on ${when}. ${kept} [pay-limit]`,
   };
+}
+
+/**
+ * The three codes `ingestQuotaReached` can end with — *the wall said no*.
+ *
+ * A list rather than a prefix test, and the difference is the point: `pay-off`,
+ * `pay-down` and `pay-none` are also `pay-` codes and none of them is a quota
+ * refusal. A deployment with no Stripe configured, a bad minute at Stripe, and
+ * a Portal press with nothing to manage are all things a reader can do nothing
+ * about by subscribing, and offering them an Upgrade link would be an offer
+ * that leads nowhere.
+ *
+ * **Kept beside the function that produces them**, so a fourth refusal added
+ * above is one line away from the list that decides what is drawn around it —
+ * and `tests/billing-plan.test.ts` asserts the two agree, by building all three
+ * messages and comparing their codes against this array.
+ */
+export const QUOTA_CODES: readonly string[] = ["pay-free", "pay-limit", "pay-lapsed"];
+
+/**
+ * **Is this failure the quota refusing an ingest?**
+ *
+ * The one question `QuotaNotice` (src/web/QuotaNotice.tsx) asks before putting a
+ * link to `/profile` beside a sentence.
+ *
+ * Asked of the **message**, because that is all a client has where these are
+ * read: `readJson` throws the server's own sentence and the code is the last
+ * thing in it. Reading the code rather than matching the prose is the rule
+ * `kindOfMessage` already follows — the wording is free to be reworded, and a
+ * classifier built out of prose silently reclassifies everything the day
+ * somebody improves a sentence.
+ *
+ * The 402 would work too, and is not used: `statusOf` is available at the fetch
+ * but not from the durable `lastFailure` string the add page keeps, and one
+ * question with two spellings is one place for them to disagree.
+ */
+export function isQuotaRefusal(message: string | null | undefined): boolean {
+  if (!message) return false;
+  const code = codeOfMessage(message);
+  return code !== null && QUOTA_CODES.includes(code);
 }
 
 /**

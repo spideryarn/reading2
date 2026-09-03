@@ -302,7 +302,7 @@ function refusalFor(
   const used = usage.used + usage.inFlight;
   if (used < entitlement.limit) return null;
   /* Read off the row rather than inferred from `used > limit`; see `lapsed`. */
-  const lapsed = Boolean(row?.stripeSubscriptionId) && !isEntitledStatus(row?.status ?? null);
+  const lapsed = hasLapsed(row);
   return {
     kind: "refused",
     used,
@@ -310,6 +310,33 @@ function refusalFor(
     ...(entitlement.tier === "paid" ? { resetAt: entitlement.periodEnd } : {}),
     ...(lapsed ? { lapsed: true as const } : {}),
   };
+}
+
+/**
+ * **Is there a subscription on this row that entitles nothing?**
+ *
+ * A `stripe_subscription_id` beside a status the allowlist does not entitle —
+ * read off the row rather than inferred from `used > limit`, which is the same
+ * answer most of the time and a wrong one the day somebody lowers a tier's
+ * `ingests_per_period`.
+ *
+ * **It is not quite "had a subscription and lost it"**, which is what this said
+ * and what the refusal copy it chooses implies: `incomplete` is a subscription
+ * whose *first* payment never succeeded, so nobody has ever paid, and it lands
+ * here too (GPT Sol, 2026-09-03). Kept as it is, because the copy it selects —
+ * "your plan has ended, and resubscribing is what adds more" — is the right
+ * thing to say to somebody whose subscription is not working either way, and the
+ * alternative is a fourth `pay-` message for a state Stripe expires in 24 hours.
+ * Written down rather than fixed.
+ *
+ * Exported so the wall and the page ask it the same way: `refusalFor` below
+ * chooses the `pay-lapsed` refusal with it, and `readBillingSummary`
+ * (src/billing/summary.ts) chooses `/profile`'s "your plan has ended" with it.
+ * Two spellings of this rule would be two answers to *is my plan over*, on the
+ * same screen a minute apart.
+ */
+export function hasLapsed(row: BillingRow | undefined): boolean {
+  return Boolean(row?.stripeSubscriptionId) && !isEntitledStatus(row?.status ?? null);
 }
 
 /** Room for another ingest, without taking any. See `ingestEligibility`. */
@@ -345,6 +372,56 @@ export async function ingestEligibility(
   const entitlement = entitlementFromRow(row, sold, new Date());
   if ("kind" in entitlement) return entitlement; // stale
   return refusalFor(entitlement, await usageFor(ownerId, entitlement), row) ?? { kind: "eligible" };
+}
+
+/**
+ * The billing row as a page needs it: the entitlement columns, plus the one
+ * fact entitlement does not care about.
+ *
+ * `cancelAtPeriodEnd` is not part of `BillingRow` because entitlement is not
+ * decided by it — a cancelled-at-period-end subscription is still `active` and
+ * still entitled until the period runs out. It matters to the *reader*, who is
+ * owed the difference between "starts again on the 3rd" and "runs out on the
+ * 3rd", so it travels beside the row rather than inside it.
+ */
+export interface AccountSnapshot extends BillingRow {
+  readonly cancelAtPeriodEnd: boolean;
+}
+
+/**
+ * Read one owner's billing row, creating nothing.
+ *
+ * For the surfaces that only *ask* — `/profile` and `/admin/users`. It takes no
+ * lock and inserts no anchor, on the same reasoning as `ingestEligibility`: a
+ * question should not write, and a missing row is the free tier exactly as it is
+ * under the lock.
+ */
+export async function accountSnapshot(ownerId: string): Promise<AccountSnapshot | undefined> {
+  const [row] = await getDb()
+    .select({ ...BILLING_COLUMNS, cancelAtPeriodEnd: billingAccounts.cancelAtPeriodEnd })
+    .from(billingAccounts)
+    .where(eq(billingAccounts.ownerId, ownerId))
+    .limit(1);
+  return row;
+}
+
+/**
+ * Every billing row there is — the one read here that is not owner-scoped.
+ *
+ * `/admin/users` needs one row per account and there is no owner to filter by,
+ * which is the same exemption `src/store/pg-admin.ts` documents at length for
+ * the five count queries. It is called from there and nowhere else; a second
+ * caller should be a second look at whether it is allowed.
+ */
+export async function allAccountSnapshots(): Promise<Map<string, AccountSnapshot>> {
+  const rows = await getDb()
+    .select({
+      ownerId: billingAccounts.ownerId,
+      ...BILLING_COLUMNS,
+      cancelAtPeriodEnd: billingAccounts.cancelAtPeriodEnd,
+    })
+    .from(billingAccounts);
+  return new Map(rows.map(({ ownerId, ...row }) => [ownerId, row]));
 }
 
 /**

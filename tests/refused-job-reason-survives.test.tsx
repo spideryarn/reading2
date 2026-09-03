@@ -81,6 +81,7 @@ vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
 
 const { useIdeas } = await import("../src/web/useIdeas.js");
 const { Tweets } = await import("../src/web/Tweets.js");
+const { AddPage } = await import("../src/web/AddPage.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 
 /** Enough article for the page to render its head. */
@@ -92,6 +93,16 @@ const ARTICLE = {
 
 /** What the server says when it refuses the job. */
 const REFUSED = "You are out of credit for today.";
+
+/**
+ * The sentence the refusal carries, so one case can send a **quota** refusal.
+ *
+ * A variable rather than a second stub: the add-page cases below are about what
+ * happens to the server's words, and a `[pay-free]` code changes what the page
+ * draws around them (`QuotaNotice`, and the `worthRetrying` gate on *Try
+ * again*). Reset to `REFUSED` before each case.
+ */
+let refused = REFUSED;
 
 /** Every request the stub was asked to make, so a test can prove one happened. */
 let sent: { method: string; url: string }[] = [];
@@ -127,6 +138,7 @@ beforeEach(() => {
   heldPolls = [];
   ideas = null;
   refusing = true;
+  refused = REFUSED;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -135,7 +147,7 @@ beforeEach(() => {
       if (method === "POST" && url === "/api/jobs") {
         /* Received and **refused**, with a reason written for a reader. This is
            the case `postFailed` cannot tell from a dead network on its own. */
-        if (refusing) return json({ error: REFUSED }, 402);
+        if (refusing) return json({ error: refused }, 402);
         return json({ id: "job1", slug: "constitution", status: "queued", steps: [] });
       }
       if (url === "/api/jobs") {
@@ -334,5 +346,85 @@ describe("the thread page, which had its own copy of all this", () => {
     refusing = false;
     await press();
     expect(host.textContent).not.toContain(REFUSED);
+  });
+});
+
+describe("the add page, which is the fifth copy and was found in a browser", () => {
+  /**
+   * **The one that mattered, and the one a passing suite did not catch.**
+   *
+   * `/add/<url>` posts on mount and had exactly the spelling this whole file is
+   * about: a boolean `failed`, and `queue.error` rendered beside it. So the
+   * quota's 402 — *"You have added all 3 articles a free account can add… the
+   * Upgrade button on your profile page sets one up. [pay-free]"* — was replaced
+   * by the generic *"It didn't get as far as the queue"* before anybody could
+   * read it, taking the link to `/profile` with it. **That is the entire point
+   * of the surface it was added to**: the refusal names a button, and the page
+   * that was meant to hand the reader that button showed them nothing.
+   *
+   * Found in the browser on 2026-09-03, by a subagent driving a real free
+   * account against a real server, after every unit test in the change was
+   * green. Written up here rather than in a file of its own because this is the
+   * file about this bug, and its own header already predicted the shape:
+   * *"the way this breaks is by somebody reintroducing a private `queue.error`
+   * read"*.
+   *
+   * The page is mounted whole, and everything real runs but the auth client.
+   */
+  const QUOTA = "You have added all 3 articles a free account can add. [pay-free]";
+
+  it("goes on saying what the server said after the next poll succeeds", async () => {
+    refused = QUOTA;
+    await act(async () => {
+      root.render(createElement(AddPage, { source: { kind: "url", url: "example.com/an-essay" } }));
+    });
+    await settle();
+
+    /* Before the poll lands — the frame the reader never sees. The broken code
+       passes this line, which is why it is here. */
+    expect(host.textContent).toContain(QUOTA);
+    expect(sent.some((r) => r.method === "POST" && r.url === "/api/jobs")).toBe(true);
+
+    /* And the poll the failed POST's own `finally` started really is in flight.
+       Without this the test could pass by never reaching the thing that wipes
+       the message. */
+    const before = polls();
+    await answerPolls();
+    expect(before).toBeGreaterThanOrEqual(1);
+
+    /* After a perfectly successful poll. Still the server's sentence, and still
+       the way out of it. */
+    expect(host.textContent).toContain(QUOTA);
+    expect([...host.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toContain("/profile");
+  });
+
+  it("does not offer a Try again under a refusal that says trying again will not help", async () => {
+    /* The rule `worthRetrying` decides, and the reason it is worth a case: a
+       button under a sentence that has just said the count will be the same is
+       one that teaches the reader to distrust the sentence. */
+    refused = QUOTA;
+    await act(async () => {
+      root.render(createElement(AddPage, { source: { kind: "url", url: "example.com/an-essay" } }));
+    });
+    await settle();
+    await answerPolls();
+
+    expect(host.textContent).not.toContain("It didn't get as far as the queue");
+    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).not.toContain("Try again");
+  });
+
+  it("still offers a Try again for a failure another go could fix", async () => {
+    /* The mirror, so the case above cannot pass by hiding the button for
+       everything. A refusal with no code is unrecognised, and `worthRetrying`
+       gives an unrecognised message the benefit of the doubt. */
+    refused = "The server was busy.";
+    await act(async () => {
+      root.render(createElement(AddPage, { source: { kind: "url", url: "example.com/an-essay" } }));
+    });
+    await settle();
+    await answerPolls();
+
+    expect(host.textContent).toContain("The server was busy.");
+    expect(host.textContent).toContain("It didn't get as far as the queue");
   });
 });

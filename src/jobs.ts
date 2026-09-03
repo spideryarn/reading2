@@ -341,6 +341,32 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      for a batch of three separate articles, which is the trap this table's
      header warns about from the other direction. */
   sketch: 240_000,
+  /* **MEASURED**, three runs over two articles on 2026-09-03
+     (evals/results/illustrated-2026-09-03b/README.md): the brief call took 175s,
+     223s and **334s**, and the three plates behind each took 83s at worst. So
+     the worst run so far is **417s**, and a fourth plate — `MAX_PLATES` is 4,
+     src/illustrated-plate.ts — puts the worst case at about **450s**.
+     Sequential by design: bounded parallelism here would multiply against the
+     three-job concurrency above.
+
+     **600s, and it is a ceiling rather than a rounding.** Every other row here
+     rounds up hard, usually to twice the worst — this one cannot. Twice 450s is
+     900s, and the deadline a claimant works to is `LEASE_MS - DEADLINE_MARGIN_MS`
+     = 740s, so a budget over that is a step that never fits in a fresh claim and
+     therefore never starts at all: the job would sit `queued` for ever with
+     nothing failing. 600s is the largest round number that leaves the claimant
+     its 140s of unwind, and it is 1.3x the worst measured rather than 2x. The
+     honest reading of that is that **this step is the one with the least
+     headroom in the table**, and the brief call is 86-89% of it.
+
+     **So `MAX_PLATES` and this number move together, and neither alone.**
+     Raising the cap to 5 costs another ~35s of plate and eats the margin;
+     raising this past 740s needs `LEASE_MS` raised first, which needs
+     `vercel.json`'s `maxDuration` — 800s today — raised before it, and
+     tests/jobs-lease-budget.test.ts is what refuses the pair being broken.
+     If the brief ever needs to be longer, the lever the plan names is the
+     prompt: cap the vignette count and the length of the compositions. */
+  illustrated: 600_000,
 };
 
 /**
@@ -1535,6 +1561,24 @@ export async function advanceJobWith(
    * It settles the job rather than taking it over — see the header — so the
    * reader sees a job that stopped and a Retry button, not a job that silently
    * restarted somewhere else.
+   *
+   * **And it is deliberately not scoped to `owner`, which is in scope on the
+   * line above and would look like a free improvement.** `settleExpired` takes
+   * an optional owner and `listJobs` passes one, so the asymmetry reads like an
+   * oversight. It is the opposite. The concurrency cap is *global* — "how many
+   * jobs may run at once, anywhere", counted inside `claim`'s `queue_state`
+   * lock (`CONCURRENCY_ENV` above) — and this is the **only** door that reaches
+   * the job of an owner who is not coming back. Scope it, and a reader whose
+   * claimant died leaves a `running` row holding one of the three global slots
+   * for ever, because the only thing that would settle it is a request that
+   * owner will never make again. `listJobs` may scope its call for an unrelated
+   * reason: a read-only page load should not end somebody else's job.
+   *
+   * The cost of the global sweep is real and is not being waved away — it is
+   * counted at `listJobs` below, which is also where the two doors are compared.
+   * Written down after the 2026-09-03 sweep proposed the scoping fix, and GPT
+   * Sol confirmed independently that it is unsafe.
+   * docs/plans/260903d-improve-the-codebase-second-sweep.md § T1.3.
    */
   /* **The outcomes, and this line is the only account of them there is.** The
      claimant that held these jobs is gone and logged nothing on its way out, so
