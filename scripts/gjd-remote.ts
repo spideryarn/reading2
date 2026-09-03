@@ -59,7 +59,7 @@ import {
   sessionRepo,
   sessionState,
 } from "./gjd-remote-tmux.js";
-import { buildProvisionRunner, cloudInitGate, provisionVerdict } from "./gjd-remote-provision.js";
+import { bootstrapProbeScript, buildProvisionRunner, cloudInitGate, provisionVerdict } from "./gjd-remote-provision.js";
 import { declaredServers, mcpVerdict } from "./gjd-remote-mcp.js";
 import { parseDuration, sshInvocation, waitPreamble } from "./gjd-remote-run.js";
 import {
@@ -4818,11 +4818,11 @@ function waitForCloudInit(seconds: number): void {
     encoding: "utf8",
     timeout: (seconds + 30) * 1000,
   });
-  // The status file is the second witness: cloud-init reports the first boot
-  // for ever, and this box's first boot went wrong before provision.sh was
-  // split out of it. See cloudInitGate.
-  const prior = ssh(`sudo cat /var/log/gjd-provision-status 2>/dev/null || true`, { check: false });
-  const verdict = cloudInitGate(`${r.stdout ?? ""}`, prior);
+  // The bootstrap artefacts are the second witness: cloud-init reports the
+  // first boot for ever, and this box's first boot went wrong before
+  // provision.sh was split out of it. See cloudInitGate.
+  const bootstrap = ssh(bootstrapProbeScript(), { check: false });
+  const verdict = cloudInitGate(`${r.stdout ?? ""}`, bootstrap);
   if (verdict.ok) {
     console.log(green(`✓ ${verdict.why}`));
     return;

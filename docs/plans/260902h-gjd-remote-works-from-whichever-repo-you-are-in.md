@@ -782,6 +782,14 @@ into its own repo · per-session worktrees on the box · a second Unix user.
   no injected-transport test for `sendEnvPayload` itself — is deferred: it lives in the
   `main()`-on-import file. Then `gjd-remote provision` refused: cloud-init's first-boot status on
   the box is `error` for ever (the pre-split `runcmd`), and the wait gate added on 2026-09-01 had
-  never been run against this box. `cloudInitGate` now reads the provision status file as a second
+  never been run against this box. `cloudInitGate` now asks for the bootstrap artefacts as a second
   witness — tests red first, then green;
-  [hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md) says why.
+  [hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md) says why. (Its first
+  version read the provision status file instead, and the very next run showed why not: a failed
+  run rewrites that file as "started".)
+- 2026-09-03 — **Provisioning then failed at "install claude code" with the installer saying
+  success.** Root-caused on the box: `su - greg -c 'set -eu; …'` runs `~/.bash_logout` on exit,
+  its `clear_console -q` fails without a console, and `set -e` made that the exit status — every
+  `su -` step with `set -e` in it, since 2026-09-02. `provision.sh` now runs user steps through a
+  non-login `AS_USER` array, and `run` says "failed with exit N" rather than "failed or timed out".
+  [260903a-a-logout-hook-decided-the-exit-status.md](../postmortems/260903a-a-logout-hook-decided-the-exit-status.md).

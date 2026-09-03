@@ -102,33 +102,51 @@ export function cloudInitVerdict(output: string): Verdict {
 }
 
 /**
+ * What a bootstrapped box has, asked directly. Prints `BOOTSTRAP OK` or
+ * `BOOTSTRAP MISSING: …` — the same list provision.sh checks on its own first
+ * lines, because "bootstrapped" means exactly "provision.sh's preconditions
+ * hold", and a second list would be the one that drifts.
+ */
+export function bootstrapProbeScript(): string {
+  return (
+    `missing=""; for c in rsync curl gpg jq git flock; do command -v "$c" >/dev/null 2>&1 || missing="$missing $c"; done; ` +
+    `sudo test -r /etc/gjd-provision.env || missing="$missing /etc/gjd-provision.env"; ` +
+    `if [ -z "$missing" ]; then echo "BOOTSTRAP OK"; else echo "BOOTSTRAP MISSING:$missing"; fi`
+  );
+}
+
+/**
  * Whether the box is bootstrapped enough to provision — the wait's verdict, read
- * against what provision.sh has recorded since.
+ * against what is actually on the box.
  *
  * `cloud-init status` reports the FIRST boot and never changes afterwards. The
  * real box's first boot ran the old, pre-split runcmd and recorded `error` for
- * good, and provision.sh has completed on it since — so a gate on the verdict
- * alone could never pass there, and on 2026-09-03 it did not. What provisioning
- * needs is a bootstrapped box, and a `PROVISION OK` written after the boot is
- * the proof of one: the script could not have got to its last line otherwise.
+ * good, and it has been provisioned several times since — so a gate on the
+ * verdict alone could never pass there, and on 2026-09-03 it did not. What
+ * provisioning needs is a bootstrapped box, and the bootstrap probe asks for
+ * the artefacts themselves. (Not the provision status file: every run rewrites
+ * it as "started" on its first line, so one failed re-run would have erased the
+ * evidence the next one needed.)
  *
  * Two refusals survive on purpose: cloud-init still running (the wait's other
- * job, and a status file says nothing about *this* boot's progress), and a bad
- * first boot with no completed provision behind it.
+ * job, and artefacts say nothing about *this* boot's progress), and a bad
+ * first boot whose artefacts are not all there.
  */
-export function cloudInitGate(output: string, priorReport: string): Verdict {
+export function cloudInitGate(output: string, bootstrap: string): Verdict {
   const v = cloudInitVerdict(output);
   if (v.ok) return v;
   const finished = /rc=\d+\s*$/.test(output.trim());
   if (!finished) return v;
-  if (!/^PROVISION OK$/m.test(priorReport)) return v;
-  const ranAt = /^ran:\s*(\S+)/m.exec(priorReport)?.[1] ?? "an unrecorded date";
+  if (!/^BOOTSTRAP OK$/m.test(bootstrap)) {
+    const missing = /^BOOTSTRAP MISSING:(.*)$/m.exec(bootstrap)?.[1]?.trim();
+    return { ok: false, why: `${v.why}${missing ? `, and the bootstrap left out: ${missing}` : ""}` };
+  }
   const status = /status:\s*(\S+)/.exec(output)?.[1] ?? "error";
   return {
     ok: true,
     why:
-      `cloud-init's first boot ended in "${status}", but provision.sh has completed on this box since ` +
-      `(${ranAt}) — that record, not first-boot history, is what says it is bootstrapped`,
+      `cloud-init's first boot ended in "${status}", but everything it was meant to leave behind is here ` +
+      `— that, not first-boot history, is what says the box is bootstrapped`,
   };
 }
 
