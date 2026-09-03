@@ -87,6 +87,23 @@ function brief(vignettes: unknown[], over: Record<string, unknown> = {}): unknow
 /** The scenes a one-plate brief is read against. */
 const ONE = { blockText: BLOCKS, sceneIds: ["overview"] };
 
+/**
+ * **One version, under two names, and they must never drift apart.**
+ *
+ * `readModelBrief` stamps `ILLUSTRATED_VERSION` onto the artefact; src/store/pg.ts
+ * answers `outdated` by comparing that field against `PROMPT_VERSION`. They were
+ * two literals until 2026-09-03, equal by coincidence, and bumping one of them
+ * for a prompt change made every freshly drawn artefact report `outdated: true`
+ * for ever — the reader would be told the picture was out of date the instant it
+ * arrived. They are the same constant now; this fails if anyone re-splits them.
+ */
+it("stamps the artefact with the version the store compares against", async () => {
+  const { PROMPT_VERSION } = await import("../src/illustrated.js");
+  expect(PROMPT_VERSION).toBe(ILLUSTRATED_VERSION);
+  const { illustrated } = readModelBrief(brief([good()]), ONE);
+  expect(illustrated.version).toBe(PROMPT_VERSION);
+});
+
 describe("readModelBrief", () => {
   it("keeps a vignette whose quote really is in the block it names", () => {
     const { illustrated, report } = readModelBrief(brief([good()]), ONE);

@@ -240,9 +240,19 @@ Three smaller things in the picker that are easy to get wrong and are worth not 
 - **`dragover` must call `preventDefault`.** Its default action is *"this is not a drop target"*,
   and without cancelling it the browser opens the PDF in the tab instead — which looks exactly
   like a drop handler that never ran.
-- **Only the dashed box is a drop target**, not the card around it or the URL field. A PDF let go an
-  inch too high does nothing at all, and that is worth knowing before diagnosing a drop that
-  "didn't work".
+- **The drop target is the whole add box, and there is no dashed rectangle any more.** Until
+  2026-09-03 the picker drew its own dashed box — an icon, *Or drop a PDF here*, and an *Upload a
+  PDF* button — about 130px of a 300px section, for the rarer of the two ways in, which on a 390px
+  phone pushed the shelf's own list entirely below the fold. So it went, and its parts went two
+  ways: the button is now a small **PDF** control on the URL row beside Add, and `UploadPicker`
+  wraps everything in the section as the drop target, which is *much larger* than the dashed strip
+  was. Nothing else changed — dragging, the counter, the refusals, progress, cancellation and retry
+  are as they were. The border is transparent at rest and turns orange when a file is over it, so
+  the target costs no height until it is doing something. What advertised dropping was the caption;
+  that sentence now lives in the PDF button's `title` — and **the wrapper covers the card's own
+  padding for exactly that reason**, because a title that promises more target than exists sends a
+  near-miss through to the browser, which opens the PDF over the page. Measured before and after in
+  [260903g](../plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md#stage-3-the-two-layout-jobs).
 
 ## The add page
 
@@ -1438,8 +1448,8 @@ leaves the box eight seconds after it finishes (`KEEP_DONE_MS`), because the art
 the shelf directly below and that is the better place to look at it. A **failed** one never leaves
 at all, deliberately: the card is the only account of what went wrong, and clearing it on a timer
 would take that away while the reader was still reading it. And the server keeps **fifty finished
-jobs per reader**, [*preferring failures*](#the-failures-retry-is-not-offered-under) when it prunes,
-for the same reason.
+jobs per reader**, favouring failures where the two kinds compete for a slot, for the same reason
+(the rule is `src/store/pg-jobs.ts` § `trimFinished`).
 
 So the box meant to say *here is what is happening now* was, on any shelf more than a few weeks old,
 a column of every import that had ever gone wrong — sitting above the shelf, which is the actual

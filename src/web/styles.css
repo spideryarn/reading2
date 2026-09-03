@@ -3582,8 +3582,19 @@ td.text.has-hit[data-hues="8"] {
 .dock-question-state.own { color: var(--ink-soft); }
 
 /* The placeholders' tooltips carry three lines rather than a label, so they
-   need room the spine's band cards don't. */
-.tooltip.tip-soon { max-width: 22rem; }
+   need room the spine's band cards don't.
+
+   **The `min()` is not decoration, and it was missing until 2026-09-03.** This
+   rule is more specific than `.tooltip` above, so a bare `22rem` here silently
+   defeated that rule's `min(22rem, calc(100vw - 1.75rem))` — the clamp that
+   stops a card becoming wider than the window it is shifting inside. Above
+   380px the two are the same value, which is why nothing showed it: the
+   difference only appears on a narrow phone, and only for `tip-soon`, which by
+   then was every control card in the app. Found by a cross-family review of the
+   Feedback button's card, which adopted this class and inherited the defect
+   with it. Any future override here must carry the `min()` too, or restate the
+   whole clamp. */
+.tooltip.tip-soon { max-width: min(22rem, calc(100vw - 1.75rem)); }
 .tip-soon-head {
   font-weight: 600;
   color: var(--ink);
@@ -10932,7 +10943,10 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
     --logo-w: 2.6rem;
     /* And the Feedback button gives up its word for the same reason and in the
        same breath — FeedbackButton.tsx renders the label in a span this query
-       hides, leaving the icon and its `title`. Both bars reserve this as right
+       hides, leaving the icon and the `aria-label` (the `title` it used to lean
+       on became a hover card on 2026-09-03, and `display: none` takes the word
+       out of the accessibility tree as well as off the screen). Both bars
+       reserve this as right
        padding (§ shell), so leaving it at 7.5rem here would cost the title a
        fifth of a 390px screen for a word nobody can see. */
     --feedback-w: 2.4rem;
@@ -13247,3 +13261,419 @@ table.only-prose thead { display: none; }
    (tailwind.css § the @layer statement), and `tw:font-mono` on the fingerprint
    and `tw:text-sm` on Delete still win. */
 .metadata-page button { font: inherit; }
+
+/* =========================================================== § the site ==
+   The signed-out marketing pages — LandingPage.tsx and FeaturesPage.tsx — and
+   nothing else in the app. Everything here is prefixed `.site-`.
+
+   **Why these are classes and not utilities.** Every one of them is used on
+   both pages, which is what makes them a system rather than a nudge, and
+   docs/project/design-css-overview.md § Which mechanism owns what puts a system
+   in this file. The `tw:` utilities stay for per-element adjustments; the
+   visual language lives here so the two pages cannot drift into two languages.
+
+   **The posture is Greg's, 2026-09-03, and it was chosen against advice.**
+   Offered "tidy it", "restructure it" and "go full modern-SaaS", he picked the
+   third; a cross-model consultation and the design research had both argued for
+   the second on brand grounds. The plan records that in full:
+   docs/plans/260903g-redesign-the-signed-out-marketing-pages.md § The decision
+   Greg made. So: glow, display type, tilt, bento, scroll-reveal — spent on
+   craft rather than on volume, and none of it reaching the reading view, which
+   is a different room with different rules.
+
+   **The one thing to know before editing.** The app's own surface tokens are too
+   close together to build depth from: --background is oklch(0.145 0 0), --card
+   is 0.205, --border a little above both — three greys within 0.13, so a dark
+   screenshot on the dark page reads as a smudge. That is the defect this block
+   exists to fix, and it fixes it with translucent white over the page rather
+   than by adding tokens, because these values are marketing-page staging and
+   not part of the app's palette. Do not lift them into tokens.css.
+
+   How to shoot the pictures these rules frame: docs/project/marketing-pages.md. */
+
+/* ---- the ladder: surfaces and hairlines, over a near-black page ---- */
+.site {
+  --site-hairline: rgb(255 255 255 / 0.10);
+  --site-hairline-strong: rgb(255 255 255 / 0.16);
+  --site-surface: rgb(255 255 255 / 0.028);
+  --site-surface-raised: rgb(255 255 255 / 0.05);
+  /* The lift under a framed screenshot. Black on near-black does almost
+     nothing, so the shadow is mostly there to darken the few pixels directly
+     under the bottom edge; the top-edge inset highlight in .site-frame is what
+     actually separates the object from the page. */
+  --site-lift: 0 24px 60px -18px rgb(0 0 0 / 0.75), 0 2px 8px rgb(0 0 0 / 0.4);
+  background: var(--background);
+}
+
+/* ---- the glow: ONE per page, behind the hero, and nowhere else ----
+   Every site the design research surveyed uses its gradient exactly once, at
+   the top, rather than behind each screenshot; repeated, it stops reading as
+   emphasis and starts reading as wallpaper.
+
+   Mixed in plain rgb() rather than oklch. --page is written `oklch(0.145 0 0)`
+   with the hue explicitly 0 rather than missing, so polar interpolation drags a
+   mix round to 11.7deg and lands pink instead of warm — the trap in
+   design-css-overview.md § Colour, which --highlight-wash escapes only by
+   saying `in oklab`. */
+.site-glow {
+  position: absolute;
+  inset-inline: -30%;
+  top: -18rem;
+  height: 46rem;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(46% 46% at 34% 38%, rgb(219 138 69 / 0.34) 0%, rgb(219 138 69 / 0.10) 45%, transparent 74%),
+    radial-gradient(40% 42% at 72% 26%, rgb(96 178 214 / 0.11) 0%, transparent 70%);
+  filter: blur(46px);
+}
+
+/* The faint grid under the hero, fading out downward. Two repeating gradients
+   and a mask; no image request, no dependency. */
+.site-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.028) 0 1px, transparent 1px 5.5rem),
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 0.028) 0 1px, transparent 1px 5.5rem);
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.9), transparent 78%);
+}
+
+/* ---- the top bar ---- */
+.site-nav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  backdrop-filter: blur(14px);
+  background: color-mix(in oklab, var(--background) 82%, transparent);
+  border-bottom: 1px solid transparent;
+  transition: border-color 180ms ease, background-color 180ms ease;
+}
+/* Painted only once the page has moved, so the bar is invisible over the hero
+   and becomes a surface over content. `animation-timeline: scroll()` does this
+   with no scroll listener and no React state; where it is unsupported the bar
+   simply keeps its transparent border, which is the correct look at the top of
+   the page and an acceptable one further down. */
+@supports (animation-timeline: scroll()) {
+  .site-nav {
+    animation: site-nav-settle linear both;
+    animation-timeline: scroll(root block);
+    animation-range: 0 6rem;
+  }
+  @keyframes site-nav-settle {
+    to {
+      border-bottom-color: var(--site-hairline);
+      background: color-mix(in oklab, var(--background) 92%, transparent);
+    }
+  }
+}
+
+/* ---- display type ----
+   Marketing type on the surveyed sites runs 3-5x the body size; ours ran about
+   2x. clamp() rather than breakpoints because there is one number here and it
+   should be continuous. */
+.site-display {
+  font-family: var(--font-reading);
+  font-size: clamp(2.6rem, 7.2vw, 4.75rem);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  font-weight: 560;
+  /* The gradient runs from the page's own foreground into the brand orange, so
+     the orange arrives as the end of a sentence rather than as a second colour.
+     background-clip: text needs a transparent fill; the plain `color` above it
+     is what a browser without it paints, and that is a good enough answer.
+
+     The stops are early — orange by 88% — and that is not taste. The background
+     box is the whole BLOCK, not the ink, so on a `max-w-[16ch]` heading whose
+     last line is short, stops in the 80-100% band land on empty space to the
+     right of the words and the orange never appears at all. Measured on the
+     first build of this page: the heading rendered entirely white. Anything
+     added here should be checked against a screenshot, not against the swatch. */
+  color: var(--foreground);
+}
+/* The gradient itself is behind a `@supports` that names BOTH halves, and the
+   transparent fill is inside it.
+
+   `color` is not a fallback for `-webkit-text-fill-color: transparent` — fill
+   wins wherever it is understood, so a browser that takes the fill and not the
+   clip paints nothing at all. Printing with background graphics off, and forced
+   colors, can do the same to a browser that understands both. An invisible
+   headline is a much worse failure than a headline that is merely white, so the
+   plain colour above is the default and the gradient is the enhancement.
+   Cross-family review, 2026-09-03, finding 8. */
+@supports ((background-clip: text) or (-webkit-background-clip: text)) {
+  .site-display {
+    background: linear-gradient(102deg, var(--foreground) 0%, var(--foreground) 26%, #eda86e 62%, var(--spideryarn-orange) 88%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+@media print {
+  .site-display {
+    background: none;
+    -webkit-text-fill-color: currentColor;
+    color: #000;
+  }
+}
+@media (forced-colors: active) {
+  .site-display {
+    background: none;
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
+.site-lede {
+  font-family: var(--font-reading);
+  font-size: clamp(1.1rem, 2.1vw, 1.375rem);
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  max-width: 46ch;
+}
+
+/* ---- buttons ----
+   Hand-written rather than shadcn's Button: these are the only two buttons on
+   the site pages, both are links rather than buttons, and the orange fill is a
+   size and weight nothing else in the app uses. */
+.site-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  padding: 0.72rem 1.4rem;
+  font-size: 0.95rem;
+  font-weight: 560;
+  text-decoration: none;
+  transition: transform 140ms ease, box-shadow 180ms ease, background-color 140ms ease;
+}
+.site-cta-primary {
+  background: var(--spideryarn-orange);
+  color: oklch(0.16 0.02 60);
+  box-shadow: 0 8px 28px -8px rgb(219 138 69 / 0.55);
+}
+.site-cta-primary:hover {
+  background: #e79a5b;
+  transform: translateY(-1px);
+  box-shadow: 0 12px 34px -8px rgb(219 138 69 / 0.65);
+}
+.site-cta-ghost {
+  border: 1px solid var(--site-hairline-strong);
+  background: var(--site-surface);
+  color: var(--foreground);
+}
+.site-cta-ghost:hover {
+  background: var(--site-surface-raised);
+  border-color: rgb(255 255 255 / 0.24);
+  transform: translateY(-1px);
+}
+
+/* ---- a screenshot, framed as an object ----
+   The inset top highlight is the load-bearing line: it catches light on the top
+   edge, which is what makes a dark rectangle on a dark page read as a raised
+   thing rather than as a hole. The drop shadow alone does almost nothing here.
+
+   No fake browser chrome. The app's own masthead is already a header, and a
+   second one states a platform this product does not have — which is also what
+   the surveyed sites that skip drop shadows mostly do. */
+.site-frame {
+  position: relative;
+  border-radius: 14px;
+  border: 1px solid var(--site-hairline-strong);
+  background: var(--card);
+  overflow: hidden;
+  box-shadow: var(--site-lift), inset 0 1px 0 rgb(255 255 255 / 0.07);
+}
+.site-frame img {
+  display: block;
+  width: 100%;
+}
+
+/* The hero's frame, which additionally carries a lit top-left edge. Drawn as a
+   masked 1px inset ring rather than a border, so it can be a gradient.
+
+   Two things here are corrections rather than choices (cross-family review,
+   2026-09-03, finding 11):
+
+   - `inset: 0`, not `-1px`. `.site-frame` sets `overflow: hidden`, so a ring
+     placed outside the padding box is drawn on the clipped side of the edge and
+     simply is not there.
+   - The whole pseudo-element lives inside a `@supports` for mask-composite.
+     Without the composite the two mask layers do not subtract, the ring becomes
+     a solid gradient wash across the middle of the screenshot, and the hero —
+     the one picture above the fold — is the thing it ruins. A missing lit edge
+     costs nothing; a veil over the product does. */
+@supports ((mask-composite: exclude) or (-webkit-mask-composite: xor)) {
+  .site-frame-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(160deg, rgb(255 255 255 / 0.22), rgb(219 138 69 / 0.16) 42%, transparent 70%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+    z-index: 1;
+  }
+}
+
+/* ---- the tilt, and why it straightens ----
+   Greg asked for the tilted hero. A tilted screenshot of a READING product is
+   self-defeating held still — the thing being sold is legible text — so it
+   arrives tilted and straightens as the reader scrolls into it. Modern on
+   arrival, readable once you engage, and it costs no JavaScript.
+
+   Authored FLAT by default, so a browser without scroll-driven animation
+   (Firefox, today) sees the finished, legible state rather than a permanently
+   skewed one. Same "visible by default, animated as enhancement" shape as the
+   reveal below. */
+.site-tilt-stage { perspective: 2000px; }
+.site-tilt { transform: none; transform-origin: 50% 0%; }
+@supports (animation-timeline: scroll()) {
+  .site-tilt {
+    animation: site-untilt linear both;
+    /* The DOCUMENT's scroll, not this element's view() progress. The hero is
+       already partly on screen when the page loads, so a view() timeline hands
+       it a progress part-way through its range and it renders nearly flat —
+       which is what the first build did, silently, looking exactly like a tilt
+       that had been dialled to zero. scroll(root) is 0 at the top of the page,
+       which is the only place this element is asked to be tilted. */
+    animation-timeline: scroll(root block);
+    animation-range: 0 34rem;
+  }
+  @keyframes site-untilt {
+    from { transform: perspective(2000px) rotateX(11deg) scale(0.945); }
+    to { transform: none; }
+  }
+}
+
+/* ---- scroll reveal ----
+   Finished state as the default rule, so an unsupported browser shows static
+   content: never invisible, never broken. The global prefers-reduced-motion
+   guard in tailwind.css flattens the duration of all of this already. */
+.site-reveal { opacity: 1; transform: none; }
+@supports (animation-timeline: view()) {
+  .site-reveal {
+    animation: site-rise linear both;
+    animation-timeline: view(block);
+    animation-range: entry 0% entry 62%;
+  }
+  @keyframes site-rise {
+    from { opacity: 0.001; transform: translateY(1.4rem); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+/* A scroll-driven animation has no scroll to be driven by on paper, and what it
+   resolves to there is not something the spec pins down. Printing a page whose
+   every section starts at opacity 0 is a good way to get eleven blank sheets,
+   so both of these are turned off outright for print.
+
+   The same override is what a screenshot harness should set before capturing a
+   full page — Playwright's full-page capture stitches without scrolling, so
+   everything below the first viewport keeps its start state and comes out
+   blank. That is not a bug in the page, but it is indistinguishable from one in
+   a screenshot, and it cost half an hour here before anyone believed the page
+   was fine. docs/project/marketing-pages.md § Screenshotting the site itself. */
+@media print {
+  .site-reveal,
+  .site-tilt,
+  .site-nav {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* **The global reduced-motion guard does not cover any of the above**, and that
+   is the trap in this block worth knowing.
+
+   tailwind.css sets `animation-duration: 0.01ms !important` on everything, which
+   is the right instrument for a time-driven animation and does nothing at all to
+   a scroll-driven one: CSS Animations Level 2 says a time duration on a
+   scroll-progress timeline is treated as `auto`, so the animation is driven by
+   the scroller regardless. A reader who has asked their operating system for no
+   motion would still get the tilt, the reveals and the nav.
+
+   So it needs its own block, and it has to turn the animations *off* rather than
+   speed them up. Found by a cross-family review, 2026-09-03
+   (docs/plans/260903g-redesign-review-sol.md, finding 6) — the guard was present,
+   documented, and missed the only motion on the page, which is the same shape
+   the guard's own comment in tailwind.css tells a story about. */
+@media (prefers-reduced-motion: reduce) {
+  .site-reveal,
+  .site-tilt,
+  .site-nav {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* No preflight in this app (tailwind.css § note 4), so every heading and
+   paragraph here arrives with the UA's own margins — and a `tw:mb-3` removes
+   only one of the two. The declared spacing above is therefore not the rendered
+   spacing, panel padding is not the padding you see, and the pages are taller
+   than the numbers say. Scoped to `.site` rather than global, because twenty
+   components in this file were built looking at the UA default underneath them.
+
+   `:where()` keeps it at zero specificity, so every `tw:mt-*` above still wins. */
+.site :where(h1, h2, h3, h4, p, figure, ul, ol) {
+  margin: 0;
+}
+
+/* ---- panels, and the bento ---- */
+.site-panel {
+  border-radius: 14px;
+  border: 1px solid var(--site-hairline);
+  background: var(--site-surface);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+}
+.site-panel-hover { transition: border-color 160ms ease, background-color 160ms ease; }
+.site-panel-hover:hover {
+  border-color: var(--site-hairline-strong);
+  background: var(--site-surface-raised);
+}
+
+/* Six columns rather than four, because the row wants thirds AND halves: a
+   full-width tile is 6, a half 3, a third 2. Four columns cannot spell thirds
+   without a second grid. */
+.site-bento {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 640px) {
+  .site-bento { grid-template-columns: repeat(2, 1fr); }
+  .site-bento > .featured { grid-column: span 2; }
+}
+@media (min-width: 900px) {
+  .site-bento { grid-template-columns: repeat(6, 1fr); }
+  .site-bento > * { grid-column: span 2; }
+  .site-bento > .wide { grid-column: span 3; }
+  .site-bento > .featured { grid-column: span 6; }
+}
+
+/* ---- an eyebrow: the small orange word above a heading ---- */
+.site-eyebrow {
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--spideryarn-orange);
+}
+
+/* ---- a section heading, one size, on both pages ---- */
+.site-h2 {
+  font-family: var(--font-reading);
+  font-size: clamp(1.7rem, 3.2vw, 2.35rem);
+  line-height: 1.14;
+  letter-spacing: -0.02em;
+  font-weight: 540;
+  color: var(--foreground);
+}

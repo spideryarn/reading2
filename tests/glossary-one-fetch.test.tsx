@@ -323,9 +323,14 @@ describe("a reply that arrives too late", () => {
        never changed. That is the bug the generation counter replaced the
        `pushed` ref for.
 
-       NOTE: the DELETE is not exercised here and would not describe production
-       if it were — `deleteGlossary` answers 501 under `postgres` on purpose
-       (src/store/index.ts). This is about ordering, not about the button. */
+       NOTE: the DELETE is not exercised here, and since 2026-09-03 that is a
+       choice rather than a limitation — `deleteGlossary` has a Postgres
+       implementation now (src/store/pg-glossary.ts), so a test that drove it
+       *would* describe production. This one deliberately does not: it is about
+       the ordering of two replies, not about the button, and the round trip
+       belongs to the tests that own it — tests/store-glossary-delete-pg.test.ts
+       for the store and tests/glossary-delete-then-rebuild.test.ts for the
+       reader's whole sentence. */
     await act(async () => {
       read?.clear();
     });

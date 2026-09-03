@@ -28,6 +28,7 @@ import { MAX_PURPOSE_CHARS, normaliseProfileText } from "../profile.js";
 import { log } from "../log.js";
 import { notFound, ownedByReader, ownedSlug, requireSlug, shelfFrom } from "./pg.js";
 import type { LibrarySearch, LibrarySearchOptions, ShelfStore } from "./contracts.js";
+import { guardDbStore } from "./db-errors.js";
 import type { LibraryEntry, LibraryHit, ShelfState } from "../types.js";
 import { pgArticleReader } from "./pg.js";
 
@@ -42,7 +43,7 @@ import { pgArticleReader } from "./pg.js";
  */
 const CONFIG = "english";
 
-export const pgShelfStore: ShelfStore = {
+const rawPgShelfStore: ShelfStore = {
   async read(slug: string): Promise<ShelfState> {
     requireSlug(slug);
     const db = getDb();
@@ -117,6 +118,9 @@ export const pgShelfStore: ShelfStore = {
   },
 };
 
+/** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
+export const pgShelfStore: ShelfStore = guardDbStore("shelf", rawPgShelfStore);
+
 /** `getDb()`, named so the statements above read as statements. */
 const db = () => getDb();
 
@@ -143,7 +147,7 @@ async function entryFor(slug: string, archived: boolean): Promise<LibraryEntry> 
   return entry;
 }
 
-export const pgLibrarySearch: LibrarySearch = {
+const rawPgLibrarySearch: LibrarySearch = {
   async searchLibrary(query: string, limit: number, opts: LibrarySearchOptions = {}) {
     const trimmed = query.trim();
     if (!trimmed) return { hits: [], capped: false };
@@ -252,3 +256,6 @@ export const pgLibrarySearch: LibrarySearch = {
     return { hits, capped };
   },
 };
+
+/** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
+export const pgLibrarySearch: LibrarySearch = guardDbStore("library", rawPgLibrarySearch);

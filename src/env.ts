@@ -46,6 +46,7 @@
  * **In production there is no `.env.local`**, so `process.env` is the only
  * source and none of this applies. See docs/project/setup-dev.md.
  */
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -156,6 +157,105 @@ export function resolveTargetUrl(choice: { shellWins: boolean }): string | undef
 }
 
 /**
+ * **`.env.prod` — for the few commands whose target is production on purpose.**
+ *
+ * The rule at the top of this file says `.env.local` beats the shell, and it is
+ * right. The consequence is that "export the production values and run it"
+ * is quietly wrong for every script that calls `loadEnvLocal()`: the file wins,
+ * and the command reports on the Docker container while looking like it
+ * reported on production. `scripts/check-owner-identity.ts` hit that first and
+ * solved it by reading `.env.prod` directly; on 2026-09-03 `stripe-setup` and
+ * `stripe-check` needed the same thing to go live, so the solution moved here
+ * rather than being copied.
+ *
+ * It is the same argument that put `resolveTargetUrl` in this file: the
+ * exception belongs beside the rule it excepts, where a reader of either finds
+ * both.
+ *
+ * ## Two secrets that have to agree with each other
+ *
+ * This is why it is a file and not two command-line variables. Pointing
+ * `stripe-setup` at live Stripe and the laptop's Postgres is a coherent-looking
+ * command that creates live prices and writes their ids somewhere no deployment
+ * reads. Taking both from one file that already holds a matched set means a
+ * mismatched pair has to be *written into that file* rather than assembled by
+ * accident on a command line — the combination is still possible, and
+ * `scripts/stripe-target.ts` checks for it. It also keeps a live secret key out
+ * of shell history, which typing it would not.
+ *
+ * ## Where it looks, and why that is two places
+ *
+ * CLAUDE.md says to work in a git worktree, and `npm run worktree:setup` copies
+ * `.env.local` but not `.env.prod`. A production-targeting script that works
+ * only in the primary checkout is a trap of the kind this function exists to
+ * remove, so it falls back to the primary — `git rev-parse --git-common-dir`,
+ * which in a linked worktree points into the primary's `.git`.
+ *
+ * @returns the file actually read and everything in it, or `null` if there is
+ *   no `.env.prod` anywhere. **Callers must print `file`**: which of the two it
+ *   found is the difference between reading this tree's production values and
+ *   another tree's, and it is not guessable from the output otherwise.
+ */
+export function readEnvProd(): { file: string; values: Record<string, string> } | null {
+  for (const file of envProdCandidates()) {
+    let text: string;
+    try {
+      text = readFileSync(file, "utf8");
+    } catch {
+      continue;
+    }
+    return { file, values: parseEnvFile(text) };
+  }
+  return null;
+}
+
+/**
+ * This checkout's `.env.prod`, then the primary checkout's.
+ *
+ * `execFileSync` rather than reading `.git` by hand: in a linked worktree
+ * `.git` is a *file* holding `gitdir: …/.git/worktrees/<name>`, and parsing
+ * that is re-implementing git's own answer. Failure is not an error — running
+ * outside a repository at all is legitimate — so it yields nothing extra.
+ */
+/**
+ * The environment minus every `GIT_*` that could redirect `git rev-parse`.
+ *
+ * `GIT_DIR` and `GIT_COMMON_DIR` are the two that move the answer outright;
+ * `GIT_WORK_TREE` and `GIT_OBJECT_DIRECTORY` are dropped with them because a
+ * half-overridden git environment is not a state worth reasoning about.
+ */
+function withoutGitVars(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const copy = { ...env };
+  for (const name of ["GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_OBJECT_DIRECTORY"]) {
+    delete copy[name];
+  }
+  return copy;
+}
+
+function envProdCandidates(): string[] {
+  const here = path.join(ROOT, ".env.prod");
+  try {
+    const common = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      /* **`GIT_DIR` is inherited, and it overrides `cwd`.** A shell that
+         exported one — or a hook, or a parent `git` invocation — makes this
+         answer about *that* repository, and the fallback would then read a
+         different project's `.env.prod` and hand its production credentials to
+         `--apply`. Reproduced by GPT Sol, 2026-09-03. Dropped rather than
+         honoured: the question is "where is this checkout's primary", and only
+         `cwd` can answer it. */
+      env: withoutGitVars(process.env),
+    }).trim();
+    const primary = path.join(path.dirname(common), ".env.prod");
+    return primary === here ? [here] : [here, primary];
+  } catch {
+    return [here];
+  }
+}
+
+/**
  * The choice itself, over injected environments — split out for the same reason
  * `applyEnvFile` is, and it is the same reason: `resolveTargetUrl` reads the
  * real snapshot and the real `process.env`, so a test that went through it
@@ -194,15 +294,7 @@ export function applyEnvFile(
 ): string[] {
   const shadowed: string[] = [];
 
-  for (const line of text.split("\n")) {
-    if (line.trimStart().startsWith("#")) continue;
-    const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
-    if (!match) continue;
-    // Neither group is optional in the pattern, so the defaults never fire —
-    // they are here because a regex match types every group as possibly absent.
-    const [, name = "", raw = ""] = match;
-    const value = raw.trim().replace(/^(['"])(.*)\1$/, "$2");
-
+  for (const [name, value] of Object.entries(parseEnvFile(text))) {
     const current = env[name];
     // Set by this process since startup: leave it alone. See the header.
     if (current !== undefined && current !== inherited[name]) continue;
@@ -212,4 +304,42 @@ export function applyEnvFile(
   }
 
   return shadowed;
+}
+
+/**
+ * An env file's text as names and values. No precedence, no `process.env`.
+ *
+ * Split out of `applyEnvFile` when `.env.prod` acquired a second reader
+ * (`readEnvProd`). Before that, `scripts/check-owner-identity.ts` matched
+ * `^NAME=(.*)$` per name against the same file, which is a second parser and a
+ * weaker one: it misses an `export ` prefix and leaves single quotes on the
+ * value. Both files are written by hand, so either spelling can appear in one
+ * tomorrow, and the two readers would then disagree about what production is.
+ *
+ * ## A later line wins, and that is a **change**, made on purpose
+ *
+ * The old loop made the *first* of two lines win, and not by decision: having
+ * assigned the first, the second iteration saw `current !== inherited[name]`,
+ * read that as "this process set it itself", and skipped. The precedence rule
+ * for the *shell* was silently deciding precedence *within the file*. Measured
+ * both ways before changing it — GPT Sol, 2026-09-03, reviewing the extraction
+ * this comment is part of and catching that it was not the pure refactor it was
+ * described as.
+ *
+ * Last-wins is kept, because it is what shell `source` does, and what somebody
+ * appending a line to override an earlier one expects. `tests/env.test.ts` pins it through `applyEnvFile` as well as here,
+ * since that is the seam where the old behaviour actually lived.
+ */
+export function parseEnvFile(text: string): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const line of text.split("\n")) {
+    if (line.trimStart().startsWith("#")) continue;
+    const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+    if (!match) continue;
+    // Neither group is optional in the pattern, so the defaults never fire —
+    // they are here because a regex match types every group as possibly absent.
+    const [, name = "", raw = ""] = match;
+    values[name] = raw.trim().replace(/^(['"])(.*)\1$/, "$2");
+  }
+  return values;
 }

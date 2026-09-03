@@ -62,6 +62,7 @@ import { and, eq, isNotNull, or } from "drizzle-orm";
 import { getDb } from "../db/client.js";
 import { articleRevisions, articles, jobs } from "../db/schema.js";
 import type { GlossaryStore } from "./contracts.js";
+import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { leaseIsLive } from "./job-fence.js";
 import { ownedSlug } from "./owned-slug.js";
@@ -172,7 +173,7 @@ function liveJobHoldingADraftQuery(
     .limit(1);
 }
 
-export const pgGlossaryStore: Pick<GlossaryStore, "deleteGlossary"> = {
+const rawPgGlossaryStore: Pick<GlossaryStore, "deleteGlossary"> = {
   async deleteGlossary(slug: string): Promise<{ deleted: boolean }> {
     /* Before any query, so a pasted title comes back as "that is not a name"
        rather than as "there is no such article". tests/store-slug-guard.test.ts. */
@@ -212,3 +213,18 @@ export const pgGlossaryStore: Pick<GlossaryStore, "deleteGlossary"> = {
     }, READ_COMMITTED);
   },
 };
+
+/**
+ * Guarded where it is built, not where it is selected — src/store/db-errors.ts.
+ *
+ * **This file arrived on `dev` on 2026-09-03, hours after the other fifteen
+ * moved**, and was wrapped at its selection in index.ts instead — which is the
+ * arrangement docs/project/database.md had just stopped describing. Nothing was
+ * red, because the exact-list assertion in tests/store-guarded.test.ts catches a
+ * store that *stops* being guarded and not one that never was. That file now
+ * asks the question from the other end as well.
+ */
+export const pgGlossaryStore: Pick<GlossaryStore, "deleteGlossary"> = guardDbStore(
+  "glossary",
+  rawPgGlossaryStore,
+);

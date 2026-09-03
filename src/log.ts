@@ -180,7 +180,13 @@ export type Component =
      application. Its lines are the other half of a deliberate bargain: that
      endpoint is public, so a driver's error reaches the caller truncated to 200
      characters and the whole of it comes here. Nothing else in the file logs —
-     everything it has to say, it says in the response. */
+     everything it has to say, it says in the response.
+
+     Also src/cold-start.ts: two lines per function instance saying what loading
+     `api-dist/vercel.js` cost. Same arm on purpose — a cold start is a property
+     of the deployment and of nothing a reader did, no request is really its
+     subject, and a sixteenth component for two lines an instance would be a
+     filter nobody would think to build. */
   | "health"
   | "model"; // src/explain.ts, src/converse.ts, src/search.ts — a reader waiting
 

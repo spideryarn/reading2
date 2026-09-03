@@ -697,39 +697,71 @@ export const fsJobStore: JobStore = {
     return true;
   },
 
+  /**
+   * **The rule lives in src/store/pg-jobs.ts § `trimFinished`** — why it ranks
+   * by when a job finished, what the interleave preserves of the old
+   * preference, and what depends on a just-ended job surviving its own sweep.
+   * Read it there and keep this side matching; the pair used to state it at
+   * length twice, which is how they drifted.
+   *
+   * In JavaScript that is: rank each kind newest-finished first, take one from
+   * each side in turn, keep the first `keep` of the result.
+   *
+   * **This side sorts what it keeps and slices from the back**, the same way
+   * round as Postgres. Until 2026-09-03 it did the opposite — sorted the doomed
+   * and sliced from the front — and carried a paragraph warning about the
+   * inversion. There is nothing left to warn about.
+   */
   async trimFinished(owner: OwnerId, keep: number): Promise<number> {
     await ready();
     const finished = [...index.values()].filter(
       (j) => j.ownerId === owner && TERMINAL.has(j.status),
     );
     if (finished.length <= keep) return 0;
-    const doomed = finished
-      .sort((a, b) => {
-        // Successes before failures, so successes are what gets dropped; then
-        // oldest first within each. A reader who loses a failure loses the only
-        // account of what went wrong.
-        const kind = Number(a.status !== "done") - Number(b.status !== "done");
-        if (kind !== 0) return kind;
-        /* Then the id, because `createdAt` is a millisecond and two jobs queued
-           in the same one are not rare. Without this the comparator answered 1
-           for every tied pair — inconsistent, so what actually got dropped was
-           whichever the `Map` happened to hold first, and that is not a rule
-           anything can be held to. Postgres has ordered by `id` since it was
-           written (src/store/pg-jobs.ts § trimFinished); this side had the
-           opposite answer, and the parity suite was red before this line went
-           in. Lowest id goes, on both.
-
-           The same collation caveat as `blockedByAnother` above applies to this
-           comparison: `<` is UTF-16 code units here and whatever collation
-           `jobs.id` carries there, and the schema does not pin `C`. */
-        if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
-        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-      })
-      .slice(0, finished.length - keep);
+    const successes = finished.filter((j) => j.status === "done").sort(byNewestFinished);
+    const others = finished.filter((j) => j.status !== "done").sort(byNewestFinished);
+    /* The non-success first at every rank, which is `order by rank, is_done`
+       there: false sorts before true, so a tie of rank goes to the failure. */
+    const kept: Job[] = [];
+    for (let rank = 0; rank < Math.max(successes.length, others.length); rank++) {
+      const other = others[rank];
+      if (other) kept.push(other);
+      const success = successes[rank];
+      if (success) kept.push(success);
+    }
+    const doomed = kept.slice(keep);
     for (const job of doomed) await removeJob(job.id);
     return doomed.length;
   },
 };
+
+/**
+ * `finished_at desc nulls last, created_at desc, id desc`, in JavaScript.
+ *
+ * The last two keys are there because neither timestamp is a total order — two
+ * jobs queued, or ended, in the same millisecond are not rare. Without the id
+ * the comparator answered the same thing for every tied pair, so what actually
+ * got dropped was whichever the `Map` happened to hold first, and that is not a
+ * rule anything can be held to. Highest id survives, on both adapters; the
+ * parity suite was red before that key existed.
+ *
+ * The same collation caveat as `blockedByAnother` above applies: `<` is UTF-16
+ * code units here and whatever collation `jobs.id` carries there, and the
+ * schema does not pin `C`.
+ *
+ * `finishedAt` is absent rather than null on a `Job`, and an absent one sorts
+ * to the back of its kind — the conservative answer for a legacy or malformed
+ * terminal row, matching `nulls last`.
+ */
+function byNewestFinished(a: Job, b: Job): number {
+  if (a.finishedAt !== b.finishedAt) {
+    if (a.finishedAt === undefined) return 1;
+    if (b.finishedAt === undefined) return -1;
+    return a.finishedAt < b.finishedAt ? 1 : -1;
+  }
+  if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1;
+  return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+}
 
 /**
  * The job this attempt still holds, or a refusal.
@@ -822,6 +854,29 @@ export async function pauseForTests(id: string, from: number): Promise<void> {
     delete step.detail;
     delete step.finishedAt;
   }
+  await persist(job);
+}
+
+/**
+ * Put a chosen `finishedAt` on a job that has already ended.
+ *
+ * The fourth seam, and it exists because retention orders terminal jobs by
+ * **when they finished** (src/store/pg-jobs.ts § `trimFinished`) and no
+ * `JobStore` operation can choose or tie that stamp — every terminal transition
+ * reads the clock for itself. A fixture that wanted two finishes in the same
+ * instant, or three finishes in an order other than the one the calls happened
+ * in, had no way to say so. Postgres reaches it with a one-line `update`.
+ *
+ * **Async, and it persists**, unlike `expireLeaseForTests` and
+ * `reattachAttemptForTests` above — those two write to `attempts`, which lives
+ * only in memory, whereas `finishedAt` is on the record. Mutating the index
+ * alone would leave the file on disk carrying the old stamp, and the next
+ * `ready()` after a `reloadForTests` would put it back.
+ */
+export async function stampFinishedForTests(id: string, iso: string): Promise<void> {
+  const job = index.get(id);
+  if (!job) throw new Error(`No such job to stamp: ${id}`);
+  job.finishedAt = iso;
   await persist(job);
 }
 

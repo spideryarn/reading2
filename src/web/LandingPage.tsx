@@ -6,18 +6,20 @@
  * still shape this file:
  *
  *  - **The sign-in buttons are on the page**, not behind a link to `/login`.
- *    SignInControls.tsx is rendered here, near the top and again at the foot,
- *    and `/login` keeps its compact screen for password-reset landings.
+ *    SignInControls.tsx is rendered here, and `/login` keeps its compact screen
+ *    for password-reset landings. Since the 2026-09-03 redesign there is one
+ *    panel rather than two, at the foot, with a `Sign in` link in the top bar
+ *    jumping to it — so the rule holds and the fold is free for the product.
  *  - **A deep link gets this same page.** `/read/some-article` while signed out
  *    is the landing page, and the address stays put so signing in puts you back
  *    where you were heading (auth-return.ts).
  *
  * ## Where the words come from — rewritten 2026-09-03
  *
- * Greg, 2026-09-02, on the previous version of this page: *"I want it to use
- * my words rather than AI-generated, and it may not be clear what came from me
- * vs AI."* So every sentence here is one of three things, and the comment
- * beside it says which:
+ * Greg, 2026-09-02, on the version before that: *"I want it to use my words
+ * rather than AI-generated, and it may not be clear what came from me vs AI."*
+ * So every sentence here is one of three things, and the comment beside it says
+ * which:
  *
  *  - **His**, from the interview of 2026-09-03
  *    (docs/research/260902k-spideryarn-reading-interview-guide.md) or from an
@@ -33,55 +35,68 @@
  * and a founder quote about one's own product is the softest thing on a page.
  * The words are his; the page speaks in the app's voice.
  *
+ * **The 2026-09-03 redesign moved sentences and cut two duplicates. It wrote
+ * none.** What moved, and why: docs/plans/260903g-redesign-the-signed-out-marketing-pages.md
+ * § Copy. The dog-eared-book line came up to sit under the hero because it is
+ * the most vivid thing he has said; "And deliberately not" came out of the gap
+ * between the principles and the prices; "Who it's for" went below the pictures,
+ * because a stranger asks whether it is for them after seeing what it is.
+ *
  * ## Beta, and the honest strip
  *
  * Greg, 2026-09-02: *"we should write the copy as if we're in Beta and taking
  * payments."* And, asked what the live page says while sign-up is still an
- * invite list and Stripe is still being built: **beta copy, honest strip** —
- * one strip that says sign-up opens shortly and takes an email, to be deleted
- * the day it opens. The strip is `BetaStrip` below and nothing else on the
- * page knows about it, so deleting it is deleting one component.
+ * invite list and Stripe is still being built: **beta copy, honest strip**. The
+ * strip is now one line under the buttons rather than a box, and the primary
+ * call to action IS the mailto, because there is nothing else honest for it to
+ * be. `BetaLine` below, plus `OpensShortly` under the plans (Plans.tsx). Delete
+ * both the day sign-up opens.
  *
- * ## The screenshots
+ * ## The lead shot changed
  *
- * All in shots.ts, with the how and the why. The lead is the glossary card,
- * because his own image of the product is *"a dog-eared copy of a book where a
- * clever friend has highlighted the best bits and scribbled in the margins"*,
- * and the card is the scribble in the margin. He left the call to me
- * (2026-09-03: *"Use your judgment … I can't decide."*).
+ * It was the glossary card. It is now the outline — the whole app in one frame,
+ * the fisheye that nothing else does, and the thing Greg named first when asked
+ * what the product does. The glossary asset was half filled by a white figure
+ * from the article, with the card sitting on top of the white; Greg named that
+ * one himself. See docs/project/marketing-pages.md § One shot, one idea.
  *
- * Styled with Tailwind utilities — docs/project/web-client.md § Tailwind and
- * shadcn. Note the `tw:` prefix on every class.
+ * Styled with the `site-*` classes at the foot of styles.css and `tw:` utilities
+ * for nudges — SiteBits.tsx's header says which does what.
  */
 import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
-import { Plans } from "./Plans.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { FEATURES_HREF, PRICING_HREF, PRIVACY_HREF } from "./router.js";
+import { Plans } from "./Plans.js";
+import { FEATURES_HREF, PRICING_HREF } from "./router.js";
 import { SHOTS } from "./shots.js";
+import { SiteFooter } from "./SiteFooter.js";
 import { SignInControls } from "./SignInControls.js";
-import { Feature, H2, Shot } from "./SiteBits.js";
+import {
+  Feature,
+  Frame,
+  GhostCta,
+  H2,
+  PrimaryCta,
+  SHELL,
+  Showcase,
+  SiteNav,
+  Tile,
+} from "./SiteBits.js";
+
+/** The subject line that lets the one inbox filter these. */
+const WAITLIST_SUBJECT = encodeURIComponent("Tell me when Spideryarn Reading sign-up opens");
+const WAITLIST_MAILTO = `mailto:${CONTACT_EMAIL}?subject=${WAITLIST_SUBJECT}`;
 
 /**
- * The strip a stranger has to read: the product is in beta, sign-up is not
- * open yet, and here is how to hear when it is. Delete this component, and its
- * one use, the day sign-up opens. The email goes to the one address the site
- * uses (docs/project/website-text.md § The contact address) with a subject so
- * the inbox can be filtered; a waitlist table is a decision for later.
+ * The line a stranger has to read: the product is in beta and sign-up is not
+ * open yet. Delete this component, and its one use, the day it opens.
  */
-function BetaStrip() {
-  const subject = encodeURIComponent("Tell me when Spideryarn Reading sign-up opens");
+function BetaLine() {
   return (
-    <p className="tw:mt-6 tw:rounded-md tw:border tw:border-highlight/40 tw:bg-highlight/10 tw:px-4 tw:py-3 tw:text-sm tw:text-foreground">
+    <p className="tw:mt-5 tw:text-sm tw:text-ink-faint">
       {/* [tissue] */}
-      <strong>Spideryarn Reading is in beta.</strong> Sign-up opens shortly.{" "}
-      <a
-        href={`mailto:${CONTACT_EMAIL}?subject=${subject}`}
-        className="tw:text-highlight tw:no-underline tw:hover:underline"
-      >
-        Email us
-      </a>{" "}
-      (it opens your mail app) and we’ll tell you the day it does.
+      Spideryarn Reading is in beta — sign-up opens shortly, and the button above opens your mail
+      app so we can tell you the day it does.
     </p>
   );
 }
@@ -90,198 +105,262 @@ export function LandingPage() {
   useDocumentTitle(pageTitle({ kind: "landing" }));
 
   return (
-    <main className="tw:mx-auto tw:max-w-3xl tw:px-6 tw:py-12 tw:font-sans tw:text-[0.95rem] tw:leading-relaxed tw:text-muted-foreground">
-      <header>
-        <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-4">
-          <h1 className="tw:font-prose tw:text-5xl tw:text-foreground">Spideryarn Reading</h1>
-          <span className="tw:rounded-full tw:border-2 tw:border-highlight tw:px-4 tw:py-1 tw:text-lg tw:font-semibold tw:uppercase tw:tracking-widest tw:text-highlight">
-            Beta
-          </span>
+    <div className="site tw:font-sans tw:text-muted-foreground">
+      <SiteNav here="home" />
+
+      {/* ------------------------------------------------------- the hero --
+          `overflow-hidden` is load-bearing twice: it clips the glow, which is
+          deliberately wider than the page, and it clips the hero shot, which is
+          wider still. Without it the page scrolls sideways on a narrow screen. */}
+      <header className="tw:relative tw:overflow-hidden tw:pt-16 tw:pb-4 tw:sm:pt-24">
+        <div className="site-grid" />
+        <div className="site-glow" />
+
+        <div className={`${SHELL} tw:relative`}>
+          <h1 className="site-display tw:max-w-[16ch]">
+            {/* Greg, 2026-09-03, answer 1, and the 2025 tagline file's first line. */}
+            Read deeply &amp; efficiently.
+          </h1>
+
+          {/* Greg, 2026-09-03, answer 1. */}
+          <p className="site-lede tw:mt-6">
+            A companion, not a replacement: it highlights, annotates, orients and explains, but
+            keeps you in the text itself.
+          </p>
+
+          <div className="tw:mt-8 tw:flex tw:flex-wrap tw:items-center tw:gap-3">
+            {/* [tissue] The primary action is the mailto until sign-up opens;
+                there is nothing else honest for it to be. */}
+            <PrimaryCta href={WAITLIST_MAILTO}>Tell me when it opens</PrimaryCta>
+            <GhostCta href={FEATURES_HREF}>See everything it does</GhostCta>
+          </div>
+          <BetaLine />
+
+          {/* The one picture above the fold. It arrives tilted and straightens
+              as you scroll into it — a screenshot of a reading product held at
+              an angle is arguing against itself (styles.css § the tilt). */}
+          <div className="site-tilt-stage tw:mt-14 tw:sm:mt-16">
+            <div className="site-tilt">
+              <Frame shot={SHOTS.outline} hero />
+            </div>
+          </div>
         </div>
-
-        {/* Greg, 2026-09-03, answer 1, and the 2025 tagline file's first line. */}
-        <p className="tw:mt-4 tw:font-prose tw:text-2xl tw:text-foreground">
-          Read deeply &amp; efficiently.
-        </p>
-        <p className="tw:mt-2 tw:font-prose tw:text-xl tw:text-foreground">
-          A companion, not a replacement: it highlights, annotates, orients and explains, but keeps
-          you in the text itself.
-        </p>
-
-        <BetaStrip />
       </header>
 
-      <section className="tw:mt-10 tw:rounded-lg tw:border tw:border-border tw:bg-card/50 tw:p-6">
-        <p className="tw:mb-5 tw:text-sm">{/* [tissue] */}Already have an account? Sign in.</p>
-        <SignInControls />
-      </section>
+      <main className={SHELL}>
+        {/* ------------------------------------------------ the one sentence --
+            Greg, 2026-09-03, answer 2. Promoted out of the third section: it is
+            the most vivid thing he has said about the product, so it is the
+            first prose under the picture rather than the second paragraph of a
+            section a stranger may never reach. */}
+        <section className="site-reveal tw:mx-auto tw:mt-20 tw:max-w-[54ch] tw:text-center">
+          <p className="tw:font-prose tw:text-xl tw:leading-relaxed tw:text-foreground tw:sm:text-2xl">
+            It’s like reading a dog-eared copy of a book where a clever friend has highlighted the
+            best bits and scribbled in the margins to help with the difficult bits, based on your
+            background, interests and needs — rather than reading the Reader’s Digest version.
+          </p>
+        </section>
 
-      {/* Greg, 2026-09-03, follow-up to answer 4: "notes in the margin that
-          explain & remind you about anything you might find tricky". The
-          second sentence is docs/project/vision.md's line on the glossary. */}
-      <Shot shot={SHOTS.glossary} title="Notes in the margin." eager>
-        They explain and remind you about anything you might find tricky: the terms this piece uses
-        in a non-obvious way, defined from the piece itself, underlined where they stand. The card
-        comes to you.
-      </Shot>
+        {/* --------------------------------------------------- the pictures --
+            Greg, 2026-09-03, follow-up to answer 4: "notes in the margin that
+            explain & remind you about anything you might find tricky". The rest
+            is docs/project/vision.md's line on the glossary. */}
+        <Showcase shot={SHOTS.glossary} eyebrow="Glossary" title="Notes in the margin." offset>
+          They explain and remind you about anything you might find tricky: the terms this piece
+          uses in a non-obvious way, defined from the piece itself, underlined where they stand. The
+          card comes to you.
+        </Showcase>
 
-      <H2>Not the Reader’s Digest version</H2>
-      {/* Greg, 2026-09-03, answer 2, verbatim apart from pronouns. */}
-      <p>
-        Spideryarn keeps bringing you back to the original text itself — an improved interface on
-        it, not an LLM-rewritten version that may or may not capture the author’s full intent. It
-        helps you fight cognitive surrender.
-      </p>
-      <p className="tw:mt-4">
-        It’s like reading a dog-eared copy of a book where a clever friend has highlighted the best
-        bits and scribbled in the margins to help with the difficult bits, based on your background,
-        interests and needs — rather than reading the Reader’s Digest version.
-      </p>
-
-      <H2>Who it’s for</H2>
-      {/* Greg, 2026-09-03, answer 3. The fields are his call of 2026-09-02:
-          "name fields too". */}
-      <p>
-        People who read difficult material and think professionally: scientists, researchers,
-        academics. You open a long, deep, important article — a paper, a philosophy essay, a policy
-        report — that you want to understand, digest, internalise, critique and remember.
-      </p>
-
-      {/* Greg, 2026-09-03, answer 4, verbatim apart from the opening. */}
-      <Shot shot={SHOTS.outline} title="Where you are in the grand scheme of things.">
-        A constantly evolving table of contents that gives you a sense of the overall landscape and
-        where you are in it, with more detail for the current and nearby sections — a semantic
-        fisheye lens.
-      </Shot>
-
-      {/* Greg, 2025-07-14, on the highlighting feature, lightly trimmed;
-          the last sentence is a product fact from docs/project/search.md. */}
-      <Shot
-        shot={SHOTS.meaningPanel}
-        title="Search by what a passage says, not what it says exactly."
-        width="tw:mx-auto tw:max-w-sm"
-      >
-        Type in basically anything — a word, a phrase, a description — and it highlights the areas
-        of the text that are relevant. It leaves you as the arbiter of whether something is worth
-        considering more closely; you can scan it rapidly. Every hit is marked in the prose and
-        painted into the strip beside it, and each says how sure it is.
-      </Shot>
-
-      <H2>And the rest of it</H2>
-      <ul className="tw:mt-4 tw:flex tw:flex-col tw:gap-4">
         {/* Greg, 2026-08-24, the granularity-zoom brief, compressed; and
             2026-08-25, "I also always want to be able to see the full text". */}
-        <Feature name="Every level of detail at once.">
-          Scroll right for more detail, down to progress through the article — and the full text
-          is always there beside it.
-        </Feature>
-        {/* Greg, 2026-08-26 (ideas) and 2026-08-31 (quotes). */}
-        <Feature name="The ideas it introduces, and the ones it needs you to hold.">
-          And the most central, helpful, interesting quotes — in order, or by importance, or by how
-          memorable they are.
-        </Feature>
-        {/* Greg, 2026-08-28 (comments) and docs/project/comments.md. */}
-        <Feature name="Ask at the point of confusion.">
-          Select a sentence, bookmark it, add a note — and, if you want one, an answer, from the
-          surrounding argument and from the web when it needs to. The article never leaves the
-          screen.
-        </Feature>
-        {/* Greg, 2026-08-27 (remember) and 2026-08-31 (quiz). */}
-        <Feature name="Find out what you kept.">
-          Say what you took from the piece and hear, plainly and concisely, where it diverges from
-          the text. Or take a dozen short questions, easy first, central first.
-        </Feature>
-        {/* docs/project/referee-mode.md, its title. */}
-        <Feature name="For peer reviewers.">
-          A mode that helps a referee read a paper without reading it for them.
-        </Feature>
-        {/* Greg, 2026-09-03, answer 2's postscript. What is shared is the
-            generated work — outline, gists, glossary, ideas, quotes — and not
-            the owner's comments, chats or searches (PrivacyPage.tsx). */}
-        <Feature name="Public articles share their AI annotations.">
-          The expensive generated work on a public-readable article — its outline, glossary,
-          ideas and quotes — is there for everyone who opens it. Your own notes stay yours.
-        </Feature>
-      </ul>
-      <p className="tw:mt-6">
-        <Link href={FEATURES_HREF} className="tw:text-highlight tw:no-underline tw:hover:underline">
-          Everything it does, with pictures →
-        </Link>
-      </p>
+        <Showcase shot={SHOTS.zoom} eyebrow="Zoom" title="Every level of detail at once.">
+          Scroll right for more detail, down to progress through the article. Scan quickly to get a
+          sense of the landscape, or burrow deeply — and the full text is always there beside it.
+        </Showcase>
 
-      <H2>What it holds to</H2>
-      <ul className="tw:mt-3 tw:flex tw:flex-col tw:gap-4">
-        {/* Greg, 2026-09-03, answer 2; docs/project/vision.md § Principles 1 and 5. */}
-        <Feature name="It keeps bringing you back to the original text.">
-          Generated text lives at generated altitudes; the author’s prose is never quietly
-          rewritten, and it is always one column away.
-        </Feature>
-        {/* docs/project/vision.md § Principles 4, and the rule in
-            src/converse.ts: a statement about the article cites its block. */}
-        <Feature name="When the AI says what the article says, it cites the passage.">
-          One press and you are reading the author, not the model.
-        </Feature>
-        {/* Greg, 2026-09-03, answer 1; the tiebreak as he corrected it the same
-            day, from his notes on "rich updated internal representations". */}
-        <Feature name="A companion, not a replacement.">
-          When a design call is close, the question is which option will best help you form your
-          own rich, updated understanding — digest, learn, notice, integrate, critique — not which
-          is easier.
-        </Feature>
-        {/* Greg, 2026-09-01, on the export button. */}
-        <Feature name="It’s the reader’s data.">
-          One button exports everything Spideryarn holds about an article, as plain files.
-        </Feature>
-      </ul>
+        {/* Greg, 2025-07-14, on the highlighting feature, lightly trimmed; the
+            last sentence is a product fact from docs/project/search.md. */}
+        <Showcase
+          shot={SHOTS.meaning}
+          eyebrow="Search by meaning"
+          title="Find what a passage says, not what it says exactly."
+          offset
+        >
+          Type in basically anything — a word, a phrase, a description — and it highlights the areas
+          of the text that are relevant. It leaves you as the arbiter of whether something is worth
+          considering more closely. Every hit is marked in the prose and painted into the strip
+          beside it, and each says how sure it is.
+        </Showcase>
 
-      <H2>And deliberately not</H2>
-      {/* docs/project/vision.md § Anti-goals. */}
-      <p>
-        “Read this in 2 minutes.” Streaks, nudges, anything optimising for time in the app.
-        Confident generated claims with no path back to the source.
-      </p>
+        {/* ------------------------------------------------------ who it's for --
+            Moved below the pictures on 2026-09-03: a stranger asks whether this
+            is for them after seeing what it is, not before. */}
+        <section className="site-panel site-reveal tw:mt-24 tw:p-8 tw:sm:p-10">
+          <h2 className="site-eyebrow tw:mb-3">Who it’s for</h2>
+          {/* Greg, 2026-09-03, answer 3. The fields are his call of 2026-09-02:
+              "name fields too". */}
+          <p className="tw:max-w-[58ch] tw:font-prose tw:text-lg tw:leading-relaxed tw:text-foreground">
+            People who read difficult material and think professionally: scientists, researchers,
+            academics. You open a long, deep, important article — a paper, a philosophy essay, a
+            policy report — that you want to understand, digest, internalise, critique and remember.
+          </p>
+        </section>
 
-      <H2>Plans</H2>
-      <Plans />
-      {/* [tissue] The same three rows are on `/pricing`; this is the address to
-          send somebody who asked what it costs, rather than a page with more on
-          it. Same shape as the features link above. */}
-      <p className="tw:mt-6">
-        <Link href={PRICING_HREF} className="tw:text-highlight tw:no-underline tw:hover:underline">
-          Pricing, and what a month's allowance means →
-        </Link>
-      </p>
-
-      <section className="tw:mt-14 tw:rounded-lg tw:border tw:border-border tw:bg-card/50 tw:p-6">
-        <p className="tw:mb-5 tw:text-sm">
-          {/* [tissue] */}Already have an account? Sign in — your shelf is where you left it.
-        </p>
-        <SignInControls />
-      </section>
-
-      <footer className="tw:mt-14 tw:border-t tw:border-border tw:pt-5 tw:text-xs tw:text-ink-faint">
-        <p className="tw:m-0">
-          Spideryarn Reading — beta. Every screenshot is of a real article read in Spideryarn; most
-          are of <em>The Mythology of AI Consciousness</em> by Anil Seth.
-        </p>
-        <p className="tw:mt-2 tw:mb-0">
-          <Link href={FEATURES_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
-            Features
+        {/* ------------------------------------------------ and the rest of it -- */}
+        {/* [tissue] The count is a product fact: nine <Tile>s follow. If you
+            add or remove one, change the number — this page has shipped a wrong
+            count before. */}
+        <H2 eyebrow="And the rest of it">Nine more ways in.</H2>
+        <div className="site-bento site-reveal">
+          {/* Greg, 2026-08-26 (ideas) and 2026-08-31 (quotes). */}
+          <Tile name="The ideas it introduces, and the ones it needs you to hold." span="wide">
+            And the most central, helpful, interesting quotes — in order, or by importance, or by
+            how memorable they are.
+          </Tile>
+          {/* Greg, 2026-08-28 (comments) and docs/project/comments.md. */}
+          <Tile name="Ask at the point of confusion." span="wide">
+            Select a sentence, bookmark it, add a note — and, if you want one, an answer, from the
+            surrounding argument and from the web when it needs to. The article never leaves the
+            screen.
+          </Tile>
+          {/* Greg, 2026-08-27 (remember) and 2026-08-31 (quiz). */}
+          <Tile name="Find out what you kept.">
+            Say what you took from the piece and hear, plainly and concisely, where it diverges from
+            the text. Or take a dozen short questions, easy first, central first.
+          </Tile>
+          {/* Greg, 2026-08-26, the summary request, and 2026-08-31. */}
+          <Tile name="Summary.">
+            One sentence on every part of the piece, and every section of every part, as deep as you
+            ask — beside the prose, never instead of it.
+          </Tile>
+          {/* Greg, 2026-08-31, the timeline request; docs/project/timeline.md. */}
+          <Tile name="Timeline.">
+            When the piece says things happened — falling back to order where the dates are
+            ambiguous, and showing the uncertainty rather than hiding it.
+          </Tile>
+          {/* Greg, 2026-08-26, the diagram request, and 2026-09-03 for the
+              fifth. The five names are DIAGRAMS in src/web/diagram.ts — checked
+              there, not in a doc about it: this page said "six diagrams" for a
+              day when there were four, and said "four" for an afternoon when
+              Illustrated had made it five. */}
+          <Tile name="Diagrams.">
+            Five maps of the structure of the piece — force, drift, trail, sketch and illustrated —
+            with where you are marked on each.
+          </Tile>
+          {/* docs/project/referee-mode.md, its title. */}
+          <Tile name="For peer reviewers.">
+            A mode that helps a referee read a paper without reading it for them.
+          </Tile>
+          {/* Greg, 2026-08-27, the links request. */}
+          <Tile name="Links.">
+            Hover the author’s own hyperlinks and see something about the destination before you
+            leave.
+          </Tile>
+          {/* Greg, 2026-09-03, answer 2's postscript. What is shared is the
+              generated work — outline, gists, glossary, ideas, quotes — and not
+              the owner's comments, chats or searches (PrivacyPage.tsx). */}
+          <Tile name="Public articles share their AI annotations." span="featured">
+            The expensive generated work on a public-readable article — its outline, glossary, ideas
+            and quotes — is there for everyone who opens it. Your own notes stay yours.
+          </Tile>
+        </div>
+        <p className="tw:mt-6 tw:text-sm">
+          <Link
+            href={FEATURES_HREF}
+            className="tw:text-highlight tw:no-underline tw:hover:underline"
+          >
+            Everything it does, with pictures →
           </Link>
-          {" · "}
-          <Link href={PRICING_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
-            Pricing
-          </Link>
-          {" · "}
-          <Link href={PRIVACY_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
-            Privacy
-          </Link>
-          {" · "}
-          <a href={`mailto:${CONTACT_EMAIL}`} className="tw:text-ink-faint tw:hover:text-highlight">
-            {CONTACT_EMAIL}
-          </a>
         </p>
-      </footer>
-    </main>
+
+        {/* --------------------------------------------------- what it holds to --
+            Two lines shorter than it was. "A companion, not a replacement" and
+            "it keeps bringing you back to the original text" both appeared twice
+            on this page; each is kept once, higher up. */}
+        {/* [tissue] */}
+        <H2 eyebrow="What it holds to">The promises underneath.</H2>
+        <ul className="site-reveal tw:mt-4 tw:flex tw:max-w-[62ch] tw:flex-col tw:gap-4">
+          {/* Greg, 2026-09-03, answer 2; docs/project/vision.md § Principles 1 and 5. */}
+          <Feature name="It keeps bringing you back to the original text.">
+            An improved interface on the text itself, not an LLM-rewritten version that may or may
+            not capture the author’s full intent. It helps you fight cognitive surrender.
+          </Feature>
+          {/* docs/project/vision.md § Principles 4, and the rule in
+              src/converse.ts: a statement about the article cites its block. */}
+          <Feature name="When the AI says what the article says, it cites the passage.">
+            One press and you are reading the author, not the model.
+          </Feature>
+          {/* Greg, 2026-09-03, answer 1; the tiebreak as he corrected it the
+              same day, from his notes on "rich updated internal representations". */}
+          <Feature name="When a design call is close, depth wins.">
+            The question is which option will best help you form your own rich, updated
+            understanding — digest, learn, notice, integrate, critique — not which is easier.
+          </Feature>
+          {/* Greg, 2026-09-01, on the export button. */}
+          <Feature name="It’s the reader’s data.">
+            One button exports everything Spideryarn holds about an article, as plain files.
+          </Feature>
+        </ul>
+
+        {/* ------------------------------------------------ and deliberately not --
+            Promoted out of the gap between the principles and the prices. It is
+            the only paragraph here a stranger would screenshot.
+            docs/project/vision.md § Anti-goals. */}
+        <section className="site-panel site-reveal tw:mt-20 tw:p-8 tw:sm:p-10">
+          <h2 className="site-eyebrow tw:mb-3">And deliberately not</h2>
+          <p className="tw:font-prose tw:text-lg tw:leading-relaxed tw:text-foreground tw:sm:text-xl">
+            “Read this in 2 minutes.” Streaks, nudges, anything optimising for time in the app.
+            Confident generated claims with no path back to the source.
+          </p>
+        </section>
+
+        {/* [tissue]; "reading is never gated" is Greg, 2026-09-02, and the
+            rule Plans.tsx states in full. */}
+        <H2 eyebrow="Plans">Simple, and reading is never gated.</H2>
+        <div className="site-reveal">
+          <Plans />
+          {/* [tissue] The same three rows are on `/pricing`, which exists to be
+              an address you can send somebody rather than a page with more on
+              it. Same shape as the features link above. */}
+          <p className="tw:mt-6 tw:text-sm">
+            <Link
+              href={PRICING_HREF}
+              className="tw:text-highlight tw:no-underline tw:hover:underline"
+            >
+              Pricing, and what a month’s allowance means →
+            </Link>
+          </p>
+        </div>
+
+        {/* ---------------------------------------------------------- sign in --
+            One panel, at the foot. The `Sign in` link in the top bar jumps here,
+            so the buttons are still on the page — the 2026-08-27 rule — without
+            standing between a stranger and the product. */}
+        <section
+          id="sign-in"
+          className="site-panel tw:mt-24 tw:scroll-mt-20 tw:p-6 tw:sm:p-8"
+        >
+          <p className="tw:mb-5 tw:text-sm">
+            {/* [tissue] */}Already have an account? Sign in — your shelf is where you left it.
+          </p>
+          <SignInControls />
+        </section>
+
+        {/* **One footer for the whole site**, since the merge of 2026-09-03:
+            this page's own `SiteFooter` in SiteBits.tsx and the general one
+            arrived the same day in two worktrees, and Greg's call was to keep
+            the general one. `variant` carries this page's taller spacing over
+            unchanged; the sentence is this page's and stays here.
+
+            **`here` because this page is drawn at addresses that are not its
+            own.** Signed out, `App.tsx` answers `/profile`, `/design`,
+            `/admin`, `/add/...` and an unshared `/read/<slug>` with this page,
+            so without it the row offered those readers a Home link to the page
+            they were already on. SiteFooter.tsx § `here`. */}
+        <SiteFooter here="library" variant="marketing">
+          Spideryarn Reading — beta. Every screenshot is of a real article read in Spideryarn.
+        </SiteFooter>
+      </main>
+    </div>
   );
 }

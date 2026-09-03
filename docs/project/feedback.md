@@ -68,7 +68,7 @@ failed send, so the reader still has their words and somewhere to put them.
 
 | what | file |
 |---|---|
-| the corner button, and who sees it | [`src/web/FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx) |
+| the corner button, its hover card, and who sees it | [`src/web/FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx) |
 | the dialog | [`src/web/FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) |
 | the microphone on its box | [dictation.md](dictation.md), and two guards this dialog needs that the others do not — see its header |
 | the diagnostics allowlist, shared by both halves | [`src/feedback-payload.ts`](../../src/feedback-payload.ts) |
@@ -95,21 +95,38 @@ byte — the feedback path builds its own payload rather than relaxing the scrub
 
 That gives the rule for anyone adding a field:
 
-> Everything in a report is either **something the reader typed into this dialog**, or **a value
-> from a closed vocabulary we wrote**. There is no third category, and "it is probably fine" is not
-> one.
+> Everything in a report is either **something the reader typed into this dialog**, **a value from
+> a closed vocabulary we wrote**, or **a fact the reader is told, on the page, that we take**.
+> "It is probably fine" is not a fourth.
+
+**The third clause is new and it was bought, not assumed.** The rule had two clauses until
+2026-09-02, when Greg's call to store the whole address introduced a value that is neither — the
+URL is an open string, validated but not enumerable. Rather than pretend it fits the second clause,
+the rule widened and the price is written into it: the reader has to be *told*, which is why the
+address appears in [privacy.md § What a bug report carries](privacy.md) and in the hover card on
+the button ([tooltips.md](tooltips.md)). A field that nobody is told about does not qualify, and
+that is the whole of the difference between this clause and "it is probably fine".
 
 `kind` is the second sort: two values and a null, `FEEDBACK_KINDS` in
 [`src/types.ts`](../../src/types.ts). It rides to Sentry as a tag, and **as no tag at all when the
 reader did not say** — a tag whose value is `""` is one Sentry will group by, while "the ones nobody
 classified" is a filter on the tag being missing.
 
-Three things follow, and each of them was got wrong once before it was got right:
+Three things follow, and each of them was got wrong once before it was got right — the first of
+them twice, in opposite directions:
 
-- **Never the raw URL.** In this app the address bar carries `?q=` and `?find=`, which are the
-  reader's own typing, and `/add/<a whole third-party URL>`, which may carry a credential. The
-  report carries a route *kind* from a list, a validated slug, and nothing else off the address.
-  [url-state.md](url-state.md) is what makes the address that rich in the first place.
+- **The raw URL, since 2026-09-02, and knowingly.** It was a route *kind* from a closed list until
+  Greg reversed it — *"I think it's fine (and even advantageous) to store the url with the Feedback
+  - if that means we can get rid of the route_kind and simplify things"* — because the vocabulary
+  cost a migration per page and a 500 whenever its four hand-mirrored copies drifted. The reason it
+  was closed still stands and is now a decision rather than a defence: this app's address bar
+  carries `?q=` and `?find=`, which are the reader's own typing, and `/add/<a whole third-party
+  URL>`, which may carry a credential ([url-state.md](url-state.md) is what makes the address that
+  rich). So the reader is *told* — [privacy.md § What a bug report carries](privacy.md), and the
+  hover card on the button itself ([tooltips.md](tooltips.md)). `isWebUrl` and a 2048-character cap
+  at the route are what remain of the guard. **This bullet said "Never the raw URL" for a day after
+  the code stopped meaning it**, and so did two comments in the code; a cross-family review found
+  all three on 2026-09-03.
 - **Never an `Error.message` or a stack.** Error messages in this codebase have four separate times
   turned out to contain the article. Reports carry an error's *name*, and only a name **on a closed
   list** — `safeDiagnosticName` in [`src/feedback-payload.ts`](../../src/feedback-payload.ts), the

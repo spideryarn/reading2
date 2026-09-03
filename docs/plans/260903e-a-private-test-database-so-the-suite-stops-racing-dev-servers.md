@@ -1,5 +1,17 @@
 # A private test database, so the suite stops racing dev servers
 
+> **Stages B–E of this plan were absorbed into
+> [260903f](260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) on 2026-09-03, by
+> Greg's decision. Do not build them from here.** That plan needs this machinery for three separate
+> things — its ledger isolation, its suite-registration abstraction, and its mandatory database
+> preflight — and the two were about to build two manifests and two lane mechanisms that would
+> disagree. **Stage A below is done and is on `dev`** (`a0fb2eb2`); it is unaffected.
+>
+> **This document stays the design**, and 260903f points back at it rather than restating it: the
+> evidence, the root cause, the isolation measurement, the ordering trap and Sol's review are all
+> here. Read it before touching the absorbed stages; build them from
+> [260903f § T](260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md).
+
 ## Goal
 
 `npm test` is nondeterministically red on this box, and `npm run check`'s test gate reports a green

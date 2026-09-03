@@ -470,13 +470,25 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     try {
       await fetchOk(`/api/glossary/${encodeURIComponent(slug)}`, { method: "DELETE" });
     } catch (err) {
-      /* **This is where production stops**, and it is not a bug in this hook:
-         deleting a glossary under `postgres` would null a column on a published
-         revision, and that table is immutable once published, so the store
-         answers 501 on purpose (src/store/index.ts § deleteGlossary). The
-         message says so, and the DELETE failing must not fall through to `run`
-         — which forces the step, and forcing it *appends*, which is the exact
-         opposite of what the reader pressed. */
+      /* **The DELETE failing must not fall through to `run`**, and that is the
+         whole of this branch. The glossary step *appends* rather than replaces
+         (src/glossary.ts), so with the old list still in the column there are
+         two ways to carry on and both are wrong: the step runs and the reader
+         gets a **longer** version of the list they asked to be rid of, or it
+         skips as current and the identical list comes straight back over the
+         `clear()` below. Neither is Start again.
+
+         Until 2026-09-03 the failure this caught was a **501**: there was no
+         Postgres implementation, so every reader who was not a developer on a
+         laptop pressed the button and was told no. There is one now
+         (src/store/pg-glossary.ts), and what lands here instead is a **409** —
+         *a job is running on this article* — plus the ordinary failures any
+         request has. The 409 is real rather than theoretical: the delete nulls
+         the column on the published revision without moving
+         `articles.current_revision_id`, so a draft opened before it would
+         publish the copied glossary back over the top, and the store refuses
+         rather than races. Its message is written for a reader and says to wait
+         and press Start again, which is why it is shown verbatim. */
       setResetFailed((err as Error).message);
       return;
     }

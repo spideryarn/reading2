@@ -29,12 +29,11 @@
  */
 import { ArrowLeft } from "lucide-react";
 
-import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { Plans } from "./Plans.js";
-import { FEATURES_HREF, PRIVACY_HREF } from "./router.js";
 import { H2 } from "./SiteBits.js";
+import { SiteFooter } from "./SiteFooter.js";
 
 export function PricingPage() {
   useDocumentTitle(pageTitle({ kind: "pricing" }));
@@ -72,25 +71,13 @@ export function PricingPage() {
         paid for, and nothing you have added is taken away.
       </p>
 
-      <footer className="tw:mt-14 tw:border-t tw:border-border tw:pt-5 tw:text-xs tw:text-ink-faint">
-        <p className="tw:m-0">
-          <Link href="/" className="tw:text-ink-faint tw:hover:text-highlight">
-            Home
-          </Link>
-          {" · "}
-          <Link href={FEATURES_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
-            Features
-          </Link>
-          {" · "}
-          <Link href={PRIVACY_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
-            Privacy
-          </Link>
-          {" · "}
-          <a href={`mailto:${CONTACT_EMAIL}`} className="tw:text-ink-faint tw:hover:text-highlight">
-            {CONTACT_EMAIL}
-          </a>
-        </p>
-      </footer>
+      {/* **The shared row, not a hand-written one.** The first draft of this
+          page copied the features page's footer, which is exactly the
+          duplication SiteFooter.tsx was extracted to stop — and it says so: a
+          Terms page should be one entry in its `LINKS`, not an edit to every
+          page. No `here` is needed, because `/pricing` parses to its own route
+          and the row can drop its own link by itself. */}
+      <SiteFooter />
     </main>
   );
 }

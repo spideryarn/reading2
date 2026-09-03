@@ -295,6 +295,41 @@ export default defineConfig(() => {
                 { timestamp: true },
               );
             }
+
+            /* **`SPIDERYARN_BASE_URL` must name the port we actually got.**
+             *
+             * It is baked at startup, and it is what Stripe is told to send a
+             * paying reader back to and what `stripe listen` is pointed at. When
+             * the port moves under it, both address **a peer's server**: a
+             * Checkout that completes against someone else's process, which from
+             * here looks like nothing happening at all. That happened on
+             * 2026-09-03 and cost a confused twenty minutes.
+             *
+             * **Deliberately not nested inside the mismatch warning above**,
+             * which does not fire — `server.config.server.port` reads back as
+             * the port vite settled on rather than the one it was asked for, so
+             * `wanted !== actual` is never true and that whole branch is dead.
+             * It is left in place because the diagnosis belongs with whoever
+             * fixes it, but nothing new may depend on it. This check compares
+             * against `actual`, which is measured from the socket, so it stands
+             * on its own. */
+            const declared = (() => {
+              try {
+                const port = new URL(process.env.SPIDERYARN_BASE_URL ?? "").port;
+                return port ? Number(port) : undefined;
+              } catch {
+                return undefined;
+              }
+            })();
+            if (declared !== undefined && declared !== actual) {
+              server.config.logger.warn(
+                `\n  This server is on ${actual}, but SPIDERYARN_BASE_URL says ${declared}.\n` +
+                  `  Anything that leaves and comes back — Stripe Checkout, OAuth — will return to\n` +
+                  `  whatever holds ${declared}, which is probably another agent's server.\n` +
+                  "  Free the port, or set SPIDERYARN_BASE_URL to match.\n",
+                { timestamp: true },
+              );
+            }
             if (allowed.length === 0 || allowed.includes(actual)) return;
             const plan = portInRange(actual)
               ? `  ${actual} is in the range we intend to allow-list but the list has not caught up:\n` +

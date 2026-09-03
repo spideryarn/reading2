@@ -387,24 +387,66 @@ export const articleVisibilityChanges = spideryarn.table(
  *
  * ## Why "in its text" and not simply "immutable"
  *
- * Only `fetch`, `extract` and `blocks` mint a revision. `hierarchy`, `arc`, `tweets`
- * and `glossary` write their own column onto the revision that is
- * already published, in one `UPDATE`. That weakens the plain reading of
- * "immutable" and it belongs here rather than arriving as a surprise to
- * whoever reads this comment and then reads the code.
+ * **Every pipeline job writes its steps into one draft and publishes that draft
+ * once.** A job opens a draft (`openOrBeginJobDraft` → `beginDraftIn`, in
+ * src/store/pg-revisions.ts), every step of that job writes into *that draft's*
+ * row, and a `done` ending publishes it (`publishRevisionIn`, called from
+ * src/store/pg-session.ts). `hierarchy`, `arc`, `tweets` and `glossary` take
+ * exactly that path, the same as `fetch`, `extract` and `blocks`.
+ *
+ * **One draft per job, not one per step**, and that distinction is the whole
+ * reason `openOrBeginJobDraft` exists rather than `beginRevision`: `advanceJob`
+ * runs one step per HTTP request, so a draft minted per step would throw away
+ * what the previous step wrote. Its own comment tells that story.
  *
  * What the property is *for* is the sentence below it: a failed re-extraction
- * must not overwrite a good article in place. That is about the **text**. A
- * revision per glossary regeneration would copy every `revision_blocks` row of
- * the article to add one JSONB value, and no reader could tell the
- * difference — a single-column `UPDATE` is already atomic.
+ * must not overwrite a good article in place. That is about the **text**, and
+ * what earns "in its text" rather than plain "immutable" is exactly one thing:
+ * the glossary delete below, which nulls one column of a row that is already
+ * published. Nothing else in this table writes a published revision.
+ * Publication is the row's *last* change as a draft — `publishRevisionIn` sets
+ * `status` and the library scalars and moves `articles.current_revision_id` in
+ * one transaction — and `failRevisionIn`'s `UPDATE` names `status = 'draft'` in
+ * its `WHERE`, so a published row is out of its reach too.
  *
- * **The limit of that licence, which a review found and which the code
- * enforces:** `hierarchy` is not one of the five. It owns `tree` *and* `labels`, and
- * a job that runs `hierarchy` then `arc` would otherwise show every reader the new
- * tree beside the old arc for the length of a model call. So `hierarchy` mints a
- * revision like the structural steps do, and only genuinely independent
- * on-demand artefacts update in place.
+ * ### This comment said the opposite until 2026-09-03, and two readers believed it
+ *
+ * It read: *"`hierarchy`, `arc`, `tweets` and `glossary` write their own column
+ * onto the revision that is already published, in one `UPDATE`."* True when it
+ * was written (docs/plans/260826e § *A new revision only when the text
+ * changes*), false from the D1b work onwards, and nothing kept it in step. It
+ * then contradicted its own last paragraph, which said `hierarchy` was *not* one
+ * of them — and it was still not enough for anybody to check. What made it
+ * expensive is that it was cited as a *reason* elsewhere:
+ * docs/plans/260903e-glossary-delete-in-postgres.md built its first version on
+ * this sentence and had to be sent back. CLAUDE.md § *One source of truth* is
+ * about exactly this: a restatement of a fact that lives in the code, going
+ * wrong by waiting.
+ *
+ * docs/project/database.md had it right the whole time — *"A `done` ending
+ * publishes the draft"* — so the correction was one file away.
+ *
+ * **The first replacement was wrong too**, which is worth recording next to the
+ * original: it said *"every step mints a revision"* and that a published row's
+ * bookkeeping *"still moves after publication"*. Neither is true — one draft
+ * serves a whole job, and after publication nothing moves a published row's
+ * `status`. GPT Sol caught it on the built code, one review after catching the
+ * sentence it replaced.
+ *
+ * ### The one deliberate exception, which is a reader's and not the pipeline's
+ *
+ * `pgGlossaryStore.deleteGlossary` (src/store/pg-glossary.ts) **does** update a
+ * published revision in place: one `UPDATE` setting `glossary` to NULL, for the
+ * glossary panel's *Start again*. Minting a revision to *remove* one JSONB value
+ * would copy every `revision_blocks` row of the article to buy nothing a reader
+ * could see, and `publishRevision` refuses a revision with no tree and no
+ * blocks — so a delete-by-revision would have to carry the whole article forward
+ * in order to null one column.
+ *
+ * It is one method, its own file says so at length, and the price of the
+ * exception is written down there too: because the pointer does not move, a
+ * draft opened before the delete would publish the copied glossary back over the
+ * top, so the delete refuses with a 409 while a live job holds one.
  */
 export const articleRevisions = spideryarn.table(
   "article_revisions",
@@ -3268,13 +3310,14 @@ export const readerProfiles = spideryarn.table("reader_profiles", {
  *
  * ## What is deliberately NOT here
  *
- * **The URL.** Not `location.href`, not the query string, not the `/add/`
- * target. This app's addresses carry `?q=` and `?find=`, which are reader-typed
- * search text, and `/add/<a whole third-party URL>`, which may carry a token —
- * and `httpContext` and `urlQueryParams` are already off in both halves of
- * monitoring so that a URL does not leave. `route_kind` and `slug` are the part
- * of the location that may, and they are a closed vocabulary and a validated
- * slug rather than a string that was in the address bar.
+ * **This section used to begin with the URL**, and had gone on saying so for a
+ * day after the `url` column below arrived — it was Greg's call to reverse it,
+ * and the reasoning is on that column. What is still true is the *reason* the
+ * vocabulary existed: this app's addresses carry `?q=` and `?find=`, which are
+ * reader-typed search text, and `/add/<a whole third-party URL>`, which may
+ * carry a token. So the address is now stored knowingly and the reader is told
+ * so (docs/project/privacy.md § What a bug report carries), rather than kept
+ * out.
  *
  * **Article prose.** The diagnostics blob carries block *ids*, never block text
  * — docs/project/block-ids.md is why an id is enough, and src/monitoring-scrub.ts

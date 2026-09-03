@@ -35,6 +35,7 @@
  */
 
 import { CAPABLE_MODEL_OPENROUTER, QUICK_MODEL_OPENROUTER, type Effort } from "../../src/models.js";
+import { PRODUCTION_EFFORT } from "../../src/hierarchy.js";
 
 /** One model call's worth of choices. */
 export interface CallSpec {
@@ -85,7 +86,22 @@ export type ArmSpec =
       deltas: readonly string[];
     };
 
-const INCUMBENT: CallSpec = { model: CAPABLE_MODEL_OPENROUTER, effort: "high" };
+/**
+ * **Production, by import rather than by typing the number in again.**
+ *
+ * It read `effort: "high"` until 2026-09-03, while `src/hierarchy.ts` had run
+ * `"medium"` since the max_tokens postmortem. So every paid arm was scored
+ * against a recipe the pipeline does not use, and `smart-low` — declared
+ * `isolated`, one variable, effort — was answering high-vs-low rather than the
+ * medium-vs-low question production actually has. GPT Sol found it by reading
+ * both files at once, which is the only way a restated constant is ever found.
+ *
+ * Hence `PRODUCTION_EFFORT`: the drift is now unrepresentable, not documented.
+ * The runs under evals/results/hierarchy-structure/ dated 2026-08-30 all
+ * predate this, their `incumbent` is `"high"`, and they are not one series
+ * with anything measured after it.
+ */
+const INCUMBENT: CallSpec = { model: CAPABLE_MODEL_OPENROUTER, effort: PRODUCTION_EFFORT };
 
 export const ARMS: readonly ArmSpec[] = [
   { name: "headings", kind: "headings", comparison: "baseline" },

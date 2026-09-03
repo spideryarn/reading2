@@ -62,6 +62,32 @@ deliberately *not* prices and the report says so at length: two generations bill
 wrote nothing, one round labelled cold that read a cache an earlier run had written, and one call
 whose cache state the provider does not report.
 
+## `hierarchy-effort-2026-09-03.md` — does the structure pass need to think at `medium`?
+
+Written by `npm run eval:hierarchy-structure`, on a 16,846-word fixture. **`low` won the blind
+judging, and the free heading tree beat both paid `medium` arms** — four judgments, two model
+families, two independent draw sets, identical ranking every time. `low` is also 36% cheaper and 47%
+faster. Luna came last and one judge called it unusable.
+
+**The document reversed itself and keeps the reasoning, which is the part worth reading.** The
+mechanical proxies favoured `medium` (2.6× less repair, no dropped sections) and it first concluded
+"keep `medium`". Those proxies describe the model's raw *proposal*; the judges rated the *delivered*
+tree, after repair. Two further self-corrections are recorded in it: the "`low` invents its own
+boundaries" story is withdrawn (`l1OnHeadings` is 96.7% vs 95.8%), and so is a claimed length
+threshold (the short and long runs use different articles, so length and article are confounded).
+
+**Do not flip production on it** — one article — and note the free tree has *no gists*, so it cannot
+replace the paid call. The finding it points at is that the author's headings carve better than the
+paid call does, which makes `headings-seeded` the experiment nobody has run.
+
+Read the resolution-floor table before quoting any other row: the shipping recipe disagrees with
+*itself* by as much as it disagrees with `low` on title retention and heading-boundary fidelity, so
+those two rows say nothing. The runs it reads are the six `2026-09-03-09/10-*` directories under
+[`hierarchy-structure/`](hierarchy-structure).
+
+The 2026-08-30 runs in that directory are **not** one series with these: their `incumbent` arm was
+`effort: "high"` while production ran `"medium"`, which is the bug this run had to fix first.
+
 ## `prompt-caching-*.md` — the article is really being cached
 
 Written by `npm run eval:caching`, 2026-08-26, against the live API. Three articles, each searched
