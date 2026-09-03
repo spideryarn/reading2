@@ -129,8 +129,15 @@ import type { SummaryNode } from "./tree.js";
  * arithmetic over prose the browser already holds — so it is the default, and
  * the other two show a spinner rather than borrowing a picture that is not
  * theirs. See [diagrams.ts](./diagrams.ts).
+ *
+ * **`illustrated` is fifth and is not geometry at all** — it is a JPEG an image
+ * model painted from the Sketch's scene, so nothing in this module lays it out
+ * and the three tables below carry a stated row rather than a number
+ * (docs/project/diagram.md § Illustrated). It sits last because the order runs
+ * from the most faithful to the most interpretive, and it is the one picture
+ * here that cannot be checked against the article at all.
  */
-export const DIAGRAMS = ["force", "drift", "trail", "sketch"] as const;
+export const DIAGRAMS = ["force", "drift", "trail", "sketch", "illustrated"] as const;
 export type DiagramKind = (typeof DIAGRAMS)[number];
 
 /**
@@ -585,10 +592,17 @@ const CHAR_W = 0.52;
    its geometry is src/sketch-paint.ts and its type scale is `SIZE_PX` in
    src/sketch-scene.ts, so `LABEL_PX` has nothing to say about it and a number
    here would be a rule nothing reads. */
+/* `illustrated` is here for a *third* reason, and it is the strongest of the
+   three: there is no SVG at all. The picture is a JPEG fetched from
+   `/api/illustrated/:slug/:hash.jpeg` (src/web/IllustratedView.tsx), so there is
+   no node to write on, no font for the stylesheet to set, and nothing this
+   module could lay out if it wanted to. The words that would have been labels
+   are the *what it depicts* list underneath, which is HTML. */
 export const UNLABELLED: ReadonlySet<DiagramKind> = new Set<DiagramKind>([
   "drift",
   "trail",
   "sketch",
+  "illustrated",
 ]);
 
 export const LABEL_PX: Record<DiagramKind, Record<number, number>> = {
@@ -598,6 +612,10 @@ export const LABEL_PX: Record<DiagramKind, Record<number, number>> = {
      because the record is keyed by `DiagramKind`, and `UNLABELLED` above is
      what makes that a stated fact rather than a forgotten row. */
   sketch: {},
+  /* Never read either, and one step further out: `illustrated` draws a raster
+     image rather than any geometry at all, so there is not even a painter for
+     this table to disagree with. */
+  illustrated: {},
   /* Nothing is written on a scatter dot at all — `lines` is always empty
      (src/web/scatter.ts). These entries exist because the record is keyed by
      `DiagramKind` and a missing one would be a type error rather than a
@@ -619,6 +637,8 @@ export const LABEL_PX: Record<DiagramKind, Record<number, number>> = {
 export const LINE_STEP: Record<DiagramKind, { title: number; gist: number }> = {
   /* Never read, for the reason `LABEL_PX` gives one table up. */
   sketch: { title: 0, gist: 0 },
+  /* Nor this one: a JPEG has no `<tspan>`s to advance. */
+  illustrated: { title: 0, gist: 0 },
   // Force puts one line on a node and the rest in the footer card.
   force: { title: 12, gist: 12 },
   // The two scatters write nothing on a dot; everything is in the card.

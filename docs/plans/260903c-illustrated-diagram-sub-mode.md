@@ -638,6 +638,63 @@ import-clean for the client boundary. What it found:
 All of those are fixed in the hardening pass. The one deliberately **not** fixed is the second-hop
 injection above.
 
+## For Greg: what was decided in the night, and what is still open
+
+Greg was asleep and asked for judgment calls to be made and listed. These are the ones where
+somebody could reasonably have chosen differently. Nothing here is load-bearing on anything else, so
+each can be reversed on its own.
+
+### Three that went against the letter of the instruction
+
+1. **The `OPENAI_API_KEY` in `.env.local` is not used.** It goes through OpenRouter instead, because
+   `openai/gpt-image-2` turned out to be routable there with reference images and a real cost line —
+   so [ai-gateway.md](../project/ai-gateway.md)'s one-gateway claim survives, and there is no
+   hand-maintained per-image price table (OpenAI publishes only per-token rates). About an hour to
+   reverse; the seam is one file. **This is the one that most deserves a second look**, because it
+   was a direct instruction and the reason for overriding it is architectural taste rather than
+   necessity.
+2. **The picture has no hotspots**, where Greg asked for a clickable top-level image. See
+   [§ Clickability](#clickability): we cannot know where the illustrator put section 3, and an
+   invisible wrong door is worse than no door. The vignette list under the plate is the clickable
+   layer instead. The three honest routes to a clickable image are listed there.
+3. **Article figures are not fed in.** Greg's version — a graph "re-depicted (faithfully!)" — is not
+   achievable, and [§ Article figures are deferred](#article-figures-are-deferred-and-gregs-version-of-it-is-not-achievable)
+   says why at length. The achievable version is a v2 with an eval behind it.
+
+### Two that are product calls rather than engineering ones
+
+4. **It costs more than Sketch: $0.27–$0.40 an article, 86–89% of it the brief call.** Every
+   intuition says the pictures are the expensive part and they are not. If that is too much, the
+   levers in order are the vignette count and the length of the three compositions — both prompt
+   edits — before a cheaper tier for the brief. [§ What it costs](#what-it-costs).
+5. **An article's author can influence what its illustration depicts**, and v1 accepts that rather
+   than fixing it. The fix is a typed composition our code renders, and it costs the free prose the
+   plates are good because of. Fine while this is owner-only; **not fine before any plate is shared,
+   made public, or used as an OG image.** [§ Two hazards](#two-hazards-the-pipeline-does-not-have-elsewhere).
+
+### Assumptions that are worth knowing are assumptions
+
+6. **`quality: "low"`** — because every plate drawn tonight was drawn at `low` and they are good.
+   Medium and high were never tried, so "low is enough" is evidence about `low`, not a comparison.
+7. **`MAX_PLATES = 4`, and only three-plate runs have been measured.** The 417 s worst case is a
+   three-plate number against a 760 s lease. A four-plate run on a long article is untested.
+8. **Two articles, one corpus.** Everything about picture quality rests on `noema` and
+   `constitution`. They are unalike enough to be encouraging and they are still two.
+9. **`output_format: "jpeg"` is honoured by a model that does not advertise supporting it.** Measured
+   twice, and the code refuses bytes that are not JPEG rather than trusting the request was obeyed —
+   but if it stops being honoured, plates stop being drawn until somebody sends `png` instead.
+
+### Open questions
+
+- **Should a drop remove a vignette from the picture as well as from the list?** Today it does not,
+  and [§ Check the brief](#check-the-brief-not-the-picture) explains why that would cost the
+  composition. A second call could rewrite the prompt from the survivors for about $0.02.
+- **Is one plate per zoom scene worth it**, or is the overview enough? Fable argued for overview-only;
+  the plates are cheap and Greg asked for them, so they are in, behind one constant.
+- **Should the register be a house style eventually?** Greg said not to worry about it yet. Worth
+  knowing that the model currently picks per article and gives a reason, and that the reasons are
+  good — which is an argument against fixing a house style rather than for one.
+
 ## The simpler option this passed over
 
 **Reusing the Sketch artefact and generating the image in the browser on demand, storing nothing.**
