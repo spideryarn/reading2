@@ -54,7 +54,7 @@ import { articleText } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
 
-export const PROMPT_VERSION = "tweets/2";
+export const PROMPT_VERSION = "tweets/3";
 
 /**
  * The per-post limit, in one place.
@@ -213,7 +213,8 @@ RULES
   limits has changed the argument, and that is the failure this whole thing is
   most likely to commit.
 - Use the author's own distinctive vocabulary. Those words are the reader's
-  handholds if they go on to the article.
+  handholds if they go on to the article. Ordinary words for everything else —
+  plainer than the article, never further from it.
 - Never introduce a fact that is not in the article. No outside knowledge, no
   numbers you inferred, no examples of your own.
 - No hype. Never "game-changing", "mind-blowing", "this changes everything",
