@@ -640,10 +640,29 @@ export interface BeginRevisionResult {
  * Start a new draft revision, as a copy of whatever is published now.
  *
  * One transaction, from the article lock to the last copied row. That is a
- * requirement rather than tidiness: `hierarchy`, `arc`, `tweets` and `glossary`
- * update the *published* revision in place, so a copy spread over
- * three transactions could take the blocks from before an in-place update and
- * the columns from after it.
+ * requirement rather than tidiness, for two reasons that outlive any one step:
+ *
+ * 1. **The article lock is the ordering, and it lasts exactly as long as the
+ *    transaction does.** `lockOrCreateArticle` takes `FOR UPDATE` on the
+ *    `articles` row, which is what serialises this against every other writer of
+ *    the same article — another `beginDraftIn`, a `publishRevisionIn`, and
+ *    `pgGlossaryStore.deleteGlossary` (src/store/pg-glossary.ts), which really
+ *    does update a published revision in place. A copy spread over three
+ *    transactions lets go of that lock twice, and the delete landing in either
+ *    gap gives the draft its `glossary` from before the delete — which the next
+ *    publication then writes back over the top of it.
+ * 2. **A half-copied draft is readable, not merely untidy.** The steps that run
+ *    next read *through* this draft: no `revision_blocks` rows and a model is
+ *    handed an empty article; no copied `revision_step_runs` rows and `has` and
+ *    `interrupted` (src/store/artifacts-pg.ts) answer that nothing has been done
+ *    here, so a resumed job pays for every completed step again.
+ *
+ * **The reason given here until 2026-09-03 was neither of those**, and it was
+ * false: *"`hierarchy`, `arc`, `tweets` and `glossary` update the published
+ * revision in place"*. True when it was written, and untrue from the D1b work
+ * onwards — every step drafts and publishes now. It was a restatement of
+ * src/db/schema.ts's own stale claim, which is how one wrong sentence became
+ * three; see the correction there for what it cost.
  *
  * Creates the `articles` row if this slug has never been seen, so the caller
  * does not need a separate "does this article exist" dance — a brand-new URL and

@@ -117,8 +117,28 @@ npx tsx scripts/stripe-setup.ts --apply    # creates the Stripe objects, writes 
 
 **Changing an amount works the same way** — edit the row, run the script. Stripe prices are
 immutable, so it creates a *new* price and moves the lookup key onto it with
-`transfer_lookup_key`. The old price stays alive and unarchived, so **anyone already subscribed
-keeps billing at the price they were sold**; moving them is a separate, deliberate act.
+`transfer_lookup_key`. The old price stays alive and unarchived, so anyone already subscribed
+keeps billing at the price they were sold; moving them is a separate, deliberate act.
+
+> [!WARNING]
+> **They keep billing and lose their allowance. Do not change a price with live subscribers until
+> this is fixed.**
+>
+> `tierForPrice` ([`src/billing/tiers.ts`](../../src/billing/tiers.ts)) matches a subscription's
+> price against `billing_tiers.stripe_price_id`, of which there is exactly one per tier — the
+> *current* one. A grandfathered subscriber is therefore on a price no tier sells, and
+> `entitlementFromRow` ([`src/store/pg-billing.ts`](../../src/store/pg-billing.ts)) fails towards
+> free, as it should when it cannot recognise a price. So they go on paying and drop to three
+> lifetime ingests. It logs a warning nobody is reading and tells the reader nothing.
+>
+> Demonstrated on 2026-09-03 rather than reasoned about: after the VAT fix below replaced both
+> prices, the test subscriber — `active`, paid, unchanged — resolved to
+> `{"tier":"free","limit":3}`.
+>
+> The fix is to stop identifying a tier by its current price. Every price this script creates
+> already carries `metadata.tier`, so `syncSubscriptionFromStripe` could read it and store a
+> `tier_id` on `billing_accounts`, leaving entitlement to read that instead — the price id stays as
+> a record of what they bought. A price-history table is the heavier alternative. **Not built.**
 
 ### What holds these rows to account
 
@@ -151,6 +171,47 @@ it silently shows somebody the base-currency price.
   down at the top of this document.
 - **The lookup key is the identity, not the name.** Never change one on a tier that has been sold:
   it is how a re-run finds the price it made last time instead of minting a second one.
+
+### Tax: the two fields that decide what a reader is charged
+
+Both live in [`scripts/stripe-setup.ts`](../../scripts/stripe-setup.ts), both were found by driving a
+real purchase on 2026-09-03, and neither is visible to any unit test — nothing here renders a Stripe
+invoice.
+
+**`tax_code` on the product.** A Stripe account created from 2026 has **Managed Payments** on by
+default — Stripe as merchant of record — and it refuses to sell a product without one. The first
+Checkout on the new account died with `Invalid line_items[0]: the product tax code is missing`, which
+our route correctly reported to the reader as "we could not reach Stripe just now". Ours is
+`txcd_10103000`, *SaaS — personal use*.
+
+**`tax_behavior` on the price, and this one is the money.** Its default, `unspecified`, behaves as
+*exclusive*: tax goes **on top**. A reader shown €9 was charged **€10.71** — €9.00 plus 19% German
+VAT — which is not the price on the page and, for a consumer sale in the UK or EU, not a price that
+may be advertised that way. It is now `inclusive`, measured side by side on the same customer: the
+old price totalled 1071, the new one 900. `tax_behavior` is immutable like the amount, so fixing it
+meant minting new prices; `differences()` now checks it, so a price predating this is replaced rather
+than kept.
+
+The consequence to be aware of is that the **net varies by the buyer's country** — €9 is €7.56 in
+Germany at 19% and €7.44 in Ireland at 21%. That is the price of quoting one honest number
+everywhere.
+
+### Managed Payments, and what it is worth
+
+On by default on the Spideryarn account, and worth an explicit decision rather than drift. Stripe
+becomes merchant of record and **registers, files and remits VAT/GST in its own name** across 80+
+countries including the UK, the EU and the US — which retires the OSS problem below rather than
+managing it. It also takes fraud liability and fights disputes.
+
+It costs **3.5% on top of** normal processing — on an £8 subscription, roughly 32p becomes 60p — and
+the customer's statement reads `LINK.COM* SPIDERYARN.COM`, with receipts, invoices and subscription
+management on link.com and an invoice footer saying "sold through Link". Checkout and Payment Links
+only, digital goods only, and Stripe may refund a customer without asking if a support escalation
+goes unanswered for 48 hours.
+
+Turn it off at `dashboard.stripe.com/settings/managed-payments` (per mode) or per session with
+`managed_payments[enabled]=false`. **Unverified**: what happens to subscriptions already running when
+it is toggled — which is the argument for deciding before anyone has subscribed.
 
 ### VAT, flagged rather than resolved
 
@@ -437,9 +498,18 @@ stores an absent period, and meters against it.
 ## Setting it up
 
 ```bash
-npx tsx scripts/stripe-setup.ts            # say what it would do
-npx tsx scripts/stripe-setup.ts --apply    # do it
+npm run stripe:setup           # say what it would do
+npm run stripe:setup -- --apply    # do it
+npm run stripe:check           # read-only: is this account fit to take money?
 ```
+
+`stripe:check` writes nothing. It is what you run against **live** before trusting it, and against a
+sandbox to see whether the two agree: the business name a customer reads on the Checkout page, the
+statement descriptor, the tax code without which nothing sells, `tax_behavior`, every currency
+against its row, the portal's cancel and card-update features, and whether any endpoint is listening
+for the webhook that grants entitlement. `✗` exits non-zero. It exists because every check it makes
+is one a real purchase found on 2026-09-03 and no unit test can —
+[`scripts/stripe-check.ts`](../../scripts/stripe-check.ts) says which.
 
 Idempotent by `lookup_key`, not by product name — a name is a label a human may edit, and matching
 on one is how you end up with two $10 prices and two cohorts of customers on different ones. It
@@ -454,11 +524,33 @@ carry: the ids are rows.
 Greg's manual surface is the account, the keys, and the few dashboard-only settings — customer
 email receipts, dispute auto-cancellation and the dunning schedule. Everything else is the script.
 
-**Live mode needs no activating.** `acct_1GHoSxLZ0dGTJEEP` has taken real payments for Greg's
-consulting work for years: read back on 2026-09-03, `charges_enabled`, `payouts_enabled` and
-`details_submitted` are all true with nothing in `requirements`. So going live is configuration in
-the live half of the dashboard and a live key, not an application. Everything else about Stripe is
-per-mode and starts empty over there — products, prices, portal configuration, webhook endpoints.
+### Spideryarn has its own Stripe account
+
+`acct_1UBW3NLv4piDbwcb`, live, with sandbox `acct_1UBW3ULUG7Oye8CX` — **not** the
+`acct_1GHoSxLZ0dGTJEEP` that bills Greg's consulting work. Greg's call, 2026-09-03, and the reasoning
+is worth keeping because the obvious argument for splitting turned out to be the wrong one.
+
+The obvious argument was the statement descriptor: a Spideryarn customer would read
+`GREG DETRE CONSULTING` on their bank statement. That is **solvable inside one account** — Stripe
+resolves the descriptor Invoice → Product → account default, so a `statement_descriptor` on the
+Spideryarn product would have done it, and per-session `branding_settings` would have fixed the
+Checkout page too.
+
+What could not be solved per-product is everything else, because it is account-wide: the **Customer
+Portal** (one headline, one custom domain — and it is our entire self-serve billing UI), the
+**customer email sender**, the **dunning and retry cadence**, **Radar** rules, the payout schedule,
+and the blast radius if Stripe ever freezes an account. A consumer subscription and B2B consulting
+invoicing want different answers to all of those. Two settings collided in one morning before the
+split — the portal login link and the one-subscription toggle — which is what made the pattern
+obvious.
+
+The costs, paid knowingly: a second account verifies from scratch and inherits nothing, and there are
+two payout streams to reconcile. **A separate Stripe account is not a separate tax position** — that
+follows the legal entity, and both trade under the same company.
+
+Settings do **not** cross between a sandbox and live, or between accounts: products, prices, portal
+configuration, webhook endpoints, business name, branding and every dashboard toggle start empty in
+live and must be set again there. `npm run stripe:check` is how you find out whether they were.
 
 ### Subscribing twice: looked at, and deliberately left open
 
@@ -479,8 +571,8 @@ What was weighed and passed over, so nobody re-derives it:
   Checkout section — so it is a dashboard click, per mode. It **redirects a Checkout page as it
   loads**; it is not a refusal at `sessions.create`, so it would not have closed the two-tab case
   anyway. When its destination is the Portal it also depends on `login_page.enabled`, which would
-  silently make it do nothing — and that field is **account-wide**, on an account that also bills
-  Greg's consulting work.
+  silently make it do nothing — and that field was **account-wide** on an account that also billed
+  Greg's consulting work, which is one of the collisions that prompted the split above.
 - **Reusing an open Session** — the actual close, and it needs stored session state plus expiry
   handling.
 - **An idempotency key** on `sessions.create` — no help, because the window here is a second tab
@@ -513,6 +605,35 @@ unavailable. It is the one route nobody is signed in to and the one that grants 
 Tests sign payloads offline with the SDK's own signer, and `api.stripe.com` is refused by
 [`tests/setup/provider-guard.ts`](../../tests/setup/provider-guard.ts) so no test can reach Stripe
 for real with the key sitting in `.env.local`.
+
+### Pointing Stripe at it
+
+**Locally**, nothing is registered at Stripe. `stripe listen` holds a connection open and forwards,
+minting its own signing secret each time it starts — which is why `STRIPE_WEBHOOK_SECRET` is
+per-machine and never travels:
+
+```bash
+stripe listen --api-key "$STRIPE_SECRET_KEY" \
+  --forward-to http://localhost:5273/api/webhooks/stripe \
+  --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted
+```
+
+It prints `whsec_…` on the line that says *Ready!*. Put that in `.env.local` and **restart the dev
+server** — the value is read at startup, so a server already running is still checking signatures
+against the previous session's secret and will reject every delivery with a 400. Pass `--api-key`
+rather than relying on `stripe login`: the CLI's stored login is whichever account somebody
+authenticated last, which is not necessarily this one.
+
+**In production**, it is a registered endpoint at
+[dashboard.stripe.com/webhooks](https://dashboard.stripe.com/webhooks) (the live URL, with no
+`/test/`), pointing at `https://www.spideryarn.com/api/webhooks/stripe`, subscribed to exactly the
+four events in `HANDLED_EVENTS`, with its own permanent `whsec_…` revealed on the endpoint's own
+page. That secret is per-endpoint and unrelated to the API keys; it goes in the Vercel production
+environment.
+
+`npm run stripe:check` fails if nothing is listening at that URL, because a live account with no
+endpoint takes money and grants nothing — the one failure mode where every other check passes and
+the customer is simply not served.
 
 ## The three billing routes
 
@@ -661,6 +782,7 @@ Comp subscriptions for journalists and QA, and go-live. The order is in
 | [`src/billing/subscription.ts`](../../src/billing/subscription.ts) | Reading a Stripe subscription into the fields entitlement needs, and refusing everything unrecognised. Pure. |
 | [`src/billing/webhook.ts`](../../src/billing/webhook.ts) | Verification. |
 | [`src/billing/checkout.ts`](../../src/billing/checkout.ts) | The three billing routes: the order that makes the mapping durable, the Portal redirect, and the proof that a Checkout Session belongs to the reader asking about it. |
+| [`scripts/stripe-check.ts`](../../scripts/stripe-check.ts) | Read-only. Whether an account is actually fit to take money, one check per thing a real purchase has caught. |
 | [`src/store/pg-billing.ts`](../../src/store/pg-billing.ts) | Reserve, settle, count. The lock. |
 | [`src/billing/admission.ts`](../../src/billing/admission.ts) | Which requests spend a slot, the refusal a reader sees, and the release. The only caller of `reserveIngest`. |
 | [`src/billing-plan.ts`](../../src/billing-plan.ts) | What `/profile` is told and what it says. Pure — no database, no network, no React, so the browser can have it. |

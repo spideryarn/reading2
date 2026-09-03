@@ -193,26 +193,47 @@ async function clear(): Promise<void> {
 }
 
 /**
- * **Which constraint a write violated**, taken off the error's `cause`.
+ * **Which constraint a write violated**, read out of the log line the guard
+ * writes.
  *
  * Not off the message: Drizzle puts the whole failed query — and its bound
  * parameters, which here are the reader's own words — into `Error.message`, and
- * that is the entire reason `guardDbStore` exists (src/store/db-errors.ts). The
- * store is wrapped in it at the seam; these tests call the raw store, so they
- * read the structured field rather than matching prose that must not be shown to
- * anybody.
+ * that is the entire reason `guardDbStore` exists (src/store/db-errors.ts).
  *
- * Returns a sentence rather than `undefined` when the write *succeeded*, so a
- * constraint that has quietly stopped firing reads as what it is instead of as
- * "expected undefined".
+ * **And not off `err.cause` either, which is what this did until 2026-09-03.**
+ * That worked only because this file imported `pgFeedbackStore` directly, and a
+ * raw store still had the driver's error hanging off it; the route, which gets
+ * `feedbackStore` through src/store/index.ts, has never seen one. So the test
+ * was asserting on a field that the production path could not reach — the same
+ * gap docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md is about, one
+ * layer up. Guarding every adapter at its own export closed it and made this
+ * red, which is the useful direction.
+ *
+ * The constraint name is not lost, and that is the point: `scrubDbError` drops
+ * the free text and emits the diagnostics it kept as **fields** — `sqlstate`,
+ * `table`, `constraint`, `routine` — which is where an operator reads them in
+ * production too. This now asserts on exactly that.
+ *
+ * Returns a sentence rather than `undefined` in every way this can come out
+ * empty — the write succeeded, nothing logged, or two constraints in one
+ * capture — because an empty capture satisfies any assertion you can write
+ * against it, which is the trap tests/helpers/log-capture.ts spells out.
  */
 async function violation(body: () => Promise<unknown>): Promise<string> {
-  try {
-    await body();
-  } catch (err) {
-    return (err as { cause?: { constraint?: string } }).cause?.constraint ?? String(err);
-  }
-  return "(the write was accepted)";
+  let threw = false;
+  const written = await logLinesWhile(async () => {
+    try {
+      await body();
+    } catch {
+      threw = true;
+    }
+  });
+  if (!threw) return "(the write was accepted)";
+
+  const named = [...written.matchAll(/"constraint":"([^"]+)"/g)].flatMap((m) => m[1] ?? []);
+  if (named.length === 0) return `(no constraint logged; the capture was ${written.length} chars)`;
+  if (named.length > 1) return `(${named.length} constraints logged: ${named.join(", ")})`;
+  return named[0] ?? "";
 }
 
 /** How many rows this owner has, counted outside the store. */

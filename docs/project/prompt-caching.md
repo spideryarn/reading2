@@ -85,9 +85,8 @@ accepted: the worst case is a few cents and a batch of latency, and the alternat
 
 `arc`, `tweets` and `glossary` do emit byte-identical article text — that part of the design worked.
 They still cannot share a cache, because **`output_config.effort` is part of the cache key**, and
-`glossary` runs at `medium` while the other two run at `high`
-([src/glossary.ts:1060](../../src/glossary.ts), [src/arc.ts:253](../../src/arc.ts),
-[src/tweets.ts:402](../../src/tweets.ts)).
+the three stages are not all set to the same effort (`src/models.ts` § `STAGE_EFFORT`, which is
+the one place that says which runs at what).
 
 This is measured, not inferred — four calls with an identical 7,291-token cached block, varying only
 `effort`, in [../research/260826b-prompt-caching-anthropic.md](../research/260826b-prompt-caching-anthropic.md).

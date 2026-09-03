@@ -12,7 +12,7 @@ nothing. Here the code is honest and the **prose about it** is wrong: a comment,
 recorded baseline. Nothing can fail, because prose does not run. It is found when somebody acts on
 it, which is always later and usually mid-task.
 
-## Three species, and they fail differently
+## Four species, and they fail differently
 
 ### 1. A statement that asserts the future
 
@@ -56,6 +56,17 @@ within a day of that input becoming reachable.
 like what it is.** Say which, and the reader can see the sampling problem without having to
 reconstruct it.
 
+### 4. An inventory
+
+> *"Twelve call sites."* Fourteen, a day later. *"Three copies."* Eight, in six files.
+
+A count or a list is a measurement, and a measurement is only as good as what took it and when. Some
+rot — the code merged on; some were wrong from birth — the grep was truncated, the sweep skipped a
+directory — and a bare number cannot tell you which. **Write what produced it, what it covered, and
+when**, so the next reader re-runs it rather than believes it. The evidence, and the guard that
+came out of it, are in
+[260903b-facts-that-were-wrong.md](../research/260903b-facts-that-were-wrong.md).
+
 ## The one about your own work, which is the hardest to see
 
 A baseline recorded *after* your own agents have been working is not a baseline.
@@ -74,6 +85,8 @@ same instant.
 - **Date any claim about the future**, and tell the reader to check the code. A note that says
   *"decided 2026-08-30, not yet landed — check the code"* stays true for ever. One that says
   *"X moved to Y"* rots the moment the plan slips.
+- **Never a bare count.** *"14 by `grep -rn takeRunLock tests/`, 2026-09-02"* — command, scope,
+  date.
 - **When you change a value, rewrite the argument above it, not just the value.** A comment left
   arguing for the rule that used to be there is worse than no comment: it is a confident,
   well-written explanation of something untrue. If the old argument was sound and is being

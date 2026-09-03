@@ -48,11 +48,30 @@ import {
 import { UNEXPECTED_FAILURE } from "./messages.js";
 import { runInRequest } from "./owner.js";
 import { readMode } from "./read-address.js";
+import { reportBundleImport, reportFirstRequest } from "./cold-start.js";
 import { builtShell, servePublicReadPage } from "./public/page.js";
 import { handleApi } from "./routes.js";
 import { health } from "./vercel-health.js";
 
 export const config = { runtime: "nodejs" };
+
+/**
+ * **The cold-start seam**, and the whole of it: two numbers in, nothing out.
+ *
+ * `api/index.js` is the one piece of code that runs *before* this bundle is
+ * loaded, so it is the only place the cost of loading it can be timed — and it
+ * is plain JavaScript outside the bundle, so it cannot import src/log.ts. It
+ * therefore takes the times and hands them to these, which src/cold-start.ts
+ * turns into one line each, once per instance, inside the logged world.
+ *
+ * Re-exported here rather than lived here because this file must stay small
+ * (see the header): the decisions — which readings to keep, what to call them,
+ * which component to log under — belong in src/cold-start.ts, and this is only
+ * the address `api/index.js` can reach them at. It is not route knowledge and it
+ * is not transport; it is the entry module doing the one thing only the entry
+ * module can do.
+ */
+export { reportBundleImport, reportFirstRequest };
 
 /**
  * Start error reporting once per instance, not once per request.

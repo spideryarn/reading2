@@ -76,7 +76,8 @@ import type {
   ToolRun,
 } from "../types.js";
 import { isThreadKind } from "../types.js";
-import type { ChatStore, SweepOptions } from "./contracts.js";
+import { MissingAttempt, type ChatStore, type SweepOptions } from "./contracts.js";
+import { guardDbStore } from "./db-errors.js";
 import { CHAT_SWEPT, requireTail } from "./fs.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned, lockArticleRow } from "./pg.js";
@@ -312,7 +313,7 @@ async function upsertThread(tx: Tx, articleId: string, thread: ChatThread): Prom
     });
 }
 
-export const pgChatStore: ChatStore = {
+const rawPgChatStore: ChatStore = {
   async load(slug: string): Promise<ChatThread[]> {
     return threadsFor(await articleIdForOwned(slug));
   },
@@ -414,10 +415,7 @@ export const pgChatStore: ChatStore = {
        failure mode this whole migration keeps meeting, so it is an error. */
     const attempt = opts.attempt;
     if (attempt === undefined) {
-      throw new Error(
-        `finish("${slug}") needs the attempt that begin/retry/edit returned. ` +
-          "Without it a model call the sweep already buried can overwrite the retry.",
-      );
+      throw new MissingAttempt("ChatStore.finish", "begin/retry/edit");
     }
 
     await db.transaction(async (tx) => {
@@ -687,3 +685,6 @@ export const pgChatStore: ChatStore = {
     return threadsFor(articleId);
   },
 };
+
+/** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
+export const pgChatStore: ChatStore = guardDbStore("chat", rawPgChatStore);

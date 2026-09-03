@@ -27,8 +27,9 @@ import { readerProfiles } from "../db/schema.js";
 import { currentOwnerId } from "../owner.js";
 import { MAX_PROFILE_CHARS, normaliseProfileText } from "../profile.js";
 import type { ReaderStore } from "./contracts.js";
+import { guardDbStore } from "./db-errors.js";
 
-export const pgReaderStore: ReaderStore = {
+const rawPgReaderStore: ReaderStore = {
   async readProfile(): Promise<string | null> {
     const [row] = await getDb()
       .select({ profile: readerProfiles.profile })
@@ -125,3 +126,6 @@ export const pgReaderStore: ReaderStore = {
     return row?.since ? row.since.toISOString() : null;
   },
 };
+
+/** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
+export const pgReaderStore: ReaderStore = guardDbStore("reader-profile", rawPgReaderStore);

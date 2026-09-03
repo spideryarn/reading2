@@ -845,17 +845,31 @@ function resourceOf(input: string): string {
  * derived by asking the database, never from a remembered flag, because the
  * cache evicts on its own schedule and a flag would go on saying yes.
  *
- * Shape-tolerant on purpose: if the payload is not what we expect, the whole
- * list is returned unfiltered rather than emptied. Showing too much is a
- * disappointment; showing nothing looks like the shelf is gone.
+ * **The envelope is kept.** `GET /api/library` sends `{ articles: [...] }`, and
+ * `readJson` only parses — so everything downstream reads `.articles` off this
+ * object. Unwrapping to a bare list here would hand the shelf a shape no
+ * caller knows. This filter got that backwards for a fortnight: it tested
+ * `Array.isArray(body)` against a payload that has never been an array, so it
+ * returned the shelf untouched every time and offline readers were offered
+ * articles that could not open.
+ * docs/postmortems/260903e-offline-shelf-filter-never-ran.md.
+ *
+ * Shape-tolerant on purpose: anything that is not an object carrying an
+ * `articles` array is returned unchanged rather than emptied. Showing too much
+ * is a disappointment; showing nothing looks like the shelf is gone.
  */
 async function onlyWhatWeHave(body: unknown, user: string | null): Promise<unknown> {
-  if (!Array.isArray(body)) return body;
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return body;
+  const { articles } = body as { articles?: unknown };
+  if (!Array.isArray(articles)) return body;
   const have = await cachedSlugs(user);
-  return body.filter((entry) => {
-    const slug = (entry as { slug?: unknown } | null)?.slug;
-    return typeof slug === "string" ? have.has(slug) : true;
-  });
+  return {
+    ...body,
+    articles: articles.filter((entry) => {
+      const slug = (entry as { slug?: unknown } | null)?.slug;
+      return typeof slug === "string" ? have.has(slug) : true;
+    }),
+  };
 }
 
 /**

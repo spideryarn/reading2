@@ -44,6 +44,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Dock } from "../src/web/Dock.js";
+import { EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 import { RefereeViews } from "../src/web/App.js";
 import type { Mode } from "../src/web/params.js";
 import { REFEREE_VIEWS, type RefereeView } from "../src/web/referee-views.js";
@@ -75,6 +76,10 @@ function paintDock(): { changes: Mode[] } {
         view: "article" as const,
         mode: "plain" as const,
         onMode: (next: Mode) => changes.push(next),
+        /* On, so the segment under test is all thirteen buttons — the arrows
+           must belong to the article whichever of them is on screen, and the
+           eight a default reader sees are a subset of these. */
+        experimental: EXPERIMENTAL_ON,
       }),
     );
   });

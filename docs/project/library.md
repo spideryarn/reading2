@@ -294,8 +294,14 @@ Postgres is worse than no count at all, because it looks like an answer. They go
 
 ## Finding an article, and finding a passage in one
 
-One box at the top of the shelf, **two matchers behind it** — which is the same shape the in-article
-search already has ([search.md](search.md)), deliberately rather than coincidentally.
+One box **directly above the list**, with **two matchers behind it** — which is the same shape the
+in-article search already has ([search.md](search.md)), deliberately rather than coincidentally.
+
+It sat at the very top of the page until 2026-09-03, above the box for *adding* an article and
+separated from the list it filters by everything in between. Greg: *"Move the search bar so it's
+just above the list of articles."* The order the page renders in is now **add box and its jobs →
+errors and Undo → search → `ShelfControls` → the "n of m" count → the list**
+([`Library.tsx`](../../src/web/Library.tsx)).
 
 1. **The cards, filtered in the browser.** Case- and accent-folded substring match over `title`,
    `byline`, `siteName` and `gist` — exactly the four fields a card renders, because matching
@@ -727,6 +733,20 @@ rule rather than a preference: this page is chrome, and chrome is what shadcn an
 adopted for ([web-client.md § Tailwind and shadcn](web-client.md#tailwind-and-shadcn-components)).
 The reading view stays hand-written, because its geometry is not something utilities can say. Every
 class needs the `tw:` prefix — unprefixed names silently do nothing.
+
+## Offline, the shelf lists only what it can open
+
+A reader who has lost the network still gets a shelf: `apiFetch` saves every GET body to IndexedDB
+and reads it back when the transport itself fails
+([260827r-offline-reading.md](../plans/260827r-offline-reading.md)). But **a card that opens to an
+error is worse than a card that is missing**, so the saved shelf is filtered through the prose we
+actually still hold — `onlyWhatWeHave` in [`src/web/lib/api.ts`](../../src/web/lib/api.ts), asking
+the cache rather than trusting a remembered flag, because eviction runs on its own schedule.
+
+The filter keeps the route's `{ articles: [...] }` envelope, and that is the whole trap: it spent a
+fortnight testing `Array.isArray(body)` against a payload that has never been an array, so it
+returned the shelf untouched every single time and the test covering it had invented a third shape
+— [260903e-offline-shelf-filter-never-ran.md](../postmortems/260903e-offline-shelf-filter-never-ran.md).
 
 ## The fixture is always on the shelf
 

@@ -28,7 +28,7 @@ in `converse` — [referee-mode.md § 4](referee-mode.md).)
 
 Code: [`src/quiz.ts`](../../src/quiz.ts) (the stage, the prompt, the validation, the sort),
 [`src/quiz-mark.ts`](../../src/quiz-mark.ts) (the marking prompt and its stream),
-[`src/routes.ts`](../../src/routes.ts) § `GET /api/quiz/:slug`, `POST /api/quiz/:slug/mark`,
+[`src/routes.ts`](../../src/routes.ts) § `/api/quiz/:slug` (the GET) and `/api/quiz/:slug/mark` (the POST),
 [`src/web/useQuiz.ts`](../../src/web/useQuiz.ts),
 [`src/web/QuizPanel.tsx`](../../src/web/QuizPanel.tsx),
 [`src/web/App.tsx`](../../src/web/App.tsx) § `RememberBand`, `QuizSubBand`.

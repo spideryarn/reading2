@@ -413,3 +413,209 @@ describe("docs have exactly one owner", () => {
     expect(unlinked).toEqual([]);
   });
 });
+
+/**
+ * The third thing this file checks: that an evergreen doc never cites a line
+ * number, and that a `file § symbol` citation names something the file holds.
+ *
+ * A line number is a fact about one commit. On 2026-09-03 every one of the six
+ * `path:NNN` citations under docs/project/ and infra/ that was checked pointed
+ * at a line that no longer held what the sentence said — `src/glossary.ts:1060`
+ * was inside a prompt string, `src/jobs.ts:443` was a comment about `force` —
+ * and the link check above was green on all of them, because it looks for the
+ * file, and the file is nearly always there. A citation that cannot go red is
+ * the subject of docs/research/260903b-facts-that-were-wrong.md.
+ *
+ * So evergreen docs cite the symbol — `src/models.ts` § `STAGE_EFFORT` — and
+ * this checks the file still contains it, which a rename does break. Plans,
+ * postmortems and research notes are dated records of a moment and may keep
+ * their line numbers; GPT Sol's reviews cite that way and are left alone.
+ *
+ * Third-party and made-up paths are ignored (`Readability.js:2701`,
+ * `src/x.ts:148`): the rule is "no line number *into this repo*", and a path
+ * that resolves to nothing here has nothing to rot against.
+ */
+const EVERGREEN = [
+  "AGENTS.md",
+  "infra/hetzner/README.md",
+  ...globSync("docs/project/**/*.md"),
+  ...globSync("docs/reusable/*.md"),
+];
+
+const CODE_EXT = "(?:ts|tsx|css|js|mjs|cjs|json|sql|sh)";
+
+/**
+ * The directories a citation into this repo starts with. A path under one of
+ * these that does not exist is a *stale* citation — the file was renamed or
+ * deleted — and must be reported, not skipped. The first version of this guard
+ * dropped every unresolved path as "external", so deleting a cited file made
+ * the test greener; GPT Sol's review demonstrated that on 2026-09-03.
+ */
+const REPO_ROOTS = ["src", "tests", "scripts", "styles", "infra", "evals", "docs", "supabase", "drizzle"];
+
+/**
+ * A citation pasted from a review or a terminal is often absolute —
+ * `/home/greg/code/spideryarn2/.claude/worktrees/x/src/foo.ts` — and means
+ * this repo's file however many worktrees deep it was. Cut it back to the repo
+ * root; a path with no repo root in it is somebody else's machine.
+ */
+function repoRelative(p: string): string {
+  const m = p.match(new RegExp(`(?:^|/)((?:${REPO_ROOTS.join("|")})/.*)$`));
+  return m ? m[1]! : p;
+}
+
+/** Where the citation points — or `null` when it is not into this repo at all. */
+type Target = { file: string } | { missing: string };
+
+/**
+ * Docs write `lib/api.ts` for `src/web/lib/api.ts` and `styles.css` for
+ * `src/web/styles.css`, so the prefixes are tried too. Over-resolving is the
+ * safe direction: a false positive is a line in a failing test that someone
+ * reads; a false negative is silence.
+ */
+function resolveCodePath(from: string, written: string): Target | null {
+  const rel = path.isAbsolute(written) ? repoRelative(written) : written;
+  if (path.isAbsolute(rel)) return null;
+  const candidates = [rel, path.join(path.dirname(from), rel), path.join("src", rel), path.join("src/web", rel)];
+  const file = candidates.map((p) => path.normalize(p)).find(existsSync);
+  if (file) return { file };
+  const root = path.normalize(rel).split(path.sep)[0] ?? "";
+  return REPO_ROOTS.includes(root) ? { missing: rel } : null;
+}
+
+interface CodeCitation {
+  from: string;
+  text: string;
+  target: Target;
+  /** Only for the `§` form. */
+  symbol?: string;
+}
+
+/**
+ * `src/foo.ts:123`, `src/foo.ts#L123`, `src/foo.ts:94-105`, and the spoken
+ * forms `foo.ts line 12` and `foo.ts L12` — anything that pins a line.
+ */
+function lineCitationsIn(from: string, text: string): CodeCitation[] {
+  const out: CodeCitation[] = [];
+  // The optional backtick is for the spoken forms, where the path is usually
+  // in code and the line number is not: `` `src/blocks.ts` line 12 ``.
+  const re = new RegExp(`([\\w./-]+\\.${CODE_EXT})\`?((?::|#L|\\s+L|\\s+lines?\\s+)\\d+)`, "g");
+  for (const m of stripFences(text).matchAll(re)) {
+    const target = resolveCodePath(from, m[1]!);
+    if (target) out.push({ from, text: `${m[1]}${m[2]}`, target });
+  }
+  return out;
+}
+
+/**
+ * `` `src/foo.ts` § `symbol` ``, bare `src/foo.ts § `symbol``, and the linked
+ * form `` [`src/foo.ts`](../../src/foo.ts) § `symbol` `` — for that one the
+ * link's target is what is resolved, not its label, since the label is
+ * whatever the author felt like writing.
+ */
+function symbolCitationsIn(from: string, text: string): CodeCitation[] {
+  const out: CodeCitation[] = [];
+  const md = stripFences(text);
+  const plain = new RegExp(`\`?([\\w./-]+\\.${CODE_EXT})\`?\\s*§\\s*\`([^\`]+)\``, "g");
+  const linked = new RegExp(`\\[[^\\]]*\\]\\(([^)\\s]+\\.${CODE_EXT})\\)\\s*§\\s*\`([^\`]+)\``, "g");
+  for (const m of [...md.matchAll(plain), ...md.matchAll(linked)]) {
+    const target = resolveCodePath(from, m[1]!);
+    if (target) out.push({ from, text: m[0], target, symbol: m[2]! });
+  }
+  return out;
+}
+
+/**
+ * Whether the file still holds the cited symbol. An identifier is matched on
+ * its own boundaries, so `` § `save` `` does not survive on `saved`; anything
+ * else — a CSS selector, a phrase from a comment — is matched as written.
+ * This proves the anchor is still there, not that the sentence around the
+ * citation is still true; that is as far as a test can go.
+ */
+function holds(file: string, symbol: string): boolean {
+  const src = readFileSync(file, "utf8");
+  if (/^[A-Za-z_$][\w$]*$/.test(symbol)) {
+    return new RegExp(`(?<![\\w$])${symbol}(?![\\w$])`).test(src);
+  }
+  return src.includes(symbol);
+}
+
+const describeTarget = (t: Target) => ("file" in t ? t.file : `${t.missing} — no such file`);
+
+describe("evergreen docs cite code by symbol, not by line", () => {
+  /**
+   * The positive controls. The two assertions after them are lists that should
+   * be empty, and an empty list says nothing about the pattern that fills it —
+   * so every shape the pattern must catch, and every shape it must leave
+   * alone, is tried here first.
+   */
+  it("recognises each shape of line citation", () => {
+    const doc = "docs/project/architecture.md";
+    const lines = (s: string) => lineCitationsIn(doc, s).map((c) => `${c.text} → ${describeTarget(c.target)}`);
+    expect(lines("see `src/blocks.ts:12`")).toEqual(["src/blocks.ts:12 → src/blocks.ts"]);
+    expect(lines("[src/blocks.ts#L12](../../src/blocks.ts)")).toEqual(["src/blocks.ts#L12 → src/blocks.ts"]);
+    expect(lines("`src/source-hash.ts:94-105`")).toEqual(["src/source-hash.ts:94 → src/source-hash.ts"]);
+    // A link whose label is not the path: the target still carries the line.
+    expect(lines("[the check](../../src/blocks.ts#L12)")).toEqual(["../../src/blocks.ts#L12 → src/blocks.ts"]);
+    // Spoken, which is how a line number gets past a regex that only knows `:`.
+    expect(lines("`src/blocks.ts` line 12")).toEqual(["src/blocks.ts line 12 → src/blocks.ts"]);
+    expect(lines("`src/blocks.ts` L12")).toEqual(["src/blocks.ts L12 → src/blocks.ts"]);
+    // The prefixes docs leave off.
+    expect(lines("`lib/api.ts:159`")).toEqual(["lib/api.ts:159 → src/web/lib/api.ts"]);
+    // Pasted from a review: absolute, and from some worktree. Still this repo.
+    expect(lines("`/home/greg/code/spideryarn2/.claude/worktrees/x/src/blocks.ts:12`")).toEqual([
+      "/home/greg/code/spideryarn2/.claude/worktrees/x/src/blocks.ts:12 → src/blocks.ts",
+    ]);
+    // A file this repo no longer has is the stalest citation of all, and the
+    // first version of this guard skipped it.
+    expect(lines("`src/x.ts:148`")).toEqual(["src/x.ts:148 → src/x.ts — no such file"]);
+    // Not this repo: nothing to rot against.
+    expect(lines("`Readability.js:2701`")).toEqual([]);
+    expect(lines("`/Users/greg/elsewhere/file.ts:148`")).toEqual([]);
+    // A fence is quoted output, not a citation.
+    expect(lines("```\nsrc/routes.ts:93\n```")).toEqual([]);
+  });
+
+  it("recognises each shape of symbol citation, and whether it still holds", () => {
+    const doc = "docs/project/architecture.md";
+    const symbols = (s: string) =>
+      symbolCitationsIn(doc, s).map((c) => [describeTarget(c.target), c.symbol]);
+    expect(symbols("(`src/blocks.ts` § `nonsuch`, and styles.css § `.tooltip-anchor`)")).toEqual([
+      ["src/blocks.ts", "nonsuch"],
+      // `styles.css` is how summaries.md writes it; the prefix is filled in.
+      ["src/web/styles.css", ".tooltip-anchor"],
+    ]);
+    // The linked form, which is how most of the corpus writes it. The target
+    // is what counts, whatever the label says.
+    expect(symbols("[`src/blocks.ts`](../../src/blocks.ts) § `nonsuch`")).toEqual([["src/blocks.ts", "nonsuch"]]);
+    expect(symbols("[the parser](../../src/blocks.ts) § `nonsuch`")).toEqual([["src/blocks.ts", "nonsuch"]]);
+    expect(symbols("`src/x.ts` § `gone`")).toEqual([["src/x.ts — no such file", "gone"]]);
+    expect(symbols("database.md § heading")).toEqual([]);
+
+    // `holds` is the filter behind the assertion below; a filter that let
+    // everything through would leave that list empty too. Not tried against
+    // this file: every string written here is, by that fact, in this file.
+    expect(holds("src/source-hash.ts", "hashBlocks")).toBe(true);
+    expect(holds("src/source-hash.ts", "hashBlock")).toBe(false); // a prefix is not the symbol
+    expect(holds("src/blocks.ts", "Bloc")).toBe(false); // nor is it inside a longer one
+    expect(holds("src/web/styles.css", ".tooltip-anchor")).toBe(true); // selectors match as written
+  });
+
+  it("never cite a line number", () => {
+    const cited = EVERGREEN.flatMap((f) => lineCitationsIn(f, readFileSync(f, "utf8")))
+      // codex-cli-as-subagent.md explains the citation form with a made-up path.
+      .filter((c) => !c.from.endsWith("codex-cli-as-subagent.md"))
+      .map((c) => `${c.from} → ${c.text}`);
+    expect(cited).toEqual([]);
+  });
+
+  it("cite symbols the file still holds", () => {
+    const all = EVERGREEN.flatMap((f) => symbolCitationsIn(f, readFileSync(f, "utf8")));
+    // The guard: the docs do cite this way, so finding few means the pattern broke.
+    expect(all.length).toBeGreaterThan(30);
+    const stale = all
+      .filter((c) => "missing" in c.target || !holds(c.target.file, c.symbol!))
+      .map((c) => `${c.from} → ${c.text} (${describeTarget(c.target)})`);
+    expect(stale).toEqual([]);
+  });
+});

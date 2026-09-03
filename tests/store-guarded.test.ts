@@ -57,6 +57,7 @@ import { describe, expect, it } from "vitest";
 
 import { ChatConflict } from "../src/chat.js";
 import { ProductRefused } from "../src/store/artifacts.js";
+import { MissingAttempt } from "../src/store/contracts.js";
 import { guardDbStore, isGuardedStore } from "../src/store/db-errors.js";
 import { CheckpointRequestError } from "../src/store/checkpoints.js";
 import { StaleAttemptError } from "../src/store/jobs.js";
@@ -121,6 +122,52 @@ describe("the stores selected outside src/store/index.ts", () => {
     });
     expect(isGuardedStore(store)).toBe("checkpoints");
   });
+});
+
+/**
+ * **And every other Postgres store, by the name its log lines print.**
+ *
+ * The discovery test in section 2 reads the *source* for `= guardDbStore(`; this
+ * reads the **objects**, which is the only thing that can say a store really
+ * arrived wrapped, and it is the only place the seam names are written down as
+ * an assertion. They are not decoration: `guardDbStore` builds every diagnostic's
+ * `where` as `<seam>.<method>`, so `reader.loadArticle` is what somebody greps
+ * for, and a rename here is a rename of the log.
+ *
+ * Fifteen of these were wrapped at the *selection* in src/store/index.ts until
+ * 2026-09-03, which meant the guard depended on that one file remembering.
+ * `pgArticleReader` is the sharpest case: src/store/pg-shelf.ts imports it
+ * directly and never goes near index.ts.
+ *
+ * Imported one module at a time rather than through src/store/index.ts, which
+ * would drag in the filesystem store and half the app for no gain. No database:
+ * every one of these calls `getDb()` inside its methods.
+ */
+describe("every Postgres store, asked for the seam it was guarded under", () => {
+  const seams: ReadonlyArray<readonly [string, string, string]> = [
+    ["../src/store/pg.js", "pgArticleReader", "reader"],
+    ["../src/store/pg-chat.js", "pgChatStore", "chat"],
+    ["../src/store/pg-searches.js", "pgSearchStore", "searches"],
+    ["../src/store/pg-comments.js", "pgCommentStore", "comments"],
+    ["../src/store/pg-shelf.js", "pgShelfStore", "shelf"],
+    ["../src/store/pg-shelf.js", "pgLibrarySearch", "library"],
+    ["../src/store/pg-reader.js", "pgReaderStore", "reader-profile"],
+    ["../src/store/pg-source.js", "pgSourceStore", "source"],
+    ["../src/store/pg-referee-criteria.js", "pgRefereeCriteriaStore", "referee-criteria"],
+    ["../src/store/pg-referee-claims.js", "pgRefereeClaimsStore", "referee-claims"],
+    ["../src/store/pg-lookups.js", "pgGlossaryLookupStore", "glossary-lookup"],
+    ["../src/store/pg-admin.js", "pgAdminStore", "admin"],
+    ["../src/store/pg-visibility.js", "pgVisibilityStore", "visibility"],
+    ["../src/store/pg-feedback.js", "pgFeedbackStore", "feedback"],
+    ["../src/store/realtime-sessions-pg.js", "pgRealtimeSessionStore", "realtime-sessions"],
+  ];
+
+  for (const [module, name, seam] of seams) {
+    it(`${name} is guarded as "${seam}"`, async () => {
+      const exports = (await import(module)) as Record<string, unknown>;
+      expect(isGuardedStore(exports[name])).toBe(seam);
+    });
+  }
 });
 
 /* --------------------------------------------------- 2. the static guard -- */
@@ -245,7 +292,36 @@ describe("no Postgres store is selected without a guard", () => {
    */
   it("and it really did find the guarded exports", async () => {
     const guarded = await guardedAtExport();
-    expect([...guarded].sort()).toEqual(["pgJobStore", "pgUploadStore"]);
+    /* **Seventeen, written out.** It was two until 2026-09-03 — the two stores
+       from the accident above — while db-errors.ts and docs/project/database.md
+       both said *every* Postgres store was wrapped at its export. The other
+       fifteen were wrapped at the selection in src/store/index.ts instead, so
+       the sentence was true of two and the list said so. It is now true of all
+       of them, and the list is the thing that says which.
+
+       Spelt out rather than counted, for the reason the docstring above gives:
+       an empty set vouches for nobody, and so does a length. A store that
+       stops being guarded has to delete its own name from here, which is a
+       line a reviewer sees. */
+    expect([...guarded].sort()).toEqual([
+      "pgAdminStore",
+      "pgArticleReader",
+      "pgChatStore",
+      "pgCommentStore",
+      "pgFeedbackStore",
+      "pgGlossaryLookupStore",
+      "pgJobStore",
+      "pgLibrarySearch",
+      "pgReaderStore",
+      "pgRealtimeSessionStore",
+      "pgRefereeClaimsStore",
+      "pgRefereeCriteriaStore",
+      "pgSearchStore",
+      "pgShelfStore",
+      "pgSourceStore",
+      "pgUploadStore",
+      "pgVisibilityStore",
+    ]);
   });
 });
 
@@ -331,6 +407,34 @@ describe("the errors the guard must not eat", () => {
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ProductRefused);
     expect((err as Error).message).toContain("missing arc");
+  });
+
+  /**
+   * **A fenced write that arrived without its fence, and the reason it is here.**
+   *
+   * `SearchStore.finish`, `CommentStore.patch`, `ChatStore.finish` and
+   * `RefereeCriteriaStore.finish` each refuse one, and until 2026-09-03 all four
+   * threw a bare `Error`. Through `src/store/index.ts` the store was already
+   * guarded, so in production the refusal has always read *"this app asked its
+   * database for something it would not do"* — which drops the entire content of
+   * it, namely **what the caller forgot**. The two suites covering it passed
+   * because they import the adapter directly, back when the adapter's export was
+   * unguarded: coverage that existed and proved nothing, exactly as in
+   * docs/postmortems/260901d-a-409-and-a-404-arrived-as-500.md.
+   *
+   * Guarding all fifteen at their exports is what made it visible. This test is
+   * the cheap pin, and it needs no database.
+   */
+  it("lets a missing attempt through, naming what the caller forgot", async () => {
+    const err = await throwing(new MissingAttempt("SearchStore.finish", "begin()"))
+      .go()
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(MissingAttempt);
+    expect((err as Error).message).toContain("needs the attempt that begin() returned");
+    /* **And no slug in it**, which is what lets it onto the allowlist at all:
+       src/store/db-errors.ts refuses any candidate whose message can carry a
+       URL, and a slug is a URL path segment derived from a title. */
+    expect((err as Error).message).not.toMatch(/"[^"]*"/);
   });
 
   /** The one that was already on the list, kept honest. */

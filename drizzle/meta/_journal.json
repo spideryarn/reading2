@@ -449,6 +449,13 @@
       "when": 1788413825686,
       "tag": "20260903053705_illustrated",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1788425000000,
+      "tag": "20260903090000_tier_descriptions_stop_restating_the_allowance",
+      "breakpoints": true
     }
   ]
 }
