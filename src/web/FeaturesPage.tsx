@@ -100,8 +100,9 @@ export function FeaturesPage() {
         </Showcase>
         {/* Alone rather than in a Gallery: one portrait in a three-column grid
             sits in the left third with two empty cells beside it, which reads as
-            a layout that lost something. */}
-        <div className="site-reveal tw:my-12 tw:max-w-sm">
+            a layout that lost something. Centred for the same reason — hard
+            left, it strands two thirds of the row. */}
+        <div className="site-reveal tw:mx-auto tw:my-12 tw:max-w-sm">
           {/* Greg, 2026-08-26, the diagram request, trimmed, and 2026-09-03
               for Illustrated. The five names are DIAGRAMS in src/web/diagram.ts
               and the picture is the first of them. Counted in the code: this
