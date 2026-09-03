@@ -257,7 +257,8 @@ on one is how you end up with two $10 prices and two cohorts of customers on dif
 **refuses** to adopt a lookup key pointing at a different amount, because Stripe prices are
 immutable and "change the price" is really "create a price and move the variable".
 
-`STRIPE_SECRET_KEY` and `STRIPE_PRICE_READER` travel on the `gjd-remote push-env` allowlist.
+`STRIPE_SECRET_KEY` travels on the `gjd-remote push-env` allowlist. There is no price variable to
+carry: the ids are rows.
 `STRIPE_WEBHOOK_SECRET` deliberately does not: locally it is minted per machine by
 `stripe listen`, so one machine's value is wrong on another's.
 
