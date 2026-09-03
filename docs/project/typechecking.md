@@ -165,6 +165,20 @@ same directory, a stray file outside every project, and a deliberate type error 
 the three in turn. That is the habit the whole of [silent-success.md](../reusable/silent-success.md)
 argues for — **a check you have never seen fail is not yet a check.**
 
+**And a third thing, which is a precondition rather than a guard: tsc has to have run.** Both guards
+above describe a failure as a fact about a project's file list, so until 2026-09-03 a compiler that
+never started was reported as a project that includes nothing — `resolved 0 files. Usually an
+"include"/"exclude" inherited through "extends"`, three times over, in a linked worktree whose
+`node_modules` had never been populated. `execFileSync` threw ENOENT, the catch read `err.stdout`
+and found none, and an empty string is indistinguishable from a project that resolved nothing.
+
+The verdict was right every time; only the stated cause was wrong, which is the cheaper half of the
+same problem — a check that fails for the wrong reason costs about what one that does not fail
+costs, because you spend the difference in `tsconfig.base.json` looking for something that is not
+there. So the binary is checked once before any project is, and a catch with no stdout now says
+*tsc did not run* rather than guessing at your config. Both were verified by breaking them: a tree
+with no `node_modules` at all, and one whose `tsc` was present but unexecutable.
+
 ## Three ways to report it clean while it is red
 
 All three happened. None is a flaw in the gate — the gate said the right thing every time.
