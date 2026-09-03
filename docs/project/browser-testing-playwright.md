@@ -192,6 +192,56 @@ these is a section of `browser-testing.md` that does not apply here.
 - **Everything about what the reading view should look like** — the URLs, the widths, the 736px
   collision, the three traps this codebase has actually hit. That is the whole point of the other
   doc and none of it is mechanism-specific.
+- **`page.evaluate` throws `ReferenceError: __name is not defined`, and it is `tsx`, not you.**
+  esbuild compiles with `keepNames`, which wraps every function it can see in a `__name(fn, "…")`
+  helper it defines at the top of the *module* — and the function you hand `evaluate` is serialised
+  and run in the page, where that helper does not exist. It fires on the first `evaluate` containing
+  any named function, including a `const f = () => …`, and the error names nothing you wrote. One
+  line, before you sign in:
+
+  ```js
+  await context.addInitScript({ content: "globalThis.__name = globalThis.__name || ((f) => f);" });
+  ```
+
+  `addInitScript` with a **`content` string**, not a function, or the helper's own body goes through
+  the same compiler and needs what it is defining.
+
+## The insets are zero here, and a phone's are not
+
+`index.html` carries `viewport-fit=cover`, so on a phone the document runs under the notch and the
+home indicator and every piece of fixed or sticky chrome adds back the edge it faces. The four
+`env(safe-area-inset-*)` tokens are **`0px` on this box, in headless Chrome, and in every screenshot
+anyone has ever taken of this app** — so any rule that reads one has a term that is always the
+identity here, and a rule that should read one and does not looks perfect.
+
+That is not hypothetical: it cost the mode band its top edge for six days, and no screenshot from
+this box showed it —
+[260903f](../postmortems/260903f-the-mode-band-stopped-short-of-the-notch.md).
+
+**[`scripts/safe-area-check.ts`](../../scripts/safe-area-check.ts)** is the check. It injects the
+insets as an *unlayered* rule (styles.css lives inside `@layer app`, so unlayered wins whatever the
+specificity — that is the only reason four lines can stand in for a device), opens every band mode
+on a 390 × 844 touch context, and walks `elementsFromPoint` down the screen asking *is the top-most
+thing here the article?* — painted, not geometric, because in that bug every box was the right size.
+
+```
+npm run dev                                    # read the port off Vite's own line
+SPIDERYARN_BASE_URL=http://localhost:<port> npx tsx scripts/safe-area-check.ts
+SPIDERYARN_BASE_URL=http://localhost:<port> npx tsx scripts/safe-area-check.ts --break
+```
+
+**Run the second one too.** Nothing on this box can make this check fail on its own — that is the
+whole point of it — so `--break` switches the defect back on and it must print FAIL and exit 1.
+[silent-success.md](../reusable/silent-success.md).
+
+Run it when you touch `styles.css` § a narrow window, § a band with no room, § a small device, or
+any rule naming a `--safe-*` token. Exit code 1 on a leak. `--top`, `--bottom`, `--width`,
+`--height`, `--modes`, `--scroll` and `--shots` are all flags; the defaults are an installed iPhone,
+scrolled, so the article is genuinely moving behind the panel.
+
+It samples a **settled** page, so it says nothing about the frames just after a mode opens — the
+other half of that bug was a 450ms window in which the bars had not arrived yet, and it was found
+by reasoning about the CSS rather than by any harness.
 
 ## What this page has not checked
 
