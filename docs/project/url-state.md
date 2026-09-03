@@ -171,9 +171,10 @@ at it. One rule divides them:
 **The path says which article. The query string says how you are looking at it.**
 
 That arrived with the library ([library.md](library.md)) on 2026-08-25, and it is the reason an
-article now has an address rather than a setting. `/` is the shelf; anything that is not
-`/read/<slug>` is also the shelf, including nonsense, so a mistyped link lands somewhere useful
-instead of on a 404.
+article now has an address rather than a setting. `/` is the shelf; **an address nobody minted is
+the 404 page**, since 2026-09-03 — it was the shelf until then, on the reasoning that a mistyped
+link lands somewhere useful, which is true and silent
+([library.md](library.md#an-address-nobody-minted)).
 
 **A mode is a parameter, not a segment.** `?mode=chat`, `?mode=glossary` and `?mode=search` replace
 the middle band between the spine and the prose ([260826a-chat-mode.md](../plans/260826a-chat-mode.md),
