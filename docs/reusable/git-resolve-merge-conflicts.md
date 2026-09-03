@@ -44,3 +44,8 @@ when the merge started. Both belong to the throw-work-away family that
 
 Before committing, grep for leftover markers — `grep -rn '^<<<<<<< ' -- <paths>`. A stray marker is
 a syntax error in code and invisible prose in markdown, and the second kind can survive for weeks.
+
+**And run the checks for whatever the merge touched, not just the tests.** A conflict shows you the
+files git could not merge; it says nothing about the files it merged silently. Two new files never
+conflict — which is how a merged migration journal can leave a forked snapshot chain that every test
+still passes.

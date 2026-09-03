@@ -247,17 +247,18 @@ export function stripFence(raw: string): string {
  * changed to rethrow, or to warn, it must switch to `parseJsonFrom` in the same
  * edit, or it puts the leak this module exists to prevent straight back.
  *
- * "Missing" and "corrupt" deliberately give the same answer. Four stages
- * (glossary, ideas, summarise, tweets) read an artefact they are about to
+ * "Missing" and "corrupt" deliberately give the same answer. Six stages
+ * (glossary, ideas, quiz, quotes, sketch, timeline) read an artefact they are about to
  * regenerate anyway, and for them an unreadable file is worth exactly what an
  * absent one is worth: nothing.
  *
- * **Not for callers who need to tell those apart**, and two in the tree do, so
+ * **Not for callers who need to tell those apart**, and one in the tree does, so
  * check before reaching for this. `readJson` in src/api.ts collects the
- * unreadable paths so the shelf can say which article broke, and `readJson` in
- * src/store/import.ts returns `undefined` for `ENOENT` only and lets a genuinely
- * corrupt file throw. Folding either into this would turn a reported failure
- * into a silent one — docs/reusable/silent-success.md.
+ * unreadable paths so the shelf can say which article broke. (There were two
+ * until 2026-09-01: `readJson` in src/store/import.ts returned `undefined` for
+ * `ENOENT` only and let a genuinely corrupt file throw, and went with that
+ * file.) Folding that reader into this would turn a reported failure into a silent
+ * one — docs/reusable/silent-success.md.
  */
 export async function readJsonOrNull<T>(file: string): Promise<T | null> {
   try {

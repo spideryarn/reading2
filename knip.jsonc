@@ -40,11 +40,26 @@
     // are editing has to be.
     "api/**/*.{ts,js}",
     "src/vercel*.ts",
-    "vite.api.config.ts",
+
+    // `vite.api.config.ts` is deliberately NOT listed: since 2026-09-03 the API
+    // build is `npm run build:api` in package.json, which knip reads for itself,
+    // and it says so as a "Remove redundant entry pattern" hint. Adding a build
+    // pass to package.json is therefore all it takes — the same rule as the
+    // pipeline stages above.
 
     // Operational scripts and evals, each behind its own npm script.
+    //
+    // `evals/**` rather than `evals/*`, because `project` below is already
+    // recursive: with a non-recursive entry glob, a nested eval was *in* the
+    // project with no entry pattern reaching it, which is knip's definition of
+    // an unused file. That reported four live, documented research CLIs
+    // (hierarchy-structure/blind.ts, hierarchy-structure/verify-costs.ts,
+    // sketch/run.ts, sketch/svg.ts) as dead — four of knip's own findings being
+    // knip's own config. This step is meant to become a gate the day its
+    // findings reach zero, so a false positive here is not cosmetic: it is four
+    // of the things standing between it and being one.
     "scripts/*.ts",
-    "evals/*.ts"
+    "evals/**/*.ts"
 
     // Not listed on purpose: vite.config.ts, vitest.config.ts,
     // drizzle.config.ts, index.html -> src/web/main.tsx, and tests/**. Knip's

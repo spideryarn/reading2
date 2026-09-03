@@ -42,6 +42,7 @@ import { appendFile, mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 import type { AiCallRow } from "../ai-spend.js";
+import { processSingleton } from "../process-state.js";
 import type { CostStore, LedgerRead } from "./contracts.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
@@ -76,8 +77,39 @@ function ledger(): string {
 /**
  * The tail of the write chain. Each append waits for the one before it, so two
  * concurrent calls in this process cannot interleave inside one line.
+ *
+ * **Kept on the process, not in this module**, because it is a lock and
+ * src/process-state.ts says what a second copy of one is worth: not a slower
+ * lock, no lock at all. A dev-server restart makes that second copy — every
+ * server module is a vite.config.ts dependency, so saving any of them
+ * re-evaluates this file with a fresh `Promise.resolve()` while the request
+ * that was already recording a call is still chained to the old one, and the
+ * two appends then race. `tests/store-fs-write-chains.test.ts` holds one copy's
+ * write and checks the other's has not started.
+ *
+ * **The exposure is small and worth saying plainly.** Production runs
+ * `SPIDERYARN_STORE=postgres`, where `selected()` in ai-calls.ts never reaches
+ * this adapter, so what is at risk is a developer's own
+ * `data/_ai-calls.jsonl`. It is fixed anyway because the machinery already
+ * exists and this is the third named instance of a class the repo has now fixed
+ * twice — docs/postmortems/260902c-the-truncation-retry-cost-storm.md converted
+ * `QueueState` and `aborts`, and
+ * docs/plans/260902g-cost-tracking-that-can-set-a-price.md wrote this one down
+ * as left out of scope. A diagnosed instance left in place is how the fourth
+ * one gets written.
+ *
+ * A one-field object rather than the bare promise, because the value is
+ * reassigned on every write and `processSingleton` hands back a reference: what
+ * both copies have to share is the *slot*, not the promise that is in it today.
+ * Bump the version if that field is renamed or joined by another; never the
+ * name, which would be a second lock universe with the first writer still
+ * inside the old one.
  */
-let writing: Promise<void> = Promise.resolve();
+const chain = processSingleton<{ writing: Promise<void> }>(
+  "ai-calls-fs",
+  "2026-09-03-writing",
+  () => ({ writing: Promise.resolve() }),
+);
 
 /**
  * **Is this actually a row?** — the fields every total depends on.
@@ -288,11 +320,11 @@ export const fsCostStore: CostStore = {
        is what makes `writeFailures` count — and swallowed for the chain, so one
        bad write does not poison every later one. */
     const at = ledger();
-    const mine = writing.then(async () => {
+    const mine = chain.writing.then(async () => {
       await mkdir(path.dirname(at), { recursive: true });
       await appendFile(at, `${JSON.stringify(row)}\n`, "utf8");
     });
-    writing = mine.catch(() => undefined);
+    chain.writing = mine.catch(() => undefined);
     return mine;
   },
 

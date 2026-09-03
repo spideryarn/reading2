@@ -16,23 +16,50 @@
  */
 import { type StdioOptions, execFileSync, spawnSync } from "node:child_process";
 import { parseArgs, styleText } from "node:util";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { constants, homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertPushableName, buildEnvPayload, diffKeys, parseEnv } from "./gjd-remote-env.js";
 import {
+  type EnvAllowance,
+  type EnvPayload,
+  SPIDERYARN_ALLOWANCE,
+  assertPushableName,
+  buildEnvPayload,
+  diffKeys,
+  parseEnv,
+} from "./gjd-remote-env.js";
+import {
+  type EnvPlan,
+  type EnvPlanTone,
+  type Policy,
+  type Proposal,
+  type ProposedKey,
+  EnvPolicyError,
+  PROPOSAL_MODEL,
+  defaultProposalCall,
+  policyPath,
+  proposeEnvKeys,
+  pushEnvPlan,
+  readPolicy,
+  writePolicy,
+} from "./gjd-remote-envpolicy.js";
+import {
+  META,
+  METADATA_VERSION,
   type Session,
+  type SessionKind,
   type SessionState,
   bindingsVerdict,
   buildBindingsScript,
   buildSessionScript,
   formatWait,
   parseSessions,
+  sessionRepo,
   sessionState,
 } from "./gjd-remote-tmux.js";
-import { buildProvisionRunner, cloudInitVerdict, provisionVerdict } from "./gjd-remote-provision.js";
+import { bootstrapProbeScript, buildProvisionRunner, cloudInitGate, provisionVerdict } from "./gjd-remote-provision.js";
 import { declaredServers, mcpVerdict } from "./gjd-remote-mcp.js";
 import { parseDuration, sshInvocation, waitPreamble } from "./gjd-remote-run.js";
 import {
@@ -55,6 +82,85 @@ import {
   wantedColour,
 } from "./gjd-remote-tab.js";
 import {
+  type InventoryEntry,
+  type OriginTransport,
+  REPO_UNKNOWN,
+  type RemoteCheckout,
+  STAGING_PREFIX,
+  describeLocalRepo,
+  describeResolution,
+  inventoryScript,
+  isRepoValue,
+  localRepo,
+  originTransport,
+  parseInventory,
+  remoteSlug,
+  resolveRemoteCheckout,
+} from "./gjd-remote-repo.js";
+import {
+  CONFIG_DIR,
+  CONFIG_FILE,
+  ConfigError,
+  type RepoConfig,
+  SETUP_SCRIPT,
+  parseRepoConfig,
+  readRepoConfig,
+} from "./gjd-remote-config.js";
+import {
+  LOCKS_SUBDIR,
+  SETUP_EXIT,
+  type SetupExpectation,
+  type SetupStatus,
+  type SetupVerdict,
+  describeVerdict,
+  newSetupAttempt,
+  parseSetupStatus,
+  setupJobScript,
+  setupPaths,
+  setupSlugFile,
+  setupStatusPath,
+  setupVerdict,
+} from "./gjd-remote-setup.js";
+import {
+  BOX_END,
+  BOX_OK,
+  boxConfigScript,
+  parseBoxConfig,
+  type CheckoutProbe,
+  type LockState,
+  LOCK_STATES,
+  type SetupSpec,
+  checkoutProbeScript,
+  cloneTransactionScript,
+  decodeBoxField,
+  describeSpec,
+  diffSetupSpec,
+  foundGateDecision,
+  needsTerminalSetupRecord,
+  parseBoxRead,
+  parseAdmission,
+  parseCheckoutProbe,
+  parseCloneTransaction,
+  SETUP_READ_FIELDS,
+  sessionAdmissionScript,
+  setupFingerprint,
+  setupGateDecision,
+  setupReadScript,
+  setupSpec,
+  sha256,
+} from "./gjd-remote-flow.js";
+import {
+  CANCELLED_NOTHING_CHANGED,
+  Cancelled,
+  NotInteractive,
+  type PromptIo,
+  checklistOrRefuse,
+  confirmOrRefuse,
+  promptIo,
+} from "./gjd-remote-prompt.js";
+import { withLedger } from "../src/cli-ledger.js";
+import { loadEnvLocal } from "../src/env.js";
+import {
   type Here,
   isSessionUuid,
   newTabScript,
@@ -67,20 +173,21 @@ import {
   selfSessionUuid,
 } from "./gjd-remote-resume-all.js";
 
+/**
+ * THE TOOL ROOT: this checkout, found from the script's own location.
+ *
+ * It is where the box's own configuration lives — Terraform state (the
+ * address), `provision.sh`, `remote-smoke-browser.mjs` — and it is NOT the repo
+ * you are working on. Those things belong to the box, which is shared, so they
+ * stay here however many repos the tool drives. Everything per-repo goes
+ * through `resolveTarget()` instead.
+ */
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const USER = "greg";
 
-/** Where checkouts live on the box, and where `clone` puts a new one. */
+/** Where checkouts live on the box, and where `clone` puts a new one. Box
+ *  policy, not a property of any repo — see the plan's "The target contract". */
 const REMOTE_CODE = `/home/${USER}/code`;
-
-/** The one checkout that already exists. Written once and referenced everywhere
- *  — it used to be a literal in two places, and the help text is exactly where
- *  a second copy goes stale without anything noticing. */
-const REMOTE_REPO_DEFAULT = `${REMOTE_CODE}/spideryarn2`;
-
-/** Where the repo checkout lives on the box. Overridable so the push can be
- *  exercised against a scratch directory without a real checkout. */
-const REMOTE_REPO = () => process.env.GJD_REMOTE_REPO ?? REMOTE_REPO_DEFAULT;
 
 /** Everything gjd-remote leaves on the box lives under here. */
 const REMOTE_WORK = `/home/${USER}/gjd-remote`;
@@ -292,12 +399,33 @@ process.on("exit", closeSshMaster);
  * the trim would quietly make two different files look identical.
  */
 function ssh(remote: string, opts: { check?: boolean; raw?: boolean } = {}): string {
-  const r = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), remote], { encoding: "utf8" });
+  const r = sshRun(remote);
   if (opts.check !== false && r.status !== 0) {
-    die(`ssh failed (${r.status}): ${(r.stderr || "").trim() || "no output"}`);
+    die(`ssh failed (${r.status}): ${r.stderr.trim() || "no output"}`);
   }
-  const out = r.stdout || "";
-  return opts.raw ? out : out.trim();
+  return opts.raw ? r.stdout : r.stdout.trim();
+}
+
+/**
+ * The whole answer — status, stdout and stderr — for the callers that have to
+ * tell "the box said nothing" apart from "the box could not be asked".
+ *
+ * `ssh(…, { check: false })` returns stdout and throws the other two away, and
+ * that is fine for a probe whose output IS the verdict. It is not fine for
+ * anything whose empty answer means "there is nothing there": ssh exits 255 on
+ * a dropped connection having printed nothing to stdout, and an empty stdout
+ * that parses as an empty listing is what a clone gets started from.
+ */
+function sshRun(remote: string): { status: number | null; stdout: string; stderr: string } {
+  const r = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), remote], { encoding: "utf8" });
+  return { status: r.status, stdout: r.stdout || "", stderr: r.stderr || "" };
+}
+
+/** The last thing the box said on stderr, for a message that has to fit on a
+ *  line or two. Never the whole stream: ssh's failures are short and a wall of
+ *  someone else's output buries the sentence that matters. */
+function lastWords(stderr: string): string {
+  return stderr.trim().split("\n").slice(-2).join(" ") || "no output";
 }
 
 /**
@@ -477,6 +605,28 @@ function requireTabColour(): Exclude<Wanted, { kind: "bad" }> {
  * tab violet with nothing running in it.
  */
 function runOnTheBox(file: string, args: string[], stdio: StdioOptions): never {
+  const r = handOverToTheBox(file, args, stdio);
+  // The shell convention for "died on a signal", because `process.exit(null ?? 0)`
+  // would report a Ctrl-C'd tunnel to the calling shell as a success.
+  if (r.signal) return process.exit(128 + (constants.signals[r.signal] ?? 0));
+  return process.exit(r.status ?? 0);
+}
+
+/**
+ * The handover itself, without the exit — because ONE caller has work left to
+ * do afterwards.
+ *
+ * `gjd-remote setup` attaches so somebody can watch the install, and then has
+ * to read the status file to say how it went; the job's pane deliberately
+ * outlives the job (`exec bash -l`), so the pane's exit code is a login shell's
+ * and proves nothing either way. Every other caller hands the terminal over and
+ * is finished, which is what `runOnTheBox` above still is.
+ */
+function handOverToTheBox(
+  file: string,
+  args: string[],
+  stdio: StdioOptions,
+): { status: number | null; signal: NodeJS.Signals | null } {
   const want = requireTabColour();
   const paint = want.kind === "colour" && canColourTab(process.env, Boolean(process.stdout.isTTY));
   if (paint) process.stdout.write(colourSequence(want.rgb));
@@ -498,13 +648,12 @@ function runOnTheBox(file: string, args: string[], stdio: StdioOptions): never {
   process.off("SIGINT", swallowInterrupt);
 
   if (paint) process.stdout.write(colourSequence("default"));
-  // The shell convention for "died on a signal", because `process.exit(null ?? 0)`
-  // would report a Ctrl-C'd tunnel to the calling shell as a success.
-  if (r.signal) return process.exit(128 + (constants.signals[r.signal] ?? 0));
-  return process.exit(r.status ?? 0);
+  return { status: r.status, signal: r.signal };
 }
 
-function attach(name: string, force?: string): never {
+/** Everything an attach does except handing over the terminal, which is the one
+ *  step its two callers disagree about. */
+function attachHandover(name: string, force?: string): { status: number | null; signal: NodeJS.Signals | null } {
   const keyboard = interactiveStdin();
   if (keyboard === null) {
     die(
@@ -523,7 +672,30 @@ function attach(name: string, force?: string): never {
   // HOST(), which reads Terraform state and can die, and a die after the paint
   // is a violet tab with nothing in it.
   const command = attachCmd(name, transport);
-  return runOnTheBox("sh", ["-c", command], [keyboard, "inherit", "inherit"]);
+  return handOverToTheBox("sh", ["-c", command], [keyboard, "inherit", "inherit"]);
+}
+
+function attach(name: string, force?: string): never {
+  const r = attachHandover(name, force);
+  if (r.signal) return process.exit(128 + (constants.signals[r.signal] ?? 0));
+  return process.exit(r.status ?? 0);
+}
+
+/**
+ * Attach, and come back — for `setup`, which has to read the status file once
+ * the watching is over.
+ *
+ * A failed attach is NOT fatal here, and that is deliberate: the setup job is
+ * running on the box whatever happens to this terminal, so the useful thing is
+ * to say the watching did not work and then go and read the verdict anyway.
+ */
+function attachAndReturn(name: string, force?: string): void {
+  const r = attachHandover(name, force);
+  if (r.signal) {
+    console.log(dim(`\n(the attach ended on ${r.signal}; the job on the box is unaffected)`));
+    return;
+  }
+  if ((r.status ?? 0) !== 0) console.log(yellow(`the attach to '${name}' exited ${r.status} — reading the status file anyway`));
 }
 
 /** A tmux session name: lower-case, hyphenated, and never surprising to a shell. */
@@ -659,43 +831,904 @@ function age(d: Date): string {
   return `${Math.floor(mins / 1440)}d`;
 }
 
+// ------------------------------------------------- which repo, and where
+
+/**
+ * WHICH REPO, AND WHERE ON THE BOX — the one question every per-repo command
+ * asks, answered in one place.
+ *
+ * There are three roots and they are not the same directory (the plan's "The
+ * target contract"):
+ *
+ *  - the **tool root** is `REPO` above: Terraform state, `provision.sh`, the
+ *    browser smoke test. Shared box, shared tool, one copy.
+ *  - the **local target** is the toplevel of the repo you are standing in. It
+ *    is where `push-env` reads `.env.local` from.
+ *  - the **remote target** is the verified checkout on the box: where a session
+ *    starts, where `.env.local` is written, whose `.mcp.json` `doctor` checks.
+ *
+ * Identity is the git origin of the cwd's repo, never a folder name — so
+ * `spideryarn/reading2` is found at `~/code/spideryarn2` with no registry
+ * anywhere, and the laptop moving between Dropbox and `~/dev` changes nothing.
+ */
+type Identity = {
+  slug: string;
+  owner: string;
+  name: string;
+  /** The repo's toplevel on THIS machine, or null when `--repo` named a repo
+   *  we are not standing in. `push-env` needs it and refuses without it. */
+  localToplevel: string | null;
+};
+
+/** Which repo the user means: `--repo` if given, else the cwd's origin. The
+ *  refusal carries its own wording, because "not a repo" and "a repo with no
+ *  origin" need different next steps. */
+function identify(repoOpt: string | undefined): { ok: true; id: Identity } | { ok: false; why: string } {
+  const here = localRepo(process.cwd());
+  if (repoOpt !== undefined) {
+    const r = parseRepo(repoOpt);
+    const slug = `${r.owner}/${r.name}`.toLowerCase();
+    return {
+      ok: true,
+      id: {
+        slug,
+        owner: r.owner,
+        name: r.name,
+        localToplevel: here.kind === "repo" && here.slug === slug ? here.toplevel : null,
+      },
+    };
+  }
+  if (here.kind !== "repo") return { ok: false, why: describeLocalRepo(here) };
+  return { ok: true, id: { slug: here.slug, owner: here.owner, name: here.name, localToplevel: here.toplevel } };
+}
+
+/**
+ * Everything directly under `~/code`, strictly parsed. One round trip, and it
+ * fails closed twice over.
+ *
+ * THE SSH STATUS IS PART OF THE ANSWER. It used to be discarded — `check:
+ * false`, stdout parsed, status thrown away — and the failure that hides in
+ * that is not exotic: any non-zero ssh whose stdout still looks like a finished
+ * listing reads as "nothing is under ~/code", which is the one answer that
+ * makes the tool clone. So a non-zero status is rejected BEFORE the parse, and
+ * the script's own refusals exit 0 and say `GJDERR` precisely so that the
+ * status means one thing only. GPT Sol's Stage 1 review, blocker 1.
+ *
+ * A missing `~/code` is still an empty inventory — but a DELIBERATE one: the
+ * script reports the folder's existence as its own field and the parser refuses
+ * a reply that leaves it out. Nothing here creates the folder.
+ */
+function inventory(base = REMOTE_CODE): { entries: InventoryEntry[]; baseExists: boolean } {
+  const r = sshRun(inventoryScript(base));
+  if (r.status !== 0) {
+    die(
+      `could not list ${base} on the box: ssh exited ${r.status ?? "on a signal"}.\n` +
+        `  ${lastWords(r.stderr)}\n` +
+        `  Nothing is concluded from a listing that failed — least of all that the repo\n` +
+        `  is absent, which is the answer that would start a clone.`,
+    );
+  }
+  const got = parseInventory(r.stdout);
+  if (!got.ok) die(`could not read ${base} on the box: ${got.why}`);
+  return { entries: got.entries, baseExists: got.baseExists };
+}
+
+/** The inventory row for one path, by listing its parent. The same script and
+ *  the same strict parse as everything else — a second way of asking "whose
+ *  checkout is this?" would be a second way of getting it wrong. */
+function entryAt(dir: string): InventoryEntry | undefined {
+  const want = dir.replace(/\/+$/, "") || "/";
+  return inventory(path.posix.dirname(want)).entries.find((e) => (e.dir.replace(/\/+$/, "") || "/") === want);
+}
+
+/** Where the repo lives on the box. `~/code/<name>` is only the PROPOSAL — a
+ *  checkout under any other name with the right origin is the answer. */
+function remoteCheckout(id: Identity): RemoteCheckout {
+  return resolveRemoteCheckout(id.slug, `${REMOTE_CODE}/${id.name}`, inventory().entries);
+}
+
+/**
+ * A directory named by hand must be the repo we are standing in, or the command
+ * is about to do this repo's work in another repo's tree. Gives back the entry
+ * it verified, so the caller need not ask the box a second time.
+ *
+ * This is the check that makes `GJD_REMOTE_REPO` safe to keep: as a silent
+ * default it could steer a hellozenno `push-env` into Spideryarn's checkout,
+ * which is exactly what an allowlisted secret must never do.
+ *
+ * IT SETS THE SAME BAR AS AUTOMATIC RESOLUTION, and it did not until GPT Sol's
+ * Stage 1 review: it compared origins and looked at nothing else, so a symlink
+ * or an interrupted clone that `resolveRemoteCheckout` blocks by name was
+ * waved through the moment somebody typed `--dir`. A hand-typed path is not a
+ * reason to check less.
+ */
+function assertSameRepo(dir: string, id: Identity, what: string): InventoryEntry {
+  const e = entryAt(dir);
+  const found = e?.isCheckout && e.origin !== undefined ? remoteSlug(e.origin) : undefined;
+  if (e !== undefined && found === id.slug && !e.isSymlink && e.hasHead) return e;
+  const wrong =
+    e === undefined
+      ? "does not exist"
+      : e.isSymlink
+        ? "is a symlink, and symlinks are never followed here"
+        : !e.isCheckout
+          ? "is not a git checkout"
+          : found === undefined
+            ? "is a checkout with an origin I do not recognise"
+            : found !== id.slug
+              ? found
+              : "is a half-finished checkout — its HEAD does not resolve";
+  die(
+    `${what} points at ${dir} on the box, and that is not a usable checkout of ${id.slug}.\n` +
+      `  you are in: ${id.slug}\n` +
+      `  that path:  ${wrong}\n` +
+      `  Nothing was touched. Drop ${what}, or point it at this repo's checkout.`,
+  );
+}
+
+/** Said out loud every time it is used, rather than obeyed quietly: an env var
+ *  that redirects which tree a session opens in — or which checkout a file full
+ *  of credentials lands in — is a thing you want reminding is set. */
+function sayDeprecated(): void {
+  console.error(yellow(`GJD_REMOTE_REPO is deprecated — it is an alias for --dir, and --dir wins over it.`));
+}
+
+/** Where this command is about to act, said out loud. Printed before anything
+ *  happens, because which tree an agent is about to edit — or which checkout a
+ *  file full of credentials is about to land in — should never be something you
+ *  find out afterwards. */
+type Target = {
+  slug: string | null;
+  localToplevel: string | null;
+  dir: string;
+  via: "--dir" | "GJD_REMOTE_REPO" | "origin";
+  originTransport: OriginTransport | null;
+  /**
+   * Was `dir` PROVED to be a checkout of `slug` — by the box, this run?
+   *
+   * True on the origin path, where the box was asked which directory carries
+   * that origin, and on any path where `assertSameRepo` ran. False only for an
+   * explicit `--dir` that nothing verified, which is exactly the case where the
+   * laptop's repo says nothing about the tree being opened.
+   */
+  verified: boolean;
+};
+
+function announce(t: Target): Target {
+  console.log(
+    dim(`repo: ${t.slug ?? "unknown — an explicit directory was given"}`) +
+      (t.localToplevel ? dim(`  (${t.localToplevel})`) : ""),
+  );
+  console.log(dim(`box:  ${t.dir}${t.via === "origin" ? "" : `  (${t.via})`}`));
+  return t;
+}
+
+/**
+ * The slug to attribute a session to, or the admission that there is not one.
+ *
+ * ONLY A VERIFIED TARGET CLAIMS A REPO. That is the origin path, where the box
+ * was asked which directory carries this origin and answered, and any path
+ * where `assertSameRepo` proved it — which now includes the deprecated env var,
+ * because `namedDir` refuses it outright unless it verified. An unverified
+ * `--dir` is an arbitrary path — `-d ~` is a home directory — and `t.slug`
+ * there is the repo the LAPTOP was standing in, which says nothing about the
+ * tree the session will open in. Writing it into `GJD_REPO` would make `ls`
+ * claim, in a column people will filter on, that a session in `~` belongs to
+ * Spideryarn.
+ *
+ * The env var used to be lumped in with `--dir` and reported as `(unknown)`
+ * even when its origin had been compared. That threw away a fact we had proved
+ * (GPT Sol's Stage 1 review, finding 7); the deprecation line is printed every
+ * time it is used, which is the honest way to nag about it.
+ */
+function targetRepo(t: Target): string {
+  return t.verified && t.slug !== null ? t.slug : REPO_UNKNOWN;
+}
+
+/**
+ * The `-e` flags that let `ls` say which repo a session is for, a whole session
+ * after everything that knew it has exited.
+ *
+ * Built from `META` and `METADATA_VERSION` rather than typed out, because the
+ * reader in scripts/gjd-remote-tmux.ts asks tmux for those exact names and a
+ * second spelling of one is a spelling that stops matching. Every value goes
+ * through `shq`: `dir` is a path somebody typed and the slug is validated but
+ * not by this process.
+ *
+ * `dir` is the directory the session actually starts in, which is the one
+ * `sessionDir()` proved enterable — not `t.dir`, so that the two cannot differ.
+ */
+function metaFlags(t: Target, dir: string, kind: SessionKind): string {
+  // VALIDATED HERE, immediately before the session is created, and not only
+  // where the values were made. A session records this metadata for the rest of
+  // its life and `ls` refuses the WHOLE listing over one bad record — so a
+  // value the reader would reject must stop the one session being created,
+  // rather than break the listing for every other session on the box. The slug
+  // producer is strict now too (`remoteSlug`); this is the check that does not
+  // depend on that staying true. GPT Sol's Stage 1 review, blocker 2.
+  const repo = targetRepo(t);
+  if (!isRepoValue(repo)) {
+    die(`refusing to start a session labelled '${repo}', which is not a repo I could read back later.`);
+  }
+  if (!dir.startsWith("/") || /[\r\n\0]/.test(dir)) {
+    die(`refusing to start a session in '${dir}': the directory must be an absolute path with nothing odd in it.`);
+  }
+  return [
+    `-e ${META.version}=${shq(METADATA_VERSION)}`,
+    `-e ${META.kind}=${shq(kind)}`,
+    `-e ${META.repo}=${shq(repo)}`,
+    `-e ${META.dir}=${shq(dir)}`,
+  ].join(" ");
+}
+
+/**
+ * The whole resolution, in the order the plan sets out: `--dir` wins, then the
+ * deprecated env var, then the repo you are standing in.
+ *
+ * `--dir` is deliberately an ARBITRARY directory — `-d ~` is a home directory
+ * and not a repo at all — so it does not need an identity and prints "unknown".
+ * Everything else needs one, and refuses rather than guessing.
+ */
+function resolveTarget(opts: {
+  repo?: string | undefined;
+  dir?: string | undefined;
+  /** push-env: no identity, no push — and a `--dir` must be this repo. */
+  requireIdentity?: boolean;
+}): Target {
+  const r = resolveOrExplain(opts);
+  if (r.kind === "target") return r.target;
+  onNotFound(r.id, r.checkout);
+}
+
+/**
+ * The resolution above, with the one arm that a session can DO something about
+ * handed back instead of ending the run.
+ *
+ * Only `new-claude` and `new-shell` want that: on `absent` they may offer to
+ * clone and set the repo up (`resolveTargetForSession`). Every other command
+ * goes through `resolveTarget`, which turns the same value into the refusal it
+ * always was — so there is one resolution, not two that can drift.
+ */
+type Resolution =
+  | { kind: "target"; target: Target }
+  | { kind: "unresolved"; id: Identity; checkout: Exclude<RemoteCheckout, { kind: "found" }> };
+
+function resolveOrExplain(opts: {
+  repo?: string | undefined;
+  dir?: string | undefined;
+  requireIdentity?: boolean;
+}): Resolution {
+  const envDir = process.env.GJD_REMOTE_REPO;
+  const givenDir = opts.dir ?? envDir;
+  const via: Target["via"] = opts.dir !== undefined ? "--dir" : envDir !== undefined ? "GJD_REMOTE_REPO" : "origin";
+  const id = identify(opts.repo);
+
+  if (via === "GJD_REMOTE_REPO") sayDeprecated();
+
+  if (givenDir !== undefined) {
+    return { kind: "target", target: announce(namedDir(givenDir, via, id, opts.requireIdentity ?? false)) };
+  }
+
+  if (!id.ok) die(id.why);
+  const r = remoteCheckout(id.id);
+  if (r.kind !== "found") return { kind: "unresolved", id: id.id, checkout: r };
+  return {
+    kind: "target",
+    target: announce({
+      slug: id.id.slug,
+      localToplevel: id.id.localToplevel,
+      dir: r.dir,
+      via: "origin",
+      originTransport: r.originTransport,
+      // The box was asked which directory carries this origin, and answered.
+      verified: true,
+    }),
+  };
+}
+
+/**
+ * A directory somebody named, checked as far as it can be.
+ *
+ * The identity is optional here and that is the point of `--dir`: `-d ~` is a
+ * home directory, not a repo, and printing "unknown" is the honest answer. It
+ * becomes compulsory the moment the command carries this repo's data
+ * (`push-env`), and the ORIGIN is compared whenever the path came from the
+ * deprecated env var, because nobody typed that today and it must not steer one
+ * repo's work into another's tree.
+ */
+function namedDir(
+  given: string,
+  via: Target["via"],
+  id: ReturnType<typeof identify>,
+  requireIdentity: boolean,
+): Target {
+  const what = via === "origin" ? "--dir" : via;
+  const dir = remotePath(given, what);
+  // THE ENV VAR NEEDS AN IDENTITY EVEN WHEN THE COMMAND DOES NOT. `--dir` is
+  // something a person just typed, so an arbitrary path is a fair thing to
+  // mean; `GJD_REMOTE_REPO` is ambient, and from a directory that is not a repo
+  // it silently redirected `new-*` into whatever it named, with nothing to
+  // compare it against. An ambient redirect that cannot be checked is refused.
+  // GPT Sol's Stage 1 review, finding 5.
+  const mustVerify = requireIdentity || via === "GJD_REMOTE_REPO";
+  if (!id.ok && mustVerify) {
+    die(
+      via === "GJD_REMOTE_REPO"
+        ? `${id.why}\n` +
+            `  GJD_REMOTE_REPO is set, and it may not redirect a command whose repo I\n` +
+            `  cannot identify. Unset GJD_REMOTE_REPO, or pass --dir to say you meant it.`
+        : id.why,
+    );
+  }
+  const entry = id.ok && mustVerify ? assertSameRepo(dir, id.id, what) : undefined;
+  return {
+    slug: id.ok ? id.id.slug : null,
+    localToplevel: id.ok ? id.id.localToplevel : null,
+    dir,
+    via,
+    originTransport: entry?.origin === undefined ? null : originTransport(entry.origin),
+    verified: entry !== undefined,
+  };
+}
+
+/**
+ * No single checkout on the box, so nothing starts.
+ *
+ * `absent` is the one arm a session can do something about, and
+ * `resolveTargetForSession` below takes it before this is reached. Everything
+ * else — `ambiguous`, every `blocked` reason — is a refusal for every command
+ * alike: there is a tree in the way, or two, and choosing one is exactly the
+ * guess this tool does not make.
+ */
+function onNotFound(id: Identity, r: Exclude<RemoteCheckout, { kind: "found" }>): never {
+  die(describeResolution(id.slug, r));
+}
+
+// --------------------------------------------- clone-then-setup, for a session
+
+/**
+ * ## Starting a session in a repo the box has never had
+ *
+ * Stage 3 of docs/plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md,
+ * and it is Greg's answer to the question the plan opens with: **ask, then
+ * clone + setup, and refuse the session if setup fails.**
+ *
+ * Only `new-claude` and `new-shell` come through here. `push-env`, `setup`,
+ * `doctor` and `clone` all still refuse an absent checkout, because none of
+ * them is a request to start work in one.
+ *
+ * The order below is the design, and each step is a thing that can be wrong:
+ *
+ *  1. **Ask before anything.** One question, defaulting to No, showing the
+ *     directory and the command that would run. Off a terminal it is a refusal
+ *     naming `gjd-remote clone` and `gjd-remote setup` — never a silent yes.
+ *  2. **The command shown first comes from the LAPTOP's checkout**, because
+ *     that is the copy the person answering can see. When there is no local
+ *     checkout (`--repo` from somewhere else) it is honestly unknown until the
+ *     clone has happened.
+ *  3. **After the clone the config is re-read from the cloned commit** — GPT
+ *     Sol's blocker 4 — and if it resolves to a different command than the one
+ *     that was approved, it asks again. When nothing was approved because
+ *     nothing was known, that second question is the first one that can name
+ *     the command, so it is always asked.
+ *  4. **Setup runs as the ordinary tool-owned tmux job**, the same `runSetup`
+ *     `gjd-remote setup` uses, and **the session is created only on a `success`
+ *     status file for that attempt** (Sol's blocker 2). `--no-attach` therefore
+ *     starts setup and stops: nobody read a verdict, so nothing may assume one.
+ */
+async function resolveTargetForSession(opts: {
+  repo?: string | undefined;
+  dir?: string | undefined;
+  /** `--no-attach`: watch nothing, and so start nothing that needs watching. */
+  attach: boolean;
+  transport?: string | undefined;
+  /** `gjd-remote new-claude` / `new-shell` — the command to tell them to re-run. */
+  what: string;
+}): Promise<SessionStart> {
+  const first = resolveOrExplain({ repo: opts.repo, dir: opts.dir });
+  if (first.kind === "target") return sayFoundSetupStatus(first.target);
+  if (first.checkout.kind !== "absent") onNotFound(first.id, first.checkout);
+
+  await cloneThenSetUp(first.id, first.checkout.proposedDir, opts);
+
+  // Resolved AGAIN, by origin, through the same box-side scan as every other
+  // run: the directory a session starts in is one the box named a moment ago,
+  // never one this process remembers having made. It also re-reads the status
+  // file it has just watched be written, which is the check the next run would
+  // do anyway.
+  const again = resolveOrExplain({ repo: opts.repo, dir: opts.dir });
+  if (again.kind !== "target") onNotFound(again.id, again.checkout);
+  return sayFoundSetupStatus(again.target);
+}
+
+/**
+ * How a session is allowed to start in a checkout the box already has: the
+ * directory, and the lock-and-status ticket the `tmux new-session` must be run
+ * under.
+ *
+ * `admit: null` means "run the command plainly", and it is the honest answer in
+ * exactly one case: a `--dir` target, which is an arbitrary path with no repo
+ * and so no setup status to be admitted against. A status read that FAILED is
+ * not the other case — it used to be, and it was a session with no ticket in a
+ * tree nobody had checked; it refuses now, and `--dir` is the way past it.
+ */
+type SessionStart = { target: Target; admit: AdmissionPlan | null };
+
+/**
+ * What the box must still be saying when the session is actually created.
+ *
+ * The three paths and the bytes, gathered when the gate was decided and handed
+ * to `sessionAdmissionScript` unchanged — see `startUnderAdmission`.
+ */
+type AdmissionPlan = {
+  slug: string;
+  lockPath: string;
+  locksDir: string;
+  statusPath: string;
+  /** The base64 the status read came back with, or null for "there was none". */
+  expect: string | null;
+};
+
+/**
+ * What the setup status file says about a checkout that IS on the box, and
+ * whether that is a reason not to start.
+ *
+ * The policy itself is `foundGateDecision` in scripts/gjd-remote-flow.ts, where
+ * tests/gjd-remote-flow.test.ts walks every cell of it. This is the round trip
+ * and the printing.
+ *
+ * Reading the status COSTS ONE SSH, and reading the box's config costs a second
+ * — so the second is only paid when there is a status to judge. With no status
+ * at all `setupVerdict` answers `never-run` whatever it is handed.
+ *
+ * **The decision it makes here is not the guarantee.** It is true at the moment
+ * of reading, and `tmux new-session` happens some seconds later; the ticket
+ * this returns is what makes it still true then — GPT Sol's Stage 3 finding 1.
+ */
+function sayFoundSetupStatus(t: Target): SessionStart {
+  // A `--dir` nobody verified is an arbitrary path — `-d ~` is a home directory
+  // — and there is no repo whose setup status could be asked about.
+  if (t.slug === null || !t.verified) return { target: t, admit: null };
+
+  const state = readSetupState(t.slug, t.dir);
+  if (!state.ok) {
+    // Fatal, and this used to be a yellow line. A status that cannot be READ is
+    // not a status that is absent: a cut ssh stream, a broken protocol and a
+    // box that is half-way through a rebuild all look like this, and starting
+    // a session on any of them is a session with no ticket in a tree nobody
+    // has checked. `--dir` is the deliberate bypass, and it prints `repo:
+    // unknown` so nobody mistakes it for the admitted kind.
+    die(
+      `could not read the setup status for ${t.slug} on the box: ${state.why}\n` +
+        `  No session started. gjd-remote resolve says what the box thinks; to start anyway,\n` +
+        `  name the directory yourself:  --dir ${t.dir}`,
+    );
+  }
+
+  // When the box has no setup command at all, the status's own hash stands in:
+  // "the config changed" is a claim, and there is nothing here to make it
+  // against. The identity fields are not optional in the same way — those are
+  // what say whether this status is about this tree at all.
+  const sha = state.status === undefined ? "" : expectedConfigSha(t.dir, state.status.configSha256);
+  // UNREADABLE IS PASSED IN rather than folded into a verdict, and it refuses:
+  // GPT Sol's Stage 3 finding 1. This used to print a yellow line and start the
+  // session anyway. Something wrote that file, and a verdict nobody can parse
+  // is not evidence of readiness — it is evidence that we do not know.
+  const gate = foundGateDecision(
+    setupVerdict(
+      state.status,
+      setupExpectation({ attempt: null, configSha256: sha, slug: t.slug, dir: t.dir, inode: state.inode }),
+    ),
+    state.lock,
+    state.unreadable,
+  );
+  if (gate.kind === "refuse") die(gate.why);
+  if (gate.kind === "warn") console.log(yellow(gate.line));
+
+  const paths = setupReadPaths(t.slug);
+  return {
+    target: t,
+    admit: {
+      slug: t.slug,
+      lockPath: paths.lockPath,
+      locksDir: `${REMOTE_WORK}/${LOCKS_SUBDIR}`,
+      statusPath: paths.statusPath,
+      expect: state.raw,
+    },
+  };
+}
+
+/**
+ * Create the session under the setup lock, or say what stopped it — the second
+ * half of GPT Sol's Stage 3 finding 1.
+ *
+ * `sayFoundSetupStatus` decided on bytes it read seconds ago. In between, a
+ * `gjd-remote setup` in another terminal can take the lock and start rewriting
+ * the tree, and no amount of care in the gate closes that window. So the
+ * `tmux new-session` is run BY THE BOX, holding the same lock a setup takes,
+ * against the same bytes we decided on — `sessionAdmissionScript` in
+ * scripts/gjd-remote-flow.ts.
+ *
+ * A `--dir` target has no ticket and runs plainly. That is the escape hatch it
+ * has always been: an arbitrary path is not a repo, and there is no status file
+ * that could be about it.
+ *
+ * **It leaves the lock FILE behind**, because taking a lock means opening the
+ * path: after the first admitted session, a repo's lock state reads `free`
+ * rather than `none`. Nothing anywhere distinguishes those two — only `held`
+ * and `noflock` are ever acted on — so this is a note for whoever adds a third
+ * meaning, not a defect. Observed on the box on 2026-09-02.
+ */
+function startUnderAdmission(plan: AdmissionPlan | null, command: string, name: string): void {
+  if (plan === null) {
+    ssh(command);
+    return;
+  }
+  const r = sshRun(
+    sessionAdmissionScript({
+      lockPath: plan.lockPath,
+      locksDir: plan.locksDir,
+      statusPath: plan.statusPath,
+      expect: plan.expect,
+      command,
+    }),
+  );
+  if (r.status !== 0) {
+    die(
+      `ssh failed while admitting the session (${r.status ?? "on a signal"}): ${lastWords(r.stderr)}\n` +
+        `  I do not know whether '${name}' was created — gjd-remote ls`,
+    );
+  }
+  const got = parseAdmission(r.stdout);
+  if (!got.ok) {
+    // FAILS CLOSED, and the sentence has to as well: the reply is unreadable,
+    // so the command may have run. Saying "nothing started" here would be the
+    // one lie this whole path exists to avoid.
+    die(
+      `the box's answer about starting '${name}' was not one I can read: ${got.why}\n` +
+        `  The session MAY exist — gjd-remote ls   # gjd-remote kill ${name}, if it does`,
+    );
+  }
+  const a = got.admission;
+  if (a.kind === "held") {
+    die(
+      `a setup for ${plan.slug} took the box-side lock just now — nothing was started.\n` +
+        `  Starting a session in a tree mid-install gives an agent a half-built repo.\n` +
+        `  gjd-remote setup --status --repo ${plan.slug}   # wait for it, then try again`,
+    );
+  }
+  if (a.kind === "changed") {
+    die(
+      `${plan.slug}'s setup status changed while I was starting the session — nothing was started.\n` +
+        `  ${sayChangedStatus(a.status, plan)}\n` +
+        `  gjd-remote setup --status --repo ${plan.slug}   # what it says now`,
+    );
+  }
+  if (a.code !== 0) {
+    die(`tmux exited ${a.code} on the box, so '${name}' was not created`);
+  }
+}
+
+/** What the status file says NOW, in one line, for the refusal above. Parsed
+ *  rather than printed: the file is JSON, and what a reader wants from it is
+ *  the verdict. */
+function sayChangedStatus(text: string | undefined, plan: AdmissionPlan): string {
+  if (text === undefined) return `the status file at ${plan.statusPath} is gone`;
+  const parsed = parseSetupStatus(text);
+  if (!parsed.ok) return `and the file there now is not one I can read: ${parsed.why}`;
+  return `it is now about attempt ${parsed.status.attempt}, outcome ${parsed.status.outcome}`;
+}
+
+/**
+ * The fingerprint of the setup the BOX would run today, or `fallback` when
+ * there is no answer to be had — an unreadable config, or a repo with no setup
+ * command.
+ *
+ * `setupFingerprint` over the whole specification, never the two command
+ * STRINGS: GPT Sol's Stage 3 finding 2. `./.gjd-remote/setup` is the same eight
+ * characters whatever the script behind it now contains, so hashing the
+ * commands let a repo whose setup script was rewritten under it keep its old
+ * success. The same function answers here, in `gjd-remote setup`, in `doctor`
+ * and in the job that writes the status, so the four cannot disagree.
+ */
+function expectedConfigSha(dir: string, fallback: string): string {
+  const box = readBoxConfig(dir);
+  if (!box.ok) {
+    console.log(yellow(`could not read this repo's config on the box: ${box.why}`));
+    return fallback;
+  }
+  if (box.config.setup.source === "none") return fallback;
+  return setupFingerprint(box.spec);
+}
+
+/**
+ * The setup specification as this LAPTOP's checkout has it — what the first
+ * question can honestly show, before there is a cloned commit to read.
+ *
+ * `unknown` is not a failure: `--repo` from outside the repo is the ordinary
+ * way to reach it, and a config this laptop cannot parse is the other. Either
+ * way the question after the clone becomes the first one that names a command,
+ * and it is always asked.
+ */
+type SetupPreview = { kind: "known"; spec: SetupSpec; shown: string } | { kind: "unknown"; why: string };
+
+function previewSetup(id: Identity): SetupPreview {
+  if (id.localToplevel === null) {
+    return { kind: "unknown", why: `setup command unknown until cloned (you are not in a local checkout of ${id.slug})` };
+  }
+  let here: { config: RepoConfig; spec: SetupSpec };
+  try {
+    here = localSpec(id.localToplevel);
+  } catch (err) {
+    return {
+      kind: "unknown",
+      why: `this laptop's config is unusable, so the command is unknown until cloned: ${err instanceof ConfigError ? err.message : String(err)}`,
+    };
+  }
+  if (here.config.setup.source === "none") {
+    return {
+      kind: "known",
+      spec: here.spec,
+      shown: `(none known here — no ${CONFIG_FILE}, no ${SETUP_SCRIPT}, no npm 'setup' script)`,
+    };
+  }
+  // `describeSpec` carries the SCRIPT's hash when a script is what runs,
+  // because `./.gjd-remote/setup` names a file rather than saying what it does
+  // — and the file is what would run.
+  return { kind: "known", spec: here.spec, shown: describeSpec(here.spec) };
+}
+/**
+ * Ask, clone, re-read the config, ask again if it changed, and run setup.
+ *
+ * Returns only when the box holds a checkout whose setup wrote a `success`
+ * status for the attempt this function watched. Every other outcome ends the
+ * run — with the clone left in place, because a cloned tree is a fact worth
+ * keeping and `gjd-remote setup` is how you retry against it.
+ */
+async function cloneThenSetUp(
+  id: Identity,
+  proposedDir: string,
+  opts: { attach: boolean; transport?: string | undefined; what: string },
+): Promise<void> {
+  const preview = previewSetup(id);
+  console.log(yellow(`${id.slug} is not on the box.`));
+  console.log(dim(`  clone to: ${proposedDir}`));
+  console.log(dim(`  setup:    ${preview.kind === "known" ? preview.shown : preview.why}`));
+
+  const yes = await confirmOrRefuse(
+    `Clone ${id.slug} to ${proposedDir} and run its setup, then start the session?`,
+    promptStreams(),
+    {
+      default: false,
+      instead:
+        `Nothing was cloned. From a terminal, or do the two halves yourself:\n` +
+        `    gjd-remote clone ${id.slug}\n` +
+        `    gjd-remote setup --repo ${id.slug}`,
+    },
+  );
+  if (!yes) die(`nothing was cloned, and no session was started.`);
+
+  // `owner/name` as git recorded them, not the lower-cased slug: GitHub does
+  // not care, but the URL this clones from is the URL the transaction compares
+  // the recorded remote against, and the two must be the same string.
+  const repo = parseRepo(`${id.owner}/${id.name}`);
+  const dest = proposedDir;
+  const base = path.posix.dirname(dest);
+  const dirName = path.posix.basename(dest);
+  if (!GH_REPO.test(dirName)) die(`'${dirName}' is not a usable directory name on the box`);
+  const tokenFile = `${TOKEN_DIR}/${repo.owner}.token`;
+
+  console.log(bold(`gjd-remote clone ${repo.owner}/${repo.name} → ${HOST()}:${dest}`));
+  requireToken(repo, tokenFile);
+  // THE SAME LOCKED TRANSACTION `gjd-remote clone` uses, and that is the point
+  // of it being one function: the automatic clone is the one nobody is reading
+  // the output of, and it re-resolves the destination under the lock — so the
+  // `absent` this flow started from cannot go stale while a question sits on
+  // screen waiting for an answer.
+  const after = ensureRemoteCheckout(repo, { base, dest, dirName, slug: id.slug });
+  console.log(green(`✓ cloned ${id.slug}`));
+  describeCheckout(after);
+
+  // FROM HERE ON "nothing changed" IS FALSE, and that is GPT Sol's Stage 3
+  // finding 4: `main()`'s one sentence for a Ctrl-C said it anyway, at a
+  // question that is only asked once the tree is on the box. The phase is this
+  // try, rather than a variable somebody has to remember to set, so a prompt
+  // added below inherits the right sentence instead of the old one.
+  try {
+    await setUpTheClone(id, repo, dest, preview, opts);
+  } catch (err) {
+    if (err instanceof Cancelled) {
+      throw new Cancelled(`cancelled: the clone at ${dest} remains; setup and the session were not started`);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Read the cloned commit's own config, ask again if it differs from what was
+ * approved, and run setup — the half of `cloneThenSetUp` that happens once the
+ * checkout is a fact on the box.
+ *
+ * Split out for the cancellation phase above and for nothing else: a Ctrl-C
+ * anywhere in here leaves a clone behind, and every path out of it says where
+ * that clone is.
+ */
+async function setUpTheClone(
+  id: Identity,
+  repo: Repo,
+  dest: string,
+  preview: SetupPreview,
+  opts: { attach: boolean; transport?: string | undefined; what: string },
+): Promise<void> {
+  // THE CLONED COMMIT'S CONFIG, not the one that was on screen. They differ
+  // whenever the laptop's copy is uncommitted or unpushed, which is most of the
+  // time while somebody is writing one.
+  const box = readBoxConfig(dest);
+  if (!box.ok) {
+    die(`${box.why}\n  The clone is at ${dest}. Nothing was run and no session was started.`);
+  }
+  saySetupCommands(box.config, box.spec, "on the box");
+  if (box.config.setup.source === "none") {
+    die(
+      `cloned, but no setup known for ${id.slug}: add ${CONFIG_FILE} or ${SETUP_SCRIPT}.\n` +
+        `  The clone is at ${dest} and nothing was run — a repo with no setup command is\n` +
+        `  not a repo that is set up, and a session in it would be a session in an\n` +
+        `  uninstalled tree.\n` +
+        `  gjd-remote setup --repo ${id.slug}   # once there is one`,
+    );
+  }
+  const command = box.config.setup.command;
+  const check = box.config.check?.command;
+
+  // RE-CONFIRMED ON ANY DIFFERENCE IN THE SPECIFICATION, not in the command
+  // string — GPT Sol's Stage 2 finding 4. A cloned `.gjd-remote/setup` whose
+  // contents are nothing like the one that was on screen resolves to the same
+  // eight characters, so comparing what was shown would have approved it.
+  const differences = preview.kind === "known" ? diffSetupSpec(preview.spec, box.spec) : [];
+  if (preview.kind !== "known" || differences.length > 0) {
+    if (preview.kind === "known") {
+      console.log(yellow(`the cloned commit's setup differs from what you approved:`));
+      for (const d of differences) {
+        console.log(dim(`  ${d.field}:  approved ${d.a}   the clone ${d.b}`));
+      }
+    } else {
+      console.log(yellow(`the setup command was unknown until now — this is the cloned commit's own:`));
+    }
+    const go = await confirmOrRefuse(`Run ${command} in ${dest} on the box?`, promptStreams(), {
+      default: false,
+      instead: `The clone is at ${dest}, unset up.\n    gjd-remote setup --repo ${id.slug}`,
+    });
+    if (!go) die(`the clone is at ${dest} and nothing was run. No session was started.`);
+  }
+
+  const target = announce({
+    slug: id.slug,
+    localToplevel: id.localToplevel,
+    dir: dest,
+    via: "origin",
+    // The remote was read back off the cloned tree, under the clone's own lock,
+    // and compared to the URL we asked for — so this is what git recorded.
+    originTransport: originTransport(repo.url),
+    verified: true,
+  });
+
+  const run = runSetup({
+    target,
+    slug: id.slug,
+    command,
+    check,
+    spec: box.spec,
+    attach: opts.attach,
+    transport: opts.transport,
+    statusHint: `gjd-remote setup --status --repo ${id.slug}   # how did it go?`,
+  });
+
+  // NOBODY READ A VERDICT, so nobody may act on one. This is Sol's blocker 2:
+  // the checkout being there is not readiness, and neither is a job having
+  // started.
+  if (run.kind === "started") {
+    die(
+      `setup was started and nothing watched it, so no session was created.\n` +
+        `  ${opts.what} again once 'gjd-remote setup --status --repo ${id.slug}' says success.`,
+    );
+  }
+  if (run.kind === "detached") {
+    die(
+      `setup is still running — you detached, it did not stop. No session was created.\n` +
+        `  gjd-remote resume ${run.name}   # back to it\n` +
+        `  ${opts.what} again once 'gjd-remote setup --status --repo ${id.slug}' says success.`,
+    );
+  }
+  if (run.verdict.kind !== "success") {
+    die(`${describeVerdict(run.verdict)}\n  The clone is at ${dest}. No session was created.`);
+  }
+  console.log(green(`✓ ${run.verdict.why}`));
+}
+
+/**
+ * `gjd-remote resolve` — say which repo this is and what the box has, and stop.
+ *
+ * One round trip, nothing created, nothing changed. It exists because every
+ * per-repo command now begins with this question, and when one of them refuses,
+ * the useful thing is to see the answer on its own rather than reconstruct it
+ * from a refusal. Exit 0 only for a checkout that was actually found.
+ */
+function cmdResolve(opts: { repo?: string | undefined; dir?: string | undefined }): void {
+  console.log(dim(`cwd:  ${process.cwd()}`));
+  const id = identify(opts.repo);
+  if (!id.ok) {
+    console.error(red(`✗ ${id.why}`));
+    process.exit(1);
+  }
+  console.log(`repo: ${bold(id.id.slug)}${id.id.localToplevel ? dim(`  (${id.id.localToplevel})`) : ""}`);
+
+  // The env var is read here too, so what this prints is what the real commands
+  // will do rather than a tidier version of it.
+  const givenDir = opts.dir ?? process.env.GJD_REMOTE_REPO;
+  if (givenDir !== undefined) {
+    const what = opts.dir !== undefined ? "--dir" : "GJD_REMOTE_REPO";
+    if (what === "GJD_REMOTE_REPO") sayDeprecated();
+    const dir = remotePath(givenDir, what);
+    const e = entryAt(dir);
+    const found = e?.isCheckout && e.origin !== undefined ? remoteSlug(e.origin) : undefined;
+    const said = found ?? (e === undefined ? "does not exist" : "not a checkout of anything I recognise");
+    console.log(`box:  ${dir}  ${dim(`(${what}; ${said})`)}`);
+    if (found !== id.id.slug) {
+      console.error(red(`✗ that is not ${id.id.slug}, so every per-repo command will refuse it`));
+      process.exit(1);
+    }
+    return;
+  }
+
+  const proposed = `${REMOTE_CODE}/${id.id.name}`;
+  // The inventory rather than `remoteCheckout`, because this command's job is
+  // to show what the box actually said — including the one fact resolution
+  // throws away: whether the code folder is there at all. "Nothing under
+  // ~/code" and "no ~/code" both resolve to `absent`, and only one of them is a
+  // box that has never had a repo put on it.
+  const inv = inventory();
+  const r = resolveRemoteCheckout(id.id.slug, proposed, inv.entries);
+  if (r.kind === "found") {
+    console.log(`box:  ${bold(r.dir)}  ${dim(`(found by origin, ${r.originTransport})`)}`);
+    if (r.originTransport === "ssh") {
+      console.log(yellow(`  its remote is an ssh URL, and the box has no GitHub ssh key — it can never fetch`));
+    }
+    return;
+  }
+  console.log(`box:  ${dim(`nothing found; ${r.kind}`)}${r.kind === "absent" ? dim(`, proposed ${proposed}`) : ""}`);
+  if (!inv.baseExists) console.log(dim(`      ${REMOTE_CODE} does not exist on the box yet — clone makes it`));
+  console.error(red(`✗ ${describeResolution(id.id.slug, r)}`));
+  process.exit(1);
+}
+
 // ---------------------------------------------------------------- commands
 
 /**
- * Which tree a session starts in — and proof that it is actually there.
+ * Proof that the tree a session is about to start in is actually enterable.
  *
- * Most specific first: an explicit `--dir`, else `GJD_REMOTE_REPO`, else the one
- * checkout that already exists. The home directory used to be the default, and
- * it is the wrong one: every session then opened with an agent guessing where to
- * `cd`, and a guess about which tree to edit is the expensive kind. `-d ~` still
- * gets you home when that is genuinely what you want.
- *
- * The check belongs HERE, before any session is created, and not only because a
- * session that dies on its first line is confusing. It is the half of the guard
- * that can say something useful — by the time the job script runs, nobody is
- * watching. See cdGuard() below for the other half.
+ * The directory itself comes from resolveTarget() — by origin, or from a `--dir`
+ * somebody typed. This is the last check before a session exists, and not only
+ * because a session that dies on its first line is confusing: it is the half of
+ * the guard that can say something useful, since by the time the job script runs
+ * nobody is watching. See cdGuard() below for the other half.
  *
  * It is `cd`, not `test -d`, and the difference is a real hole: `test -d` only
  * stats, so a directory with no execute permission passes it and then refuses
  * every attempt to enter. Asking the question we actually mean costs the same
  * round trip.
  */
-function sessionDir(given: string | undefined): string {
-  const explicit = given !== undefined;
-  const dir = remotePath(given ?? REMOTE_REPO(), explicit ? "--dir" : "GJD_REMOTE_REPO");
-  const probe = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), `cd ${shq(dir)}`], { encoding: "utf8" });
-  if (probe.status === 0) return dir;
+function sessionDir(t: Target): string {
+  const probe = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), `cd ${shq(t.dir)}`], { encoding: "utf8" });
+  if (probe.status === 0) return t.dir;
   const why = (probe.stderr || "").trim().split("\n").at(-1)?.replace(/^bash: line \d+: /, "") ?? "";
   die(
-    `cannot start a session in ${dir} on the box.\n` +
+    `cannot start a session in ${t.dir} on the box.\n` +
       (why ? `  the box said: ${why}\n` : "") +
-      (explicit
-        ? `  --dir is a path on the BOX, not on this laptop.`
-        : `  that is where sessions start when you do not say. Either put it there:\n` +
-          `    gjd-remote clone spideryarn/reading2 --name spideryarn2\n` +
-          `  or say where to start:\n` +
-          `    gjd-remote new-claude -d ~   ${dim("# the home directory")}\n` +
-          `  (or set GJD_REMOTE_REPO to a checkout that already exists)`),
+      (t.via === "origin"
+        ? `  The box listed that directory a moment ago as the checkout of ${t.slug}, so\n` +
+          `  something changed underneath us, or its permissions do not allow entering it.\n` +
+          `  gjd-remote resolve   ${dim("# what the box says about this repo now")}`
+        : `  ${t.via} is a path on the BOX, not on this laptop.`),
   );
 }
 
@@ -996,11 +2029,22 @@ function cmdLs(): void {
     .sort((a, b) => a.label.rank - b.label.rank || a.s.name.localeCompare(b.s.name));
 
   const w = Math.max(4, ...list.map((s) => s.name.length));
+  // Widths are measured on the UNDIMMED text and the cells are padded with
+  // padVisible, because dim() wraps its argument in escape sequences that
+  // .length counts and a terminal does not — the bug that once made the STATE
+  // column ragged.
+  const rw = Math.max(4, ...list.map((s) => sessionRepo(s).text.length));
   const sw = Math.max(5, ...rows.map((r) => visibleWidth(r.label.text)));
-  console.log(bold(`${"NAME".padEnd(w)}  AGE   ATT  ${"STATE".padEnd(sw)}  TITLE`));
+  console.log(bold(`${"NAME".padEnd(w)}  ${"REPO".padEnd(rw)}  AGE   ATT  ${"STATE".padEnd(sw)}  TITLE`));
   for (const { s, label } of rows) {
+    // Dimmed when it is not a real answer, the same treatment the empty TITLE
+    // cell gets: a session started before the metadata existed, or against an
+    // arbitrary --dir, cannot be attributed to a repo and should not look like
+    // it has been.
+    const repo = sessionRepo(s);
     console.log(
-      `${s.name.padEnd(w)}  ${age(s.created).padEnd(4)}  ${s.attached ? green("yes") : dim(" no")}  ` +
+      `${s.name.padEnd(w)}  ${padVisible(repo.known ? repo.text : dim(repo.text), rw)}  ` +
+        `${age(s.created).padEnd(4)}  ${s.attached ? green("yes") : dim(" no")}  ` +
         `${padVisible(label.text, sw)}  ${s.title ? s.title : dim("(no title yet)")}`,
     );
   }
@@ -1219,6 +2263,21 @@ function interactiveStdin(): number | "inherit" | null {
 }
 
 /**
+ * The streams a question is asked on, or `null` when there is no terminal to
+ * ask on at all.
+ *
+ * Both rules live in `promptIo()` in scripts/gjd-remote-prompt.ts, which is
+ * where the prompts are and where they can be tested: the input is whatever
+ * `interactiveStdin()` found and is never upgraded, so a redirected stdin
+ * refuses rather than borrowing a keyboard nobody offered; the output moves to
+ * `/dev/tty` when stdout is not a terminal, so a redirected stdout does not
+ * swallow the question. This is the seam between the two, and nothing else.
+ */
+function promptStreams(): PromptIo | null {
+  return promptIo(interactiveStdin());
+}
+
+/**
  * Create a session and start Claude Code in it.
  *
  * The prompt goes through a FILE, never a command line. It is prose: it will
@@ -1227,17 +2286,22 @@ function interactiveStdin(): number | "inherit" | null {
  * Lifted from MindstoneRebel's fleet, whose comment reads "keeps quoting sane
  * when prompts contain prose".
  */
-function cmdNewClaude(
+async function cmdNewClaude(
   given: string | undefined,
   opts: {
     prompt?: string | undefined;
+    /** Where to start: resolved by resolveTargetForSession() below, and
+     *  deliberately not in main(), so the cheap local refusals still come
+     *  first — an oversized prompt and a bad name are refused before the box is
+     *  asked anything, let alone offered a clone. */
+    repo?: string | undefined;
     dir?: string | undefined;
     attach: boolean;
     transport?: string | undefined;
     /** `--wait 2h`: already parsed, because a bad duration must not reach the box. */
     wait?: { seconds: number; label: string } | undefined;
   },
-): void {
+): Promise<void> {
   // Checked before anything touches the network, because the failure it
   // prevents is a green tick over a Claude that never ran. The job runs
   // `claude "$(cat -- promptPath)"`, so the whole prompt becomes ONE argv
@@ -1266,10 +2330,21 @@ function cmdNewClaude(
   if (!SLUG.test(name)) die(`'${name}' is not a valid name (lower-case letters, digits, hyphens; max 41)`);
   if (sessions().some((s) => s.name === name)) die(`session '${name}' already exists — 'gjd-remote resume ${name}'`);
 
-  // Resolved, normalised and checked in one place — and said out loud, because
-  // which tree an agent is about to edit should never be something you find out
-  // afterwards.
-  const dir = sessionDir(opts.dir);
+  // Which repo, which directory, printed — then the last look, which is the one
+  // that proves the directory can actually be entered.
+  //
+  // This is where a repo the box has never had is offered a clone and a setup,
+  // and where a checkout whose setup never succeeded says so. Everything above
+  // is deliberately in front of it: a bad name or an oversized prompt is a
+  // sentence, not a question about cloning.
+  const { target, admit } = await resolveTargetForSession({
+    repo: opts.repo,
+    dir: opts.dir,
+    attach: opts.attach,
+    transport: opts.transport,
+    what: "gjd-remote new-claude",
+  });
+  const dir = sessionDir(target);
   console.log(bold(`gjd-remote new-claude ${name}`) + dim(` → ${HOST()}:${dir}`));
 
   // Pin the session id rather than discovering it: it is how we find this
@@ -1358,9 +2433,17 @@ function cmdNewClaude(
   // The id and the provisional flag live in the tmux session's own environment,
   // so they survive the rename that `ls` may later perform — a mapping file
   // keyed by name would go stale at exactly that moment.
-  ssh(
+  // The rest of the `-e` flags are the session's own metadata — see metaFlags().
+  // UNDER THE SETUP LOCK when the target is a repo the box resolved by origin,
+  // and plainly for a `--dir` — `startUnderAdmission`. The gate that let us get
+  // here read a status file some seconds ago; this is what makes that reading
+  // still true at the moment the session exists.
+  startUnderAdmission(
+    admit,
     `tmux new-session -d -s ${name} -e CLAUDE_SESSION_ID=${sessionId} ` +
-      `-e GJD_PROVISIONAL=${provisional ? 1 : 0} ${shq(`bash ${jobPath}`)}`,
+      `-e GJD_PROVISIONAL=${provisional ? 1 : 0} ${metaFlags(target, dir, "claude")} ` +
+      shq(`bash ${jobPath}`),
+    name,
   );
 
   confirmStarted(name);
@@ -1375,6 +2458,10 @@ function cmdNewClaude(
       name,
       id: sessionId,
       dir,
+      // The same value the session's own `GJD_REPO` carries, from the same
+      // function, so the durable record and the box agree about which repo this
+      // was — `dir` alone cannot answer it (see LogRecord.repo).
+      repo: targetRepo(target),
       host: host(),
       ...(opts.wait === undefined
         ? {}
@@ -1425,7 +2512,10 @@ function cmdNewClaude(
  * gets you back into it. `ssh` is a throwaway connection that dies with the
  * terminal, which is what you want for a quick look and never for real work.
  */
-function cmdNewShell(given: string | undefined, opts: { dir?: string | undefined; transport?: string | undefined }): void {
+async function cmdNewShell(
+  given: string | undefined,
+  opts: { repo?: string | undefined; dir?: string | undefined; transport?: string | undefined },
+): Promise<void> {
   const name = given ?? timestampName("sh");
   if (!SLUG.test(name)) die(`'${name}' is not a valid name (lower-case letters, digits, hyphens; max 41)`);
 
@@ -1435,7 +2525,17 @@ function cmdNewShell(given: string | undefined, opts: { dir?: string | undefined
     attach(name, opts.transport);
   }
 
-  const dir = sessionDir(opts.dir);
+  // As in cmdNewClaude: an absent checkout is offered a clone and a setup here,
+  // and a session is created only on a `success` status. A shell always
+  // attaches, so it always watches the setup it started.
+  const { target, admit } = await resolveTargetForSession({
+    repo: opts.repo,
+    dir: opts.dir,
+    attach: true,
+    transport: opts.transport,
+    what: "gjd-remote new-shell",
+  });
+  const dir = sessionDir(target);
   console.log(bold(`gjd-remote new-shell ${name}`) + dim(` → ${HOST()}:${dir}`));
 
   // `-c ${dir}` is NOT the guard, and used to be all there was: tmux falls back
@@ -1446,13 +2546,123 @@ function cmdNewShell(given: string | undefined, opts: { dir?: string | undefined
   // GJD_PROVISIONAL=0: a shell has no Claude conversation and so will never
   // have a title to adopt. Marking it settled stops `ls` looking every time.
   ssh(`mkdir -p ${REMOTE_WORK}/jobs && rm -f ${shq(failNote(name))}`);
-  ssh(
+  // As in cmdNewClaude, the `GJD_*` variables are what `ls` reads back — the
+  // kind differs, and nothing else does.
+  // Under the setup lock, exactly as `new-claude` starts its session — see
+  // `startUnderAdmission`. A shell in a tree mid-`npm ci` is the same
+  // half-built repo an agent would get.
+  startUnderAdmission(
+    admit,
     `tmux new-session -d -s ${name} -c ${shq(dir)} -e GJD_PROVISIONAL=0 ` +
+      `${metaFlags(target, dir, "shell")} ` +
       shq(`${cdGuard(name, dir, "a shell")}; exec bash -l`),
+    name,
   );
   confirmStarted(name);
+  // A launch line, written after the session exists, the way cmdNewClaude
+  // writes one. main() has already logged the bare `new-shell` invocation; this
+  // is the record of a shell that actually started, and of where. No uuid and
+  // no prompt, because a shell has neither.
+  appendLog({ cmd: "new-shell", name, dir, repo: targetRepo(target), host: host() });
   console.log(green(`✓ shell '${name}'`) + dim(` in ${dir}`));
   attach(name, opts.transport);
+}
+
+/**
+ * Which keys may leave the laptop, per repo.
+ *
+ * A map rather than one hard-wired list, because the list is Spideryarn's: it
+ * is a set of key NAMES, and another repo's `DATABASE_URL` is not this one's.
+ * A repo with no entry here is REFUSED rather than pushed under somebody else's
+ * policy — Stage 4 of the plan fills the gap with a per-repo policy the user
+ * ticks once and this file then reads from `~/.config/gjd-remote/repos/`.
+ *
+ * The seam is deliberately this small. It is a lookup by slug and a function
+ * that turns file text into a payload; Stage 4 adds entries to it and changes
+ * nothing else here.
+ */
+type EnvRoute =
+  /** A list written down in this repo, in TypeScript, by a person. No prompt,
+   *  no model, no saved policy — the list IS the decision. */
+  | { kind: "typed"; allowance: EnvAllowance }
+  /** Everything else: names off the file, a proposal, a checklist, and what the
+   *  reader ticked remembered in `~/.config/gjd-remote/repos/`. */
+  | { kind: "checklist" };
+
+const TYPED_ENV_POLICIES: Record<string, EnvAllowance | undefined> = {
+  "spideryarn/reading2": SPIDERYARN_ALLOWANCE,
+};
+
+/**
+ * **Which of the two `push-env` paths this repo takes, and why there are two.**
+ *
+ * A function rather than a bare lookup so this comment has somewhere to live.
+ *
+ * The typed path stays for Spideryarn because its allowlist is not a
+ * convenience: it is a reviewed list of names with reasons written beside each
+ * one, and two of its entries are absences that were argued over
+ * (scripts/gjd-remote-env.ts). Replacing it with "whatever Greg ticked last
+ * time" would throw that away, and a checklist that re-asks the same twenty
+ * keys every time is a checklist people stop reading.
+ *
+ * Every other repo takes the checklist path, because a list of key NAMES is
+ * repo-specific — hellozenno's `DATABASE_URL` is not this one's — and nobody is
+ * going to write a TypeScript entry per repo, which was the objection to the
+ * typed-map design in the first place (the plan, § "The simpler options passed
+ * over").
+ *
+ * What the two paths SHARE is everything that decides safety: the same value
+ * guards (`localityVerdict`, the Supabase-JWT and Stripe-mode checks in
+ * `buildEnvPayload`), the same forbidden names, the same atomic write and the
+ * same readback. The difference is only where the list of names comes from.
+ */
+function envRoute(slug: string): EnvRoute {
+  const typed = TYPED_ENV_POLICIES[slug];
+  return typed === undefined ? { kind: "checklist" } : { kind: "typed", allowance: typed };
+}
+
+/**
+ * WHICH file on this laptop, and WHOSE rules apply to it.
+ *
+ * Three refusals, all of them before a single byte is read:
+ *
+ *  - **No local checkout, no push.** `--repo` can name a repo you are not
+ *    standing in, and then there is no `.env.local` to send. Guessing this
+ *    checkout's one would send Spideryarn's keys under another repo's name.
+ *  - **No symlinks.** What is about to be read is every credential the repo
+ *    has, and a symlink is a file whose real location this never looked at.
+ *
+ * "No policy" used to be a third refusal here. It is a route now: a repo with no
+ * typed list is asked about rather than turned away (`envRoute`).
+ */
+function envSource(
+  target: Target,
+  file: string | undefined,
+): { local: string; slug: string; route: EnvRoute } {
+  const slug = target.slug;
+  if (slug === null || target.localToplevel === null) {
+    die(
+      `push-env sends this repo's .env.local, so it has to be run from inside the repo.\n` +
+        (slug === null
+          ? `  I could not tell which repo you mean.`
+          : `  --repo named ${slug}, but this laptop is not standing in it, so there is no\n` +
+            `  .env.local to read. Run it from that checkout.`),
+    );
+  }
+
+  // The LOCAL TARGET, not the tool root: `.env.local` belongs to the repo you
+  // are standing in. It used to be read from this checkout however far away the
+  // work was, which is how a hellozenno push would have sent Spideryarn's keys.
+  const local = path.resolve(file ?? path.join(target.localToplevel, ".env.local"));
+  const refusal = assertPushableName(path.basename(local));
+  if (refusal) die(refusal);
+  const st = lstatSync(local, { throwIfNoEntry: false });
+  if (!st) die(`no such file: ${local}`);
+  if (st.isSymbolicLink()) {
+    die(`${local} is a symlink, and this will not follow one to find credentials.\n  Pass the real file with --file.`);
+  }
+  if (!st.isFile()) die(`${local} is not a regular file.`);
+  return { local, slug, route: envRoute(slug) };
 }
 
 /**
@@ -1477,13 +2687,52 @@ function cmdNewShell(given: string | undefined, opts: { dir?: string | undefined
  * Reports which KEYS changed. Never a value, and never a hash of one: a short
  * value shown as a hash is a value shown.
  */
-function cmdPushEnv(opts: { file?: string | undefined }): void {
-  const local = path.resolve(opts.file ?? path.join(REPO, ".env.local"));
-  const refusal = assertPushableName(path.basename(local));
-  if (refusal) die(refusal);
-  if (!existsSync(local)) die(`no such file: ${local}`);
+type PushEnvOptions = {
+  file?: string | undefined;
+  repo?: string | undefined;
+  dir?: string | undefined;
+  /** Ask the model even when the saved policy already covers every key. */
+  propose: boolean;
+  /** Skip the checklist: every selectable key / no key at all. */
+  all: boolean;
+  none: boolean;
+  /** Record an empty policy when nothing was selected. */
+  save: boolean;
+  /** Skip the final confirmation. `--all` alone still asks. */
+  yes: boolean;
+};
 
-  const payload = buildEnvPayload(readFileSync(local, "utf8"));
+async function cmdPushEnv(opts: PushEnvOptions): Promise<void> {
+  // `requireIdentity` — this command carries one repo's credentials, so it may
+  // not run without knowing which repo, and a `--dir` must be that repo's
+  // checkout rather than any directory on the box.
+  const target = resolveTarget({ repo: opts.repo, dir: opts.dir, requireIdentity: true });
+  const { local, slug, route } = envSource(target, opts.file);
+  const text = readFileSync(local, "utf8");
+  if (route.kind === "checklist") return pushEnvByChecklist(target, slug, local, text, opts);
+
+  // The typed path takes no options, and says so rather than ignoring them: a
+  // `--all` that quietly did nothing would read as "everything was sent".
+  const used = (["propose", "all", "none", "save", "yes"] as const).filter((f) => opts[f]);
+  if (used.length) {
+    die(
+      `--${used.join(", --")} ${used.length === 1 ? "is" : "are"} for a repo with no written-down list of keys.\n` +
+        `  ${slug} has one, in scripts/gjd-remote-env.ts, and it is the whole decision — there\n` +
+        `  is nothing here to propose, tick or remember. Nothing was sent.`,
+    );
+  }
+  sendEnvPayload(target, local, buildEnvPayload(text, route.allowance));
+}
+
+/**
+ * The tail both routes share: refuse a file that would silently lose keys, say
+ * what is changing by KEY NAME, write it atomically, and read it back.
+ *
+ * Extracted rather than copied when the checklist route arrived. Two copies of
+ * this would be two atomic-write recipes and two readbacks, and the one that got
+ * a fix would not be the one somebody was running.
+ */
+function sendEnvPayload(target: Target, local: string, payload: EnvPayload): void {
   // Refused, not reported. The allowlist stops the file sending a key it should
   // not; nothing stopped it sending FEWER keys than it appears to — a duplicate
   // takes the later value, an unclosed quote eats every line after it, and a
@@ -1500,26 +2749,17 @@ function cmdPushEnv(opts: { file?: string | undefined }): void {
   }
   if (payload.pushed.size === 0) {
     die(
-      `${local} has none of the allowlisted keys — refusing to write an empty env file.\n` +
-        `  The allowlist is in scripts/gjd-remote-env.ts.`,
+      `none of the keys that were going to be sent are in ${local} — refusing to write an\n` +
+        `  empty env file. The list of names came from ${payload.sourceOfNames}.`,
     );
   }
 
-  const dir = REMOTE_REPO();
+  const dir = target.dir;
   const dest = `${dir}/.env.local`;
   // Not created for you, on purpose: an env file beside no repo is a box that
   // looks set up and is not, and you would find out at the first npm command.
   if (ssh(`test -d ${shq(dir)} && echo yes || echo no`, { check: false }) !== "yes") {
-    die(
-      `no checkout at ${dir} on the box, so there is nowhere to put .env.local.\n` +
-        `  Create it first, then run this again:\n` +
-        `    gjd-remote ssh\n` +
-        // HTTPS, not the ssh remote the laptop uses. The box authenticates with
-        // per-owner fine-grained PATs through a git credential helper, which only
-        // sees a request it can route when the URL is https.
-        `    mkdir -p ~/code && git clone https://github.com/spideryarn/reading2.git ${dir}\n` +
-        `  (or set GJD_REMOTE_REPO to a checkout that already exists)`,
-    );
+    die(`${dir} went away between resolving it and writing to it, so nothing was written.`);
   }
 
   console.log(bold(`gjd-remote push-env → ${HOST()}:${dest}`));
@@ -1530,32 +2770,30 @@ function cmdPushEnv(opts: { file?: string | undefined }): void {
   for (const k of diff.changed) console.log(`  ${bold("~")} ${k}` + dim("  changed"));
   console.log(dim(`  = ${diff.unchanged} unchanged`));
   if (payload.skipped.length) {
-    console.log(dim(`  skipped ${payload.skipped.length} keys not on the allowlist: ${payload.skipped.join(", ")}`));
+    console.log(dim(`  skipped ${payload.skipped.length} keys that are not going: ${payload.skipped.join(", ")}`));
   }
   if (payload.missing.length) {
-    console.log(dim(`  ${payload.missing.length} allowlisted keys absent locally: ${payload.missing.join(", ")}`));
+    console.log(dim(`  ${payload.missing.length} expected keys absent locally: ${payload.missing.join(", ")}`));
   }
 
-  const stage = mkdtempSync(path.join(tmpdir(), "gjd-remote-env-"));
-  const staged = path.join(stage, ".env.local");
-  writeFileSync(staged, payload.text, { encoding: "utf8", mode: 0o600 });
-
-  const tmp = `${dir}/.env.local.push-${randomUUID()}`;
-  // Pre-create the temp file under umask 077. scp only applies a mode when it
-  // CREATES the file, so writing into an existing 0600 file leaves it 0600 —
-  // whereas chmod-after-scp leaves a window in which a world-readable copy of
-  // every credential is sitting in the repo. The chmod after the copy is belt
-  // and braces, not the mechanism.
-  ssh(`umask 077 && : > ${shq(tmp)}`);
-  const sent = spawnSync("scp", ["-q", ...SSH_OPTS, ...sshMasterOpts(), staged, `${HOST()}:${tmp}`], { encoding: "utf8" });
-  if (sent.status !== 0) {
-    ssh(`rm -f ${shq(tmp)}`, { check: false });
-    die(`scp failed: ${(sent.stderr || "").trim()}`);
+  // A THIRD copy of the selected credentials, and it is removed on every path
+  // out of here — GPT Sol's Stage 4 finding 3. `scp` needs a real file, so the
+  // copy is unavoidable; leaving it in /tmp until the next reboot is not. The
+  // `finally` removes the directory this call created and nothing else, by the
+  // name `mkdtempSync` returned.
+  //
+  // The failure comes back as a value and dies AFTER the `finally`, because
+  // `die()` is `process.exit`, and `process.exit` does not run `finally` blocks
+  // — so a `die()` inside the `try` left the staged copy behind on exactly the
+  // path that was meant to be covered (GPT Sol, post-landing review, finding 2).
+  const stage = mkdtempSync(path.join(tmpdir(), STAGE_PREFIX));
+  let failure: string | undefined;
+  try {
+    failure = stageAndSend(stage, payload, dir, dest);
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
   }
-  // One command: chmod, then rename over the destination. rename(2) within a
-  // directory is atomic, so a reader on the box sees the old file or the new
-  // one and never a half-written one.
-  ssh(`chmod 600 ${shq(tmp)} && mv -f ${shq(tmp)} ${shq(dest)}`);
+  if (failure !== undefined) die(failure);
 
   // BYTES first, meaning second. The readback used to go straight through the
   // parser, which is the one comparison that cannot see what the parser
@@ -1586,6 +2824,209 @@ function cmdPushEnv(opts: { file?: string | undefined }): void {
   if (mode !== `600 ${USER}`) die(`written, but the mode is '${mode}' and should be '600 ${USER}'`);
 
   console.log(green(`✓ ${payload.pushed.size} keys, 0600 ${USER}, read back and verified`));
+}
+
+/** The prefix every staging directory this tool makes is named with, so that
+ *  `ls "$TMPDIR" | grep` after a push is a check somebody can actually run. */
+const STAGE_PREFIX = "gjd-remote-env-";
+
+/** Write the payload into `stage` and get it onto the box, atomically. Split out
+ *  only so that the removal of `stage` can be a `finally` around the whole of
+ *  it — including the `die` paths, which throw. */
+/**
+ * Stage the file and move it into place on the box. Returns the failure rather
+ * than dying on it, so the caller's `finally` gets to remove the staged copy
+ * first: nothing in here may call `die()` or an `ssh()` that does.
+ */
+function stageAndSend(stage: string, payload: EnvPayload, dir: string, dest: string): string | undefined {
+  const staged = path.join(stage, ".env.local");
+  writeFileSync(staged, payload.text, { encoding: "utf8", mode: 0o600 });
+
+  const tmp = `${dir}/.env.local.push-${randomUUID()}`;
+  // Pre-create the temp file under umask 077. scp only applies a mode when it
+  // CREATES the file, so writing into an existing 0600 file leaves it 0600 —
+  // whereas chmod-after-scp leaves a window in which a world-readable copy of
+  // every credential is sitting in the repo. The chmod after the copy is belt
+  // and braces, not the mechanism.
+  const made = sshRun(`umask 077 && : > ${shq(tmp)}`);
+  if (made.status !== 0) return `ssh failed (${made.status}): ${lastWords(made.stderr)}`;
+  const sent = spawnSync("scp", ["-q", ...SSH_OPTS, ...sshMasterOpts(), staged, `${HOST()}:${tmp}`], { encoding: "utf8" });
+  if (sent.status !== 0) {
+    ssh(`rm -f ${shq(tmp)}`, { check: false });
+    return `scp failed: ${(sent.stderr || "").trim()}`;
+  }
+  // One command: chmod, then rename over the destination. rename(2) within a
+  // directory is atomic, so a reader on the box sees the old file or the new
+  // one and never a half-written one.
+  const moved = sshRun(`chmod 600 ${shq(tmp)} && mv -f ${shq(tmp)} ${shq(dest)}`);
+  if (moved.status !== 0) {
+    ssh(`rm -f ${shq(tmp)}`, { check: false });
+    return `ssh failed (${moved.status}): ${lastWords(moved.stderr)}`;
+  }
+  return undefined;
+}
+
+/**
+ * **`push-env` for a repo with no written-down list**, which is glue and nothing
+ * else: read the saved policy, hand `pushEnvPlan` the callbacks it cannot have —
+ * money, prompts, the terminal — and do what it says.
+ *
+ * The decisions all live in `pushEnvPlan` (scripts/gjd-remote-envpolicy.ts), and
+ * that is GPT Sol's Stage 4 finding 2 rather than tidiness. They used to be
+ * here, where `main()`-on-import makes them untestable, so the leak test could
+ * only reach the pure half — and the sinks that matter most, the ones a value
+ * would have to pass through a prompt or a `console.log` to reach, were exactly
+ * the ones it could not see.
+ *
+ * Two things stay here on purpose:
+ *
+ * - **Reading the policy**, because an unreadable file is a refusal rather than
+ *   an empty approval set: those two are indistinguishable downstream, and the
+ *   second would present every key as undecided and then overwrite the file it
+ *   could not read. `SavedPolicy` is the type that makes the confusion
+ *   impossible to express.
+ * - **The order of the two writes.** The box first, the policy second, so the
+ *   file records what actually travelled rather than what was hoped for.
+ */
+async function pushEnvByChecklist(
+  target: Target,
+  slug: string,
+  local: string,
+  text: string,
+  opts: PushEnvOptions,
+): Promise<void> {
+  console.log(bold(`gjd-remote push-env ${slug}`));
+  const file = policyFile(slug);
+  const saved = readPolicy(file, slug);
+  if (saved.kind === "error") {
+    die(
+      `${saved.why}\n` +
+        `  That file records which keys you decided about for this repo, so a push cannot\n` +
+        `  go ahead without being able to read it. Fix it or delete it. Nothing was sent.`,
+    );
+  }
+  console.log(
+    saved.kind === "policy"
+      ? dim(
+          `  policy: ${file}  (${saved.approved.length} approved of ${saved.reviewed.length} decided, saved ${saved.savedAt})`,
+        )
+      : dim(`  policy: none yet — would be ${file}`),
+  );
+
+  const dest = `${target.dir}/.env.local`;
+  let plan: EnvPlan;
+  try {
+    plan = await pushEnvPlan({
+      text,
+      local,
+      slug,
+      saved,
+      flags: { propose: opts.propose, all: opts.all, none: opts.none, save: opts.save, yes: opts.yes },
+      propose: askForProposal,
+      choose: (items) =>
+        checklistOrRefuse({
+          message: "which keys should go on the box?",
+          items: items.map((i) => ({
+            value: i.name,
+            label: i.name,
+            description: i.description,
+            checked: i.checked,
+            disabled: i.disabled,
+          })),
+          io: promptStreams(),
+          instead: "gjd-remote push-env --all (every eligible key), or --none --save to approve nothing",
+        }),
+      confirm: (names) =>
+        confirmOrRefuse(`send these ${names.length} keys to ${HOST()}:${dest}?`, promptStreams(), {
+          instead: "gjd-remote push-env --all --yes sends every eligible key without asking",
+        }),
+      say: sayPlanLine,
+    });
+  } catch (err) {
+    if (err instanceof EnvPolicyError) die(err.message);
+    throw err;
+  }
+
+  if (plan.payload !== undefined) sendEnvPayload(target, local, plan.payload);
+  if (plan.policyToSave !== undefined) savePolicy(file, plan.policyToSave);
+}
+
+/** One line the plan asked for, coloured. Two spaces, because everything under
+ *  the `push-env` banner is indented and the plan should not have to know it. */
+function sayPlanLine(line: string, tone: EnvPlanTone): void {
+  const paint = tone === "dim" ? dim : tone === "warn" ? yellow : tone === "bad" ? red : (s: string) => s;
+  console.log(paint(`  ${line}`));
+}
+
+/** `policyPath`, with its refusal in the CLI's voice. It throws on a slug that
+ *  cannot be a filename, which is a thing `--repo` can produce. */
+function policyFile(slug: string): string {
+  try {
+    return policyPath(slug);
+  } catch (err) {
+    if (err instanceof EnvPolicyError) die(err.message);
+    throw err;
+  }
+}
+
+/**
+ * Remember what travelled — and treat failing to as a warning, not a failure.
+ *
+ * The keys are already on the box by the time this runs. Dying here would print
+ * a red cross over a push that worked, and the reader would run it again.
+ */
+function savePolicy(file: string, policy: Policy): void {
+  try {
+    writePolicy(file, policy, new Date());
+    console.log(
+      dim(`  ${policy.approved.length} approved of ${policy.reviewed.length} decided, recorded in ${file}`),
+    );
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    console.log(yellow(`  the keys were sent, but the policy was not saved: ${why}`));
+  }
+}
+
+/**
+ * **The paid call, and everything it needs that a pure module cannot have.**
+ *
+ * WHETHER to ask is not decided here — `pushEnvPlan` does that, and only calls
+ * this when there is something undecided to ask about (or `--propose`). This is
+ * the money and the printing.
+ *
+ * `loadEnvLocal()` reads THIS repo's `.env.local` for the OpenRouter key, off
+ * the module's own location rather than the cwd — the tool root, never the repo
+ * being pushed. `withLedger("cli", …)` is what makes the call appear in `npm run
+ * cost`; without it the meter finds no collector, warns once and drops the row.
+ *
+ * A failure is one line and no proposal, never a refusal: this is advisory, and
+ * `push-env` going down because a classifier was unavailable would be a nicety
+ * taking the feature with it.
+ */
+async function askForProposal(
+  names: readonly string[],
+  why: string,
+): Promise<Map<string, ProposedKey> | undefined> {
+  // `PROPOSAL_MODEL`, not a model constant of this file's own choosing: the
+  // request body is built in gjd-remote-envpolicy.ts, and a line here naming a
+  // different model would be a lie printed with total confidence. It said
+  // QUICK_MODEL_OPENROUTER for one afternoon while the job ran on the capable
+  // one, which is the whole reason the name is exported.
+  console.log(dim(`  asking ${PROPOSAL_MODEL} about ${names.length} key NAMES (${why})`));
+  loadEnvLocal();
+  let outcome: Proposal | undefined;
+  await withLedger("cli", async () => {
+    outcome = await proposeEnvKeys(names, { call: defaultProposalCall });
+  });
+  // `outcome` is assigned inside the callback, so the compiler cannot see that
+  // it happened; undefined here means the ledger returned without running it,
+  // which would be a bug rather than a model failure — and either way the
+  // honest answer downstream is "no proposal".
+  if (outcome === undefined || !outcome.ok) {
+    console.log(yellow(`  no proposal: ${outcome?.why ?? "the call did not run"} — nothing is pre-ticked from it`));
+    return undefined;
+  }
+  return outcome.proposal;
 }
 
 // ---------------------------------------------------------------- clone
@@ -1631,17 +3072,8 @@ function parseRepo(given: string): Repo {
   return { owner, name, url: `https://github.com/${owner}/${name}.git` };
 }
 
-/** `owner/name`, lower-cased, out of any GitHub remote URL — the comparable
- *  form. GitHub owners and repo names are case-insensitive, so the comparison
- *  has to be too, or an existing checkout goes unrecognised and gets a twin. */
-function remoteSlug(url: string): string | undefined {
-  const m = /^(?:https:\/\/(?:[^@/]*@)?github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(
-    url.trim(),
-  );
-  const owner = m?.[1];
-  const name = m?.[2];
-  return owner && name ? `${owner}/${name}`.toLowerCase() : undefined;
-}
+// `remoteSlug` used to have a second copy here. It is imported from
+// scripts/gjd-remote-repo.ts now, which is the only place that regex lives.
 
 /** A path ON THE BOX, from a flag. Absolute or `~`-relative; anything else is a
  *  path relative to whatever directory ssh happened to land in, which is not a
@@ -1655,72 +3087,206 @@ function remotePath(given: string, what: string): string {
   return abs.replace(/\/+$/, "") || "/";
 }
 
-type CloneFacts = {
-  get: (k: string) => string;
-  /** Every checkout directly under the base folder, with its origin URL. */
-  siblings: { dir: string; url: string }[];
-};
-
 /**
- * Everything the decision needs, in one round trip: the destination's state,
- * whether the owner has a token, and what else under the base folder is already
- * a checkout of something.
+ * One directory on the box, asked strictly.
  *
- * `rev-parse --show-toplevel` alone is not "is this a checkout" — inside a repo
- * it happily answers for an ANCESTOR, so a plain subdirectory of one would read
- * as a checkout of the parent. It counts only when the toplevel IS the
- * directory we asked about.
+ * WHAT THIS REPLACES, and why it is not a tidy-up. `cloneFacts()` asked with
+ * `ssh(..., { check: false })` — no sentinel, no row count, a non-zero status
+ * thrown away and every missing field defaulted to the empty string. A reply
+ * cut after `token=yes` therefore came back as "the destination does not exist
+ * and nothing else under ~/code is a checkout of anything", which is precisely
+ * the answer that authorises a clone. It is the same failure class `inventory()`
+ * was fixed for in Stage 1, and GPT Sol's Stage 2 finding 3 is that it was
+ * still here.
+ *
+ * The decisions now come from two strict readers and nothing else: `inventory()`
+ * for what is under the base folder, and this for one named directory —
+ * including the tree a clone has just made, which the inventory deliberately
+ * cannot see (it hides staging directories).
  */
-function cloneFacts(base: string, dest: string, tokenFile: string): CloneFacts {
-  const script = `
-    isrepo() {
-      top=$(git -C "$1" rev-parse --show-toplevel 2>/dev/null || true)
-      real=$(cd "$1" 2>/dev/null && pwd -P || true)
-      [ -n "$top" ] && [ "$top" = "$real" ]
-    }
-    d=${shq(dest)}
-    printf 'exists=%s\\n' "$(test -e "$d" && echo yes || echo no)"
-    if isrepo "$d"; then
-      printf 'checkout=yes\\n'
-      printf 'remote=%s\\n' "$(git -C "$d" remote get-url origin 2>/dev/null || true)"
-      printf 'branch=%s\\n' "$(git -C "$d" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-      printf 'subject=%s\\n' "$(git -C "$d" log -1 --pretty=%s 2>/dev/null | tr -d '\\n' || true)"
-      printf 'dotgit=%s\\n' "$(test -e "$d/.git" && echo yes || echo no)"
-    else
-      printf 'checkout=no\\n'
-    fi
-    for c in ${shq(base)}/*/; do
-      c=\${c%/}
-      if isrepo "$c"; then
-        printf 'sibling=%s|%s\\n' "$c" "$(git -C "$c" remote get-url origin 2>/dev/null || true)"
-      fi
-    done
-    printf 'token=%s\\n' "$(test -f ${shq(tokenFile)} && echo yes || echo no)"
-    printf 'tokenmode=%s\\n' "$(stat -c '%a %U' ${shq(tokenFile)} 2>/dev/null || true)"`;
-  const map = new Map<string, string>();
-  const siblings: { dir: string; url: string }[] = [];
-  for (const line of ssh(script, { check: false }).split("\n")) {
-    const at = line.indexOf("=");
-    if (at < 1) continue;
-    const key = line.slice(0, at);
-    const value = line.slice(at + 1).trim();
-    if (key === "sibling") {
-      const bar = value.lastIndexOf("|");
-      const dir = value.slice(0, bar);
-      const url = value.slice(bar + 1);
-      if (bar > 0 && url) siblings.push({ dir, url });
-      continue;
-    }
-    map.set(key, value);
+function probeCheckout(dir: string): CheckoutProbe {
+  const r = sshRun(checkoutProbeScript(dir));
+  if (r.status !== 0) {
+    die(`could not look at ${dir} on the box: ssh exited ${r.status ?? "on a signal"}.\n  ${lastWords(r.stderr)}`);
   }
-  return { get: (k) => map.get(k) ?? "", siblings };
+  const got = parseCheckoutProbe(r.stdout);
+  if (!got.ok) die(`could not look at ${dir} on the box: ${got.why}`);
+  return got.probe;
 }
 
 /** What a checkout is, said the same way whether we found it or made it. */
-function describeCheckout(facts: CloneFacts): void {
-  console.log(`  ${dim("remote")}  ${facts.get("remote") || dim("(none)")}`);
-  console.log(`  ${dim("branch")}  ${facts.get("branch") || dim("(unknown)")}`);
-  console.log(`  ${dim("HEAD")}    ${facts.get("subject") || dim("(no commits)")}`);
+function describeCheckout(p: CheckoutProbe): void {
+  console.log(`  ${dim("remote")}  ${p.origin ?? dim("(none)")}`);
+  console.log(`  ${dim("branch")}  ${p.branch ?? dim("(unknown)")}`);
+  console.log(`  ${dim("HEAD")}    ${p.subject ?? dim("(no commits)")}`);
+}
+
+/**
+ * The box's per-owner token, asked on its own and strictly.
+ *
+ * Existence and mode ONLY. Never the contents, not even a prefix of them —
+ * this file is a GitHub credential and the tool has no reason to read one.
+ */
+function tokenProbeScript(tokenFile: string): string {
+  return [
+    `printf '${BOX_OK}\\n'`,
+    `if [ -f ${shq(tokenFile)} ]; then printf 'token present\\n'; else printf 'token absent\\n'; fi`,
+    `printf 'mode %s\\n' "$(stat -c '%a %U' ${shq(tokenFile)} 2>/dev/null || true)"`,
+    `printf '${BOX_END}\\n'`,
+  ].join("\n");
+}
+
+/** Checked BEFORE git rather than after: git's own error for a missing token
+ *  names neither the owner nor the file. */
+function requireToken(repo: Repo, tokenFile: string): void {
+  const r = sshRun(tokenProbeScript(tokenFile));
+  if (r.status !== 0) {
+    die(`could not ask the box about ${tokenFile}: ssh exited ${r.status ?? "on a signal"}.\n  ${lastWords(r.stderr)}`);
+  }
+  const got = parseBoxRead(r.stdout, ["token", "mode"]);
+  if (!got.ok) die(`could not ask the box about ${tokenFile}: ${got.why}`);
+  if (got.fields.get("token") !== "present") {
+    die(
+      `no GitHub token on the box for owner '${repo.owner}'.\n` +
+        `  git would fail with "could not read Username for 'https://github.com'", which\n` +
+        `  says nothing about why. The credential helper needs this file:\n` +
+        `    ${tokenFile}\n` +
+        `  Issue a fine-grained PAT with resource owner '${repo.owner}', then:\n` +
+        `    ssh ${HOST()} 'umask 077; cat > ${tokenFile}'   # paste, then Ctrl-D\n` +
+        `  The full ceremony — including the org policy that makes a private repo look\n` +
+        `  like a typo — is in infra/hetzner/README.md § Giving the box GitHub access.`,
+    );
+  }
+  const mode = got.fields.get("mode") ?? "";
+  if (mode && mode !== `600 ${USER}`) {
+    console.log(red(`  warning: ${tokenFile} is '${mode}' and should be '600 ${USER}'`));
+  }
+}
+
+/**
+ * One clone: locked, verified, moved into place, and the old setup status for
+ * that slug archived — all inside a single box-side transaction.
+ *
+ * THE WHOLE THING HOLDS ONE LOCK, and that is GPT Sol's Stage 2 finding 1. The
+ * version this replaces asked the box whether the destination existed, and
+ * renamed into it several seconds and one clone later; a `test -e` followed by
+ * a rename is a TOCTOU check whichever shell runs it, and two `new-shell`s
+ * racing on a repo the box has never had is two agents starting at once. The
+ * transaction re-resolves the destination under the lock, reserves the staging
+ * name with `mkdir` so the failure path can only ever remove a directory it
+ * made (finding 2), and proves the destination IS the tree it verified by
+ * comparing the `.git` inode across the rename.
+ *
+ * The generated shell and its parser are in scripts/gjd-remote-flow.ts, where
+ * tests/gjd-remote-flow.test.ts runs them for real against temporary repos.
+ *
+ * stdout is captured for the protocol and **stderr is inherited**, so git's own
+ * progress is on your terminal while it runs. A clone is the one thing here
+ * slow enough that watching it is worth a round trip's worth of plumbing.
+ */
+function ensureRemoteCheckout(
+  repo: Repo,
+  where: { base: string; dest: string; dirName: string; slug: string },
+): CheckoutProbe {
+  const { base, dest, dirName, slug } = where;
+  const staging = `${base}/${STAGING_PREFIX}${dirName}-${randomUUID().slice(0, 8)}`;
+  const script = cloneTransactionScript({
+    dest,
+    staging,
+    // Per destination directory, which is what two clones actually contend
+    // over. Two different repos cloning to two names never wait on each other.
+    lockPath: `${REMOTE_WORK}/${LOCKS_SUBDIR}/clone-${dirName}.lock`,
+    locksDir: `${REMOTE_WORK}/${LOCKS_SUBDIR}`,
+    url: repo.url,
+    statusPath: setupStatusPath(REMOTE_WORK, slug),
+  });
+
+  const r = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), script], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  if (r.status !== 0) {
+    die(
+      `the clone could not be run on the box: ssh exited ${r.status ?? "on a signal"}.\n` +
+        `  git's own output, if it got that far, is above.\n` +
+        `  Nothing is concluded from a transaction that did not report.`,
+    );
+  }
+  const got = parseCloneTransaction(r.stdout || "");
+  if (!got.ok) {
+    // A refusal the box MEANT — no lock to be had, no git, no base64 — means
+    // nothing was made, and sending somebody to look at two paths that do not
+    // exist is worse than saying so.
+    die(
+      got.refused
+        ? `${got.why}.\n  Nothing was cloned and nothing at ${dest} was touched.`
+        : `the clone did not report what it did: ${got.why}\n  Look at ${dest} and ${staging} before trying again.`,
+    );
+  }
+
+  const o = got.outcome;
+  switch (o.kind) {
+    case "ok": {
+      if (o.stale === "archived") {
+        console.log(dim(`  a setup status from the checkout that used to be here was moved aside`));
+      }
+      return probeCheckout(dest);
+    }
+    /* A stale status that could NOT be moved aside used to be a yellow line on
+       the `ok` arm and a clone that carried on. It is its own outcome now
+       (scripts/gjd-remote-flow.ts), because readiness is the status file: a
+       session started in the fresh checkout would be admitted on the evidence
+       of the tree that used to be there. So this refuses, and names the file. */
+    case "stale-stuck":
+      return die(
+        `the clone worked, and I could not move aside the setup status left by the checkout that used to be at ${dest}.\n` +
+          `  ${setupStatusPath(REMOTE_WORK, slug)}\n` +
+          `  That file is about the tree that WAS here, and until it is gone a session started in\n` +
+          `  this one would be admitted on its evidence. Move it or delete it, then run: gjd-remote setup`,
+      );
+    case "taken":
+      return die(`something appeared at ${dest} on the box while the clone was starting. Nothing was cloned.`);
+    case "staging-taken":
+      return die(
+        `${staging} already exists on the box, and I will not clone into a directory I did not make.\n` +
+          `  Nothing was cloned and nothing was touched. Look at it, then try again.`,
+      );
+    case "clone-failed":
+      return die(
+        `the clone failed on the box (exit ${o.code}) — git's own output is above.\n` +
+          `  "Repository not found" on a repo that exists usually means the token has no\n` +
+          `  grant for it, or is pending org approval; both read as a typo.\n` +
+          `  ${dest} does not exist; nothing was moved into place.\n` +
+          (o.swept === "removed"
+            ? `  Nothing was left behind.`
+            : `  What it did create is still at ${staging} — look at it, then remove it.`),
+      );
+    case "verify-failed":
+      return die(
+        (o.why === "wrong-remote"
+          ? `cloned, but git recorded a different remote than the one asked for.\n` +
+            `    asked for: ${repo.url}\n` +
+            `    recorded:  ${o.origin || "(none)"}\n` +
+            `  A rewrite (url.insteadOf) would do this, and an ssh remote can never fetch\n` +
+            `  from this box — it has no GitHub ssh key.`
+          : o.why === "no-head"
+            ? `the clone said it succeeded, but HEAD does not resolve in what it made.`
+            : `the clone said it succeeded, but what it made is not a checkout.`) +
+          `\n  ${dest} does not exist; nothing was moved into place.\n` +
+          `  The tree it made is at ${staging} — look at it, then remove it.`,
+      );
+    case "move-failed":
+      return die(
+        `the clone finished, but moving it into place did not.\n` +
+          `  The verified checkout is at ${staging} — move it yourself, or remove it.`,
+      );
+    default:
+      return die(
+        `the clone finished and the move did not take: ${dest} is not the tree that was verified\n` +
+          `  (its .git was inode ${o.before}, and ${dest} has ${o.after || "none"}).\n` +
+          `  Something else is at ${dest}. The verified checkout is at ${staging}.`,
+      );
+  }
 }
 
 /**
@@ -1740,15 +3306,27 @@ function describeCheckout(facts: CloneFacts): void {
  *               and an ssh remote on this box can never fetch again. So the
  *               remote is read back and compared, not assumed.
  *
+ * With no argument it clones the repo you are standing in.
+ *
+ * The tree is built at a staging name beside the destination and moved into
+ * place only once it has been checked, so an interrupted clone leaves the
+ * destination ABSENT rather than half-made — see the comment at the clone
+ * itself, and `STAGING_PREFIX` in scripts/gjd-remote-repo.ts.
+ *
  * It deliberately runs nothing else — no `npm ci`, no install. A clone that
  * quietly triggers a five-minute install is a clone you cannot use to look at
- * something. The next steps are printed instead.
+ * something. The setup command the repo's config would run is printed instead.
  */
-function cmdClone(given: string | undefined, opts: { baseFolder?: string | undefined; name?: string | undefined }): void {
-  if (!given) {
-    die(`gjd-remote clone <repo> [--base-folder DIR] [--name DIR-NAME]\n  owner/name, or https://github.com/owner/name.git`);
-  }
-  const repo = parseRepo(given);
+async function cmdClone(
+  given: string | undefined,
+  opts: { baseFolder?: string | undefined; name?: string | undefined; repo?: string | undefined },
+): Promise<void> {
+  const repo = whichRepoToClone(given, opts.repo);
+  // This laptop's checkout of the repo being cloned, when that is where we are
+  // standing — the copy whose `.gjd-remote/config.toml` can be read and shown.
+  // `identify` answers null for it when the cwd is some other repo, or none.
+  const asIdentity = identify(`${repo.owner}/${repo.name}`);
+  const localToplevel = asIdentity.ok ? asIdentity.id.localToplevel : null;
   const base = remotePath(opts.baseFolder ?? REMOTE_CODE, "--base-folder");
   const dirName = (opts.name ?? repo.name).trim();
   if (!GH_REPO.test(dirName)) {
@@ -1756,108 +3334,819 @@ function cmdClone(given: string | undefined, opts: { baseFolder?: string | undef
   }
   const dest = `${base}/${dirName}`;
   const tokenFile = `${TOKEN_DIR}/${repo.owner}.token`;
+  const want = `${repo.owner}/${repo.name}`.toLowerCase();
 
   console.log(bold(`gjd-remote clone ${repo.owner}/${repo.name} → ${HOST()}:${dest}`));
 
-  const before = cloneFacts(base, dest, tokenFile);
-  const want = `${repo.owner}/${repo.name}`.toLowerCase();
+  // THE STRICT LISTING, not a best-effort one. Everything below decides whether
+  // to write to the box, and the answer that authorises writing — "there is
+  // nothing there" — is exactly what a cut-off reply used to look like.
+  const inv = inventory(base);
+  const at = entryIn(inv.entries, dest);
+  const found = at?.isCheckout && at.origin !== undefined ? remoteSlug(at.origin) : undefined;
 
   // Already there — but only success if it is a checkout of the repo that was
   // ASKED FOR. This used to print the green ✓ and exit 0 for any checkout at
   // all, adding a red advisory line underneath saying it was a different repo:
   // a name collision and a done job then looked the same to a caller, to a
   // script, and to anyone reading the last line.
-  if (before.get("checkout") === "yes") {
-    const found = remoteSlug(before.get("remote"));
+  if (at?.isCheckout) {
     if (found !== want) {
       die(
         `${dest} on the box is a checkout of a different repository.\n` +
           `  asked for: ${want}\n` +
-          `  found:     ${found ?? `unrecognised remote '${before.get("remote") || "(none)"}'`}\n` +
+          `  found:     ${found ?? `unrecognised remote '${at.origin || "(none)"}'`}\n` +
           `  Nothing was cloned and nothing was touched. --name or --base-folder to put\n` +
           `  ${want} somewhere else.`,
       );
     }
     console.log(green(`✓ already a checkout of ${want} — nothing to do`));
-    describeCheckout(before);
+    describeCheckout(probeCheckout(dest));
     return;
   }
 
   // Answer about the directory that was actually asked for before offering
   // news about any other one: an occupied destination is the user's problem to
   // decide, and burying it under an advisory reads as success.
-  if (before.get("exists") === "yes") {
-    die(`${dest} exists on the box but is not a git checkout.\n  Move it aside, or pass --name for a different directory.`);
+  if (at !== undefined) {
+    die(
+      `${dest} exists on the box but is not a git checkout${at.isSymlink ? " — it is a symlink" : ""}.\n` +
+        `  Move it aside, or pass --name for a different directory.`,
+    );
   }
 
   // The same repo under another name. This is the reading2/spideryarn2 case,
   // and cloning anyway is how you get two checkouts that drift apart.
-  const twin = before.siblings.find((s) => remoteSlug(s.url) === want);
+  //
+  // WITHOUT --name it is simply reported and nothing happens: the caller asked
+  // for the repo, the repo is there, and a second copy is not what they meant.
+  // WITH --name they have named a directory that is not the one already
+  // holding it, which is the only way to say "I do want a second copy" — so it
+  // is asked out loud, defaulting to No, rather than either refused or done
+  // quietly. Off a terminal the question cannot be asked, and `confirmOrRefuse`
+  // throws `NotInteractive`, which main() turns into a refusal.
+  const twin = inv.entries.find(
+    (e) => !e.isSymlink && e.isCheckout && e.origin !== undefined && remoteSlug(e.origin) === want,
+  );
   if (twin) {
-    console.log(green(`✓ ${want} is already on the box`) + dim(` — under a different name`));
-    console.log(`  ${dim("at")}      ${twin.dir}`);
-    console.log(dim(`  nothing cloned. For a genuinely separate second copy, use --base-folder.`));
-    return;
+    if (opts.name === undefined) {
+      console.log(green(`✓ ${want} is already on the box`) + dim(` — under a different name`));
+      console.log(`  ${dim("at")}      ${twin.dir}`);
+      console.log(dim(`  nothing cloned. For a genuinely separate second copy, use --name or --base-folder.`));
+      return;
+    }
+    const yes = await confirmOrRefuse(
+      `${want} is already on the box at ${twin.dir}. Clone a second copy to ${dest} anyway?`,
+      promptStreams(),
+      {
+        default: false,
+        instead:
+          `Two checkouts of one repo diverge, and every command then refuses both as 'ambiguous'.\n` +
+          `  Answer it from a terminal, or put the second copy outside ${base} with --base-folder DIR.`,
+      },
+    );
+    if (!yes) {
+      console.log(dim(`nothing cloned. ${want} is at ${twin.dir}.`));
+      return;
+    }
   }
 
-  // Before git, not after: git's own error names neither the owner nor the file.
-  if (before.get("token") !== "yes") {
-    die(
-      `no GitHub token on the box for owner '${repo.owner}'.\n` +
-        `  git would fail with "could not read Username for 'https://github.com'", which\n` +
-        `  says nothing about why. The credential helper needs this file:\n` +
-        `    ${tokenFile}\n` +
-        `  Issue a fine-grained PAT with resource owner '${repo.owner}', then:\n` +
-        `    ssh ${HOST()} 'umask 077; cat > ${tokenFile}'   # paste, then Ctrl-D\n` +
-        `  The full ceremony — including the org policy that makes a private repo look\n` +
-        `  like a typo — is in infra/hetzner/README.md § Giving the box GitHub access.`,
-    );
-  }
-  // Existence and mode only. Never the contents, not even a prefix of them.
-  const mode = before.get("tokenmode");
-  if (mode && mode !== `600 ${USER}`) {
-    console.log(red(`  warning: ${tokenFile} is '${mode}' and should be '600 ${USER}'`));
-  }
-
-  // stdio inherit: a clone is the one thing here slow enough that its progress
-  // is worth watching. GIT_TERMINAL_PROMPT=0 so a credential miss fails instead
-  // of hanging on a username nobody is there to type.
-  const cmd = `mkdir -p ${shq(base)} && GIT_TERMINAL_PROMPT=0 git clone ${shq(repo.url)} ${shq(dest)}`;
-  const r = spawnSync("ssh", [...SSH_OPTS, ...sshMasterOpts(), HOST(), cmd], { stdio: "inherit" });
-  if (r.status !== 0) {
-    die(
-      `git clone failed on the box (exit ${r.status}) — git's own output is above.\n` +
-        `  "Repository not found" on a repo that exists usually means the token has no\n` +
-        `  grant for it, or is pending org approval; both read as a typo.`,
-    );
-  }
-
-  // Verify rather than trust. A clone that exited 0 into the wrong shape, or
-  // with a rewritten remote, is exactly the silent success worth catching.
-  const after = cloneFacts(base, dest, tokenFile);
-  if (after.get("checkout") !== "yes" || after.get("dotgit") !== "yes") {
-    die(`git clone said it succeeded, but ${dest} is not a checkout on the box.`);
-  }
-  const got = after.get("remote");
-  if (got !== repo.url) {
-    die(
-      `cloned, but git recorded a different remote than the one asked for.\n` +
-        `  asked for: ${repo.url}\n` +
-        `  recorded:  ${got || "(none)"}\n` +
-        `  A rewrite (url.insteadOf) would do this, and an ssh remote can never fetch\n` +
-        `  from this box — it has no GitHub ssh key.`,
-    );
-  }
+  requireToken(repo, tokenFile);
+  const after = ensureRemoteCheckout(repo, { base, dest, dirName, slug: want });
 
   console.log(green(`✓ cloned ${want}`));
   describeCheckout(after);
-  // Nothing else is run for you — no `npm ci`, no install. Said out loud,
-  // because a clone that silently starts a five-minute install is a clone you
-  // cannot use to go and look at something.
-  const envNote = dest === REMOTE_REPO() ? "" : `   # note: writes to ${REMOTE_REPO()}, not here`;
+  // The setup command is PRINTED, never run: a clone that silently starts a
+  // five-minute install is a clone you cannot use to go and look at something.
+  saySetupPlan(localToplevel);
   console.log(dim("\nnext:"));
-  console.log(dim(`  gjd-remote push-env${envNote}`));
-  console.log(dim(`  gjd-remote new-shell -d ${dest}   then npm ci`));
+  // Both are run FROM that repo's checkout on this laptop, which is how they
+  // find it on the box — by origin, not by the directory name above.
+  console.log(dim(`  gjd-remote push-env      # from ${want}'s own checkout on this laptop`));
+  console.log(dim(`  gjd-remote new-shell -d ${dest}`));
+}
+
+/** One entry of a listing, by path, with trailing slashes ignored on both
+ *  sides. The listing is the strict one; this is only the lookup. */
+function entryIn(entries: readonly InventoryEntry[], dir: string): InventoryEntry | undefined {
+  const want = dir.replace(/\/+$/, "") || "/";
+  return entries.find((e) => (e.dir.replace(/\/+$/, "") || "/") === want);
+}
+
+/**
+ * Which repo `clone` was asked for: the argument, `--repo`, or — with neither —
+ * the repo you are standing in, which is the common case and the one that needs
+ * no typing.
+ *
+ * The argument and `--repo` together must AGREE. A clone of the wrong repo is
+ * not a typo anybody notices until an agent is editing it.
+ */
+function whichRepoToClone(given: string | undefined, repoOpt: string | undefined): Repo {
+  if (given !== undefined && repoOpt !== undefined && parseRepo(given).url !== parseRepo(repoOpt).url) {
+    die(`clone was given two different repos: '${given}' and --repo ${repoOpt}.`);
+  }
+  const asked = given ?? repoOpt;
+  if (asked !== undefined) return parseRepo(asked);
+
+  const id = identify(undefined);
+  if (!id.ok) {
+    die(
+      `gjd-remote clone [repo] [--base-folder DIR] [--name DIR-NAME]\n` +
+        `  With no argument it clones the repo you are standing in, and you are not in one.\n` +
+        `${id.why}`,
+    );
+  }
+  console.log(dim(`repo: ${id.id.slug}  (${id.id.localToplevel})`));
+  return parseRepo(id.id.slug);
+}
+
+/**
+ * What setting this repo up on the box would run — printed, never run.
+ *
+ * It reads the config from the LAPTOP's checkout, which is the copy the person
+ * reading this can see and edit. Sol's review asks for it to be re-read from
+ * the cloned commit before anything is executed, and that belongs with the
+ * command that executes it; here nothing runs, so the honest thing to show is
+ * what is in front of you.
+ */
+function saySetupPlan(localToplevel: string | null): void {
+  console.log(dim("\nsetup:"));
+  if (localToplevel === null) {
+    console.log(dim(`  not in a local checkout of this repo; setup command unknown until 'gjd-remote setup'`));
+    return;
+  }
+  let cfg: RepoConfig;
+  try {
+    cfg = readRepoConfig(localToplevel);
+  } catch (err) {
+    console.log(yellow(`  ${err instanceof ConfigError ? err.message : String(err)}`));
+    return;
+  }
+  console.log(
+    cfg.setup.source === "none"
+      ? dim(`  no setup command known — no ${CONFIG_FILE}, no ${SETUP_SCRIPT}, no npm 'setup' script`)
+      : dim(`  ${cfg.setup.command}   (${cfg.setup.source})`),
+  );
+  for (const w of cfg.warnings) console.log(yellow(`  ${w}`));
+  console.log(dim(`  nothing was run. Running it is 'gjd-remote setup'.`));
+}
+
+// ---------------------------------------------------------------- setup
+
+/**
+ * ## Setting a repo up on the box
+ *
+ * The durable half — the status file, the job script, the verdict — lives in
+ * scripts/gjd-remote-setup.ts, and its header is where the design is written
+ * down. What is here is the wiring: which config actually runs, how the job is
+ * started, and how the verdict is read back afterwards.
+ *
+ * **THE CONFIG THAT RUNS IS THE BOX'S**, and that is GPT Sol's finding 4. The
+ * laptop's `.gjd-remote/config.toml` is the copy you can see and edit; the
+ * box's checkout is the copy the setup command will actually be run from. The
+ * two differ whenever a change is uncommitted, or committed and unpushed, or
+ * pushed and unpulled — which is most of the time while somebody is editing
+ * one. So the box's copy is read on every run, and a disagreement REFUSES
+ * rather than quietly picking a side: running the laptop's command against the
+ * box's tree is a setup that nobody wrote and that no later reader could
+ * reconstruct.
+ *
+ * **READINESS IS THE STATUS FILE**, never the checkout's presence and never
+ * this command's exit code. Everything below reads it back through
+ * `setupVerdict`, which is the one place that decides.
+ */
+
+/** Only `statusPath` and `lockPath` are read back, and neither depends on which
+ *  attempt wrote them — so a reader needs a placeholder to get at them through
+ *  the one function that knows the layout. It is never written to a path that
+ *  survives this call. */
+const ATTEMPT_PLACEHOLDER = "read-only";
+
+function setupReadPaths(slug: string): { statusPath: string; lockPath: string } {
+  const p = setupPaths({ work: REMOTE_WORK, slug, attempt: ATTEMPT_PLACEHOLDER });
+  return { statusPath: p.statusPath, lockPath: p.lockPath };
+}
+
+/**
+ * The tagged lines of a box read, framed at BOTH ends.
+ *
+ * The framing is `parseBoxRead` in scripts/gjd-remote-flow.ts, and the terminal
+ * sentinel is GPT Sol's Stage 2 finding 5: a reply cut off after its last field
+ * is byte-for-byte a complete one, so `GJDBOXOK` at the top proves only that
+ * the script started. Every field is named up front, must appear exactly once,
+ * and nothing else may appear.
+ *
+ * A non-zero ssh status is rejected BEFORE the parse, so it means one thing
+ * only — the box could not be asked — and never "there is nothing there",
+ * which is the answer that makes this tool run things.
+ */
+function boxRead(script: string, want: readonly string[], what: string): BoxFields | { ok: false; why: string } {
+  const r = sshRun(script);
+  if (r.status !== 0) {
+    return { ok: false, why: `could not read ${what} on the box: ssh exited ${r.status ?? "on a signal"} — ${lastWords(r.stderr)}` };
+  }
+  const got = parseBoxRead(r.stdout, want);
+  if (!got.ok) return { ok: false, why: `${what}: ${got.why}` };
+  return got;
+}
+
+type BoxFields = { ok: true; fields: ReadonlyMap<string, string> };
+
+/**
+ * The repo's config as the BOX has it, and the specification that comes with
+ * it.
+ *
+ * The script and the field parser are `boxConfigScript`/`parseBoxConfig` in
+ * scripts/gjd-remote-flow.ts, where tests/gjd-remote-flow.test.ts runs them
+ * against real temporary checkouts — including the one that caught this
+ * protocol reporting "no setup script in package.json" as "package.json is
+ * unparseable".
+ */
+type BoxSpecRead = { ok: true; config: RepoConfig; spec: SetupSpec } | { ok: false; why: string };
+
+/**
+ * The repo's config as the BOX has it, and the specification that comes with
+ * it. Never dies: `doctor` wants the reason as a red line rather than as the
+ * end of the run, and `setup` wants to name the directory it was reading from.
+ */
+function readBoxConfig(dir: string): BoxSpecRead {
+  const r = sshRun(boxConfigScript({ dir, configDir: CONFIG_DIR, configFile: CONFIG_FILE, setupScript: SETUP_SCRIPT }));
+  if (r.status !== 0) {
+    return {
+      ok: false,
+      why: `could not read ${CONFIG_FILE} in ${dir} on the box: ssh exited ${r.status ?? "on a signal"} — ${lastWords(r.stderr)}`,
+    };
+  }
+  const got = parseBoxConfig(r.stdout, dir);
+  if (!got.ok) return { ok: false, why: `${CONFIG_FILE} in ${dir}: ${got.why}` };
+
+  let config: RepoConfig;
+  try {
+    config = parseRepoConfig(got.fields.configText, {
+      setupScript: got.fields.setupScript,
+      packageJsonHasSetup: got.fields.packageJsonHasSetup,
+    });
+  } catch (err) {
+    const why = err instanceof ConfigError ? err.message : String(err);
+    return { ok: false, why: `the ${CONFIG_FILE} in ${dir} on the box is not usable:\n  ${why}` };
+  }
+  return {
+    ok: true,
+    config,
+    spec: setupSpec(config, { scriptSha256: got.fields.scriptSha256, packageSetup: got.fields.packageSetup }),
+  };
+}
+
+/** The same specification, from this laptop's checkout. Throws `ConfigError`
+ *  the way `readRepoConfig` does, so a broken local config reads the same
+ *  wherever it is met. */
+function localSpec(toplevel: string): { config: RepoConfig; spec: SetupSpec } {
+  const config = readRepoConfig(toplevel);
+  let scriptSha256: string | null = null;
+  try {
+    scriptSha256 = sha256(readFileSync(path.join(toplevel, SETUP_SCRIPT)));
+  } catch {
+    // Absent, or unreadable. `readRepoConfig` has already decided what that
+    // means for the resolution; here it simply means there is no hash to
+    // compare, which is what `null` says.
+  }
+  let packageSetup: string | null = null;
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path.join(toplevel, "package.json"), "utf8"));
+    if (typeof parsed === "object" && parsed !== null) {
+      const scripts = (parsed as { scripts?: unknown }).scripts;
+      if (typeof scripts === "object" && scripts !== null) {
+        const setup = (scripts as { setup?: unknown }).setup;
+        if (typeof setup === "string" && setup.trim()) packageSetup = setup.trim();
+      }
+    }
+  } catch {
+    // Same again: `readRepoConfig` throws on a package.json it cannot parse,
+    // and it has already run by the time this does.
+  }
+  return { config, spec: setupSpec(config, { scriptSha256, packageSetup }) };
+}
+
+/**
+ * The config that will run, having checked it against the one you can see.
+ *
+ * `boxDir` is the verified checkout. `localToplevel` is this laptop's checkout
+ * of the same repo, or null when `--repo` named one we are not standing in — in
+ * which case there is nothing to compare and the box's copy simply is the
+ * answer, said out loud.
+ *
+ * WHAT IS COMPARED IS THE SPECIFICATION, not the command strings. GPT Sol's
+ * Stage 2 finding 4: three real disagreements have identical commands, because
+ * in each of them the command is a constant and the thing that changed is a
+ * file behind it. `diffSetupSpec` names the field that differs and prints both
+ * sides.
+ */
+function authoritativeConfig(slug: string, boxDir: string, localToplevel: string | null): { config: RepoConfig; spec: SetupSpec } {
+  const box = readBoxConfig(boxDir);
+  if (!box.ok) die(box.why);
+
+  if (localToplevel === null) {
+    console.log(dim(`config: read from ${boxDir} on the box (you are not in a local checkout of ${slug})`));
+    return { config: box.config, spec: box.spec };
+  }
+
+  let here: { config: RepoConfig; spec: SetupSpec };
+  try {
+    here = localSpec(localToplevel);
+  } catch (err) {
+    die(err instanceof ConfigError ? err.message : String(err));
+  }
+
+  const differences = diffSetupSpec(box.spec, here.spec);
+  if (differences.length > 0) {
+    die(
+      `${slug}'s setup differs between the box and this laptop, so I will not choose.\n` +
+        differences
+          .map(
+            (d) =>
+              `  ${d.field}:\n` +
+              `    the box (${boxDir}) — this is the copy that would run: ${d.a}\n` +
+              `    this laptop (${localToplevel}): ${d.b}\n`,
+          )
+          .join("") +
+        `  Nothing was run. Commit and push the change, then pull it on the box —\n` +
+        `    gjd-remote ssh 'cd ${boxDir} && git pull'`,
+    );
+  }
+  console.log(dim(`config: ${boxDir} on the box and ${localToplevel} here agree`));
+  return { config: box.config, spec: box.spec };
+}
+
+/** Say what would run, and every complaint the config had about the files
+ *  around it. Warnings are the two ways something on disk is being ignored, and
+ *  a warning nobody prints is a file that silently does nothing. */
+function saySetupCommands(cfg: RepoConfig, spec: SetupSpec, where: string): void {
+  console.log(cfg.setup.source === "none" ? dim(`setup:  (none known)`) : dim(`setup:  ${describeSpec(spec)}  ${where}`));
+  if (cfg.check) console.log(dim(`check:  ${cfg.check.command}`));
+  for (const w of cfg.warnings) console.log(yellow(`  ${w}`));
+}
+
+/**
+ * `setupReadScript` USED TO BE HERE, in its own second copy, and it was deleted
+ * on 2026-09-02. It is `setupReadScript` in scripts/gjd-remote-flow.ts now,
+ * where tests/gjd-remote-flow.test.ts RUNS it — against a real lock file, with
+ * `flock` taken off the PATH, which is the one arrangement where a probe in the
+ * right order and no probe at all give different answers.
+ *
+ * The copy that lived here used `base64 -w0`, which is GNU-only: the same
+ * script under the test's macOS bash printed nothing and the field came back
+ * empty. One of the two copies was therefore untestable, which is how a second
+ * copy of a wire protocol earns its keep right up until it doesn't.
+ */
+
+type SetupRead =
+  | {
+      ok: true;
+      status: SetupStatus | undefined;
+      lock: LockState;
+      unreadable: string | undefined;
+      /** The `.git` inode of the checkout being asked about, when it has one. */
+      inode: string | undefined;
+      /**
+       * The status file's own bytes, base64, EXACTLY as the box sent them —
+       * `null` when there is no status file at all.
+       *
+       * Kept because `sessionAdmissionScript` compares this string, byte for
+       * byte, against what the box reads back under the lock a moment later.
+       * Re-encoding the parsed status would compare two ideas of what the file
+       * says rather than the file; and a round trip through anybody's JSON
+       * would make an unreadable file impossible to speak about at all.
+       */
+      raw: string | null;
+    }
+  | { ok: false; why: string };
+
+/**
+ * The status file, the lock and the checkout's identity, in one round trip.
+ *
+ * A status file that is THERE and does not parse is not the same as no status
+ * file: the first is a verdict this reader refuses to believe, the second is a
+ * repo nothing has ever set up. So `status: undefined` with an `unreadable`
+ * reason is carried separately, and the caller prints it — `setupVerdict` would
+ * otherwise call a corrupt file `never-run` and cheerfully offer to run setup
+ * over the top of whatever wrote it.
+ */
+function readSetupState(slug: string, dir: string): SetupRead {
+  const { statusPath, lockPath } = setupReadPaths(slug);
+  const got = boxRead(setupReadScript({ statusPath, lockPath, dir }), [...SETUP_READ_FIELDS], `the setup status for ${slug}`);
+  if (!got.ok) return got;
+
+  const lockWord = got.fields.get("lock") ?? "";
+  const lock = LOCK_STATES.find((l) => l === lockWord);
+  if (lock === undefined) return { ok: false, why: `the box said the lock is '${lockWord}', which means nothing to me` };
+
+  const rawInode = got.fields.get("inode") ?? "-";
+  if (rawInode !== "-" && !/^[0-9]+$/.test(rawInode)) {
+    return { ok: false, why: `the box said ${dir}'s .git inode is '${rawInode}', which is not a number` };
+  }
+  const inode = rawInode === "-" ? undefined : rawInode;
+
+  const st = got.fields.get("status") ?? "";
+  if (st === "absent") return { ok: true, status: undefined, lock, unreadable: undefined, inode, raw: null };
+  if (st !== "present") return { ok: false, why: `the box said the status file is '${st}', which means nothing to me` };
+
+  const raw = got.fields.get("text") ?? "";
+  const decoded = decodeBoxField(raw, statusPath);
+  if (!decoded.ok) return { ok: false, why: decoded.why };
+  const parsed = parseSetupStatus(decoded.text);
+  // A file that is there and does not parse still HAS bytes, and the admission
+  // compares bytes — so `raw` travels on this arm too. It is what makes "the
+  // status changed while you were being asked" a thing that can be said about
+  // a file nobody could read.
+  if (!parsed.ok) return { ok: true, status: undefined, lock, unreadable: parsed.why, inode, raw };
+  return { ok: true, status: parsed.status, lock, unreadable: undefined, inode, raw };
+}
+
+/**
+ * What this run is asking the status file to be evidence of.
+ *
+ * Built in ONE place because forgetting a field here is not a type error on the
+ * two that are optional, and each of them is a way an old success applies to a
+ * tree it was never about — GPT Sol's Stage 2 finding 7.
+ */
+function setupExpectation(o: {
+  attempt: string | null;
+  configSha256: string;
+  slug: string;
+  dir: string;
+  inode: string | undefined;
+}): SetupExpectation {
+  return {
+    attempt: o.attempt,
+    configSha256: o.configSha256,
+    slug: o.slug,
+    dir: o.dir,
+    ...(o.inode === undefined ? {} : { checkoutInode: o.inode }),
+  };
+}
+
+/**
+ * The tmux session name for a setup job: `setup-<slug>-<8 of the attempt>`.
+ *
+ * It has to satisfy `SLUG`, because that is what `gjd-remote kill` and `resume`
+ * check before they will touch a name — a setup session nobody can kill by name
+ * would be a session you have to ssh in and hunt for. So the slug half is
+ * lower-cased, anything outside the alphabet becomes a hyphen (a repo name may
+ * hold `.` and `_`, which `SLUG` refuses), and it is trimmed to leave room for
+ * the attempt. The attempt fragment is what makes two runs distinguishable, so
+ * it is never the part that gets cut.
+ */
+function setupSessionName(slug: string, attempt: string): string {
+  const short = attempt.replaceAll("-", "").slice(0, 8);
+  const room = 41 - "setup-".length - 1 - short.length;
+  const base = setupSlugFile(slug).toLowerCase().replaceAll(/[^a-z0-9-]+/g, "-").slice(0, Math.max(1, room));
+  const name = `setup-${base}-${short}`;
+  if (!SLUG.test(name)) die(`'${name}' would not be a session name I could kill by name later`);
+  return name;
+}
+
+/** A setup job can exit before it writes anything, and then the pane is gone
+ *  too — so `confirmStarted`'s "it left no note" is true and unhelpful. These
+ *  are the three ways, each with its own exit code in `SETUP_EXIT`. */
+function confirmSetupStarted(name: string, slug: string, attempt: string, logPath: string, dir: string): void {
+  const alive = ssh(`sleep 1; tmux has-session -t =${name} 2>/dev/null && printf 'alive\\n'`, { check: false }).trim();
+  if (alive === "alive") return;
+  const read = readSetupState(slug, dir);
+  const wrote = read.ok && read.status !== undefined && read.status.attempt === attempt;
+  die(
+    `the setup job for ${slug} did not survive starting.\n` +
+      (wrote
+        ? `  It wrote a status first, so look at it: gjd-remote setup --status\n`
+        : `  It wrote no status, so it stopped before it began. The three ways are:\n` +
+          `    ${SETUP_EXIT.locked} another setup for ${slug} holds the lock\n` +
+          `    ${SETUP_EXIT.noFlock} flock is not installed on the box\n` +
+          `    ${SETUP_EXIT.unusable} the checkout could not be entered, or the status file could not be written\n`) +
+      `  the job's log, if it got that far: ${logPath}`,
+  );
+}
+
+/** The one line the whole command exists to produce. Exits 0 only for a
+ *  `success` that is about the run we asked about. */
+function saySetupVerdict(v: SetupVerdict, lock: LockState): never {
+  if (v.kind === "success") {
+    console.log(green(`✓ ${v.why}`));
+    return process.exit(0);
+  }
+  console.error(red(`✗ ${describeVerdict(v)}`));
+  if (v.kind === "in-progress") console.error(dim(`  the box-side lock is ${lock}${lock === "held" ? " — a run really is under way" : " — nothing holds it, so that attempt died"}`));
+  return process.exit(1);
+}
+
+/**
+ * `gjd-remote setup` — run this repo's setup command on the box, durably.
+ *
+ * The order is the design, and each step exists because skipping it produces a
+ * confident wrong answer:
+ *
+ *  1. Resolve the checkout, verified. An `absent` repo dies with the clone
+ *     command — Stage 3 turns that into a prompt.
+ *  2. Read the config from the BOX, and refuse if this laptop's copy disagrees.
+ *  3. Read the status file and the lock. A live attempt is refused; a `success`
+ *     for the same config is already done and says so.
+ *  4. Upload the job and start it in its own tmux session, then record it.
+ *  5. Attach, so somebody watches — and read the verdict off the FILE when the
+ *     attach returns, never off the stream or the pane's exit code.
+ */
+function cmdSetup(opts: {
+  repo?: string | undefined;
+  dir?: string | undefined;
+  status: boolean;
+  force: boolean;
+  attach: boolean;
+  transport?: string | undefined;
+}): void {
+  const target = resolveTarget({ repo: opts.repo, dir: opts.dir, requireIdentity: true });
+  if (target.slug === null || !target.verified) {
+    // Unreachable: requireIdentity makes namedDir verify, and the origin path
+    // is verified by construction. Written out rather than asserted, because
+    // "which repo is this setup for" is the question the status file is keyed
+    // on and a wrong answer there is a wrong readiness verdict for ever.
+    die("setup needs a verified checkout of a repo, and this target is not one");
+  }
+  const slug = target.slug;
+
+  const { config: cfg, spec } = authoritativeConfig(slug, target.dir, target.localToplevel);
+  saySetupCommands(cfg, spec, "on the box");
+  if (cfg.setup.source === "none") {
+    die(
+      `no setup known for ${slug}: add ${CONFIG_FILE} or ${SETUP_SCRIPT}.\n` +
+        `  A repo with no setup command is not a repo that is set up — reporting that as\n` +
+        `  success is how a session starts in a tree where nothing was ever installed.`,
+    );
+  }
+  const command = cfg.setup.command;
+  const check = cfg.check?.command;
+  // The whole specification, hashed once — see `expectedConfigSha`. `spec` is
+  // the box's, because the box's copy is the one that runs.
+  const sha = setupFingerprint(spec);
+
+  const state = readSetupState(slug, target.dir);
+  if (!state.ok) die(state.why);
+  if (state.unreadable !== undefined) {
+    die(
+      `there is a setup status file for ${slug} on the box and I will not act on it: ${state.unreadable}.\n` +
+        `  ${setupReadPaths(slug).statusPath}\n` +
+        `  Look at it, or delete it, before running setup over the top of whatever wrote it.`,
+    );
+  }
+
+  // `attempt: null` — this is the "is it ready?" question, not "how did MY run
+  // go?", which is the one asked at the end.
+  const before = setupVerdict(
+    state.status,
+    setupExpectation({ attempt: null, configSha256: sha, slug, dir: target.dir, inode: state.inode }),
+  );
+
+  // Not `return saySetupVerdict(…)`: it returns `never` and this returns void,
+  // and biome is right that handing one back as the other reads as a value.
+  if (opts.status) {
+    // The verdict is settled and the laptop's log may still say `started` —
+    // GPT Sol's Stage 2 finding 10. Written here, once, before it is printed.
+    reconcileSetupLog(slug, state.status, before, target.dir);
+    saySetupVerdict(before, state.lock);
+  }
+
+  // The whole verdict × lock × --force matrix is `setupGateDecision` in
+  // scripts/gjd-remote-flow.ts, where a test walks every cell of it.
+  const gate = setupGateDecision(before, state.lock, opts.force);
+  if (gate.kind === "refuse") {
+    die(`${gate.why}${gate.remedy === null ? "" : `\n  ${gate.remedy}`}${sayLockHolders(slug, state.lock)}`);
+  }
+  if (gate.kind === "already-ready") {
+    console.log(green(`✓ ${gate.why}`));
+    console.log(dim(`  the config has not changed since — 'gjd-remote setup --force' to run it again anyway`));
+    return;
+  }
+  if (gate.note !== null) console.log(gate.note === before.why ? dim(`status: ${gate.note}`) : yellow(gate.note));
+
+  const run = runSetup({
+    target,
+    slug,
+    command,
+    check,
+    spec,
+    attach: opts.attach,
+    transport: opts.transport,
+    statusHint: `gjd-remote setup --status${opts.repo ? ` --repo ${slug}` : ""}   # how did it go?`,
+  });
+  if (run.kind === "verdict") saySetupVerdict(run.verdict, run.lock);
+}
+
+/** Which session is holding the lock, when one is — a name you can type rather
+ *  than a fact you have to go and hunt for. Asked only on the refusal path,
+ *  because it is a round trip. */
+function sayLockHolders(slug: string, lock: LockState): string {
+  if (lock !== "held") return "";
+  const holders = sessions()
+    .filter((s) => s.meta.version === 1 && s.meta.kind === "setup" && s.meta.repo === slug)
+    .map((s) => s.name);
+  return (
+    `\n  it holds ${setupReadPaths(slug).lockPath}\n` +
+    (holders.length
+      ? holders.map((n) => `    gjd-remote resume ${n}   # watch it\n`).join("")
+      : `  No setup session for ${slug} is listed, so something else on the box has the lock.\n`)
+  );
+}
+
+/**
+ * Close a setup attempt in the laptop's log, once, when the box says it is
+ * settled and this laptop only ever wrote `started`.
+ *
+ * GPT Sol's Stage 2 finding 10: `--no-attach`, or detaching from a job that
+ * then finished, leaves a `started` line and nothing else, for ever. `gjd-remote
+ * log` reads that log, so a run that succeeded ten minutes ago stayed open in
+ * the only durable record of it.
+ *
+ * Idempotent BY ATTEMPT — `needsTerminalSetupRecord` in
+ * scripts/gjd-remote-flow.ts — so `setup --status` can be run ten times and the
+ * outcome is written once. Nothing is invented: a verdict this laptop never
+ * started, or one that is still `in-progress`, writes nothing.
+ */
+function reconcileSetupLog(slug: string, status: SetupStatus | undefined, v: SetupVerdict, dir: string): void {
+  if (status === undefined) return;
+  if (v.kind !== "success" && v.kind !== "failed") return;
+  const file = logPath(process.env, homedir());
+  if (!existsSync(file)) return;
+  const parsed = parseLog(readFileSync(file, "utf8"));
+  if (!needsTerminalSetupRecord(parsed.records, status.attempt)) return;
+  appendLog({
+    cmd: "setup",
+    repo: slug,
+    attempt: status.attempt,
+    outcome: v.kind === "success" ? "success" : "failed",
+    dir,
+    host: host(),
+  });
+  console.log(dim(`  (recorded that attempt's outcome in the log, which only had its start)`));
+}
+/**
+ * What happened to one setup run, as far as this laptop can honestly say.
+ *
+ * `started` and `detached` are NOT verdicts and must never be treated as one:
+ * in both, the job is alive on the box and nobody has read its status file.
+ * They are separate arms rather than one "unknown" because they need different
+ * sentences — one of them means you asked not to watch.
+ */
+type SetupRun =
+  | { kind: "started"; name: string; attempt: string }
+  | { kind: "detached"; name: string; attempt: string }
+  | { kind: "verdict"; name: string; attempt: string; verdict: SetupVerdict; lock: LockState };
+
+/**
+ * Mint an attempt, start the job, and — when somebody is watching — read the
+ * verdict back off the file afterwards.
+ *
+ * THE ONE PLACE A SETUP IS STARTED. `gjd-remote setup` and the automatic
+ * clone-then-setup inside `new-claude`/`new-shell` both come here, so there is
+ * one attempt id, one status file, one lock and one log record however it was
+ * asked for. The two callers differ only in what they do with the answer:
+ * `setup` prints it and exits, and a session refuses on anything but `success`.
+ *
+ * It deliberately decides NOTHING about whether the run should happen —
+ * `setupGate` is that, and it belongs to the command, not to the mechanism.
+ */
+function runSetup(o: {
+  target: Target;
+  slug: string;
+  command: string;
+  check: string | undefined;
+  /**
+   * The BOX's specification — the copy that will run.
+   *
+   * The specification rather than a hash, because two things have to come out
+   * of it and they must come out of the same one: the `configSha256` the status
+   * file records, and the file facts the job re-derives under the lock before
+   * it runs anything. Handed them separately, a caller could pass a fingerprint
+   * of one config and the files of another, and nothing would ever say so.
+   */
+  spec: SetupSpec;
+  attach: boolean;
+  transport?: string | undefined;
+  /** The line printed under a started-but-unwatched job: how to ask later. */
+  statusHint: string;
+}): SetupRun {
+  const attempt = newSetupAttempt();
+  const sha = setupFingerprint(o.spec);
+  const paths = setupPaths({ work: REMOTE_WORK, slug: o.slug, attempt });
+  const name = setupSessionName(o.slug, attempt);
+  // The same proof `new-claude` takes before it starts a session: `cd`, not
+  // `test -d`, so a directory nothing can enter fails here where somebody is
+  // reading rather than inside a pane nobody is watching.
+  const dir = sessionDir(o.target);
+
+  const job = setupJobScript({
+    slug: o.slug,
+    dir,
+    attempt,
+    command: o.command,
+    ...(o.check === undefined ? {} : { check: o.check }),
+    configSha256: sha,
+    home: `/home/${USER}`,
+    user: USER,
+    statusPath: paths.statusPath,
+    tmpPath: paths.tmpPath,
+    lockPath: paths.lockPath,
+    logPath: paths.logPath,
+    setupDir: paths.setupDir,
+    locksDir: paths.locksDir,
+    // THE FILES AS THIS LAPTOP SAW THEM, re-derived by the job inside the lock
+    // — GPT Sol's Stage 3 finding 2. Between the config read above and the job
+    // starting, the checkout is a directory anything on the box can write to: a
+    // `git pull` in another pane rewrites `.gjd-remote/setup`, and the job runs
+    // bytes nobody agreed to under a fingerprint naming the ones they did.
+    // Omitting this emits no check at all, silently, which is why it is passed
+    // here rather than defaulted there.
+    expectFiles: { scriptSha256: o.spec.scriptSha256, packageSetup: o.spec.packageSetup },
+  });
+
+  const jobPath = `${REMOTE_WORK}/jobs/setup-${setupSlugFile(o.slug)}-${attempt}.sh`;
+  console.log(bold(`gjd-remote setup ${o.slug}`) + dim(` → ${HOST()}:${dir}  (attempt ${attempt})`));
+  ssh(`mkdir -p ${REMOTE_WORK}/jobs`);
+  writeRemote(job, jobPath, { exec: true });
+  ssh(`tmux new-session -d -s ${name} ${metaFlags(o.target, dir, "setup")} ${shq(`bash ${jobPath}`)}`);
+  confirmSetupStarted(name, o.slug, attempt, paths.logPath, dir);
+  appendLog({ cmd: "setup", repo: o.slug, attempt, outcome: "started", dir, host: host() }, { loud: true });
+  console.log(green(`✓ started '${name}'`) + dim(` — its verdict will be ${paths.statusPath}`));
+
+  if (!o.attach) {
+    console.log(dim(`  ${o.statusHint}`));
+    console.log(dim(`  gjd-remote resume ${name}   # watch it`));
+    return { kind: "started", name, attempt };
+  }
+
+  // The job ends with `exec bash -l`, so the pane outlives the work and this
+  // returns when the user detaches or closes it — which is why there is
+  // anything to do afterwards at all.
+  attachAndReturn(name, o.transport);
+  const seen = reportAfterAttach({ slug: o.slug, name, attempt, sha, dir, statusPath: paths.statusPath });
+  return seen === null ? { kind: "detached", name, attempt } : { kind: "verdict", name, attempt, ...seen };
+}
+
+/**
+ * The gate that decided whether a setup could start USED TO LIVE HERE, printing
+ * and dying as it went. It is `setupGateDecision` in
+ * scripts/gjd-remote-flow.ts now, returning `start | already-ready | refuse`,
+ * because a decision that exits cannot be tested and cannot be reused by the
+ * clone-then-setup flow — GPT Sol's Stage 2 findings 9 and 11. `cmdSetup` above
+ * calls it and does the printing.
+ */
+
+/**
+ * The verdict, once the watching is over — read off the FILE, and only from a
+/**
+ * The verdict, once the watching is over — read off the FILE, and only from a
+ * file about THIS attempt.
+ *
+ * A pane that is still there when you detach is the ordinary case, so
+ * `in-progress` here is not a failure: it is "you left, it did not". That case
+ * comes back as `null` — there IS no verdict — rather than as a verdict the
+ * caller might mistake for one; a status file this reader could not believe
+ * still ends the run here, because no caller has a sensible next move.
+ */
+function reportAfterAttach(o: {
+  slug: string;
+  name: string;
+  attempt: string;
+  sha: string;
+  dir: string;
+  statusPath: string;
+}): { verdict: SetupVerdict; lock: LockState } | null {
+  const after = readSetupState(o.slug, o.dir);
+  if (!after.ok) {
+    console.error(red(`✗ ${after.why}`));
+    console.error(dim(`  the job may well have finished — gjd-remote setup --status`));
+    process.exit(1);
+  }
+  if (after.unreadable !== undefined) {
+    console.error(red(`✗ the status file at ${o.statusPath} is not one: ${after.unreadable}`));
+    process.exit(1);
+  }
+  // NOW the attempt matters: a file about any other run says nothing about this
+  // one, however healthy it looks.
+  const v = setupVerdict(
+    after.status,
+    setupExpectation({ attempt: o.attempt, configSha256: o.sha, slug: o.slug, dir: o.dir, inode: after.inode }),
+  );
+  if (v.kind === "in-progress") {
+    console.log(yellow(`setup is still running (attempt ${o.attempt}) — you detached, it did not stop`));
+    console.log(dim(`  gjd-remote resume ${o.name}   # back to it`));
+    console.log(dim(`  gjd-remote setup --status   # the verdict, when there is one`));
+    return null;
+  }
+  appendLog({
+    cmd: "setup",
+    repo: o.slug,
+    attempt: o.attempt,
+    outcome: v.kind === "success" ? "success" : "failed",
+    dir: o.dir,
+    host: host(),
+  });
+  return { verdict: v, lock: after.lock };
 }
 
 /**
@@ -1949,56 +4238,169 @@ function probeTools(): Map<string, { status: number; detail: string }> {
 }
 
 /**
- * Everything that can be checked from here, in one command — because Claude
- * Code's own shell cannot reach port 22, so an agent cannot run any of this
- * itself. Run `gjd-remote doctor` and paste the output.
+ * The MCP servers the TARGET repo declares, against what the box holds for that
+ * checkout.
  *
- * It EXITS NON-ZERO if anything failed. It printed red crosses and exited 0
- * until 2026-08-31, which made every "doctor is green" claim worth nothing —
- * including the one at the end of the rebuild drill this command exists for.
+ * Two of the three need an OAuth login only a human with a browser can do, once
+ * per box. Nothing about a box that has not had it done looks wrong: sessions
+ * start, the suite passes, and an agent simply never has the tool. The failure
+ * is an absence, so it needs a check rather than a reader.
  *
- * And it asserts, positively, that every check it means to run actually ran.
- * A doctor that quietly ran nothing at all otherwise looks exactly like a pass.
+ * BOTH SIDES ARE THE REMOTE TARGET, and that is the change this stage makes:
+ * the wanted list is read from the checkout's own `.mcp.json` ON THE BOX, and
+ * `claude mcp list` runs in that same directory. Reading the wanted list from
+ * THIS checkout while listing servers in another repo's would compare two
+ * different repos and call the difference a broken box.
+ *
+ * Everything else `doctor` asks is about the box, which is shared, and stays on
+ * the tool root — Terraform state, `provision.sh`, the browser smoke test.
+ *
+ * It takes the resolved directory rather than the `--repo` string: the repo
+ * half has already asked the box where the checkout is, and asking a second
+ * time is both a second round trip and a second chance for the two answers to
+ * differ.
  */
-function cmdDoctor(): void {
-  const ip = host();
-  console.log(bold(`gjd-remote → ${ip}`));
+function mcpOutcome(dir: string): { kind: "skip"; why: string } | { kind: "check"; ok: boolean; why: string } {
+  const mcpFile = `${dir}/.mcp.json`;
+  // A TAGGED READ, not `cat … 2>/dev/null || true`. That idiom turned four
+  // different things into one empty string — the file is absent, the file is
+  // there and unreadable, the file is there and empty, and the connection died
+  // — and the caller then skipped the check and let `doctor` exit 0 on all
+  // four. Only the first is a repo with nothing to say. GPT Sol's Stage 1
+  // review, blocker 3.
+  //
+  // `cat` is last in its branch, so an unreadable file makes the whole script
+  // exit non-zero, which is the transport-or-permission arm below.
+  const read = sshRun(`f=${shq(mcpFile)}\nif [ -e "$f" ]; then echo GJDMCP-PRESENT; cat -- "$f"; else echo GJDMCP-ABSENT; fi`);
+  if (read.status !== 0) {
+    return { kind: "check", ok: false, why: `could not read ${mcpFile}: ssh exited ${read.status ?? "on a signal"}, ${lastWords(read.stderr)}` };
+  }
+  const nl = read.stdout.indexOf("\n");
+  const tag = (nl === -1 ? read.stdout : read.stdout.slice(0, nl)).trim();
+  const raw = nl === -1 ? "" : read.stdout.slice(nl + 1);
+  // A repo that declares nothing has nothing to be wrong about, and failing it
+  // would make doctor red for every repo but this one. This is the ONE arm that
+  // may skip, and it is the one the box said out loud.
+  if (tag === "GJDMCP-ABSENT") return { kind: "skip", why: `${mcpFile} does not exist on the box` };
+  if (tag !== "GJDMCP-PRESENT") {
+    return { kind: "check", ok: false, why: `the box did not answer about ${mcpFile} in the form this asked for` };
+  }
+  if (raw.trim() === "") {
+    return { kind: "check", ok: false, why: `${mcpFile} exists on the box and is empty, so it declares nothing and is not nothing` };
+  }
+  const declared = declaredServers(raw);
+  if (!declared.ok) return { kind: "check", ok: false, why: `${mcpFile}: ${declared.why}` };
+  // `|| true` and check:false: `claude mcp list` exits non-zero when any server
+  // is unhealthy, including servers of Greg's that are none of our business.
+  // Its OUTPUT is the answer; its exit code is not.
+  const listing = ssh(`cd ${shq(dir)} && timeout 120 claude mcp list 2>&1 || true`, { check: false });
+  const verdict = mcpVerdict(listing, declared.names);
+  return { kind: "check", ok: verdict.ok, why: verdict.why };
+}
 
-  // Every name here must be recorded exactly once before the run ends. The
-  // count is derived from this list rather than written down, so adding a check
-  // cannot leave the two out of step.
-  const EXPECTED = ["ssh", "mosh", ...TOOLS.map((t) => t.name), "tmux keys", "browser", "mcp", "provisioning"];
-  const seen = new Map<string, "ok" | "fail" | "skip">();
-  const record = (name: string, state: "ok" | "fail" | "skip") => {
-    if (seen.has(name)) die(`doctor recorded '${name}' twice — that is a bug in doctor, not in the box`);
-    seen.set(name, state);
-  };
-  /** Everything that can fail ends up here, so nothing is reported by print
-   *  alone. A red cross that does not reach the exit code is decoration. */
-  const check = (name: string, ok: boolean, note = "") => {
-    record(name, ok ? "ok" : "fail");
-    console.log((ok ? green(`✓ ${name}`) : red(`✗ ${name}`)) + (note ? dim(`  ${note}`) : ""));
-  };
+type CheckState = "ok" | "fail" | "skip";
 
-  const finish = (): never => {
-    const missing = EXPECTED.filter((n) => !seen.has(n));
-    const failed = [...seen].filter(([, s]) => s === "fail").map(([n]) => n);
-    const skipped = [...seen].filter(([, s]) => s === "skip").map(([n]) => n);
-    console.log("");
-    if (missing.length) {
-      // The positive assertion. A doctor that ran nothing at all otherwise
-      // prints a clean screen and exits 0, which is the worst possible pass.
-      const n = missing.length;
-      console.log(red(`✗ ${n} check${n === 1 ? "" : "s"} never ran: ${missing.join(", ")}`));
+/**
+ * Where a doctor check's verdict goes — and the reason the two halves below can
+ * be separate functions without either of them being able to lie about what it
+ * ran.
+ *
+ * `skip` is a first-class outcome rather than "no result": a check that did not
+ * run is named in the summary as skipped, never left out, because a check
+ * silently not running looks exactly like one that passed.
+ */
+type Scoreboard = {
+  check: (name: string, ok: boolean, note?: string) => void;
+  skip: (name: string, why: string) => void;
+  /** For the one place that has already printed a better message than `check`
+   *  would: the ssh refusal, which needs three lines of its own. */
+  record: (name: string, state: CheckState) => void;
+};
+
+/**
+ * The two halves, by name. Each is its own list because they are expected
+ * separately: `--box-only`, or a `doctor` run from outside any repo, expects
+ * the box's list and nothing else, and the summary's denominator has to match
+ * what was actually asked for.
+ */
+const BOX_CHECKS = ["ssh", "mosh", ...TOOLS.map((t) => t.name), "tmux keys", "browser", "provisioning"];
+const REPO_CHECKS = ["setup", "HEAD", "origin", "mcp", "setup status"];
+
+/**
+ * Whether this repo's setup has ever run on the box, and how it went.
+ *
+ * THE ONE LINE THAT MAY ANSWER "is it ready?", and it answers it from the
+ * status file under `~/gjd-remote/setup/` rather than from the checkout's
+ * presence — a failed setup leaves a perfectly ordinary-looking checkout behind
+ * (Sol's finding 2). Everything except `success`, for the config the repo asks
+ * for TODAY, is a red cross with the command to type.
+ *
+ * It reads the config from the BOX, because that is the copy that would run;
+ * and it fails when this laptop's copy resolves to something different, since
+ * that is precisely the state in which `gjd-remote setup` refuses.
+ */
+function doctorSetupStatus(id: Identity, dir: string, d: Scoreboard): void {
+  const box = readBoxConfig(dir);
+  if (!box.ok) {
+    d.check("setup status", false, box.why.split("\n")[0] ?? box.why);
+    return;
+  }
+  if (box.config.setup.source === "none") {
+    d.check("setup status", false, `${dir} on the box has no setup command, so nothing could ever have set it up`);
+    return;
+  }
+  if (id.localToplevel !== null) {
+    let laptop: { config: RepoConfig; spec: SetupSpec } | undefined;
+    try {
+      laptop = localSpec(id.localToplevel);
+    } catch {
+      // Already reported by the `setup` check above, in its own words.
     }
-    if (failed.length) console.log(red(`✗ ${failed.length} of ${EXPECTED.length} checks failed: ${failed.join(", ")}`));
-    if (skipped.length) console.log(dim(`  skipped: ${skipped.join(", ")}`));
-    if (!missing.length && !failed.length) {
-      console.log(green(`✓ ${seen.size - skipped.length} of ${EXPECTED.length} checks passed`));
+    if (laptop !== undefined) {
+      // The SPECIFICATION, not the command strings — the same comparison
+      // `gjd-remote setup` refuses on, so doctor cannot say ready where setup
+      // would say no (GPT Sol's Stage 2 finding 4).
+      const differences = diffSetupSpec(box.spec, laptop.spec);
+      const first = differences[0];
+      if (first !== undefined) {
+        d.check(
+          "setup status",
+          false,
+          `the box and this laptop disagree about ${first.field} ('${first.a}' vs '${first.b}') — ` +
+            `gjd-remote setup refuses until they agree`,
+        );
+        return;
+      }
     }
-    process.exit(missing.length || failed.length ? 1 : 0);
-  };
+  }
+  const sha = setupFingerprint(box.spec);
+  const state = readSetupState(id.slug, dir);
+  if (!state.ok) {
+    d.check("setup status", false, state.why.split("\n")[0] ?? state.why);
+    return;
+  }
+  if (state.unreadable !== undefined) {
+    d.check("setup status", false, `there is a status file and it is not one: ${state.unreadable}`);
+    return;
+  }
+  // `attempt: null` — doctor is asking "is this repo ready?", which no
+  // particular run owns.
+  const v = setupVerdict(
+    state.status,
+    setupExpectation({ attempt: null, configSha256: sha, slug: id.slug, dir, inode: state.inode }),
+  );
+  d.check("setup status", v.kind === "success", v.remedy === null ? v.why : `${v.why} — ${v.remedy.split("#")[0]?.trim()}`);
+}
 
+/**
+ * Everything about the BOX, which is shared and belongs to no repo: can we
+ * reach it, are the tools there and working, does tmux bind nothing, does the
+ * browser come up, did provisioning finish.
+ *
+ * Returns false when ssh itself failed, because nothing below that line is
+ * knowable — the caller stops rather than reporting a wall of unknowns.
+ */
+function doctorBox(d: Scoreboard): boolean {
   const reach = spawnSync("ssh", [...SSH_OPTS, HOST(), "true"], { encoding: "utf8" });
   if (reach.status !== 0) {
     const err = reach.stderr ?? "";
@@ -2016,24 +4418,20 @@ function cmdDoctor(): void {
       console.log(dim(`  ${err.trim().split("\n").slice(-2).join(" ")}`));
     }
     // Nothing below this line can run without ssh, so the rest is genuinely
-    // unknown rather than fine — finish() says so and exits non-zero.
-    record("ssh", "fail");
-    finish();
+    // unknown rather than fine — the summary says so and exits non-zero.
+    d.record("ssh", "fail");
+    return false;
   }
-  check("ssh", true);
+  d.check("ssh", true);
 
   const mosh = moshState();
-  if (mosh.state === "skip") {
-    record("mosh", "skip");
-    console.log(dim(`· mosh  not probed: ${mosh.note}`));
-  } else {
-    check("mosh", mosh.state === "ok", mosh.note);
-  }
+  if (mosh.state === "skip") d.skip("mosh", mosh.note);
+  else d.check("mosh", mosh.state === "ok", mosh.note);
 
   const probes = probeTools();
   for (const tool of TOOLS) {
     const verdict = toolVerdict(tool, probes.get(tool.name));
-    check(tool.name, verdict.ok, verdict.why);
+    d.check(tool.name, verdict.ok, verdict.why);
   }
 
   // tmux on this box binds NOTHING -- no prefix, no keys -- so every keystroke
@@ -2051,36 +4449,10 @@ function cmdDoctor(): void {
   // that name, and doctor's own record() refuses a duplicate rather than
   // letting the second result overwrite the first. It caught this.
   const keys = bindingsVerdict(ssh(buildBindingsScript(), { check: false }));
-  check("tmux keys", keys.ok, keys.why);
+  d.check("tmux keys", keys.ok, keys.why);
 
   const smoke = runBrowserSmoke();
-  check("browser", smoke.ok, smoke.detail);
-
-  // The MCP servers this repo declares, checked against what the box holds.
-  //
-  // Two of the three need an OAuth login only a human with a browser can do,
-  // once per box. Nothing about a box that has not had it done looks wrong:
-  // sessions start, the suite passes, and an agent simply never has the tool.
-  // The failure is an absence, so it needs a check rather than a reader.
-  //
-  // The wanted list is read from OUR .mcp.json, not written down again here, so
-  // adding a server extends this check without anyone remembering to.
-  const declared = declaredServers(
-    existsSync(path.join(REPO, ".mcp.json")) ? readFileSync(path.join(REPO, ".mcp.json"), "utf8") : "",
-  );
-  if (!declared.ok) {
-    check("mcp", false, declared.why);
-  } else {
-    // `|| true` and check:false: `claude mcp list` exits non-zero when any
-    // server is unhealthy, including servers of Greg's that are none of our
-    // business. Its OUTPUT is the answer; its exit code is not.
-    const listing = ssh(
-      `cd ${shq(REMOTE_REPO())} && timeout 120 claude mcp list 2>&1 || true`,
-      { check: false },
-    );
-    const verdict = mcpVerdict(listing, declared.names);
-    check("mcp", verdict.ok, verdict.why);
-  }
+  d.check("browser", smoke.ok, smoke.detail);
 
   // cloud-init's own status is genuinely informational: it reports the FIRST
   // boot and never changes afterwards, so on a box that has been re-provisioned
@@ -2107,7 +4479,7 @@ function cmdDoctor(): void {
   // the counting branch below would render it as "0 failed" — an un-provisioned
   // box reported in the words of a healthy one.
   const notRun = /^PROVISION NOT RUN/m.test(report);
-  check(
+  d.check(
     "provisioning",
     provisionOk && failedLines.length === 0,
     report.trim() === ""
@@ -2122,6 +4494,205 @@ function cmdDoctor(): void {
 
   const list = sessions();
   console.log(bold(`\nsessions: ${list.length}`));
+  return true;
+}
+
+/**
+ * Everything about ONE REPO: the checkout on the box, whether the box could
+ * ever fetch it again, what its `.mcp.json` asks for, and what setting it up
+ * would run.
+ *
+ * It needs an identity and says so rather than guessing. `doctor` is run from
+ * anywhere — a cron line, a terminal in the home directory — and a repo check
+ * that quietly fell back to some other checkout would report on a tree nobody
+ * asked about.
+ *
+ * Two of these are laptop-side and box-side halves of the same question, and
+ * they are kept apart deliberately: the SETUP PLAN is read from this laptop's
+ * checkout, so it is reported even for a repo the box has never seen, while
+ * HEAD, origin and mcp are facts about the box and are skipped by name when
+ * there is no single checkout to look at.
+ */
+function doctorRepo(opts: { repo?: string | undefined; dir?: string | undefined }, d: Scoreboard): void {
+  console.log(bold("\nthis repo"));
+  const id = identify(opts.repo);
+  if (!id.ok) {
+    // With `--dir` there is nothing to verify the path AGAINST, and a repo
+    // check on an unverified path is a check on some other repo's tree. The
+    // contract's `push-env`/`setup`/repo-doctor row: those three need an
+    // identity, and a path they are given must have the same origin.
+    if (opts.dir !== undefined) die(id.why);
+    for (const name of REPO_CHECKS) d.skip(name, id.why.split("\n")[0] ?? "no repo identified");
+    return;
+  }
+  if (opts.dir === undefined) {
+    console.log(dim(`repo: ${id.id.slug}  (${id.id.localToplevel ?? "not checked out on this laptop"})`));
+  }
+
+  // The laptop's half, and it does not need the box at all.
+  doctorSetupPlan(id.id, d);
+
+  // A path somebody typed goes through the same resolver every other per-repo
+  // command uses, with `requireIdentity` on — so it is proved to be a
+  // non-symlink checkout of THIS repo with a resolvable HEAD before a single
+  // check is run against it. Stage 1 claimed a verified `doctor --dir` and did
+  // not have one (GPT Sol's Stage 1 review, blocker 4).
+  if (opts.dir !== undefined) {
+    const t = resolveTarget({ repo: opts.repo, dir: opts.dir, requireIdentity: true });
+    d.check("HEAD", true, `${t.dir}  (verified as ${id.id.slug}'s checkout)`);
+    d.check("origin", t.originTransport === "https", originNote(t.originTransport));
+    const mcpAt = mcpOutcome(t.dir);
+    if (mcpAt.kind === "skip") d.skip("mcp", mcpAt.why);
+    else d.check("mcp", mcpAt.ok, mcpAt.why);
+    doctorSetupStatus(id.id, t.dir, d);
+    return;
+  }
+
+  const r = remoteCheckout(id.id);
+  // A `.git` at the right origin with no HEAD is an interrupted clone, and it
+  // gets its own arm rather than the generic refusal: it is the one blocked
+  // state that is a failure of THIS repo's checkout rather than an absence.
+  if (r.kind === "blocked" && r.reason === "incomplete-checkout") {
+    d.check("HEAD", false, `${r.dir} has ${id.id.slug}'s origin and no commit — an interrupted clone`);
+    for (const name of ["origin", "mcp", "setup status"]) d.skip(name, `there is nothing usable at ${r.dir}`);
+    return;
+  }
+  if (r.kind !== "found") {
+    const why = describeResolution(id.id.slug, r).split("\n")[0] ?? r.kind;
+    for (const name of ["HEAD", "origin", "mcp", "setup status"]) d.skip(name, why);
+    return;
+  }
+
+  d.check("HEAD", true, r.dir);
+  d.check("origin", r.originTransport === "https", originNote(r.originTransport));
+
+  const mcp = mcpOutcome(r.dir);
+  if (mcp.kind === "skip") d.skip("mcp", mcp.why);
+  else d.check("mcp", mcp.ok, mcp.why);
+
+  doctorSetupStatus(id.id, r.dir, d);
+}
+
+/** An ssh origin ON THE BOX is a checkout that can never fetch or push again:
+ *  the box has no GitHub ssh key and gets one per-owner HTTPS token instead. It
+ *  resolves perfectly well, which is why it needs a check of its own. */
+function originNote(transport: OriginTransport | null): string {
+  if (transport === "https") return "https, so the box can fetch it";
+  if (transport === "ssh") {
+    return "an ssh URL, and the box has no GitHub ssh key — it can never fetch or push from this checkout";
+  }
+  return "the box did not give an origin for this checkout";
+}
+
+/**
+ * What setting this repo up on the box would run, read from the LAPTOP's own
+ * checkout — so it is reported even for a repo the box has never seen.
+ *
+ * "No setup command known" is a FAIL, not a skip: it means `gjd-remote setup`
+ * has nothing to run for this repo, and reporting that as a clean skip is
+ * exactly the silent success the config module exists against.
+ */
+function doctorSetupPlan(id: Identity, d: Scoreboard): void {
+  if (id.localToplevel === null) {
+    d.skip("setup", `${id.slug} is not checked out on this laptop, so its config cannot be read`);
+    return;
+  }
+  let cfg: RepoConfig;
+  try {
+    cfg = readRepoConfig(id.localToplevel);
+  } catch (err) {
+    d.check("setup", false, err instanceof ConfigError ? (err.message.split("\n")[0] ?? err.message) : String(err));
+    return;
+  }
+  d.check(
+    "setup",
+    cfg.setup.source !== "none",
+    cfg.setup.source === "none"
+      ? `no setup command known — add ${CONFIG_FILE}, an executable ${SETUP_SCRIPT}, or an npm 'setup' script`
+      : `${cfg.setup.command}  (${cfg.setup.source})`,
+  );
+  for (const w of cfg.warnings) console.log(yellow(`  ${w}`));
+}
+
+/**
+ * Everything that can be checked from here, in one command — because Claude
+ * Code's own shell cannot reach port 22, so an agent cannot run any of this
+ * itself. Run `gjd-remote doctor` and paste the output.
+ *
+ * It EXITS NON-ZERO if anything failed. It printed red crosses and exited 0
+ * until 2026-08-31, which made every "doctor is green" claim worth nothing —
+ * including the one at the end of the rebuild drill this command exists for.
+ *
+ * And it asserts, positively, that every check it means to run actually ran.
+ * A doctor that quietly ran nothing at all otherwise looks exactly like a pass.
+ *
+ * TWO HALVES. `doctorBox` is about the shared box and needs no repo;
+ * `doctorRepo` is about one repo and needs an identity. The repo half runs when
+ * there is a repo to run it for, and when there is not, one line says why and
+ * its checks are not counted — rather than being counted as skips, which would
+ * make "0 skipped" impossible to reach from an ordinary directory.
+ */
+function cmdDoctor(opts: { repo?: string | undefined; dir?: string | undefined; boxOnly: boolean }): void {
+  const ip = host();
+  console.log(bold(`gjd-remote → ${ip}`));
+
+  // Why the repo half is not running, or null. `--repo` and `--dir` both say
+  // which repo to check explicitly, so either makes it run; otherwise the cwd
+  // has to be one.
+  let noRepo: string | null = null;
+  if (opts.boxOnly) noRepo = "--box-only";
+  else if (opts.repo === undefined && opts.dir === undefined) {
+    const here = identify(undefined);
+    if (!here.ok) noRepo = here.why.split("\n")[0] ?? "not inside a git repository";
+  }
+
+  // Every name here must be recorded exactly once before the run ends. The
+  // count is derived from these lists rather than written down, so adding a
+  // check cannot leave the two out of step.
+  const EXPECTED = noRepo === null ? [...BOX_CHECKS, ...REPO_CHECKS] : [...BOX_CHECKS];
+  const seen = new Map<string, CheckState>();
+  const d: Scoreboard = {
+    record: (name, state) => {
+      if (seen.has(name)) die(`doctor recorded '${name}' twice — that is a bug in doctor, not in the box`);
+      seen.set(name, state);
+    },
+    /** Everything that can fail ends up here, so nothing is reported by print
+     *  alone. A red cross that does not reach the exit code is decoration. */
+    check: (name, ok, note = "") => {
+      d.record(name, ok ? "ok" : "fail");
+      console.log((ok ? green(`✓ ${name}`) : red(`✗ ${name}`)) + (note ? dim(`  ${note}`) : ""));
+    },
+    skip: (name, why) => {
+      d.record(name, "skip");
+      console.log(dim(`· ${name}  not checked: ${why}`));
+    },
+  };
+
+  const finish = (): never => {
+    const missing = EXPECTED.filter((n) => !seen.has(n));
+    const failed = [...seen].filter(([, s]) => s === "fail").map(([n]) => n);
+    const skipped = [...seen].filter(([, s]) => s === "skip").map(([n]) => n);
+    console.log("");
+    if (missing.length) {
+      // The positive assertion. A doctor that ran nothing at all otherwise
+      // prints a clean screen and exits 0, which is the worst possible pass.
+      const n = missing.length;
+      console.log(red(`✗ ${n} check${n === 1 ? "" : "s"} never ran: ${missing.join(", ")}`));
+    }
+    if (failed.length) console.log(red(`✗ ${failed.length} of ${EXPECTED.length} checks failed: ${failed.join(", ")}`));
+    if (skipped.length) console.log(dim(`  skipped: ${skipped.join(", ")}`));
+    if (noRepo !== null) {
+      console.log(dim(`  repo checks not run (${noRepo.replace(/\.$/, "")}): ${REPO_CHECKS.join(", ")}`));
+    }
+    if (!missing.length && !failed.length) {
+      console.log(green(`✓ ${seen.size - skipped.length} of ${EXPECTED.length} checks passed`));
+    }
+    process.exit(missing.length || failed.length ? 1 : 0);
+  };
+
+  // The box first: without ssh, nothing about any repo is knowable either.
+  if (!doctorBox(d)) finish();
+  if (noRepo === null) doctorRepo({ repo: opts.repo, dir: opts.dir }, d);
   finish();
 }
 
@@ -2247,7 +4818,11 @@ function waitForCloudInit(seconds: number): void {
     encoding: "utf8",
     timeout: (seconds + 30) * 1000,
   });
-  const verdict = cloudInitVerdict(`${r.stdout ?? ""}`);
+  // The bootstrap artefacts are the second witness: cloud-init reports the
+  // first boot for ever, and this box's first boot went wrong before
+  // provision.sh was split out of it. See cloudInitGate.
+  const bootstrap = ssh(bootstrapProbeScript(), { check: false });
+  const verdict = cloudInitGate(`${r.stdout ?? ""}`, bootstrap);
   if (verdict.ok) {
     console.log(green(`✓ ${verdict.why}`));
     return;
@@ -2300,14 +4875,16 @@ function runBrowserSmoke(): { ok: boolean; detail: string } {
 const HELP = `${bold("gjd-remote")} — Claude Code sessions on a server that never sleeps
 
 ${bold("SESSIONS")}
-  ls, (no args)           list sessions, each with Claude's own title for it
+  ls, (no args)           list sessions, each with its repo and Claude's own title
   new-claude [name]       start Claude Code and attach
       -p, --prompt TEXT     give it a first prompt (${dim("-p -")} reads it from stdin)
-      -d, --dir DIR         working directory on the box ${dim(`(default: ${REMOTE_REPO_DEFAULT})`)}
+      -d, --dir DIR         a directory on the box, skipping the repo question
+          --repo OWNER/NAME which repo, when you are not standing in it
           --wait DURATION   create it now, start Claude later ${dim("— 45s, 15m, 2h, 1d")}
           --no-attach       create it, but stay here
   new-shell [name]        a persistent shell, no Claude Code
-      -d, --dir DIR         working directory on the box ${dim(`(default: ${REMOTE_REPO_DEFAULT})`)}
+      -d, --dir DIR         a directory on the box
+          --repo OWNER/NAME which repo, when you are not standing in it
   resume [name]           reattach; with no name, the most recent session
   resume-all              one new iTerm tab per session, each attached to its own
       --include-attached    take over sessions something else is already in
@@ -2318,19 +4895,70 @@ ${bold("SESSIONS")}
       --path                print where the log file is and stop
 
 ${bold("THE BOX")}
+  resolve                 which repo is this, and where is it on the box?
+                          one round trip, nothing created — run it when a command
+                          refuses and you want to see what it saw
+      -d, --dir DIR         check that this box path is that repo's checkout
+          --repo OWNER/NAME ask about a repo you are not standing in
   doctor                  check everything, and say what is wrong
                           exits non-zero if any check failed
+                          two halves: the BOX (ssh, tools, tmux, browser,
+                          provisioning) and THIS REPO (its checkout on the box,
+                          whether the box can still fetch it, its .mcp.json, and
+                          what setting it up would run). The repo half needs to
+                          know which repo, so it is skipped — by name, never
+                          silently — outside a repo and without --repo.
+          --repo OWNER/NAME which repo to check, when you are not standing in it
+      -d, --dir DIR         check this box path, which must be verified as this
+                            repo's checkout — same origin, not a symlink, real HEAD
+          --box-only        the box half only, for a check that belongs to no repo
   provision               build a bootstrapped box: copy provision.sh up, run it
                           cloud-init no longer does this — user_data is capped at
                           32 KiB and the script is 67 KiB base64'd
                           safe to re-run; that is how you move a pinned version
       --wait-seconds N      how long to wait for ssh and cloud-init ${dim("(default 300)")}
       --run-minutes N       cap on the run itself ${dim("(default 45)")}
-  clone <repo>            clone one of Greg's repos onto the box, over HTTPS
+  clone [repo]            clone one of Greg's repos onto the box, over HTTPS
+                          with no argument, the repo you are standing in
+                          It is ONE LOCKED TRANSACTION on the box: it takes a
+                          per-destination lock, re-checks the destination under
+                          it, reserves a staging name beside it, clones, verifies
+                          the origin and HEAD, and only then renames — proving
+                          afterwards that what landed IS the tree it verified. So
+                          an interrupted clone leaves NOTHING at the destination
+                          rather than a half-made checkout, two clones racing
+                          cannot both win, and the failure path can only remove a
+                          directory it made itself. If it fails after git has
+                          started, the staging path is named so you can look.
+                          Nothing is run afterwards; the setup command the repo's
+                          config would use is printed instead.
       --base-folder DIR     where to put it ${dim(`(default: ${REMOTE_CODE})`)}
-      --name DIR-NAME       directory name, if not the repo's own
-  push-env                send .env.local to the repo checkout on the box
+      --name DIR-NAME       directory name, if not the repo's own. With the repo
+                            already on the box under another name, this is how you
+                            ask for a second copy — and it asks you to confirm it
+  setup                   run this repo's setup command in its checkout on the box
+                          It is a tmux job on the box, not an ssh command, so it
+                          survives the laptop sleeping. You are attached to watch;
+                          detaching does not stop it.
+          --status          just read the verdict and stop — nothing is run
+          --repo OWNER/NAME which repo, when you are not standing in it
+      -d, --dir DIR         a box path, which must be this repo's checkout
+          --force           run it again even though it already succeeded
+          --no-attach       start it and stay here
+  push-env                send this repo's .env.local to its checkout on the box
+                          Spideryarn's keys come off a list in the code; every
+                          other repo gets a checklist you tick once and this
+                          remembers. See below.
       --file PATH           a different .env.local — the basename must be exactly that
+      --dir DIR             a box path, which must be this repo's checkout
+          --propose         ask the model again, even when you have decided them all
+          --all             skip the checklist: every key that is not hard-guarded
+          --none            skip it the other way: no keys at all. Only useful with
+                            --save, which then records "no" for every eligible key
+          --save            with --none, write those answers down, so the next run
+                            asks no model. An ordinary push saves what it sent, and
+                            what you left unticked, without being asked
+          --yes             skip the final confirmation. --all on its own still asks
   ssh [command]           a throwaway connection — no tmux, dies with the terminal
                           with a command, runs it and prints what it said
                           ${dim("gjd-remote ssh 'free -g; uptime'")}
@@ -2338,13 +4966,60 @@ ${bold("THE BOX")}
   forget-key              after a rebuild: accept the machine's new host key
 
 ${bold("WHAT push-env WILL AND WILL NOT SEND")}
-  It BUILDS the file on the box from an allowlist of key names — it does not copy
-  yours across. Anything not on the list is skipped and named in the output, so a
-  new key stays on the laptop until somebody puts it on the list on purpose.
-  ${dim("HETZNER_CLOUD_API_TOKEN")} (can delete this box) and ${dim("SUPABASE_ACCESS_TOKEN")} (can delete the
-  production Supabase project) are deliberately off it. The list, and the reasons,
-  are at the top of ${dim("scripts/gjd-remote-env.ts")}.
-  It reports which KEYS changed. Never a value, and never a hash of one.
+  Whichever repo you are in, it ${bold("BUILDS")} the file on the box from a list of key
+  names — it never copies yours across. Anything not on that list is skipped and
+  named in the output. It reports which KEYS changed, never a value and never a
+  hash of one, and the file it writes is read back and compared before it says so.
+  ${bold("Where the list comes from depends on the repo, and there are two answers.")}
+  ${bold("Spideryarn:")} a reviewed allowlist in ${dim("scripts/gjd-remote-env.ts")}, with the reason for
+  each name beside it. No prompt, no model, no remembered state — the list is the
+  decision, and a key nobody has added to it stays on the laptop.
+  ${bold("Every other repo:")} a checklist. The key NAMES are read out of that repo's
+  .env.local — ${bold("a value is never sent to the model and never written to the")}
+  ${bold("ledger")}, and never printed; the keys you tick are of course sent to the box —
+  and the capable model is asked to sort the names into local-only, provider key,
+  production secret, infrastructure-destroying, or unknown. It costs about two
+  cents and was chosen over a model eighteen times cheaper, which left a quarter
+  of each file unclassified and twice failed to name a token that can delete this
+  box. Its answer is the ${bold("starting state")} for a key you have not answered for
+  before, with its reason on each row. ${bold("Both your answers are remembered")}, in
+  ${dim("~/.config/gjd-remote/repos/<owner>--<name>.toml")}: a key you ticked starts
+  ticked, a key you ${bold("unticked stays unticked")} however a later model classifies it,
+  and no model is asked about a key you have already decided — so a second run
+  usually costs nothing and says so. ${dim("--propose")} asks anyway. ${dim("--all")} and ${dim("--none")}
+  skip the checklist, and ${dim("--none --save")} is how you record "none of these" as a
+  real answer. There is still a final "send these N keys?" unless you pass ${dim("--yes")}.
+  Off a terminal, with none of those flags, it refuses rather than guessing.
+  ${bold("That model call is Spideryarn's money, wherever you ran it from")}: the key, and the
+  ledger the spend is written to, come from THIS repo's own configuration — the
+  tool's location, never the cwd — so a proposal for hellozenno shows up in
+  ${dim("npm run cost")} here, under the ${dim("env-proposal")} job.
+  ${bold("TWO GUARDS YOU CANNOT TICK PAST")}, on either path. ${dim("HETZNER_CLOUD_API_TOKEN")} (can
+  delete this box) and ${dim("SUPABASE_ACCESS_TOKEN")} (can delete the production Supabase
+  project) are shown greyed out and can never be selected. And any value that is a
+  database URL not pointing at 127.0.0.1 is refused ${bold("whatever it is called")} — by
+  its value, so a production database under a name nothing here has heard of is
+  caught too. Both are re-applied after you choose, not merely drawn that way.
+
+${bold("SETTING A REPO UP")}
+  ${dim("gjd-remote setup")} runs one command — the repo's own — inside its checkout ON THE
+  BOX. What that command is comes from ${dim(CONFIG_FILE)}, or an executable
+  ${dim(SETUP_SCRIPT)}, or ${dim("npm ci && npm run setup")} if the package.json has a setup
+  script. A repo with none of those is refused: "nothing to run" is not "set up".
+  ${bold("The config that runs is the box's copy, not yours")}. They differ whenever a change
+  is uncommitted, unpushed, or unpulled — so both are read and a disagreement
+  refuses, naming each, rather than running the one you cannot see.
+  It runs as a tmux job under a per-repo ${dim("flock")}, because ${dim("npm ci")} plus Docker pulls
+  outlive an ssh from a laptop that goes to sleep. You are attached so you can
+  watch; detaching leaves it running, and ${dim("gjd-remote setup --status")} says how it went.
+  ${bold("Readiness is the status file, never the checkout's presence")} — a failed setup
+  leaves a perfectly ordinary-looking directory behind. The file records which
+  attempt wrote it and a hash of ${bold("everything that would run")} — the commands, the
+  ${dim(SETUP_SCRIPT)} contents, the package.json setup script — so a run whose stream
+  was cut cannot read as this run's success, and a repo whose setup changed since,
+  ${bold("in the file behind the command as much as in the command")}, is
+  ${dim("config-changed")} rather than ready. It lives at
+  ${dim(`${REMOTE_WORK}/setup/<owner>--<name>.json`)}, and ${dim("doctor")} reads it too.
 
 ${bold("HOW clone AUTHENTICATES")}
   Always HTTPS, never ssh: the box has no GitHub ssh key. It has a fine-grained
@@ -2355,12 +5030,36 @@ ${bold("HOW clone AUTHENTICATES")}
   Issuing the tokens is a ceremony in ${dim("infra/hetzner/README.md")}.
 
 ${bold("WHERE A SESSION STARTS")}
-  ${dim("new-claude")} and ${dim("new-shell")} begin in the repo checkout, not the home directory: an agent
-  that starts in ~ opens by guessing which tree to edit. Most specific wins —
-  ${dim("--dir")}, else ${dim("GJD_REMOTE_REPO")}, else ${dim(REMOTE_REPO_DEFAULT)} — and whichever it
-  is, it is printed. ${dim("-d ~")} for the home directory.
+  Three lines, and they apply to ${dim("new-claude")}, ${dim("new-shell")}, ${dim("push-env")}, ${dim("clone")} and ${dim("doctor")} alike:
+    1. the repo is the ${bold("git origin")} of wherever you are standing — never a folder
+       name, so ${dim("reading2")} on the laptop and ${dim("spideryarn2")} on the box are one repo.
+    2. the box is asked what is under ${dim(REMOTE_CODE)}, and the ONE directory with
+       that origin is the answer. None, two, or something else in the way: it says
+       so and does nothing. ${dim("--repo owner/name")} when you are not in the repo.
+    3. ${dim("--dir")} wins over both, and is an arbitrary path on the box — ${dim("-d ~")} is the
+       home directory and no repo at all.
+  Whichever it is, the repo and the directory are printed before anything happens.
   The directory must already exist on the box; there is no fallback, because the
   fallback was a healthy-looking session in ${dim("/home/greg")} editing the wrong thing.
+  ${bold("A repo the box has never had is offered a clone and a setup")}, by ${dim("new-claude")} and
+  ${dim("new-shell")} only. One question, defaulting to No, naming the directory and the
+  exact command — off a terminal it refuses and tells you to run ${dim("gjd-remote clone")}
+  and ${dim("gjd-remote setup")} yourself. The command in the question is your laptop's copy,
+  because that is the one you can see; ${bold("after the clone it is re-read from the cloned")}
+  ${bold("commit")}, and if that resolves to something else you are asked again. A repo whose
+  cloned commit has no setup command at all is left cloned and unset-up, with no
+  session. ${bold("The session is created only for a `success` status file")} from the attempt
+  you just watched — so ${dim("--no-attach")} starts the setup and stops, because nobody read
+  a verdict. ${dim("gjd-remote clone")} is still the clone on its own, and runs nothing.
+  For a checkout that IS there, the setup status is printed when it is not
+  ${dim("success")} — a yellow line, and the session starts anyway, because ${dim("~/code/spideryarn2")}
+  was set up by hand years before this existed. The refusals are a status file
+  nobody can read, a box with no ${dim("flock")}, a status about some other tree, and a
+  setup that is running right now, holding the lock.
+  ${bold("The session itself is created on the box under that setup lock")}, against the
+  same status file the decision was made on: so it cannot start in a tree a
+  setup took over while the question was on screen. A ${dim("--dir")} is the exception,
+  as it is everywhere — an arbitrary path is not a repo and has no status.
 
 ${bold("STARTING LATER")}
   ${dim("--wait 2h")} makes the session NOW and starts Claude in two hours. The units are
@@ -2399,10 +5098,21 @@ ${bold("THE LOG")}
   across checkouts, and the repo is inside Dropbox.
 
 ${bold("EXAMPLES")}
+  gjd-remote ls
+      ${dim("NAME             REPO                  AGE   ATT  STATE        TITLE")}
+      ${dim("fix-the-toc      spideryarn/reading2   17m   yes  ? needs you  Fix the ToC ordering")}
+      ${dim("scratch-shell    (unknown)             3h     no  - shell      (no title yet)")}
+      REPO is what the launcher pinned into the session, not a guess from its
+      directory — one repo is ${dim("reading2")} here and ${dim("spideryarn2")} on the box. It is
+      dimmed and reads ${dim("(unknown)")} for a session started with ${dim("--dir")}, which is an
+      arbitrary path and no repo at all, and for one started before this existed.
   gjd-remote new-claude -p "fix the ToC ordering bug"
-      ${dim(`gjd-remote new-claude s-260831-171205 → greg@1.2.3.4:${REMOTE_REPO_DEFAULT}`)}
+      ${dim(`repo: spideryarn/reading2  (/Users/greg/dev/spideryarn/reading2)`)}
+      ${dim(`box:  ${REMOTE_CODE}/spideryarn2`)}
+      ${dim(`gjd-remote new-claude s-260831-171205 → greg@1.2.3.4:${REMOTE_CODE}/spideryarn2`)}
       ${dim("✓ started 's-260831-171205' with a prompt")}
-      already in the checkout, and named after whatever Claude decides the work is
+      in the checkout of the repo you ran it from, found by origin rather than by
+      name, and named after whatever Claude decides the work is
   gjd-remote new-claude -p - <<'EOF'
       the prompt comes from stdin, so nothing needs escaping — quotes, backticks,
       dollar signs and newlines all arrive as typed
@@ -2433,9 +5143,11 @@ ${bold("EXAMPLES")}
       ${dim("  HEAD    Add a --json flag to the export script")}
   gjd-remote clone spideryarn/reading2 --name spideryarn2
       the repo is ${dim("reading2")} and its checkout is ${dim("spideryarn2")}. Without --name you are
-      told it is already on the box under another name, rather than given a second copy
+      told it is already on the box under another name, rather than given a second
+      copy; with --name you are asked whether you really want the second copy, and
+      off a terminal that question cannot be asked, so it refuses
   gjd-remote push-env
-      ${dim(`gjd-remote push-env → greg@1.2.3.4:${REMOTE_REPO_DEFAULT}/.env.local`)}
+      ${dim(`gjd-remote push-env → greg@1.2.3.4:${REMOTE_CODE}/spideryarn2/.env.local`)}
       ${dim("  + OPENROUTER_API_KEY  added")}
       ${dim("  ~ DATABASE_URL  changed")}
       ${dim("  = 10 unchanged")}
@@ -2446,9 +5158,11 @@ ${bold("ENVIRONMENT")}
   GJD_REMOTE_HOST         override the address (default: read from Terraform state,
                           so it is never stale after a rebuild)
   GJD_REMOTE_TRANSPORT    ssh | mosh | auto (default: auto, which probes mosh once)
-  GJD_REMOTE_REPO         where the checkout lives on the box — where push-env
-                          writes, and where new-claude/new-shell start without a --dir
-                          (default: ${REMOTE_REPO_DEFAULT})
+  GJD_REMOTE_REPO         ${dim("deprecated")} — an alias for --dir, and --dir wins over it.
+                          It prints a line whenever it is set, and it REFUSES if the
+                          directory it names is not the repo you are standing in:
+                          an env var must not quietly steer one repo's work, or one
+                          repo's credentials, into another repo's checkout.
   GJD_REMOTE_TAB_COLOUR   ${dim("off")}, or a ${dim("#rrggbb")} (default: ${REMOTE_TAB_COLOUR})
 
 ${bold("WHICH TABS ARE ON THE BOX")}
@@ -2470,7 +5184,7 @@ Names are optional everywhere. An unnamed session starts under a placeholder and
 adopts Claude Code's own title for the work at the next ${dim("gjd-remote ls")}. A name you
 choose is never changed for you.`;
 
-function main(): void {
+async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2);
 
   // Before anything, so a mistyped colour is refused while nothing has happened
@@ -2487,7 +5201,15 @@ function main(): void {
   //
   // `log` and `--help` are exempt: reading the log should not write to it, and
   // a report whose own noise grows every time you read it is a worse report.
-  if (cmd !== "log" && cmd !== "-h" && cmd !== "--help" && cmd !== "help") appendLog({ cmd: cmd ?? "ls" });
+  //
+  // `setup` is exempt for a different reason, and it is not politeness: a
+  // `setup` line is a DIFFERENT SHAPE in scripts/gjd-remote-log.ts — it must
+  // carry a repo, an attempt and an outcome, because a setup record nobody can
+  // join to the box's status file says nothing. A bare `{cmd:"setup"}` is
+  // refused by formatLine, which is the module doing its job; the real record
+  // is written by cmdSetup, twice, once it knows those three things.
+  const generic = cmd !== "log" && cmd !== "setup" && cmd !== "-h" && cmd !== "--help" && cmd !== "help";
+  if (generic) appendLog({ cmd: cmd ?? "ls" });
 
   switch (cmd) {
     case undefined:
@@ -2502,6 +5224,7 @@ function main(): void {
         options: {
           prompt: { type: "string", short: "p" },
           dir: { type: "string", short: "d" },
+          repo: { type: "string" },
           wait: { type: "string" },
           "no-attach": { type: "boolean", default: false },
           ssh: { type: "boolean", default: false },
@@ -2518,6 +5241,7 @@ function main(): void {
       }
       return cmdNewClaude(positionals[0], {
         prompt: resolvePrompt(values.prompt),
+        repo: values.repo,
         dir: values.dir,
         wait,
         attach: !values["no-attach"],
@@ -2579,16 +5303,43 @@ function main(): void {
       const { values, positionals } = parseArgs({
         args: rest,
         allowPositionals: true,
-        options: { dir: { type: "string", short: "d" }, ssh: { type: "boolean", default: false } },
+        options: {
+          dir: { type: "string", short: "d" },
+          repo: { type: "string" },
+          ssh: { type: "boolean", default: false },
+        },
       });
       return cmdNewShell(positionals[0], {
+        repo: values.repo,
         dir: values.dir,
         transport: values.ssh ? "ssh" : undefined,
       });
     }
 
-    case "doctor":
-      return cmdDoctor();
+    case "doctor": {
+      const { values } = parseArgs({
+        args: rest,
+        options: {
+          repo: { type: "string" },
+          dir: { type: "string", short: "d" },
+          "box-only": { type: "boolean", default: false },
+        },
+      });
+      return cmdDoctor({ repo: values.repo, dir: values.dir, boxOnly: values["box-only"] });
+    }
+
+    // Hidden-ish, and documented in the help as a debugging aid: it answers
+    // "which repo does this directory mean, and what does the box say about
+    // it?" in one cheap round trip, without creating anything. Everything the
+    // per-repo commands do starts here, so when one of them refuses, this is
+    // how you see what it saw.
+    case "resolve": {
+      const { values } = parseArgs({
+        args: rest,
+        options: { repo: { type: "string" }, dir: { type: "string", short: "d" } },
+      });
+      return cmdResolve({ repo: values.repo, dir: values.dir });
+    }
 
     case "provision": {
       const { values } = parseArgs({
@@ -2607,9 +5358,61 @@ function main(): void {
       });
     }
 
+    case "setup": {
+      const { values } = parseArgs({
+        args: rest,
+        options: {
+          repo: { type: "string" },
+          dir: { type: "string", short: "d" },
+          status: { type: "boolean", default: false },
+          force: { type: "boolean", default: false },
+          "no-attach": { type: "boolean", default: false },
+          ssh: { type: "boolean", default: false },
+        },
+      });
+      // `--status` looks and stops, so the two flags about running it are a
+      // contradiction rather than a preference. Refused, because silently
+      // ignoring one of them is how somebody thinks they forced a re-run.
+      if (values.status && (values.force || values["no-attach"])) {
+        die("--status only looks at the status file; it cannot be combined with --force or --no-attach.");
+      }
+      return cmdSetup({
+        repo: values.repo,
+        dir: values.dir,
+        status: values.status,
+        force: values.force,
+        attach: !values["no-attach"],
+        transport: values.ssh ? "ssh" : undefined,
+      });
+    }
+
     case "push-env": {
-      const { values } = parseArgs({ args: rest, options: { file: { type: "string" } } });
-      return cmdPushEnv({ file: values.file });
+      const { values } = parseArgs({
+        args: rest,
+        options: {
+          file: { type: "string" },
+          repo: { type: "string" },
+          dir: { type: "string", short: "d" },
+          propose: { type: "boolean", default: false },
+          all: { type: "boolean", default: false },
+          none: { type: "boolean", default: false },
+          save: { type: "boolean", default: false },
+          yes: { type: "boolean", default: false },
+        },
+      });
+      // A contradiction rather than a preference, like `setup --status --force`:
+      // silently letting one win is how somebody thinks they sent everything.
+      if (values.all && values.none) die("--all and --none are opposites; pick one.");
+      return cmdPushEnv({
+        file: values.file,
+        repo: values.repo,
+        dir: values.dir,
+        propose: values.propose,
+        all: values.all,
+        none: values.none,
+        save: values.save,
+        yes: values.yes,
+      });
     }
 
     case "clone": {
@@ -2619,9 +5422,14 @@ function main(): void {
         options: {
           "base-folder": { type: "string" },
           name: { type: "string" },
+          repo: { type: "string" },
         },
       });
-      return cmdClone(positionals[0], { baseFolder: values["base-folder"], name: values.name });
+      return cmdClone(positionals[0], {
+        baseFolder: values["base-folder"],
+        name: values.name,
+        repo: values.repo,
+      });
     }
 
     case "forget-key": {
@@ -2701,7 +5509,7 @@ function main(): void {
       return console.log(HELP);
 
     default: {
-      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "provision", "clone", "push-env", "ssh", "tunnel", "forget-key"];
+      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "provision", "clone", "setup", "push-env", "resolve", "ssh", "tunnel", "forget-key"];
       // The containment clause is not decoration: `new` and `shell` were the
       // names of these two commands until 2026-08-31 and there are no aliases,
       // so the typo path is the whole migration. Two-char prefixes get `new`
@@ -2723,4 +5531,32 @@ function main(): void {
   }
 }
 
-main();
+/**
+ * THE ONE PLACE A REFUSED OR CANCELLED QUESTION LANDS.
+ *
+ * `main` is async because the prompts are, and everything it dispatches to
+ * either returns or throws. The two prompt outcomes that are not errors in the
+ * ordinary sense are turned into an exit here, once, rather than in every
+ * command that asks something:
+ *
+ *  - `Cancelled` — Ctrl-C at a question. 130 is the shell's convention for
+ *    "killed by SIGINT", and THE THROWER'S OWN MESSAGE is printed, because
+ *    "nothing changed" is only true at the first question. `cloneThenSetUp`
+ *    re-throws with the clone it left behind named — GPT Sol's Stage 3 finding
+ *    4, where a Ctrl-C at the second question said nothing had happened while a
+ *    fresh checkout sat on the box.
+ *  - `NotInteractive` — there was no terminal to ask on. Its message is already
+ *    written in the tool's voice and names what to run instead, so it goes
+ *    straight to `die` and exit 1.
+ *
+ * Anything else is rethrown as it was: an unhandled rejection prints the stack,
+ * which is what an unexpected failure should still do.
+ */
+main().catch((err: unknown) => {
+  if (err instanceof Cancelled) {
+    console.error(yellow(err.message || CANCELLED_NOTHING_CHANGED));
+    process.exit(130);
+  }
+  if (err instanceof NotInteractive) die(err.message);
+  throw err;
+});

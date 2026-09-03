@@ -313,9 +313,14 @@ export const articles = spideryarn.table("articles", {
  * somebody needs it. *"Who shared this, when, and had they said they were
  * entitled to"* is a question about an article we no longer have.
  *
- * The comment also rested on a claim that was simply false — *"nothing deletes
- * an article today"*. `src/store/import.ts` deletes orphaned articles, so this
- * was a live loss rather than a choice about a hypothetical path.
+ * The comment also rested on a claim that was false at the time — *"nothing
+ * deletes an article today"*. `src/store/import.ts` deleted orphaned articles,
+ * so this was a live loss rather than a choice about a hypothetical path. That
+ * importer went on 2026-09-01, and nothing in `src/`, `scripts/` or `api/`
+ * deletes an article now — only tests do — so the claim is true again. It
+ * changes nothing here: the decision rests on what the log is *for*, not on the
+ * current count of deleters, and the next path that removes an article should
+ * not have to remember this table.
  *
  * So `article_id` is nullable and the reference clears on delete. Everything
  * that makes the row *evidence* survives without it: the slug that was shared,
@@ -985,8 +990,8 @@ export const revisionBlocks = spideryarn.table(
      * `callout` joined the list on 2026-08-31 (migration 0033). Widening a
      * CHECK is the safe direction — every row that satisfied the old one still
      * satisfies this — but it has to land *before* an article extracted by the
-     * new stage 2 is imported. Blocks are written in one batched statement
-     * inside a transaction (src/store/import.ts, src/store/artifacts-pg.ts), so
+     * new stage 2 is published. Blocks are written in one batched statement
+     * inside a transaction (src/store/artifacts-pg.ts), so
      * the failure is loud and total: the statement is refused and the whole
      * revision rolls back. It does not leave half an article. `npm run deploy`
      * migrates before it pushes code, which is the right order.

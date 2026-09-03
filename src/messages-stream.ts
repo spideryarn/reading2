@@ -330,9 +330,14 @@ function meterStream(stream: MessageStream): CallMeter {
  * documentation gets fixed.** It costs one clause. The alternative — assuming
  * `stop_reason` and being wrong — is not a failed generation but a *silent* one:
  * the branch never fires, and each stage tries to parse a refusal sentence as
- * JSON. [`src/summarise.ts`](summarise.ts) is the worst of them, treating that as
- * a repairable parse error, **buying a second call**, and then salvaging the
- * batch as merely missing summaries. Raised by a GPT Sol review.
+ * JSON. `src/summarise.ts` was the worst of them, treating that as a repairable
+ * parse error, **buying a second call**, and then salvaging the batch as merely
+ * missing summaries — that file went with the whole of Summary mode on
+ * 2026-08-31. Nothing pays twice for it today: `src/labels.ts` is the only stage
+ * that retries, and it retries a truncated or short batch while refusing to
+ * retry a malformed shape. So the cost is now a stage failing with a parse error
+ * that names the wrong cause — cheaper, and still wrong. Raised by a GPT Sol
+ * review.
  *
  * **Only `.type` is read, and nothing but a boolean leaves this function.**
  * `stop_details` is the provider's own words about a request that carried the

@@ -25,6 +25,7 @@ import { type Mark, PlaceOnCriterion } from "./PlaceOnCriterion.js";
 import { Tooltip } from "./Tooltip.js";
 import { parseRoute } from "./router.js";
 import { useDictationField } from "./useDictationField.js";
+import { useEscapeToClose } from "./useEscapeToClose.js";
 
 interface Props {
   comment: ClientComment;
@@ -149,11 +150,7 @@ export function CommentDialog({
     setFollowUp("");
   }, [comment.id]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscapeToClose(onClose);
 
   /**
    * Get out of the way while the reader is dragging out a new selection.

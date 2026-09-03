@@ -16,7 +16,7 @@ Nothing here restates [web-client.md](web-client.md), [icons.md](icons.md) or
 |---|---|---|
 | 1 | [`src/web/tailwind.css`](../../src/web/tailwind.css) | **the entry point.** The `@layer` statement, the Tailwind imports, the token bridge, the source-scanning rule |
 | 2 | `tailwindcss/theme.css` + `utilities.css` | Tailwind v4, prefixed `tw`, in layers `theme` and `utilities`. **Preflight is deliberately not imported** |
-| 3 | [`src/web/styles.css`](../../src/web/styles.css) | every hand-written rule, ~1200 lines, imported by *file 1* so it lands in `@layer app` |
+| 3 | [`src/web/styles.css`](../../src/web/styles.css) | every hand-written rule, ~12,800 lines, imported by *file 1* so it lands in `@layer app` |
 | 4 | [`styles/tokens.css`](../../styles/tokens.css) | the brand palette and the four font stacks, imported in turn by *file 3* |
 | 5 | [`styles/colourscales.css`](../../styles/colourscales.css) | the three palettes that are **not** the brand — categorical, sequential, diverging — imported by *file 4*. See [colour-scales.md](colour-scales.md) |
 
@@ -495,8 +495,10 @@ eventually have to decide whether they are a system or an accident:
   before most of the motion it guards exists — which is the lesson from the previous app, where
   the guard covered two class names while fifteen keyframe animations ran regardless. Individual
   durations are still per-rule.
-- **What "done" looks like.** Whether this project wants a design system, or whether ~1200 lines
-  of well-commented CSS *is* the answer at this size, is genuinely undecided.
+- **What "done" looks like.** Whether this project wants a design system, or whether ~12,800
+  lines of well-commented CSS *is* the answer at this size, is genuinely undecided — and the
+  number is the sharp end of the question. This line said "~1200" until 2026-09-03, and it was
+  right when it was written: the file was 1,211 lines on 2026-08-25.
 
 ## See also
 

@@ -18,7 +18,8 @@
  *
  * `?perf=1` on any URL, or `localStorage.setItem("spya-perf", "1")` to survive
  * navigations. When off, nothing here is patched and nothing is counted — the
- * globals keep their own identities, and `mark()` is a function that returns.
+ * globals keep their own identities, and `useRenderCount` returns on its first
+ * line.
  * This matters more than it sounds: the probe patches `setTimeout`, `fetch` and
  * `requestAnimationFrame`, and a probe that is always on is a probe that is
  * part of what you are measuring.
@@ -196,21 +197,6 @@ export function useRenderCount(label: string): void {
   if (!state.on) return;
   bump(state.renders, label);
   live().renders += 1;
-}
-
-/** A named span of work, for the paths that are neither a timer nor a frame —
- *  a layout measure, a diagram build. Charged to the live bucket like anything
- *  else, and tallied under its own label. */
-export function mark<T>(label: string, fn: () => T): T {
-  if (!state.on) return fn();
-  const t0 = performance.now();
-  try {
-    return fn();
-  } finally {
-    const ms = performance.now() - t0;
-    live().jsMs += ms;
-    bump(state.renders, `${label} (ms)`, Math.round(ms));
-  }
 }
 
 /**

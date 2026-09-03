@@ -453,7 +453,31 @@ export type EvalAiJob = "eval";
  */
 export type LiveAiJob = "live_conversation";
 
-export type AiJob = Task | NonTaskAiJob | EvalAiJob | LiveAiJob;
+/**
+ * **A model call made by a developer tool**, rather than for a reader or to
+ * measure something.
+ *
+ * One member: `env-proposal`, which is `gjd-remote push-env` asking a model to
+ * sort a repo's `.env.local` **key names** — never a value — into "safe on a
+ * shared box" and "absolutely not", so the checklist it then shows starts
+ * somewhere better than blank. It runs on `CAPABLE_MODEL_OPENROUTER`, which is
+ * a measured choice rather than the obvious one for a classification this
+ * small; the reasoning is beside the constant in
+ * [`scripts/gjd-remote-envpolicy.ts`](../scripts/gjd-remote-envpolicy.ts).
+ *
+ * Its own category, and not a fourth `NonTaskAiJob`, for the reason `EvalAiJob`
+ * gives about itself: those three have one fixed model each and are listed on
+ * the profile page's model inventory, which is a page about the product. A
+ * command Greg runs from a terminal is not part of that inventory and would be
+ * a confusing row on it.
+ *
+ * It still spends real money and it still needs a row, which is the whole
+ * reason it is in `AiJob` at all rather than being a call that happens to work.
+ * `scope_kind` is `cli` — see [`src/cli-ledger.ts`](cli-ledger.ts).
+ */
+export type ToolAiJob = "env-proposal";
+
+export type AiJob = Task | NonTaskAiJob | EvalAiJob | LiveAiJob | ToolAiJob;
 
 /**
  * **Which tier each task is on — and the file's actual decision, rather than its
@@ -666,6 +690,10 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
      WebRTC data channel, so they share a wire and are told apart by
      `requested_model` and by `ai_calls.event_kind`. See `Wire` above. */
   live_conversation: "realtime",
+  /* `gjd-remote push-env`'s key-name classifier. chat/completions, because that
+     is the only wire QUICK_MODEL_OPENROUTER is served on — the same fact the
+     throw at the bottom of this file is about. */
+  "env-proposal": "chat",
 };
 
 const ALL_TASKS = Object.keys(TASK_WIRE) as Task[];

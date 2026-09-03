@@ -169,8 +169,11 @@ async function backfillOne(slug: string, write: boolean): Promise<Outcome> {
 
   /* **A rebuilt manifest is backfilled too, and the first version of this
      refused it.** `db:export` writes `backfilled` onto every manifest it
-     reconstructs from columns, and `readRaw` in src/store/import.ts treats such
+     reconstructs from columns, and `readRaw` in src/store/import.ts treated such
      a manifest as absent — so refusing looked like the consistent thing to do.
+     (That importer went on 2026-09-01. The `readRaw` that survives, in
+     src/fetch.ts, makes no such judgement — it parses the file or answers
+     `null`.)
 
      It conflates two different claims. What `backfilled` says is unreliable is
      the **provenance**: the content type the server sent, the encoding we

@@ -418,7 +418,7 @@ here before ([260831b-finish-the-database-move.md](../plans/260831b-finish-the-d
 | `npm run labels -- <dir>` | 4b on its own, against a `tree.json` that already exists ([src/labels.ts](../../src/labels.ts)). The stage to re-run when you have changed the label prompt and do not want to pay for a new tree | `labels.json`, and rewrites `tree.json` |
 | `npm run hierarchy:flatten -- …` | 4, tree → the flat sidebar rows ([hierarchy.md](hierarchy.md)) | — |
 | `npm run validate-tree -- <dir>` | checks a `tree.json` against the invariants in [granularity-zoom.md § The tree](granularity-zoom.md#the-tree) | — |
-| `npm run build` | production bundle | `dist/` |
+| `npm run build` | production bundle, both passes — the client, then the API function ([deployment.md](deployment.md)) | `dist/`, `api-dist/` |
 | `npm test` | the deterministic unit tests ([testing.md](testing.md)) | — |
 | `npm run eval:hierarchy -- <dir>…` | not a test — measures nav-label quality against committed artefacts ([evals/README.md](../../evals/README.md)). Calls no model; run it after any change to stage 4 | `evals/results/<slug>-<date>.json` |
 | `npm run typecheck` | every tsconfig, plus the guards that the checking happened ([typechecking.md](typechecking.md)) | — |

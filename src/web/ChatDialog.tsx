@@ -49,6 +49,7 @@ import { Composer, Conversation } from "./ChatPanel.js";
 import { askAboutBlock } from "./chat-handoff.js";
 import { shortBlockId } from "./BlockRef.js";
 import { useChat } from "./useChat.js";
+import { useEscapeToClose } from "./useEscapeToClose.js";
 
 /**
  * What the panel is open on.
@@ -157,14 +158,7 @@ export function ChatDialog({
     setDraft(target.kind === "draft" ? (target.question ?? "") : "");
   }, [target.kind === "draft" ? target.anchor.blockId : target.threadId]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscapeToClose(onClose);
 
   /**
    * The answer currently arriving, if one is.
