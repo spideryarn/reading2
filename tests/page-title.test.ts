@@ -182,6 +182,8 @@ describe("every title, whatever the page", () => {
     { kind: "add", source: "https://example.com" },
     { kind: "profile" },
     { kind: "design" },
+    { kind: "privacy" },
+    { kind: "features" },
     { kind: "landing" },
     { kind: "login" },
     { kind: "callback" },

@@ -13,14 +13,18 @@
  *
  * ## What the "etc etc" is, and what it is not
  *
- * Nine numbers and three dates. **Nothing here names a document.** Not a title,
- * not a URL, not a filename, not a sentence of anybody's reading — see
- * docs/project/admin.md § What it deliberately does not show, which is the one
- * paragraph to read before adding a column.
+ * Numbers, dates, and — since 2026-09-03 — a plan and a Stripe status.
+ * **Nothing here names a document.** Not a title, not a URL, not a filename, not
+ * a sentence of anybody's reading — see docs/project/admin.md § What it
+ * deliberately does not show, which is the one paragraph to read before adding a
+ * column. A tier id and a subscription status are facts about the account, in
+ * the same family as "how many articles", and neither is anybody's reading.
  *
  * ## The two accessor rules, borrowed rather than reinvented
  *
- * They are the same two the shelf's columns carry, and for the same reasons:
+ * They are the same two the shelf's columns carry, and for the same reasons —
+ * and `at()`, the date parser both files sort by, is no longer two copies of
+ * the rules but one import, from `lib/table-sort.js`:
  *
  * **A missing value must be `undefined`**, never `null` and never `NaN` —
  * `numberOrMissing` sorts missing low and `sinkLast` in the page moves them to
@@ -31,17 +35,10 @@
  * sorts at the low end rather than being banished with the unknowns.
  */
 
-import { type AdminUser, formatSpendNanos } from "../admin.js";
+import { type AdminUser, formatSpendNanos, isAdmin } from "../admin.js";
 import type { SortableColumn } from "./lib/DataTable.js";
-import { localeText, numberOrMissing } from "./lib/table-sort.js";
+import { at, localeText, numberOrMissing } from "./lib/table-sort.js";
 import { exactly, timeAgo } from "./relative-time.js";
-
-/** Parsed to a number, or `undefined` for absent and unparseable alike. */
-function at(iso: string | undefined): number | undefined {
-  if (!iso) return undefined;
-  const t = Date.parse(iso);
-  return Number.isNaN(t) ? undefined : t;
-}
 
 /**
  * The default sort: **who signed up most recently, first.**
@@ -72,6 +69,11 @@ export const ADMIN_CHIP_ORDER = [
      question this page gained on 2026-09-02 and the one a subscription price is
      argued from; how many articles somebody has is context for it. */
   "spend",
+  /* Beside spend, and above the counts, for the same reason spend is: "who is
+     paying" and "who is expensive" are the two halves of one question, and both
+     are read before "how much have they got on the shelf". */
+  "plan",
+  "ingests",
   "articles",
   "uploads",
   "questions",
@@ -140,6 +142,141 @@ function Spend({ user }: { user: AdminUser }) {
 }
 
 /**
+ * **What they are on, and what Stripe says about it.**
+ *
+ * Two lines rather than one, because they answer different questions and only
+ * one of them is usually interesting: `plan` is the entitlement this server
+ * acted on, and `planStatus` is Stripe's own word for the subscription behind
+ * it. They agree on a healthy account and the interesting rows are the ones
+ * where they do not — `free` over `canceled` is a lapsed subscriber, and `free`
+ * over `past_due` would be a bug, because `past_due` is entitled on purpose.
+ *
+ * **The status is drawn raw**, in the mono face the ids use, rather than
+ * translated: `AdminUser.planStatus` says why, and a status Stripe adds next
+ * year should show itself here rather than be flattened into whichever of ours
+ * it least resembles.
+ */
+function Plan({ user }: { user: AdminUser }) {
+  return (
+    <div className="tw:min-w-0">
+      <div className="tw:truncate tw:text-foreground">{user.plan}</div>
+      {user.planStatus && (
+        <div
+          className="tw:truncate tw:font-mono tw:text-xs tw:text-muted-foreground"
+          title={`Stripe's own subscription status. Entitlement is decided from an allowlist, so a status not on it reads as the free tier.`}
+        >
+          {user.planStatus}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * **How much of the allowance is gone**, over the span the allowance is for.
+ *
+ * `4 / 20` rather than `4`, because a bare count against a limit that is a *row*
+ * in `billing_tiers` — raisable at any time, by anybody with a psql prompt — is
+ * a number the reader of this page cannot scale. The window is in the `title`
+ * and again in the column's hint, for the reason the spend column carries its
+ * period twice: an allowance measured over an unnamed span is a figure two
+ * people read differently.
+ *
+ * **A lapsed account really does read `40 / 3` here, and that is deliberate** —
+ * it is the one place the shape the reader must never see is the right thing to
+ * draw. GPT Sol raised it as a P1 on 2026-09-03 and the disagreement is recorded
+ * rather than silently overruled: Greg's rule is about **what a reader is told
+ * about themselves**, because *"you have added all 3 articles a free account can
+ * add"*, shown to somebody looking at forty of them, reads as arithmetic going
+ * wrong. This page is the administrator reading a support email, and forty
+ * against three is precisely the fact that makes it make sense — hiding it would
+ * remove the answer while leaving the question. `plan: free` beside
+ * `planStatus: canceled` in the column to the left is what says it is a policy.
+ *
+ * **An administrator gets an em dash.** `isAdmin` is the gate's own question,
+ * the same one the wall exempts on (`admitIngest` in src/billing/admission.ts),
+ * and the exemption is total — no slot is reserved at all, so an administrator's
+ * ingests are legitimately absent from `ingest_events` and any figure drawn here
+ * would be a count of something that was never counted. Drawn on the page rather
+ * than sent from the server because those two uuids are already in this bundle.
+ */
+function Ingests({ user }: { user: AdminUser }) {
+  if (isAdmin(user.id)) {
+    return <span title="Administrators take no quota slot, so nothing is counted">—</span>;
+  }
+  /* **"used", not "successful ingests"**, because the figure includes
+     reservations still in flight — which is what the wall counts, so it is what
+     the page has to count or the two disagree about who has a slot left. */
+  if (user.ingestWindow === "stale") {
+    /* **Said on the cell, because the fraction cannot be read without it.** A
+       subscription whose stored period has run out has no window to count
+       inside, so this is a lifetime count against a monthly limit — and `active`
+       in the Plan column beside it is the status of dates we could not read.
+       Drawn as `61 / 20 ?` rather than as a bare fraction. GPT Sol, 2026-09-03. */
+    return (
+      <span
+        className="tw:text-muted-foreground"
+        title={
+          `${user.ingests} used over the lifetime of the account, against this tier's ` +
+          `${user.ingestLimit} a month — the two are not the same window. Stripe's stored ` +
+          "billing period does not contain now, so there is no current period to count inside."
+        }
+      >
+        {user.ingests} / {user.ingestLimit} ?
+      </span>
+    );
+  }
+  const window =
+    user.ingestWindow === "period"
+      ? "in the current Stripe billing period"
+      : "over the lifetime of the account";
+  return (
+    <span title={`${user.ingests} of ${user.ingestLimit} used ${window}`}>
+      {user.ingests} / {user.ingestLimit}
+    </span>
+  );
+}
+
+/**
+ * The marker on the administrator's own row, and nobody else's.
+ *
+ * Greg, 2026-09-03: *"also indicate if a row is an admin user or not"*.
+ *
+ * **It asks `isAdmin`, which is the gate's own question** — the same id list
+ * `/api/admin/*` compares against in src/routes.ts, not a second opinion about
+ * who the administrator is. So the marker cannot drift from the thing it
+ * describes: an unmarked row is an account this page would refuse.
+ *
+ * Positive only: absence means "not an administrator", which is what an absent
+ * badge conventionally means, and a `—` on every other row would be noise on a
+ * page that is already eleven columns wide.
+ *
+ * Nothing new about anybody crosses the wire for it: the id is already in the
+ * row and the id list is already in the browser bundle. (`ADMIN_USER_IDS` holds
+ * two ids because there are two Supabase projects — a laptop's and
+ * production's — not because anybody has two accounts in one of them.)
+ */
+function AdminMarker({ id }: { id: string }) {
+  if (!isAdmin(id)) return null;
+  return (
+    /* **A tinted word, not a bordered pill**, and both halves of that were
+       measured rather than preferred. A border and `py` make the chip taller
+       than the line of text it sits in, which made the administrator's row 58px
+       against everybody else's 53px; and `uppercase` with letter-spacing made
+       it wider than this column gets on a narrow screen, so it hung over the
+       column's edge. Lower-case at the line's own height does neither, and it
+       matches the words beside it (`google`, `email unconfirmed`). Measured at
+       1280 and 390 on 2026-09-03. */
+    <span
+      title="Can reach the admin pages"
+      className="tw:shrink-0 tw:rounded tw:bg-highlight/15 tw:px-1.5 tw:text-highlight"
+    >
+      admin
+    </span>
+  );
+}
+
+/**
  * `now` is passed in rather than read here, so that every relative date on one
  * render agrees with every other and nothing in this file reads the clock.
  */
@@ -177,20 +314,43 @@ export function adminColumns(now: number): SortableColumn<AdminUser>[] {
       /* The address, and under it how they got in. `providers` comes straight
          from the Auth service's own record for the account
          (src/store/admin-accounts.ts), so it says `google` or `email` rather
-         than anything we inferred. */
-      cell: ({ row }) => (
-        <div className="tw:min-w-0">
-          <div className="tw:truncate tw:text-foreground" title={row.original.email}>
-            {row.original.email}
-          </div>
-          {row.original.providers.length > 0 && (
-            <div className="tw:truncate tw:text-xs tw:text-muted-foreground">
-              {row.original.providers.join(", ")}
-              {!row.original.emailConfirmedAt && " · email unconfirmed"}
+         than anything we inferred.
+
+         **The sub-line is no longer behind `providers.length > 0`.** It was,
+         and that hid "email unconfirmed" on exactly the account that most needs
+         a word under it: one with no linked provider at all. The gate is now
+         "has this line anything to say". Found while looking at something else
+         (docs/plans/260903c-admin-users-count-disagrees-with-rows.md) and fixed
+         on its own merits, not as an explanation of that. */
+      cell: ({ row }) => {
+        const under = [
+          ...(row.original.providers.length > 0 ? [row.original.providers.join(", ")] : []),
+          ...(row.original.emailConfirmedAt ? [] : ["email unconfirmed"]),
+        ];
+        const marked = isAdmin(row.original.id);
+        return (
+          /* **The marker goes under the address rather than beside it**, which
+             looks like the lesser arrangement and is the only one that works.
+             This is the fluid column (`w-full max-w-0` in lib/DataTable.tsx),
+             so on a narrow screen the table scrolls and this column collapses
+             to almost nothing — and a pill that will not shrink, on the same
+             line, then takes all of it: measured at 390px on 2026-09-03, the
+             administrator's own address was the one address on the page that
+             could not be read at all. Below, the worst it can do is make the
+             column as wide as the word. */
+          <div className="tw:min-w-0">
+            <div className="tw:truncate tw:text-foreground" title={row.original.email}>
+              {row.original.email}
             </div>
-          )}
-        </div>
-      ),
+            {(marked || under.length > 0) && (
+              <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-1.5 tw:text-xs tw:text-muted-foreground">
+                <AdminMarker id={row.original.id} />
+                {under.length > 0 && <span className="tw:truncate">{under.join(" · ")}</span>}
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       id: "signedUp",
@@ -253,6 +413,39 @@ export function adminColumns(now: number): SortableColumn<AdminUser>[] {
         numeric: true,
       },
       cell: ({ row }) => <Spend user={row.original} />,
+    },
+    {
+      id: "plan",
+      header: "Plan",
+      accessorFn: (u) => u.plan,
+      /* A to Z first, so the default press groups `free` away from the tiers
+         rather than starting at whichever tier sorts last. */
+      sortDescFirst: false,
+      sortingFn: localeText<AdminUser>(),
+      meta: {
+        label: "Plan",
+        hint: "What they are entitled to — the tier id, or free. Stripe's status underneath",
+        ends: ["A to Z", "Z to A"],
+      },
+      cell: ({ row }) => <Plan user={row.original} />,
+    },
+    {
+      id: "ingests",
+      header: "Ingests",
+      accessorFn: (u) => u.ingests,
+      sortDescFirst: true,
+      sortingFn: numberOrMissing<AdminUser>(),
+      meta: {
+        label: "Ingests",
+        /* The window is named here and again on every cell, and that repetition
+           is deliberate: the two allowances are measured over different spans,
+           so a column of `4 / 20` and `2 / 3` is two different questions in one
+           list unless each cell says which it is answering. */
+        hint: "Articles added against the allowance — a paid period, or the account's lifetime",
+        ends: ["fewest first", "most first"],
+        numeric: true,
+      },
+      cell: ({ row }) => <Ingests user={row.original} />,
     },
     counted("articles", "Articles", "Articles", "How many are on their shelf", (u) => u.articles),
     counted("archived", "Archived", "Archived", "How many they have taken off it", (u) => u.archived),

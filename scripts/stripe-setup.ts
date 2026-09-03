@@ -212,15 +212,59 @@ export async function ensureTier(tier: TierRow, apply: boolean): Promise<Step[]>
 }
 
 /**
+ * The slice of Stripe this function needs, so a test can hand it a fake.
+ *
+ * Injectable for the same reason `CheckoutDeps` is (src/billing/checkout.ts):
+ * what matters here is what we *send*, and the only way to see that is to
+ * answer it. The real client is checked against this type at the default
+ * argument, so an SDK whose signatures moved is a compile error there.
+ */
+export interface StripePortalSetup {
+  readonly billingPortal: {
+    readonly configurations: {
+      list(
+        params: Stripe.BillingPortal.ConfigurationListParams,
+      ): Promise<{ data: Stripe.BillingPortal.Configuration[] }>;
+      create(
+        params: Stripe.BillingPortal.ConfigurationCreateParams,
+      ): Promise<Stripe.BillingPortal.Configuration>;
+      update(
+        id: string,
+        params: Stripe.BillingPortal.ConfigurationUpdateParams,
+      ): Promise<Stripe.BillingPortal.Configuration>;
+    };
+  };
+}
+
+/**
  * Create (or find) the Customer Portal configuration.
  *
  * This is the whole of our self-serve billing UI: invoice history, payment
  * method, cancellation. Cancellation is `at_period_end` on purpose — nobody
  * loses access they have already paid for, and the subscription stays `active`
  * until the period closes, which is exactly what entitlement reads.
+ *
+ * ## It has to end up as the account *default*
+ *
+ * `portalUrl` (src/billing/checkout.ts) opens a Portal session without naming a
+ * configuration, so it gets whatever the account default is. A configuration
+ * that is not the default is dead weight no reader ever sees — and the branch
+ * that creates one only runs on a mode that has none, which means it will run
+ * for the first time ever on live day, unrehearsed. So it checks, and says which
+ * it got. GPT Sol read Stripe's docs as saying an API-created configuration is
+ * *never* the default; the one on this account carries our own `managed_by`
+ * metadata **and** `is_default: true`, so that reading is not right here — which
+ * is precisely why this asserts rather than assumes either way.
+ *
+ * `features` are not reconciled on a configuration that already exists. Note the
+ * gap that leaves: they decide money-sensitive behaviour, so a hand-edited
+ * `subscription_cancel` is invisible here. Reporting that drift is worth doing
+ * and is not done.
  */
-export async function ensurePortalConfiguration(apply: boolean): Promise<Step[]> {
-  const stripe = stripeClient();
+export async function ensurePortalConfiguration(
+  apply: boolean,
+  stripe: StripePortalSetup = stripeClient(),
+): Promise<Step[]> {
   const existing = await stripe.billingPortal.configurations.list({ is_default: true, limit: 1 });
   const found = existing.data[0];
   if (found) return [{ what: "portal", detail: `default configuration already exists — ${found.id}` }];
@@ -239,7 +283,17 @@ export async function ensurePortalConfiguration(apply: boolean): Promise<Step[]>
     },
     metadata: { managed_by: "scripts/stripe-setup.ts" },
   });
-  return [{ what: "portal", detail: `created ${configuration.id}` }];
+  return [
+    { what: "portal", detail: `created ${configuration.id}` },
+    configuration.is_default
+      ? { what: "portal", detail: "and it is the account default, so Portal sessions will use it" }
+      : {
+          what: "portal",
+          detail:
+            "but it is NOT the account default, so readers would get the dashboard's one instead — " +
+            "make it the default before selling anything",
+        },
+  ];
 }
 
 async function main(): Promise<void> {

@@ -70,7 +70,12 @@ import {
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
 } from "../sketch.js";
 import type { Sketch } from "../sketch-scene.js";
-import { isSlug } from "../ingest.js";
+import {
+  inputFingerprint as illustratedFingerprint,
+  isStale as illustratedIsStale,
+  PROMPT_VERSION as ILLUSTRATED_PROMPT_VERSION,
+} from "../illustrated.js";
+import type { Illustrated } from "../illustrated-plate.js";
 import { deriveLibraryScalars, headingTitleOf, type LibraryScalars } from "../library-scalars.js";
 import { log } from "../log.js";
 import { CAPABLE_MODEL } from "../models.js";
@@ -102,6 +107,7 @@ import type {
   QuotesFound,
   Ideas,
   IdeasFound,
+  IllustratedFound,
   SketchFound,
   Timeline,
   TimelineFound,
@@ -127,11 +133,14 @@ export function notFound(slug: string): Error {
   return Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
 }
 
-/** A slug that is about to reach a query, or a 400 — the same guard src/api.ts keeps. */
-export function requireSlug(slug: string): void {
-  if (isSlug(slug)) return;
-  throw Object.assign(new Error(`Not a slug: ${JSON.stringify(slug)}`), { status: 400 });
-}
+/* **Moved to a leaf, and re-exported from here so nothing else changed** — the
+   same move, for the same reason, as `ownedSlug` below. `pg.ts` imports
+   `src/api.ts`, so a store file that wanted only this guard would inherit the
+   whole read layer; [require-slug.ts](require-slug.ts) imports `isSlug` and
+   nothing else. It has a dozen callers here, so it is re-exported rather than
+   re-imported at each of them. */
+export { requireSlug } from "./require-slug.js";
+import { requireSlug } from "./require-slug.js";
 
 /**
  * The four shelf columns, as the shape `describeArticle` wants.
@@ -390,6 +399,7 @@ type RevisionReader =
   | "timeline"
   | "quiz"
   | "sketch"
+  | "illustrated"
   | "arc"
   /**
    * **The raw document, and it is the only read that goes looking for it.**
@@ -424,6 +434,7 @@ const REVISION_READ_POLICY: Record<
     article: "value", library: "value", metadata: "value", publish: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", arc: "value", timeline: "value", quiz: "value", rawSource: "value",
+    illustrated: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
@@ -460,16 +471,31 @@ const REVISION_READ_POLICY: Record<
     article: "value", library: "value", metadata: "value", arc: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", timeline: "value", quiz: "value",
+    /* **Not because this stage's own prompt prints them** — its prompt prints
+       the scene — but because this read reports the *Sketch's* staleness as
+       well as its own, and answering that needs exactly what the `sketch` read
+       needs. src/store/pg.ts § `REVISION_PROJECTIONS.illustrated`. */
+    illustrated: "value",
   },
   byline: {
     article: "value", library: "value", metadata: "value", arc: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", timeline: "value", quiz: "value",
+    /* **Not because this stage's own prompt prints them** — its prompt prints
+       the scene — but because this read reports the *Sketch's* staleness as
+       well as its own, and answering that needs exactly what the `sketch` read
+       needs. src/store/pg.ts § `REVISION_PROJECTIONS.illustrated`. */
+    illustrated: "value",
   },
   siteName: {
     article: "value", library: "value", metadata: "value", arc: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", timeline: "value", quiz: "value",
+    /* **Not because this stage's own prompt prints them** — its prompt prints
+       the scene — but because this read reports the *Sketch's* staleness as
+       well as its own, and answering that needs exactly what the `sketch` read
+       needs. src/store/pg.ts § `REVISION_PROJECTIONS.illustrated`. */
+    illustrated: "value",
   },
   lang: { article: "value", library: "value" },
   excerpt: { article: "value", library: "value", publish: "value" },
@@ -506,6 +532,11 @@ const REVISION_READ_POLICY: Record<
        a fingerprint with an empty URL in it and report every quiz stale for
        ever, on every article that has one. */
     quiz: "value",
+    /* **Not because this stage's own prompt prints them** — its prompt prints
+       the scene — but because this read reports the *Sketch's* staleness as
+       well as its own, and answering that needs exactly what the `sketch` read
+       needs. src/store/pg.ts § `REVISION_PROJECTIONS.illustrated`. */
+    illustrated: "value",
   },
   fetchedAt: { article: "value", library: "value" },
   rawSha256: { article: "value", library: "value" },
@@ -545,6 +576,11 @@ const REVISION_READ_POLICY: Record<
        outline like its five neighbours — and this line had not caught up.
        tests/store-revision-columns.test.ts is what noticed. */
     quotes: "value",
+    /* **Not because this stage's own prompt prints them** — its prompt prints
+       the scene — but because this read reports the *Sketch's* staleness as
+       well as its own, and answering that needs exactly what the `sketch` read
+       needs. src/store/pg.ts § `REVISION_PROJECTIONS.illustrated`. */
+    illustrated: "value",
     library: "presence",
   },
   arc: { article: "value", library: "presence", metadata: "value", arc: "value" },
@@ -589,7 +625,32 @@ const REVISION_READ_POLICY: Record<
      here — up to 46KB of coordinates — so reading it to answer a boolean on a
      list of forty articles is exactly the cost docs/plans/260828c-library-read-latency.md
      was written about. */
-  sketch: { metadata: "value", sketch: "value" },
+  sketch: {
+    metadata: "value",
+    sketch: "value",
+    /* **The Illustrated read takes the SKETCH**, which is the only read here
+       that wants somebody else's artefact — and it is the whole of what it
+       wants, because what a plate was painted from is the scene rather than the
+       article. src/illustrated.ts § `inputFingerprint`. */
+    illustrated: "value",
+  },
+  /* **Its own reader, and the metadata page.** Not the library, on the same
+     call `quotes`, `timeline` and `sketch` make: a card shows four ticks and a
+     fifth would not fit.
+
+     **The `metadata` grant is not optional and the plan asked for it to be
+     left out.** Two things make it impossible: `ProfileCarrying` is derived
+     from `ArtifactMap`, so `personalisedSteps` will not compile without this
+     column — and the sentence an owner reads before publishing would otherwise
+     name five personalised artefacts while a sixth, painted for their profile,
+     goes public unmentioned, which is the exact bug that list was rewritten to
+     end. And `isCurrent` has to have an arm for every stamped step
+     (tests/store-revision-columns.test.ts), which it cannot answer without the
+     column: falling to `default: true` is the failure that has caught `ideas`,
+     `sketch` and `timeline` in turn. The column is cheap — the plates' bytes
+     are in the blob store and this holds only their hashes — so the cost the
+     instruction was guarding against is not there. */
+  illustrated: { metadata: "value", illustrated: "value" },
   /* Its own reader and the metadata page, and **not the library**, on the same
      call `quotes`, `timeline` and `sketch` make: a card shows four ticks and a
      fifth would not fit. */
@@ -636,10 +697,12 @@ const REVISION_READ_POLICY: Record<
   /* **The library's cached scalars, and the library now reads them.**
      They are written by `deriveLibraryScalars` (src/library-scalars.ts) inside
      the same transaction that writes the blocks and the tree they describe —
-     by `publishRevision`, and by the importer's in-place update — so they
-     cannot describe text that is no longer there. That atomicity, not
-     immutability, is the invariant: GPT Sol's second finding on the plan showed
-     the importer updates a published revision in place.
+     by `publishRevision` — so they cannot describe text that is no longer
+     there. That atomicity, not immutability, is the invariant.
+
+     This used to name "the importer's in-place update" as the second writer,
+     and the importer was deleted on 2026-09-01. `publishRevision` is the only
+     one left. docs/plans/260903e-glossary-delete-in-postgres.md.
 
      Until 2026-08-28 no read selected them and the shelf recomputed all five
      from every block row of every article, once per homepage load. */
@@ -814,6 +877,10 @@ export const REVISION_PROJECTIONS = {
        dialog tells an owner nothing was personalised while a picture drawn for
        their profile goes public with the article. */
     sketch: articleRevisions.sketch,
+    /* The sixth artefact that can carry a `profileHash`, and here for that and
+       for `isCurrent`'s arm — see the policy entry, which has the argument
+       about why this column could not be left off this read. */
+    illustrated: articleRevisions.illustrated,
   },
   publish: {
     id: articleRevisions.id,
@@ -861,6 +928,25 @@ export const REVISION_PROJECTIONS = {
   },
   sketch: {
     id: articleRevisions.id,
+    sketch: articleRevisions.sketch,
+    ...CITED_FINGERPRINT_COLUMNS,
+  },
+  /**
+   * **The one projection that takes another artefact's column**, and it takes
+   * the cited fingerprint set as well.
+   *
+   * `illustrated`'s own `sourceHash` is a hash of the `sketch` column, so that
+   * is the first thing this needs. The fingerprint columns are the second, and
+   * they are not belt-and-braces: this read reports `stale` when the **Sketch**
+   * has gone stale too, and answering that is exactly the question the `sketch`
+   * projection one entry up exists for. A picture painted from a Sketch that
+   * has since drifted off the article is two hops away from it, and calling it
+   * current because nobody has pressed the Sketch button would be the most
+   * confidently wrong answer in the mode.
+   */
+  illustrated: {
+    id: articleRevisions.id,
+    illustrated: articleRevisions.illustrated,
     sketch: articleRevisions.sketch,
     ...CITED_FINGERPRINT_COLUMNS,
   },
@@ -1273,6 +1359,10 @@ const STEP_STORAGE: Record<StepName, string[]> = {
   timeline: ["article_revisions.timeline"],
   quiz: ["article_revisions.quiz"],
   sketch: ["article_revisions.sketch"],
+  /* The brief is the column; the plates it names are content-addressed objects
+     in the `sources` bucket, which is not a table and so is not listed here —
+     the same shape `assets` above has. */
+  illustrated: ["article_revisions.illustrated"],
 };
 
 /**
@@ -1559,6 +1649,49 @@ function sketchIsCurrent(
     {
       inputHash: sketchFingerprint(blocks, tree, meta),
       promptVersion: SKETCH_PROMPT_VERSION,
+      model: CAPABLE_MODEL,
+      ...profile,
+    },
+  );
+}
+
+/**
+ * Is the stored `illustrated` artefact one we would paint again today?
+ *
+ * **A sibling of `sketchIsCurrent` directly above, over a different input.**
+ * That one asks whether the *article* has moved; this one asks whether the
+ * *Sketch* has — src/illustrated.ts § `inputFingerprint` for why, and it is the
+ * one place in this switch where the obvious answer is the wrong one.
+ *
+ * It deliberately does **not** also ask whether the Sketch is stale against the
+ * article. That is a question `loadIllustrated` answers for the panel, because
+ * the panel is offering to repaint; this page is listing which stages have run,
+ * and a stage whose input is unchanged is a stage we would not run again. The
+ * Sketch's own row on the same page is where the article's movement shows.
+ *
+ * `profileHash` on both sides, for `sketchIsCurrent`'s reason: the profile the
+ * pipeline would stamp with is resolved per job and this read has no access to
+ * it. Here it is inherited from the Sketch besides, so a guess would be wrong
+ * twice over.
+ */
+function illustratedIsCurrent(revision: { illustrated: unknown; sketch: unknown }): boolean {
+  const found = revision.illustrated as Illustrated | null;
+  const sketch = revision.sketch as Sketch | null;
+  /* An empty plate list counts as none, the same rule `SHAPE` and
+     `loadIllustrated` keep. */
+  if (!found || !Array.isArray(found.plates) || found.plates.length === 0) return false;
+  if (!sketch || !Array.isArray(sketch.scenes) || sketch.scenes.length === 0) return false;
+  const profile = found.profileHash !== undefined ? { profileHash: found.profileHash } : {};
+  return sameStamp(
+    {
+      ...(found.sourceHash === undefined ? {} : { inputHash: found.sourceHash }),
+      promptVersion: found.version,
+      ...(found.generator === undefined ? {} : { model: found.generator }),
+      ...profile,
+    },
+    {
+      inputHash: illustratedFingerprint(sketch),
+      promptVersion: ILLUSTRATED_PROMPT_VERSION,
       model: CAPABLE_MODEL,
       ...profile,
     },
@@ -1904,6 +2037,7 @@ function personalisedSteps(revision: {
   quotes: Quotes | null;
   ideas: Ideas | null;
   sketch: Sketch | null;
+  illustrated: Illustrated | null;
 }): StepName[] {
   /* `Record`, not `Partial<Record>`: a seventh artefact gaining a `profileHash`
      has to fail here, at the compiler, rather than fall off the dialog. It has
@@ -1914,6 +2048,11 @@ function personalisedSteps(revision: {
     quotes: revision.quotes,
     ideas: revision.ideas,
     sketch: revision.sketch,
+    /* The sixth, and the one whose `profileHash` is **inherited** rather than
+       taken from the reader: a picture painted from a personalised Sketch is
+       itself personalised, and an owner about to publish is owed that fact.
+       src/illustrated.ts. */
+    illustrated: revision.illustrated,
   };
   /* `Object.entries` rather than indexing `carriers` by `StepName`, because
      the record is now exactly the five that can be personalised and a
@@ -2347,6 +2486,11 @@ export const pgArticleReader: ArticleReader = {
            that was missing. */
         case "sketch":
           return sketchIsCurrent(revision, blocks, citedFingerprint);
+        /* **The only arm here that does not look at the article**, and the
+           comment is the point: what this stage was painted from is the
+           `sketch` column beside it. See `illustratedIsCurrent`. */
+        case "illustrated":
+          return illustratedIsCurrent(revision);
         /* **Added 2026-08-29, the day `arc.json` started recording what it was
            made from.** Before that this step genuinely had nothing to compare and
            sat in the `default` arm below with `fetch`, `extract` and `blocks`.
@@ -2736,6 +2880,58 @@ export const pgArticleReader: ArticleReader = {
       sketch,
       stale: !tree || sketchIsStale(sketch, blocks, tree, citedMetaFingerprintOf(found.revision)),
       outdated: sketch.version !== SKETCH_PROMPT_VERSION,
+    };
+  },
+
+  /**
+   * The Illustrated plates on their own — the Postgres half of
+   * `loadIllustrated`. docs/project/diagram.md § Illustrated.
+   *
+   * **Two artefacts, not one article.** `loadSketch` above compares its scene
+   * with the blocks and the tree; this compares its plates with the *scene*,
+   * and then asks `loadSketch`'s question about that scene as well. Both halves
+   * are needed and they are different facts:
+   *
+   *  - the Sketch was redrawn, so these plates paint a superseded argument;
+   *  - the Sketch was not redrawn but the article moved under it, so these
+   *    plates paint an argument that is itself out of date.
+   *
+   * The panel has one sentence for both, which is right — the offer either way
+   * is *paint it again* — but reporting only the first would leave a picture two
+   * hops from the article claiming to be current.
+   */
+  async loadIllustrated(slug: string): Promise<IllustratedFound> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "illustrated");
+    if (!found) throw notFound(slug);
+
+    const illustrated = found.revision.illustrated as Illustrated | null;
+    /* An empty plate list counts as none — the same hole `SHAPE` closes at the
+       store boundary and `loadIllustrated` closes on the filesystem. */
+    if (!illustrated || !Array.isArray(illustrated.plates) || illustrated.plates.length === 0) {
+      throw Object.assign(
+        new Error(
+          `No illustration for "${slug}" yet. Paint one with ` +
+            `POST /api/jobs { "slug": "${slug}", "steps": ["illustrated"] }.`,
+        ),
+        { status: 404 },
+      );
+    }
+    const sketch = found.revision.sketch as Sketch | null;
+    const blocks = await blockHashInputs(found.revision.id);
+    const tree = found.revision.tree as Tree | null;
+    /* No Sketch at all is stale rather than an error: there is still a picture
+       to look at, and "we cannot tell" answers not-current here as everywhere
+       else. */
+    const stale =
+      !sketch ||
+      illustratedIsStale(illustrated, sketch) ||
+      !tree ||
+      sketchIsStale(sketch, blocks, tree, citedMetaFingerprintOf(found.revision));
+    return {
+      illustrated,
+      stale,
+      outdated: illustrated.version !== ILLUSTRATED_PROMPT_VERSION,
     };
   },
 

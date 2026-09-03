@@ -55,6 +55,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Brush,
   ChartScatter,
   ChevronDown,
   ChevronUp,
@@ -90,6 +91,7 @@ import { CHAIN_MS, measureRow, stepTarget } from "./keynav.js";
 import { activeSectionIndex } from "./position.js";
 import { armActivation } from "./activation.js";
 import { SketchView } from "./SketchView.js";
+import { ILLUSTRATED_PRICE, ILLUSTRATED_WAIT, IllustratedView } from "./IllustratedView.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 
 interface Props {
@@ -195,6 +197,24 @@ const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Network; blurb:
        reading order" and "click a box to jump there" were describing the good
        case as the guarantee. ⟨Sol⟩, 2026-08-30. */
     how: "Costs one model call and about two minutes, and is never drawn until you ask. It mostly runs down the page with the article, and nothing is to scale. Boxes that point at a passage jump there when clicked; not all of them do.",
+  },
+  /* The fifth, and the only one whose input is another picture rather than the
+     article. Its `blurb` has to say that it is an *interpretation* before the
+     press, not after it, because it is the one picture here that cannot be
+     checked against what it claims to depict — docs/project/diagram.md
+     § Illustrated. And its `how` leads with the price for Sketch's reason,
+     doubled: this is the dearest and slowest button in the app, and the number
+     is measured (evals/results/illustrated-2026-09-03/README.md) rather than
+     estimated. */
+  illustrated: {
+    label: "Illustrated",
+    icon: Brush,
+    blurb:
+      "The same argument as the Sketch, painted — an antique map or an illuminated page, drawn from passages the article actually contains. An interpretation of the shape, not a diagram of it.",
+    /* **"the list under it is both" said checked, and only half of it is.** The
+       quotes are the article's own words and their destinations are checked;
+       what the row says is *drawn* is the model's. GPT Sol, 2026-09-03. */
+    how: `Made from the Sketch rather than the article, so draw that one first. Costs ${ILLUSTRATED_PRICE} and takes ${ILLUSTRATED_WAIT}, and is never painted until you ask. Nothing in the picture is checked or clickable; the list under it quotes the article and jumps into it.`,
   },
 };
 
@@ -1377,9 +1397,17 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
                        is query state, so Back and Forward move it too, and a
                        pasted `?mode=diagram&diagram=sketch` must not buy a
                        two-minute, $0.20 model call. Opening Diagram itself
-                       costs nothing, so only this chip arms anything.
-                       src/web/activation.ts. */
-                    if (k === "sketch") armActivation(slug, "sketch");
+                       costs nothing, so only these two chips arm anything.
+
+                       **Two of them since 2026-09-03**, and the second is
+                       dearer: Illustrated is $0.27–$0.40 and four to seven
+                       minutes. The test narrows `k` to exactly the two names
+                       `AutoRunTarget` (src/web/activation.ts) has for chips, so
+                       a third chip added to this row cannot be armed here until
+                       it is a target there — the mistake it stops is the
+                       reverse one, a chip that spends money and quietly arms
+                       nothing. */
+                    if (k === "sketch" || k === "illustrated") armActivation(slug, k);
                     onKind(k);
                   }}
                   data-diag-kind={k}
@@ -1393,19 +1421,32 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
         </TooltipGroup>
       </div>
 
-      {/* **Sketch replaces everything below the chips, rather than adding a
-          branch to each of them.** The three pictures above are one
-          `DiagramLayout` and every control under here is about it — the axis
-          chips, the step bar, the footer card, the roving tabstop. A Sketch has
-          none of those things and has its own. Splitting once, here, is what
-          keeps the other three unbraided; src/web/SketchView.tsx says the rest.
+      {/* **Sketch and Illustrated each replace everything below the chips,
+          rather than adding a branch to each of them.** The three pictures
+          above are one `DiagramLayout` and every control under here is about it
+          — the axis chips, the step bar, the footer card, the roving tabstop. A
+          Sketch has none of those things and has its own; a painted plate has
+          fewer still, being a JPEG. Splitting once, here, is what keeps the
+          other three unbraided; src/web/SketchView.tsx says the rest.
+
+          **Three-way rather than two nested twos**, so the `<>…</>` that holds
+          the layout pictures stays a single else-branch: nesting a second
+          ternary inside it would put the axis chips and the step bar one level
+          deeper for a picture that has neither.
 
           The hooks above still run and cost nothing: `useSimilar` and
           `useProjection` are already gated on the kind that wants them, so
-          pressing Sketch spends no money on the pictures the reader is not
-          looking at. */}
+          pressing either of these spends no money on the pictures the reader is
+          not looking at. */}
       {kind === "sketch" ? (
         <SketchView slug={slug} blocks={blocks} atRow={atRow} onJump={onJump} />
+      ) : kind === "illustrated" ? (
+        /* No `atRow`: there is no you-are-here mark on a painting. We do not
+           know where the illustrator put anything, and a marker placed where the
+           Sketch said a thing would be is the wrong-door failure the whole mode
+           refuses — docs/project/diagram.md § Nothing in the picture is a
+           control. */
+        <IllustratedView slug={slug} blocks={blocks} onJump={onJump} />
       ) : (
         <>
 

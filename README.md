@@ -46,8 +46,9 @@ Three commitments separate this from the summariser it superficially resembles:
   the model asserts is tied to one, so the passage it came from is one press away. That contract is
   spelled out [below](#the-one-contract-that-matters).
 - **It is a reading tool, not a writing or chat tool.** The article never leaves the screen. And
-  when a design call is genuinely close, the tiebreak is: which option leaves more of the thinking
-  with the reader?
+  when a design call is genuinely close, the tiebreak is: which option will best help the reader
+  form their own rich, updated internal representation — digest, understand, learn, notice,
+  integrate, critique?
 
 ## What exists today
 

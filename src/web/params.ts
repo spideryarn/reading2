@@ -440,12 +440,13 @@ export const rankParam = createParser<QuoteRank>({
   .withOptions({ history: "push" });
 
 /**
- * How high the bar is for the prioritised order's top group — the reader's hand
- * on the threshold, which is the second thing Greg asked for by name.
+ * How high a quote has to score to stay on screen in the prioritised order —
+ * the reader's hand on the threshold, which is the second thing Greg asked for
+ * by name.
  *
  * The number is `max(importance, striking)`, the same value `priorityOf` in
- * QuotesPanel.tsx computes, so `?bar=0.75` says *promote the quotes the model
- * called at least 0.75 on one of the two axes*.
+ * QuotesPanel.tsx computes, so `?bar=0.75` says *show the quotes the model
+ * called at least 0.75 on one of the two axes*, and hide the ones below it.
  *
  * **`max`, where the glossary's `?gate=` is a product**, and Greg chose it:
  * the glossary's two scores are factors of one quantity (the cost of not
@@ -455,7 +456,7 @@ export const rankParam = createParser<QuoteRank>({
  *
  * **No default, deliberately** — the same call `gateParam` and `confParam` make
  * above, for the same reason. Absent means *nobody has touched this*, and the
- * panel resolves it to `PROMOTE_BAR`.
+ * panel resolves it to `QUOTE_BAR_DEFAULT`.
  *
  * `replace` and debounced, exactly as `?gate=` is: a range input fires on every
  * pixel of a drag, browsers rate-limit history writes, and a Back button that
@@ -484,17 +485,16 @@ export const barParam = createParser<number>({
  * rather than an exception the condition allows for.** Greg, 2026-08-26, asked
  * for an order that combines the two scores with first appearance and for it to
  * arrive without being asked for. It is the gentlest ranked order we could
- * build: the two scores only decide which of two groups an entry is in, and
- * *inside* a group the order is still first use, so the model chooses nothing
- * there. The divider names the rule and both scores are shown on every row —
- * see docs/plans/260826b-glossary-prioritised-order.md for the four designs and
- * `groupEntries` in GlossaryPanel.tsx for what it actually does.
+ * build: the two scores only decide whether an entry is shown, and the order of
+ * what is shown is still first use, so the model chooses nothing about the
+ * sequence. Both scores are on every row, and a foot line says how many the bar
+ * is holding back — see docs/plans/260826b-glossary-prioritised-order.md for
+ * the four designs and `sortEntries` in GlossaryPanel.tsx for what it does now.
  *
- * It is also **self-cancelling**: when the gate does not split the list (no
- * scores, or every entry on one side of it), the panel falls back to `document`
- * and does not offer the control. So an old glossary with no scores behaves
- * exactly as it did before, and the default never labels an order that isn't
- * one.
+ * It is also **self-cancelling**: when no position of the bar would hide
+ * anything (`canPrioritise`), the panel falls back to `document` and does not
+ * offer the control. So an old glossary with no scores behaves exactly as it
+ * did before, and the default never labels an order that isn't one.
  *
  * `push`, like `cols` and `text` and unlike `term`: changing the order of a
  * list is a deliberate act on the view, and Back should undo it.
@@ -513,13 +513,14 @@ export const sortParam = createParser<TermSort>({
   .withOptions({ history: "push" });
 
 /**
- * How high the bar is for the prioritised order's top group — the reader's own
- * hand on the threshold, added 2026-08-26 at Greg's request for "a small
- * threshold-slider ... set to a sensible default".
+ * How high a term has to score to stay on screen in the prioritised order — the
+ * reader's own hand on the threshold, added 2026-08-26 at Greg's request for "a
+ * small threshold-slider ... set to a sensible default".
  *
  * The number is `difficulty × centrality`, the same product `priorityOf` in
- * GlossaryPanel.tsx computes, so `?gate=0.45` says *promote the terms the model
- * called at least 0.45 hard-and-load-bearing*. Two decimal places on the way
+ * GlossaryPanel.tsx computes, so `?gate=0.45` says *show the terms the model
+ * called at least 0.45 hard-and-load-bearing*, and hide the ones below it. Two
+ * decimal places on the way
  * out, and anything outside 0–1 parses to null rather than throwing, which is
  * the same rule every other parser in this file follows.
  *

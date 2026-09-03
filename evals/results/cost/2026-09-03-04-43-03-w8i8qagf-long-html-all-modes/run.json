@@ -1,0 +1,1331 @@
+{
+  "meta": {
+    "startedAt": "2026-09-03T04:43:03.487Z",
+    "commit": "da3aba391959e35d4a47d24b61ca3e4e0f9dd275",
+    "gitDirty": true,
+    "srcPatchSha256": null,
+    "store": "postgres",
+    "databaseTarget": "postgresql://postgres:***@127.0.0.1:54362/postgres",
+    "evalOwnerId": "00000000-0000-4000-8000-000000000002",
+    "environmentOwnerId": "f4d08b58-5573-4811-9887-e26c114fb324",
+    "scenario": "per-mode",
+    "node": "v26.8.1",
+    "effort": {
+      "pipelineEnvOverride": null,
+      "hierarchy": "medium",
+      "labels": "module-private in src/labels.ts — pinned by commit + srcPatchSha256",
+      "articleStages": {
+        "arc": "high",
+        "tweets": "high",
+        "glossary": "medium",
+        "quotes": "medium",
+        "ideas": "high",
+        "sketch": "high",
+        "timeline": "high",
+        "quiz": "high"
+      }
+    }
+  },
+  "runTag": "w8i8qagf",
+  "notes": [
+    "Stage 1 (fetch) is a fixture read, so the elapsed time excludes real-world fetch latency. It costs no model call, so the money is unaffected.",
+    "There is no `labels` step: nav labels fan out inside `hierarchy`, so every label call carries stepName=hierarchy and job=labels. The hierarchy/labels split is in `byAiJob`.",
+    "Per-step wall clock is max(finishedAt) - min(startedAt). sum(durationMs) is printed beside it and is several times larger wherever a step fanned out; it is not a wait.",
+    "Unpriced rows are unknown, not zero. A total carrying them is short by an unknown amount.",
+    "Pipeline cache breakpoints are conditional and off by default (`sharesArticleCache`), so an ordinary ingest marks nothing and these are cold numbers in that sense too. Checked in the code: `sharesArticleCache` returns false for anything that is not an ArticleStage, and `hierarchy` is not one — so nothing an ingest writes can be read warm by a later draw.",
+    "`scenario` says whether the modes were measured one per job (`per-mode`) or several in one (`batched-modes`). The two are different numbers and must never be aggregated together.",
+    "A draw that was billed and did not produce its artefact is a PAID FAILURE: its money was really spent and it is not the price of anything, so it is excluded from every per-mode and whole-article figure and listed separately. Read `jobStatus` and `steps` per draw, not the money alone — a truncated generation is billed in full with an `outcome: \"ok\"` row.",
+    "`observedSpend` is what each step's own collector saw, from AdvanceParts.onStepSpend. Its `calls` is what the ledger is reconciled against. Its `writeFailures` is a LOWER BOUND: collectSpend calls onDone before draining its writes, so a write that rejects late is not counted there — which is exactly why the check is calls-made against rows-kept."
+  ],
+  "draws": [
+    {
+      "phase": "ingest",
+      "mode": null,
+      "fixture": "long-html",
+      "fixtureFile": "evals/extraction/fixtures/gwern.html",
+      "fixtureSha256": {
+        "measured": "4a2564b8da9689f11afab5c99b621930defad2f305aaa0da7ff2e80152086f18",
+        "manifest": "4a2564b8da9689f11afab5c99b621930defad2f305aaa0da7ff2e80152086f18",
+        "matches": true
+      },
+      "fixtureBytes": 290410,
+      "createdArticle": true,
+      "repeat": 1,
+      "order": 1,
+      "slug": "evalcost-w8i8qagf-long-html-1-spya-bgmk77",
+      "url": "https://cost-eval.invalid/w8i8qagf/long-html-1",
+      "jobId": "spya-a7msr4",
+      "elapsedMs": 177216,
+      "jobStatus": "done",
+      "steps": [
+        {
+          "name": "fetch",
+          "status": "done",
+          "detail": "284 KB (fixture long-html)"
+        },
+        {
+          "name": "extract",
+          "status": "done",
+          "detail": "The Scaling Hypothesis"
+        },
+        {
+          "name": "blocks",
+          "status": "done",
+          "detail": "186 blocks, 186 new ids (0 kept)"
+        },
+        {
+          "name": "hierarchy",
+          "status": "done",
+          "detail": "39 sections over 186 blocks"
+        },
+        {
+          "name": "assets",
+          "status": "done",
+          "detail": "0 images stored, 9 left hot-linked"
+        }
+      ],
+      "blocks": {
+        "observed": 186,
+        "manifest": 186,
+        "matches": true
+      },
+      "gistableBlocks": 177,
+      "unreadable": 0,
+      "money": {
+        "credits": 329920500,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [
+        {
+          "step": "hierarchy",
+          "calls": 4,
+          "money": {
+            "credits": 329920500,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "47dd8a7f-8a39-4ad9-9df9-0b31ff9b7350"
+          ],
+          "jobIds": [
+            "spya-a7msr4"
+          ],
+          "tokens": {
+            "input": 58304,
+            "output": 20513,
+            "cacheRead": 0,
+            "cacheWrite": 3273,
+            "reasoning": 11341
+          },
+          "outcomes": {
+            "ok": 4
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 165551,
+          "summedDurationMs": 195469
+        }
+      ],
+      "byAiJob": [
+        {
+          "step": "hierarchy",
+          "calls": 1,
+          "money": {
+            "credits": 214934000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "47dd8a7f-8a39-4ad9-9df9-0b31ff9b7350"
+          ],
+          "jobIds": [
+            "spya-a7msr4"
+          ],
+          "tokens": {
+            "input": 28552,
+            "output": 15783,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 11341
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 142875,
+          "summedDurationMs": 142875
+        },
+        {
+          "step": "labels",
+          "calls": 3,
+          "money": {
+            "credits": 114986500,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "47dd8a7f-8a39-4ad9-9df9-0b31ff9b7350"
+          ],
+          "jobIds": [
+            "spya-a7msr4"
+          ],
+          "tokens": {
+            "input": 29752,
+            "output": 4730,
+            "cacheRead": 0,
+            "cacheWrite": 3273,
+            "reasoning": 0
+          },
+          "outcomes": {
+            "ok": 3
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 22465,
+          "summedDurationMs": 52594
+        }
+      ],
+      "ledgerWallClockMs": 165551,
+      "observedSpend": [
+        {
+          "step": "fetch",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "extract",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "blocks",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "hierarchy",
+          "calls": 4,
+          "pending": 0,
+          "writeFailures": 0
+        },
+        {
+          "step": "assets",
+          "calls": 0,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "findings": [],
+      "articleId": "3ea6eece-b116-4784-bb6a-1f98f792bb3c",
+      "adoption": {
+        "kind": "minted",
+        "requested": "evalcost-w8i8qagf-long-html-1",
+        "got": "evalcost-w8i8qagf-long-html-1-spya-bgmk77",
+        "why": "an ingest draw mints"
+      }
+    },
+    {
+      "phase": "mode",
+      "mode": "arc",
+      "fixture": "long-html",
+      "fixtureFile": "evals/extraction/fixtures/gwern.html",
+      "createdArticle": false,
+      "repeat": 1,
+      "order": 2,
+      "slug": "evalcost-w8i8qagf-long-html-1-spya-bgmk77",
+      "jobId": "spya-hpt3uh",
+      "elapsedMs": 18683,
+      "jobStatus": "done",
+      "steps": [
+        {
+          "name": "arc",
+          "status": "done",
+          "detail": "8 sentences, one per part"
+        }
+      ],
+      "blocks": {
+        "observed": null,
+        "manifest": 186,
+        "matches": null
+      },
+      "gistableBlocks": 177,
+      "unreadable": 0,
+      "money": {
+        "credits": 73294000,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [
+        {
+          "step": "arc",
+          "calls": 1,
+          "money": {
+            "credits": 73294000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "7abbb5b4-29e9-48e1-bc0d-5e1259c1064d"
+          ],
+          "jobIds": [
+            "spya-hpt3uh"
+          ],
+          "tokens": {
+            "input": 28947,
+            "output": 1540,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 924
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 18267,
+          "summedDurationMs": 18267
+        }
+      ],
+      "byAiJob": [
+        {
+          "step": "arc",
+          "calls": 1,
+          "money": {
+            "credits": 73294000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "7abbb5b4-29e9-48e1-bc0d-5e1259c1064d"
+          ],
+          "jobIds": [
+            "spya-hpt3uh"
+          ],
+          "tokens": {
+            "input": 28947,
+            "output": 1540,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 924
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 18267,
+          "summedDurationMs": 18267
+        }
+      ],
+      "ledgerWallClockMs": 18267,
+      "observedSpend": [
+        {
+          "step": "arc",
+          "calls": 1,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "findings": [],
+      "articleId": "3ea6eece-b116-4784-bb6a-1f98f792bb3c",
+      "adoption": {
+        "kind": "adopted",
+        "slug": "evalcost-w8i8qagf-long-html-1-spya-bgmk77",
+        "articleId": "3ea6eece-b116-4784-bb6a-1f98f792bb3c"
+      }
+    },
+    {
+      "phase": "mode",
+      "mode": "tweets",
+      "fixture": "long-html",
+      "fixtureFile": "evals/extraction/fixtures/gwern.html",
+      "createdArticle": false,
+      "repeat": 1,
+      "order": 3,
+      "slug": "evalcost-w8i8qagf-long-html-1-spya-bgmk77",
+      "jobId": "spya-sdcybc",
+      "elapsedMs": 20229,
+      "jobStatus": "done",
+      "steps": [
+        {
+          "name": "tweets",
+          "status": "done",
+          "detail": "16 posts"
+        }
+      ],
+      "blocks": {
+        "observed": null,
+        "manifest": 186,
+        "matches": null
+      },
+      "gistableBlocks": 177,
+      "unreadable": 0,
+      "money": {
+        "credits": 71062000,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [
+        {
+          "step": "tweets",
+          "calls": 1,
+          "money": {
+            "credits": 71062000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "3634f47b-9260-4c0d-aff6-320f6a9f02fa"
+          ],
+          "jobIds": [
+            "spya-sdcybc"
+          ],
+          "tokens": {
+            "input": 27631,
+            "output": 1580,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 195
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 19771,
+          "summedDurationMs": 19771
+        }
+      ],
+      "byAiJob": [
+        {
+          "step": "tweets",
+          "calls": 1,
+          "money": {
+            "credits": 71062000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "3634f47b-9260-4c0d-aff6-320f6a9f02fa"
+          ],
+          "jobIds": [
+            "spya-sdcybc"
+          ],
+          "tokens": {
+            "input": 27631,
+            "output": 1580,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 195
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 19771,
+          "summedDurationMs": 19771
+        }
+      ],
+      "ledgerWallClockMs": 19771,
+      "observedSpend": [
+        {
+          "step": "tweets",
+          "calls": 1,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "findings": [],
+      "articleId": "3ea6eece-b116-4784-bb6a-1f98f792bb3c",
+      "adoption": {
+        "kind": "adopted",
+        "slug": "evalcost-w8i8qagf-long-html-1-spya-bgmk77",
+        "articleId": "3ea6eece-b116-4784-bb6a-1f98f792bb3c"
+      }
+    },
+    {
+      "phase": "mode",
+      "mode": "glossary",
+      "fixture": "long-html",
+      "fixtureFile": "evals/extraction/fixtures/gwern.html",
+      "createdArticle": false,
+      "repeat": 1,
+      "order": 4,
+      "slug": "evalcost-w8i8qagf-long-html-1-spya-bgmk77",
+      "jobId": "spya-djfx3w",
+      "elapsedMs": 37702,
+      "jobStatus": "done",
+      "steps": [
+        {
+          "name": "glossary",
+          "status": "done",
+          "detail": "19 terms"
+        }
+      ],
+      "blocks": {
+        "observed": null,
+        "manifest": 186,
+        "matches": null
+      },
+      "gistableBlocks": 177,
+      "unreadable": 0,
+      "money": {
+        "credits": 94148000,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [
+        {
+          "step": "glossary",
+          "calls": 1,
+          "money": {
+            "credits": 94148000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "4a9315fe-6332-4384-b2cd-d702ce22ff17"
+          ],
+          "jobIds": [
+            "spya-djfx3w"
+          ],
+          "tokens": {
+            "input": 28924,
+            "output": 3630,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 622
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 36687,
+          "summedDurationMs": 36687
+        }
+      ],
+      "byAiJob": [
+        {
+          "step": "glossary",
+          "calls": 1,
+          "money": {
+            "credits": 94148000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "4a9315fe-6332-4384-b2cd-d702ce22ff17"
+          ],
+          "jobIds": [
+            "spya-djfx3w"
+          ],
+          "tokens": {
+            "input": 28924,
+            "output": 3630,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 622
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 36687,
+          "summedDurationMs": 36687
+        }
+      ],
+      "ledgerWallClockMs": 36687,
+      "observedSpend": [
+        {
+          "step": "glossary",
+          "calls": 1,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "findings": [],
+      "articleId": "3ea6eece-b116-4784-bb6a-1f98f792bb3c",
+      "adoption": {
+        "kind": "adopted",
+        "slug": "evalcost-w8i8qagf-long-html-1-spya-bgmk77",
+        "articleId": "3ea6eece-b116-4784-bb6a-1f98f792bb3c"
+      }
+    },
+    {
+      "phase": "mode",
+      "mode": "quotes",
+      "fixture": "long-html",
+      "fixtureFile": "evals/extraction/fixtures/gwern.html",
+      "createdArticle": false,
+      "repeat": 1,
+      "order": 5,
+      "slug": "evalcost-w8i8qagf-long-html-1-spya-bgmk77",
+      "jobId": "spya-htaq2b",
+      "elapsedMs": 18725,
+      "jobStatus": "done",
+      "steps": [
+        {
+          "name": "quotes",
+          "status": "done",
+          "detail": "14 quotes"
+        }
+      ],
+      "blocks": {
+        "observed": null,
+        "manifest": 186,
+        "matches": null
+      },
+      "gistableBlocks": 177,
+      "unreadable": 0,
+      "money": {
+        "credits": 71082000,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [
+        {
+          "step": "quotes",
+          "calls": 1,
+          "money": {
+            "credits": 71082000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "b1283ee7-7e76-4bda-936b-c14afa0202df"
+          ],
+          "jobIds": [
+            "spya-htaq2b"
+          ],
+          "tokens": {
+            "input": 28026,
+            "output": 1503,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 0
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 17727,
+          "summedDurationMs": 17727
+        }
+      ],
+      "byAiJob": [
+        {
+          "step": "quotes",
+          "calls": 1,
+          "money": {
+            "credits": 71082000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "b1283ee7-7e76-4bda-936b-c14afa0202df"
+          ],
+          "jobIds": [
+            "spya-htaq2b"
+          ],
+          "tokens": {
+            "input": 28026,
+            "output": 1503,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 0
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 17727,
+          "summedDurationMs": 17727
+        }
+      ],
+      "ledgerWallClockMs": 17727,
+      "observedSpend": [
+        {
+          "step": "quotes",
+          "calls": 1,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "findings": [],
+      "articleId": "3ea6eece-b116-4784-bb6a-1f98f792bb3c",
+      "adoption": {
+        "kind": "adopted",
+        "slug": "evalcost-w8i8qagf-long-html-1-spya-bgmk77",
+        "articleId": "3ea6eece-b116-4784-bb6a-1f98f792bb3c"
+      }
+    },
+    {
+      "phase": "mode",
+      "mode": "ideas",
+      "fixture": "long-html",
+      "fixtureFile": "evals/extraction/fixtures/gwern.html",
+      "createdArticle": false,
+      "repeat": 1,
+      "order": 6,
+      "slug": "evalcost-w8i8qagf-long-html-1-spya-bgmk77",
+      "jobId": "spya-a6gbvf",
+      "elapsedMs": 124406,
+      "jobStatus": "done",
+      "steps": [
+        {
+          "name": "ideas",
+          "status": "done",
+          "detail": "10 ideas, 2 to bring"
+        }
+      ],
+      "blocks": {
+        "observed": null,
+        "manifest": 186,
+        "matches": null
+      },
+      "gistableBlocks": 177,
+      "unreadable": 0,
+      "money": {
+        "credits": 175970000,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [
+        {
+          "step": "ideas",
+          "calls": 1,
+          "money": {
+            "credits": 175970000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "f2a2c1c1-4f52-4cb4-bdb0-604be1373632"
+          ],
+          "jobIds": [
+            "spya-a6gbvf"
+          ],
+          "tokens": {
+            "input": 30545,
+            "output": 11488,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 6676
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 123850,
+          "summedDurationMs": 123850
+        }
+      ],
+      "byAiJob": [
+        {
+          "step": "ideas",
+          "calls": 1,
+          "money": {
+            "credits": 175970000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "f2a2c1c1-4f52-4cb4-bdb0-604be1373632"
+          ],
+          "jobIds": [
+            "spya-a6gbvf"
+          ],
+          "tokens": {
+            "input": 30545,
+            "output": 11488,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 6676
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 123850,
+          "summedDurationMs": 123850
+        }
+      ],
+      "ledgerWallClockMs": 123850,
+      "observedSpend": [
+        {
+          "step": "ideas",
+          "calls": 1,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "findings": [],
+      "articleId": "3ea6eece-b116-4784-bb6a-1f98f792bb3c",
+      "adoption": {
+        "kind": "adopted",
+        "slug": "evalcost-w8i8qagf-long-html-1-spya-bgmk77",
+        "articleId": "3ea6eece-b116-4784-bb6a-1f98f792bb3c"
+      }
+    },
+    {
+      "phase": "mode",
+      "mode": "timeline",
+      "fixture": "long-html",
+      "fixtureFile": "evals/extraction/fixtures/gwern.html",
+      "createdArticle": false,
+      "repeat": 1,
+      "order": 7,
+      "slug": "evalcost-w8i8qagf-long-html-1-spya-bgmk77",
+      "jobId": "spya-uq9gjg",
+      "elapsedMs": 174199,
+      "jobStatus": "done",
+      "steps": [
+        {
+          "name": "timeline",
+          "status": "done",
+          "detail": "11 events, 5 dated"
+        }
+      ],
+      "blocks": {
+        "observed": null,
+        "manifest": 186,
+        "matches": null
+      },
+      "gistableBlocks": 177,
+      "unreadable": 0,
+      "money": {
+        "credits": 249866000,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [
+        {
+          "step": "timeline",
+          "calls": 1,
+          "money": {
+            "credits": 249866000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "f8c6a4e7-0411-4ab1-9f37-159a0da36708"
+          ],
+          "jobIds": [
+            "spya-uq9gjg"
+          ],
+          "tokens": {
+            "input": 30358,
+            "output": 18915,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 16377
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 173553,
+          "summedDurationMs": 173553
+        }
+      ],
+      "byAiJob": [
+        {
+          "step": "timeline",
+          "calls": 1,
+          "money": {
+            "credits": 249866000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "f8c6a4e7-0411-4ab1-9f37-159a0da36708"
+          ],
+          "jobIds": [
+            "spya-uq9gjg"
+          ],
+          "tokens": {
+            "input": 30358,
+            "output": 18915,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 16377
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 173553,
+          "summedDurationMs": 173553
+        }
+      ],
+      "ledgerWallClockMs": 173553,
+      "observedSpend": [
+        {
+          "step": "timeline",
+          "calls": 1,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "findings": [],
+      "articleId": "3ea6eece-b116-4784-bb6a-1f98f792bb3c",
+      "adoption": {
+        "kind": "adopted",
+        "slug": "evalcost-w8i8qagf-long-html-1-spya-bgmk77",
+        "articleId": "3ea6eece-b116-4784-bb6a-1f98f792bb3c"
+      }
+    },
+    {
+      "phase": "mode",
+      "mode": "quiz",
+      "fixture": "long-html",
+      "fixtureFile": "evals/extraction/fixtures/gwern.html",
+      "createdArticle": false,
+      "repeat": 1,
+      "order": 8,
+      "slug": "evalcost-w8i8qagf-long-html-1-spya-bgmk77",
+      "jobId": "spya-j3r8gk",
+      "elapsedMs": 113833,
+      "jobStatus": "done",
+      "steps": [
+        {
+          "name": "quiz",
+          "status": "done",
+          "detail": "12 questions"
+        }
+      ],
+      "blocks": {
+        "observed": null,
+        "manifest": 186,
+        "matches": null
+      },
+      "gistableBlocks": 177,
+      "unreadable": 0,
+      "money": {
+        "credits": 185366000,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [
+        {
+          "step": "quiz",
+          "calls": 1,
+          "money": {
+            "credits": 185366000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "ddde7378-37de-480e-b80e-6469ced71f65"
+          ],
+          "jobIds": [
+            "spya-j3r8gk"
+          ],
+          "tokens": {
+            "input": 30608,
+            "output": 12415,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 8324
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 113228,
+          "summedDurationMs": 113228
+        }
+      ],
+      "byAiJob": [
+        {
+          "step": "quiz",
+          "calls": 1,
+          "money": {
+            "credits": 185366000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "ddde7378-37de-480e-b80e-6469ced71f65"
+          ],
+          "jobIds": [
+            "spya-j3r8gk"
+          ],
+          "tokens": {
+            "input": 30608,
+            "output": 12415,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 8324
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 113228,
+          "summedDurationMs": 113228
+        }
+      ],
+      "ledgerWallClockMs": 113228,
+      "observedSpend": [
+        {
+          "step": "quiz",
+          "calls": 1,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "findings": [],
+      "articleId": "3ea6eece-b116-4784-bb6a-1f98f792bb3c",
+      "adoption": {
+        "kind": "adopted",
+        "slug": "evalcost-w8i8qagf-long-html-1-spya-bgmk77",
+        "articleId": "3ea6eece-b116-4784-bb6a-1f98f792bb3c"
+      }
+    },
+    {
+      "phase": "mode",
+      "mode": "sketch",
+      "fixture": "long-html",
+      "fixtureFile": "evals/extraction/fixtures/gwern.html",
+      "createdArticle": false,
+      "repeat": 1,
+      "order": 9,
+      "slug": "evalcost-w8i8qagf-long-html-1-spya-bgmk77",
+      "jobId": "spya-ujpyp5",
+      "elapsedMs": 220869,
+      "jobStatus": "done",
+      "steps": [
+        {
+          "name": "sketch",
+          "status": "done",
+          "detail": "Spine with two convergences — 33 nodes, 3 scenes"
+        }
+      ],
+      "blocks": {
+        "observed": null,
+        "manifest": 186,
+        "matches": null
+      },
+      "gistableBlocks": 177,
+      "unreadable": 0,
+      "money": {
+        "credits": 299412000,
+        "upstream": 0,
+        "computed": 0,
+        "unpriced": 0
+      },
+      "byStep": [
+        {
+          "step": "sketch",
+          "calls": 1,
+          "money": {
+            "credits": 299412000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "5e99fa07-2734-416c-afc2-e5d159d37038"
+          ],
+          "jobIds": [
+            "spya-ujpyp5"
+          ],
+          "tokens": {
+            "input": 35481,
+            "output": 22845,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 17305
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 220524,
+          "summedDurationMs": 220524
+        }
+      ],
+      "byAiJob": [
+        {
+          "step": "sketch",
+          "calls": 1,
+          "money": {
+            "credits": 299412000,
+            "upstream": 0,
+            "computed": 0,
+            "unpriced": 0
+          },
+          "runIds": [
+            "5e99fa07-2734-416c-afc2-e5d159d37038"
+          ],
+          "jobIds": [
+            "spya-ujpyp5"
+          ],
+          "tokens": {
+            "input": 35481,
+            "output": 22845,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 17305
+          },
+          "outcomes": {
+            "ok": 1
+          },
+          "requestedModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "answeredModels": [
+            "anthropic/claude-sonnet-5"
+          ],
+          "upstreams": [
+            "Anthropic"
+          ],
+          "serviceTiers": [
+            "standard"
+          ],
+          "wallClockMs": 220524,
+          "summedDurationMs": 220524
+        }
+      ],
+      "ledgerWallClockMs": 220524,
+      "observedSpend": [
+        {
+          "step": "sketch",
+          "calls": 1,
+          "pending": 0,
+          "writeFailures": 0
+        }
+      ],
+      "findings": [],
+      "articleId": "3ea6eece-b116-4784-bb6a-1f98f792bb3c",
+      "adoption": {
+        "kind": "adopted",
+        "slug": "evalcost-w8i8qagf-long-html-1-spya-bgmk77",
+        "articleId": "3ea6eece-b116-4784-bb6a-1f98f792bb3c"
+      }
+    }
+  ]
+}

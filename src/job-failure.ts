@@ -38,8 +38,61 @@
  * — here it is minutes of pipeline and another billed model call, which is a
  * good deal worse. So a stage that knows its failure cannot come out
  * differently should say so, with `stageFailure` below.
+ *
+ * ## Two strings, not one
+ *
+ * A step's failure has two audiences and they want different sentences, so
+ * since 2026-09-03 it carries both. `Error.message` is the **diagnostic**: it
+ * goes to the **log**, and it may carry arithmetic, a file reference and an
+ * instruction addressed to whoever tunes a prompt. `readerFailure` is the
+ * **reader's**, and it is what src/jobs.ts persists onto `step.error` and
+ * `job.error`, which are what the band and the shelf card render.
+ *
+ * `readerFailureOf` below is the seam, and it is a seam rather than a
+ * convention because the convention had already failed eight times — see
+ * `stepGaveUp` in src/messages.ts for the count and for what was rejected.
+ * "Developer-facing" still means **safe to log**: it is not somewhere to put a
+ * provider's error body back, which can echo the article
+ * (src/anthropic-call.ts, docs/project/logging.md).
+ *
+ * ## The log, and **not** Sentry — the cost of the split, paid knowingly
+ *
+ * Sentry is stricter than the log, on purpose: `authored` in
+ * src/monitoring-scrub.ts forwards an `Error.message` only when it ends in a
+ * registered bracketed code, because a code is the one proof available that we
+ * wrote every word of it. A diagnostic has no code — it is free text a step
+ * wrote — so **Sentry withholds it.**
+ *
+ * **The obvious remedy is the one that must not be taken**: appending a code to
+ * every diagnostic so it looks authored. See `stageFailure` below for the six
+ * hours that lived in the tree and what it let through.
+ *
+ * The remedy that *is* taken is `{ authored }` on `stageFailure` — a throw site
+ * saying it wrote every character of a diagnostic, one word, greppable, and
+ * refused to anything interpolating text from outside. So the split costs
+ * nothing at the two places where the sentence was worth having:
+ * `anthropicCallFailed` and the ten `MODEL_REFUSED` throw sites still reach
+ * Sentry, and still carry the code that
+ * [tests/stop-details.test.ts](../tests/stop-details.test.ts) reads off the
+ * **log** line to tell a refusal apart from a stage that died before it ever
+ * called a model.
+ *
+ * What genuinely does not reach Sentry is every diagnostic nobody has made that
+ * claim about — a step's free text, which is most of them and is where a
+ * provider body or a stretch of the article turns up. Those events still arrive
+ * with the exception's name, its full stack, the `status` tag and a
+ * `message_withheld` marker saying why the message is bare; what is gone is the
+ * sentence. Several were already in that position: `TooLongForOnePass` has
+ * never carried a code and has never reached Sentry.
  */
-import { canRetry, type FailureKind, kindOfMessage } from "./messages.js";
+import {
+  canRetry,
+  codeOfMessage,
+  type FailureKind,
+  kindOfMessage,
+  type ReaderFacingFailure,
+  stepGaveUp,
+} from "./messages.js";
 
 /**
  * The four kinds, as a total map, so a fifth cannot be added without coming
@@ -70,37 +123,187 @@ const KNOWN_KINDS: Record<FailureKind, true> = {
  */
 interface KindedError {
   failureKind?: FailureKind;
+  /**
+   * **The sentence the reader gets**, when the throw site wrote them one.
+   *
+   * Separate from `Error.message`, which is the diagnostic: it goes to the log
+   * — and to the log only, see § The log, and **not** Sentry above — and it is
+   * free to carry arithmetic, a file reference and an instruction addressed to
+   * whoever tunes a prompt. Nothing but `readerFailureOf` may read this, for
+   * `failureKind`'s reason: the "nobody said, so fall back" rule belongs in one
+   * place.
+   */
+  readerFailure?: ReaderFacingFailure;
 }
 
 /**
- * Throw this when a step's failure cannot come out differently unchanged.
+ * Throw this when a step's failure is one the pipeline has something to say
+ * about — the kind it is, the sentence the reader gets, or both.
  *
  * One line at the throw site, and the reason it is a helper rather than an
- * `Object.assign` written out four times is that it is greppable: `stageFailure`
- * finds every place in the pipeline that has made this claim, which is the list
- * anybody auditing it wants.
+ * `Object.assign` written out at each one is that it is greppable:
+ * `stageFailure` finds every place in the pipeline that has made this claim,
+ * which is the list anybody auditing it wants.
  *
- * Make the claim only when it is true of a **retry**, which is a narrower thing
- * than a re-run: Retry skips every step that finished, so a stage that failed
- * over an artefact an earlier step already wrote will read the identical
+ * ## The two forms, and which to use
+ *
+ * **`stageFailure(kind, detail)`** says only what kind of failure it is. The
+ * reader gets `stepGaveUp`'s generic sentence for that kind (src/messages.ts),
+ * naming the step and nothing else, and `detail` is the diagnostic.
+ *
+ * **`stageFailure(failure, detail?)`** says both, carrying a whole
+ * `ReaderFacingFailure` — `kind` and reader sentence together, which is what
+ * that type is for. Reach for this whenever the failure has something true and
+ * useful to tell a reader; `detail` is what the log gets instead, and defaults
+ * to the reader's own sentence when there is nothing more to say.
+ *
+ * Claiming a kind that is not `retry` is a claim about a **retry**, which is
+ * narrower than a re-run: Retry skips every step that finished, so a stage that
+ * failed over an artefact an earlier step already wrote will read the identical
  * artefact again. That is what makes a bad tree or a missing URL permanent and
  * a malformed model answer not.
+ *
+ * ## `{ authored }`, for a diagnostic the throw site wrote every character of
+ *
+ * A plain `detail` is free text and is treated as such: no code is added to it,
+ * so `authored` in src/monitoring-scrub.ts withholds it from Sentry. That is
+ * the right default, because most details are built from something that came
+ * back over a wire.
+ *
+ * `{ authored }` is the throw site saying **I wrote every character of this and
+ * none of it came from a provider, a document or a reader**. The code goes on,
+ * and the sentence travels — to Sentry, and to a log line where the code is
+ * what tells a refusal apart from a stage that died before it ever called a
+ * model (tests/stop-details.test.ts makes exactly that distinction).
+ *
+ * It is a *claim*, deliberately, and one word at the throw site rather than a
+ * flag threaded from somewhere else — so that grepping `authored:` returns
+ * every place the claim has been made, which is the list an audit wants. What
+ * it must never wrap is an interpolation of anything that arrived from
+ * outside: `${err.message}`, a response body, a block of prose.
  */
-export function stageFailure(kind: FailureKind, message: string): Error {
-  return Object.assign(new Error(message), { failureKind: kind });
+export function stageFailure(kind: FailureKind, detail: string): Error;
+export function stageFailure(
+  failure: ReaderFacingFailure,
+  detail?: string | { authored: string },
+): Error;
+export function stageFailure(
+  what: FailureKind | ReaderFacingFailure,
+  detail?: string | { authored: string },
+): Error {
+  if (typeof what === "string") {
+    return Object.assign(new Error(typeof detail === "string" ? detail : ""), {
+      failureKind: what,
+    });
+  }
+  if (detail !== undefined && typeof detail !== "string") {
+    return Object.assign(new Error(coded(detail.authored, what)), {
+      failureKind: what.kind,
+      readerFailure: what,
+    });
+  }
+  /**
+   * **The detail goes on verbatim, and is not dressed up to look authored.**
+   *
+   * For six hours on 2026-09-03 this appended the reader sentence's bracketed
+   * code to `detail`, so that `authored` in src/monitoring-scrub.ts would
+   * forward the diagnostic to Sentry. That was wrong, and the way it was wrong
+   * is worth keeping: `authored` does not ask *"is there a code"*, it treats a
+   * registered code as **proof that we wrote the whole string**, which is why
+   * `sanitise` then forwards it verbatim. Appending one lets any text buy that
+   * proof — and a step's `detail` is free text, which is exactly where a
+   * provider body or a stretch of the article turns up. GPT Sol reproduced it:
+   *
+   *     stageFailure(MODEL_REFUSED, "ARTICLE_SENTINEL: private prose")
+   *     → Sentry: "ARTICLE_SENTINEL: private prose [ai-model-refused]"
+   *     → withheld: false
+   *
+   * So an uncoded diagnostic is withheld from Sentry, and that is the correct
+   * outcome rather than a gap. `tests/job-failure.test.ts` § the diagnostic
+   * does not buy its way past monitoring drives `sanitise` itself, so this
+   * cannot come back by anybody reasoning about it again.
+   */
+  return Object.assign(new Error(detail ?? what.message), {
+    failureKind: what.kind,
+    readerFailure: what,
+  });
+}
+
+/**
+ * An authored diagnostic, with the reader sentence's code on the end of it.
+ *
+ * The code is not decoration and it is not only about Sentry. `authored` in
+ * src/monitoring-scrub.ts reads it as provenance, and a **log** reader reads it
+ * as identity: tests/stop-details.test.ts pins `[ai-model-refused]` on the log
+ * line precisely because absence proves nothing — a stage that died on a
+ * missing file before it ever reached a model also contains no sentinel, and
+ * the code is the only thing that tells the two apart.
+ *
+ * Already coded is left alone: it came from somewhere that had already made
+ * this decision, and two codes name no branch at all.
+ */
+function coded(text: string, failure: ReaderFacingFailure): string {
+  if (codeOfMessage(text) !== null) return text;
+  const code = codeOfMessage(failure.message);
+  return code === null ? text : `${text} [${code}]`;
+}
+
+/**
+ * **The sentence to persist on `step.error` and `job.error`**, given whatever a
+ * step threw.
+ *
+ * This is the seam. Everything a reader is ever shown about a failed step comes
+ * through here, and it has exactly two branches: the throw site declared a
+ * sentence, or it did not and gets a generic one for its kind.
+ *
+ * **Undeclared falls through to generic rather than to the error's own text.**
+ * That is the whole point, and it is the choice this seam did not make for its
+ * first year: `src/jobs.ts` copied `(err as Error).message`, which published
+ * whatever a step happened to put in an exception. The known cost is at
+ * `stepGaveUp` in src/messages.ts, along with the allowlist that was rejected
+ * and the type-level enforcement that does not exist.
+ *
+ * **Unknown maps to the retryable sentence**, the same compatibility rule
+ * `failureKindOf` keeps below: nobody said, so offer another go. A reader must
+ * not be told to try again under a failure stored as `ours` or `bug`, and must
+ * not have the offer withheld because a kind went unrecorded.
+ *
+ * @param step the failed step's **label** — see `stepGaveUp`.
+ */
+export function readerFailureOf(err: unknown, step: string): ReaderFacingFailure {
+  const declared = (err as KindedError | null | undefined)?.readerFailure;
+  /* Shape-checked rather than trusted. `readerFailure` is read off a thrown
+     value, so it is outside the type system in exactly the way `KNOWN_KINDS`
+     above describes — and a malformed one here would put `undefined` on a
+     reader's screen. */
+  if (
+    typeof declared === "object" &&
+    declared !== null &&
+    typeof declared.message === "string" &&
+    declared.message !== "" &&
+    typeof declared.kind === "string" &&
+    declared.kind in KNOWN_KINDS
+  ) {
+    return declared;
+  }
+  return stepGaveUp(failureKindOf(err) ?? "retry", step);
 }
 
 /**
  * What kind of failure this is, if it said.
  *
  * Two sources, in order. The **field** is the real one and the one a stage
- * should set. The **bracketed code** is the fallback, for the model-call layer:
- * `anthropicCallFailed` (src/anthropic-call.ts) throws
- * `providerHttpFailure(status).message`, and the six stages that can meet a
- * refusal throw `MODEL_REFUSED.message` — sentences that already carry their
- * kind because they had nowhere else to carry it. Reading it here is not a
- * second mechanism; it is the same one, arriving through the door
- * src/messages.ts built for it.
+ * should set, and since 2026-09-03 every failure in the pipeline that had a
+ * kind worth knowing sets it: `stageFailure` writes the field, and
+ * `anthropicCallFailed` and the ten `MODEL_REFUSED` throw sites go through it.
+ *
+ * The **bracketed code** is the fallback, and it is now a fallback for history
+ * rather than for a live mechanism. This paragraph described the live one until
+ * that day — those stages threw the reader's coded sentence *as*
+ * `Error.message`, having nowhere else to put a kind — and the split gave them
+ * somewhere. What still arrives by code is a job settled before the split and
+ * read back off disk, and any error whose message happens to be one of
+ * src/messages.ts's sentences. Both should keep answering, so the branch stays.
  *
  * `undefined` means nobody said, and every caller must read that as "offer the
  * retry".

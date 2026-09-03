@@ -158,6 +158,13 @@ export type Route =
    */
   | { kind: "privacy" }
   /**
+   * What the thing does, mode by mode, with pictures — `/features`. See
+   * FeaturesPage.tsx and docs/project/website-text.md. Reachable signed out
+   * for the same reason `privacy` is: the person who wants it is deciding
+   * whether to sign up, and the landing page links to it.
+   */
+  | { kind: "features" }
+  /**
    * Where Google sends the reader back — `/auth/callback`. See AuthCallback.tsx.
    *
    * **The one route that must be exempt from every rewrite in main.tsx**, and
@@ -233,11 +240,12 @@ export function parseRoute(pathname: string): Route {
   if (new RegExp(`^${LOGIN_HREF}/?$`).test(pathname)) return { kind: "login" };
   // Beside `design` and above `/read/` for the same reason: it is not about an
   // article, so the article regex must never get a chance at it.
-  if (/^\/profile\/?$/.test(pathname)) return { kind: "profile" };
+  if (new RegExp(`^${PROFILE_HREF}/?$`).test(pathname)) return { kind: "profile" };
   // Beside `design` and `profile`, and for the same reason. Above `/read/`
   // because it is not about an article, and above the sign-in gate in App.tsx
   // because it is not about being signed in either.
   if (new RegExp(`^${PRIVACY_HREF}/?$`).test(pathname)) return { kind: "privacy" };
+  if (new RegExp(`^${FEATURES_HREF}/?$`).test(pathname)) return { kind: "features" };
   /* Beside `design` and `profile`, and above `/read/` for the same reason: it
      is not about an article. The alternation is the validation — `/admin/foo`
      matches nothing here and falls through to the shelf, which is what every
@@ -351,10 +359,25 @@ export const ADMIN_FEEDBACK_HREF = "/admin/feedback";
 export const DESIGN_HREF = "/design";
 export const LOGIN_HREF = "/login";
 /**
+ * The reader's own page — the profile box, the plan, the settings.
+ *
+ * A constant for the same reason `ADMIN_HREF` is one, and it earned it: the
+ * string was written out at three call sites before the quota's refusal copy
+ * needed a fourth (`QuotaNotice` in QuotaNotice.tsx), which is the point at
+ * which a typo stops being a broken link and starts being a reader who has just
+ * been refused an article landing on the shelf with no way forward.
+ */
+export const PROFILE_HREF = "/profile";
+/**
  * The privacy policy. Linked from the landing page's footer and from
  * `/profile`, so both a stranger and a reader can find it.
  */
 export const PRIVACY_HREF = "/privacy";
+/**
+ * The features page. Linked from the landing page, where the short list ends
+ * with "everything it does, with pictures".
+ */
+export const FEATURES_HREF = "/features";
 /**
  * Spelled once, and read by both `parseRoute` above and main.tsx's rewrite
  * exemption.

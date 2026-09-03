@@ -1,0 +1,187 @@
+{
+  "version": "illustrated/1",
+  "style": "An illuminated manuscript page — vellum, iron-gall ink linework, gold leaf and lapis/madder pigment, with the argument told as a sequence of painted roundels linked by vine-tendrils and marginalia, fitting an essay that closes on the soul, psychē and Ātman.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Funnel, the Fork, and the Return",
+      "prompt": "An illuminated manuscript page on cream vellum, drawn in iron-gall brown ink with gold leaf accents and touches of lapis and madder-red, in the hand of a single medieval illustrator, composition running top to bottom in a chain of round painted medallions linked by curling vine-tendrils that fork and rejoin like a genealogical tree. At the very top, a small brass automaton stands before a scribe's balance-scale weighing a heart against a sealed scroll. Below, a scribe's hand plaits three plain ribbons into a braid; beside it a folded, ribbon-like coiled shape sits ignored while robed figures admire a separate speaking mechanical mouth; beside that, tiny travelers climb a hillside path that turns vertical just ahead of their feet. These three tendrils braid together into a single medallion: a round bun marked with a faint accidental face, peered at by monks. From this medallion a tendril descends to four medallions in a row: a brain split into flesh and brass gears; an ornate bronze geared astronomical device with dials; a scholar gesturing to a glowing heart rooted in soil; a dry stomach-diagram beneath a rain-cloud whose drops stop short of it. These four tendrils converge into a leaning tower built of stacked cogs, visibly cracking. From the cracked tower, a tendril descends to a hooded figure at a misted crossroads holding a blank scroll toward failing light. From this figure the path forks into two medallions side by side: a forge where a craftsman hammers a small glowing homunculus while onlookers recoil holding out a chain; and a shelf of glass vessels each holding a tiny glowing knot of tissue, tended by an alchemist. Both forks rejoin at the bottom into a final medallion: a rough stone idol and a jointed brass figure standing side by side, leaning toward one shared small flame, with a slender gold tendril curling back up the right margin of the page to touch the scale-and-heart medallion at the top, closing the loop. Wide decorated margins, small painted foliage, no lettering, no numerals, no text anywhere on the page.",
+      "vignettes": [
+        {
+          "block": "spya-e68t9h",
+          "quote": "with consciousness comes moral status, the potential for suffering and, perhaps, rights",
+          "depicts": "At the top of the page, a small brass automaton stands before a scribe's balance-scale; one pan holds a bleeding heart, the other a sealed scroll.",
+          "node": "op1"
+        },
+        {
+          "block": "spya-cvaqgs",
+          "quote": "The propensity to bundle intelligence and consciousness together can be traced to three baked-in psychological biases",
+          "depicts": "A scribe's hand plaiting three plain ribbons into a single braid, without any faces or symbols on the ribbons themselves.",
+          "node": "bias1"
+        },
+        {
+          "block": "spya-k6fpme",
+          "quote": "Nobody, as far as I know, has claimed that DeepMind's AlphaFold is conscious",
+          "depicts": "A coiled, folded parchment-ribbon shape sits ignored in a corner while a crowd of small figures gathers admiringly around a separate speaking mechanical mouth.",
+          "node": "bias2"
+        },
+        {
+          "block": "spya-cke6sj",
+          "quote": "on an exponential curve, every point is an inflection point",
+          "depicts": "A path up a hillside that turns near-vertical just ahead of each climber's foot, flattening away behind them, with tiny robed travelers craning upward at every step.",
+          "node": "bias3"
+        },
+        {
+          "block": "spya-k850tu",
+          "quote": "seeing patterns in things, like a face in a piece of toast or Mother Teresa in a cinnamon bun",
+          "depicts": "The three ribbons, the quiet folded shape, and the vertical path all converge as vine-tendrils into a round bun marked with a faint, accidental face, being peered at by monks.",
+          "node": "conv1"
+        },
+        {
+          "block": "spya-a8jgf4",
+          "quote": "brains are not computers. The metaphor of the brain as a carbon-based computer has been hugely influential",
+          "depicts": "An anatomical brain split down the centre, one half rendered as soft convoluted flesh, the other as interlocking brass gears.",
+          "node": "arg1"
+        },
+        {
+          "block": "spya-hj5y6s",
+          "quote": "called biological naturalism by the philosopher John Searle— that properties of life are necessary",
+          "depicts": "A robed scholar gestures toward a glowing heart growing among tangled roots in the soil.",
+          "node": "arg3"
+        },
+        {
+          "block": "spya-npjt4j",
+          "quote": "A simulation of the digestive system does not actually digest anything",
+          "depicts": "A drawn diagram of a stomach and coiled intestine sits perfectly dry beneath a rain-cloud whose drops stop short of touching it.",
+          "node": "arg4"
+        },
+        {
+          "block": "spya-ymbpwn",
+          "quote": "looks increasingly shaky as the many and deep differences between brains and (standard digital) computers come into view",
+          "depicts": "The split brain, the bronze gear-device, the rooted heart and the dry stomach-diagram converge as tendrils into a leaning tower built of stacked cogs, visibly cracking.",
+          "node": "conv2"
+        },
+        {
+          "block": "spya-vs0vpj",
+          "quote": "the accidental emergence of consciousness in cerebral organoids (brain-like structures typically grown from human embryonic stem cells)",
+          "depicts": "A row of small glass vessels on a shelf, each containing a tiny glowing brain-like knot of tissue, tended quietly by an alchemist in the margin.",
+          "node": "eth2"
+        },
+        {
+          "block": "spya-zv36xq",
+          "quote": "the idea of the soul might seem as outmoded as the Stone Age",
+          "depicts": "The crossroads figure, the forge, and the glass vessels all converge below into one final roundel: a rough stone-carved idol and a jointed brass figure standing side by side, both leaning toward the same small flame.",
+          "node": "close1"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-the-temptations",
+      "title": "Doing and Being, Bias and Rapture",
+      "prompt": "An illuminated manuscript page on cream vellum, iron-gall brown ink with gold leaf and touches of lapis and madder-red, same single hand and palette throughout, composition in painted roundels linked by branching vine-tendrils, running top to bottom. At the top, a wide medallion shows a cluster of small figures at ordinary tasks: one bent over a grid of squares, one assembling wooden furniture, one walking a lane toward a shopfront carrying a basket. From this medallion two vine-tendrils branch left and right. The left branch descends through: a human figure standing at the centre of a compass-circle ringed by varied creatures and objects all facing inward; then a tall ladder rising through the page with winged angelic figures at its top rungs, human figures at its middle, and animals at its foot; then a crowd of robed figures gathered eagerly around a speaking mechanical mouth on a scroll-stand; then a sleeping figure in a curtained bed with a faint translucent figure standing at its foot. The right branch descends through: a road rising skyward that steepens sharply just ahead of a traveller's foot and flattens behind, the traveller gazing up in awe; then a robed inventor standing before a glowing jointed humanoid raised on a stone altar, arms lifted as if before a deity. Both branches, left ending at the bedside ghost and right ending at the altar scene, send their tendrils down to converge in a final medallion at the bottom of the page: a round bun bearing a faint accidental face, examined closely by two monks leaning in with lamps. Decorative foliate borders in the margins, small painted vines and leaves filling empty space, no lettering, no numerals, no text anywhere on the page.",
+      "vignettes": [
+        {
+          "block": "spya-nj888h",
+          "quote": "solving a crossword puzzle, assembling some furniture, navigating a tricky family situation, walking to the shop",
+          "depicts": "A cluster of small figures: one bent over a grid of squares, one fitting together wooden furniture pieces, one carrying a basket down a lane toward a shopfront.",
+          "node": "A"
+        },
+        {
+          "block": "spya-h4mwb2",
+          "quote": "to take the human example as definitional, rather than as one example of how different properties might come together",
+          "depicts": "A single human figure stands at the centre of a drawn compass-circle, with varied creatures and objects arranged around its rim, all facing inward toward the human as if measured against it.",
+          "node": "B1"
+        },
+        {
+          "block": "spya-cke6sj",
+          "quote": "on an exponential curve, every point is an inflection point",
+          "depicts": "A road rising toward the sky that steepens sharply just ahead of the traveller's foot and flattens behind, with a small robed figure gazing up in awe.",
+          "node": "C1"
+        },
+        {
+          "block": "spya-her4zk",
+          "quote": "closer to angels and Gods than to other animals, as in the medieval Scala naturae",
+          "depicts": "A tall ladder rising through the page, winged angelic figures at its top rungs, human figures in the middle, and animals clustered at its foot.",
+          "node": "B2"
+        },
+        {
+          "block": "spya-v4sduf",
+          "quote": "If you've created a conscious machine — it's not the history of man, that's the history of Gods",
+          "depicts": "A robed inventor stands before a glowing jointed humanoid figure raised on a stone altar, arms lifted as though before a deity.",
+          "node": "C2"
+        },
+        {
+          "block": "spya-k6fpme",
+          "quote": "Large Language Models (LLMs) like OpenAI's ChatGPT or Anthropic's Claude have been the focus of most of the excitement",
+          "depicts": "A crowd of small robed figures gathers eagerly around a speaking mechanical mouth mounted on a scroll-stand.",
+          "node": "B3"
+        },
+        {
+          "block": "spya-t29n67",
+          "quote": "hear voices that aren't there or see a dead relative standing at the foot of the bed",
+          "depicts": "A sleeping figure in a curtained bed, with a faint translucent figure standing silently at its foot.",
+          "node": "B4"
+        },
+        {
+          "block": "spya-k850tu",
+          "quote": "seeing patterns in things, like a face in a piece of toast or Mother Teresa in a cinnamon bun",
+          "depicts": "The ladder, the altar-scene, the speaking mouth and the bedside ghost all send tendrils down into one final medallion: a round bun bearing a faint accidental face, examined closely by two monks.",
+          "node": "D"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-the-computation",
+      "title": "The Cornerstone and the Cracking Tower",
+      "prompt": "An illuminated manuscript page on cream vellum, iron-gall brown ink with gold leaf and touches of lapis and madder-red, same hand and palette as companion pages, composition in painted roundels joined by branching vine-tendrils, running top to bottom. At the top, a single keystone crowning a stone archway bears upon it, side by side, a small brass gear and a softly glowing brain-shape. From this keystone, four vine-tendrils branch downward side by side into four medallions: a brain split down the centre into flesh on one side and brass gears on the other; an ornate bronze geared astronomical device with dials and toothed wheels; a robed scholar gesturing toward a glowing heart rooted among tangled soil; and a dry stomach-and-intestine diagram beneath a rain-cloud whose drops stop short of touching it. From the split-brain medallion, a further tendril descends to a row of three small heads shown in sequence, each more transformed than the last, flesh giving way piece by piece to brass cogs and plates. From the dry-stomach medallion, a tendril descends to a small stone office filled with dials and gearwork, its roof open to a storm-cloud from which hailstones fall inward onto the machinery. All four upper medallions, together with the transforming-heads sequence and the hail-filled office, send tendrils converging into one final medallion at the bottom: a tower built of stacked cogs and gears, leaning visibly, with cracks running down its stone base. Decorative foliate borders fill the margins with small painted vines and leaves, no lettering, no numerals, no text anywhere on the page.",
+      "vignettes": [
+        {
+          "block": "spya-wepmnr",
+          "quote": "The very idea of conscious AI rests on the assumption that consciousness is a matter of computation",
+          "depicts": "A single keystone at the top of a stone arch, with a small brass gear and a softly glowing brain-shape resting together upon it, both borne up by the one stone.",
+          "node": "E"
+        },
+        {
+          "block": "spya-a8jgf4",
+          "quote": "brains are not computers. The metaphor of the brain as a carbon-based computer has been hugely influential",
+          "depicts": "A brain split down the centre, one half soft convoluted flesh, the other half interlocking brass gears.",
+          "node": "F1"
+        },
+        {
+          "block": "spya-hj5y6s",
+          "quote": "called biological naturalism by the philosopher John Searle— that properties of life are necessary",
+          "depicts": "A robed scholar gestures toward a glowing heart rooted among tangled soil-bound roots.",
+          "node": "F3"
+        },
+        {
+          "block": "spya-npjt4j",
+          "quote": "A simulation of the digestive system does not actually digest anything",
+          "depicts": "A drawn diagram of a stomach and coiled intestine, perfectly dry, beneath a rain-cloud whose falling drops stop just short of touching it.",
+          "node": "F4"
+        },
+        {
+          "block": "spya-ahtr6e",
+          "quote": "invites us to imagine progressively replacing brain parts with silicon equivalents that function in exactly the same way",
+          "depicts": "A sequence of three small heads in a row, each more transformed than the last, flesh giving way piece by piece to brass cogs and plates.",
+          "node": "G1"
+        },
+        {
+          "block": "spya-xvm37k",
+          "quote": "a hailstorm is likely to arise inside the computers of the U.K. meteorological office",
+          "depicts": "A small stone office filled with dials and gearwork, its roof open to a drawn storm-cloud from which hailstones fall inward onto the machinery.",
+          "node": "G2"
+        },
+        {
+          "block": "spya-ymbpwn",
+          "quote": "looks increasingly shaky as the many and deep differences between brains and (standard digital) computers come into view",
+          "depicts": "A tower built of stacked cogs and gears, leaning visibly, cracks running down its stonework base.",
+          "node": "H"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "openai/gpt-image-2",
+  "slug": "noema-mythology-of-conscious-ai",
+  "profileHash": null
+}

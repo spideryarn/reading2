@@ -35,6 +35,7 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import type { Article } from "./article-input.js";
 import { articleWithIds } from "./article-prompt.js";
 import { isBodyEvidence } from "./block-policy.js";
+import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
@@ -44,6 +45,7 @@ import {
   accept,
   CANVAS_W,
   readSketch,
+  SKETCH_VERSION,
   stripInferredOpens,
   scoreSketch,
   type Sketch,
@@ -59,8 +61,18 @@ import {
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Meta, Tree, TreeNode } from "./types.js";
 
-/** Bumped whenever SYSTEM or `renderPrompt` changes what the model is asked. */
-export const PROMPT_VERSION = "sketch/1";
+/**
+ * Bumped whenever SYSTEM or `renderPrompt` changes what the model is asked —
+ * and it is **`SKETCH_VERSION` itself**, not a second copy of the same string.
+ *
+ * `readSketch` stamps `SKETCH_VERSION` (src/sketch-scene.ts) onto every sketch
+ * it builds, and src/api.ts reports `outdated` by comparing that stamp with
+ * this. They were two literals until 2026-09-03, which meant bumping one alone
+ * marked every sketch outdated *including ones generated a second later*, with
+ * nothing to say which of the two was behind. One name, so there is nothing to
+ * keep in step.
+ */
+export const PROMPT_VERSION = SKETCH_VERSION;
 
 /**
  * How many nodes the overview should have.
@@ -382,6 +394,11 @@ Rules that make the difference between a picture and a mess:
     of contents again.
   - Do not label a node with its section number. The reader cannot see the
     contents page and does not care.
+  - Plain words everywhere you write words — "text", "sub", "detail", a region's
+    label, a scene title, the caption: the article's own for the things it
+    names, ordinary words for the rest. Most of these are read in a glance, in a
+    box, with no room to re-read — plainer than the article, never further from
+    it.
   - If the article has a part that is apparatus — notes, bibliography,
     acknowledgements — leave it out or draw it once, muted, at the bottom.
 
@@ -555,7 +572,9 @@ export async function generateSketch(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  if (wasRefused(message)) throw new Error(MODEL_REFUSED.message);
+  if (wasRefused(message)) throw stageFailure(MODEL_REFUSED, {
+      authored: "the model answered with stop_reason: refusal",
+    });
   if (message.stop_reason === "max_tokens") {
     throw truncationFailure("sketch", maxTokens, answerTokens, {
       outputTokens: message.usage.output_tokens,

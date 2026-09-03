@@ -131,7 +131,7 @@
  * (docs/project/web-client.md#tailwind-and-shadcn-components). Every class needs
  * the `tw:` prefix — unprefixed names silently do nothing.
  */
-import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useQueryState } from "nuqs";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import {
@@ -144,6 +144,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Database,
   Download,
   ExternalLink,
   FileArchive,
@@ -153,11 +154,13 @@ import {
   Fingerprint,
   Image,
   Layers,
+  Link2,
   List,
   ListOrdered,
   ListTree,
   MessageCircle,
   MessageCircleQuestionMark,
+  Paintbrush,
   PenLine,
   RefreshCw,
   ScanLine,
@@ -184,7 +187,7 @@ import { isWebUrl } from "../urls.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam } from "./params.js";
-import { LIBRARY_HREF, carriedSearch, readHref } from "./router.js";
+import { LIBRARY_HREF, PROFILE_HREF, carriedSearch, readHref } from "./router.js";
 import { SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { EditableTitle, useArticleRename } from "./TitleEditor.js";
@@ -196,6 +199,7 @@ import { useExperimental } from "./useExperimental.js";
 import { apiFetch, failure, readJson, statusOf } from "./lib/api.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
 import { ProfileBox } from "./ProfileBox.js";
+import { PageContents } from "./PageContents.js";
 
 /**
  * Clear of the fixed bottom bar, in terms of `--dock-space` rather than a number.
@@ -249,6 +253,9 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
      "no raw document" state a few rows down. */
   quiz: MessageCircleQuestionMark,
   sketch: PenLine,
+  /* A paintbrush beside the sketch's pen: the same argument, painted rather
+     than drawn. docs/project/diagram.md § Illustrated. */
+  illustrated: Paintbrush,
 };
 
 /**
@@ -474,6 +481,16 @@ export function Metadata({
    * any order and re-run one at a time, so "when did anything happen to this
    * article" is a max rather than a lookup.
    */
+  /**
+   * The page body, for the contents list in the margin to read its entries off.
+   *
+   * A ref rather than a `document.querySelector("main")`: this component is
+   * mounted in tests two at a time (the owner's page and the visitor's, in
+   * tests/metadata-origin.test.tsx), and a document-wide selector would hand
+   * one page's contents list the other page's sections.
+   */
+  const body = useRef<HTMLElement>(null);
+
   const pipelineLine = useMemo(() => {
     if (!provenance) return null;
     const ran = provenance.stages.filter((s) => s.done).length;
@@ -497,7 +514,24 @@ export function Metadata({
           reader. The reader shell got a top-inset audit and these pages did not.
           GPT Sol, second pass, 2026-08-28.
           docs/plans/260828av-mobile-screen-real-estate.md § 2. */}
-      <main className={`tw:mx-auto tw:max-w-3xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}>
+      {/* The contents list in the left margin. It reads its entries off the
+          `[data-section]` elements inside `main`, so there is no second list of
+          section names to keep in step — PageContents.tsx says why that matters
+          more here than usual. Hidden below `xl`, where there is no margin to
+          put it in. */}
+      <PageContents containerRef={body} label="Sections of this page" />
+
+      {/* `metadata-page` carries exactly one rule, and it is a typography fix
+          rather than a layout one: every `<button>` on this page inherits its
+          font (styles.css § metadata). We import no preflight, on purpose, so a
+          button otherwise keeps the UA's 13.3px Arial — which is why the
+          collapsible section headings drew half again the size of the ones
+          beside them. Greg, 2026-09-03: *"some of them seem larger than others
+          somehow?"* */}
+      <main
+        ref={body}
+        className={`metadata-page tw:mx-auto tw:max-w-3xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}
+      >
         <Link
           href={backHref}
           className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
@@ -556,27 +590,67 @@ export function Metadata({
             is the same private `GET /api/source/:slug` the masthead gates, and
             this page already has one answer to *is this yours*. */}
         <Origin meta={meta} slug={slug} owner={hasShelfRow} />
-        <p className="tw:mt-2 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:font-mono tw:text-xs tw:text-ink-faint">
-          <span className="tw:rounded tw:border tw:border-border tw:px-1.5 tw:py-0.5">{slug}</span>
-          {provenance && (
-            <span className="tw:rounded tw:border tw:border-border tw:px-1.5 tw:py-0.5">
-              {provenance.dir}/
-            </span>
-          )}
-          {/* The fixture opens under any unknown slug, so a page describing it
-              must say so — otherwise the numbers below look like this article's
-              and are somebody else's. */}
-          {showingFixture && (
+        {/* **The two identifiers are gone from here**, to `TechnicalDetails` at
+            the foot of the page. They were the third line under the title on
+            every visit, in mono, and Greg on 2026-09-03 said the thing a header
+            is not allowed to make somebody wonder: *"I don't know what these
+            are."* Neither is addressed to the reader — one is the text already
+            in their address bar, the other is a row in a database — and neither
+            has ever been actionable from up here.
+
+            The fixture badge stays, because it is the opposite kind of fact: it
+            says the numbers on this page belong to somebody else's article, and
+            a warning behind a shut heading is not a warning. */}
+        {showingFixture && (
+          <p className="tw:mt-2 tw:mb-0">
             <span
-              className="tw:rounded tw:border tw:border-highlight/40 tw:px-1.5 tw:py-0.5 tw:text-highlight"
-              title="No artefacts exist for this slug, so the reading view is showing the committed example fixture — see example/README.md"
+              className="tw:rounded tw:border tw:border-highlight/40 tw:px-1.5 tw:py-0.5 tw:font-mono tw:text-xs tw:text-highlight"
+              /* The `example/README.md` pointer went with the rewrite: it named
+                 a file in this repository to a reader who has no copy of it.
+                 What is left is the consequence, which is the part they can do
+                 something about. */
+              title="Nothing has been stored at this address, so the page is showing our built-in example article. Nothing below is about yours."
             >
               fixture
             </span>
-          )}
-        </p>
+          </p>
+        )}
 
-        {/* ------------------------------------------------- 2. at a glance --
+        {/* --------------------------------------------- 2. in one sentence --
+            Serif, because this is the article talking rather than the app —
+            the same distinction the reading view makes between prose and
+            chrome, and the same one a library card makes.
+
+            **Directly under the title since 2026-09-03**, where it was third
+            before. Greg: *"Perhaps the 'In one sentence' could be displayed
+            directly underneath the title."* It is the only thing on the page
+            that answers *what is this*, so everything above it was furniture
+            in front of the answer — and it is the one section here written in
+            the article's own voice, which makes it read as part of the heading
+            rather than as the first of nine cards. */}
+        {Boolean(root?.gist || root?.summary || meta.note) && (
+          <Section label="In one sentence">
+            <div className={`${CARD} tw:p-5`}>
+              {root?.gist && (
+                <p className="tw:m-0 tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:text-foreground">
+                  {root.gist}
+                </p>
+              )}
+              {root?.summary && (
+                <p className="tw:mt-3 tw:mb-0 tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:text-ink-faint">
+                  {root.summary}
+                </p>
+              )}
+              {meta.note && (
+                <p className="tw:mt-3 tw:mb-0 tw:border-t tw:border-border tw:pt-3 tw:text-xs tw:text-ink-faint">
+                  {meta.note}
+                </p>
+              )}
+            </div>
+          </Section>
+        )}
+
+        {/* ------------------------------------------------- 3. at a glance --
             Six numbers, each big enough to read without reading a sentence.
             One TooltipGroup so that once the pointer has opened one card's
             explanation, sweeping across the rest is instant rather than six
@@ -602,13 +676,13 @@ export function Metadata({
                    model's judgement, then scaled the estimate by how confident
                    the model said it was. See Dock.tsx, and
                    original-version/difficulty-and-reading-time.md. */
-                tip={`Words ÷ ${WPM} a minute, rounded, and never less than one. A flat rate: it does not know how hard this particular article is. The original version asked a model instead of counting syllables, and scaled its answer by how confident the model was — we have not.`}
+                tip={`Words ÷ ${WPM} a minute, rounded, and never less than one. A flat rate: it does not know how hard this particular article is.`}
               />
               <Stat
                 icon={Blocks}
                 label="Blocks"
                 value={stats.blocks.toLocaleString()}
-                tip="Paragraphs, headings, quotes and images — each with a stable id that every question and every summary is addressed by."
+                tip="Paragraphs, headings, quotes and images. Each has a permanent id, which is how a comment or a summary stays attached to the right passage even after we re-read the article."
               />
               <Stat
                 icon={BookOpen}
@@ -626,102 +700,67 @@ export function Metadata({
                 icon={Layers}
                 label="Levels"
                 value={stats.depth.toLocaleString()}
-                tip="How many rungs the tree has below the whole article. It is the number of granularity columns this piece can offer, so it is the honest answer to “why does this one only have two?”."
+                tip="How many rungs of detail the tree has below the whole article. It is also how many zoom columns this piece can offer, so it answers “why does this one only have two?”."
               />
             </div>
           </TooltipGroup>
         </Section>
 
-        {/* ------------------------------------------- 3. in one sentence --
-            Serif, because this is the article talking rather than the app —
-            the same distinction the reading view makes between prose and
-            chrome, and the same one a library card makes. */}
-        {Boolean(root?.gist || root?.summary || meta.note) && (
-          <Section label="In one sentence">
-            <div className={`${CARD} tw:p-5`}>
-              {root?.gist && (
-                <p className="tw:m-0 tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:text-foreground">
-                  {root.gist}
-                </p>
-              )}
-              {root?.summary && (
-                <p className="tw:mt-3 tw:mb-0 tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:text-ink-faint">
-                  {root.summary}
-                </p>
-              )}
-              {meta.note && (
-                <p className="tw:mt-3 tw:mb-0 tw:border-t tw:border-border tw:pt-3 tw:text-xs tw:text-ink-faint">
-                  {meta.note}
-                </p>
-              )}
-            </div>
-          </Section>
-        )}
-
-        {/* ------------------------------------------ 3b. where it came from --
+        {/* ------------------------------------- 4. how well we read the PDF --
             The one field of their Document Information we never took, because
             when this page was built the answer was the same for every article.
             It is not any more: since 2026-08-26 a PDF is read by a
             model rather than by Readability
             (docs/project/content-extraction.md), and `CameFrom` says what that
-            reading actually did. Nothing for a web page — see the component. */}
+            reading actually did. Nothing for a web page — see the component.
+
+            High on the page, above everything about the reader, because it is
+            the trust question: a PDF owner who opened this page because
+            *something looked wrong* is asking whether the words on screen are
+            the words in the file, and every section below answers something
+            else. Fable, 2026-09-03. */}
         <CameFrom meta={meta} />
 
-        {/* ------------------------------------------ 4. what we did to it --
-            Which stages have run, and the two that carry a model's name. A
-            stage counts as run only when *all* of its outputs are on disk —
-            src/pipeline.ts owns that rule and this page borrows it rather than
-            restating it. */}
-        {/* `collapsible` only while there is nothing wrong. The one thing this
-            section holds that the reader has to see is the error when the
-            metadata request fails — and a shut section is exactly where it
-            would have gone. So a failure makes the section ordinary: open, with
-            the error at the top of it. Found by a cross-model review,
-            2026-08-27; the first version hid it. */}
-        <Section
-          label="What we did to it"
-          collapsible={!provenanceError}
-          aside={provenanceError ? null : pipelineLine}
-        >
-          {provenanceError && (
-            <p
-              className={`${CARD} tw:m-0 tw:border-destructive/40 tw:bg-destructive/10 tw:p-4 tw:text-sm tw:text-foreground`}
-            >
-              {provenanceError}
-            </p>
-          )}
-          {/* Named, not "Loading…", and only after the timer — their loading
-              rules on both counts (original-version/design-system.md#loading-states). */}
-          {!provenanceError && provenance === null && slow && (
-            <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
-              Checking which files the pipeline wrote…
-            </p>
-          )}
-          {provenance && (
-            /* One group over the nine rows, same as the stat cards: once one
-               row's tooltip is open, running down the column is instant rather
-               than nine separate waits. */
-            <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-              <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
-                {provenance.stages.map((stage) => (
-                  <StageRow
-                    key={stage.step}
-                    stage={stage}
-                    generator={
-                      stage.step === "hierarchy"
-                        ? `${tree.generator} · ${tree.version}`
-                        : stage.step === "arc" && arc
-                          ? `${arc.generator} · ${arc.version}`
-                          : undefined
-                    }
-                  />
-                ))}
-              </div>
-            </TooltipGroup>
-          )}
-        </Section>
+        {/* -------------------------------------------- 5. access & sharing --
+            **Moved above "your reading" on 2026-09-03**, on Greg's *"Move
+            Access & Sharing up."* It was below it, under a section of pipeline
+            rows that has now gone to the foot of the page.
 
-        {/* ------------------------------------------------ 5. your reading --
+            The order it lands in is: what this article is (the three sections
+            above), then the decisions about where it goes (this and Export),
+            then the reader's own work on it, then the machinery. The previous
+            arrangement had the one irreversible control on the page — a public
+            link cannot be un-rung (messages.ts § SHARING_CANNOT_UNRING) —
+            below two screenfuls of notes and file paths.
+
+            Still above Delete, and Delete is still last: nothing destructive
+            sits above something somebody came here to read.
+
+            **Not offered on the fixture.** That address has no row of its own
+            (`showingFixture` above), so the `PUT` behind the switch would 404,
+            and a control that can only fail is worse than no control because
+            pressing it is how you find out. */}
+        <SharingSection
+          slug={slug}
+          title={meta.title}
+          /* **Not `hasShelfRow`**, which is false while the fetch is out and
+             false for ever if it fails — so a failed metadata check removed the
+             whole section rather than showing its "we could not check" state.
+             An owner looking for the sharing switch found no sharing switch and
+             nothing saying why. GPT Sol, 2026-08-28.
+             Hidden only for a *known* fixture, which is the one case where the
+             controls really would 404. */
+          offer={!showingFixture}
+          /* **Parsed, not passed.** `readJson<ArticleMetadata>` above is a
+             cast and checks nothing, so `sharing: {}` used to be truthy, become
+             the card's *known* state, and draw "Only you can read this" about a
+             body that said nothing. The write response was validated from the
+             day it was written; this door was not. AccessSharing.tsx §
+             asArticleSharing. */
+          sharing={asArticleSharing(provenance?.sharing)}
+        />
+
+        {/* ------------------------------------------------ 6. your reading --
             Reader state, and the only section on the page that is about you
             rather than about the article. */}
         <Section label="Your reading">
@@ -767,7 +806,7 @@ export function Metadata({
                 <span className="tw:text-[0.7rem] tw:uppercase tw:tracking-[0.03em] tw:text-ink-faint">
                   About you
                 </span>
-                <Link href="/profile" className="tw:text-xs tw:text-highlight">
+                <Link href={PROFILE_HREF} className="tw:text-xs tw:text-highlight">
                   Edit on your profile →
                 </Link>
               </div>
@@ -791,103 +830,42 @@ export function Metadata({
                 </Link>
               ) : (
                 <span className="tw:text-muted-foreground">
-                  You haven't moved off the top of this one yet.
+                  You haven't scrolled past the top of this one yet.
                 </span>
               )}
             </Row>
           </div>
         </Section>
 
-        {/* ------------------------------------------ 6. access & sharing --
-            Between "your reading" and the two lists that are about the app
-            rather than about this article: it is a decision about *this*
-            document, so it belongs with the other things the owner sets here,
-            and it is above Delete for the same reason Delete is last — nothing
-            destructive sits above something somebody came here to read.
-
-            **Not offered on the fixture.** That address has no row of its own
-            (`showingFixture` above), so the `PUT` behind the switch would 404,
-            and a control that can only fail is worse than no control because
-            pressing it is how you find out. The same rule Delete follows, and
-            withheld until `provenance` has landed for the same reason: `null`
-            is "not yet told" as much as it is "not the fixture". */}
-        <SharingSection
-          slug={slug}
-          title={meta.title}
-          /* **Not `hasShelfRow`**, which is false while the fetch is out and
-             false for ever if it fails — so a failed metadata check removed the
-             whole section rather than showing its "we could not check" state.
-             An owner looking for the sharing switch found no sharing switch and
-             nothing saying why. GPT Sol, 2026-08-28.
-             Hidden only for a *known* fixture, which is the one case where the
-             controls really would 404. */
-          offer={!showingFixture}
-          /* **Parsed, not passed.** `readJson<ArticleMetadata>` above is a
-             cast and checks nothing, so `sharing: {}` used to be truthy, become
-             the card's *known* state, and draw "Only you can read this" about a
-             body that said nothing. The write response was validated from the
-             day it was written; this door was not. AccessSharing.tsx §
-             asArticleSharing. */
-          sharing={asArticleSharing(provenance?.sharing)}
-        />
-
-        {/* ------------------------------------------------ 7. export it --
-            Above "not built yet" because that list is things that do not
-            exist and this one does, and below sharing because both are
-            decisions about where this article's data goes. Still above
-            Delete, which stays last. */}
+        {/* -------------------------------------------------- 7. export it --
+            Below sharing because both are decisions about where this article's
+            data goes, and above the machinery because this one is a thing the
+            owner does rather than a thing we did. Still above Delete, which
+            stays last. */}
         <ExportSection slug={slug} offer={hasShelfRow} />
 
-        {/* --------------------------------------------- 8. not built yet --
-            Dimmed rows rather than absence, because absence is indistinguishable
-            from an oversight. Same tooltip convention as the bar's placeholder
-            buttons (Dock.tsx): what the thing would be, and what the previous
-            version's attempt at it taught us. */}
-        <Section label="Not built yet">
-          <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-            <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden tw:opacity-70`}>
-              {SOON.map((idea) => (
-                <Tooltip
-                  key={idea.key}
-                  placement="top"
-                  className="tip-soon"
-                  content={
-                    <>
-                      <div className="tip-soon-head">
-                        {idea.label} <span className="tip-soon-flag">not built yet</span>
-                      </div>
-                      <p>{idea.blurb}</p>
-                      <p className="tip-soon-learned">{idea.learned}</p>
-                    </>
-                  }
-                >
-                  {/* A button so it is focusable and reaches the tooltip by
-                      keyboard, `aria-disabled` so nothing announces it as
-                      something that will happen if pressed. */}
-                  <button
-                    type="button"
-                    aria-disabled="true"
-                    className="tw:flex tw:w-full tw:items-center tw:gap-3 tw:px-4 tw:py-3 tw:text-left tw:text-sm tw:text-muted-foreground tw:cursor-help tw:hover:bg-accent/40 tw:focus-visible:outline-none tw:focus-visible:bg-accent/40"
-                  >
-                    <Chip icon={idea.icon} />
-                    <span className="tw:border-b tw:border-dotted tw:border-rule-strong">
-                      {idea.label}
-                    </span>
-                    <span className="tw:ml-auto tw:shrink-0 tw:rounded-full tw:border tw:border-border tw:px-2 tw:py-0.5 tw:text-[0.68rem] tw:uppercase tw:tracking-[0.06em]">
-                      not built yet
-                    </span>
-                  </button>
-                </Tooltip>
-              ))}
-            </div>
-          </TooltipGroup>
-        </Section>
+        {/* ------------------------------------------- 8. technical details --
+            Everything that is true, is ours rather than the reader's, and has
+            no bearing on reading the article: the two identifiers, the PDF's
+            fingerprint, which stages have run, and the one thing this page
+            cannot do yet. Shut, so the page ends at Export for anybody not
+            looking for it. Greg, 2026-09-03. */}
+        <TechnicalDetails
+          slug={slug}
+          provenance={provenance}
+          rawSha256={meta.rawSha256}
+          error={provenanceError}
+          slow={slow}
+          aside={pipelineLine}
+          hierarchyGenerator={`${tree.generator} · ${tree.version}`}
+          arcGenerator={arc ? `${arc.generator} · ${arc.version}` : undefined}
+        />
 
         {/* ------------------------------------------------ 9. deleting it --
             Last on the page, and last on purpose: a destructive control belongs
             past everything somebody might have come here to read, not beside
-            it. Under "not built yet" rather than over it for the same reason —
-            that list is the least urgent thing here, and it is still not
+            it. Under the technical section rather than over it for the same
+            reason — that is the least urgent thing here, and it is still not
             something to scroll a Delete button past. */}
         <Section label="Delete this article">
           <DeleteArticle
@@ -1140,7 +1118,11 @@ function Questions({
   // passage it is about.
   return (
     <Link href={href} className="tw:text-highlight">
-      {count} question{count === 1 ? "" : "s"}
+      {/* **"Comments", to match the row's own label and the mode's name.** It
+          said "questions" under a label that said Comments, which is two words
+          for one thing on one line — and the mode a reader has already met in
+          the bar is called Comments (docs/project/comments.md). */}
+      {count} comment{count === 1 ? "" : "s"}
     </Link>
   );
 }
@@ -1264,7 +1246,12 @@ function Origin({ meta, slug, owner }: { meta: Meta; slug: string; owner: boolea
 function CameFrom({ meta }: { meta: Meta }) {
   if (meta.source !== "pdf") return null;
   return (
-    <Section label="Where it came from">
+    /* **"Where it came from" until 2026-09-03**, which described the section
+       next to it rather than this one: where it came from is the URL or the
+       "uploaded from a file" line under the title, three inches up. What is
+       actually in here is a transcription and how far to trust it, so the
+       heading now says that. Fable, 2026-09-03. */
+    <Section label="How well we read the PDF">
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
           <Row icon={FileType} label="Made from">
@@ -1275,52 +1262,186 @@ function CameFrom({ meta }: { meta: Meta }) {
               <span className="tw:font-mono tw:text-xs tw:break-all">{meta.method}</span>
             </Row>
           )}
-          <Row icon={ScanLine} label="Checked">
-            {meta.unverified ? (
-              /* Not a number, because there is no number: a scan has no
-                 text layer, so nothing compared anything. The sentence is
-                 the honest form and a "0%" would be a lie in the other
-                 direction. docs/plans/260826c-pdf-ingestion.md § A scan with no
-                 text layer. */
-              <span>Nothing checked it — a scan, with no text in the file to check against</span>
-            ) : meta.recall === undefined ? (
-              <span>Not recorded</span>
-            ) : (
+          {/* **"Words we may have missed", not "Checked".** Greg, 2026-09-03:
+              *"the one for 'Where it came from / Checked' is very confusing"*,
+              and it was confusing in three separate ways.
+
+              "Checked" named the *process* — did a check happen — while a
+              reader is asking about the *outcome*: can I trust the words on
+              the screen to be the words in the file. So the row is named after
+              what it measures, and stated as a shortfall, which is the
+              direction somebody worries in. "83% of the words" also read as a
+              grade, and 83% is not a mark out of a hundred; it is coverage.
+
+              Second, the tooltip said "averaged over the pages that had one",
+              and that is not what the number is: `recall` is
+              `matchedTokens / baselineTokens` (src/pdf-read.ts), pooled across
+              every checked page and therefore weighted by how much text each
+              page had — not a mean of per-page recalls. Both this tooltip and
+              the field's own docstring in src/types.ts said "mean"; the
+              docstring is corrected in the same commit.
+
+              Third, and worst, "on 3 of 17 pages" was never explained, so the
+              obvious reading is "14 pages failed". It means the other fourteen
+              carry no hidden text to compare against, so nothing could check
+              them — which is a much more useful thing to know and was findable
+              only by reading `pagesChecked`'s definition. Fable, 2026-09-03. */}
+          <Row icon={ScanLine} label="Words we may have missed">
+            <Missed meta={meta} />
+          </Row>
+          {/* **Fingerprint has gone to `TechnicalDetails`.** Greg named it as
+              one of the things to put away, and it was the odd row here in any
+              case: the three rows above are about whether to trust the words,
+              and a hash answers "is this the same file", which is a different
+              question asked by a different person on a different day. */}
+        </div>
+      </TooltipGroup>
+    </Section>
+  );
+}
+
+/** A heading for one card inside a section, without starting a section of its own. */
+function SubHeading({ children }: { children: ReactNode }) {
+  /* An `h3` rather than a styled `p`, so a screen reader still gets the page's
+     outline — but deliberately NOT a nested `Section`, which would put "What we
+     did to it" into the contents list in the margin as if it were a peer of
+     "Your reading". `Section` is what `[data-section]` means. */
+  return (
+    <h3 className="tw:mt-5 tw:mb-2 tw:text-[0.68rem] tw:font-normal tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
+      {children}
+    </h3>
+  );
+}
+
+/**
+ * Everything true about this article that is about us rather than about it.
+ *
+ * ## What this section is for
+ *
+ * Greg, 2026-09-03, having opened the page on a real article and met
+ * `temporal-context-reinstatement-spya-dhqkf9` and
+ * `spideryarn.article_revisions/e7efb065-…/` under the title:
+ *
+ * > I don't know what these are. Give them tooltips, and maybe also hide them
+ * > in a section of "Technical details" (default collapsed) or something like
+ * > that, along with Fingerprint, etc.
+ *
+ * and, of the nine-to-thirteen rows of stage names and file paths:
+ *
+ * > Move "What we did to it" down, and maybe put that in the Technical Details.
+ *
+ * So: both, and the "not built yet" row too, which is a note about the stage
+ * rows above it and had a section of the page to itself for one dimmed line.
+ * Everything in here is *true* and none of it changes how you read the article,
+ * which is the test for what belongs.
+ *
+ * ## The rule this section inherits, and must not break
+ *
+ * "What we did to it" was collapsible **only while nothing had gone wrong**,
+ * because the metadata request's error message lives in it and a shut heading
+ * is exactly where an error goes to not be seen. A cross-model review found
+ * that on 2026-08-27, when the first version hid it.
+ *
+ * Moving those rows into a section that is shut *by default* rather than by
+ * choice makes that rule matter more, not less — so it comes along, unchanged:
+ * `collapsible={!error}`, and a failure draws the whole section open with the
+ * error at the top. tests/metadata-page-order.test.tsx pins it, and pins that
+ * the section is really there while it does — the first draft of that test
+ * passed against a page with no such section at all.
+ */
+function TechnicalDetails({
+  slug,
+  provenance,
+  rawSha256,
+  error,
+  slow,
+  aside,
+  hierarchyGenerator,
+  arcGenerator,
+}: {
+  slug: string;
+  provenance: ArticleMetadata | null;
+  /** The PDF's hash, if this article is one. */
+  rawSha256: string | undefined;
+  error: string | null;
+  slow: boolean;
+  /** `N of M stages · last wrote …`, kept on the heading so shutting it takes only the detail. */
+  aside: string | null;
+  hierarchyGenerator: string;
+  arcGenerator: string | undefined;
+}) {
+  return (
+    <Section label="Technical details" collapsible={!error} aside={error ? null : aside}>
+      {error && (
+        <p
+          className={`${CARD} tw:m-0 tw:mb-3 tw:border-destructive/40 tw:bg-destructive/10 tw:p-4 tw:text-sm tw:text-foreground`}
+        >
+          {error}
+        </p>
+      )}
+
+      <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+        <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
+          {/* **The slug, called what it is to the person reading.** "Slug" is
+              our word; the reader's word for this string is the address, since
+              it is the part of the URL in front of them. The tooltip answers
+              the question the string actually provokes on an article whose
+              title has since been edited. */}
+          <Row icon={Link2} label="Address">
+            <Tooltip
+              placement="top"
+              content={
+                <Note>
+                  The last part of this article's web address — the `/read/…/` in your address
+                  bar. Made from the title when you added it, plus a few random letters so two
+                  articles with the same name never collide. Renaming the article does not change
+                  it.
+                </Note>
+              }
+            >
+              <button
+                type="button"
+                className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:font-mono tw:text-xs tw:break-all tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+              >
+                {slug}
+              </button>
+            </Tooltip>
+          </Row>
+          {provenance && (
+            <Row icon={Database} label="Stored as">
               <Tooltip
                 placement="top"
                 content={
                   <Note>
-                    The share of the words in the PDF's own text layer that turned up in the
-                    transcription, averaged over the pages that had one. Read it with the page
-                    count beside it, always: a mean over one page of seventeen is arithmetically
-                    fine and means nothing.
+                    Where this article's data physically sits. There is nothing to do with it —
+                    except quote it if you are reporting a problem with this particular article,
+                    which is the one thing it is good for.
                   </Note>
                 }
               >
                 <button
                   type="button"
-                  className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+                  className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:font-mono tw:text-xs tw:break-all tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight"
                 >
-                  {/* The page count only when there is one. `?? 0` on a
-                      meta.json written before `pages` existed produces "on 3 of
-                      0 pages", and a nonsense denominator undermines the number
-                      standing next to it. */}
-                  {Math.round(meta.recall * 100)}% of the words
-                  {meta.pages ? `, on ${meta.pagesChecked ?? 0} of ${meta.pages} pages` : ""}
+                  {provenance.dir}/
                 </button>
               </Tooltip>
-            )}
-          </Row>
-          {meta.rawSha256 && (
+            </Row>
+          )}
+          {/* Down from "how well we read the PDF", where it was the odd row
+              out: the three rows around it are about whether to trust the
+              words, and this one is an identity check on the file. */}
+          {rawSha256 && (
             <Row icon={Fingerprint} label="Fingerprint">
               <Tooltip
                 placement="top"
                 content={
                   <Note>
-                    SHA-256 of the PDF exactly as we fetched it, so “is this the same document?”
-                    has an answer that does not depend on its filename or its URL.
+                    A checksum of the PDF exactly as we received it. Two files with the same
+                    fingerprint are the same document, whatever they have been named or wherever
+                    they were downloaded from.
                     <br />
-                    <span className="tw:font-mono tw:break-all">{meta.rawSha256}</span>
+                    <span className="tw:font-mono tw:break-all">{rawSha256}</span>
                   </Note>
                 }
               >
@@ -1332,11 +1453,95 @@ function CameFrom({ meta }: { meta: Meta }) {
                   type="button"
                   className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:font-mono tw:text-xs tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight"
                 >
-                  {meta.rawSha256.slice(0, 12)}…
+                  {rawSha256.slice(0, 12)}…
                 </button>
               </Tooltip>
             </Row>
           )}
+        </div>
+      </TooltipGroup>
+
+      {/* Which stages have run, and the two that carry a model's name. A stage
+          counts as run only when *all* of its outputs are on disk —
+          src/pipeline.ts owns that rule and this page borrows it rather than
+          restating it. */}
+      <SubHeading>What we did to it</SubHeading>
+      {/* Named, not "Loading…", and only after the timer — their loading
+          rules on both counts (original-version/design-system.md#loading-states). */}
+      {!error && provenance === null && slow && (
+        <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
+          Checking which files the pipeline wrote…
+        </p>
+      )}
+      {provenance && (
+        /* One group over all the rows, same as the stat cards: once one row's
+           tooltip is open, running down the column is instant rather than a
+           fresh wait per row. */
+        <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+          <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
+            {provenance.stages.map((stage) => (
+              <StageRow
+                key={stage.step}
+                stage={stage}
+                generator={
+                  stage.step === "hierarchy"
+                    ? hierarchyGenerator
+                    : stage.step === "arc"
+                      ? arcGenerator
+                      : undefined
+                }
+              />
+            ))}
+          </div>
+        </TooltipGroup>
+      )}
+
+      {/* Dimmed rows rather than absence, because absence is indistinguishable
+          from an oversight. Same tooltip convention as the bar's placeholder
+          buttons (Dock.tsx): what the thing would be, and what the previous
+          version's attempt at it taught us.
+
+          **Under the stage rows rather than in a section of its own**, since
+          2026-09-03. Its one entry is "re-run a stage", which is a sentence
+          about the list directly above it — and a whole section of the page for
+          one dimmed line was more prominence than a thing that does not exist
+          has earned. */}
+      <SubHeading>Not built yet</SubHeading>
+      <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+        <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden tw:opacity-70`}>
+          {SOON.map((idea) => (
+            <Tooltip
+              key={idea.key}
+              placement="top"
+              className="tip-soon"
+              content={
+                <>
+                  <div className="tip-soon-head">
+                    {idea.label} <span className="tip-soon-flag">not built yet</span>
+                  </div>
+                  <p>{idea.blurb}</p>
+                  <p className="tip-soon-learned">{idea.learned}</p>
+                </>
+              }
+            >
+              {/* A button so it is focusable and reaches the tooltip by
+                  keyboard, `aria-disabled` so nothing announces it as
+                  something that will happen if pressed. */}
+              <button
+                type="button"
+                aria-disabled="true"
+                className="tw:flex tw:w-full tw:items-center tw:gap-3 tw:px-4 tw:py-3 tw:text-left tw:text-sm tw:text-muted-foreground tw:cursor-help tw:hover:bg-accent/40 tw:focus-visible:outline-none tw:focus-visible:bg-accent/40"
+              >
+                <Chip icon={idea.icon} />
+                <span className="tw:border-b tw:border-dotted tw:border-rule-strong">
+                  {idea.label}
+                </span>
+                <span className="tw:ml-auto tw:shrink-0 tw:rounded-full tw:border tw:border-border tw:px-2 tw:py-0.5 tw:text-[0.68rem] tw:uppercase tw:tracking-[0.06em]">
+                  not built yet
+                </span>
+              </button>
+            </Tooltip>
+          ))}
         </div>
       </TooltipGroup>
     </Section>
@@ -1611,6 +1816,135 @@ function DeleteArticle({
  * and the label are three elements over there, copied into every section, and
  * one of the seven has a different gradient for no reason anybody recorded.
  */
+/**
+ * How much of the PDF we may have failed to transcribe — in four states.
+ *
+ * Split out of `CameFrom` because it *is* four states: a scan, an unscored
+ * record, a perfect score and a number, each with its own sentence and its own
+ * tooltip. Inline it was three nested ternaries inside a fourth conditional and
+ * put that function over this repo's cognitive-complexity limit, which was the
+ * lint telling the truth — the row is the hardest thing on this page to state
+ * correctly, and it deserves to be readable on its own.
+ */
+function Missed({ meta }: { meta: Meta }) {
+  return (
+    <>
+    {meta.unverified ? (
+      /* Not a number, because there is no number: a scan has no
+         text layer, so nothing compared anything. The sentence is
+         the honest form and a "0%" would be a lie in the other
+         direction. docs/plans/260826c-pdf-ingestion.md § A scan with no
+         text layer. */
+      <Tooltip
+        placement="top"
+        content={
+          <Note>
+            There was not enough of the PDF's own text to check the transcription
+            against — a scan is pictures of pages, and what little text a scan does carry
+            is usually the digitising library's rather than the author's. Nobody and
+            nothing has verified this one. Open the original if a line reads oddly.
+          </Note>
+        }
+      >
+        <button
+          type="button"
+          className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+        >
+          Couldn't be checked — this is a scan
+        </button>
+      </Tooltip>
+    ) : meta.recall === undefined ? (
+      /* **"Not recorded", and not a guess at why.** This said "read
+         before we started recording this", which is one cause among
+         several and cannot be told from the others here: a SINGLE-page
+         scan reaches this branch too, because `isScan` requires
+         `pages.length > 1` (src/pdf.ts § withText), so such a document
+         is recorded as neither verified nor scored. Naming a cause we
+         cannot establish is the failure this whole page exists to
+         avoid. GPT Sol, 2026-09-03. */
+      <span>No comparison score was recorded</span>
+    ) : (
+      <Tooltip
+        placement="top"
+        content={
+          <Note>
+            {/* **What was compared, not why the rest was not.** This
+                said "the other N had no hidden text, so nothing could
+                check them", and that is not what `pagesChecked` counts:
+                `scored` also drops end-of-document reference lists,
+                which do have a text layer and are excluded because the
+                model transcribes them only partly (src/pdf-score.ts §
+                checkable). GPT Sol, 2026-09-03. */}
+            {meta.pages && meta.pagesChecked
+              ? `We compared our transcription against the PDF's own hidden text on ${meta.pagesChecked} of its ${meta.pages} pages, and ${found(meta.recall)}% of that text turned up in what the model wrote.${
+                  /* **Only when some were.** Seen in a browser on a
+                     real article where all 8 of 8 pages were checked:
+                     "The other 0 were left out of the comparison",
+                     which is a sentence about nothing and reads as a
+                     bug on the page whose job is being trusted. */
+                  meta.pages > meta.pagesChecked
+                    ? ` The other ${meta.pages - meta.pagesChecked} were left out of the comparison — usually for carrying no text to compare against.`
+                    : ""
+                }`
+              : `We compared our transcription against the PDF's own hidden text, and ${found(meta.recall)}% of it turned up in what the model wrote.`}{" "}
+            Compare a page against the original if a passage reads oddly.
+          </Note>
+        }
+      >
+        <button
+          type="button"
+          className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+        >
+          {/* The page count only when there is one. `?? 0` on a
+              meta.json written before `pages` existed produces "judging
+              by 3 of 0 pages", and a nonsense denominator undermines the
+              number standing next to it. */}
+          {/* **`recall === 1`, not a rounded 100.** Those are not the
+              same claim, and the difference is live on a real article:
+              a stored recall of 0.998 rounds to 100 and would have
+              printed "None found" over a document that did miss words.
+              GPT Sol, 2026-09-03. */}
+          {meta.recall === 1
+            ? "None found"
+            : found(meta.recall) === 100
+              ? "Less than 1%"
+              : `About ${100 - found(meta.recall)}%`}
+          {meta.pages ? `, judging by ${meta.pagesChecked ?? 0} of ${meta.pages} pages` : ""}
+        </button>
+      </Tooltip>
+    )}
+    </>
+  );
+}
+
+/**
+ * The percentage of the checked text we found, rounded once.
+ *
+ * **Rounded once, and subtracted from afterwards.** The row says how much was
+ * missed and its tooltip says how much was found, and computing those
+ * separately — `round(100 - r*100)` in one and `round(r*100)` in the other —
+ * lets them disagree: at a recall of 0.835 the row said 17% missed while the
+ * tooltip said 84% found, which is 101% of the document. One rounding, two
+ * readings of it.
+ */
+function found(recall: number): number {
+  return Math.round(recall * 100);
+}
+
+/**
+ * A section's heading turned into an element id, for the contents list to aim at.
+ *
+ * Deriving it rather than passing one in: an `id` prop is a second name for the
+ * section that nothing checks against the first, and the failure is a contents
+ * entry that scrolls nowhere. The labels here are short English phrases, so
+ * lower-casing and hyphenating is enough — `"Access & sharing"` becomes
+ * `"access-sharing"`, and there is no pair of labels on this page that collide
+ * under it.
+ */
+function sectionId(label: string): string {
+  return `sec-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+}
+
 function Section({
   label,
   aside,
@@ -1631,7 +1965,30 @@ function Section({
      you left open is not a place you were. Nothing about a shut section is
      worth linking to, and a `?stages=open` in every shared metadata URL would
      be noise in the one place this app keeps clean. */
-  const [open, setOpen] = useState(!collapsible);
+  /**
+   * **`open` is the reader's toggle; `showing` is what actually renders.**
+   *
+   * This was `useState(!collapsible)`, and that is a bug that had been live
+   * since the section was written, found by tests/metadata-page-order.test.tsx
+   * on 2026-09-03. `useState`'s argument is an *initial* value: it is read on
+   * the first render and never again. But the one caller that passes a varying
+   * `collapsible` computes it from a request that has not answered yet —
+   * `collapsible={!provenanceError}` — so the section mounts collapsible,
+   * latches `open: false`, and then the request fails.
+   *
+   * At that moment `collapsible` goes false, which takes the disclosure button
+   * away (the heading stops being a control), while `open` is still false. The
+   * section was left **shut, with nothing on the page that could open it**, and
+   * what was sealed inside was the error message — the exact outcome the rule
+   * was written to prevent, by a cross-model review on 2026-08-27 which said
+   * "a shut section is exactly where it would have gone". It went there anyway.
+   *
+   * Deriving it fixes the class rather than the instance: a section that is not
+   * collapsible shows its children, whenever it stopped being collapsible and
+   * whatever the reader had toggled beforehand. docs/postmortems/260903d-a-collapsible-section-latched-shut-and-sealed-the-error-in.md
+   */
+  const [open, setOpen] = useState(false);
+  const showing = !collapsible || open;
   const head = (
     <>
       <span
@@ -1642,7 +1999,16 @@ function Section({
     </>
   );
   return (
-    <section className="tw:mt-8">
+    /* `data-section` is what the contents list in the margin reads, and `id` is
+       where it scrolls to — PageContents.tsx, which derives its whole list from
+       these rather than from a second array of section names.
+
+       `scroll-mt-24` is 6rem, and `REACHED_PX` over there is deliberately a
+       little MORE than it — the section a click has just scrolled to must be
+       the section the list then marks, and setting the two equal put that on a
+       knife edge that a browser lost. See the constant's docstring; if you
+       change this 24, that number has to stay above it. */
+    <section id={sectionId(label)} data-section={label} className="tw:mt-8 tw:scroll-mt-24">
       <h2 className="tw:m-0 tw:mb-3 tw:flex tw:items-center tw:gap-2 tw:text-[0.68rem] tw:font-normal tw:uppercase tw:tracking-[0.09em] tw:text-ink-faint">
         {collapsible ? (
           /* The heading itself is the control, so the target is the whole line
@@ -1652,11 +2018,11 @@ function Section({
           <button
             type="button"
             onClick={() => setOpen((was) => !was)}
-            aria-expanded={open}
+            aria-expanded={showing}
             className="tw:flex tw:items-center tw:gap-2 tw:border-0 tw:bg-transparent tw:p-0 tw:text-inherit tw:uppercase tw:tracking-[0.09em] tw:cursor-pointer tw:hover:text-highlight tw:focus-visible:outline-none tw:focus-visible:text-highlight"
           >
             {head}
-            {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            {showing ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
           </button>
         ) : (
           head
@@ -1669,7 +2035,7 @@ function Section({
           </span>
         )}
       </h2>
-      {open && children}
+      {showing && children}
     </section>
   );
 }
@@ -1788,7 +2154,14 @@ function StageRow({ stage, generator }: { stage: StageState; generator: string |
     <div className={`tw:px-4 tw:py-3 ${done ? "" : "tw:opacity-60"}`}>
       <div className="tw:flex tw:items-center tw:gap-3">
         <Chip icon={Icon} />
-        <span className="tw:font-mono tw:text-sm tw:text-foreground">{step}</span>
+        {/* **The English name first, the key beside it.** Until 2026-09-03 the
+            row led with `step` — `arc`, `tweets`, `blocks` — and showed the
+            human label *only when the stage had not run*, so the rows you could
+            read were the ones with nothing in them. The key still earns its
+            place: it is what `npm run <step> <slug>` takes, and this is the
+            page you have open when you are about to type that. */}
+        <span className="tw:text-sm tw:text-foreground">{label}</span>
+        <span className="tw:font-mono tw:text-xs tw:text-ink-faint">{step}</span>
         {/* `done &&` is load-bearing. The generator string comes off the tree
             and the arc, which are in hand because the article loaded — so a hierarchy
             stage whose blocks copy is missing would otherwise print a model
@@ -1813,12 +2186,12 @@ function StageRow({ stage, generator }: { stage: StageState; generator: string |
       {/* Indented to the chip's width so the files hang under the stage name
           rather than under its icon. */}
       <div className="tw:mt-1.5 tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-3 tw:gap-y-1 tw:pl-9 tw:text-xs tw:text-ink-faint">
-        {done ? (
+        {/* Only for a stage that ran. A not-run stage's line is now blank — its
+            label moved up to be the row's name, and listing the files it would
+            have written reads as a list of things that are missing rather than
+            as a thing that has not happened yet. */}
+        {done && (
           <span className="tw:min-w-0 tw:font-mono tw:break-all">{outputs.join(" · ")}</span>
-        ) : (
-          // The stage's own present-tense label, which reads as the thing that
-          // has not happened yet rather than as a list of missing files.
-          <span>{label}</span>
         )}
         <Wrote at={stage.ranAt} bytes={stage.bytes} done={done} />
       </div>
@@ -1930,7 +2303,15 @@ function Fetched({ iso, lead }: { iso: string | undefined; lead: boolean }) {
   return (
     <Tooltip
       placement="bottom"
-      content={<Note>{exactly(when)}</Note>}
+      /* The exact stamp, and what it is a stamp *of*. "fetched 3 days ago" on
+         its own gets read as "written 3 days ago" — this is the date we took
+         our copy, and the page may have changed underneath it since. */
+      content={
+        <Note>
+          {exactly(when)} — when we took our copy. The article may have changed on its own site
+          since.
+        </Note>
+      }
     >
       <span className="tw:cursor-help">
         {lead && <span className="tw:mr-2 tw:opacity-50">·</span>}

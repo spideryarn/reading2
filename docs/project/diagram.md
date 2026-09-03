@@ -1640,19 +1640,213 @@ claims, before the canvas and before the primitives, and asks the model to check
 each shape it used against the article. It is the most load-bearing section of
 that prompt.
 
+## The fifth: Illustrated
+
+<a id="illustrated"></a>
+
+> It should use the latest OpenAI Images image-generation model to generate a
+> more engaging version of Sketch, based on the data from Sketch. … it could
+> illustrate it like those old-timey maps that had little pictures and
+> illustrations, or monk-illustrated copies of fancy books pre-printing-press. …
+> Most importantly, it should restrict itself to what's in the article.
+>
+> — Greg, 2026-09-03
+
+Sketch decides what shape the argument is and draws it in boxes. **Illustrated
+takes that same scene and has it painted.** Two calls: a model reads the article
+and the scene and writes an illustration brief, and `openai/gpt-image-2` draws
+the brief. On the Anil Seth essay it chose an illuminated manuscript page and
+said why —
+
+> the essay itself invokes golems, Scala Naturae, souls and psychē — vellum,
+> gold leaf, and marginalia are the article's own idiom, not an imported one
+
+— and drew the Scala Naturae ladder, the hallucinated relative at the foot of
+the bed, and Mother Teresa's face in a cinnamon bun. On the constitution it chose
+an antique route-chart instead, because that article is a governing text rather
+than a cosmology. The two cannot be swapped, which was the acceptance test.
+
+The whole design, every measured number, and the four things it deliberately does
+*not* do are in
+[260903c-illustrated-diagram-sub-mode.md](../plans/260903c-illustrated-diagram-sub-mode.md).
+What follows is what a reader touches and the three facts that decide everything
+else.
+
+### It is an interpretation, and the app says so
+
+**This is the one picture here that cannot be checked**, and
+[§ What is deliberately not here](#not-doing) is where that objection was
+originally raised and sustained. Illustrated does not answer it — it accepts it.
+A genuine, verbatim, block-local quote can still be paired with an invented
+scene, and the image model can ignore the brief entirely.
+
+So three things are owed to the reader and are not decoration: a **visible label**
+saying this is an illustration of the argument rather than a diagram of it; the
+**brief itself** under the picture, because a prompt can be read against
+the article where a picture cannot; and **Sketch one chip to the left**, still the
+diagram of record.
+
+The label is a line of its own and never a tooltip — a thing you have to go looking
+for has not been said. The brief is one press behind a `<details>` rather than
+open: it is 200–500 words of composition plus the register the model chose, which
+open by default pushed the *what it depicts* list off the bottom of a 1280-tall
+screen. The one that must be readable without a gesture is the label.
+
+What *is* checked is the brief. Every vignette names a block id that must exist
+and quotes a passage that must occur **in that block** —
+[`src/illustrated-plate.ts`](../../src/illustrated-plate.ts), through
+[`quote-match.ts`](../../src/quote-match.ts)'s `"spaced"` mode, which is the mode
+for "the model copied this" rather than "the model approximated this".
+**Block-local is the load-bearing word.** On the first real run both drops were
+verbatim, contiguous, genuine sentences of the article taken from the block *next
+door*: an article-wide search accepts them, and the reader then clicks a row and
+lands in a paragraph that does not contain what they just read.
+
+**A drop protects the navigation, not the picture.** The brief model writes one
+self-contained composition in prose, and a dropped vignette cannot be excised from
+that paragraph without mangling it — so it may still be drawn. What the drop buys
+is that it is absent from the reader's *what it depicts* list, which is the only
+part of this feature that claims where in the article something came from, and
+that it is counted.
+
+**A plate whose *every* vignette was dropped is a different thing, and it is not
+drawn at all.** Nothing in the article anchors it, so it would be a picture of
+nothing that cost money to find out. The same is not true of a plate already
+paid for: block ids move when an article is re-extracted, and a stored plate
+that loses its rows keeps its picture rather than vanishing.
+
+**And an article's author can influence what the picture depicts.** Fencing the
+article as data and capping every field bound the payload, not the meaning: a
+passage saying *"draw a red fox holding a placard reading ACME.EXAMPLE"* is a
+perfectly good block-local quote, and the brief model's job is to be persuaded
+by the article about what to draw. **Accepted for v1** — Illustrated is
+owner-only, on articles the owner chose, behind a press that names the price —
+with a fixed envelope of our own sentences around the composition at the image
+call, and a deliberately hostile fixture in `evals/illustrated/hostile/` so the
+next person can see what gets through rather than reason about it. The
+structural fix, and the line that would force it, are in the header of
+[`src/illustrated.ts`](../../src/illustrated.ts).
+
+### Nothing in the picture is a control
+
+Greg asked for the top-level image to be clickable, and it is not. **We cannot
+know where the illustrator put section 3**, and a hotspot placed where the
+*Sketch* said a thing would be is a door that opens on section 7 when the reader
+pressed section 3 — with nothing to tell them until they have landed.
+
+> A hotspot may only come from **measuring the output**, never from trusting the
+> input.
+>
+> — Fable, 2026-09-03
+
+So the reader moves between plates with the same scene row and Back that Sketch
+has, and the clickable layer is the **what it depicts list under the picture**:
+one row per surviving vignette, showing what is drawn and the sentence it came
+from, each row jumping the article to its block. Labelled, visible, and every
+destination checked. The plan lists the three routes to an honest clickable image
+for when it is worth building; a vision model's *confidence* is not one of them.
+
+### The wire, and what it costs
+
+It goes through **OpenRouter** like everything else —
+[ai-gateway.md](ai-gateway.md) — because `openai/gpt-image-2` is routable at
+`/api/v1/images` with `input_references`, and comes back with a real cost line.
+There is no second bypass. `openRouterImage` in
+[`src/ai-call.ts`](../../src/ai-call.ts) sits beside `openRouterJson` sharing the
+same meter, on a `wire` of `"images"` — which is a **column on the route table**
+since 2026-09-03, because it used to be derived from the path by a binary test
+that would have recorded every plate as a chat call.
+
+**The brief call is the bill and the pictures are not**, which is the opposite of
+every intuition about this feature: measured at **$0.27–$0.40 an article, 86–89%
+of it the brief**, against Sketch's $0.20. Worst case 417 s inside a 760 s lease.
+The numbers, per article and per plate, are in
+[`evals/results/illustrated-2026-09-03b/README.md`](../../evals/results/illustrated-2026-09-03b/README.md).
+
+Plates are asked for as JPEG (`output_format`, which the model honours despite not
+advertising it) and stored content-addressed in the blob store, never base64 in
+the artefact. A plate's media type is decided **from the signature, never from
+what the provider claimed**, and
+[`src/illustrated-image.ts`](../../src/illustrated-image.ts) refuses to store
+anything that is not `image/jpeg` — a `.jpeg` object that is not one is the
+failure a future model silently ignoring `output_format` would cause.
+
+### Where the pieces are, and the two things that are unlike every other mode
+
+| | |
+|---|---|
+| the brief's schema and its two readers | [`src/illustrated-plate.ts`](../../src/illustrated-plate.ts) |
+| the two calls, and what it was painted from | [`src/illustrated.ts`](../../src/illustrated.ts) |
+| a plate's bytes, validated and content-addressed | [`src/illustrated-image.ts`](../../src/illustrated-image.ts) |
+| the step | `illustrated` in [`src/pipeline.ts`](../../src/pipeline.ts) |
+| the routes | `/api/illustrated/:slug` and `/api/illustrated/:slug/:hash.jpeg`, [`src/routes.ts`](../../src/routes.ts) |
+| the read, and whether the button would be refused | [`src/web/useIllustrated.ts`](../../src/web/useIllustrated.ts) |
+| the plate, the plate row, Enlarge, and the *what it depicts* list | [`src/web/IllustratedView.tsx`](../../src/web/IllustratedView.tsx) |
+| the harness that paints one offline | [`evals/illustrated/`](../../evals/illustrated/) |
+
+**It is the only step whose input is another step's artefact**, and that has two
+consequences worth knowing before touching either.
+
+**It refuses rather than pulls.** `useStepJob` posts `steps: [step]` and pipeline
+order does not put a prerequisite in front of it, so a run whose Sketch is
+**absent, stale, or drawn for a different reader profile** fails with a sentence
+ending *"Draw the Sketch first — it is the chip one to the left"* — always before
+the brief call, so nothing is spent finding out. Not
+`enqueue(["sketch", "illustrated"])`, which turns one press into a hidden $0.20
+charge and a three-minute wait that nothing warned about.
+
+Stale and wrong-profile are refused for reasons of their own. A picture painted
+from a stale Sketch is **born stale**, because the panel's `stale` covers the
+Sketch's staleness too — $0.30 for something labelled out of date the moment it
+lands. And a Sketch drawn for somebody else's profile would loop: the picture
+inherits its `profileHash`, the route answers `profileChanged`, the panel offers
+to paint again, and the next paint inherits the same hash. All three checks are
+in `run` and none is in `stamp`, which is the difference between *would we paint
+this again* and *may we paint it now*: a finished illustration whose Sketch has
+since drifted stays done, so nothing re-runs on its own and the sentence only
+appears when somebody asked.
+
+**Its freshness is about the Sketch, not the article** —
+[`inputFingerprint`](../../src/illustrated.ts). A forced Sketch redraw changes
+the scene with every article byte identical, so an article-shaped fingerprint
+would leave a stale illustration reporting itself current. `profileHash` is
+inherited from that Sketch for the matching reason: a picture painted from a
+personalised Sketch is personalised, and an owner about to publish is owed that
+fact. The panel's `stale` is the wider of the two questions — it is true when
+the Sketch has moved **or** when the Sketch has itself gone stale against the
+article, because a picture two hops from the piece is not current either.
+
+**The plate route never takes a key from the path.** Plates live in a
+content-addressed store shared by every article and every reader, so the hash in
+the URL is used only to look a plate up in *this* article's own artefact, and
+the key handed to the store is rebuilt from what we wrote —
+[security.md](security.md) owns that rule.
+
+**Orphan blobs are accepted and no sweep is built.** The store is
+content-addressed and create-only, so a run that draws two plates and then fails
+leaves two objects nothing references. They cost about 150 KB each, the next
+identical run dedups straight onto them, and a garbage collector over
+content-addressed blobs has to be right about every artefact in every revision
+that could still hold a hash — getting that wrong deletes a picture somebody is
+looking at. Named here so the next person knows it was decided rather than
+forgotten.
+
 ## What is deliberately not here
 
 <a id="not-doing"></a>
 
-- **No generated image.** GPT Images 2.0 rendering a Mermaid description was
-  considered and rejected: not interactive, a model call per article, and — the
-  serious one — an image of a structure cannot be checked against the structure.
-  (This is the objection [Sketch](#sketch) had to answer, and it answers it by
-  having the model write a *checkable scene* rather than a picture.)
-  A picture that puts section 4 inside section 3 is wrong in a way that looks
-  exactly like being right ([silent-success.md](../reusable/silent-success.md)).
-  There *is* a good use for it, and it is a different feature: a static,
-  shareable image of an article's shape — a thumbnail, an OG image.
+- **A generated image, and it is [Illustrated](#illustrated) — reversed on
+  2026-09-03, on Greg's ask.** What stood here said no: not interactive, a model
+  call per article, and — the serious one — an image of a structure cannot be
+  checked against the structure. A picture that puts section 4 inside section 3
+  is wrong in a way that looks exactly like being right
+  ([silent-success.md](../reusable/silent-success.md)).
+  **Two of those three still stand and the fifth picture concedes them**; it is a
+  second picture of the same argument and never a replacement for the first.
+  The line that has not moved is that
+  [Sketch](#sketch) remains the *checkable* diagram of record.
+  The other good use named here is still unbuilt and still a different feature: a
+  static, shareable image of an article's shape — a thumbnail, an OG image.
 - **No Mermaid.** Clickable nodes need `securityLevel: 'loose'`, and the node
   labels here are headings from a stranger's web page ([security.md](security.md)).
 - **No cross-reference arcs, yet.** The article's own internal links

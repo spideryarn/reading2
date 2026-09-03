@@ -8,10 +8,10 @@
  * readers"*, which cannot be asked with an owner filter on it, so the rules it
  * obeys instead are:
  *
- * 1. **Counts and dates only.** No title, no URL, no filename, no sentence.
- *    How many articles somebody has is a fact about the account; which articles
- *    they are is their reading. docs/project/admin.md § What it deliberately
- *    does not show.
+ * 1. **Counts, dates, and what the account may do.** No title, no URL, no
+ *    filename, no sentence. How many articles somebody has is a fact about the
+ *    account, and so is which plan they are on; *which* articles they are is
+ *    their reading. docs/project/admin.md § What it deliberately does not show.
  * 2. **Reached from exactly one route**, `GET /api/admin/users`, behind the
  *    `/api/admin` namespace check in src/routes.ts. There is no other caller,
  *    and a second one should be a second look at whether it is allowed.
@@ -20,19 +20,26 @@
  *    that makes this safe is a route gate somewhere else, so the one thing a
  *    future call site can be given here is a name that argues with it.
  *
- * ## Five queries, not one, and not one per user
+ * ## One query per table, not one query and not one per user
  *
- * The counts live in five tables that share nothing but an article. A single
- * statement joining all five would multiply rows — somebody with 3 articles and
- * 4 questions would count 12 of each — and the usual repair, five correlated
- * sub-selects, is a statement nobody can read. A count per user per table is an
- * N+1 that grows with the sign-up list.
+ * The counts live in tables that share nothing but an article. A single
+ * statement joining them all would multiply rows — somebody with 3 articles and
+ * 4 questions would count 12 of each — and the usual repair, a correlated
+ * sub-select each, is a statement nobody can read. A count per user per table is
+ * an N+1 that grows with the sign-up list.
  *
  * So: **one grouped aggregate per table, run together, joined in TypeScript by
- * owner id.** Five statements whatever the number of accounts, each hitting an
- * index that already exists — and a sixth thing beside them that is not a
- * statement at all: the account listing, which comes from the Auth service over
- * HTTP (admin-accounts.ts).
+ * owner id.** A fixed number of statements whatever the number of accounts, each
+ * hitting an index that already exists — and beside them the account listing,
+ * which is not a statement at all but an HTTP call to the Auth service
+ * (admin-accounts.ts).
+ *
+ * **Seven aggregates and two plain reads as of 2026-09-03**, against a pool of
+ * five (src/db/client.ts): the five article-shaped ones, spend, the ingest
+ * ledger, every `billing_accounts` row, and the (cached) tier table. Still one
+ * round trip's worth of waiting rather than several, on a page one person opens
+ * a few times a day — but it is the point at which adding another stops being
+ * free. docs/project/admin.md § Where the numbers come from.
  *
  * The file is in three parts for one reason — so that each of them can be
  * checked by something: `mergeUsers` is pure and takes two owners' worth of
@@ -64,7 +71,20 @@ import { count, eq, sql } from "drizzle-orm";
 
 import type { Db } from "../db/client.js";
 import { getDb } from "../db/client.js";
-import { articles, chatThreads, comments, searchRuns, uploads } from "../db/schema.js";
+import {
+  articles,
+  billingAccounts,
+  chatThreads,
+  comments,
+  ingestEvents,
+  searchRuns,
+  uploads,
+} from "../db/schema.js";
+import { FREE_LIFETIME_INGESTS, tierForPrice } from "../billing/tiers.js";
+import type { TierRow } from "../billing/tiers.js";
+import { allAccountSnapshots, entitlementFromRow } from "./pg-billing.js";
+import type { AccountSnapshot } from "./pg-billing.js";
+import { allTiers } from "./pg-tiers.js";
 import type { AccountRow } from "./account-row.js";
 import { gotruePages, listAccounts } from "./admin-accounts.js";
 import {
@@ -103,6 +123,25 @@ export interface CountRow {
   n: number;
 }
 
+/**
+ * The three ingest numbers, per owner.
+ *
+ * **Both windows come back, and the merge picks one**, because which one is
+ * right depends on the entitlement and the entitlement is decided in TypeScript
+ * — `entitlementFromRow`, the same function the wall decides with. Asking SQL
+ * to work out which allowance somebody is on would be a second implementation
+ * of that rule, living in a string, disagreeing with the first one quietly.
+ */
+export interface IngestTally {
+  owner: string;
+  /** Successful ingests ever — what the free allowance is measured over. */
+  lifetime: number;
+  /** Successful ingests inside the row's stored billing period, if it has one. */
+  inPeriod: number;
+  /** Reservations taken and not settled. Counted as used, as the wall does. */
+  inFlight: number;
+}
+
 /** Everything the merge needs, named so the call site reads as a sentence. */
 export interface UserCounts {
   shelf: ShelfTally[];
@@ -110,6 +149,18 @@ export interface UserCounts {
   questions: CountRow[];
   chats: CountRow[];
   searches: CountRow[];
+  ingests: IngestTally[];
+  /**
+   * One `billing_accounts` row per owner that has one. Absent is the free tier.
+   *
+   * The only read in this file that is not a count, and the exemption is the
+   * header's: there is no owner to filter by. It comes from
+   * `allAccountSnapshots` in pg-billing.ts rather than from a query written
+   * here, so the columns entitlement is decided from are named once.
+   */
+  accounts: Map<string, AccountSnapshot>;
+  /** What we sell, so a tier's quota is read from its row and never guessed. */
+  tiers: readonly TierRow[];
   /**
    * **Money, and the only entry here that is not a count of the reader's own
    * things.** Keyed by owner id like the rest; absent means the account made no
@@ -128,6 +179,105 @@ export interface UserCounts {
 /** Turn `[{owner, n}]` into something the merge can look up. */
 function tally(rows: CountRow[]): Map<string, number> {
   return new Map(rows.map((r) => [r.owner, r.n]));
+}
+
+/**
+ * What one account is entitled to and how much of it is spent.
+ *
+ * **Picked out of `AdminUser` rather than restated**, so the window's three
+ * values are declared once — a fourth added there and not here would be a type
+ * error at the spread rather than a silent narrowing.
+ */
+type PlanFacts = Pick<AdminUser, "plan" | "ingests" | "ingestLimit" | "ingestWindow"> &
+  Partial<Pick<AdminUser, "planStatus">>;
+
+/**
+ * The billing three lines of one row.
+ *
+ * **`entitlementFromRow` decides, not this function** — it is the same call the
+ * wall makes under its lock (`reserveIngest`), so a row this page draws as
+ * *Reader, 4 of 20* is a row that would be admitted, and a row it draws as free
+ * is one that would be refused at three. Two opinions about entitlement, one of
+ * them on an administrator's screen while the other decides what a reader may
+ * do, is the disagreement this reuse exists to prevent.
+ *
+ * **A stale period is shown as the lifetime count**, and it is the one case
+ * worth explaining. `entitlementFromRow` answers `stale` when the row says
+ * subscribed and its stored period does not contain now — so there is no
+ * current period to count inside, and `inPeriod` would be a count over a window
+ * that has closed. The tier's limit is still the right scale, because that is
+ * what they are paying for, and the raw `status` sits beside it in its own
+ * column, which is the tell. `/profile` says *"we could not confirm your plan"*
+ * for the same row (src/billing-plan.ts); an administrator gets the numbers
+ * instead, because they are the person who would act on them.
+ *
+ * **Nothing here is excused for an administrator.** The exemption is `isAdmin`'s
+ * and the page draws it, for the reason `AdminUser` gives: those two uuids are
+ * already in the browser bundle and a second copy of the question is a second
+ * answer waiting to differ.
+ *
+ * ## The count and the row are two observations, not one
+ *
+ * `inPeriod` is computed in SQL against `billing_accounts` inside the ledger
+ * aggregate, and `account` comes from `allAccountSnapshots()` — a **separate
+ * statement**, issued concurrently. A webhook rolling a subscription's period
+ * between the two would let this label the old period's count as the new one.
+ * GPT Sol, 2026-09-03.
+ *
+ * Not fixed, and the reason is proportion rather than difficulty: the window is
+ * the few milliseconds between two statements in one `Promise.all`, the loser is
+ * an administrator's read-only page that is reloaded by hand, and the wrong
+ * answer is a count for the month that has just ended shown against the month
+ * that has just begun. The fix — returning the boundaries with the aggregate and
+ * checking they match, or putting nine reads in one snapshot — is real work
+ * against a number nobody acts on within the second. Written down because a
+ * *future* caller of this arithmetic might not be a page somebody is looking at.
+ */
+function planFacts(
+  account: AccountSnapshot | undefined,
+  tiers: readonly TierRow[],
+  counts: IngestTally | undefined,
+  now: Date,
+): PlanFacts {
+  const status = account?.status ?? undefined;
+  const inFlight = counts?.inFlight ?? 0;
+  const lifetime = (counts?.lifetime ?? 0) + inFlight;
+  const inPeriod = (counts?.inPeriod ?? 0) + inFlight;
+
+  const entitlement = entitlementFromRow(account, tiers, now);
+
+  if ("kind" in entitlement) {
+    /* Stale — see the docstring. The price still names the tier, and a price no
+       tier sells falls to the free numbers, which is the same direction
+       `entitlementFromRow` fails in. */
+    const tier = tierForPrice(account?.priceId, tiers);
+    return {
+      plan: tier?.id ?? "free",
+      ...(status === undefined ? {} : { planStatus: status }),
+      ingests: lifetime,
+      ingestLimit: tier?.ingestsPerPeriod ?? FREE_LIFETIME_INGESTS,
+      /* **Its own window, not `lifetime`.** The count and the limit are measured
+         over different spans here and only the cell can say so — see
+         `AdminUser.ingestWindow`. */
+      ingestWindow: "stale",
+    };
+  }
+
+  return entitlement.tier === "paid"
+    ? {
+        plan: entitlement.tierId,
+        ...(status === undefined ? {} : { planStatus: status }),
+        ingests: inPeriod,
+        ingestLimit: entitlement.limit,
+        ingestWindow: "period",
+      }
+    : {
+        plan: "free",
+        ...(status === undefined ? {} : { planStatus: status }),
+        ingests: lifetime,
+        ingestLimit: entitlement.limit,
+        ingestWindow: "lifetime",
+      };
 }
 
 
@@ -169,12 +319,25 @@ export function mergeUsers(people: AccountRow[], counts: UserCounts): AdminUser[
   const searches = tally(counts.searches);
   const shelf = new Map(counts.shelf.map((r) => [r.owner, r]));
   const spend = counts.spend;
+  const ingests = new Map(counts.ingests.map((r) => [r.owner, r]));
+  /* One clock for the whole merge, so two rows cannot be decided either side of
+     a period boundary — the same reason `spendMonth` is settled before any
+     query runs in `listUsersAcrossOwners`. */
+  const now = new Date();
 
   return people
-    /* An account with no address cannot sign in here at all — the gate refuses
-       it by name, `[auth-noemail]` in src/auth.ts — so it owns nothing and has
-       nothing to show. Dropped rather than drawn as a blank row, and this
-       comment is why that is not hiding anything. */
+    /* An account with no address cannot sign in here — the gate refuses it by
+       name, `[auth-noemail]` in src/auth.ts — and this table is led by the
+       address, so such a row would be a blank first column rather than a fact.
+       Dropped for that reason and no other.
+
+       **Not because it owns nothing.** That is what this comment used to say
+       and it does not follow: the project is shared with an older app, so an
+       account this app will not admit may still belong to a person and have
+       rows against its id, and they are dropped here silently. GPT Sol,
+       2026-09-03. Left as it is, because what to show for an account nobody can
+       sign in as is a product question rather than a bug —
+       docs/plans/260903c-admin-users-count-disagrees-with-rows.md § Reviews. */
     .filter((p): p is AccountRow & { email: string } => typeof p.email === "string" && p.email !== "")
     .map((p): AdminUser => {
       const mine = shelf.get(p.id);
@@ -204,6 +367,7 @@ export function mergeUsers(people: AccountRow[], counts: UserCounts): AdminUser[
         spendCalls: spend.get(p.id)?.calls ?? 0,
         spendUnpricedCalls: spend.get(p.id)?.unpricedCalls ?? 0,
         spendMonth: counts.spendMonth,
+        ...planFacts(counts.accounts.get(p.id), counts.tiers, ingests.get(p.id), now),
       };
     });
 }
@@ -211,7 +375,7 @@ export function mergeUsers(people: AccountRow[], counts: UserCounts): AdminUser[
 /* ---------------------------------------------------------- the queries --- */
 
 /**
- * The five statements, as builders rather than as results.
+ * The statements, as builders rather than as results.
  *
  * Pulled out so that **what they mean** can be asserted without a database:
  * `tests/admin-queries.test.ts` reads `.toSQL()` off each one and pins the
@@ -299,6 +463,46 @@ export function adminQueries(db: Db) {
       .innerJoin(articles, eq(searchRuns.articleId, articles.id))
       .where(onTheShelf())
       .groupBy(articles.ownerId),
+
+    /* **The quota ledger, and it groups by its own `owner_id`** — unlike the
+       three above, which reach an owner through the article. There is nothing to
+       reach through: an `ingest_events` row is a slot, not a document, and it
+       exists before the article does and outlives one that is deleted. That is
+       the whole reason it is the abuse boundary rather than a count of articles
+       (docs/project/billing.md § *The quota*).
+
+       **Left join, not inner**, because most owners have no `billing_accounts`
+       row at all — a free reader never gets one until they check out or hit the
+       wall — and an inner join would silently report every free account as
+       having ingested nothing.
+
+       The period predicate is the same half-open `>= start and < end` that
+       `usageSql` counts by, so an ingest at the instant a period rolls over is
+       counted once here and once there, in the same period. `mapWith(Number)`
+       on every one, for the reason the shelf query gives: `count()` comes back
+       from the driver as a string. */
+    ingests: db
+      .select({
+        owner: ingestEvents.ownerId,
+        lifetime:
+          sql<number>`count(*) filter (where ${ingestEvents.succeededAt} is not null)`.mapWith(
+            Number,
+          ),
+        inPeriod: sql<number>`count(*) filter (
+            where ${ingestEvents.succeededAt} is not null
+              and ${billingAccounts.currentPeriodStart} is not null
+              and ${billingAccounts.currentPeriodEnd} is not null
+              and ${ingestEvents.succeededAt} >= ${billingAccounts.currentPeriodStart}
+              and ${ingestEvents.succeededAt} < ${billingAccounts.currentPeriodEnd})`.mapWith(
+          Number,
+        ),
+        inFlight: sql<number>`count(*) filter (
+            where ${ingestEvents.succeededAt} is null
+              and ${ingestEvents.releasedAt} is null)`.mapWith(Number),
+      })
+      .from(ingestEvents)
+      .leftJoin(billingAccounts, eq(billingAccounts.ownerId, ingestEvents.ownerId))
+      .groupBy(ingestEvents.ownerId),
   };
 }
 
@@ -350,20 +554,33 @@ export const pgAdminStore: AdminStore = {
        heading — a one-second-a-month bug that nothing would ever reproduce. */
     const month = currentUtcMonth();
 
-    const [people, shelf, uploaded, questions, chats, searches, spend] = await Promise.all([
-      listAccounts(accountSource()),
-      q.shelf,
-      q.uploads,
-      q.questions,
-      q.chats,
-      q.searches,
-      /* The sixth aggregate, and the pool is sized 5 (src/db/client.ts), so one
-         of the six now waits for a connection. Measured against the alternative
-         — a second round trip after the first five — that is still one wall
-         clock's worth of latency rather than two, and this is an admin page a
-         single person opens. */
-      productSpendByOwner(month.since, month.until),
-    ]);
+    const [people, shelf, uploaded, questions, chats, searches, spend, ingests, accounts, tiers] =
+      await Promise.all([
+        listAccounts(accountSource()),
+        q.shelf,
+        q.uploads,
+        q.questions,
+        q.chats,
+        q.searches,
+        /* The sixth aggregate, and the pool is sized 5 (src/db/client.ts), so one
+           of the six now waits for a connection. Measured against the alternative
+           — a second round trip after the first five — that is still one wall
+           clock's worth of latency rather than two, and this is an admin page a
+           single person opens. */
+        productSpendByOwner(month.since, month.until),
+        /* Three more since 2026-09-03, for the plan column, and the paragraph
+           above is now about nine things queueing five deep rather than six
+           queueing one. That is still one round trip's worth of waiting rather
+           than several, on a page one person opens a few times a day — but it is
+           the point at which "add another aggregate" stops being free, and the
+           next column should read `allTiers`'s cache or join something that is
+           already here rather than making it ten. */
+        q.ingests,
+        allAccountSnapshots(),
+        /* Cached for thirty seconds, so on a page being reloaded this is usually
+           not a query at all. */
+        allTiers(),
+      ]);
 
     return mergeUsers(people, {
       shelf,
@@ -373,6 +590,9 @@ export const pgAdminStore: AdminStore = {
       searches,
       spend,
       spendMonth: month.label,
+      ingests,
+      accounts,
+      tiers,
     });
   },
 

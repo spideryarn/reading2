@@ -80,7 +80,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { carriedSearch, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
 import { useOrderedRead } from "./useOrderedRead.js";
-import { useStepJob } from "./useStepJob.js";
+import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useSlow } from "./useSlow.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { JobProgress } from "./JobProgress.js";
@@ -344,7 +344,7 @@ function Empty({
   onCancel,
 }: {
   job: Job | null;
-  failed: string | null;
+  failed: StepFailure | null;
   stalled: boolean;
   onWrite(): Promise<void>;
   onCancel(id: string): void;
@@ -380,7 +380,7 @@ function Progress({
   ...props
 }: {
   job: Job | null;
-  failed: string | null;
+  failed: StepFailure | null;
   stalled: boolean;
   onWrite(): Promise<void>;
   onCancel(id: string): void;
@@ -414,7 +414,7 @@ function Thread({
   profileChanged: boolean;
   article: Article;
   job: Job | null;
-  failed: string | null;
+  failed: StepFailure | null;
   stalled: boolean;
   onWrite(force?: boolean, useProfile?: boolean): Promise<void>;
   onCancel(id: string): void;
@@ -658,7 +658,7 @@ function Rewrite({
   onCancel,
 }: {
   job: Job | null;
-  failed: string | null;
+  failed: StepFailure | null;
   onWrite(force?: boolean): Promise<void>;
   onCancel(id: string): void;
 }) {
@@ -712,7 +712,7 @@ function Rewrite({
 
   return (
     <span className="tw:ml-auto tw:flex tw:items-center tw:gap-3">
-      {failed && <span className="tw:text-xs tw:text-destructive">{failed}</span>}
+      {failed && <span className="tw:text-xs tw:text-destructive">{failed.message}</span>}
       <Button
         type="button"
         variant="ghost"

@@ -252,6 +252,10 @@ be decided in a change about column widths. Follow-up, named here so it is not l
   the consequence for *this* change is narrow but real: **any test of `reset()` with a mocked
   successful DELETE is not describing production.** Say so in the test rather than implying the
   button works.
+  *(Correction, 2026-09-03: `reset()` is built and no longer 501 — the decision was "yes, as one
+  named exception". See [260903e-glossary-delete-in-postgres.md](260903e-glossary-delete-in-postgres.md).
+  Item 7 below, about the tests carrying a comment saying the DELETE is mocked, is now stale in the
+  same way — the tests should exercise the real path instead.)*
 
 ## How each part is checked
 

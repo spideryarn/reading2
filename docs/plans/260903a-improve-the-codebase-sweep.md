@@ -651,9 +651,20 @@ Recorded because a negative result from a real sweep is worth as much as a findi
 next run should not re-spend agents here.
 
 - **The request path.** No wrong status codes, one error envelope, one body reader, one auth check at
-  the top of `handleApi`, all six SSE streams terminate with an explicit frame, no `console.log` in a
+  the top of `handleApi`, all ~~six~~ **seven** SSE streams terminate with an explicit frame, no `console.log` in a
   request path. Each of the four postmortem classes in this zone has a fix *and* a mechanical test
   that re-catches the class.
+  <br>**"Six" was wrong when it was written**, corrected 2026-09-03 by
+  [260903d](260903d-improve-the-codebase-second-sweep.md) § T1.6. Six go through the `sse()` helper
+  (`src/routes.ts:1344, 1614, 3417, 3664, 3799, 3917`); the seventh, `streamChat`, writes its SSE
+  headers by hand at `:2309` and so is invisible to a grep for the helper.
+  **"Terminate with an explicit frame" was also too strong**, and the correction's first draft
+  repeated it: search and both referee streams deliberately omit the terminal frame on some paths
+  (`src/routes.ts:3452, 3698, 3832`), which is a documented no-op case rather than an oversight. What
+  is true of all seven is that each closes via `res.end()` in a `finally`. The *method* is the
+  lesson: **counting the callers of a shared helper counts everything except the instance that does
+  it by hand**, which is the one worth finding — and `sse()`'s own comment (`:947`) is stale in the
+  same direction, still saying only chat and comments use it when six callers do.
 - **The pipeline and the AI layer.** One JSON-from-model parser, one price table, one token
   estimator, one model-id source, one gateway path with the one declared exception. `maxRetries: 0`
   and one bounded repair retry. The `id > start && id < end` string-comparison trap from
@@ -675,6 +686,12 @@ the deployed app. It is properly tracked (`SEAM_ASYMMETRIES.GlossaryStore` in `s
 enforced by a test), and it is blocked on the open question in
 [260826e](260826e-postgres-storage-implementation.md) about whether a published revision may be
 mutated. It is user-visible and has been open a while.
+
+**Correction, 2026-09-03: it turned out to be engineering, not a product decision.** The mutate-a-
+published-revision question was answered "yes, as one named exception" and the delete is built —
+see [260903e-glossary-delete-in-postgres.md](260903e-glossary-delete-in-postgres.md). The one product
+choice inside that work (refuse with 409 while a live job holds a draft, rather than queue behind it)
+was small enough to make directly rather than carry back to Greg first.
 
 ---
 
@@ -742,6 +759,9 @@ is *"this file above all, the seven entry points, anything in `docs/reusable/`"*
 2. **`DELETE /api/glossary/:slug`** — the "start again" button is a 501 on the deployed app, tracked
    and tested, blocked on whether a published revision may be mutated
    ([260826e](260826e-postgres-storage-implementation.md)). A product decision.
+   *(Correction, 2026-09-03: not deferred after all — built in
+   [260903e-glossary-delete-in-postgres.md](260903e-glossary-delete-in-postgres.md), which found the
+   question small enough to answer directly.)*
 3. **T3.2, `styles.css` at 12,830 lines.** The doc already calls this open; the sweep found no drift
    inside it. Not an engineering defect.
 

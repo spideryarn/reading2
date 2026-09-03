@@ -49,6 +49,19 @@ earlier the same day put `3-small` at P@5 64.4% and `bge-m3` at 42.2%; these fiv
 61.1% and 37.8% for identical retrieval. The gap did not move — the scale did. Those two-arm files
 were deleted rather than kept, precisely so nobody reads a row across.
 
+## `cost-per-article-2026-09-03.md` — what one article costs us
+
+Written from the ten runs under [`cost/`](cost), each of which keeps its own `run.json`. **An
+ingest is $0.03 on a 561-word essay and $0.33 on a 16,855-word one; everything pressed, $0.35 and
+$1.55.** The report carries the reproduction command for every figure and the provenance of each —
+commit, effort, fixture hash — because a config constant moved mid-ledger once and nearly made an
+earlier analysis wrong by 2×.
+
+The `run.json` files are the record and the report is the reading of them. Three things in them are
+deliberately *not* prices and the report says so at length: two generations billed in full that
+wrote nothing, one round labelled cold that read a cache an earlier run had written, and one call
+whose cache state the provider does not report.
+
 ## `prompt-caching-*.md` — the article is really being cached
 
 Written by `npm run eval:caching`, 2026-08-26, against the live API. Three articles, each searched

@@ -110,6 +110,7 @@ import type { Article } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import {
@@ -151,7 +152,7 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * Exported so tests assert against the current value rather than pinning a
  * literal — a fixture that hardcodes the version tests the fixture.
  */
-export const PROMPT_VERSION = "timeline/1";
+export const PROMPT_VERSION = "timeline/2";
 
 /**
  * The most events one call may carry into the artefact.
@@ -1032,6 +1033,9 @@ recognise an event you have already read about. Never write a label a reader
 could substitute for the paragraph. If somebody could follow the whole story
 from your labels alone, they are too long.
 
+Use the article's own words for the things it names and ordinary words for the
+rest — plainer than the article, never further from it.
+
 OCCURRENCES
 
   "blockId" — MUST be one of the ids listed in the article below. Never invent
@@ -1292,7 +1296,9 @@ export async function generateTimeline(opts: {
   if (wasRefused(message)) {
     /* `stop_details` is neither thrown nor logged — it is the provider's own
        words about a request that carried the whole article. src/messages.ts. */
-    throw new Error(MODEL_REFUSED.message);
+    throw stageFailure(MODEL_REFUSED, {
+      authored: "the model answered with stop_reason: refusal",
+    });
   }
   if (message.stop_reason === "max_tokens") {
     throw truncationFailure("timeline", maxTokens, ANSWER_TOKENS, {

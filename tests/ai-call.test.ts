@@ -201,15 +201,33 @@ describe("the request that actually goes out", () => {
 });
 
 describe("the routing table", () => {
-  it("agrees with AI_JOB_WIRE about which endpoint each job speaks to", () => {
+  it("agrees with AI_JOB_WIRE about which endpoint each job speaks to, and what to call it", () => {
     /* The two are separate because deriving one from the other would need a
        value import and would close a module cycle — src/ai-call.ts says so at
-       the import. Separate facts get checked rather than trusted. */
+       the import. Separate facts get checked rather than trusted.
+
+       **The `route.wire` half is new on 2026-09-03 and is the half with teeth.**
+       Until then the ledger's `wire` was computed inside src/ai-call.ts as
+       `path === "/v1/embeddings" ? "embeddings" : "chat"` — so it could not
+       disagree with the path, and this loop was checking a table against a
+       ternary that had no way of being wrong. It also had no way of being
+       right about a third path: adding `/v1/images` under that expression
+       recorded every plate as `wire: "chat"`, wrote the row, failed nothing,
+       and left a `SUM(output_tokens)` adding image tokens to words. A
+       cross-family review caught it. Now `Route.wire` is stated per row and
+       this is a real comparison of two independent statements.
+
+       Spelled out per wire rather than as a ternary, so the table is what has
+       to be right and this is not another copy of the rule it is checking. */
+    const PATH_FOR_WIRE: Partial<Record<string, string>> = {
+      chat: "/v1/chat/completions",
+      embeddings: "/v1/embeddings",
+      images: "/v1/images",
+    };
     for (const [job, route] of Object.entries(AI_JOB_ROUTE)) {
       const wire = AI_JOB_WIRE[job as keyof typeof AI_JOB_WIRE];
-      expect(route.path, job).toBe(
-        wire === "embeddings" ? "/v1/embeddings" : "/v1/chat/completions",
-      );
+      expect(route.wire, job).toBe(wire);
+      expect(route.path, job).toBe(PATH_FOR_WIRE[wire]);
     }
   });
 
@@ -265,10 +283,13 @@ describe("the routing table", () => {
        Voyage model finds no Anthropic upstream, falls through to the real one,
        and answers. The pin does nothing while looking like it did something. */
     for (const job of ["dictation", "embeddings", "pdf"] as const) {
-      expect(AI_JOB_ROUTE[job].provider.order, job).toBeUndefined();
+      expect(AI_JOB_ROUTE[job].provider?.order, job).toBeUndefined();
+      /* `?.` because `Route.provider` is nullable now — but these three must
+         have a block, and a `null` would satisfy the line above by vacuum. */
+      expect(AI_JOB_ROUTE[job].provider, job).not.toBeNull();
     }
-    expect(AI_JOB_ROUTE.dictation.provider.zdr).toBe(true);
-    expect(AI_JOB_ROUTE.pdf.provider.allow_fallbacks).toBe(false);
+    expect(AI_JOB_ROUTE.dictation.provider?.zdr).toBe(true);
+    expect(AI_JOB_ROUTE.pdf.provider?.allow_fallbacks).toBe(false);
   });
 
   it("refuses to route a pipeline stage down this wire", () => {

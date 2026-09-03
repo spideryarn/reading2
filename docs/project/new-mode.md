@@ -98,6 +98,55 @@ Then the residue nothing refuses at compile time:
   [`useAutoRun.ts`](../../src/web/useAutoRun.ts) is the whole rule, and
   [reading-view-overview.md § True across the whole view](reading-view-overview.md#true-across-the-whole-view)
   is why. *Nothing.*
+- **`PROMPT_VERSION`, bumped, whenever you change what the prompt asks for** — the
+  stamp says which prompt wrote the artefact, and an unchanged one makes every
+  stored artefact claim it was written by the prompt that ships. Where the stage
+  also has an `outdated` comparison ([`src/api.ts`](../../src/api.ts),
+  [`pg.ts`](../../src/store/pg.ts)) the bump surfaces in the panel. `hierarchy`'s
+  is a stamp and nothing more; `labels`' has no comparison either but is inside
+  `batchFingerprint`, so it invalidates checkpoint reuse. Check the version is
+  *one* constant before you bump it: `sketch` had two literal
+  copies in two files until 2026-09-03 — `SKETCH_VERSION`, which is what gets
+  stamped, and `PROMPT_VERSION`, which is what gets compared — so bumping either
+  alone marked every sketch outdated including one generated a second later.
+  *Nothing.*
+
+## The words the mode puts in front of the reader
+
+Whatever a mode generates for the reader — a gist, a label, an answer, a question,
+a caption — is written to the same rule, and a new one takes it too:
+
+> Make minimal tweaks to the prompts … to use slightly plainer/simpler/easier-to-
+> understand language, while still trying to stay close to the language of the text.
+>
+> — Greg, 2026-09-03
+
+Two halves, and the second is what stops the first turning into paraphrase: **the
+article's own words for the things the article names** — those are the reader's
+handholds, and what they meet again on the page — and **ordinary words for
+everything else**. It is not a licence to flatten. A mode that swaps the author's
+distinctive word for a common synonym has taken something from the reader, which is
+[vision.md](vision.md)'s whole objection to summaries.
+
+Every prompt that carries it ends on the same phrase, **"plainer than the article,
+never further from it"**, so `grep -rni "lainer than the article" src/` is the list
+of prompts that have it. Put it where the prompt already talks about how to write
+rather than opening a section for it, and cover each field the model actually
+writes: [`src/hierarchy.ts`](../../src/hierarchy.ts) says it under both TITLES and
+GISTS, [`src/quotes.ts`](../../src/quotes.ts) only on `reason` because `text` is
+copied verbatim.
+
+Two kinds of prompt deliberately do **not** have it.
+[`search.ts`](../../src/search.ts) already asks for its one written sentence "in
+plain words", and the four referee prompts ([`referee-candidates-prompt.ts`](../../src/referee-candidates-prompt.ts),
+[`referee-claims-run.ts`](../../src/referee-claims-run.ts),
+[`referee-mirror.ts`](../../src/referee-mirror.ts),
+[`referee-criteria-run.ts`](../../src/referee-criteria-run.ts)) are written for a
+peer reviewer reading in their own field — [referee-mode.md](referee-mode.md).
+
+Watch for the rule fighting one already there. Chat and Remember may bring in what
+they found on the web, so neither may be told to use "no term the piece did not
+use" — that clause was written and then cut for exactly this reason.
 
 ## Before you call it finished
 

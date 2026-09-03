@@ -180,16 +180,4 @@ export const SEAM_ASYMMETRIES: Readonly<Record<string, SeamAsymmetry>> = {
       "lines written against a module docs/plans/260831b-finish-the-database-move.md " +
       "deletes. A Feedback button that accepts a report and drops it is worse than none.",
   },
-  GlossaryStore: {
-    missing: "postgres",
-    why:
-      "The SQL is trivial; what is not settled is whether it may run at all. " +
-      "deleteGlossary nulls article_revisions.glossary on a PUBLISHED revision, and " +
-      "whether a published revision may be mutated is the open decision step 11 of " +
-      "docs/plans/260826e-postgres-storage-implementation.md owns. Refused rather than " +
-      "made a quiet exception.",
-    productionGap:
-      "The glossary panel's 'start over' does not work on the deployed app: it answers " +
-      "501 and the reader is stuck with the glossary they have.",
-  },
 };

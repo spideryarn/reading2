@@ -137,6 +137,19 @@ const SHARED = new Set([
   // the point: two spellings of "is this Greg" is one place for them to
   // disagree. See docs/project/admin.md.
   "admin.js",
+  /* What plan a reader is on, and the sentences `/profile` says about it. On the
+     list for the same reason `admin.js` is, and it is the same argument one
+     question along: `GET /api/billing/usage` builds a `ReaderPlan` and
+     BillingSection.tsx draws it, so the shape is a wire contract with an end on
+     each side. It imports nothing at all.
+
+     **It is a flat module rather than `src/billing/plan.ts` because of this
+     rule**, and that is worth saying rather than looking like a naming whim: the
+     rest of `src/billing/` constructs Stripe clients and opens database
+     transactions, and the one file the browser may have had to leave the
+     directory to prove it. See src/billing-plan.ts and docs/project/billing.md
+     § What a reader sees. */
+  "billing-plan.js",
   /* The Sketch diagram's schema, its validator and its painter — the two files
      that turn a model's scene into geometry. On the list for the reason the
      header states rather than for convenience: `sketch-scene.js` imports
@@ -155,6 +168,19 @@ const SHARED = new Set([
      See docs/project/diagram.md § Sketch. */
   "sketch-scene.js",
   "sketch-paint.js",
+  /* The illustration brief's schema and its two readers. On the list for
+     `sketch-scene.js`'s reason and one that is sharper: it imports only
+     `quote-match.js` (already here) and type-only `types.js` / `sketch-scene.js`,
+     reaches no `node:` module and has no side effect — and **the browser is
+     where the rows under the picture are checked**. Each row shows a passage
+     and jumps the article to the block it came from, and a stored artefact may
+     have been written against block ids an article has since moved, so
+     `readStoredIllustrated` runs at ingress in src/web/useIllustrated.ts and
+     drops what it cannot vouch for. The `readModelBrief` half of the file is
+     the server's and is never called here; the split is the trust boundary, and
+     the header of src/illustrated-plate.ts says why there are two.
+     See docs/project/diagram.md § Illustrated. */
+  "illustrated-plate.js",
   /* What a stranger is served — the wire shapes of `/api/public/…`. On the list
      for the reason the header of the file gives rather than for convenience: it
      imports `types.js` and nothing else, and it is a `.ts` of nothing but

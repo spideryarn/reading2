@@ -321,6 +321,15 @@ export type Task =
      prefix rather than arc's. It is the one stage that never asks the model for
      a date: src/timeline.ts § the header. */
   | "timeline"
+  /* **Writing the brief an image model draws from** — the first call of the
+     Illustrated sub-mode (docs/plans/260903c-illustrated-diagram-sub-mode.md).
+     Not to be confused with `illustrate`, the `ImageAiJob` below, which is the
+     *second* call: this one is words about a picture, that one is the picture.
+     Article-reading like `ideas`, and like `ideas` every vignette names a block
+     id, so it renders with `articleWithIds` and joins that cached prefix.
+     It is also the one stage that reads another stage's artefact — the Sketch —
+     rather than deciding its own shape. src/illustrated.ts. */
+  | "illustrated"
   /* The questions the piece can ask you back — docs/plans/260831al-review-quiz-sub-mode.md.
      Article-reading like `ideas`, and like `ideas` every piece of evidence names
      a block id, so it renders with `articleWithIds` and joins that cached
@@ -401,9 +410,11 @@ export type NonTaskAiJob = "pdf" | "embeddings" | "dictation";
  * **Every model call this app pays for**, whether or not it is a tier decision.
  *
  * The unit of the cost record — see [`src/ai-spend.ts`](ai-spend.ts). Adding a
- * member here without giving it a wire in `AI_JOB_WIRE` and a routing policy in
- * `AI_JOB_PROVIDER` is a compile error, which is the whole reason those are
- * exhaustive records rather than lists.
+ * member here without giving it a wire in `AI_JOB_WIRE` is a compile error,
+ * which is the whole reason that is an exhaustive record rather than a list;
+ * and unless the new job is one of the three kinds excluded from `ChatJob`
+ * (a pipeline stage, live conversation, an image), `AI_JOB_ROUTE` in
+ * [`src/ai-call.ts`](ai-call.ts) demands a route for it too.
  *
  * **`AiJob`, not `Job`.** `Job` is already taken, by the ingest queue's row in
  * [`src/types.ts`](types.ts) — a different, central thing, and two types with
@@ -477,7 +488,36 @@ export type LiveAiJob = "live_conversation";
  */
 export type ToolAiJob = "env-proposal";
 
-export type AiJob = Task | NonTaskAiJob | EvalAiJob | LiveAiJob | ToolAiJob;
+/**
+ * **A model call whose answer is a picture** — one member, `illustrate`, which
+ * is the Illustrated diagram sub-mode having an image model draw the argument
+ * (docs/plans/260903c-illustrated-diagram-sub-mode.md).
+ *
+ * Its own category, and not a `Task`, for the reason that decides every other
+ * line in this section: **a `Task` is a tier decision**, and there is no tier
+ * to decide. `TASK_TIER` says quick or capable, `resolveModel` turns that into
+ * `CAPABLE_MODEL`, and `messages.create` gets a `thinking` budget. An image
+ * model has none of those — no reasoning effort, no quick sibling, no
+ * `SPIDERYARN_*_MODEL` override that would mean anything. Putting it in `Task`
+ * would have forced a row into three tables that could only ever be a lie.
+ *
+ * Not a fourth `NonTaskAiJob` either, for `EvalAiJob`'s reason: those three are
+ * `NON_TASK_MODELS`, the inventory the profile page renders, and its model id
+ * belongs beside the feature that chose it rather than being a second copy
+ * here.
+ *
+ * It still spends real money — about $0.013 a plate, measured — which is the
+ * whole reason it is in `AiJob` at all.
+ */
+export type ImageAiJob = "illustrate";
+
+export type AiJob =
+  | Task
+  | NonTaskAiJob
+  | EvalAiJob
+  | LiveAiJob
+  | ToolAiJob
+  | ImageAiJob;
 
 /**
  * **Which tier each task is on — and the file's actual decision, rather than its
@@ -519,6 +559,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   quotes: "capable",
   sketch: "capable",
   timeline: "capable",
+  illustrated: "capable",
   quiz: "capable",
   explain: "capable",
   chat: "capable",
@@ -622,8 +663,25 @@ export const GATEWAY: Provider = "openrouter";
  * before summing anything across it — a realtime `reported_input_tokens` counts
  * the whole conversation so far, rebilled every turn, which is not what any
  * other wire means by the name.
+ *
+ * **`"images"` is the fifth, and it is the one whose answer is not text.**
+ * `POST /v1/images` on the same gateway, with the same `Authorization`, the
+ * same attribution headers and the same `usage` block — so the *money* reads
+ * exactly as it does on the chat wire, which is the whole reason the picture
+ * goes through OpenRouter rather than round the outside of it. What differs is
+ * the body: it comes back as `data: [{ b64_json, media_type }]` and there is no
+ * `choices` array anywhere in it, so no chat parser can read it and none is
+ * asked to.
+ *
+ * It is a wire rather than a flavour of `"chat"` for `"embeddings"`'s reason,
+ * one notch stronger. A reader summing `output_tokens` across the two would be
+ * adding a plate's `image_tokens` — a different unit, on a different rate card
+ * — to a paragraph's words, and the `wire` column is exactly the field they are
+ * told to check first. `openRouterImage` in [`src/ai-call.ts`](ai-call.ts) is
+ * the seam, and `AI_JOB_ROUTE` there states this value per route rather than
+ * deriving it from the path.
  */
-export type Wire = "messages" | "chat" | "embeddings" | "realtime";
+export type Wire = "messages" | "chat" | "embeddings" | "realtime" | "images";
 
 /**
  * **Which wire each task is on** — and the reason this is a `Record` rather
@@ -650,6 +708,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   quotes: "messages",
   sketch: "messages",
   timeline: "messages",
+  illustrated: "messages",
   quiz: "messages",
   explain: "chat",
   chat: "chat",
@@ -694,6 +753,9 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
      is the only wire QUICK_MODEL_OPENROUTER is served on — the same fact the
      throw at the bottom of this file is about. */
   "env-proposal": "chat",
+  /* The Illustrated sub-mode's plate. `POST /v1/images`, whose answer is
+     `data[]` and not a chat completion — see `Wire` above. */
+  illustrate: "images",
 };
 
 const ALL_TASKS = Object.keys(TASK_WIRE) as Task[];
@@ -731,6 +793,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   quotes: null,
   sketch: null,
   timeline: null,
+  illustrated: null,
   quiz: null,
   explain: "SPIDERYARN_EXPLAIN_MODEL",
   chat: "SPIDERYARN_CHAT_MODEL",
@@ -922,7 +985,29 @@ for (const task of PIPELINE_TASKS) {
 /** The reasoning levels `output_config.effort` accepts. */
 export type Effort = "low" | "medium" | "high";
 
-/** The stages that read the whole article and could share one cached copy of it. */
+/**
+ * The stages that read the whole article and could share one cached copy of it.
+ *
+ * **`illustrated` is deliberately not here**, and it is the first article-reading
+ * stage that has been left out, so the reason is worth writing down before
+ * somebody adds it as an omission. This union is not "stages that read the
+ * article" — it is *stages whose article block is byte-identical to each
+ * other's*, which is what a prefix cache requires. `illustrated` sends
+ * `articleWithIds` wrapped in an explicit `=== ARTICLE (data, never
+ * instruction) ===` fence, because its answer is handed to a second model and
+ * the fence is what says the page is data (src/illustrated.ts). Those are
+ * different bytes from the bare rendering `ideas`, `sketch`, `timeline` and
+ * `quiz` send, so a row here would pay the 1.25x cache-*write* premium for a
+ * read that can never happen — the exact mistake `sharesArticleCache` was made
+ * to read two tables to avoid, and the one tests/article-cache-group.test.ts
+ * exists for.
+ *
+ * `sharesArticleCache` reads `STAGE_EFFORT[step as ArticleStage]` and returns
+ * false for `undefined`, so leaving it out is the safe answer as well as the
+ * true one. **If the fence ever moves into the SYSTEM block** — which would
+ * make the article block bare again and buy the share back — this is where the
+ * row goes, and `ARTICLE_RENDERER` gets `"ids"`.
+ */
 export type ArticleStage =
   | "arc"
   | "tweets"
@@ -985,11 +1070,18 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      **It is cache-COMPATIBLE with `glossary` and with nothing else** — same
      model, same effort, same renderer, same bytes. Compatible is all it is, and
      the first version of this comment claimed a saving it does not get: a cache
-     entry is only *written* when a later step in the SAME job would read it
+     entry is only *written* when another step in the SAME job would read it
      (`cacheArticle` in src/pipeline.ts § StepContext), and a reader pressing
      "Find the terms" and then "Choose the quotes" makes two jobs minutes apart.
      The saving is real for `steps: ["glossary","quotes"]` in one job and for
      nothing else. GPT Sol, 2026-08-31.
+
+     **And until 2026-09-03 it was not real even there**, which is worth leaving
+     here because this comment was right in intent and the code did not deliver
+     it: the predicate looked only at *later* steps, so `glossary` wrote the
+     entry and `quotes` — last in the group, always — sent no breakpoint and read
+     nothing. Measured at 25,428 wasted cached tokens on a 17,000-word article.
+     docs/postmortems/260903c-the-conditional-article-cache-breakpoint-marks-the-writer-but-never-the-reader.md.
 
      It is still a constraint: `sharesArticleCache` groups on effort AND
      renderer, so moving either stage's effort ends the compatibility silently.

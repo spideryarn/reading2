@@ -76,6 +76,7 @@ import type { RefereeResult } from "../referee-criteria.js";
    src/referee-claims.ts. */
 import type { Claim } from "../referee-claims.js";
 import type { Sketch } from "../sketch-scene.js";
+import type { Illustrated } from "../illustrated-plate.js";
 import type { LabelsFile } from "../labels.js";
 import type {
   Arc,
@@ -774,6 +775,34 @@ export const articleRevisions = spideryarn.table(
      * take the picture down with it or block the delete.
      */
     sketch: jsonb("sketch").$type<Sketch>(),
+
+    /**
+     * The same argument painted — `Illustrated`, src/illustrated-plate.ts,
+     * written by the `illustrated` step. docs/project/diagram.md § Illustrated.
+     *
+     * **The brief and where the pictures are, never the pictures.** A plate
+     * holds a sha256, an extension and the dimensions; the bytes are
+     * content-addressed objects in the `sources` bucket at
+     * `sha256/<hash>.jpeg`, the same place the article's own figures go, put
+     * there by `storePlateImage` (src/illustrated-image.ts). Base64 here would
+     * be about 200 KB a plate dragged along by every read of this revision that
+     * named the column — the same call `assets` makes below.
+     *
+     * **`sourceHash` here is a hash of the SKETCH, not of the article**, which
+     * is the one thing about this column that will surprise somebody. A forced
+     * Sketch redraw changes the scene with every article byte identical, so an
+     * article-shaped fingerprint would call a stale illustration current
+     * (src/illustrated.ts § the header). And **`profileHash` is inherited from
+     * the Sketch** rather than taken from the reader's current profile: a
+     * personalised picture must not quietly become an impersonal one.
+     *
+     * **No foreign key from a vignette's `block` to `revision_blocks`**, on the
+     * same argument the glossary, the ideas and the sketch make: a dropped
+     * paragraph should cost that vignette its jump rather than take the picture
+     * down with it or block the delete. `readIllustrated` drops what it cannot
+     * resolve, in the browser as well as on the server.
+     */
+    illustrated: jsonb("illustrated").$type<Illustrated>(),
 
     /**
      * The article's own images, and what became of each — `Assets`,
@@ -2082,7 +2111,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','assets','arc','tweets','glossary','quotes','ideas','timeline','quiz','sketch')`,
+      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','assets','arc','tweets','glossary','quotes','ideas','timeline','quiz','sketch','illustrated')`,
     ),
     check(
       "revision_step_runs_status",
@@ -3860,9 +3889,15 @@ export const billingAccounts = spideryarn.table(
  *
  * ## The three timestamps, and why they are not one status column
  *
- * **Written in the future tense on purpose: none of this is wired up yet.** The
- * functions exist in `src/store/pg-billing.ts` and nothing calls them, so what
- * follows is the contract they are built to, not something the app does today.
+ * **This was written in the future tense, and the future arrived on 2026-09-03.**
+ * It read "none of this is wired up yet … nothing calls them", which was true
+ * when the columns landed and false a few hours later: `reserveIngest` is
+ * reached from `POST /api/jobs` via `withIngestSlot`
+ * ([src/billing/admission.ts](../billing/admission.ts)), and settlement runs
+ * from `settleIn` ([src/store/pg-session.ts](../store/pg-session.ts)) and from
+ * three places in [pg-jobs.ts](../store/pg-jobs.ts). `pg-billing.ts`'s own
+ * header said "it is wired up" while this said the opposite. So what follows is
+ * the contract **and** what the app does.
  *
  * `reserved_at` is set at admission, inside the transaction holding the owner's
  * `billing_accounts` lock — that write is what makes a second concurrent

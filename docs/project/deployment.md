@@ -580,6 +580,7 @@ is read by nothing.
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | **set on Production, 2026-08-27 — and they are read at BUILD time**, which is the part to remember. Vite compiles them into the bundle, so setting them after a deploy changes nothing until the next build. Missing means [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) throws at module load and the site is a **blank page** — which is what `www.spideryarn.com` was for a few hours that day. **Set on Preview too, 2026-08-27** — until then a preview was a blank page for this reason and no other, which looks identical to a build that never ran. Note that Preview builds predating that setting keep the missing values baked in; only a new build picks them up. The values came from `.env.prod`, where the publishable key lives under the legacy name `SUPABASE_ANON_KEY` and its value is an `sb_publishable_…`. [auth.md](auth.md), [260826ae-auth-ui-and-production.md § The release fence](../plans/260826ae-auth-ui-and-production.md#the-release-fence) |
 | `STRIPE_SECRET_KEY` | **not set yet — payments are not live.** When it is, it must be the **live** key here and nowhere else. A production deployment on `sk_test_…` takes test cards, writes `active` subscription rows and grants real quota, while every "is it set" check stays green; [`src/billing/stripe.ts`](../../src/billing/stripe.ts) refuses to construct a client in that state and `/api/health` warns. Absent is fine and means everybody is on the free tier. [billing.md](billing.md) |
 | `STRIPE_WEBHOOK_SECRET` | the signing secret of the **dashboard** webhook endpoint, which is a different value from the one `stripe listen` mints locally — that is why this is not on the `gjd-remote push-env` allowlist. Unset refuses every delivery rather than skipping verification, deliberately: the alternative turns one missing variable into an endpoint that grants subscriptions to anyone who can POST JSON |
+| `SPIDERYARN_BASE_URL` | **must stay unset here**, and it is listed so nobody adds it. It is where Stripe returns a reader to after Checkout or the Portal, and production reads no variable for that at all — `billingReturnOrigin()` ([`src/billing/checkout.ts`](../../src/billing/checkout.ts)) answers `PUBLIC_ORIGIN` before it looks. It exists for a **worktree's** dev server, which lands on 5274, 5275… and would otherwise send a test purchase back to somebody else's checkout |
 | ~~`STRIPE_PRICE_*`~~ | **Gone, deliberately.** Tiers and their Stripe price ids live in the `billing_tiers` table since 2026-09-02, so they can be changed without a deploy and without pasting an id onto every machine. `npx tsx scripts/stripe-setup.ts --apply` reads the rows, makes Stripe match, and writes the id back. [billing.md](billing.md#adding-a-tier-or-a-currency) |
 | `SPIDERYARN_OWNER_ID` | the uuid in `auth.users` that rows are stamped with **when there is no signed-in reader** — the CLI and the pipeline. Inside a request the session user wins and this is ignored, and that ordering is load-bearing: were it the other way round, setting this here would have handed every signed-in stranger Greg's own shelf and every query would have matched. Unset in production is a thrown error rather than a default. [`src/owner.ts`](../../src/owner.ts), [auth.md](auth.md) |
 | `LOG_LEVEL=info` | [logging.md](logging.md) |
@@ -922,10 +923,16 @@ writes to a local filesystem, which a serverless host does not have:
   **How to find this class of failure yourself** — the route answers `200` and
   Vercel's error dashboard stays empty, so the recipe matters:
   [logging.md § where to look](logging.md#where-to-look-when-production-breaks)
-- **`deleteGlossary`** — still refused by `notMigrated` in
-  [`src/store/index.ts`](../../src/store/index.ts), which is the right failure.
-  It nulls the glossary on a *published* revision, and whether a published
-  revision may be mutated at all is an open decision in step 11
+- **`deleteGlossary`** — **fixed 2026-09-03.** It was refused by `notMigrated` in
+  [`src/store/index.ts`](../../src/store/index.ts) on the belief that mutating a
+  *published* revision was an open decision. It was not open — nothing else
+  mutates a published revision in place; every job drafts and publishes, per
+  [database.md](database.md) — and the delete is now the one deliberate
+  exception, built in
+  [260903e-glossary-delete-in-postgres.md](../plans/260903e-glossary-delete-in-postgres.md).
+  It also answers **409** when a live queued or running job holds a draft for
+  the article, so the reader is told to wait for the job and press the button
+  again rather than the delete racing that job's publish.
 
 Greg, 2026-08-26, chose to ship with these broken rather than wait for them.
 

@@ -44,6 +44,14 @@
  * Cases 2 and 5 both publish, which is the sentence worth keeping: **publication
  * does not hang off `commit`.**
  *
+ * **Cases 2 to 5 all settle the job's quota slot**, in the same transaction —
+ * charged on a `done`, given back on every other ending, including case 4's,
+ * which is inside the `release` branch and is therefore not one of "both
+ * branches". Case 1 settles nothing: the job is not over. The other two endings
+ * a job can have are the ones that happen with nobody inside it, and they settle
+ * their own — `settleExpired` and `requestCancel` in src/store/pg-jobs.ts.
+ * docs/project/billing.md.
+ *
  * And clearing `jobs.draft_revision_id` is part of every ending, because
  * `sweepAbandonedDrafts` treats *any* job's pointer as ownership — a terminal
  * job's included. `finish` and `releaseStep` still do not clear it and must not:
@@ -99,6 +107,7 @@ import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { DraftGoneError, StaleAttemptError } from "./jobs.js";
 import type { JobEnding } from "./jobs.js";
+import { settleReservation } from "./pg-billing.js";
 import { finishIn, releaseStepIn } from "./pg-jobs.js";
 import {
   JobDraftGone,
@@ -311,6 +320,35 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
     ending.error ?? `the job ended ${ending.status} with no message`;
 
   /**
+   * **The quota slot this job is spending**, read inside the settling
+   * transaction and off the job row itself.
+   *
+   * A read rather than a value carried in. `settleIn` is handed `{ id,
+   * attemptId }` and a transition, and widening either of those to carry a
+   * billing id would push it through `JobTransition` — which the filesystem
+   * session shares — for a column only Postgres has. One extra `select` on a row
+   * this transaction has already fenced and locked is cheaper than that, and it
+   * cannot be stale: nothing but `enqueueOrGet`'s own INSERT ever writes this
+   * column.
+   *
+   * `null` means the job spends no quota — CLI work, a step re-run, seeding.
+   * `settleReservation` does nothing with it.
+   *
+   * It stopped being the *ordinary* answer on 2026-09-03: this comment used to
+   * end "and every job today, because nothing calls `reserveIngest` yet", and a
+   * job enqueued through `POST /api/jobs` now arrives carrying one
+   * ([src/billing/admission.ts](../billing/admission.ts)).
+   */
+  const reservationOf = async (tx: Tx, jobId: string): Promise<string | null> => {
+    const [row] = await tx
+      .select({ ingestEventId: jobsTable.ingestEventId })
+      .from(jobsTable)
+      .where(eq(jobsTable.id, jobId))
+      .limit(1);
+    return row?.ingestEventId ?? null;
+  };
+
+  /**
    * The whole of the state machine, inside the caller's transaction.
    *
    * Returns what happened **and** what the caller should log once the
@@ -375,6 +413,11 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
          now carries `kept` too — and a `keep` never reaches here, so the
          remaining case would type as `kept | ended` and lose its `ending`. */
       if (settlement.kind !== "ended") return { settlement, announce: {} };
+      /* **Case 4 is an ending, so the slot goes back here too** — and it is the
+         one the plan's "both branches of `settleIn`" misses. The reader pressed
+         Stop while the step ran, `releaseStepIn`'s own `case` ended the job
+         instead of queueing it, and nothing below this line runs for it. */
+      await settleReservation(tx, await reservationOf(tx, transition.jobId), "released");
       return {
         settlement,
         announce: await discardAfterCancel(tx, slug, reasonFor(settlement.ending)),
@@ -452,6 +495,28 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
     }
 
     const after = await finishIn(tx, transition.jobId, transition.attempt, ending);
+
+    /**
+     * **The charge, and the release, in the transaction that just ended the
+     * job.** Cases 2, 3 and 5 — a terminal success, a stage failure or
+     * cancellation, and an all-skipped claim.
+     *
+     * **After `finishIn`, not before**, so it runs only over an ending the
+     * fence accepted: a claimant that had lost the job raises
+     * `StaleAttemptError` above this line and settles nothing.
+     *
+     * A `done` **charges, strictly** — `settleReservation` throws unless exactly
+     * one row moved, and that throw takes the publication back with it. Both
+     * directions of getting this wrong are bad: publishing without charging is a
+     * free ingest, and charging without publishing is a debit for an article
+     * nobody got. Every other ending **releases, tolerantly**; see
+     * src/store/pg-billing.ts for why the two differ.
+     */
+    await settleReservation(
+      tx,
+      await reservationOf(tx, transition.jobId),
+      ending.status === "done" ? "succeeded" : "released",
+    );
     return { settlement: settlementOf(transition, after), announce };
   };
 

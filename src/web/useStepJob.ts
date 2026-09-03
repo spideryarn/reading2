@@ -56,7 +56,9 @@
  * reaches one.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { jobWorthRetrying } from "../job-failure.js";
 import { driverStalled } from "../job-state.js";
+import { worthRetrying } from "../messages.js";
 import type { Job, StepName } from "../types.js";
 import { useJobs } from "./useJobs.js";
 
@@ -101,6 +103,54 @@ interface StepRun {
   useProfile?: boolean;
 }
 
+/**
+ * **A run that ended badly, and what the reader can do about it.**
+ *
+ * One value rather than a sentence beside a boolean beside a callback, for the
+ * reason `postFailure` below already gives about its own two halves: *"the
+ * failure and its reason are one value … so no later edit can set one and
+ * forget the other"*. A panel cannot wire the message and forget the
+ * retryability, because there is nothing to forget — they arrive together or
+ * not at all.
+ *
+ * This was a bare `string | null` until 2026-09-03, which is what let
+ * `JobProgress` redraw its ordinary run button under **every** failure while
+ * the shelf card next door had been consulting `retryable` since August. Same
+ * job, same failure, two different answers.
+ */
+export interface StepFailure {
+  /**
+   * What to show the reader.
+   *
+   * Off the record for a job that failed — `job.error`, which since 2026-09-03
+   * is a sentence somebody wrote for a reader rather than whatever a step
+   * threw (src/job-failure.ts) — and from the server's own refusal for a POST
+   * that never produced a job.
+   */
+  message: string;
+  /**
+   * Whether another go at this could come out differently.
+   *
+   * `jobWorthRetrying` for a job on the record, so the band and the shelf card
+   * cannot disagree about one job; `worthRetrying` on the sentence for a
+   * refusal that never became one, which is the same fallback every other
+   * surface uses for a stored message. Both read *nobody said* as **yes** —
+   * src/job-failure.ts § Which way to be wrong.
+   */
+  retryable: boolean;
+  /**
+   * Run the failed job again, skipping whatever finished — or `null` when there
+   * is no job to run.
+   *
+   * Null is the POST that never landed: there is no id, so the honest
+   * affordance is the ordinary run button, which `JobProgress` is already
+   * drawing. Being null is *not* the same as `retryable` being false, and the
+   * two are separate fields for that reason: one is a judgement about the
+   * failure, the other is whether there is anything to point the judgement at.
+   */
+  retry: (() => void) | null;
+}
+
 export interface StepJob {
   /**
    * The job writing this article's artefact, if one is. Null otherwise.
@@ -125,7 +175,7 @@ export interface StepJob {
    * or merely watched it. See `watchedId` below for why the second half
    * matters, and for the two ways it was got wrong first.
    */
-  failed: string | null;
+  failed: StepFailure | null;
   /**
    * **This tab can see the job and cannot move it.** A separate question from
    * anything on the record, and the reason it comes through here.
@@ -366,11 +416,31 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
     if (seen.status === "queued" || seen.status === "running") return;
     if (seen.status === "done" && !announced.current.has(id)) onFinished();
   }, [queue.jobs, onFinished]);
+  /**
+   * The watched job, once it has stopped badly — and whether it is worth
+   * another go.
+   *
+   * **The id comes out with it**, because a Retry is a job-level action and
+   * `job` above is null by the time this is non-null: a failed job leaves the
+   * queued/running set, which is the whole reason `watchedId` exists. Without
+   * the id the band could say *try again* and have nothing to try.
+   *
+   * `jobWorthRetrying` and not a comparison written here, so the band and the
+   * shelf card ask one question of one function — src/job-failure.ts. A cancel
+   * is always worth another go: the reader stopped it, which is not the same as
+   * not wanting it, and Retry skips whatever finished before they did.
+   */
   const stopped = useMemo(() => {
     const mine = watchedId ? queue.jobs.find((j) => j.id === watchedId) : undefined;
     if (!mine) return null;
-    if (mine.status === "error") return mine.error ?? "The job failed.";
-    if (mine.status === "cancelled") return "Stopped.";
+    if (mine.status === "error") {
+      return {
+        id: mine.id,
+        message: mine.error ?? "The job failed.",
+        retryable: jobWorthRetrying(mine),
+      };
+    }
+    if (mine.status === "cancelled") return { id: mine.id, message: "Stopped.", retryable: true };
     return null;
   }, [queue.jobs, watchedId]);
 
@@ -441,7 +511,29 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
      article is queued rather than turned away — so what is left is the ordinary
      kind: a quota, a bad step, a dead network. Those are true until the next
      press, which is when `start` clears this. */
-  const failed = postFailure ? (postFailure.reason ?? "Couldn't start the job.") : stopped;
+  /* **Built here rather than inside the memo above**, because it closes over
+     `queue.retry` — a fresh function on every render, so putting it in the
+     memo's dependencies would defeat the memo, and leaving it out would be a
+     stale closure. The `.find` is what is worth memoising; a two-field object
+     is not. Same shape as `cancel` in the returned interface below. */
+  const failed: StepFailure | null = postFailure
+    ? {
+        message: postFailure.reason ?? "Couldn't start the job.",
+        /* No `failureKind` to read — nothing became a job — so the sentence is
+           all there is, which is exactly what `worthRetrying` is for. A quota
+           refusal carries `[pay-free]` and correctly withholds the offer; an
+           unrecognised sentence keeps it. */
+        retryable: worthRetrying(postFailure.reason),
+        /* Nothing to retry: the run button beside this message *is* the retry. */
+        retry: null,
+      }
+    : stopped
+      ? {
+          message: stopped.message,
+          retryable: stopped.retryable,
+          retry: () => void queue.retry(stopped.id),
+        }
+      : null;
 
   /* `driverStalled` rather than a comparison written out here, so the threshold
      lives in one place — the shelf card asks the same function. */
