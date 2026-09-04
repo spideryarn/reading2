@@ -14,7 +14,7 @@ three later stages consume it**:
 ```
 A (store inventory) ✅ → B0 ✅ (already done) → T-B (factory) ✅ → T-C (lanes) ✅
   → T-D (activation) ✅ → T-E (pollution) ✅
-  → B (12 of 26 done) → B2 (`routes.test.ts`) → C → D → E → F (hinge) → G → H → I
+  → B (25 of 26 done) → B2 (`routes.test.ts`) → C → D → E → F (hinge) → G → H → I
 ```
 
 **`C → B` became `B → C` on 2026-09-04**, and this line is the only place the order lives, so
@@ -32,7 +32,7 @@ more*.
 | **T-C** | `TEST_LANES`, `OWNER_AUDIT`, and `seedLocalAccounts`. Reviewed; the owner guard rebuilt per `(file, owner)` pair. |
 | **T-D** | **`npm test` is three projects now** — see below. The first stage of the six that is visible to anybody else. |
 | **T-E** | Four verdicts at the private lane's teardown, `POLLUTED` and `TEARDOWN FAILED` among them; the pool names itself; the shared lane reports its neighbours on failure. Two Sol rounds — the design one refused half the spec, the built one refused the commit. |
-| **B** | **12 of 26.** Two in the pilot, then ten more in two parallel halves. All green, each with one mutation watched red and a written note of what that mutation does *not* cover. |
+| **B** | **25 of 26.** Two in a pilot, ten in two halves, then thirteen in three. Only `routes.test.ts` is left, and it is B2. Every file carries its mutation, the run's own numbers, and what the mutation does *not* cover — retained in the file after a review found the first ten had reported the evidence without keeping it. |
 | **D′1** | Landed earlier; since **extended by another worktree**, and its "unforgeable" claim is measured false — see D′1b. |
 
 **This paragraph used to say "nothing yet changes the default `npm test`", and T-D is where that
@@ -1953,6 +1953,35 @@ map **only once the witness is re-run**, and the witness is dated 2026-09-03. So
 > **Re-run the witness at the end of stage B**, and let every file the conversion took out of its
 > reach drop out of `STORE_MIGRATION` entirely.
 
+**And that re-run is now a command rather than a reconstruction**, 2026-09-04.
+`vitest.witness.config.ts` and `tests/setup/fs-store-witness*.ts` were kept, but the thing that ran
+them and assembled the JSON was not, so the step above was unrunnable — a number recorded without its
+derivation, which is the failure this plan spends a section on.
+[`scripts/store-migration-witness.ts`](../../scripts/store-migration-witness.ts) is that missing half:
+
+    npx tsx scripts/store-migration-witness.ts --self-check                                  # ~1 min, 12 control files
+    npx tsx scripts/store-migration-witness.ts --full --out tests/store-migration-witness.json
+
+The command is recorded in the JSON's own `what` field so it cannot go missing twice. Three things
+changed with it, each of which alters what a re-run will say:
+
+- **The instrumented run now reproduces the three lanes**, derived from `vitest.config.ts` rather than
+  restated. The 2026-09-03 measurement ran every file in one project on the shared database, which was
+  fair when the lanes were a day old and is wrong now that stage B's output *is* the Postgres suites.
+- **`--self-check` runs seven positive controls covering all eight instrumented modules, four
+  negatives, and the read-only blind spot**, and it was watched failing three ways: the hook pointed
+  at a module nobody imports (7 positives red, negatives still green), method wrapping removed (the
+  subtle one — module-level exports stay green, `fsJobStore.get` and friends vanish), and the
+  recorder's output disabled (everything "DID NOT REPORT", which is the distinction the witness
+  exists for). Two of its original controls had already been converted by stage B and the check said
+  so, which is the intended way for it to age.
+- **`--full` re-runs each non-reporting file on its own** before scoring it `unresolved`, which is
+  what was done by hand on 2026-09-03, and it **refuses to write** a witness with 50 or fewer touched
+  files — the floor `tests/store-migration-registry.test.ts` keeps, applied at the source.
+
+The one hand-edit the committed JSON carries is now code: `tests/store-artefacts-pg.test.ts` is in
+neither bucket (`READ_ONLY_BLIND_SPOTS`), which is why its counts sum to 587 of 588.
+
 At that point the category question dissolves rather than being answered, which is the better
 outcome, and the map becomes a measurement of the *current* tree again instead of a September the 3rd
 one. Until then the four entries stay `database-integration` with reasons that say the conversion is
@@ -2020,6 +2049,74 @@ merely reading the wrong store, it is **reaching past the selection into the con
 is the reach stage A's witness was built to count. This predicts which of the remaining 24 will hit
 it: the three chat route suites, both referee route suites, and anything reading a shelf or a
 profile.
+
+#### The five referee suites — 17 of 26, and the feared one was the safe one
+
+2026-09-04. `referee-claims-omitted`, `referee-claims-routes`, `referee-criteria-routes`,
+`referee-mirror-route`, `referee-scan-route`. **Five files, 44 tests, one private database, green.**
+Cost held at 30-40 minutes for four of five; `referee-criteria-routes` ran long because four
+mutations mean four runs.
+
+**`referee-scan-route` was the one this plan was afraid of, and the fear was wrong.** The worry was
+that a silently wrong sha256 would point the scan at nothing, and a scan of nothing reports a clean
+paper — silent success in the one feature whose job is to say *this manuscript is talking to your
+model*. Three independent things make it impossible rather than unlikely, and the conversion proved
+it rather than asserting it: the hash is computed twice by two different pieces of code and
+`storeRawBytesFor` **throws** if they disagree; `readRawDocument` re-hashes what the bucket returned
+and raises `MissingRawObject` rather than answering `null`, so a wrong key is a 500 and never an
+empty scan; and a poisoned document and a clean one are seeded in the same run, so a mix-up fails one
+of the two. The mutation — rotating the digest in `canonicalKey` — turned **4 of 8 red, all
+`MissingRawObject`**. Loud, not empty. Worth carrying forward: **the address being the content hash
+is what makes this safe**, so anything that lets a caller pass a key it did not derive re-opens it.
+
+##### Two mutations stayed green, and one of them was a real hole in a Vercel-only guard
+
+1. **`sweep`'s `lt(created_at, cutoff)` could be deleted and `referee-claims-routes` stayed green.**
+   That predicate *is* the difference between the two stores: the filesystem store sweeps whatever it
+   is shown, Postgres leaves another process's run alone for `CLAIMS_ORPHAN_GRACE_MS`. **On Vercel
+   the polling process is never the streaming one**, so without the guard every poll errors a run
+   that is still arriving. Nothing in the file began a run and then asked whether a GET had left it
+   alone. One assertion added — a young run is still `pending` after the GET — and the mutation goes
+   red. The same hole existed in `referee-criteria-routes` and got a whole case.
+2. **`criteriaFor` losing `where article_id` stayed green, and was kept.** One article in a private
+   database cannot tell a scoped read from an unscoped one. `tests/owner-isolation.test.ts` is what
+   speaks for that predicate, and the note saying so sits at the assertion it undermines. **A private
+   database per run removes the cross-run leak and leaves the single-article blindness**, which is
+   worth knowing before trusting any "writes nothing at all" assertion in this stage.
+
+##### Coverage genuinely lost, because the code is unreachable under the store that deploys
+
+Two whole cases went from `referee-claims-routes` — *"refuses a paper with no text, before a header
+is written"* and *"writes nothing when it refuses"*. **`claimsProblem`'s 400 cannot happen under
+Postgres**: `reasonsNotToPublish` ([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts))
+refuses to publish a revision with no blocks, so `loadArticle` can never hand the route an empty
+`blocks` array. The *ordering* claim those cases carried survives on the 404, which is the other
+refusal above `sse(res)`.
+
+**So the conversion turned a covered branch into uncovered dead code**, and that is the honest
+description rather than a loss to be smoothed over. The code stays — a fail-safe above a stream costs
+nothing and the guard it duplicates lives in a different module — but **stage H should decide whether
+it stays as a fail-safe or goes**, and it is recorded here so that decision is made rather than
+inherited. Same shape as `referee-criteria-routes`'s dropped `sourceHash` assertion, and resolved the
+same way: do not manufacture a row so condemned code can go on being exercised.
+
+##### The filesystem-only list is readers *and writers*, and the table was half of it
+
+**[`src/comments.ts`](../../src/comments.ts) § `createComment` is a filesystem-only writer** — same
+property as the thirteen readers, and verified: nothing in that module imports `src/store/`. Neither
+its name nor its import path says "files". The table above should be read as *the filesystem
+adapter's implementation exported from `src/*.ts`*, which is what it always said — but it lists only
+the read half, and **a converted test that keeps calling a filesystem writer does not get an empty
+answer, it gets a write nobody will ever read.** That is worse, because the assertion that follows it
+tends to be about the route's reply rather than the row.
+
+##### One trap for the next converter
+
+**The store's own clock beats an `UPDATE`.** `RefereeClaimsStore.begin(slug, now)` takes a clock, so
+an abandoned run can be seeded honestly. `RefereeCriteriaStore.begin` does **not** —
+`attempt_started_at` is `clock_timestamp()` — so testing its sweep needs
+`vi.useFakeTimers({ toFake: ["Date"] })` and nothing else faked, or the pg driver's own timers stop.
+Both are documented in the files themselves.
 
 #### The review found the evidence was reported and not retained — 2026-09-04
 
@@ -2099,26 +2196,393 @@ verdict** rather than letting a retained log stand in for a run it did not do. T
 the instruction to hand it evidence is meant to produce, and it is worth recording that it worked —
 but it means the follow-ups were verified here, in this tree, and not there.
 
-#### The witness has no instrument — the step this plan scheduled cannot be run
+#### The evidence guard: cite it, do not copy it
+
+The review's process finding — evidence reported and not retained — wants a mechanical check, because
+the instrument that failed was *"a convention says a comment should be there"*, and this orchestrator
+then demonstrated the point twice in ten minutes: a grep for the word "mutation" **falsely accused**
+five converted files of carrying no evidence, and a second grep nearly **missed** the evidence three
+of them did carry. Prose cannot be audited by looking for prose.
+
+**The obvious design is wrong.** A typed `mutation` field on the `STORE_MIGRATION` entry — what was
+broken, what the run printed, what it does not cover — makes the compiler enforce the pairing, which
+is this registry's own idiom (`StoreEntry` is a discriminated union precisely so that a collateral
+verdict without a mechanism cannot be written). But it would put **one fact in two homes**, against
+`CLAUDE.md`'s *cite, don't restate*, and the two would drift: the registry entry is edited by whoever
+is thinking about categories, and the test file by whoever is thinking about the test.
+
+**And the test file is the better home**, which settles it. The evidence earns its keep by sitting
+beside the assertion it bears on — *"what this cannot tell you is whether the read was scoped to this
+article"*, three lines above the assertion that cannot tell you. Moved to the registry it becomes a
+record; left where it is it is a warning to the next person to touch that line.
+
+**So the guard checks that the citation exists, not what it says.** Every file with a `TEST_LANES`
+entry whose `STORE_MIGRATION` entry records a stage-B conversion must contain a findable marker; the
+marker's neighbourhood is the evidence, and no copy of it lives anywhere else. What the guard can
+honestly check is presence and shape — that a converted file says which mutation was run, what the run
+printed, and what it does not cover — and **not** whether any of that is true. That limit is the point
+rather than a weakness: a guard that claimed more would be the next thing to trust wrongly.
+
+Deferred out of the stage-B batch because three agents were editing the registry, and out of the
+commit that closed it because 25 files were mid-run. **Do it before B2**, so that `routes.test.ts` —
+the file with the thinnest mutation coverage per test in the whole stage — lands under it rather than
+before it.
+
+#### The four queue suites, the `jobs-fs-adapter` split, and 25 of 26
+
+2026-09-04. `jobs`, `jobs-walk`, `jobs-commit-path`, `retry-is-only-for-a-failed-job`. **4 files, 80
+tests**, plus [`tests/jobs-fs-adapter.test.ts`](../../tests/jobs-fs-adapter.test.ts) at 12. Only
+`routes.test.ts` remains, and it is B2.
+
+**Two of this document's counts were wrong.** `jobs.test.ts` had **71** tests, not the *"~35"*
+recorded above, and `jobs-walk` had 10, not 9. Both came from an inventory that counted `it(` at a
+glance. The § *Counts are perishable* rule keeps being right about this document's own numbers.
+
+**The split took 12 tests, not the 5 the brief named**, and the two extra are the right call:
+
+- **`sweepStopped` (6 tests)** — a pure function exported only from `src/store/jobs-fs.ts` and used
+  only by it. Left inside a converted `jobs.test.ts`, it would have kept that file importing a
+  condemned module **and** orphaned six tests at stage G. That is the brief's own argument for the
+  other two blocks, applied to a block the brief had not seen.
+- **`leaves the marker behind when a step fails` (1)** — asserts `fsArtifacts.interrupted` and then
+  `rm`s `data/<slug>/steps`. Postgres has no marker; the equivalent is a rolled-back draft and a
+  `revision_step_runs` row left `error`.
+
+The new file's header names **two deletion moments**, not one — `jobs-fs`/`artifacts-fs` for most of
+it, `step-context-paths` for the `outputs(ctx)` block — and, per block, what already covers the
+Postgres side, **checked rather than assumed**: `store-jobs-parity` for `sweepStopped`,
+`store-artefacts-pg` for `interrupted` both ways, and **nothing for `writeOnce`'s rename, correctly**.
+It also records the one thing none of them has: the marker seen through the real runner.
+
+##### A green mutation says the artefact check cannot see what it is for
+
+Deleting `if (run?.status !== "done") return false;` from `hasArtefacts` left `jobs.test.ts` at 60/60.
+A control in the same function (`if (run) return false;`) turned 3 red, so the function is genuinely
+on the path — **nothing in the file distinguishes "the artefacts are present" from "a step is recorded
+as having run".** `jobs.test.ts` is the only converted queue suite whose skip decisions come from real
+rows; `jobs-walk` and `retry` both replace `session.reads`, so neither could have found it.
+
+##### Three traps, and the first is the most dangerous thing found today
+
+1. **`vi.resetModules()` silently moves a private-lane worker onto another database.** The reload of
+   [`src/env.ts`](../../src/env.ts) takes a **fresh `INHERITED` snapshot** in which our minted URL
+   already sits, so nothing "differs from what was inherited" and `.env.local` wins the next
+   `loadEnvLocal()`. Measured: the next pool lands in **`postgres`**, the maintenance database. **A
+   suite that only writes would have written there and passed.** Surfaced in `jobs-walk` as a job
+   reading `gone` instead of `busy`.
+
+   Fixed in [`tests/setup/private-db.ts`](../../tests/setup/private-db.ts) with the one line
+   `src/env.ts` § `PINNED` exists for, which [`unit-no-database.ts`](../../tests/setup/unit-no-database.ts)
+   has always had and this lane never did. Above the branch, so the deliberately-unreachable poison URL
+   is pinned too — otherwise a reset in a lane with *no* database replaces *"refused fast"* with a live
+   connection to the shared one.
+
+   [`tests/private-lane-survives-a-module-reset.test.ts`](../../tests/private-lane-survives-a-module-reset.test.ts)
+   is the control, and **its first form passed while the hole was open**: importing `src/env.ts` after
+   the reset changes nothing, because `loadEnvLocal()` is a function and not a top-level effect. The
+   reload has to reach a caller — `src/db/client.ts` § `databaseUrl` calls it before every pool. That
+   wrong first version is recorded in the file, because it is the more useful half.
+
+2. **A seeded article gives `requireUrl` a real URL, and the pump will fetch the web.** These fixtures
+   were free of it only because they had no `meta.json`. `scratchArticleInPg`'s `mutate` now rewrites
+   to a per-slug `https://spideryarn-test.invalid/<slug>` — verified to fail at DNS with nothing
+   leaving the box, and *distinct per slug* so that `freeSlug` cannot adopt one fixture for another.
+3. **`jobs.upload_id` is a third id Postgres validates** — a foreign key, so an invented uuid fails the
+   insert with `23503`. Beside `jobs_id_format` and `attempt_id` in trap 2 above.
+
+And two shortcuts: **a claim does not need an article** (`lockOrCreateArticle` makes the row when a
+draft opens on a bare slug), and **a fake step's product must be one the store accepts** — `{ made:
+name }` is refused, `raw` needs a manifest naming a real `raw_sources` row, and without a `stamp`
+`publishRevisionIn` refuses with *"the tree was built from different blocks"* and the job ends `error`
+one step after the thing under test.
+
+##### Where the manifest was wrong about its own outliers
+
+§ *B's manifest* called `jobs`, `jobs-walk` and `step-failure-seam` the expensive ones because of
+`data/_jobs/` byte assertions. **The byte assertions were the easy part — they are rows.** The real
+cost was that `claimSession` needs a draft and the Postgres store **shape-checks products**, neither of
+which this document mentions anywhere. Estimating conversion cost from a count of filesystem sites
+over-counted `step-failure-seam` badly and under-counted `jobs-walk`.
+
+And *"one mutation per `describe`"* needs the qualifier the agent used: **one per *store-touching*
+`describe`**, since eight of `jobs.test.ts`'s blocks are pure functions.
+
+#### The lane went green, then two files went red, and neither was what it looked like
+
+Running the whole `private-postgres` lane after the pin: **2 failed of 125**. Both diagnosed, both
+fixed, and the lane now runs **125 files, 1839 tests, exit 0**.
+
+##### `store-shelf-reads` had never seeded the articles it audits
+
+It filters the shelf to `!slug.startsWith("test-")` and asserts over what remains, believing that to be
+the `data/` corpus. **This file has never put an article anywhere.** It was reading whatever another
+suite had loaded under a corpus name and left behind in the run's shared database, and stage B's move
+onto `scratchArticleInPg` — which names articles `test-…` — removed the accident. **It fails when run
+alone**, and did so before today; the full lane was hiding it.
+
+**Its own non-vacuity guard is what caught it** — `expect(entries.length).toBeGreaterThan(0)`, written
+so the file could not pass while asserting over nothing. It fired the first time the accident stopped
+happening, which is the entire argument for writing such a guard.
+
+Fixed by seeding three corpus articles through the real `loadArticleIntoPg` → `publishRevision` path,
+and by **turning the filter from a deny-list into an allow-list** — the deny-list is what made the file
+order-dependent, and both concerns its original comments record (a foreign fixture's `title_override`
+changing mid-run, a foreign fixture's wrong column reddening the wrong file) are settled by owning the
+slugs, where *"exclude the fixtures we know about today"* holds only until the next suite arrives.
+
+**And the fix uncovered a second vacuity.** The case *"and the corpus, where it has one, really does
+exercise the fallback"* had been printing a warning and returning, because the committed corpus has no
+untitled article — **a permanently vacuous non-vacuity control**. One of the three seeded articles is
+`writes` with its title deleted, so it is now a real assertion. A third, from `openai-huggingface`, is
+the only corpus article with a `supplement` block, which makes the scalars audit's recomputation
+distinguishable — something that file's own comment says nothing in the database previously did.
+
+##### `jobs.test.ts` was a defect, and not the cross-file interference it looked like
+
+*"Expected 'busy' to be 'claimed'"*, only in full-lane runs. **`pgJobStore.claim` opens by taking the
+`queue_state` singleton with `for update nowait`**, so any claim arriving while another claim is
+mid-transaction is answered `busy` — *"another claim is being decided"* — whatever job it names. The
+other claimant is **the same file**: `enqueue` starts a pump, a request handed an already-running job
+is given one too, and those pumps are still waking on their 250 ms→5 s backoff several cases later.
+
+Established from a timeline, not a story — every `claim` call logged, six job ids inside 400 ms in the
+red run against four and no overlap in green ones. The obvious alternative was ruled out by measurement:
+a probe for `running` rows immediately before the fixture claim, after deliberately running five other
+database suites first, returned **zero** — the concurrency cap is not involved and no other file leaves
+a `running` row.
+
+**It reproduces alone on a loaded box — 3 of 12, then 1 of 15 — and never on a quiet one.** It read as
+interference only because a full lane run is slow enough to be loaded. Worth knowing separately: **lane
+file order is not stable run to run**, because vitest's default sequencer sorts by cached durations in
+`node_modules/.vite/vitest/*/results.json`.
+
+Fixed by asking again on `busy`, which is the queue's **documented contract** — *"whoever takes it
+runs; everybody else is told `busy` and asks again. The pump is not privileged."* **And the retry does
+not soften the file**: re-applying the mutation its header records (`leaseIsOver` → `leaseIsLive`)
+still produces exactly the two documented reds, with the first now taking 3046 ms instead of 94 ms
+because it exhausts the whole budget first. 20 of 20 green repeats under the load that gave 3/12 before.
+
+[`docs/project/testing.md`](../project/testing.md) § *One database, many suites* attributed this error
+message solely to a stray `running` row filling the cap. It now carries the second cause, because
+looking for a `running` row finds nothing in this case.
+
+#### The eight mutations, re-run and retained — and five of them stayed green
+
+2026-09-04, after the review found the evidence missing. Twenty mutations across the eight files;
+**fifteen red, five green**, all twenty written into the file beside the assertion they bear on, with
+the run's own numbers. All eight re-run green afterwards (**66 tests**), `src/` clean.
+
+**The five greens are the return on the whole exercise**, and none of them is a small point:
+
+1. **The seeder ships the artefact the oracle asserts.** Suppressing `artifacts.write` in
+   `pg-session.commit` left `article-cache-call-site` **green**, because `scratchArticleInPg` clones
+   `data/writes`, which already contains `arc.json`, `tweets.json` and `glossary.json`;
+   `openOrBeginJobDraft` carries them forward, and `assertProduced` reads back **the fixture's**
+   artefact. Verified here: those files are in `data/writes/`. **The file would pass over a session
+   that persisted nothing.** This is not one file's bug — **any converted suite whose oracle is "the
+   artefact exists after the step" is blind exactly to the extent that the corpus slug it cloned
+   already had one**, and that is most of them. It goes in every remaining brief and it is a question
+   for the ones already landed.
+2. **An unjournalled ticket ships green.** Suppressing `realtimeSessionStore.issue` in the route left
+   `chat-live-ticket-route` untouched: no assertion in it ever asks whether the row exists — the table
+   appears in a `pgReady` list and a teardown comment, and nowhere else. Covered now only because
+   `live-session-routes` was converted the same day, by a different agent, which is luck rather than
+   design.
+3. **The token is carried and never checked.** Removing the `attemptId` fence from `pgChatStore.finish`
+   left `chat-live-turn` green. The `MissingAttempt` throw above it still catches an *absent* token —
+   another mutation proved that — but nothing calls `finish` with a **stale** one, because the retry
+   aborts the original stream rather than letting the loser land.
+4. **"First" is untested.** Swapping the two 409 checks in `refuseAMovedQuiz` left `quiz-mark-route`
+   green: the case named *refuses a source-stale quiz before it looks at the batch at all* deliberately
+   sends the **correct** batch id, so under either order the batch check passes and the staleness one
+   throws. Ordering claims need a case with **both** wrong.
+5. **One owner cannot see a predicate that narrows to one owner.** Deleting the owner term from
+   `ownedSlug` left the query-string suite green. **That is the fourth file today** — with
+   `criteriaFor`, `markConnected`/`close`/`find`, and the referee half's own note. It is a property of
+   the private lane, not of any of the four: *a private database with one seeded owner cannot tell a
+   scoped query from an unscoped one.* `tests/owner-isolation.test.ts` is what speaks for all of them.
+
+**Two more greens are recorded in the files rather than here**, both of the same shape — a case that
+refuses one line earlier than the claim it is cited for, so its 409 is evidence about a different
+claim than the file thinks.
+
+##### Three header claims that no mutation can reach
+
+Worth having, because a claim nothing can falsify is a claim resting on a reading of the code:
+
+- `quiz-mark-route`'s *"every refusal happens before a single SSE header is written"* — asserted as
+  `streamed === false` on four cases, but nothing can move `sse(res)` relative to the checks without
+  rewriting the handler.
+- `chat-live-ticket-route`'s *"the history and the tail, from one read"* — both come out of the same
+  `threadsFor` call, so the file would not notice if somebody split it.
+- `one-article-for-one-address`'s reliance on `jobs_active_source`, which is a partial unique index in
+  [`src/db/schema.ts`](../../src/db/schema.ts): loosening it is a **migration, not an edit**, so both
+  mutations reached the classifier and the repair while the index went on doing the refusing.
+
+##### And one correction to a header, found by mutating it
+
+The query-string suite claimed `chatStore.load` reaches the article through its slug *and its current
+revision*. It does not: `articleIdForOwned` predicates on `ownedSlug` **alone**, and `onTheShelf` — the
+published-revision rule — is not in that path. The header named the wrong predicate and now names the
+right one.
+
+##### A failure shape that reads as a finding
+
+The first attempt at one mutation used `desc(chatMessages.ordinal)`, a symbol `pg-chat.ts` does not
+import. **All 11 tests failed, including the ungated `STORE` control.** That is a module that would not
+load, and in a summary line it is indistinguishable from a real whole-file red — so a mutation must be
+checked for *which* tests it turned red, not only how many. Recorded in the file beside the real
+result.
+
+#### The other four — 21 of 26, and the worst trap yet is a suite that is green and blind
+
+2026-09-04. `all-skipped-publication-log`, `term-lookup`, `live-session-routes`, `step-failure-seam`.
+**Four files, 37 tests, one private database, green.** With the five referee suites, stage B stands at
+**21 of 26**: four queue files and `routes.test.ts` (→ B2) remain.
+
+##### Seed as one owner, read as another, and every refusal passes for the wrong reason
+
+`term-lookup` seeded as `DEV_OWNER_ID` and read as `currentOwnerId()` — which is `SPIDERYARN_OWNER_ID`
+from `.env.local`, a different uuid. **Both 404 cases passed.** A 404 for *"not yours"* is
+indistinguishable from a 404 for *"no such term"*, so the suite was green with its fixture completely
+invisible. Fixed by running every call inside `runAsOwner(DEV_OWNER_ID, …)`, with the 409 case
+documented as the control that keeps the two 404s honest.
+
+**The general form is the most valuable thing this stage has produced, and it goes in every remaining
+brief:**
+
+> **A converted suite whose assertions are all refusals can be entirely green while its fixture is
+> invisible.** Every refusal-shaped suite needs at least one case that can only pass through a fixture
+> the reader can actually see.
+
+The filesystem store had no owner scoping to get wrong, so this failure mode **did not exist before
+the conversion** and is created by it. It is not on the trap list because nobody had met it yet.
+
+##### Two instructions in the brief were wrong, and the agent checked instead of obeying
+
+Both came from a careful read of the file rather than a run, which is precisely the distinction this
+plan keeps making, and this time the read was mine.
+
+1. **"Replace the 2-JSONL-lines-collapse-to-1 assertion with a `count = 1` query."** Wrong: that
+   assertion is about the **ledger**, and `selected()` in
+   [`src/store/ai-calls.ts`](../../src/store/ai-calls.ts) returns `fsCostStore` whenever
+   `NODE_ENV === "test"` *whatever the flag says*, so the ledger did not move and the assertion was
+   already true. Following the instruction would have replaced a working assertion with a weaker one.
+   **That is the second finding today to land on that same line**, the first being `quiz-mark-route`'s
+   ledger reach, and both say the same thing: **pinning a file to Postgres does not pin its ledger**.
+2. **"Replace the journal-write-failure's directory trick with a `vi.spyOn` rejection."** Followed, and
+   it cost coverage: the old trick made a **real write fail**, so it would have caught an `issue` that
+   swallowed its own error. The spy cannot. Written into the file. A narrower test arrived by
+   instruction rather than by accident, which is worse, and it is recorded rather than quietly kept.
+
+##### `step-failure-seam` was never an outlier, and its race is gone
+
+The manifest called it one alongside `jobs` and `jobs-walk`, on the grounds that it asserts on bytes
+read back out of `data/_jobs/`. **Its sixteen filesystem sites were mostly scaffolding**, it converted
+in about forty minutes like the others, and the `data/_jobs/` assertion **had a direct Postgres
+analogue** — it did not have to be dropped. Estimating from a site count over-counted this file badly.
+
+Its intermittent red is also gone: **ten consecutive runs at load average 32-52** with three other
+agents working, green every time, recorded in the file as a dated measurement rather than a proof.
+There is no `data/_jobs/` left in it to race on.
+
+##### Three more stated-but-not-tested predicates, all found by mutation
+
+- **`live-session-routes`: `eq(ownerId)` can be deleted from `markConnected`, `close` *or* `find` and
+  everything stays green.** The file's own header says sessions are "looked up for the authenticated
+  owner". Stated, not tested — nothing in it is cross-owner. Same shape as the referee half's
+  `criteriaFor`, and the same cause: **a private database with one owner cannot tell a scoped query
+  from an unscoped one.** That is now three files, and it is a property of the lane rather than of any
+  of them.
+- **`all-skipped-publication-log`'s mutation left every one of its six `logged` assertions green** —
+  and the log line is the file's actual subject. It proves the `error` column round-trips and says
+  nothing about the thing the file is named for.
+- **`step-failure-seam`'s mutation missed `job.error` entirely**, and `releaseStepIn` — the mid-walk
+  writer a reader actually watches — is never exercised, because every job in the file has one step
+  and ends on the first failure.
+
+##### And one docstring that had quietly stopped being true
+
+`persisted`'s justification in `step-failure-seam` said `getJob` hands back a `structuredClone` of an
+in-memory index, so only the file read was real. **Under Postgres `getJob` is a `SELECT` too** — proved
+by the mutation turning the *in-memory* assertion red first. The function was kept and its docstring
+rewritten, rather than leaving a claim the code no longer supports. Prose that survives the change it
+describes, found for the fourth time in this plan.
+
+#### The witness could be re-run and could not be re-*proved* — and this section was wrong twice first
 
 `STORE_MIGRATION` membership is driven by the **dynamic** witness — which files *executed* a condemned
 function — so a converted file genuinely does stop being witnessed, and the resolution recorded above
 holds. (Had it been witness 1's static import graph it would not: a converted route suite still
 imports the app, which still imports `src/store/index.ts`, which still imports `fs.ts` until stage G.)
 
-**But the script that produced [`tests/store-migration-witness.json`](../../tests/store-migration-witness.json)
-is not in the repo.** The JSON records `what`, `measured`, `store`, the eight `instrumentedModules`,
-`notInstrumented` and two `knownBlindSpots` — everything except the command. So *"re-run the witness at
-the end of stage B"* was scheduled against a tool that does not exist, and it would have been
-discovered at the end of stage B.
+**This section claimed twice that the witness could not be re-run, and both claims were false.**
+They are left here named rather than quietly swapped, because the mistake is more instructive than the
+work it prompted.
 
-It is this document's own § *Counts are perishable here — re-derive, never inherit* failing on the
-one input it cannot re-derive, and the repo's rule that an inventory records **the command**, scope
-and run date. Being rebuilt as `scripts/store-migration-witness.ts`, committed this time, with the
-original's proving discipline made repeatable rather than described: the 2026-09-03 run hit four
-positive controls with method-level detail and four clean negative controls, and an instrument that
-silently stopped hooking would produce an empty `touched` — the shape that passes the registry guard
-while proving nothing.
+- *"The script that produced the JSON is not in the repo."* Wrong. The instrument —
+  [`vitest.witness.config.ts`](../../vitest.witness.config.ts) and `tests/setup/fs-store-witness*.ts`
+  — landed in `4900c89e` on 2026-09-03, in stage A's own commit.
+- *"Nothing recorded the command."* Also wrong. [`tsconfig.json`](../../tsconfig.json) carried it, in
+  a comment above the config's own entry, along with the reason the file is kept and the note that
+  stage G deletes it: `FSW_OUT=<path>.jsonl npx vitest run --config ./vitest.witness.config.ts`.
+
+**Both conclusions came from an absence in a search rather than an absence in the tree.** The greps
+covered `scripts/`, `tests/`, `src/`, `vitest.config.ts` and `vitest.setup.ts`, and the answer was in
+neither of those two places. Treating an incomplete search as proof of absence is the same move as
+treating a green test as evidence — [silent-success.md](../reusable/silent-success.md) one level up,
+committed to this document and reported before it was checked.
+
+**What was actually missing is narrower, and still worth the build.** The raw run was reproducible;
+the **aggregation and the proving** were not. Nothing turned the JSONL into the witness JSON's shape,
+separated *did not report* from *did not touch*, re-ran the files that failed to report, applied the
+undocumented hand-edit the committed JSON carries, or ran the controls that say whether the instrument
+still hooks anything. So *"re-run the witness at the end of stage B"* would have produced **a file, on
+the first attempt, with nothing saying whether it meant anything** — which is worse than producing
+nothing.
+
+##### Built: [`scripts/store-migration-witness.ts`](../../scripts/store-migration-witness.ts)
+
+`--self-check`, `--files <paths…>` and `--full [--out FILE]`. It hooks the eight modules with a Vite
+`resolveId`/`load` plugin that re-exports each one through a proxy — a call trap for functions and a
+`get` trap returning per-method recorders for objects — so it records **calls, not imports**, survives
+`vi.resetModules()` and `await import()`, and needs no cooperation from the code under test.
+
+**Seven positive controls now cover all eight modules, asserted rather than claimed**, plus four
+negatives and the read-only blind spot. And it was **watched failing three ways**, which is what makes
+the controls evidence:
+
+| the break | what it printed |
+| --- | --- |
+| plugin pointed at a module nobody imports | 7/7 positives red, 4/4 negatives still green, 0 method-level sites, exit 1 |
+| object proxy returns methods unwrapped | 5 positives red — `data-root` and `artefact-copy`, whose exports are plain functions, **stayed green**, which is exactly why the method-level assertion is separate |
+| the recorder's output disabled | every file *"DID NOT REPORT"*, including *"NEGATIVE CONTROL DID NOT REPORT — 'did not run' is not 'did not touch'"* |
+
+It also **aged correctly on its first run**: two of its own positive controls had already been
+converted by stage B, and it said so instead of passing.
+
+**Two things about the 2026-09-03 measurement are now known that were not.** The committed JSON is a
+measurement **plus a hand-edit** — `tests/store-artefacts-pg.test.ts` was lifted out of
+`ranAndTouchedNothing` and put in neither bucket, which is why 88 + 498 + 1 is 587 of 588, and the
+registry test asserts that absence. **A naive regeneration would therefore have gone red**, and the
+edit is now code (`READ_ONLY_BLIND_SPOTS`) rather than a thing somebody did once. And this document's
+*"499 touch nothing"* is the pre-edit number against the JSON's post-edit 498.
+
+**One deliberate change to the engine**: the witness config now derives its three lanes from
+`vitest.config.ts` rather than running everything in one laneless project. Defensible on 2026-09-03;
+wrong for a stage-B re-run, because stage B's output *is* the Postgres suites, and a laneless run puts
+them on the shared database racing every dev server — where a suite that dies in setup writes no
+record and scores `unresolved` rather than clean.
+
+**The commands, recorded here so this cannot go missing again:**
+
+```
+npx tsx scripts/store-migration-witness.ts --self-check          # ~1 min, first
+npx tsx scripts/store-migration-witness.ts --full --out tests/store-migration-witness.json
+```
+
+`--full` refuses to write when 50 or fewer files touched the store — the registry test's own floor,
+applied at the source, because **an unhooked instrument and a finished migration look identical**.
 
 #### The tail was measured, and it is 16.75 hours, not 7 — 2026-09-04
 

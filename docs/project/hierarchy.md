@@ -199,11 +199,67 @@ squeezing the child into one borrowed block writes a boundary nobody proposed. T
 a tiling fault still costs anything, so it is **counted on its own** rather than as another kind of
 repair: a moved boundary keeps every section the model named, and this does not.
 
-Still refused, because these are faults in what the model *said* rather than in how its sections line
-up, and each has an exact message: a range that runs backwards, an endpoint that is not a block id,
-and a root that misses the article's ends. One unresolvable child leaves its whole sibling set
+Still refused, because it is a fault in what the model *said* rather than in how its sections line
+up: **an endpoint that is not a block id**. One unresolvable child leaves its whole sibling set
 underived, so the precise error survives instead of being buried by a tree built as though that child
 had never been proposed.
+
+#### A child's backwards range is a disagreement, not a lie <a id="backwards-child"></a>
+
+**That list had a second entry — a range that runs backwards — until 2026-09-04.** The refusal was
+explicit and tested, so it was a decision rather than an oversight; what was too broad was its
+premise. This whole function believes a start and computes every end, so **a child's own end is a
+redundant second statement of a boundary the derivation already discards**. A backwards pair whose
+ids both resolve is those two statements disagreeing, which is the thing the repairs exist to absorb.
+
+It is not evidence that the node's title and gist describe the wrong prose: the model wrote those
+from the whole article, not from its own range, and the repairs already keep a title and gist while
+moving that node's boundary by many blocks. ⟨GPT Sol, 2026-09-04⟩
+
+Measured, and it is why this changed: `smart-low` lost `gwern-scaling-long` to exactly this — one
+block backwards at `root > child 7 > child 1` — in the run that moved production to `low`
+([hierarchy-waves-real-corpus](../../evals/results/hierarchy-waves-real-corpus-2026-09-04.md)).
+
+**What it costs, which is the interesting half.** A backwards end is **ineligible for the fallback**.
+When two children claim the same start, `planChildRanges` falls back to the previous child's end as
+the only claim left; borrowing an end we have just called wrong would invent a split point from a bad
+number and attach *both* neighbours to the wrong prose. So a following child with no usable claim of
+its own is dropped, exactly as it always was when neither claim stood up. The raw end is still read
+for measurement, which changes nothing about what is built.
+
+**The root is the exception, and it has to be.** It has no parent to derive from, so a backwards root
+range is unmendable and still throws — and the [root clamp](#root-clamp) deliberately does not fire
+on a pair that does not run forwards, or it would turn an invented id into a silent acceptance.
+
+#### The root was the last node whose range was believed <a id="root-clamp"></a>
+
+**A root that misses the article's ends was on that list until 2026-09-04, and it should never have
+been.** Every other node's range is *computed* — `planChildRanges` believes a start and derives every
+end, so the first child begins where its parent begins and the last ends where its parent ends. The
+root has no parent, so its range came out of the answer and then met a hard equality assertion. It
+was the one node in the tree where the ordinary fault was fatal, and the section above reads as
+though the derivation covered everything.
+
+It is not a corner. `openai-huggingface` ends on an empty paragraph, a stranded footnote the prompt
+renders as `NOT-GISTABLE: (withheld)`, and a blog footer whose entire text is `No posts`; ending the
+article before those three is what a careful reader would do, and **three independent arms — Sonnet
+at `medium`, Sonnet at `low`, and glm-5.3-flash — each did, and each lost the article to the same
+sentence** ([hierarchy-cheap-models](../../evals/results/hierarchy-cheap-models-2026-09-03.md),
+recommendation 3).
+
+So the root is clamped to `[blocks[0].id, blocks.at(-1).id]` before anything descends, and the guard
+stays behind it as a post-condition rather than being deleted for having nothing left to catch.
+Three things about the shape are load-bearing:
+
+- **Widen, never shrink.** The other way to reconcile the two claims is to believe the model and drop
+  the blocks it left out. That is worse: every block gets exactly one leaf, so an uncovered block has
+  no row anywhere and no resolver in the reading view can find it.
+- **Only when both ends resolve and run forwards.** An invented id and a backwards range are faults
+  in what the model *said*, and clamping first would turn the first of those into a silent
+  acceptance.
+- **Counted at the boundary that moved.** At the closing end the coordinate is `blocks.length`, which
+  is the same boundary the last child's own stretch names, so `repairedBlockCount` folds the two into
+  one rather than charging the article twice for one slip.
 
 #### Measurement is what stands where the bounds stood
 

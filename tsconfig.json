@@ -43,9 +43,12 @@
        date on it and the tree keeps moving** — it recorded 588 test files and the
        import walk saw 597 ninety minutes later. Whoever needs to re-take it needs
        this. It is not wired into vitest.config.ts and `npm test` never loads it;
-       run it deliberately:
+       scripts/store-migration-witness.ts is what drives it, and running that
+       config by hand skips the controls that say whether the instrument still
+       hooks anything:
 
-         FSW_OUT=<path>.jsonl npx vitest run --config ./vitest.witness.config.ts
+         npx tsx scripts/store-migration-witness.ts --self-check
+         npx tsx scripts/store-migration-witness.ts --full --out tests/store-migration-witness.json
 
        Deleted with the filesystem store in stage G, when there is nothing left to
        instrument. */

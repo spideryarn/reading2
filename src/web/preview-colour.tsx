@@ -12,7 +12,6 @@ import { SearchPanel } from "./SearchPanel.js";
 import { assignSlots } from "./hit-colours.js";
 import { MODE_MIN, SPINE_W } from "./layout.js";
 import type { SavedSearch } from "./useSearch.js";
-import "./styles.css";
 import "./tailwind.css";
 
 const FIXTURE: SavedSearch[] = [
