@@ -116,7 +116,7 @@ adapters beside it; [`src/upload-records.ts`](../../src/upload-records.ts) is on
 bytes instead of fetching them. The design, the measurements behind it and the two cross-family
 reviews are in [260826u-pdf-upload-and-storage.md](../plans/260826u-pdf-upload-and-storage.md).
 
-### Four things about it that are not obvious
+### The things about it that are not obvious
 
 **The upload is not the ingest, and they happen in different places.** The transfer starts on the
 shelf, because that is where the `File` is — a file handle is not something an address can carry.
@@ -158,8 +158,8 @@ than by slug.
 
 **A PDF too long to read is refused here, not three stages later.** Since 2026-09-04 the
 acquisition step counts the pages between verifying the checksum and promoting the bytes, and refuses
-over [`src/pdf-read.ts`](../../src/pdf-read.ts) § `MAX_PAGES` — so nothing is stored, the upload
-record ends `rejected` rather than `verified`, and the job card names the page count and the limit
+over [`src/pdf-read.ts`](../../src/pdf-read.ts) § `MAX_PAGES` — so the bytes are never promoted to
+their canonical name, the upload record ends `rejected` rather than `verified`, and the job card names the page count and the limit
 within seconds. The position is load-bearing: `verified` is terminal
 ([`src/source.ts`](../../src/source.ts)), so a refusal after it cannot record its own reason.
 The record takes a static reason and the job takes the sentence with the number in it —
@@ -309,7 +309,9 @@ made up. Caught by a test, not by reading.
 
 **The real check is `acquireUpload`**, in the step, over the bytes: the object exists and is under
 the cap (`head`, before anything moves), one bounded `get`, `%PDF-` over what came back, and our
-SHA-256 against the browser's. Downloading once and doing the last two over that same copy is not
+SHA-256 against the browser's — and, since 2026-09-04, the page count, between the checksum and the
+promotion. That last one is the only one of the five that can refuse a file which really is a PDF.
+Downloading once and doing the middle two over that same copy is not
 tidiness — reading the object twice is the one sequence content addressing does not cover, because
 the grant is still live and the second read may not be the bytes the first one verified.
 
@@ -714,6 +716,12 @@ reads when they are looking at the step list: same step name, same one output (`
 `beginStep`/`finishStep`/cancellation/`assertProduced` machinery — a different label and a
 different way of coming by the bytes.
 
+**Both halves count a PDF's pages before they store it**, and since 2026-09-04 that is the only work
+this step does which is not [`src/fetch.ts`](../../src/fetch.ts)'s: an upload after the checksum and
+before the promotion, a fetched document once the bytes are known to be a PDF and before `writeRaw`.
+One helper called at two branch-specific points, so the call is duplicated and the policy is not —
+[§ A PDF too long to read is refused here](#uploading-a-pdf).
+
 That it is a *step* rather than something beside the step list was a review finding, and the
 reasoning is worth keeping: work that floats outside the list bypasses exactly the machinery built
 to make interrupted work visible.
@@ -831,7 +839,9 @@ returns `{slug, kind: "minted" | "adopted"}` rather than a string
 ([`freeSlug`](../../src/jobs.ts)). An upload always mints, there being no address that could make two
 uploads one article.
 
-**A retry reserves everywhere except a published address**, which is what keeps re-taking the
+**A retry's allocation has three shapes and no fourth** — a mint that reserves, an adoption of a
+durably published address, or an adoption with no address at all — and it reserves in the first,
+which is what keeps re-taking the
 failed attempt's name from opening the race `jobs_active_source` closes — and when the index refuses
 it, it takes the holder's job rather than inserting an unreserved row. See
 [§ A retry keeps the failed attempt's name](#a-retry-keeps-the-failed-attempts-name-and-that-is-a-decision).
@@ -1223,8 +1233,10 @@ store is not what ships.
 **What that costs, measured rather than asserted.** Statements per poll go **1 → 2 while a job is
 running**, about **+1.5 ms** each locally, nearly all of it round trip rather than work — counted at
 the driver over 300 iterations, not read off the source. An idle shelf is unchanged, because the gate
-is closed. A 520-second worst-case import is therefore some 520 extra statements and well under a
-second of database time. On Vercel→Supabase the round trip dominates, so the statement count is the
+is closed. A 630-second worst-case import — the sum re-measured on 2026-09-04 in
+[`src/jobs.ts`](../../src/jobs.ts) § `LEASE_MS`, the old line having said 520 — is therefore some 630
+extra statements and well under a second of database time, and a long PDF that takes two claims pays
+it twice. On Vercel→Supabase the round trip dominates, so the statement count is the
 honest headline and the milliseconds are a floor. This paragraph used to say "one indexed `UPDATE`
 over rows that are almost always none", which was fair when it happened once an advance and is not
 when it happens once a second.
@@ -1421,6 +1433,8 @@ identical artefact again. That is what separates the two lists:
 | a page Readability already refused, over cached bytes | an empty answer, a refusal, a timeout |
 | a tree that does not contain its own root | a fetch that failed at somebody else's server |
 | a PDF over the page cap, or a chunk over the request cap | a nav-label batch that came back truncated |
+| a PDF that will not open — locked with a password, or damaged past parsing | |
+| a source document whose stored bytes are damaged — it is content-addressed, so a re-fetch lands on the same bad bytes | |
 | an answer truncated at `max_tokens` — *see below* | |
 
 Model-output validation failures are in the right-hand column on purpose. The next call is a fresh
@@ -1432,8 +1446,11 @@ finish into a **draft**, and a failure throws that draft away — so "this step 
 statement about a revision the retry cannot see, and honouring it published the old article under a
 row of green ticks. `forceForRetry` now re-forces everything the original request forced (Greg's
 decision 8; [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md)
-§ *The fourth fault*). The cost is deliberate: a refresh that dies late re-fetches, re-extracts and
-pays for a PDF transcription a second time. So the left-hand column above is about an ordinary
+§ *The fourth fault*). The cost is deliberate: a refresh that dies late re-fetches and re-extracts.
+It no longer **pays** for the PDF transcription a second time, which this paragraph said until
+2026-09-04 — the per-chunk checkpoints are keyed on the article and a refresh is of an article
+already on the shelf, so the second run re-reads its own finished chunks rather than re-buying them
+([content-extraction.md](content-extraction.md)). So the left-hand column above is about an ordinary
 retry — a refresh really does go back to the publisher.
 
 **Truncation is the one entry that is not certain, and it is worth being exact about why.**
@@ -1531,7 +1548,9 @@ reported the job **interrupted**, which is not what the reader did.
 Two things about that branch are load-bearing. It settles with **`settleExpired`'s field set, not the
 running branch's** — `draftRevisionId` included, because the running branch deliberately leaves the
 pointer for the claimant to dispose of, and a terminal row still holding one is a draft
-`sweepAbandonedDrafts` spares for ever. And the condition is written **once**, as `over`, and reused
+`sweepAbandonedDrafts` spares for ever — a sweep which, checked 2026-09-04, **nothing calls**, so
+failed drafts accumulate without bound. Ranked and deliberately not built in
+[260904a](../postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md). And the condition is written **once**, as `over`, and reused
 across every `case`: seven branches that have to agree is the shape of the bug this section is about.
 
 **There is deliberately no force-stop short of the lease.** A live claim may genuinely be working,
