@@ -197,6 +197,76 @@ still fires for the four `shared-services` files and for anything running agains
 No retry, ever: a retried contended run is a green that conceals a real queue regression.
 [`tests/helpers/expect-claimed.ts`](../../tests/helpers/expect-claimed.ts) names the four reasons.
 
+When a `shared-services` test fails, the lane now prints **who else was inside `postgres`** at that
+moment — pid, application name, user, state, connect and last-statement times, wait event, and never
+the SQL, which carries article prose.
+[`tests/setup/shared-db.ts`](../../tests/setup/shared-db.ts) does it from an `onTestFailed` hook.
+Read it as a place to look and nothing more: a peer that wrote the row and committed is already gone
+by the time the assertion fails, and an idle stranger did nothing at all. Sessions the app named
+itself are listed separately from ones it could not — `spideryarn <worktree>:<pid>` is
+[`src/db/client.ts`](../../src/db/client.ts) § `applicationName`, so a blank name in that report is
+now somebody who is not us.
+
+### `POLLUTED`
+
+A different verdict again, and it can only come from the `private-postgres` lane, at teardown:
+
+```
+  [private lane] ================================ POLLUTED ================================
+  [private lane] spideryarn_test_… was minted for this run alone, and it was not this run's alone.
+```
+
+The run's own database is minted for it, leased for its whole life and dropped afterwards, so a
+**stranger** inside it is a verdict rather than noise — and unlike `CONTENDED` it **fails the run**:
+`process.exitCode = 1`, because a `throw` from a global teardown is only *logged* by vitest and exits
+0 ([`tests/setup/private-db-global.ts`](../../tests/setup/private-db-global.ts) has the measurement).
+
+Two things can raise it, and the second is the stronger: the sessions enumerated just before the
+lease closes, and an ordinary non-forced `DROP DATABASE` that Postgres then refuses — which settles
+the check-to-drop race atomically rather than by sampling twice. For that second one to mean
+anything, this run's own leftover backends are **terminated by pid first**; otherwise one of ours
+guarantees the refusal and a stranger who came and went contributes nothing distinguishable. Either
+way the sessions are classified before anything is decided, and the database is dropped afterwards —
+`WITH (FORCE)` wherever the ordinary drop did not land — so no verdict ever also leaks one.
+
+A fourth banner, `TEARDOWN FAILED`, is a **different claim**: the sample, the lease close, the drop,
+the re-read or the forced cleanup did not work, so the check that would have told us never ran. It
+also fails the run, and it deliberately does not say anybody was inside.
+
+**Who counts as a stranger.** Everything except this run's own workers, which name themselves
+`spideryarn-test-private-<vitest pid>` — [`tests/setup/private-db.ts`](../../tests/setup/private-db.ts)
+puts that in `PGAPPNAME` before the file it precedes imports anything, and
+[`src/db/client.ts`](../../src/db/client.ts) § `applicationName` honours it. The pid makes that tag
+collision-resistant between cooperative concurrent runs and nothing more: `application_name` is
+chosen by the client, so it is not an adversarial boundary and cannot be one while every worktree
+here shares the same local superuser credential. Anything else got the
+minted name from somewhere: vitest prints it, and it is in `pg_database` and `pg_stat_activity` for
+anyone on this box, so the uuid buys accident-resistance rather than access control. The report names
+the sessions and `application_name` is the thread to pull. Never work around it by re-running.
+
+### The last file's pool is not pollution, and how we learned that
+
+Teardown also prints a plain line — no failure — when the only leftovers are this run's own:
+
+```
+  [private lane] 2 of this run's own tagged connection(s) remained at teardown and were closed. …
+```
+
+That is expected, and the reason is worth knowing because **two contradictory measurements were both
+correct**. One said the minted database has zero non-lease sessions at teardown (3, 15 and 99 files);
+the other said 7 of 8 private-lane files leave one or two of their own `getDb()` connections behind
+and trip the check. The unstated condition that reconciles them: **vitest tears down `globalSetup`
+before it closes its worker pool**, so an unclosed pool outlives the run only if its file happened to
+run *last* — vitest recycles the worker as soon as the next file starts. Two known leakers together
+leave 2 sessions, not 4; either of them followed by a file that calls `closeDb()` leaves 0. The
+full-lane runs ended on a closer; the single-file runs did not.
+
+So the leak is real, bounded to one file's worth, and never a stranger. 71 of the lane's ~101 files
+call `closeDb()` and about 29 do not; `tests/health.test.ts` and `tests/billing-tiers.test.ts` were
+given an `afterAll(closeDb)` because the check caught them, and the rest were deliberately left
+alone. A number that is real and unrepeatable because nobody wrote down the condition is exactly the
+shape [silent-success.md](../reusable/silent-success.md) is about.
+
 ## What we test, and what we don't
 
 Everything here is **deterministic**: no LLM calls, no clock, no unseeded randomness. `mintId`

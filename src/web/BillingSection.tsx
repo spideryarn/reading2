@@ -71,7 +71,24 @@ export function BillingSection() {
         {billing.error ? (
           <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
             <TriangleAlert size={12} /> Couldn't read your plan — {billing.error}{" "}
-            <button type="button" className="linky" onClick={billing.reload}>
+            {/* **Not `className="linky"`, which styled nothing here.** That
+                class is scoped in styles.css to `.controls`, `.cmt-dialog` and
+                `.chat-dialog` ancestors — "a shape, not a shared class", as it
+                says — and this card is in none of them, so the button arrived
+                with no underline and nothing to mark it as pressable in the
+                middle of a sentence. Same fix as `SettingsSection.tsx` and the
+                sharing card, 2026-09-04.
+
+                Two utilities and no more, because the rest is now in the
+                button reset: `border-0`, `background-color: transparent`,
+                `cursor: pointer` and `font: inherit` all come from
+                tailwind.css § the bit of preflight we need. Colour is
+                inherited from the `text-highlight` span around it. */}
+            <button
+              type="button"
+              className="tw:p-0 tw:underline tw:underline-offset-2"
+              onClick={billing.reload}
+            >
               Try again
             </button>
           </span>

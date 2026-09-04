@@ -1082,9 +1082,20 @@ function tsxLoader(): string {
  * whole safety argument, so read `dropStaleTestDatabase` beside this one.
  *
  * The caller of this is the process that minted `name` and is finishing with
- * it: any session still inside is that run's own, an idle pool it is about to
- * discard, and waiting for it would hang a teardown. Nobody else can be in
- * there, because nobody else knows the uuid.
+ * it: any session still inside is expected to be that run's own — the last test
+ * file's pool, which vitest has not recycled yet — and waiting for it would hang
+ * a teardown.
+ *
+ * **That is an expectation, not a guarantee, and the uuid does not make it one.**
+ * The name is printed to stderr by `tests/setup/private-db-global.ts`, it is in
+ * `pg_database` and `pg_stat_activity`, it is in every worker's environment and
+ * is inherited by any child they spawn, and every worktree on this box connects
+ * with the same local superuser credential. Knowing the name proves knowledge of
+ * the name and nothing about ownership — the same distinction `ScavengeOptions.only`
+ * makes about itself below. The uuid buys **accident-resistance, not access
+ * control**, and what actually checks the expectation is the caller: that
+ * teardown enumerates who is inside and fails the run as `POLLUTED` if anybody
+ * is a stranger. GPT Sol, 2026-09-04.
  *
  * The CLI's `--drop <name>` comes here too. That is a person naming one
  * database they have looked up, which is the manual form of the same act.
@@ -1132,22 +1143,41 @@ export async function dropTestDatabase(name: string): Promise<void> {
  * lease has to be held by *the run*, which is what T-D builds; a factory
  * function cannot hold it.
  */
-export async function dropStaleTestDatabase(
-  name: string,
-): Promise<{ dropped: boolean; why?: string }> {
+export async function dropStaleTestDatabase(name: string): Promise<DropOutcome> {
   assertMintedName(name, "drop");
   const pool = poolFor(baseUrl());
   try {
     /* No `if exists`: a database that vanished between the scan and here is a
        thing worth reporting rather than a silent no-op. */
     await pool.query(`drop database "${name}"`);
-    return { dropped: true };
+    return { kind: "dropped" };
   } catch (err) {
-    return { dropped: false, why: dropRefusal(err) };
+    return dropOutcome(err);
   } finally {
     await pool.end();
   }
 }
+
+/**
+ * **What happened to a non-forced `DROP DATABASE`. Three answers, not two.**
+ *
+ * `in-use` is the one this design is built around: somebody was connected, which
+ * is a statement about *occupancy* and is the only outcome a caller may reason
+ * about occupants from. `failed` is everything else — a permission error, a dead
+ * socket, an internal error, a database that had already vanished — and it is a
+ * statement about **nothing**, because the drop never got far enough to look.
+ *
+ * They used to be one value, `{ dropped: false }` with prose in `why`. GPT Sol's
+ * blocking finding on T-E, 2026-09-04: the teardown in
+ * [`tests/setup/private-db-global.ts`](../tests/setup/private-db-global.ts) read
+ * that as "in use", classified the occupants it already knew about as its own,
+ * found no stranger, and went **green on a drop that had failed outright**. A
+ * boolean cannot carry "I could not tell", so it carried it as "no".
+ */
+export type DropOutcome =
+  | { kind: "dropped" }
+  | { kind: "in-use"; why: string }
+  | { kind: "failed"; why: string };
 
 /**
  * Why Postgres refused a non-forced drop, in words a report can carry.
@@ -1155,15 +1185,21 @@ export async function dropStaleTestDatabase(
  * `55006` (`object_in_use`) is the one this design is built around — somebody
  * connected after the check — and it is named explicitly so that it reads as
  * the expected outcome rather than as an error nobody predicted. Anything else
- * is passed through as itself.
+ * is `failed`, including `3D000`: a database that is *already gone* tells a
+ * caller nothing about who was inside it.
  */
-function dropRefusal(err: unknown): string {
+function dropOutcome(err: unknown): DropOutcome {
   const e = err as { code?: string; message?: string };
   if (e.code === "55006") {
-    return `somebody connected to it before the drop landed, so Postgres refused: ${e.message ?? ""}`.trim();
+    return {
+      kind: "in-use",
+      why: `somebody connected to it before the drop landed, so Postgres refused: ${e.message ?? ""}`.trim(),
+    };
   }
-  if (e.code === "3D000") return "it was already gone by the time the drop ran";
-  return `the drop failed: ${e.message ?? String(err)}`;
+  if (e.code === "3D000") {
+    return { kind: "failed", why: "it was already gone by the time the drop ran" };
+  }
+  return { kind: "failed", why: `the drop failed: ${e.message ?? String(err)}` };
 }
 
 /* ------------------------------------------------------------- scavenging */
@@ -1319,8 +1355,12 @@ export async function scavengeTestDatabases(options: ScavengeOptions = {}): Prom
       continue;
     }
     const outcome = await dropStaleTestDatabase(name);
-    if (outcome.dropped) dropped.push(name);
-    else report.spared.push({ name, why: outcome.why ?? "the drop did not happen" });
+    /* Both non-`dropped` kinds spare the database here, and on purpose: the
+       scavenger is best-effort and never fatal, so its worst outcome is leaving
+       one alone. The distinction matters to the private lane's teardown, which
+       does reason about occupancy from it. */
+    if (outcome.kind === "dropped") dropped.push(name);
+    else report.spared.push({ name, why: outcome.why });
   }
   report.dropped = dropped;
   return report;

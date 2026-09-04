@@ -1,6 +1,6 @@
 # Delete `SPIDERYARN_STORE` and the filesystem store
 
-**Status, 2026-09-04. Fourth draft; five of thirteen stages are on `dev`.** GPT Sol returned *not
+**Status, 2026-09-04. Fourth draft; seven of thirteen stages are done, and stage B is started.** GPT Sol returned *not
 ready* on the first draft and *ready with changes* on the second; those changes are in. The three
 pre-build spikes the second review asked for have all run, and each of them moved the plan — the
 sections below carry what they found.
@@ -13,9 +13,14 @@ three later stages consume it**:
 
 ```
 A (store inventory) ✅ → B0 ✅ (already done) → T-B (factory) ✅ → T-C (lanes) ✅
-  → T-D (activation) ✅ → T-E (pollution)
-  → C → B → D → E → F (hinge) → G → H → I
+  → T-D (activation) ✅ → T-E (pollution) ✅
+  → B (12 of 26 done) → B2 (`routes.test.ts`) → C → D → E → F (hinge) → G → H → I
 ```
+
+**`C → B` became `B → C` on 2026-09-04**, and this line is the only place the order lives, so
+the swap is recorded here rather than in the stage. B converts 16 of the 39 unit-lane files C
+would otherwise have to convert itself, using the same edit — § *C is not independent of B any
+more*.
 
 ## What is on `dev`, 2026-09-04
 
@@ -26,14 +31,19 @@ A (store inventory) ✅ → B0 ✅ (already done) → T-B (factory) ✅ → T-C 
 | **T-B** | [`scripts/db-test-create.ts`](../../scripts/db-test-create.ts) — a private, migrated database per run, ~4.6s. Reviewed; three blocking findings folded in. |
 | **T-C** | `TEST_LANES`, `OWNER_AUDIT`, and `seedLocalAccounts`. Reviewed; the owner guard rebuilt per `(file, owner)` pair. |
 | **T-D** | **`npm test` is three projects now** — see below. The first stage of the six that is visible to anybody else. |
+| **T-E** | Four verdicts at the private lane's teardown, `POLLUTED` and `TEARDOWN FAILED` among them; the pool names itself; the shared lane reports its neighbours on failure. Two Sol rounds — the design one refused half the spec, the built one refused the commit. |
+| **B** | **12 of 26.** Two in the pilot, then ten more in two parallel halves. All green, each with one mutation watched red and a written note of what that mutation does *not* cover. |
 | **D′1** | Landed earlier; since **extended by another worktree**, and its "unforgeable" claim is measured false — see D′1b. |
 
 **This paragraph used to say "nothing yet changes the default `npm test`", and T-D is where that
 stopped being true** — left here as the marker rather than quietly overwritten, because a status
 block that survives the change it describes is the failure this plan keeps finding in other people's
 files. `npm test` now runs `unit`, `private-postgres` and `shared-services`, membership derived from
-`TEST_LANES` rather than written out a second time. **It costs 267s → 466s**, all of it the
-serialised private lane; a filtered run pays nothing and mints no database.
+`TEST_LANES` rather than written out a second time. **It costs 267s → 444–466s**, all of it the
+serialised private lane; a filtered run pays nothing and mints no database. The pair is two
+measurements of the same tree on a box ten worktrees share, which is the honest spread — the
+444 is the run that preceded the push to `dev` (`ae5ed824`), 3 failed / 630 passed / 1 skipped
+of 634 files.
 
 **What that bought:** the same 626 files run, set-compared before and after with an empty difference
 both ways, against a baseline that was *nondeterministically* red — two runs of an unchanged tree
@@ -1332,7 +1342,7 @@ skipping 90 suites, which is the direction § *Making the database required* is 
 lane provides `null`, the per-file setup poisons `DATABASE_URL`, and the suites that go through
 `pgReady` skip and say so. **The ones that do not, do not** — see *What Sol's review changed* below;
 a dozen private-lane files fail with the stack off, and did so before the lanes existed too.
-**Stage T-E — pollution as its own verdict in `scripts/check.ts` — is still to do.**
+**Stage T-E — pollution as its own verdict in `scripts/check.ts` — turns out not to be buildable where it says**; see § *T-E — measured before it was built* below.
 
 ##### Deleted, and what was kept
 
@@ -1366,9 +1376,38 @@ re-run its own acceptance is not tidy.
 Four files fail identically before and after, on this tree: `tests/client-imports.test.ts`
 (a client module reaching out of `src/web`), `tests/cold-start-lazy-imports.test.ts` (`jsdom` at
 module scope again), `tests/fixture-ids.test.ts` (two uuids in two files) and
-`tests/paid-cli-ledger.test.ts` (`unscoped` spend declarations diverged from `ADMITTED` — note the
-untracked `scripts/stage.ts` in this worktree). They are not database failures, none of them moved
-across the four runs above, and they are what run 3's `4 failed` is.
+`tests/paid-cli-ledger.test.ts` (`unscoped` spend declarations diverged from `ADMITTED`). They are
+not database failures, none of them moved across the four runs above, and they are what run 3's
+`4 failed` is.
+
+**Three of the four on the run before the push, and the fourth sentence above was wrong.** The
+2026-09-04 09:26 run — the one `ae5ed824` was pushed on — is `3 failed | 630 passed | 1 skipped`
+of 634 files in 444s: `fixture-ids` has been fixed on `dev` since. And this document blamed
+`paid-cli-ledger` on *"the untracked `scripts/stage.ts` in this worktree"*, which was a guess that
+was never checked. The assertion names `dictation-bench-models` and `dictation-gate-models` —
+`unscoped` declarations that arrived from `dev` in another worktree's work, and nothing to do with
+the spike sitting here. **A red attributed by plausibility rather than by reading its message is
+the same failure as a green nobody checked**, and it survived two runs of this document.
+
+##### A fourth red appeared once, and it is a filesystem race in one of stage B's own 26
+
+`tests/step-failure-seam.test.ts` failed on the 2026-09-04 11:08 full run and **has not failed
+since**: it passes alone, and it passes in a complete `unit`-lane run of 529 files. The distinguishing
+condition is load — that run took 651s against 444s for the one before it, because other worktrees
+were busy.
+
+The assertion is `row.error` coming back `undefined` from `persisted()`, which scans `data/_jobs/`
+and **found the file**. So the file existed and its `error` field did not yet: a read-after-write on
+the filesystem job store that a slow enough box loses.
+
+**It is recorded rather than dismissed, and rather than chased**, for three reasons. It is not in
+either stage's files and cannot be reached by anything they changed — it is a `unit`-lane test with a
+poisoned `DATABASE_URL`. The seam it tests was rewritten by another worktree in `b0556bd7`, merged
+here at 09:33 the same morning. And it is one of stage B's own 26, and one of the three the pilot
+flagged as outliers *because it asserts on bytes read back out of `data/_jobs/`* — so **the race is
+in the store this plan deletes, and converting the file is what removes it.** Chasing it now would be
+fixing something on its way out; leaving it unnamed would be the thing this document keeps objecting
+to.
 
 **And two of the reds along the way were this stage's own**, worth recording because both were
 invisible until a full run: deleting `tests/setup/spike-db.ts` and `scripts/spike-migrate-to.ts` left
@@ -1436,6 +1475,256 @@ semantic backstop restated with a fresh example.
 on `ECONNREFUSED` from `fetch`. Making Docker-off genuinely green is a change to a dozen files with
 no bearing on the store flag, and § *Making the database required* is heading the other way anyway.
 
+#### T-E — measured before it was built, and the spec does not survive the measurement
+
+260903e's Stage E was written **before** its Stage D existed, and reads:
+
+> In [`scripts/check.ts`](../../scripts/check.ts), before the test gate: `select application_name
+> from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid()`. Any row
+> means somebody is inside *my* test database — name them and fail as **polluted**, which is a
+> different answer from red. **Exact only once the database is private.**
+>
+> Make the gate print the database it reached and refuse to run its Postgres gate against
+> `postgres`, so a shared-database green stops being representable.
+
+Its own last clause is the warning, and the thing it warns about has now happened. `scripts/check.ts`
+runs *before* it spawns `npm run test`, and the private database is minted **inside vitest's
+`globalSetup`** — so at the moment the check would run, `current_database()` is the shared
+`postgres`, and the rule is being applied to the one database it explicitly does not hold for.
+
+##### What the two measurements say
+
+**Three runs found the minted database empty at teardown — and *"every time"*, which is what this
+paragraph used to say, does not follow.** It holds when the last file to run closes its pool, and
+all three of these did. See § *The zero was true and unrepeatable* below; the sentence is left
+standing with its correction attached because generalising from three runs is the failure this plan
+keeps finding, and it is worth one instance of its own. Instrumented in
+[`private-db-global.ts`](../../tests/setup/private-db-global.ts) on the lease's own connection,
+2026-09-04:
+
+| run | files | tests | non-lease sessions at teardown |
+| --- | --- | --- | --- |
+| 3 files | `store-checkpoints`, `run-lock`, `pg-ready` | 40 passed | **0** |
+| 15 files | a spread across the lane | 260 passed | **0** |
+| **the whole lane, 99 files**, exit 0, 380s | | 1566 passed, 1 skipped | **0** |
+
+No leaked pools and no strangers.
+
+**The sentence that stood here was wrong, and it is left named rather than quietly swapped.** It
+said the name *"is handed out only through vitest's `provide`/`inject`, so there is no channel by
+which a process outside the run learns it"*. GPT Sol refused it, and it is refuted by this file's
+own behaviour: `private-db-global.ts` **prints the name to stderr**, it is listed in `pg_database`
+and in `pg_stat_activity`, it is in every worker's environment and is inherited by any child they
+spawn, and every worktree on this box connects with the same local superuser credential. The uuid
+buys **accident-resistance, not access control** — the same distinction `ScavengeOptions.only`
+already makes about itself in `scripts/db-test-create.ts`, in a comment written by this plan two days
+ago and not applied here. `dropTestDatabase` carries the equivalent claim and needs the same
+correction.
+
+**And the private lane does write to the shared `postgres`.** Its six Storage files go through the
+shared Storage API, which writes `storage.objects` *there* — so "the private lane touches only its
+own database" is false, and `SUPABASE_URL` staying live means a misclassified private test could
+reach GoTrue or PostgREST too. Nothing currently does; nothing structurally prevents it.
+
+**And the shared `postgres` is never empty.** Five samples over six minutes:
+
+| | rows | what they were |
+| --- | --- | --- |
+| at rest | **11–12** | the Supabase stack itself: `cluster_node_realtime` ×2, `supabase_mt_realtime` ×4–5, `PostgREST 16.1`, `Supabase Storage API` ×1–4, `pg_cron scheduler`, `pg_net` |
+| one sample | **19** | the same, **plus 7 sessions running live `spideryarn.*` statements** — `delete from spideryarn.jobs`, `update spideryarn.articles`, `insert into spideryarn.jobs` |
+
+So bullet 1 applied to the shared database is **a permanent red of eleven-or-twelve rows that all
+have to be there**, and the floor is not even constant — the Storage API holds between one and four
+connections, so 12 and 19 are not distinguishable by a reader who does not already know today's
+number. A rule whose baseline moves is not a verdict.
+
+**The 19-row sample is the first direct observation of the contention this plan had only inferred.**
+`admin-store.test.ts` failing in a batch and passing alone was the symptom; another agent's process
+writing to `spideryarn.jobs` while the shared lane ran is the cause, seen rather than deduced.
+
+##### And bullet 2 was answered by T-D, in three places
+
+*"Make the gate print the database it reached, and a shared-database green stop being
+representable"* is what T-D's per-lane controls already do, one per lane, closer to the suite than a
+gate could be: [`private-db.ts`](../../tests/setup/private-db.ts) asserts `current_database()`
+against the minted name **and** that this run's lease is inside it;
+[`shared-db.ts`](../../tests/setup/shared-db.ts) asserts `postgres` **and** `projectMismatch`,
+because `postgres` is a name and not an identity;
+[`unit-no-database.ts`](../../tests/setup/unit-no-database.ts) poisons both URLs and
+[`unit-lane-has-no-database.test.ts`](../../tests/unit-lane-has-no-database.test.ts) asserts the
+connection fails. Each was watched failing. **Refusing `postgres` outright, which is the other half
+of the bullet, is now simply wrong**: the `shared-services` lane runs there on purpose, because
+GoTrue reads it.
+
+A third piece of the same intent is older still and already on `dev` — 260903e's own Stage A gave
+contention a banner of its own, `TEST DATABASE CONTENDED` in
+[`expect-claimed.ts`](../../tests/helpers/expect-claimed.ts), which is *"a different answer from
+red"* for the queue singleton.
+
+**So T-E's intent is delivered by three things already built, and what the spec literally asks for is
+unbuildable in one half and wrong in the other.** That went to GPT Sol as a design fork, with both
+measurements and an explicit invitation to say the stage was being talked out of existence —
+[260903f-pollution-verdict-design-sol.md](260903f-pollution-verdict-design-sol.md).
+
+##### Sol's answer: keep T-E, much smaller, and the version proposed here would not have worked
+
+> *"Your re-derivation is substantially right. Do not close T-E entirely as absorbed: keep a much
+> smaller stage for private teardown integrity and shared-failure diagnostics. Delete the original
+> `check.ts` requirements."*
+>
+> — GPT Sol, 2026-09-04
+
+Four blocking findings. **The one that matters most is that the guard as proposed would have been a
+silent success**, in the stage built to remove one:
+
+**A `throw` from a `globalSetup` teardown does not fail the run.** `close()` in
+`node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js` collects every teardown rejection into
+`teardownErrors` and does exactly one thing with it — `this.logger.error("error during close", …)`.
+Nothing sets an exit code. **Measured here rather than read**, because reading a docstring instead of
+running the code is how two tautological controls got endorsed on 2026-09-04:
+
+```
+ Test Files  1 passed (1)
+error during close Error: TEMPORARY PROBE: does a teardown throw fail the run?
+    at Object.teardown (tests/setup/private-db-global.ts:182:9)
+EXIT=0
+```
+
+The banner prints **after** the summary, so in a seven-minute run it scrolls past and the exit code
+says green. **And the throw skipped the drop**, leaking a 12 MB database the scavenger would not
+touch for six hours — the failure would have cost more than the thing it reported.
+
+`process.exitCode = 1` in the same place **does** propagate, measured the same way: `EXIT=1`, with
+the drop still running. That is the mechanism, and it is one line.
+
+**The other three findings.**
+
+| # | finding | what it changes |
+| --- | --- | --- |
+| P1 | the minted name is discoverable, and the private lane writes to shared `postgres` | the two corrections above |
+| P1 | **a setup-time session count is not useful** — sample when a shared-lane test *fails*, via `onTestFailed`, and print identities rather than a number | replaces the proposal in (ii) |
+| P1 | **`usename = postgres` is the wrong discriminator** — incidental configuration, and it already needs a `pg_net` exception. Name the connections instead: `PGAPPNAME` for this run's shared clients, and a `spideryarn…` application name carrying a worktree identifier on the dev-server pool, which today sets **none** ([`src/db/client.ts`](../../src/db/client.ts) § `new Pool`) | the anonymous sessions in the 19-row sample become attributable |
+| P2 | **use a non-forced `DROP DATABASE` as the atomic backstop** — sample, close the lease, try the ordinary drop; if anyone appeared in between, Postgres refuses *atomically*. `FORCE` only afterwards, for cleanup | closes the check-to-drop race, and reuses the distinction already in the factory |
+
+Sol also asks that the report **not print SQL text**, which may carry article prose or a secret —
+this repo's own logging rule, and the probes written earlier today selected `query` without thinking
+about it.
+
+**So T-E is real, and it is: private teardown enumerates, backs itself with a non-forced drop, and
+fails the run through `process.exitCode`; the shared lane prints attributed sessions on failure
+only; and the original `check.ts` requirements are recorded as superseded rather than built.**
+
+##### The zero was true and unrepeatable, and the condition nobody stated is "the last file"
+
+**Building it broke the measurement it was built on.** The table above says the minted database holds
+**0** non-lease sessions at teardown, on 3, 15 and 99 files. Running the new check against
+*single* private-lane files, **7 of 8 fail it** — each leaving one or two of its own `getDb()`
+connections behind, because vitest tears down `globalSetup` **before** it closes its worker pool and
+about 29 of the lane's 101 files never call `closeDb()`.
+
+Two measurements of the same quantity, disagreeing, both correct. The missing fact, measured
+2026-09-04:
+
+| run | files | sessions left at teardown |
+| --- | --- | --- |
+| `billing-usage-route` alone | 1 | **2**, and `EXIT=1` |
+| `billing-usage-route`, then `pg-ready`, `run-lock` | 3 | **0**, `EXIT=0` |
+| `billing-usage-route` **and** `billing-checkout` — two known leakers | 2 | **2**, not 4 |
+
+**Only the last file's pool survives.** Vitest recycles the worker when the next file starts, so an
+unclosed pool outlives the run only if its file happened to run last. Every one of the three runs in
+the table above this one ended on a file that closes its pool, which is the whole of why they said
+zero — and nothing in the measurement said so, because nobody knew it was a condition.
+
+**The number was not wrong. The sentence around it was**, and this plan has now produced that shape
+itself after finding it in four other people's files. *"0 non-lease sessions at teardown"* is a fact
+about three particular runs; *"the minted database is empty at teardown"* is the generalisation it
+does not support. The check being built is what exposed it, four hours later, which is the argument
+for building checks rather than reasoning about them.
+
+**What it changes in the design.** A verdict that fires on a clean run and blames *"something outside
+this run"* for a worker of that very run is a gate whose red is noise — the position
+[`vitest.config.ts`](../../vitest.config.ts) already argues at length about a timeout. So
+"unexpected" has to mean **"not this run"**, which the connection naming built for the shared lane
+now makes expressible: the private lane tags its own workers through `PGAPPNAME`, the teardown
+partitions the sample into the lease, this run's workers and strangers, and only a stranger fails the
+run. Our own unclosed pool becomes a line that says so, bounded to one file and honest about it.
+
+**And the non-forced drop needs the same correction**, which is the subtle half: our own workers are
+alive at teardown, so Postgres refuses the ordinary drop on clean runs too.
+
+**The first answer to that was re-sampling after a refusal, and the stage-end review refuted it** —
+[260903f-pollution-verdict-built-sol.md](260903f-pollution-verdict-built-sol.md), *"do not commit T-E
+yet"*. Once one of our own pools guarantees the refusal, a stranger can arrive after the sample,
+contribute nothing distinguishable to a refusal that was coming anyway, disconnect before the
+re-read, and the run goes green. **A re-read is a second sample, not an atomic decision**, and
+calling it a backstop was the same move as the two tautological controls this document already
+records: naming a check after the property it was supposed to have.
+
+The fix restores the property instead of lowering the claim: **terminate our own tagged backends
+first**, by pid, and only then attempt the ordinary drop — at which point `55006` means an
+unexpected client and nothing else. A clean run then reaches a drop that *succeeds*, which is a
+better outcome than forcing.
+
+**The review's second blocking finding is a silent success in the error handling**, and of a kind
+this plan has now found at every level of the stack: `dropStaleTestDatabase` converts *every* error
+into `{ dropped: false }`, so a permission or network failure is indistinguishable from "in use" —
+and with our own workers present that combination produces no stranger, no ghost, and a green run.
+A failed *forced* cleanup, likewise, only printed that the database had leaked. Both now fail the
+run, and as a **teardown failure** rather than as POLLUTED, because *"we could not tell"* and
+*"somebody was inside"* are different claims and the banner should not confuse them.
+
+##### T-E is built — four verdicts, and the two that were added by being refuted
+
+| what the teardown found | verdict | exit |
+| --- | --- | --- |
+| a stranger | **POLLUTED** | 1 |
+| the drop, the lease close or the re-read failed | **TEARDOWN FAILED** — *"we could not tell"* | 1 |
+| only this run's own tagged connections | one line saying so | 0 |
+| nothing | silent | 0 |
+
+**Only the first of those was in the design.** The second came from the review, the third from the
+measurement collapsing, and the fourth was always there. A stage specified as one verdict shipped as
+four, and each addition came from something being *refuted* rather than from scope creep.
+
+The sequence is: sample on the lease's connection → **terminate this run's own tagged backends by
+pid** → close the lease → ordinary `DROP DATABASE` → re-read from the *base* database only if it was
+refused as `in-use` → classify → drop → verdict. Terminating ours first is what makes the refusal
+mean something again: with them gone, `55006` is an unexpected client and nothing else.
+
+**Verified here rather than reported**, on 2026-09-04:
+
+```
+stranger held inside the minted database     EXIT=1, POLLUTED, names it, then drops WITH FORCE
+the run's own unclosed pool, alone           EXIT=0, "2 … tagged connection(s) remained", then
+                                             dropped — not WITH FORCE, because ours were closed first
+a clean multi-file run                       EXIT=0, silent
+```
+
+The middle row is the one worth noticing: **the clean path now reaches an ordinary drop that
+succeeds**, which is a stronger property than the stage started with — before T-E every run forced,
+and a forced drop cannot tell you anything because it terminates whatever it finds.
+
+Three pieces of machinery, all small: `PGAPPNAME` naming this run's connections (asserted in
+[`private-db.ts`](../../tests/setup/private-db.ts) by asking Postgres what *this backend* is called,
+which is a measurement rather than an echo of what we set); `backend_type`, so that **an autovacuum
+worker inside the freshly restored database** — null `usename`, empty `application_name`, and
+indistinguishable from an intruder by name — is not accused, which it was on the first run; and a
+`DropOutcome` of `dropped | in-use | failed` replacing a boolean, because **a boolean cannot carry
+*"I could not tell"*, so it carried it as *"no"***.
+
+**And the tag is honest about what it is.** `application_name` is client-chosen, so the pid makes it
+collision-resistant between two cooperative runs on this box and nothing more; it is not an
+adversarial boundary and cannot be while every worktree shares one superuser credential. Said in the
+code, in [testing.md](../project/testing.md), and here, because the last thing this stage needed was
+a fourth check that sounds stronger than it is.
+
+**`src/db/client.ts` is the one production change**: the pool names itself
+`spideryarn <cwd-basename>:<pid>` where it used to name itself nothing, which is why seven sessions
+in the measured sample were unattributable. `PGAPPNAME` wins where set. Printable ASCII, cut to 63
+**bytes** rather than 63 UTF-16 units — the review's catch, and the sort of thing that makes a
+comment false rather than a program wrong.
+
 ### B0 — take `RUN_LOCK` off the seed window — **already done, and this plan was wrong about it**
 
 **Nothing to build. It landed on 2026-09-01 in `df7a7980`, two days before this plan was written.**
@@ -1488,12 +1777,443 @@ seed. The ~19–24s of serial demand that `load-article.ts` warns about is a des
 `serialise: true` *would* cost at B's scale, not a debt B has to pay.
 
 
-### B — convert the ungated route suites (parallelisable)
+### B — convert the suites that exercise the filesystem store
 
-The pattern is proved: `tests/helpers/scratch-article.ts`, ~280 ms a seed. Land `serialise: false`
-for unique-slug seeds as you go. **Each converted suite must run green against unchanged production
-code with `postgres` set explicitly, and each gets one mutation watched going red.** That evidence is
-retained — it is part of the final proof in the readiness work.
+The pattern is proved: `tests/helpers/scratch-article.ts`, ~280 ms a seed. **Each converted suite
+must run green against unchanged production code with `postgres` set explicitly, and each gets one
+mutation watched going red.** That evidence is retained — it is part of the final proof in the
+readiness work. Three registry edits go with each conversion and are about a fifth of the work:
+`TEST_LANES`, `OWNER_AUDIT` where the file names a fixed owner uuid, and the `STORE_MIGRATION`
+verdict.
+
+**Two things this heading used to say, both wrong and both left named.** It said *"the ungated route
+suites"*, and the set is 26 files of which only about half are routes — § *B's manifest* below. And
+it said **(parallelisable)**, which is true of the editing and false of the verifying: the private
+lane is serialised, so every converted file adds ~11s to every future run, and two agents converting
+in two worktrees each mint a database.
+
+**It also said "land `serialise: false` for unique-slug seeds as you go", and that is already the
+default.** `LoadOptions.serialise` is `false` and `scratch-article.ts` never passes it — the same
+thing B0 records about itself two stages down. The pilot below looked for something to change here
+and correctly found nothing, which is a stale instruction costing somebody's time for the second
+time in one plan.
+
+#### B's manifest is 26 files, and it is derived rather than written
+
+**"The ungated route suites" is not a set anybody can act on**, and this plan's own rule is that a
+count without a derivation is perishable. Now that both maps exist in one file, the set is an
+intersection: `STORE_MIGRATION` says which tests are `database-integration`, `TEST_LANES` says which
+have a database, and **a file in the first and not the second is a database test running on the
+filesystem store**. Computed 2026-09-04 against `ae5ed824`:
+
+| | in a database lane | in the `unit` lane |
+| --- | --- | --- |
+| `database-integration` (36) | 10 | **26 — this is stage B** |
+| `shared-mechanism-collateral` (28) | 23 | 5 |
+| `filesystem-adapter-behaviour` (24) | — | 24, and stage G deletes them |
+| `store-agnostic-fake` (13) | — | 13, correctly |
+
+```
+all-skipped-publication-log        jobs-walk                    referee-criteria-routes
+article-cache-call-site            jobs                         referee-mirror-route
+chat-anchor-route                  list-reconciles-expired      referee-scan-route
+chat-live-ticket-route             live-session-routes          retry-is-only-for-a-failed-job
+chat-live-turn                     one-article-for-one-address  routes
+chat-spoken-route                  owner-jobs                   second-job-queues
+jobs-commit-path                   quiz-mark-route              step-failure-seam
+                                   referee-claims-omitted       term-lookup
+                                   referee-claims-routes        the-query-string-does-not-decide-the-route
+                                                                upload-records
+```
+
+**Only about half of them are routes.** `jobs`, `jobs-walk`, `jobs-commit-path`, `owner-jobs`,
+`second-job-queues`, `step-failure-seam` and `upload-records` are the queue, and the stage's name has
+been quietly wrong about its own contents since the first draft.
+
+**And stage B had never had an estimate.** The *"6–10 hours"* this session twice attributed to it is
+260903e's figure for **its** stage B — the database factory, which is built and on `dev`. Two stages
+in two plans share a letter, and the number migrated between them unchallenged. It has a measured
+one now, from converting two of the 26 — see below.
+
+**This is the first time the two maps have been intersected**, and it is the composition the T-C
+review argued for over a literal merge: neither verdict predicts the other, but the *pair* answers a
+question neither could. Re-derive it rather than copying the list: the files whose `STORE_MIGRATION`
+category is `database-integration` and which have no `TEST_LANES` entry, both in
+[`tests/store-migration-registry.ts`](../../tests/store-migration-registry.ts). Five of the six
+counts in this document that went stale went stale by being copied instead.
+
+**But the set shrinks from both ends as the stage runs, so 26 is a starting position and not a
+size.** A converted file gains a lane *and* stops being `database-integration` — the pilot found the
+right post-conversion verdict is `shared-mechanism-collateral`, because what a converted route suite
+still touches is the loader's copy step and the ledger redirect. So the derivation above returns 24
+after two conversions, and anyone re-deriving mid-stage will get a number that does not match this
+heading. **That is the derivation working, not drifting**, and it is the one case in this document
+where a moving count is the correct behaviour rather than the failure.
+
+#### Two of the 26 are converted, and the estimate is now measured rather than guessed
+
+**A pilot, 2026-09-04**: one from each half, chosen to be representative rather than easy.
+`tests/chat-anchor-route.test.ts` (the route shape — copy `example/` under a throwaway slug, drive
+`handleApi`, read back through a store function) and `tests/owner-jobs.test.ts` (the queue shape —
+the *"jobs never reach Postgres"* tail this stage's § A names).
+
+| | edit | green | one mutation, watched red |
+|---|---|---|---|
+| `chat-anchor-route` | ~25 min | 20 passed, 15.7s | `anchorQuote: quoteOf(…)` → `null` in `pg-chat.ts` — **4 failed** |
+| `owner-jobs` | ~20 min | 10 passed, 11.4s | the `where(eq(jobs.ownerId, owner))` deleted from `pgJobStore.list` — **2 failed** |
+
+**Both mutations are ones the filesystem version could not have caught**, which is the argument that
+the conversion bought something rather than merely moved something: neither line exists in the
+filesystem store. The first is sharper than intended — a null `anchor_quote` beside a non-null
+`anchor_start` violates the `chat_threads_anchor_both` CHECK, so the route 500s where the fs store
+would have written the fourth anchor shape and said nothing.
+
+**The review passed both conversions and named two gaps in the *evidence*, not the code**
+([260903f-pollution-verdict-built-sol.md](260903f-pollution-verdict-built-sol.md) § 7). Worth
+carrying into the remaining 24, because they are about how a mutation is chosen:
+
+- **Mutate the thing the conversion was justified by.** `chat-anchor-route` was converted because
+  its header said the foreign key was left to another file *"because this harness writes to the
+  filesystem store"*. The mutation that matches that reason is deleting the route's `checkAnchor`
+  call — which should turn the foreign-block case from a 400 into a 500. `anchorQuote → null` is a
+  valid persistence mutation and it is not that one.
+- **One predicate is not the family.** Deleting `list`'s `where owner_id` proves list isolation;
+  `get`, `claim`/`getIn` and `forget` each carry their own SQL predicate and none of them was
+  mutated. Not a hole in the behaviour — the tests do cover those outcomes — but the *watched red*
+  covers one quarter of what the file claims.
+
+Neither is worth re-doing on these two. Both are worth writing into the brief for the rest, because
+"one mutation watched going red" is a rule this plan wrote and it does not say *which* mutation,
+which turns out to be most of its value.
+
+#### Ten more, in two parallel halves — 12 of 26, 2026-09-04
+
+Two agents, disjoint file sets, both editing `TEST_LANES` at different alphabetical positions. Five
+route suites (`the-query-string-does-not-decide-the-route`, `chat-spoken-route`,
+`chat-live-ticket-route`, `chat-live-turn`, `quiz-mark-route`) and five queue and article-identity
+suites (`second-job-queues`, `upload-records`, `list-reconciles-expired`,
+`one-article-for-one-address`, `article-cache-call-site`).
+
+All ten green together — `10 passed, 79 tests` in one private database, no `POLLUTED`. **The pilot's
+30–40 minutes a file held for nine of ten.** `quiz-mark-route` took roughly twice that, and for a
+reason worth naming: its fixture is an *artefact it rewrites per test*, not an article it reads, so
+three seeded articles and a real second publication had to stand in for what a directory copy used to
+do.
+
+##### The most valuable result is a mutation that did not bite
+
+Deleting `row.workKey === ticket.workKey` from `tryEnqueue`'s re-read classifier — a
+predicate the Postgres path owns and the filesystem never had, exactly the kind this plan asks for —
+left `second-job-queues` **green**. That re-read only runs when the insert conflicts, and the suite's
+two accepted-job cases insert cleanly. So the file exercises one branch of that classifier and none
+of `sourceTaken`, `nameTaken` or id-collision.
+
+**Nothing in the file, the plan or the review would have revealed that.** It is the argument for the
+rule the plan already has — one mutation watched going red, per file — restated as: the rule's value
+is not the red, it is that a mutation which *stays green* names a hole nobody knew was there. Both
+agents were asked to say what each mutation does **not** cover, and every one of the ten has an
+answer written down.
+
+##### Two more traps, and both are Postgres being stricter than a directory was
+
+3. **A global `fetch` stub that catches model calls also catches the seeder.** `scratchArticleInPg`
+   → `storeRawSource` puts bytes in the Supabase bucket **over HTTP**, so seeding inside a test whose
+   `fetch` is stubbed fails with the stub's own *"no model in tests"* and reads as a route bug. Swap
+   the real `fetch` back for the length of the seed and restore it in a `finally`.
+4. **Postgres validates ids the filesystem store never looked at.** `jobs_id_format` refuses a
+   hand-written mnemonic like `spya-2ndrun` (the body must start with a letter), and `jobs.attempt_id`
+   is a `uuid`, so a string token like `"attempt-2nd"` fails the insert. Any converted queue suite
+   that writes its own ids needs `mintId()` and `mintAttempt()`. **This is the migration finding
+   underneath the trap**: a filesystem store validated nothing, so a decade of hand-written fixture
+   ids were never wrong until now.
+
+And one that is not a trap but a shortcut: **`claimSession` is the answer for any suite driving
+`advanceJobWith`**, is already exported, and already says so in its docstring. `article-cache-call-site`
+converted in 20 minutes using it. That downgrades the fear about `jobs-walk` and `step-failure-seam`
+— their difficulty is the `data/_jobs/` byte assertions, not the walk.
+
+##### The category question, escalated rather than decided, and the answer is to re-run the witness
+
+The two halves disagreed. The pilot moved both its files to `shared-mechanism-collateral`; the queue
+agent moved only one, leaving four as `database-integration` because after conversion they seed no
+article and run no step, so **they reach no condemned module at all** — and
+`shared-mechanism-collateral` requires a non-empty `mechanisms`, which there is nothing to fill.
+
+Read against the definitions at the top of the registry, neither is right. Those categories say **what
+work the file still needs**: `database-integration` is *"move it, or finish moving it"*, which a
+converted file does not need, and `shared-mechanism-collateral` is *"none, to this file"*, which is
+the correct action but claims a mechanism that is gone.
+
+**The resolution is that the map should shrink, and cannot yet.** Membership is one-directional —
+`tests/store-migration-registry.test.ts` demands an entry for every file
+[`tests/store-migration-witness.json`](../../tests/store-migration-witness.json) saw touching the
+filesystem store, and nothing demands a listed file still touch it. So a converted file may leave the
+map **only once the witness is re-run**, and the witness is dated 2026-09-03. So:
+
+> **Re-run the witness at the end of stage B**, and let every file the conversion took out of its
+> reach drop out of `STORE_MIGRATION` entirely.
+
+At that point the category question dissolves rather than being answered, which is the better
+outcome, and the map becomes a measurement of the *current* tree again instead of a September the 3rd
+one. Until then the four entries stay `database-integration` with reasons that say the conversion is
+done — the honest verdict rather than an un-updated one, in the queue agent's words, and it is
+recorded here so that the next reader knows it was a decision.
+
+**Call it 30–40 minutes a file for the twenty-four that are left, plus a day for the three that are
+not this shape.** The editing is nearly all pattern: pin `postgres` in `vi.hoisted`, a `pgReady`
+gate, `scratchArticleInPg` in `beforeAll`, delete rows instead of re-copying a directory in
+`beforeEach`, and read back through the store rather than through a filesystem-only reader. Three
+registry edits follow — `TEST_LANES`, `OWNER_AUDIT` where the file names a fixed uuid, and the
+`STORE_MIGRATION` verdict, which for a converted route suite becomes
+`shared-mechanism-collateral` with the loader and the ledger as its remaining touches. **The
+outliers are `jobs.test.ts` (26 filesystem sites), `jobs-walk.test.ts` and `step-failure-seam.test.ts`**;
+the last two assert on bytes read back out of `data/_jobs/`, which has no Postgres equivalent and
+has to be re-expressed rather than translated.
+
+**Four things the pilot found that this plan and `scratch-article.ts` do not say:**
+
+1. **The lane entry comes first, or the run finds no files.** `vitest.config.ts` derives each
+   project's file list from `TEST_LANES`, so `--project private-postgres tests/<new file>` exits 1
+   with *"No test files found"* until the registry names it. Converting the test and running it is
+   two steps in the wrong order.
+2. **Route suites read back through filesystem-only functions, and the import does not look like
+   one.** `chat-anchor-route` called `loadThreads` from [`src/chat.ts`](../../src/chat.ts), which
+   `readFile`s `chat.json` unconditionally — nothing in the name or the import path says "files".
+   The replacement is `chatStore.load` inside `asTestOwner`, and a conversion that pins the flag and
+   leaves the read alone gets an empty list rather than an error. **That is a green suite asserting
+   nothing**, and it is the one failure mode of this stage that no gate would catch: the flag is
+   pinned, the seed is real, the lane is right, and the assertion reads a file nobody wrote.
+3. **The `OWNER_AUDIT` guard fires on the lane, not on the conversion**, and it names the constant:
+   giving `owner-jobs` a lane turned it red with
+   *`tests/owner-jobs.test.ts ALICE 00000000-…a7`*. It also resolved `seedAuthUser(db, { id: ALICE, … })`
+   through the constant, so `kind: "seeded"` needed no `why`.
+4. **Literal block ids and quoted prose do not survive the move**, exactly as `ScratchArticle.blocks`
+   warns: `scratchArticleInPg` seeds `writes`, not `example/`, so anything the old file quoted has
+   to be re-derived from `article.blocks` at run time.
+
+##### The trap in finding 2 has a measurable surface, so it is a checklist rather than a warning
+
+Derived 2026-09-04, and the derivation matters more than the list. Modules under `src/` that read
+the data root directly **and never import `src/store/` or name `STORE`** cannot be store-aware, so a
+converted test that keeps calling one of their readers gets an empty answer:
+
+| module | the readers a converted suite might keep calling |
+| --- | --- |
+| [`src/chat.ts`](../../src/chat.ts) | `loadThreads` — **the one the pilot hit** |
+| [`src/comments.ts`](../../src/comments.ts) | `loadComments` |
+| [`src/searches.ts`](../../src/searches.ts) | `readSearches`, `loadRuns` |
+| [`src/referee-claims-store.ts`](../../src/referee-claims-store.ts) | `loadClaimsRun` |
+| [`src/referee-criteria-store.ts`](../../src/referee-criteria-store.ts) | `loadCriteria` |
+| [`src/glossary-lookups.ts`](../../src/glossary-lookups.ts) | `loadLookups` |
+| [`src/shelf.ts`](../../src/shelf.ts) | `loadShelf` |
+| [`src/profile.ts`](../../src/profile.ts) | `loadReaderProfile`, `loadReaderExperimental` |
+
+Eight modules, thirteen readers. **`src/api.ts` is deliberately not on the list** — it reads files
+too, but it imports `./store/`, so its `loadArticle` and its ten siblings dispatch rather than
+assume. That is the discriminator, and it is why the list is short enough to check by hand.
+
+**These are the filesystem adapter's implementation, exported from `src/*.ts` instead of from
+`src/store/`.** The only non-client caller of `loadThreads` in the tree is
+[`src/store/fs.ts`](../../src/store/fs.ts), which stage G deletes — the `src/web/` matches are a
+different `loadThreads`, a client controller's effect. So calling one of these from a test is not
+merely reading the wrong store, it is **reaching past the selection into the condemned half**, which
+is the reach stage A's witness was built to count. This predicts which of the remaining 24 will hit
+it: the three chat route suites, both referee route suites, and anything reading a shelf or a
+profile.
+
+#### The review found the evidence was reported and not retained — 2026-09-04
+
+[260903f-stage-b-ten-conversions-review-sol.md](260903f-stage-b-ten-conversions-review-sol.md).
+Verdict: *land with named follow-ups*, and the approach is right — *"explicit store selection, real
+per-run Postgres, serialized files, non-vacuous readbacks"*. It checked every one of the ten for a
+surviving filesystem-only reader and found none, and it compared each file against its
+pre-conversion self assertion by assertion and found **nothing lost**. The one changed meaning is
+`expect(STORE).toBe("files")` becoming `postgres`.
+
+**The finding that matters is about the process, not the conversions.** The plan requires each
+converted file to *retain* its mutation and what that mutation does not cover. **Eight of the ten
+retain nothing.** The mutations were run — the agents reported them, and this document repeated the
+reports — but the evidence was never written into the artefact, so nothing distinguishes *watched
+red* from *reported green*. Confirmed by grep before acting on it: only `list-reconciles-expired`
+carries a real record (*"Watched red with the final `store.list(owner)` replaced by `return listed`:
+one call, not two"*), and `second-job-queues` carries the green one.
+
+That is this plan's own subject turned on the plan: **a claim of evidence is not evidence**, and the
+orchestrator relayed ten subagent reports without opening the files. The rule *"'Done, all tests
+pass' is a claim, not a result — read the diff"* exists for exactly this and was not followed.
+
+**Re-run, not reconstructed.** Writing a plausible note from reading the code would manufacture the
+evidence rather than retain it, which is worse than having none. The eight go back through the
+mutation, the run and the watch.
+
+**The process fix is a guard, and it is deferred rather than dropped.** A convention that a comment
+should be there is the same instrument that just failed. The evidence wants a typed home — a
+`mutation` field on the `STORE_MIGRATION` entry, carrying what was broken, what the run printed, and
+what it does not cover, with a test requiring it of every converted file. Not done in this batch
+because three agents were editing
+[`tests/store-migration-registry.ts`](../../tests/store-migration-registry.ts) concurrently and a
+type change would have collided. **Do it when the registry is quiet, before stage B closes.**
+
+##### Two registry accounts that disagree with the code, both verified
+
+Both are `mechanisms` lists that under-state what the converted file still reaches. Neither
+invalidates a Postgres assertion; both would leave stage G's account wrong.
+
+1. **`quiz-mark-route` still reaches the filesystem ledger.** Its entry says *"the provider is stubbed
+   to reject, so no ledger row"*, and that is wrong twice. `src/ai-call.ts`'s streaming wrapper
+   records spend through a `finally`, so a rejection and an aborted stream both record — and
+   **[`src/store/ai-calls.ts`](../../src/store/ai-calls.ts) line 74 returns `fsCostStore` whenever
+   `NODE_ENV === "test"`, so the ledger ignores the store flag altogether in tests.** The 2026-09-03
+   witness corroborates it: `ai-calls-fs:fsCostStore.record`. Wants `ledger-redirect` added — and it
+   is a reminder that pinning a file to Postgres does not pin its ledger, which is the whole reason
+   **C** is a stage.
+2. **`the-query-string-does-not-decide-the-route` uses a symbol from the condemned module.** Its GET
+   always calls `sweepChat`, and the *Postgres* sweep writes `CHAT_SWEPT` — declared in
+   [`src/store/fs.ts`](../../src/store/fs.ts) line 390 and imported by
+   [`src/store/pg-chat.ts`](../../src/store/pg-chat.ts) line 81. Not a filesystem read returning an
+   empty answer; a shared symbol living in the half being deleted. Wants `shared-mechanism` naming
+   it, and it is one for stage G's list: **deleting `fs.ts` moves this string, it does not remove
+   it.**
+
+Both edits wait for the registry to be quiet, for the same reason the guard does.
+
+##### And it agreed with the two calls this plan had already made
+
+The green mutation's conclusion was checked against the code and confirmed: `tryEnqueue` returns
+immediately after a clean insert, so the two accepted-job cases never reach the classifier at all,
+and the double-click case reaches `sameWork` with a row that already agrees on owner, slug and work
+key — so removing the work-key predicate *cannot* change that answer. The file exercises `sameWork`
+but not the necessity of its predicate, and none of `sourceTaken`, `nameTaken` or the id-collision
+path.
+
+And on the four entries left as `database-integration`: *"I agree with the plan's resolution: rerun
+the witness and remove these entries rather than inventing a completed/transitional category.
+Shrinking the map is cleaner than recategorising."*
+
+##### The review could not run anything, and said so
+
+The managed sandbox denied the local Postgres connection (`connect EPERM 127.0.0.1:54362`), the
+private setup then installed its poison URL, and collection failed with zero tests. Every finding
+above is reasoned rather than reproduced, and the review **says so itself, unprompted, in its own
+verdict** rather than letting a retained log stand in for a run it did not do. That is the behaviour
+the instruction to hand it evidence is meant to produce, and it is worth recording that it worked —
+but it means the follow-ups were verified here, in this tree, and not there.
+
+#### The witness has no instrument — the step this plan scheduled cannot be run
+
+`STORE_MIGRATION` membership is driven by the **dynamic** witness — which files *executed* a condemned
+function — so a converted file genuinely does stop being witnessed, and the resolution recorded above
+holds. (Had it been witness 1's static import graph it would not: a converted route suite still
+imports the app, which still imports `src/store/index.ts`, which still imports `fs.ts` until stage G.)
+
+**But the script that produced [`tests/store-migration-witness.json`](../../tests/store-migration-witness.json)
+is not in the repo.** The JSON records `what`, `measured`, `store`, the eight `instrumentedModules`,
+`notInstrumented` and two `knownBlindSpots` — everything except the command. So *"re-run the witness at
+the end of stage B"* was scheduled against a tool that does not exist, and it would have been
+discovered at the end of stage B.
+
+It is this document's own § *Counts are perishable here — re-derive, never inherit* failing on the
+one input it cannot re-derive, and the repo's rule that an inventory records **the command**, scope
+and run date. Being rebuilt as `scripts/store-migration-witness.ts`, committed this time, with the
+original's proving discipline made repeatable rather than described: the 2026-09-03 run hit four
+positive controls with method-level detail and four clean negative controls, and an instrument that
+silently stopped hooking would produce an empty `touched` — the shape that passes the registry guard
+while proving nothing.
+
+#### The tail was measured, and it is 16.75 hours, not 7 — 2026-09-04
+
+The twelve done average 30-40 minutes, so the obvious extrapolation says the remaining fourteen are
+about seven hours. **They are about seventeen.** Measured by reading all fourteen — every filesystem
+site classified as *has a database equivalent* / *asserts something only the filesystem has* /
+*incidental scaffolding* — rather than by extrapolating, which is this document's own rule about
+perishable counts applied to an estimate for once instead of a count.
+
+It is not spread. Eleven of the fourteen cluster at 25-70 minutes, exactly as the pilot predicted.
+Three carry the difference:
+
+| file | minutes | why |
+| --- | --- | --- |
+| `routes.test.ts` | **240** | 1,598 lines, ~95 tests, ~40 filesystem sites, and two design decisions of its own |
+| `jobs.test.ts` | 140 | 1,515 lines, and six of its tests are about the filesystem adapter rather than the queue |
+| `referee-scan-route.test.ts` | 80 | needs four correctly sha256-hashed raw-document manifests |
+
+**`referee-scan-route` is the one to be afraid of, and it is not the expensive one.** A silently wrong
+hash makes the prompt-injection scan a no-op **while the test stays green** — the exact shape of
+[silent-success.md](../reusable/silent-success.md), inside the stage built to remove it. Its brief
+says to prove the hash two ways, or to plant a known injection and watch the scan find it, rather
+than accepting a green.
+
+**And none of the fourteen is a filesystem-adapter test in disguise.** The registry's
+`database-integration` calls all held up under a close read. That is the first independent check
+stage A's map has had, and it passed.
+
+#### `routes.test.ts` becomes its own stage, B2, and the split was passed over
+
+The build order gains a stage: **B (13 files) → B2 (`routes.test.ts`) → C**. B2 must land before the
+hinge; it does not block C.
+
+Put to Fable as three options — convert it as an ordinary item, lift it into its own stage, or let it
+happen inside the hinge — and the third was the one to kill, on a premise this plan had not checked.
+The argument for it was that ~9 of its tests assert *"501 because filesystem"*, behaviour F deletes,
+so converting them in B writes assertions F rewrites. **That premise is false.** The moment the file
+is pinned to Postgres those assertions are already unreachable, and what they become — administrator
+gets 200 and a list, anonymous 401, stranger 403, malformed 400 — is behaviour **the hinge does not
+touch**, because F deletes the `files` path and not the Postgres one. The work is done once whichever
+stage does it. So C had only its cost: a 1,600-line rewrite inside the commit two reviews have spent
+their time shrinking, and the largest route suite left on the undeployed store for the whole of C, D,
+D′ and E.
+
+**The simpler option passed over: splitting `routes.test.ts` into sibling files** — `reader-routes`,
+`admin-gate`, `search-routes` and so on, one per `describe` block, each with its own lane entry and
+its own mutation. Recommended, and the reasoning behind it is right: **the mutation rule's unit is the
+file, and one mutation over 95 tests is about 1% of what the file claims.** It is the same finding as
+`second-job-queues` staying green, pointed at a file instead of a predicate.
+
+It was passed over anyway, and the reason is scope rather than disagreement. The file is named from
+seven docs under `docs/project/` and about 133 lines across the repo; splitting it is a
+test-organisation refactor with a rename sweep, landing in a tree five other agents are working in,
+on top of a store migration. **The benefit is obtainable without the refactor: change the rule's
+unit, not the file.** B2 converts `routes.test.ts` one `describe` block at a time, with **one mutation
+per block** and each block a stopping point — four or five pieces of mutation evidence instead of one,
+which is what the recommendation was actually for, and no references move.
+
+If B2 turns out to want the split anyway once it is inside the file, that is a finding for this
+section and not a decision to take quietly.
+
+**The two design decisions B2's brief has to carry, settled now so they are not settled mid-flow:**
+
+1. **Reader-profile isolation.** `pg-reader.ts` keys every row on `currentOwnerId()`, so the answer is
+   a seeded owner per run under `asTestOwner` — the shape `OWNER_AUDIT` already audits — not a scratch
+   root, for which there is no equivalent. Assert the row is gone in `afterAll`, per stage G's
+   teardown rule.
+2. **The nine 501 tests.** Rewrite them to real admin behaviour; **do not** split them into a
+   `routes-postgres` sibling. The `referee-routes-postgres` split exists *because* the flag existed —
+   one process is one store — and a store-pinned sibling is the pattern this plan is deleting.
+   `tests/seed-admin-signin.test.ts` already drives `/api/admin/users` against Postgres and is the
+   thing to cite. Keep *"says nothing about users in three refusals"*, with its third arm becoming
+   200-with-`users`: its comment that a page saying *no accounts* and a page that *could not answer*
+   look identical is still exactly the point.
+
+#### Two smaller calls, and both go against building the fixture
+
+**`jobs.test.ts` splits before it converts.** Six of its tests have the filesystem adapter as their
+subject — five asserting `STEPS[name].outputs(ctx)` returns on-disk paths, one asserting no
+`<id>.json.<pid>.<n>.tmp` files survive `writeOnce`'s rename. They move to
+`tests/jobs-fs-adapter.test.ts`, categorised `filesystem-adapter-behaviour`, and stage G deletes that
+file beside `src/store/jobs-fs.ts`. The registry classifies files, and `jobs.test.ts` currently
+deserves two verdicts at once, which the map cannot express. Leaving them in forces one of two bad
+outcomes: a conversion that keeps the file able to reach the filesystem adapter, or six tests quietly
+deleted during B — **the uncovered interval G's "same commit as its subject" rule exists to
+prevent**. The new file's header says the `outputs(ctx)` block is really about `StepContext.dir` and
+`htmlFile`, so whoever removes those fields is the one who deletes it, rather than it being orphaned.
+
+**`term-lookup`'s `example` assertion is dropped, not rebuilt.** It passes only because the filesystem
+reader hard-codes a special-cased `example` slug to fall through to a committed fixture. Postgres has
+no such directory and no such fall-through, so building a row to keep the guard testable would be
+manufacturing state so that condemned code can go on being exercised — a green test proving nothing
+about deployed code, which is worse than not converting. The 404-for-unknown-slug arm stays; it is
+real under Postgres and it is the half that matters. Recorded in the file header and the registry
+`reason` so G's *"enumerate every surviving assertion"* pass can see the drop was deliberate.
 
 ### C — ledger isolation, its own reviewed stage
 
@@ -1573,6 +2293,37 @@ records cost needs its owner row in `auth.users` — measured, 5 of 5 refused wi
 `tests/chat-route.test.ts` uses `ADMIN_USER_ID_LOCAL`, which exists on this box only by accident of
 `db:seed-dev` and would not exist in a clean clone. That is a named member of the tail 260903e's
 Stage C warns about, and it probably reaches most of the 43 route files.
+
+#### C is not independent of B any more, and the reason is the poison
+
+**Half a day was costed when a test that reached Postgres by accident merely got the shared
+database.** T-D changed that: a `unit`-lane file's `DATABASE_URL` is now a refusal. So the moment
+`selected()` stops redirecting to the filesystem under `NODE_ENV === "test"`, **every unit-lane test
+that actually records a row fails**, and C's real cost is however many of those there are plus a lane
+for each.
+
+An upper bound, computed 2026-09-04 against `ae5ed824` — the unit-lane files mentioning `handleApi`,
+`costStore`, `withLedger` or `collectSpend`:
+
+| | files |
+| --- | --- |
+| can open a ledger, anywhere in the suite | 56 |
+| …already in a database lane | 17 |
+| …**in the `unit` lane** | **39** |
+| of those 39, also in stage B's 26 | 16 |
+| **C's own tail, after B has run** | **23** |
+
+**39 is a ceiling, not a count, and the difference matters.** The grep proves that a file *names* the
+machinery, not that a row is written — `vercel-url`, `cold-start-lazy-imports` and `paid-cli-ledger`
+are on the list and at least the last is a static AST test that executes no route at all. The true
+number is what C's own acceptance criterion 1 asks for (*"`pgCostStore.record` genuinely executed,
+not silently skipped"*), and it can only come from a run. **Recording the ceiling rather than
+guessing at the number is the point**: an unmeasured 39 is honest, and a confidently wrong 12 is what
+this document keeps catching elsewhere.
+
+What it settles regardless: **B goes before C**, because B converts 16 of the 39 anyway and each
+conversion is the same edit either stage would make. That is a change to the build order the plan
+had as `C → B`.
 
 **And a caveat about what C can honestly claim.** All five rows the route suites produced came back
 `outcome: "error"`, `cost_source: "none"`, `credits_used_nanos: null` — the model call is stubbed, so

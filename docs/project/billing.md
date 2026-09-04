@@ -986,7 +986,18 @@ the first.
 `npm run stripe:check -- --prod` fails if nothing is listening at that URL, because a live account
 with no endpoint takes money and grants nothing — the one failure mode where every other check
 passes and the customer is simply not served. It checks Stripe's side; what it cannot see is whether
-the deployment holds the secrets, which is `vercel env ls production`.
+the deployment holds the secrets.
+
+**That other half is `/api/health` since 2026-09-04**, so it is something the deploy gate does rather
+than something somebody remembers to run: `STRIPE_WEBHOOK_SECRET` is an entry in `EXPECTED`
+([`src/vercel-health.ts`](../../src/vercel-health.ts)), required only when `STRIPE_SECRET_KEY` is set
+— no Stripe at all is a fine deployment, half of Stripe never is. `vercel env ls production` still
+answers the question by hand.
+
+**Absence is conclusive there; presence is not.** A secret that is set and *wrong* — the endpoint
+rotated or recreated in the dashboard, Vercel never updated — makes every delivery a 400 while that
+line reads green, and health cannot sign a delivery to find out. The instrument for that is the
+endpoint's recent delivery-failure count on Stripe's side, which nothing reads yet.
 
 ## The three billing routes
 

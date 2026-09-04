@@ -343,7 +343,12 @@ describe("renaming from the metadata page", () => {
   async function page(dir: string) {
     apiFetch.mockResolvedValue(provenance(dir));
     await act(async () => {
-      root.render(<Metadata slug={SLUG} article={article("The Barn Owl")} onRenamed={vi.fn<(slug: string, title: string) => void>()} />);
+      root.render(<Metadata
+          slug={SLUG}
+          article={article("The Barn Owl")}
+          onRenamed={vi.fn<(slug: string, title: string) => void>()}
+          onVisibility={() => {}}
+        />);
     });
   }
 
@@ -368,6 +373,7 @@ describe("renaming from the metadata page", () => {
           slug={SLUG}
           article={article("The Barn Owl")}
           onRenamed={vi.fn<(slug: string, title: string) => void>()}
+          onVisibility={() => {}}
         />,
       );
     });

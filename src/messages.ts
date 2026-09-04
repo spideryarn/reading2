@@ -2207,6 +2207,39 @@ export const SHARING_OFF = "Only you can read this.";
 export const SHARING_ON = "Anyone with the link can read this, without signing in.";
 
 /**
+ * **The three tooltips on the three controls**, and the first one is the one
+ * that earns its keep.
+ *
+ * > the Share button should visibly be a button with rich tooltip
+ * >
+ * > — Greg, 2026-09-04
+ *
+ * `SHARING_OPEN_TIP` answers the question an owner actually has with the
+ * pointer over that button: *if I press this, is it done?* It is not — the
+ * press opens a confirmation — and until 2026-09-04 the only way to find that
+ * out was to press it, on the one control in this app whose act cannot be
+ * un-rung (`SHARING_CANNOT_UNRING`). That is a bad way to learn it.
+ *
+ * The other two say what their button does to a page that is already out, which
+ * is the same distinction from the other side: `Stop sharing` refuses the next
+ * request and nothing more, and `Copy` puts an address on the clipboard without
+ * changing anything at all.
+ */
+export const SHARING_OPEN_TIP =
+  "Nothing goes out yet. This opens a list of exactly what a visitor would get, and asks you to " +
+  "confirm before anything leaves.";
+
+/** @see SHARING_OPEN_TIP */
+export const SHARING_STOP_TIP =
+  "Takes the public page down, so the next request for it is refused. What somebody has already " +
+  "read or copied stays with them.";
+
+/** @see SHARING_OPEN_TIP */
+export const SHARING_COPY_TIP =
+  "Puts the link on your clipboard. Copying it shares nothing on its own — the article is already " +
+  "readable by anyone who has this address.";
+
+/**
  * **The same fact, small enough for a corner of a card on the shelf.**
  *
  * The owner's own word for it — the sharing card says *"Shared since …"* — and
@@ -2223,6 +2256,56 @@ export const SHARING_ON = "Anyone with the link can read this, without signing i
  * sentence between them rather than two near-misses.
  */
 export const SHARING_BADGE = "Shared";
+
+/**
+ * **The mark at the top of the article, in two states, each of them a whole
+ * sentence and a destination.**
+ *
+ * Greg, 2026-09-04:
+ *
+ * > Make it a bit clearer at the top of an article page with an icon if it's
+ * > public or not - actually, make that a clickable button with clear tooltip
+ * > that takes you to the profile to change whether the article is
+ * > private/public
+ *
+ * Built on `SHARING_ON` and `SHARING_OFF` rather than written afresh, so the
+ * masthead, the sharing card and the shelf badge cannot drift into three
+ * near-misses of one sentence — which is exactly how the dock's tooltip came
+ * apart from the band's ([visitor.ts § markedModes](web/visitor.ts)). What is
+ * added is only the half a tooltip on a *link* has to carry that a label does
+ * not: where pressing it goes.
+ *
+ * **There is a private twin here, unlike on the shelf.** The badge has none
+ * because a chip on every card is decoration; this is one mark on one article,
+ * and the question it answers — *would the link I am about to paste work?* — is
+ * asked exactly as often about a private article as a public one. An icon that
+ * appears only when shared answers it by absence, which is indistinguishable
+ * from a mark that has not loaded.
+ */
+export const SHARING_MARK_PUBLIC = `${SHARING_ON} Change who can read it.`;
+
+/** The other state of the mark above. */
+export const SHARING_MARK_PRIVATE = `${SHARING_OFF} Share it with anyone.`;
+
+/**
+ * **The mark's *name*, which is not its tooltip** — and the two have to differ.
+ *
+ * Floating UI gives the tooltip to the link as `aria-describedby`, so an
+ * `aria-label` holding the same sentence has a screen reader read it twice: once
+ * as the link's name, once as its description. GPT Sol, finding 5, 2026-09-04.
+ *
+ * So the name is what a link's name should be — the state, and where pressing
+ * it goes — and the tooltip stays the sentence. Short enough to be worth hearing
+ * in a list of links, which is the other thing a name is for.
+ *
+ * `SHARING_BADGE` is the shelf's word for the same state and is deliberately
+ * reused: an owner who has met *Shared* on a card should meet the same word here
+ * rather than a synonym.
+ */
+export const SHARING_MARK_NAME_PUBLIC = `${SHARING_BADGE} — change who can read this`;
+
+/** The other state of the name above. There is no shelf word for this one. */
+export const SHARING_MARK_NAME_PRIVATE = "Private — change who can read this";
 
 /**
  * **What a shared link carries, in one line, for the visitor** — the reader of

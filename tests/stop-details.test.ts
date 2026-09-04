@@ -113,16 +113,26 @@ const LEAK = {
 const STAGES = ["hierarchy", "arc", "tweets", "glossary", "ideas", "labels"] as const;
 
 /**
- * One line per stage, plus the control. Counted rather than guessed, so that a
- * child which died halfway cannot pass every "does not contain" assertion by
- * printing nothing — the vacuous shape docs/reusable/silent-success.md is about.
+ * One line per stage, plus the control, each carrying its own `step` field.
+ * Counted rather than guessed, so that a child which died halfway cannot pass
+ * every "does not contain" assertion by printing nothing — the vacuous shape
+ * docs/reusable/silent-success.md is about.
  *
- * None of the six stage files calls the logger itself; every line here is
- * written by the `step` wrapper in the child, which is how src/jobs.ts writes
- * one. A leak found in an *outgoing* request would add an eighth line and fail
- * this count as well as its own assertion, which is the intended noise.
+ * **It counts step lines, not stdout lines**, and that distinction is the
+ * second thing this harness has had to learn. Until 2026-09-04 it compared the
+ * total number of lines the child printed, on the stated grounds that "none of
+ * the six stage files calls the logger itself". Then ca9ad5ee gave
+ * [`src/labels.ts`](../src/labels.ts) an info line about its checkpoints — a
+ * good line to have — and this file went red for a leak that had not happened,
+ * failing for a reason its own prose said was impossible. A stage module is
+ * free to log. What this file needs is that **each step reported its outcome
+ * exactly once**, which is what a child that died halfway cannot do.
+ *
+ * A leak is still caught either way: the `not.toContain` assertions read the
+ * whole of stdout, so an extra line carrying the sentinel fails them whether or
+ * not anything counts it.
  */
-const EXPECTED_LINES = STAGES.length + 1;
+const EXPECTED_STEPS = [...STAGES, "control"] as const;
 
 let stdout = "";
 let stderr = "";
@@ -300,10 +310,34 @@ beforeAll(async () => {
   stdout = child.stdout ?? "";
   stderr = child.stderr ?? "";
 
-  const lines = stdout.split("\n").filter((l) => l.trim() !== "");
-  if (lines.length !== EXPECTED_LINES) {
+  /* The census: how many lines each `step` name accounted for. A line with no
+     `step` field is some other component logging, which is allowed and ignored
+     here — it is still read by the leak assertions below. */
+  const census = new Map<string, number>();
+  for (const line of stdout.split("\n").filter((l) => l.trim() !== "")) {
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      throw new Error(
+        `the child printed a line that is not JSON, so the logger is not the only writer` +
+          `\n--- the line ---\n${line}` +
+          `\n--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}`,
+      );
+    }
+    const step = parsed.step;
+    if (typeof step === "string") census.set(step, (census.get(step) ?? 0) + 1);
+  }
+
+  const wrong = [
+    ...EXPECTED_STEPS.filter((s) => census.get(s) !== 1).map((s) => `${s}: ${census.get(s) ?? 0}`),
+    ...[...census.keys()]
+      .filter((s) => !EXPECTED_STEPS.includes(s as (typeof EXPECTED_STEPS)[number]))
+      .map((s) => `${s}: unexpected`),
+  ];
+  if (wrong.length > 0) {
     throw new Error(
-      `expected ${EXPECTED_LINES} log lines from the child, got ${lines.length}` +
+      `expected exactly one log line for each of ${EXPECTED_STEPS.join(", ")}; got ${wrong.join("; ")}` +
         `\n--- fixture ${dir}: ${(await readdir(dir)).join(", ")}` +
         `\n--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}`,
     );

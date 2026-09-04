@@ -180,6 +180,7 @@ import type {
   Meta,
   StageState,
   StepName,
+  Visibility,
 } from "../types.js";
 import { MAX_PURPOSE_CHARS } from "../types.js";
 import { WPM } from "../reading-time.js";
@@ -191,13 +192,14 @@ import { LIBRARY_HREF, PROFILE_HREF, carriedSearch, readHref } from "./router.js
 import { SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { EditableTitle, useArticleRename } from "./TitleEditor.js";
-import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
 import { apiFetch, failure, readJson, statusOf } from "./lib/api.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
+import { CARD } from "./card.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { PageContents } from "./PageContents.js";
 
@@ -224,8 +226,10 @@ import { PageContents } from "./PageContents.js";
    bar. */
 const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-space)_+_2rem)]";
 
-/** The card surface, said once. Same tokens as a library card, on purpose. */
-const CARD = "tw:rounded-lg tw:border tw:border-border tw:bg-card";
+/* The card surface, said once — and now said in card.ts, because the sharing
+   card's preview page needs the same string and a second copy of it is a copy
+   that goes stale in the one place screenshots are taken from. */
+
 
 /**
  * A glyph per pipeline stage, so the rows are scannable before they are read.
@@ -300,6 +304,7 @@ export function Metadata({
   slug,
   article,
   onRenamed,
+  onVisibility,
 }: {
   slug: string;
   article: Article;
@@ -311,6 +316,15 @@ export function Metadata({
    * the same reason the masthead's pencil reports upwards too.
    */
   onRenamed: (slug: string, title: string) => void;
+  /**
+   * The reader threw the sharing switch below — handed up for the same reason
+   * `onRenamed` is, and it is the same hazard: the article payload is fetched
+   * once for all three views and never refetched between them, so a fact
+   * changed here goes stale in the reading view's masthead one click away.
+   * `AccessSharing` § `onVisibility` has the long version, including why `null`
+   * is one of the values.
+   */
+  onVisibility: (slug: string, visibility: Visibility | null) => void;
 }) {
   const { meta, tree, arc } = article;
   const stats = useMemo(() => articleStats(article), [article]);
@@ -741,6 +755,7 @@ export function Metadata({
             and a control that can only fail is worse than no control because
             pressing it is how you find out. */}
         <SharingSection
+          onVisibility={onVisibility}
           slug={slug}
           title={meta.title}
           /* **Not `hasShelfRow`**, which is false while the fetch is out and
@@ -908,9 +923,12 @@ function SharingSection({
   title,
   offer,
   sharing,
+  onVisibility,
 }: {
   slug: string;
   title: string;
+  /** Straight through to the card — see `Metadata`'s prop of the same name. */
+  onVisibility: (slug: string, visibility: Visibility | null) => void;
   /** There is a shelf row and we know it — `hasShelfRow` in `Metadata`. */
   offer: boolean;
   /**
@@ -924,7 +942,25 @@ function SharingSection({
   if (!offer) return null;
   return (
     <Section label="Access & sharing">
-      <AccessSharing slug={slug} title={title} sharing={sharing} />
+      {/* **In a card, like every other section on this page**, since
+          2026-09-04. It was the one section whose contents sat straight on the
+          page background — Greg: *"the section should be inside a box like the
+          other sections"* — which read as a stray paragraph rather than as the
+          page's one irreversible control, and left the confirmation panel
+          below it as the only boxed thing here, so the *warning* looked more
+          like a card than the switch did.
+
+          `${CARD} p-4`, matching `ExportSection` rather than "In one
+          sentence"'s `p-5`: both of these are a control with a sentence beside
+          it, and the two sit next to each other. */}
+      <div className={`${CARD} tw:p-4`}>
+        <AccessSharing
+          slug={slug}
+          title={title}
+          sharing={sharing}
+          onVisibility={onVisibility}
+        />
+      </div>
     </Section>
   );
 }
@@ -1391,12 +1427,12 @@ function TechnicalDetails({
             <Tooltip
               placement="top"
               content={
-                <Note>
+                <TipNote>
                   The last part of this article's web address — the `/read/…/` in your address
                   bar. Made from the title when you added it, plus a few random letters so two
                   articles with the same name never collide. Renaming the article does not change
                   it.
-                </Note>
+                </TipNote>
               }
             >
               <button
@@ -1412,11 +1448,11 @@ function TechnicalDetails({
               <Tooltip
                 placement="top"
                 content={
-                  <Note>
+                  <TipNote>
                     Where this article's data physically sits. There is nothing to do with it —
                     except quote it if you are reporting a problem with this particular article,
                     which is the one thing it is good for.
-                  </Note>
+                  </TipNote>
                 }
               >
                 <button
@@ -1436,13 +1472,13 @@ function TechnicalDetails({
               <Tooltip
                 placement="top"
                 content={
-                  <Note>
+                  <TipNote>
                     A checksum of the PDF exactly as we received it. Two files with the same
                     fingerprint are the same document, whatever they have been named or wherever
                     they were downloaded from.
                     <br />
                     <span className="tw:font-mono tw:break-all">{rawSha256}</span>
-                  </Note>
+                  </TipNote>
                 }
               >
                 {/* Twelve characters is enough to recognise one and far too
@@ -1838,12 +1874,12 @@ function Missed({ meta }: { meta: Meta }) {
       <Tooltip
         placement="top"
         content={
-          <Note>
+          <TipNote>
             There was not enough of the PDF's own text to check the transcription
             against — a scan is pictures of pages, and what little text a scan does carry
             is usually the digitising library's rather than the author's. Nobody and
             nothing has verified this one. Open the original if a line reads oddly.
-          </Note>
+          </TipNote>
         }
       >
         <button
@@ -1867,7 +1903,7 @@ function Missed({ meta }: { meta: Meta }) {
       <Tooltip
         placement="top"
         content={
-          <Note>
+          <TipNote>
             {/* **What was compared, not why the rest was not.** This
                 said "the other N had no hidden text, so nothing could
                 check them", and that is not what `pagesChecked` counts:
@@ -1888,7 +1924,7 @@ function Missed({ meta }: { meta: Meta }) {
                 }`
               : `We compared our transcription against the PDF's own hidden text, and ${found(meta.recall)}% of it turned up in what the model wrote.`}{" "}
             Compare a page against the original if a passage reads oddly.
-          </Note>
+          </TipNote>
         }
       >
         <button
@@ -2059,7 +2095,7 @@ function Stat({
   tip: string;
 }) {
   return (
-    <Tooltip placement="top" content={<Note>{tip}</Note>}>
+    <Tooltip placement="top" content={<TipNote>{tip}</TipNote>}>
       <div className={`${CARD} tw:p-4 tw:cursor-help tw:transition-colors tw:hover:border-highlight/40`}>
         <div className="tw:mb-2 tw:flex tw:items-center tw:gap-2">
           <Chip icon={Icon} />
@@ -2073,26 +2109,6 @@ function Stat({
   );
 }
 
-/**
- * The text inside a plain tooltip.
- *
- * `.tooltip` styles the panel and deliberately sets no font-size, so a bare
- * string inherits `body`'s 1rem — noticeably bigger than every other tooltip in
- * the app, all of which are on classed content (`.tip-crumb`, `.tip-search`,
- * `.tip-soon`). Sized here rather than by adding a rule to styles.css, which
- * would be a fifth spelling of the same thing.
- *
- * `foreground/85` and NOT `ink-soft`, which is what the eye wants and what the
- * other tooltips use: `--ink-soft` is declared in styles.css but is not one of
- * the four reading-view names bridged into Tailwind's theme (tailwind.css), so
- * `tw:text-ink-soft` compiles to nothing at all and the text would simply
- * inherit — no error, no missing class, just the wrong colour.
- */
-function Note({ children }: { children: ReactNode }) {
-  return (
-    <span className="tw:block tw:text-xs tw:leading-relaxed tw:text-foreground/85">{children}</span>
-  );
-}
 
 /**
  * The small square an icon sits in.
@@ -2228,7 +2244,7 @@ function Wrote({ at, bytes, done }: { at: string | null; bytes: number | null; d
     <Tooltip
       placement="top"
       content={
-        <Note>
+        <TipNote>
           {exactly(when)}
           {bytes !== null && ` · ${weight(bytes)} on disk`}
           <br />
@@ -2241,7 +2257,7 @@ function Wrote({ at, bytes, done }: { at: string | null; bytes: number | null; d
           {bytes === null
             ? "When this stage last finished."
             : "When the newest of this stage's files was written. A copy or a fresh checkout resets that, so it says when — never what from."}
-        </Note>
+        </TipNote>
       }
     >
       {/* A button, not a span, because everything in this tooltip is only in
@@ -2307,10 +2323,10 @@ function Fetched({ iso, lead }: { iso: string | undefined; lead: boolean }) {
          its own gets read as "written 3 days ago" — this is the date we took
          our copy, and the page may have changed underneath it since. */
       content={
-        <Note>
+        <TipNote>
           {exactly(when)} — when we took our copy. The article may have changed on its own site
           since.
-        </Note>
+        </TipNote>
       }
     >
       <span className="tw:cursor-help">

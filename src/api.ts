@@ -305,6 +305,14 @@ export async function loadArticle(slug: string): Promise<Article> {
        required on `Article` and the omission this guards against is silent —
        see the field's note in src/types.ts. `readJson` answers `null` for a
        file that is not there, and the reader's third state is `undefined`. */
+    /* **No `visibility`, and the absence is the answer.** `data/` is one
+       directory per slug with nowhere to record that a document is shared —
+       `visibilityStore.set` refuses with a 501 on this store
+       (src/store/index.ts) — so this store cannot say who may read the
+       article, and saying `private` would be a claim it is in no position to
+       make. The masthead's mark draws nothing rather than a lock. Same
+       reasoning as `articleMetadata`'s missing `sharing` block below.
+       docs/plans/260904b-sharing-mark-on-the-article-masthead.md. */
     return { meta, blocks, tree, ...(arc ? { arc } : {}), assets };
   }
   // Tagged 404 rather than left for routes.ts to infer. Inferring it meant

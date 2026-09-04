@@ -41,8 +41,8 @@
  * anyway (src/routes.ts § parseVisibilityRequest), so the box is a statement
  * the owner makes rather than a gate the client keeps.
  */
-import { useEffect, useState } from "react";
-import { Check, Copy, Globe, Lock } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Copy, Globe, Link2Off, Lock } from "lucide-react";
 
 import type { StepName } from "../types.js";
 import {
@@ -62,17 +62,28 @@ import {
   NOT_SHARED_HEADING,
   NOT_SHARED_NOTE,
   SHARING_WRITE_UNCERTAIN,
+  SHARING_COPY_TIP,
+  SHARING_OPEN_TIP,
+  SHARING_STOP_TIP,
   sharingConfirmBody,
   sharingInFlight,
 } from "../messages.js";
-import type { ArticleSharing, PublicArtefacts, VisibilityState } from "../types.js";
+import type {
+  ArticleSharing,
+  PublicArtefacts,
+  Visibility,
+  VisibilityState,
+} from "../types.js";
+import { Button } from "./components/ui/button.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import {
   sharedInventory,
   type InventoryItem,
   type SharedInventory,
 } from "./shared-inventory.js";
+import { exactly } from "./relative-time.js";
 import { readHref } from "./router.js";
+import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 
 /**
  * What the card has learned since the page loaded — see `card` in the component
@@ -197,9 +208,36 @@ export function AccessSharing({
   slug,
   title,
   sharing,
+  onVisibility,
 }: {
   slug: string;
   title: string;
+  /**
+   * **The switch was thrown — tell whoever else is drawing this fact.**
+   *
+   * The reading view's masthead draws the same fact from the same article
+   * payload (`Article.visibility`, src/web/Masthead.tsx § `SharingMark`), and
+   * that payload is fetched once for all three of an article's views and is
+   * **not** refetched when the view changes (`ArticlePage` in App.tsx says why:
+   * stepping out to this page and back should be free rather than 150KB and a
+   * spinner). So without this, publishing an article here and pressing Back
+   * left a lock sitting over a document anyone with the link could read — the
+   * one sentence this control must never get wrong, arriving by the back door
+   * of a payload nobody thought of as stale.
+   *
+   * Reported upwards rather than written into a store, exactly as the rename
+   * beside it is: `OwnedArticle` owns the payload and layers this over it.
+   *
+   * **`null` means *we no longer know*, and it is not a nicety.** A write that
+   * failed after the server committed leaves this card in `WRITE_UNCERTAIN` —
+   * see `set` below — and the honest thing for every other view of the fact is
+   * to stop claiming one. The masthead draws nothing for an absent
+   * `visibility`, which is exactly that sentence.
+   *
+   * Optional so the card can still be mounted on its own — tests/access-sharing.test.tsx
+   * does — without every caller inventing a no-op.
+   */
+  onVisibility?: ((slug: string, visibility: Visibility | null) => void) | undefined;
   /**
    * From the page's own metadata fetch. `undefined` covers both *not landed
    * yet* and *this store cannot say*, and the card draws the same thing for
@@ -262,6 +300,41 @@ export function AccessSharing({
    */
   const inventory = sharing?.available ? sharedInventory(sharing.available) : undefined;
 
+  /**
+   * **Is this card still on screen** — the guard on every report upwards.
+   *
+   * A `PUT` outlives the card that sent it: the owner can press Share and leave
+   * for the article before the answer lands, and this component then resolves
+   * its promise from inside a tree React has already thrown away. Its own
+   * `setActed` is harmless there (React drops it), but `onVisibility` is not —
+   * it writes into the *parent*, which is still mounted, and the parent has no
+   * way to tell a live answer from a dead one.
+   *
+   * That is the out-of-order case, and it is not hypothetical: publish, leave,
+   * come back to this page, unpublish, and if the first request was slow enough
+   * its `public` lands **after** the second's `private` and the masthead ends
+   * up wearing a globe over a private article. Last writer wins is exactly the
+   * wrong rule when the writers are two requests about one document.
+   *
+   * So a dead card says nothing at all, and it does not need to: it has already
+   * reported `null` at the moment it started writing (see `report` below), so
+   * whatever is drawing this fact elsewhere is already saying *we cannot say*
+   * rather than something stale. Silence is a state this design has; a wrong
+   * answer is not. GPT Sol, finding 2, 2026-09-04.
+   *
+   * Set in the effect body rather than only cleared in its cleanup, because
+   * `<StrictMode>` mounts, unmounts and remounts every component in
+   * development — a ref only ever set to `false` would leave every card in the
+   * app silently dead. docs/reusable/silent-success.md.
+   */
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
+
   /* One article's answer must not survive into another's. `Metadata` is keyed
      on the slug so this component remounts anyway; the effect is what keeps
      that true if the key ever moves. */
@@ -273,12 +346,55 @@ export function AccessSharing({
     setError(null);
   }, [slug]);
 
+  /**
+   * **Tell the rest of the page, or say nothing** — every report goes through
+   * here, and there is no second spelling of the guard.
+   *
+   * `null` is *we no longer know*, which every other view of this fact draws as
+   * no claim at all rather than as a stale one.
+   */
+  function report(visibility: Visibility | null): void {
+    if (live.current) onVisibility?.(slug, visibility);
+  }
+
+  /**
+   * **What the page already knew, handed upwards once.**
+   *
+   * The reading view's payload carries `Article.visibility` from the moment it
+   * was fetched and is never refetched between an article's views — so after a
+   * write this card could not confirm, the masthead goes on drawing nothing
+   * even though *this* page has since asked the server again and been told.
+   * `GET /api/metadata/:slug` is a validated read, and it is better information
+   * than a payload from ten minutes ago. GPT Sol, finding 3, 2026-09-04.
+   *
+   * **Only while this card has done nothing**, which is what keeps it in order:
+   * `acted` goes to `pending` synchronously at the first press, so a slow
+   * metadata read that lands mid-write cannot report the state from before it
+   * over the top of the write's own answer.
+   *
+   * The parent ignores a report that changes nothing, so the common case — open
+   * the page, read the same value the payload already had, go back — costs no
+   * re-render. src/web/App.tsx § `OwnedArticle`.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `report` is a fresh closure every render over a ref and a prop that do not change; listing it would re-run this on every render, and what it must fire on is what the server said and whether this card has acted
+  useEffect(() => {
+    if (acted !== null || !sharing) return;
+    report(sharing.visibility);
+  }, [sharing, acted]);
+
   async function set(to: "private" | "public"): Promise<void> {
     /* The pending state replaces the buttons rather than disabling them, so a
        second press is not merely refused — there is nothing there to press.
        Sol asked for a double-click test; this is the shape that makes one
        pass. */
     setActed({ kind: "pending", to });
+    /* **Before the request, not only after it.** Until the answer arrives
+       nobody knows what is true — the server may have committed already — and
+       a masthead still drawing the state from before the press is a lock over
+       a document that may by now be public. The press is the moment the old
+       answer stops being trustworthy, not the moment the new one lands. GPT
+       Sol, finding 1, 2026-09-04. */
+    report(null);
     setError(null);
     try {
       const res = await apiFetch(`/api/article/${encodeURIComponent(slug)}/visibility`, {
@@ -304,6 +420,12 @@ export function AccessSharing({
          we cannot parse is not an answer; it is the absence of one. */
       const state = asVisibilityState(await readJson<unknown>(res));
       setActed(state ? { kind: "known", state } : WRITE_UNCERTAIN);
+      /* **The server's answer, not `to`** — the same rule the line above
+         follows, and for the same reason: a 200 is not evidence a field was
+         honoured, and an unparseable one is the absence of an answer rather
+         than the value we asked for. `null` in that case, which every other
+         view of this fact renders as *we cannot say*. */
+      report(state ? state.visibility : null);
       setConfirming(false);
       setRights(false);
     } catch (e) {
@@ -317,6 +439,10 @@ export function AccessSharing({
          load said, which is now exactly the stale answer that must not be
          drawn. */
       setActed(WRITE_UNCERTAIN);
+      /* And the same sentence to everybody else drawing this fact. A failed
+         request is not proof nothing was written, so the masthead must stop
+         claiming either state rather than keep the one from before the write. */
+      report(null);
     }
   }
 
@@ -334,10 +460,31 @@ export function AccessSharing({
         </p>
       ) : (
         <>
-          <p className="tw:m-0 tw:mb-1 tw:flex tw:items-center tw:gap-2 tw:text-ink">
-            {shared ? <Globe size={14} /> : <Lock size={14} />}
-            {shared ? SHARING_ON : SHARING_OFF}
-          </p>
+          {/* **The state, and then when it started being the state.** The
+              timestamp moved up here on 2026-09-04, from under the copy row: it
+              is the second half of the sentence above it, and it was separated
+              from it by the one control that has nothing to do with when.
+
+              `exactly` rather than `toLocaleString`, which drew *"9/1/2026,
+              10:30:00 AM"* — a seconds field nobody needs and a month/day order
+              half the world reads backwards. relative-time.ts already owns this
+              spelling and four other places use it. */}
+          <div className="tw:mb-3 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-0.5">
+            {/* `items-start` with the glyph nudged onto the first line's
+                centre, rather than `items-center`: at a phone's width this
+                sentence wraps to two lines, and a centred padlock then floats
+                in the gutter beside the *middle* of them. `shrink-0` because a
+                flex child with an intrinsic size is otherwise fair game. */}
+            <p className="tw:m-0 tw:flex tw:items-start tw:gap-2 tw:text-ink">
+              <span className="tw:mt-[3px] tw:shrink-0">
+                {shared ? <Globe size={14} /> : <Lock size={14} />}
+              </span>
+              {shared ? SHARING_ON : SHARING_OFF}
+            </p>
+            {shared && publicAt && (
+              <p className="tw:m-0 tw:text-xs tw:text-ink-faint">Shared since {exactly(publicAt)}.</p>
+            )}
+          </div>
 
           {/* **No prose sentence about what a shared link carries, in either
               state, since 2026-09-03.** It used to be drawn here, above this
@@ -360,20 +507,19 @@ export function AccessSharing({
           {shared && (
             <>
               <CopyLink link={link} />
-              {publicAt && (
-                <p className="tw:m-0 tw:mb-3 tw:text-xs tw:text-ink-faint">
-                  Shared since {new Date(publicAt).toLocaleString()}.
-                </p>
-              )}
               <Inventory inventory={inventory} />
               <p className="tw:m-0 tw:mb-3 tw:text-ink-faint">{SHARING_CANNOT_UNRING}</p>
-              <button
-                type="button"
-                className="linky"
-                onClick={() => void set("private")}
-              >
-                Stop sharing
-              </button>
+              <Tooltip placement="bottom" content={<TipNote>{SHARING_STOP_TIP}</TipNote>}>
+                {/* `outline` and **not** `destructive`, which is the tint the
+                    eye reaches for on a button that takes something away. It
+                    would be the wrong sentence: this is the safe direction, and
+                    the destructive red on this page belongs to Delete, which is
+                    the one control here that loses work. */}
+                <Button type="button" variant="outline" size="sm" onClick={() => void set("private")}>
+                  <Link2Off size={14} />
+                  Stop sharing
+                </Button>
+              </Tooltip>
             </>
           )}
 
@@ -387,10 +533,46 @@ export function AccessSharing({
             <p className="tw:m-0 tw:text-ink-faint">{SHARING_INVENTORY_UNKNOWN}</p>
           )}
 
+          {/* **A button that looks like one, and says what it does before it
+              does it.** Greg, 2026-09-04: *"the Share button should visibly be
+              a button with rich tooltip"*.
+
+              It read as a line of plain text until then, and the reason is
+              worth knowing because four other buttons in this app still have
+              it: `className="linky"` styles **nothing here**. That class is
+              scoped — `.controls button.linky`, `.cmt-dialog button.linky`,
+              `.chat-dialog button.linky`, and styles.css says so in as many
+              words (*"a shape, not a shared class"*). This card is in none of
+              those three, so the class matched no rule at all and the button
+              fell back to the reset: no border, no padding, no affordance. A
+              class that silently does nothing looks exactly like one that
+              works — docs/reusable/silent-success.md.
+
+              `outline`, not the orange `default`: this button does not share
+              anything, it opens the question. The primary is on `Share it`
+              inside the confirmation, which is the press that does. */}
           {!shared && inventory && !confirming && (
-            <button type="button" className="linky" onClick={() => setConfirming(true)}>
-              Share with anyone who has the link…
-            </button>
+            <Tooltip placement="bottom" content={<TipNote>{SHARING_OPEN_TIP}</TipNote>}>
+              {/* **Allowed to wrap, which `Button` on its own is not.** The
+                  shared component ships `whitespace-nowrap` and a fixed height,
+                  and this is the one button in the app with a sentence for a
+                  label: at a 320px viewport it comes out around 279px inside a
+                  card with about 238px of room, so it would push the page
+                  sideways. The old unstyled control wrapped, so this would have
+                  been a regression rather than an old bug. Measured by GPT Sol,
+                  2026-09-04; 390px, which is where I checked first, has the
+                  room and hides it. */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="tw:h-auto tw:min-h-8 tw:whitespace-normal tw:py-1.5 tw:text-left"
+                onClick={() => setConfirming(true)}
+              >
+                <Globe size={14} />
+                Share with anyone who has the link…
+              </Button>
+            </Tooltip>
           )}
 
           {!shared && confirming && (
@@ -410,10 +592,15 @@ export function AccessSharing({
                 />
                 <span>{SHARING_RIGHTS_CONFIRM}</span>
               </label>
-              <div className="tw:flex tw:gap-3">
-                <button
+              <div className="tw:flex tw:items-center tw:gap-2">
+                {/* **The primary, and the only one on this card.** It is the
+                    press that publishes, so it is the press that gets the
+                    orange; everything else here is `outline` or `ghost`. The
+                    disabled state is `Button`'s own `opacity-50`, which reads
+                    as not-yet rather than as broken. */}
+                <Button
                   type="button"
-                  className="linky"
+                  size="sm"
                   /* The server refuses a publish without it too — this is the
                      reader being told why the button is not live yet, in the
                      one place where a silent refusal would be baffling.
@@ -424,18 +611,20 @@ export function AccessSharing({
                   disabled={!rights}
                   onClick={() => void set("public")}
                 >
+                  <Globe size={14} />
                   Share it
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className="linky"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => {
                     setConfirming(false);
                     setRights(false);
                   }}
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -483,29 +672,58 @@ export function AccessSharing({
  * list assembled from a guess is the one thing worse here than no list: it is
  * a specific, checkable, wrong claim about what a stranger is about to read.
  *
- * The sentence is on `title` rather than beside the label because two dozen of
+ * The sentence is on a tooltip rather than beside the label because two dozen of
  * them stacked would bury the thing the owner came here to read — Greg asked for
  * *"tooltips if needed"* and this is where it is needed.
  *
- * **A known gap, stated rather than glossed.** It is also the `aria-label`, so a
- * screen reader gets it — but a sighted keyboard or touch user gets neither, and
- * an earlier draft of this comment claimed otherwise. `title` has no focus or
- * tap disclosure in any browser. The honest fix is a real disclosure component,
- * which this app does not have; until then the chips are a *skimmable index* and
- * the three headings and their notes carry every claim an owner has to be able
- * to read. GPT Sol's review, 2026-09-02, and it is in the plan as an open item.
+ * **Where each reader gets that sentence, as of 2026-09-04**, because it is
+ * three different mechanisms and the old one served only two thirds of one:
+ *
+ * | reader | how |
+ * |---|---|
+ * | pointer | the `Tooltip`, on hover |
+ * | touch | the same, on the hover a tap synthesises — measured in Chrome, not assumed |
+ * | screen reader | an `sr-only` span in the chip, permanently in the tree |
+ * | sighted keyboard, no screen reader | **still nothing — see below** |
+ *
+ * It was a `title` attribute, which is the *worst* of these: a screen reader
+ * read it (it was the `aria-label` too), and nobody else without a mouse got
+ * anything, because `title` has no focus or tap disclosure in any browser. The
+ * comment here used to say the honest fix was a real disclosure component
+ * *"which this app does not have"* — which was simply wrong when it was
+ * written: `Tooltip.tsx` is one, six other panels use it, and `Metadata.tsx`'s
+ * own six `Stat` cards use it four sections up this same page.
+ *
+ * **The last row is a real gap, left open on purpose.** Two drafts tried to
+ * close it by putting the chips in the tab order — `tabIndex={0}`, then a
+ * `<button>` — and both were worse than the gap: twenty-three inert controls
+ * standing between a keyboard user and the rights checkbox they came to tick.
+ * The shape that would close it honestly is one *"what are these?"* disclosure
+ * per list, expanding the chips into label-and-sentence rows: three tab stops
+ * instead of twenty-three, and every one of them does something. That is a new
+ * interaction rather than a polish, so it is Greg's to decide.
+ *
+ * One `TooltipGroup` per card, so sweeping the row is instant after the first —
+ * the same reasoning as `Metadata.tsx`'s "At a glance", and the same delays.
  */
 function Inventory({ inventory }: { inventory: SharedInventory | undefined }) {
   if (!inventory) return null;
   const { shared, ifBuilt, withheld } = inventory;
   return (
-    <div className="tw:mb-3 tw:flex tw:flex-col tw:gap-2">
-      <InventoryList heading={SHARED_HEADING} items={shared} tone="out" />
-      {ifBuilt.length > 0 && (
-        <InventoryList heading={SHARED_IF_BUILT_HEADING} note={SHARED_IF_BUILT_NOTE} items={ifBuilt} tone="out" />
-      )}
-      <InventoryList heading={NOT_SHARED_HEADING} note={NOT_SHARED_NOTE} items={withheld} tone="kept" />
-    </div>
+    <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+      {/* `gap-3.5`, not `gap-2`: three headings each followed by a wrapping row
+          of chips, and at two the last chip of one list sat closer to the next
+          list's heading than that heading sat to its own chips — so the eye
+          grouped them wrongly, on the one list where which column a thing is in
+          is the entire point. */}
+      <div className="tw:mb-3 tw:flex tw:flex-col tw:gap-3.5">
+        <InventoryList heading={SHARED_HEADING} items={shared} tone="out" />
+        {ifBuilt.length > 0 && (
+          <InventoryList heading={SHARED_IF_BUILT_HEADING} note={SHARED_IF_BUILT_NOTE} items={ifBuilt} tone="out" />
+        )}
+        <InventoryList heading={NOT_SHARED_HEADING} note={NOT_SHARED_NOTE} items={withheld} tone="kept" />
+      </div>
+    </TooltipGroup>
   );
 }
 
@@ -529,24 +747,49 @@ function InventoryList({
       </p>
       {note && <p className="tw:m-0 tw:mt-0.5 tw:text-xs tw:text-ink-faint">{note}</p>}
       <ul className="tw:m-0 tw:mt-1 tw:flex tw:list-none tw:flex-wrap tw:gap-x-1.5 tw:gap-y-1 tw:p-0">
+        {/* **The chip is not a control, and two drafts got that wrong in
+            opposite directions.** First `<li tabIndex={0}>`, which biome
+            refuses (`a11y/noNoninteractiveTabindex`); then a `<button>`, which
+            biome accepts and GPT Sol rejected for a better reason — a button
+            promises that Enter and Space *do* something, and this one did
+            nothing. Twenty-three of those, in the confirmation, sitting in the
+            tab order in front of the rights checkbox: a keyboard user would
+            have had to pass every one of them to reach the irreversible press.
+
+            So the chip is a plain list item again, and what it gained is the
+            `sr-only` span below.
+
+            `keepSide`, for the reason `Tooltip` spells out: these are rows of
+            triggers, and a card thrown onto the cross axis lands on top of the
+            chips the reader is about to hover. `cursor-help` rather than the
+            dotted underline the `Stat` cards use, which would be too much at
+            this size on two dozen at once. */}
         {items.map((item) => (
-          <li
-            key={item.key}
-            title={item.detail}
-            aria-label={`${item.label} — ${item.detail}`}
-            className={`tw:rounded tw:border tw:px-1.5 tw:py-0.5 tw:text-xs ${
-              tone === "out"
-                ? "tw:border-rule tw:text-ink"
-                /* Muted, and **not struck through**, which the first draft was.
-                   Twelve struck-out chips read as twelve things that have gone
-                   wrong; the heading and the padlock beside it already say what
-                   this column is, and saying it a third time in the type is
-                   what turns a list into a warning. */
-                : "tw:border-rule tw:text-ink-faint"
-            }`}
-          >
-            {item.label}
-          </li>
+          <Tooltip key={item.key} placement="top" keepSide content={<TipNote>{item.detail}</TipNote>}>
+            <li
+              className={`tw:cursor-help tw:rounded tw:border tw:px-1.5 tw:py-0.5 tw:text-xs tw:transition-colors tw:hover:border-highlight/50 ${
+                tone === "out"
+                  ? "tw:border-rule tw:text-ink"
+                  /* Muted, and **not struck through**, which the first draft was.
+                     Twelve struck-out chips read as twelve things that have gone
+                     wrong; the heading and the padlock beside it already say what
+                     this column is, and saying it a third time in the type is
+                     what turns a list into a warning. */
+                  : "tw:border-rule tw:text-ink-faint"
+              }`}
+            >
+              {item.label}
+              {/* **The sentence, permanently in the accessibility tree** — the
+                  half of this that a `title` did badly and a tooltip alone does
+                  not do at all. `useRole` gives the panel an `aria-describedby`
+                  only while it is *open*, and a screen-reader user moving by
+                  virtual cursor never opens it, so the detail could simply
+                  never be announced. `InventoryItem.detail`'s contract says the
+                  sentence reaches a screen reader (shared-inventory.ts), and
+                  this is the line that keeps it true. GPT Sol, 2026-09-04. */}
+              <span className="tw:sr-only"> — {item.detail}</span>
+            </li>
+          </Tooltip>
         ))}
       </ul>
     </div>
@@ -583,23 +826,26 @@ function CopyLink({ link }: { link: string }) {
         className="tw:min-w-0 tw:flex-1 tw:rounded tw:border tw:border-rule tw:bg-background tw:px-2 tw:py-1 tw:font-mono tw:text-xs tw:text-ink"
         aria-label="The link to share"
       />
-      <button
-        type="button"
-        className="linky"
-        onClick={() => {
-          if (!navigator.clipboard) return;
-          navigator.clipboard
-            .writeText(link)
-            .then(() => {
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1500);
-            })
-            .catch(() => setCopied(false));
-        }}
-      >
-        {copied ? <Check size={13} /> : <Copy size={13} />}
-        {copied ? " Copied" : " Copy"}
-      </button>
+      <Tooltip placement="bottom" content={<TipNote>{SHARING_COPY_TIP}</TipNote>}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            if (!navigator.clipboard) return;
+            navigator.clipboard
+              .writeText(link)
+              .then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1500);
+              })
+              .catch(() => setCopied(false));
+          }}
+        >
+          {copied ? <Check size={13} /> : <Copy size={13} />}
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </Tooltip>
     </div>
   );
 }

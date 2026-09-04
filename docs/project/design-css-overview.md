@@ -285,6 +285,27 @@ reset that is present, documented, and covers a minority of what it names. **The
 have caught it is one line in a console** — count the buttons whose computed `border-style` is
 neither `none` nor `solid` — and it is worth running after anything that touches this file.
 
+The same block was missing the *font* as well. A UA gives `<button>` its own 13.333px Arial, which
+beats inheritance, and `tw:text-sm` sets a size and leaves the family alone — so every button that
+set no font of its own, shadcn's included, was Arial on a Geist page; "Sign in with Google" on the
+live landing page was, on 2026-09-04. Greg had seen the symptom on the Metadata page the day before
+(*"some of them seem larger than others somehow?"*), and the fix there was **deliberately scoped to
+that page rather than made global**, because forty-odd buttons in `styles.css` set their own font
+and had been laid out against the UA face beneath them. It went global the next day anyway, in
+`base`: that layer sits below `app`, so every one of those rules and every utility still wins, and
+what changes is the buttons that set nothing — which were the bug.
+
+**The global version is two longhands, `font-family` and `font-size`, and not preflight's
+`font: inherit`** — because the shorthand also sets `line-height`, and `body` is 1.55 against a UA
+button's `normal`. That would have made every button setting only a `font-size` about 5px taller;
+there are five such rules and four are on signed-in surfaces, so the shorthand's blast radius was
+the earlier decision's objection made real. The longhands fix both symptoms that were observed —
+the wrong face, and the wrong *size* on a button carrying no type of its own, which is what made
+the shut section headings draw half again the size of their neighbours — and cannot change any
+height. Buttons only; `input`, `select` and `textarea` keep their UA fonts until someone sees a
+wrong one. The console check above gains a second line: count the buttons whose computed
+`font-family` is not the page's.
+
 ### The other half of the same hole: images
 
 Found 2026-08-27, when Greg said the screenshots on the landing page *"look warped somehow"*. They
