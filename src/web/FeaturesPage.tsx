@@ -36,7 +36,8 @@
 import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { Plans } from "./Plans.js";
+import { WebsitePlans } from "./PlanCards.js";
+import { PRICING_HREF } from "./router.js";
 import { SHOTS } from "./shots.js";
 import { SiteFooter } from "./SiteFooter.js";
 import {
@@ -49,12 +50,20 @@ import {
   Tile,
 } from "./SiteBits.js";
 
-export function FeaturesPage() {
+/**
+ * **`signedIn` is threaded in rather than asked for here**, because App.tsx
+ * already knows: this page is mounted from both of its branches, and the two
+ * differ in what the top bar may honestly offer. `/#sign-in` from a signed-in
+ * reader lands on the shelf, which has no such panel — a link that visibly does
+ * nothing, and the older half of GPT Sol's stage 2 finding 1. It is a boolean
+ * and not a reader id because nothing on this page reads a reader's data.
+ */
+export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
   useDocumentTitle(pageTitle({ kind: "features" }));
 
   return (
     <div className="site tw:font-sans tw:text-muted-foreground">
-      <SiteNav here="features" />
+      <SiteNav here="features" signedIn={signedIn} />
 
       <header className="tw:relative tw:overflow-hidden tw:pt-16 tw:pb-2">
         <div className="site-glow" />
@@ -259,10 +268,28 @@ export function FeaturesPage() {
         </div>
 
         {/* [tissue]; "reading is never gated" is Greg, 2026-09-02, and the
-            rule Plans.tsx states in full. */}
+            rule PlanCards.tsx states in full. */}
         <H2 eyebrow="Plans">Simple, and reading is never gated.</H2>
         <div className="site-reveal">
-          <Plans />
+          {/* **Only for a stranger.** Signed in, this row is three facts about
+              an account the reader already has; a *Recommended* eyebrow over
+              the middle one is then either a downgrade or the plan they are on.
+              PlanCards.tsx § `recommended`. */}
+          <WebsitePlans recommend={!signedIn} />
+          {/* [tissue] The same link, in the same shape, as the one under the
+              plans on the landing page — added here on 2026-09-04 when
+              `/pricing` became the page you buy on. These cards carry no
+              buttons (no `action` is passed, on either marketing page), so
+              without this the one page that can take the press is reachable
+              only from the bar and the footer. */}
+          <p className="tw:mt-6 tw:text-sm">
+            <Link
+              href={PRICING_HREF}
+              className="tw:text-highlight tw:no-underline tw:hover:underline"
+            >
+              Pricing, and what a month’s allowance means →
+            </Link>
+          </p>
         </div>
 
         <p className="tw:mt-14 tw:text-sm">

@@ -57,6 +57,7 @@
  */
 import { Clock, TriangleAlert } from "lucide-react";
 import type { BlockId, Dating, Timeline, TimelineEvent, TimelineModality, When } from "../types.js";
+import type { PublicTimeline } from "../public-types.js";
 import type { UseTimeline } from "./useTimeline.js";
 import type { Found } from "./search-hits.js";
 import { BlockNav, nudgeTo } from "./BlockNav.js";
@@ -272,17 +273,38 @@ const GROUPS: { modality: TimelineModality; heading: string | null; blurb: strin
   },
 ];
 
+/**
+ * **The owner's half of this panel** — the read's status, the job that reads
+ * the chronology, and the verbs that spend.
+ *
+ * Absent for a visitor. GlossaryPanel.tsx § GlossaryOwner has the argument for
+ * one panel with its data injected rather than two panels for one list.
+ */
+export type TimelineOwner = UseTimeline;
+
+/**
+ * **Who is reading, and the events they get — one prop, so the two cannot
+ * disagree.**
+ *
+ * The same shape as `QuotesAccess`, down to `owner?: never`, which is
+ * load-bearing rather than tidy: without it the union catches only a fresh
+ * object literal at the call site, so the same object built in a variable first
+ * would typecheck with an owner hook riding inside a visitor's arm.
+ * GlossaryPanel.tsx § GlossaryAccess is the full argument.
+ *
+ * **This replaced a required `owner: UseTimeline` on 2026-09-04**, when
+ * timeline became an artefact a shared link carries. The comment that stood
+ * here said there was no visitor half and that making the mode shareable
+ * "wants a general answer for every mode, not a fifth hand-written table" —
+ * and the general answer turned out to be the one the quotes and the glossary
+ * already had. docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1.
+ */
+export type TimelineAccess =
+  | { kind: "owner"; owner: TimelineOwner }
+  | { kind: "visitor"; timeline: PublicTimeline; owner?: never };
+
 interface Props {
-  /**
-   * **Owner only, and there is no visitor half.**
-   *
-   * `src/web/visitor.ts` gives `timeline` an `owners-only` policy, so a visitor pressing the
-   * button gets a boundary they can read rather than this panel. That is stated
-   * there rather than left to the fail-closed fall-through — see the comment on
-   * the entry. Making it shareable is a follow-up that wants a general answer
-   * for every mode, not a fifth hand-written table.
-   */
-  owner: UseTimeline;
+  access: TimelineAccess;
   /** Which event is open, from `?event=`. */
   eventId: string | null;
   onEvent(id: string | null): void;
@@ -295,7 +317,7 @@ interface Props {
 }
 
 export function TimelinePanel({
-  owner,
+  access,
   eventId,
   onEvent,
   found,
@@ -304,7 +326,14 @@ export function TimelinePanel({
   onJump,
 }: Props) {
   useRenderCount("TimelinePanel");
-  const timeline: Timeline | null = owner.timeline;
+  /* **A visitor has no owner half at all**, rather than a stubbed one: there is
+     no request in flight to have a status, nothing to retry, and no job to
+     start. Every read below is guarded on this being non-null, which is what
+     makes "a visitor cannot start a model call from this panel" a fact about
+     the types rather than a promise in a comment. */
+  const owner = access.kind === "owner" ? access.owner : null;
+  const timeline: Timeline | PublicTimeline | null =
+    access.kind === "owner" ? access.owner.timeline : access.timeline;
   const events = timeline?.events ?? [];
   const years = yearsOf(events);
   /* One year across the whole list, so the rows drop it and the head says it
@@ -318,7 +347,8 @@ export function TimelinePanel({
    *   request the automatic run makes, or the two carry different `work_key`s
    *   and the reader pays twice. useTimeline.ts § `ensure`.
    */
-  const run = (label: string, again = false) => (
+  const run = (label: string, again = false) =>
+    owner === null ? null : (
     <JobProgress
       job={owner.job}
       starting={owner.starting}
@@ -345,11 +375,11 @@ export function TimelinePanel({
         )}
       </div>
 
-      {owner.error && <p className="gloss-error">{owner.error}</p>}
+      {owner?.error && <p className="gloss-error">{owner.error}</p>}
 
-      {owner.status === "loading" && <p className="gloss-quiet">Looking for the timeline…</p>}
+      {owner?.status === "loading" && <p className="gloss-quiet">Looking for the timeline…</p>}
 
-      {owner.status === "none" && (
+      {owner?.status === "none" && (
         <div className="gloss-empty">
           <p>Nobody has read the chronology out of this one yet.</p>
           <p className="gloss-hint">
@@ -360,7 +390,12 @@ export function TimelinePanel({
         </div>
       )}
 
-      {timeline && owner.status === "ready" && (
+      {/* **A visitor's arm has no status to be ready**, and that is the whole
+          of the difference: their timeline arrived inside the page's own
+          payload, so there is nothing to be loading, nothing to have failed and
+          nothing to ask for. src/web/reader-capability.ts § what "visitor"
+          means. */}
+      {timeline && (owner === null || owner.status === "ready") && (
         <>
           {/* Stale wins when both are true, and for the same reason as next
               door: it is the one that makes the passages wrong, and two
@@ -372,7 +407,7 @@ export function TimelinePanel({
               twenty-four temporal expressions are year-less — so a publisher
               re-dating a post changes almost every row here and not one word
               anywhere else. src/timeline.ts § inputFingerprint. */}
-          {owner.stale ? (
+          {owner?.stale ? (
             <div className="gloss-stale">
               <p>
                 <TriangleAlert size={13} />
@@ -380,7 +415,7 @@ export function TimelinePanel({
               </p>
               {run("Read it again", true)}
             </div>
-          ) : owner.outdated ? (
+          ) : owner?.outdated ? (
             <div className="gloss-stale">
               <p>
                 <TriangleAlert size={13} />
@@ -485,7 +520,11 @@ export function TimelinePanel({
               A *stale* empty timeline still gets a button — the banner's own.
               Nothing-to-re-run is a statement about this article, and a stale
               artefact is by definition about a different one. */}
-          {events.length > 0 && !owner.stale && !owner.outdated && (
+          {/* `owner !== null` first, and it is not redundant with `run`
+              returning null: the wrapper `<div className="tl-again">` would
+              otherwise render empty for a visitor, which is a stray gap under
+              the last row rather than nothing. */}
+          {owner !== null && events.length > 0 && !owner.stale && !owner.outdated && (
             <div className="tl-again">{run("Read it again", true)}</div>
           )}
         </>

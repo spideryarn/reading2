@@ -27,8 +27,8 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 **The CLI**
 
 - [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) — all of it: `ls`, `new-claude`,
-  `new-shell`, `resume`, `resume-all`, `kill`, `doctor`, `provision`, `clone`, `push-env`, `resolve`,
-  `ssh`, `tunnel`, `forget-key`. `--help` is long on purpose.
+  `new-shell`, `resume`, `resume-all`, `kill`, `log`, `doctor`, `provision`, `clone`, `setup`,
+  `push-env`, `upload`, `resolve`, `ssh`, `tunnel`, `forget-key`. `--help` is long on purpose.
 - [`scripts/gjd-remote-repo.ts`](../../scripts/gjd-remote-repo.ts) — which repo you are standing in,
   and which directory on the box is that same repo. The box-side inventory script and its
   fail-closed parse live here too. See [Which repo, and where on the box](#which-repo-and-where-on-the-box)
@@ -47,6 +47,12 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
   The file on the box is **built from an allowlist**, never copied; `HETZNER_CLOUD_API_TOKEN` (can
   delete the box) and `SUPABASE_ACCESS_TOKEN` (can delete the production Supabase project) are
   deliberately off it. Tested in [`tests/gjd-remote-env.test.ts`](../../tests/gjd-remote-env.test.ts).
+- [`scripts/gjd-remote-upload.ts`](../../scripts/gjd-remote-upload.ts) — putting a file on the box:
+  where `upload` sends it, the local paths whose basename would escape that folder, and
+  `remoteWriteScript`, the one `sh` recipe behind **every** `writeRemote` — prompts and job scripts
+  included. Tested by running that script for real:
+  [`tests/gjd-remote-upload.test.ts`](../../tests/gjd-remote-upload.test.ts). See
+  [Getting a file onto the box](#getting-a-file-onto-the-box).
 - [`scripts/gjd-remote-mcp.ts`](../../scripts/gjd-remote-mcp.ts) — which MCP servers the box should
   be holding, and whether it is. Split out to be testable without a network:
   [`tests/gjd-remote-mcp.test.ts`](../../tests/gjd-remote-mcp.test.ts).
@@ -194,7 +200,7 @@ Three roots, and they are not the same directory:
 |---|---|---|
 | tool root | Terraform state, `provision.sh`, `remote-smoke-browser.mjs` | this checkout, from the script's own location |
 | local target | the `.env.local` that `push-env` reads | the toplevel of the repo you are in |
-| remote target | the session's cwd, `push-env`'s destination, the `.mcp.json` `doctor` checks | the verified checkout on the box |
+| remote target | the session's cwd, `push-env`'s destination, `upload`'s `uploads/`, the `.mcp.json` `doctor` checks | the verified checkout on the box |
 
 `gjd-remote doctor` is two halves for the same reason: the box's checks belong to no repo, and the
 repo's checks — its checkout on the box, whether the box can still fetch it, its `.mcp.json`, what
@@ -252,6 +258,47 @@ repo and has no status to be admitted against.
 
 The plan is
 [../plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md](../plans/260902h-gjd-remote-works-from-whichever-repo-you-are-in.md).
+
+### Getting a file onto the box
+
+`gjd-remote upload <file>` copies one file from this machine into **`uploads/` under that repo's
+checkout on the box** — a screenshot, a log, a PDF, whatever an agent over there needs and cannot
+fetch for itself. Run it from anywhere inside the repo, so you never have to know or type the box
+path; the destination is resolved by origin like every other per-repo command, and printed before
+anything happens.
+
+- **It requires an identity**, and a `--dir` must be verified as this repo's checkout, exactly as for
+  `push-env`. Here the repo *is* the address, and an upload is as likely to be a credential dump as
+  `.env.local` is — a file meant for one repo's agent landing in another repo's tree is the thing to
+  design out, not to notice afterwards.
+- **It never replaces a file already there**, and the guarantee is `link(2)`'s rather than ours.
+  Two uploads a week apart called `screenshot.png` are the ordinary case, and the second one quietly
+  winning is how the first goes missing with nobody told. `--force` to mean it.
+- **The bytes go down the ssh command's own stdin**, not over scp, and the staging, the size check
+  and the publish are all one remote command:
+  [`remoteWriteScript`](../../scripts/gjd-remote-upload.ts), which is the recipe behind *every*
+  `writeRemote` in the tool and carries the reason for each of its steps. A `Buffer` goes through
+  unconverted — re-encoding a PNG as UTF-8 gives a file of about the right size that nothing will
+  open, and the byte count would then agree with itself about the mangled bytes.
+- **A symlink is followed** — what you meant is the bytes at the end of it — and the real path is
+  printed, because which file you actually sent is not a thing to find out later.
+- **The file lands 0600**, and an `uploads/` this creates lands 0700. The reason this command
+  verifies which repo it is standing in is that an upload may well be a credential dump, and `cat >`
+  makes 0644 by default. An `uploads/` that already existed keeps whatever mode it has.
+- **`uploads/` is ignored** by this repo's `.gitignore`, anchored to the top of the checkout, for the
+  same reason `.claude/worktrees/` is: a dozen agents share the box's checkout and the commit recipe
+  in [AGENTS.md](../../AGENTS.md) leans on the working-tree status being readable. Nothing there is
+  source and nothing there is backed up.
+
+The decisions, the options passed over and the two reviews that reshaped this are in
+[260904c-gjd-remote-upload-puts-a-file-in-the-repo-folder-on-the-box.md](../plans/260904c-gjd-remote-upload-puts-a-file-in-the-repo-folder-on-the-box.md).
+
+The tests **run** that script, against temporary directories, rather than asserting on its text —
+[`tests/gjd-remote-upload.test.ts`](../../tests/gjd-remote-upload.test.ts). That is not ceremony: the
+`-T` on `ln` and `mv` is load-bearing, because with a *directory* at the destination the plain forms
+put the file **inside** it and exit 0, and a test that read the string would only have agreed with
+whatever we already believed. Half of that bug was found by review and half by the test. `-T` is GNU
+coreutils, so on a Mac that suite skips and says so.
 
 ### Setting a repo up: `gjd-remote setup`
 

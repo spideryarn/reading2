@@ -25,25 +25,115 @@
  * awaited cancel afterwards is then a no-op. The test written against it passed
  * with the lock removed, which is worse than no test. What is checked instead is
  * the lock's own contract — see tests/turn-order.test.ts.
+ *
+ * ## It ran on the filesystem store until 2026-09-04, and one contract appears
+ *
+ * The article was a `cp(example/ → data/<slug>/)` and the read-backs went
+ * through `loadThreads`, so every claim here was being made about the store
+ * that is not deployed
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § B). Worse, `loadThreads` reads the data root and never consults the store,
+ * so pinning the flag and leaving it alone would have given `stored()` an empty
+ * array rather than an error — every `status` assertion below reading
+ * `undefined` and the file going green having checked nothing.
+ *
+ * **What the move adds is the store attempt.** `begin` hands back an
+ * `attempt` token and `finish` is fenced on it, so a call some other process's
+ * sweep has already buried cannot land on the retry the reader is watching —
+ * and `pgChatStore.finish` *refuses* a caller that arrives without one
+ * (`MissingAttempt`). The filesystem store has no attempts at all and returns
+ * `undefined` there, so on files the whole thread of that token from `begin`
+ * to `finish` could be cut and nothing in this file would have moved. It is
+ * what the last assertion here — the answer ends up `done` — now depends on.
+ *
+ * ## The mutations, watched rather than reasoned — 2026-09-04
+ *
+ * Two, both aimed at the paragraph above, and the pair splits it in half: the
+ * token being **carried** is tested here, the token being **checked** is not.
+ *
+ * **1 — cut the thread from `begin` to `finish`, and it went red.**
+ * `src/routes.ts`: `const storeAttempt = begun.attempt;` made `const
+ * storeAttempt = undefined as string | undefined;`, so `finish` is called with
+ * no token and `pgChatStore.finish` throws `MissingAttempt`. **1 failed of 3**:
+ * *refuses one aimed at an attempt that has been replaced*, whose last
+ * assertion is the answer ending up `done`. This is the mutation the filesystem
+ * store could not have had — it returns `undefined` there and takes
+ * `undefined`, so the same cut moved nothing.
+ *
+ * **2 — remove the fence itself, and it STAYED GREEN.**
+ * `src/store/pg-chat.ts` § `finish`: `eq(chatMessages.attemptId, attempt),`
+ * deleted from the `where`, leaving only the `status = 'pending'` clause. **3
+ * passed of 3.** The `MissingAttempt` throw above it still fires on an absent
+ * token, which is what mutation 1 reached; what is gone is the check that the
+ * token is *the current one*. Nothing here ever calls `finish` with a stale
+ * attempt: the retry in the second case replaces the row's `attempt_id` and
+ * then the original stream is aborted rather than allowed to land, so the
+ * losing writer never arrives. So *a call some other process's sweep has
+ * already buried cannot land on the retry the reader is watching* is the
+ * mechanism this file rests on and **is not the thing this file proves**.
+ * tests/turn-order.test.ts and tests/store-chat-pg.test.ts are where the fence
+ * itself is held.
+ *
+ * **What neither covers.** Both reach `finish`. `begin`'s own minting of the
+ * attempt is untouched — a `begin` that wrote the same token on every row would
+ * satisfy both runs. Neither says anything about the `status`/`attempt_id`
+ * CHECK pair being cleared together at the end of `finish`, nor about the
+ * `updatedAt` bump deliberately left outside the fence a few lines above it,
+ * which no assertion in this file reads.
  */
-import { cp, rm } from "node:fs/promises";
-import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { handleApi } from "../src/routes.js";
-import { loadThreads } from "../src/chat.js";
-import type { ChatMessage } from "../src/types.js";
-import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const SLUG = "test-chat-live-fixture";
-const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
+/**
+ * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
+ * reads the flag once and imports are hoisted above every statement. Copied
+ * from tests/candidates-route.test.ts, which explains the shape.
+ */
+const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
+  const previous = process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
+  return previous;
+});
+
+import { closeDb } from "../src/db/client.js";
+import { loadEnvLocal } from "../src/env.js";
+import type { ChatMessage } from "../src/types.js";
+import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
+
+loadEnvLocal();
+
 /* The turn needs an article to answer about, and this slug used to get one for
    nothing: an unknown slug fell through to the committed `example/` fixture.
    That fallback is gone (src/api.ts § `candidateDirs`) — it answered a reader's
-   own half-built article with the fixture's prose — so the artefacts are copied
-   in, and the directory is thrown away after each test because the chat file
-   lands in it too. */
-const EXAMPLE = path.resolve(import.meta.dirname, "..", "example");
+   own half-built article with the fixture's prose. It is a seeded Postgres
+   article now, and the conversations written against it are deleted between
+   cases rather than the directory being thrown away. */
+const SLUG = "test-chat-live-fixture";
+
+const { reachable } = await pgReady({
+  suite: "tests/chat-live-turn.test.ts",
+  tables: ["spideryarn.chat_threads", "spideryarn.chat_messages", "spideryarn.revision_blocks"],
+});
+
+const { handleApi } = await import("../src/routes.js");
+const { chatStore, STORE } = await import("../src/store/index.js");
+
+if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
+
+const when = reachable ? describe : describe.skip;
+
+describe("the store these tests are actually talking to", () => {
+  it("is the Postgres one", () => {
+    /* Not gated on the database being up, deliberately: a control that vanishes
+       when Postgres is missing vanishes exactly when it matters. A flag that
+       failed to take looks precisely like this suite working — the filesystem
+       store finishes an answer with no attempt token and says nothing. */
+    expect(STORE).toBe("postgres");
+  });
+});
 
 const frame = (text: string) =>
   `data: ${JSON.stringify({ model: "test/model", choices: [{ delta: { content: text } }] })}\n\n`;
@@ -64,9 +154,32 @@ function hangingBody(): ReadableStream<Uint8Array> {
   });
 }
 
+let article: ScratchArticle | undefined;
+
+beforeAll(async () => {
+  if (!reachable) return;
+  /* `TEST_OWNER`, because `acceptAny` authenticates as that reader and the
+     Postgres reader filters every article by owner. An article seeded as
+     anybody else is invisible and every route below answers 404, which looks
+     exactly like a broken route — `ScratchOptions.ownerId`. */
+  article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
+}, 60_000);
+
+afterAll(async () => {
+  await article?.remove();
+  await closeDb();
+});
+
 beforeEach(async () => {
-  await rm(DIR, { recursive: true, force: true });
-  await cp(EXAMPLE, DIR, { recursive: true });
+  /* Conversations, and nothing a previous case left streaming beside them.
+     Both cases below use the same thread id, so this is what keeps the second
+     from inheriting the first's messages — where the filesystem version threw
+     the whole `data/<slug>/` directory away and got the same reset for free. */
+  if (article) {
+    await asTestOwner(async () => {
+      for (const thread of await chatStore.load(SLUG)) await chatStore.remove(SLUG, thread.id);
+    });
+  }
   process.env.OPENROUTER_API_KEY = "test-key";
   vi.stubGlobal(
     "fetch",
@@ -80,9 +193,8 @@ beforeEach(async () => {
     }),
   );
 });
-afterEach(async () => {
+afterEach(() => {
   vi.unstubAllGlobals();
-  await rm(DIR, { recursive: true, force: true });
 });
 
 interface Call {
@@ -164,8 +276,16 @@ async function streaming(c: Call): Promise<void> {
   throw new Error("nothing streamed");
 }
 
+/**
+ * The conversation as the store has it, read as the reader the request ran as.
+ *
+ * Outside a request `currentOwnerId()` falls back to the environment's owner
+ * and the read fails as a 404 about the fixture, arriving inside an assertion —
+ * see `asTestOwner`. It went through `loadThreads` until 2026-09-04, which
+ * reads `data/<slug>/chat.json` whatever the store is.
+ */
 const stored = async (threadId: string): Promise<ChatMessage[]> =>
-  (await loadThreads(SLUG)).find((t) => t.id === threadId)?.messages ?? [];
+  (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.id === threadId)?.messages ?? [];
 
 /** Stop whatever is still streaming in a conversation. Never throws. */
 async function release(threadId: string): Promise<void> {
@@ -178,7 +298,7 @@ async function release(threadId: string): Promise<void> {
   }
 }
 
-describe("a request that will be refused touches nothing", () => {
+when("a request that will be refused touches nothing", () => {
   it("does not stop the live answer on its way to a 409", async () => {
     const live = call("POST", `/api/chat/${SLUG}`, {
       threadId: "spya-t7r4wz",
@@ -219,7 +339,7 @@ describe("a request that will be refused touches nothing", () => {
   });
 });
 
-describe("a stop names the answer it was pressed on", () => {
+when("a stop names the answer it was pressed on", () => {
   it("refuses one aimed at an attempt that has been replaced", async () => {
     const live = call("POST", `/api/chat/${SLUG}`, {
       threadId: "spya-t7r4wz",

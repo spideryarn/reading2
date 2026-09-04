@@ -174,6 +174,7 @@ function mount(
   act(() => {
     root.render(
       <DiagramPanel
+        access={{ kind: "owner" }}
         slug="s"
         root={tree}
         kind={kind}

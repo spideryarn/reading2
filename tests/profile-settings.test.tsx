@@ -88,6 +88,33 @@ let root: Root;
 const box = (): HTMLInputElement => host.querySelector("input[type=checkbox]") as HTMLInputElement;
 const said = (): string => host.textContent ?? "";
 
+/**
+ * The retry button, **by the words on it rather than by a class name.**
+ *
+ * This was `host.querySelector("button.linky")` until 2026-09-04, and the class
+ * it selected on was styling **nothing**: `.linky` is scoped in styles.css to
+ * `.controls`, `.cmt-dialog`, `.chat-dialog` and `.annotate-dialog`, and this
+ * page is in none of them, so the button rendered as bare text with no
+ * underline (tests/linky-is-scoped.test.ts).
+ *
+ * That is worth a sentence, because this file is part of why nobody noticed:
+ * the class had a second job as a **test hook**, so it looked used and load-
+ * bearing while doing nothing a reader could see. A selector that names the
+ * thing a reader looks for survives the styling changing underneath it.
+ *
+ * **`null` rather than a throw, and that is load-bearing**: one test below ends
+ * by asserting the button is *gone* once a save lands, because a successful
+ * save means there is nothing left to retry. A helper that threw on absence
+ * would turn that assertion into an error.
+ */
+function tryAgain(): HTMLButtonElement | null {
+  return (
+    [...host.querySelectorAll("button")].find((b) =>
+      /Try again|Check again/.test(b.textContent ?? ""),
+    ) ?? null
+  );
+}
+
 function paint(): void {
   /* **The session starts the load, not the mount.** Since 2026-09-03 the answer
      lives in one module-level store and a component only subscribes to it
@@ -230,7 +257,8 @@ describe("the experimental-features switch", () => {
     expect(box().disabled).toBe(true);
 
     answer = () => Promise.resolve({ experimentalSince: null });
-    const retry = host.querySelector("button.linky") as HTMLButtonElement;
+    const retry = tryAgain();
+    if (!retry) throw new Error(`No Try again button to press — the page reads: ${said()}`);
     await act(async () => {
       retry.click();
     });
@@ -251,9 +279,9 @@ describe("the experimental-features switch", () => {
     answer = () => Promise.reject(new Error("offline"));
     paint();
     await settle();
-    const retry = () => host.querySelector("button.linky") as HTMLButtonElement;
+    const retry = tryAgain;
     expect(said()).toContain("Couldn't load");
-    expect(retry().disabled).toBe(false);
+    expect(retry()?.disabled).toBe(false);
 
     held = [];
     answer = () => Promise.resolve({ experimentalSince: null });
@@ -263,7 +291,7 @@ describe("the experimental-features switch", () => {
       snapshot().set(true);
     });
     expect(patched).toEqual([{ experimental: true }]);
-    expect(retry().disabled).toBe(true);
+    expect(retry()?.disabled).toBe(true);
 
     /* And once the save lands the button is **gone**, not merely enabled
        again: a successful save is a current answer from the server, so the load

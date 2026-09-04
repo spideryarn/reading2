@@ -4,19 +4,120 @@
  * Almost nothing here runs a job. Queuing one fetches somebody's website and
  * spends money at two model endpoints, so what is mostly tested is everything
  * that decides *whether* and *in what order* that happens, plus the request
- * parsing that stands between the browser and the filesystem.
+ * parsing that stands between the browser and the database.
  *
- * The exception is at the bottom: it queues a job whose first step cannot reach
- * the network, and exercises the write path around it. That path is where the
- * only bug that ever reached a running server lived — two overlapping writes
- * for one job, which took the dev server down with an unhandled rejection.
+ * The exceptions are the two blocks that drive the real queue — `running a job`
+ * and `advancing a job one step at a time`. Both stay offline and free, and how
+ * they manage that changed with the store; see below.
  *
  * See docs/project/ingest-queue.md, and docs/project/testing.md for why the
  * line is drawn here.
+ *
+ * ## The store, since 2026-09-04
+ *
+ * Stage B of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
+ * This file left `SPIDERYARN_STORE` unset, so *"the queue's arithmetic plus the
+ * write path around the one bug that ever took a running server down"* was
+ * being asserted about `data/_jobs/` — a directory of JSON files and a
+ * process-local `Map`. Production's queue is `spideryarn.jobs`: `enqueue` is an
+ * insert arbitrated by `jobs_active_work` and `jobs_active_slug`, a claim is
+ * `update … where status = 'queued'`, the lease is `lease_expires_at` on the
+ * database's own clock, and `failure_kind` is a column. None of those existed
+ * on the store this file used to run against.
+ *
+ * **Eight of the ten blocks below are pure functions and were never affected**
+ * — `the pipeline`, `orderSteps`, `cascadeForce`, `forceForRetry`,
+ * `parseJobRequest`, `the work key`, `freeSlug` and `slugForRetry`, the last two
+ * injecting their shelf lookup. They are untouched by the conversion and need no
+ * mutation evidence, because there is no store under them to reach.
+ *
+ * ## What the conversion cost, and the one thing it did **not** cost
+ *
+ * It did not cost a fixture. `lockOrCreateArticle` (src/store/pg-revisions.ts)
+ * **creates the article row** when a claim opens a draft for a slug nothing
+ * holds, so a job on a bare slug still runs, still finds no source URL, and
+ * still fails offline at `fetch` — which is how this file has always stayed
+ * free. That is worth writing down because every other queue suite converted in
+ * this stage had to seed an article, and the reason they did is that they walk
+ * *fake* steps whose products the store shape-checks.
+ *
+ * What it did cost:
+ *
+ * - **`data/<slug>/` became `spideryarn.articles`.** Those empty rows are what
+ *   the claim leaves behind, and `afterAll` deletes them by slug — jobs first,
+ *   because `jobs.draft_revision_id` is a foreign key into the revision an
+ *   article delete would be cascading away.
+ * - **`fixtureWithRawJson` became a seeded article**, in the one block that
+ *   needs a step to be genuinely *done* — see that block's own note.
+ * - **Every hand-written id.** `jobs_id_format` refuses a mnemonic whose body
+ *   does not start with a letter, and `jobs.attempt_id` is a real `uuid`, so
+ *   `"spya-someone"` no longer inserts. `mintId()` and `mintAttempt()`.
+ *
+ * ## Every byte assertion, one at a time
+ *
+ * Nothing was dropped silently.
+ *
+ * - **the `afterAll` sweep of `data/_jobs/` through `jobFilesOnDisk`**, and its
+ *   companion `rm` of `data/<slug>/`. **Converted**, to deletes of
+ *   `spideryarn.jobs` and `spideryarn.articles` by slug. Neither was ever an
+ *   assertion — they were careful *because* `data/_jobs/` is a real directory a
+ *   reader may have jobs in, which the private database makes moot.
+ * - **`JOBS_DIR` and `ROOT_DATA`**. **Incidental scaffolding, dropped.** Their
+ *   last reader — the temp-file case — moved to `tests/jobs-fs-adapter.test.ts`
+ *   in the split.
+ * - **`fixtureWithRawJson` writing `data/<slug>/raw.json`, and `RAW_MANIFEST`.**
+ *   **Converted.** *"A slug with a `raw.json`, so `fetch` counts as done"* is
+ *   `article_revisions`' raw columns plus a `revision_step_runs` row saying
+ *   `done`, which is what `hasArtefacts` (src/store/artifacts-pg.ts) asks —
+ *   strictly more than a file's presence. A seeded article has both. The stub
+ *   that had to *return* a manifest now returns the corpus's own, because
+ *   `writeRawSource` refuses one whose `storedSha256` names no `raw_sources`
+ *   row.
+ * - **`pause()` / `pauseForTests`.** **Dropped, by not needing it.** It existed
+ *   to put a settled job back the way a stopped server leaves it, because
+ *   `enqueue`'s pump had already driven it. Both advance cases now insert the
+ *   `queued` row with `pgJobStore.enqueueOrGet` and never start a pump, which is
+ *   the same state without the race — `tests/jobs-walk.test.ts` § `queueJob`
+ *   makes the same choice.
+ * - **`expireLeaseForTests`.** **Converted** to an `update … set lease_expires_at
+ *   = clock_timestamp() - interval '1 second'`, the database's own clock, which
+ *   is the clock `settleExpired` compares against.
+ *
+ * Nothing moved to `tests/jobs-fs-adapter.test.ts` in this pass; the four blocks
+ * that belonged there went in the split that preceded it.
+ *
+ * ## The mutations, one per store-touching block, watched on 2026-09-04
+ *
+ * Recorded above each block rather than here, because a mutation is evidence
+ * about the cases beneath it and reads as decoration anywhere else.
  */
-import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
-import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+
+/**
+ * `SPIDERYARN_STORE=postgres` before **any** import.
+ *
+ * `src/jobs.ts` picks its store **once, at module load** — `const store:
+ * JobStore = STORE === "postgres" ? pgJobStore : fsJobStore` — and imports are
+ * hoisted above every statement in a module, so a plain assignment here would
+ * leave the whole file on the filesystem queue with nothing saying so.
+ * `claimSession` branches on the same constant.
+ */
+const HOISTED = vi.hoisted(() => {
+  const previousStore = process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
+  return { previousStore };
+});
+
+import { randomUUID } from "node:crypto";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { eq, inArray, sql } from "drizzle-orm";
+
+import { closeDb, getDb } from "../src/db/client.js";
+import { articles, jobs as jobsTable, uploads } from "../src/db/schema.js";
+import { loadEnvLocal } from "../src/env.js";
+import { mintId } from "../src/ids.js";
 import {
   advanceJob,
   cascadeForce,
@@ -31,44 +132,54 @@ import {
   workKeyFor,
 } from "../src/jobs.js";
 import {
-  contextPaths,
   DEFAULT_INGEST_STEPS,
   FORCE_ONLY_WHEN_NAMED,
   isStepName,
   STEP_ORDER,
   STEPS,
-  stepIsDone,
 } from "../src/pipeline.js";
+import type { ConvertedProduct } from "../src/pipeline.js";
 import { isSlug, urlKey } from "../src/ingest.js";
-import type { RawManifest } from "../src/fetch.js";
-import type { StepContext } from "../src/pipeline.js";
-import { fsArtifacts } from "../src/store/artifacts-fs.js";
-import {
-  expireLeaseForTests,
-  fsJobStore,
-  pauseForTests,
-  sweepStopped,
-} from "../src/store/jobs-fs.js";
+import type { ArtifactKind, ArtifactParts } from "../src/store/artifacts.js";
 import { mintAttempt } from "../src/store/jobs.js";
+import { STORE } from "../src/store/live.js";
+import { pgJobStore } from "../src/store/pg-jobs.js";
 import { jobWorthRetrying } from "../src/job-failure.js";
 import { parseJobRequest } from "../src/routes.js";
-import { currentOwnerId, DEV_OWNER_ID } from "../src/owner.js";
+import { currentOwnerId, DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
-import { jobFilesOnDisk } from "./helpers/job-files.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { FIXTURE_ROOT } from "./helpers/require-fixture.js";
+import { scratchArticleInPg, SCRATCH_SOURCE, type ScratchArticle } from "./helpers/scratch-article.js";
+
+/* Put the flag back straight after the imports: vitest reuses a worker across
+   files and does not reset `process.env` between them. */
+if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
+
+loadEnvLocal();
+
+const { reachable } = await pgReady({
+  suite: "tests/jobs.test.ts",
+  tables: ["spideryarn.articles", "spideryarn.jobs"],
+});
+
+const when = reachable ? describe : describe.skip;
+
+describe("the store these tests are actually talking to", () => {
+  it("is the Postgres one", () => {
+    /* **Not gated on `reachable`**, deliberately. A flag that failed to take
+       would run the two queue blocks below against `data/_jobs/`, which answers
+       every one of them happily — and the insert arbitration, the claim
+       predicate and the lease that are the point of the conversion would never
+       be consulted. A control that vanishes when the database is missing
+       vanishes exactly when it matters. */
+    expect(STORE).toBe("postgres");
+  });
+});
 
 function step(name: StepName, status: JobStep["status"]): JobStep {
   return { name, label: STEPS[name].label, status };
-}
-
-function job(status: Job["status"], steps: JobStep[]): Job {
-  return {
-    id: "spya-testjb",
-    slug: "a-slug",
-    ownerId: DEV_OWNER_ID,
-    steps,
-    status,
-    createdAt: "2026-08-25T10:00:00.000Z",
-  };
 }
 
 describe("the pipeline", () => {
@@ -328,135 +439,6 @@ describe("forceForRetry", () => {
   });
 });
 
-describe("what a step counts as done", () => {
-  // Mirrors the real split: the data directory and the `output/` HTML are
-  // siblings, not nested. `contextPaths` is what the runner actually uses.
-  /* Annotated rather than inferred, so that the next required field added to
-     StepContext lands as one error here — at the thing that is actually
-     incomplete — instead of as nine identical errors at the call sites. That
-     is how `cacheArticle` arrived: nine copies of the same complaint, none of
-     them next to the object that was missing it. */
-  const ctx: StepContext = {
-    ...contextPaths("nothing-here"),
-    slug: "nothing-here",
-    report: () => {},
-    signal: new AbortController().signal,
-    // Nothing here sends the article anywhere, so there is no prefix to pay for.
-    cacheArticle: false,
-  };
-
-  it("lists every file a step writes, not just the first", () => {
-    // `extract` writes the HTML and meta.json; `hierarchy` writes tree.json,
-    // labels.json and its copy of blocks.json. Checking only one would let a
-    // crash between the writes leave a step reporting itself finished with half
-    // its output — and the stage after it would then consume the missing half.
-    //
-    // `hierarchy` went from two files to three when the nav labels became a second
-    // model pass (docs/plans/260826h-toc-scaling.md). A tree with no labels.json beside
-    // it is a half-run step, not a finished one, which is also why src/hierarchy.ts
-    // writes tree.json last of the three.
-    expect(STEPS.extract.outputs(ctx)).toHaveLength(2);
-    expect(STEPS.hierarchy.outputs(ctx)).toHaveLength(3);
-    expect(STEPS.extract.outputs(ctx).some((f) => f.endsWith("meta.json"))).toBe(true);
-    expect(STEPS.hierarchy.outputs(ctx).some((f) => f.endsWith("blocks.json"))).toBe(true);
-    expect(STEPS.hierarchy.outputs(ctx).some((f) => f.endsWith("labels.json"))).toBe(true);
-  });
-
-  it("checks its own artefact, not the copy a later stage makes", () => {
-    // Stage 3 writes beside the HTML; stage 4 copies into data/. Checking the
-    // data copy here would mean a finished `blocks` step reporting itself
-    // unfinished until `hierarchy` had also run.
-    expect(STEPS.blocks.outputs(ctx)).toContain(ctx.htmlFile.replace(/\.html$/, ".blocks.json"));
-    expect(STEPS.blocks.outputs(ctx).some((f) => f.startsWith(ctx.dir))).toBe(false);
-  });
-
-  it("counts the HTML among what `blocks` writes, because it writes the ids into it", () => {
-    // Stage 3 stamps the ids back into the HTML — that is what makes
-    // `#spya-k3m9qt` an anchor with no JavaScript. Listing only the JSON would
-    // let a blocks-only job find its JSON, skip, and leave the HTML without
-    // the ids the JSON claims are in it.
-    expect(STEPS.blocks.outputs(ctx)).toContain(ctx.htmlFile);
-  });
-
-  it("is not done when none of its files are there", async () => {
-    for (const name of STEP_ORDER) {
-      expect(await stepIsDone(STEPS[name], ctx, fsArtifacts)).toBe(false);
-    }
-  });
-});
-
-describe("sweepStopped", () => {
-  /* Its job changed on 2026-08-26 and these tests changed with it. It used to
-     mark an interrupted job `error` — which was right while one long-lived
-     process was the only thing that could run a job, and became wrong the
-     moment `advanceJob` could pick one back up. A closed tab is a pause, not a
-     failure. See docs/plans/260826s-ingest-resume.md § 2. */
-
-  it("leaves a job the server died under waiting, not failed", () => {
-    const j = job("running", [
-      step("fetch", "done"),
-      step("extract", "done"),
-      step("blocks", "running"),
-      step("hierarchy", "pending"),
-    ]);
-    expect(sweepStopped(j)).toBe(true);
-    expect(j.status).toBe("queued");
-    // No error, and nothing saying it ended — because it has not.
-    expect(j.error).toBeUndefined();
-    expect(j.finishedAt).toBeUndefined();
-  });
-
-  it("puts the interrupted step back to pending, so resuming runs it again", () => {
-    // It did not fail; it did not happen. `error` on that row put a red line
-    // and a Retry button in front of a reader whose ingest was fine.
-    const j = job("running", [
-      step("fetch", "done"),
-      step("extract", "done"),
-      step("blocks", "running"),
-      step("hierarchy", "pending"),
-    ]);
-    sweepStopped(j);
-    expect(j.steps.map((s) => s.status)).toEqual(["done", "done", "pending", "pending"]);
-    expect(j.steps[2]?.error).toBeUndefined();
-  });
-
-  it("leaves the finished steps finished, so resuming skips them", () => {
-    // The half that makes it worth doing at all — though the record is a
-    // convenience here rather than the authority. What actually decides is
-    // `stepIsDone` over the artefacts; see `advanceJob`.
-    const j = job("running", [step("fetch", "done"), step("extract", "running")]);
-    sweepStopped(j);
-    expect(j.steps[0]?.status).toBe("done");
-  });
-
-  it("says nothing changed about a job that was already merely queued", () => {
-    // `queued` is already the right answer for it, so there is nothing to write.
-    const j = job("queued", [step("fetch", "pending")]);
-    expect(sweepStopped(j)).toBe(false);
-    expect(j.status).toBe("queued");
-  });
-
-  it("finishes the cancel the dead process never delivered", () => {
-    /* Stop had been pressed and the abort had not landed. Nothing is going to
-       deliver it now, and resuming a job somebody stopped would be the one
-       interruption they actually noticed. */
-    const j: Job = { ...job("running", [step("fetch", "running")]), cancelling: true };
-    expect(sweepStopped(j)).toBe(true);
-    expect(j.status).toBe("cancelled");
-    expect(j.cancelling).toBeUndefined();
-    expect(j.finishedAt).toBeTypeOf("string");
-  });
-
-  it("leaves a job that already finished exactly as it was", () => {
-    for (const status of ["done", "error", "cancelled"] as const) {
-      const j = job(status, [step("fetch", "done")]);
-      const before = JSON.stringify(j);
-      expect(sweepStopped(j)).toBe(false);
-      expect(JSON.stringify(j)).toBe(before);
-    }
-  });
-});
-
 describe("parseJobRequest", () => {
   it("derives the slug from the URL rather than trusting one", () => {
     const parsed = parseJobRequest({ url: "https://www.noemamag.com/the-mythology-of-conscious-ai/" });
@@ -600,52 +582,80 @@ describe("parseJobRequest", () => {
 });
 
 /* ---------------------------------------------------------------------------
-   The one test that runs the queue for real.
+   The two blocks that run the queue for real.
 
-   It queues a step that cannot succeed — there is no URL for this slug, so
-   `fetch` throws before it reaches the network — which makes it safe: nothing
-   is fetched and no model is called. What it exercises is the machinery around
-   the step, and specifically the write path, which is where the only bug that
-   reached a running server lived.
+   They queue steps that cannot succeed — there is no source URL for these
+   slugs, so `fetch` throws before it reaches the network — which is what makes
+   them safe: nothing is fetched and no model is called. What they exercise is
+   the machinery around the step, and specifically the write path, which is
+   where the only bug that reached a running server lived.
+
+   **The offline guarantee did not survive the move unexamined**, and it is the
+   trap this stage's other conversions all hit. `requireUrl` resolves the URL
+   from the *article row*, so a slug with a seeded article carries whatever
+   address that article's metadata names — the corpus's `paulgraham.com`, which
+   is a live web page. Two answers, and both are used below: the `running a job`
+   block seeds nothing at all, so there is no address to find; the `advancing`
+   block seeds articles and rewrites them to `spideryarn-test.invalid` first.
 --------------------------------------------------------------------------- */
 
-const JOBS_DIR = path.resolve(import.meta.dirname, "..", "data", "_jobs");
 const SLUG = "test-jobs-fixture-no-such-article";
-const ROOT_DATA = path.resolve(import.meta.dirname, "..", "data");
 
 /**
- * Every slug this half of the suite makes an article directory for.
+ * Every slug this half of the suite leaves a row under.
  *
- * `beginStep` does a `mkdir` before the stage runs, so **a job that fails on its
- * first step still leaves `data/<slug>/steps/` behind** — which is most of the
- * jobs here, because failing offline is how they avoid spending money. Left
- * there, those directories are walked by every suite that reads the shelf, and
- * turn up as a mystery extra row in somebody else's assertion.
+ * `lockOrCreateArticle` **creates the article** when a claim opens a draft for a
+ * slug nothing holds (src/store/pg-revisions.ts), so a job that fails on its
+ * first step still leaves an empty `spideryarn.articles` row behind — the
+ * database's version of the `data/<slug>/steps/` directory `beginStep` used to
+ * leave. Left there, those rows are on the shelf every library test reads, and
+ * turn up as a mystery extra entry in somebody else's assertion.
+ *
+ * The two short-id slugs are not in this list because they are *minted*: the
+ * last case cannot know its own slugs in advance, so it collects them.
  */
-const OWN_SLUGS = [SLUG, "test-advance-token", "test-advance-sweeps", "test-enqueue-busy-article"];
+const OWN_SLUGS = [
+  SLUG,
+  "test-advance-token",
+  "test-advance-sweeps",
+  "test-enqueue-busy-article",
+];
 
-/* Remove only this suite's records. `data/_jobs/` is a real directory a reader
-   may have jobs in — the test must not tidy away theirs. */
+/** Slugs minted at run time — the short-id case's two. */
+const MINTED: string[] = [];
+
+/** Upload rows this file inserts, so the foreign key has something to point at. */
+const MADE_UPLOADS: string[] = [];
+
+/**
+ * Take this file's rows out again.
+ *
+ * **Jobs before articles**: a job row's `draft_revision_id` is a foreign key
+ * into the revision an article delete would be trying to cascade away, so the
+ * order is not cosmetic. It replaces a sweep of `data/_jobs/` and an `rm` of
+ * `data/<slug>/`, neither of which was ever an assertion.
+ */
+async function removeRows(slugs: readonly string[]): Promise<void> {
+  if (!slugs.length) return;
+  await getDb().delete(jobsTable).where(inArray(jobsTable.slug, [...slugs]));
+  await getDb().delete(articles).where(inArray(articles.slug, [...slugs]));
+}
+
 afterAll(async () => {
-  for (const { path: full, record } of await jobFilesOnDisk()) {
-    if (record.slug !== undefined && OWN_SLUGS.includes(record.slug)) {
-      await rm(full, { force: true });
-    }
+  if (!reachable) return;
+  await removeRows([...OWN_SLUGS, ...MINTED]);
+  if (MADE_UPLOADS.length) {
+    await getDb().delete(uploads).where(inArray(uploads.id, MADE_UPLOADS));
   }
-  // And the run markers those failed jobs left behind. Not tidiness: a marker
-  // surviving into the next run of this suite would make the fixture's `fetch`
-  // not-done for a reason that has nothing to do with what is being tested.
-  for (const slug of OWN_SLUGS) {
-    await rm(path.join(ROOT_DATA, slug), { recursive: true, force: true });
-  }
-});
+  await closeDb();
+}, 60_000);
 
 /** Poll until the job stops moving, or give up. */
 async function settle(id: string) {
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 200; i++) {
     const job = await getJob(id);
     if (job && job.status !== "queued" && job.status !== "running") return job;
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 25));
   }
   throw new Error("job never finished");
 }
@@ -771,7 +781,182 @@ describe("the work key", () => {
   });
 });
 
-describe("running a job", () => {
+/**
+ * A `queued` row straight into the store — **not** `enqueue`.
+ *
+ * `enqueue` starts the local pump, which is a second driver racing whatever the
+ * case is about. Where a case's subject *is* `enqueue` it is used; where the
+ * subject is the claim or the advance, this is. Same choice, for the same
+ * reason, as `tests/jobs-walk.test.ts` § `queueJob`.
+ */
+async function queueJob(slug: string, names: StepName[], force = false): Promise<Job> {
+  const wanted: Job = {
+    id: mintId(),
+    ownerId: DEV_OWNER_ID,
+    slug,
+    steps: names.map(
+      (name): JobStep => ({
+        name,
+        label: STEPS[name].label,
+        status: "pending",
+        ...(force ? { force: true } : {}),
+      }),
+    ),
+    status: "queued",
+    createdAt: new Date().toISOString(),
+  };
+  const { job } = await pgJobStore.enqueueOrGet(wanted, {
+    workKey: `jobs-test-${wanted.id}`,
+    reservesName: false,
+  });
+  return job;
+}
+
+/**
+ * **The advance, inside this file's owner.**
+ *
+ * `advanceJob` asks `currentOwnerId()`, which outside a request answers with
+ * `SPIDERYARN_OWNER_ID` — set in `.env.local` by `scripts/setup-local.ts` on any
+ * machine that has run it, and unset on one that has not. Rows queued by
+ * `queueJob` above are `DEV_OWNER_ID`'s, so without this scope the two disagree
+ * and every claim answers `gone`, with nothing in the failure mentioning an
+ * owner. `tests/jobs-walk.test.ts` § `advanceAsOwner` says the same.
+ */
+const advanceAsOwner = (id: string) => runAsOwner(DEV_OWNER_ID, () => advanceJob(id));
+
+/* ------------------------------------------------- asking again, on `busy` --
+
+   **`busy` is an answer, not a failure, and this file has to treat it as one.**
+
+   Two of the cases below take a claim as a *fixture* — one to make an orphaned
+   lease, one to hold the job while a second caller is turned away — and then
+   assert something about the claim that follows it. Both were written as a
+   single call apiece, and both are races: `claim` takes the `queue_state`
+   singleton with `for update nowait` (src/store/pg-jobs.ts), so a claim that
+   arrives while *any* other claim is mid-transaction is answered
+   `busy` — "another claim is being decided" — however free the job itself is.
+
+   **The other claimant is this file.** `enqueue` starts a `pump`
+   (src/jobs.ts), and a request that is handed an already-running job is given
+   one too, so an earlier case leaves one or more pumps looping on their own
+   job with a 250ms→5s backoff. They are still waking up several cases later.
+   Measured on 2026-09-04 by logging every `claim` this file makes: in the run
+   that went red, a leftover pump's claim started 19ms before this block's
+   advance and was still inside its transaction when the advance asked, and six
+   different job ids claimed inside 400ms. In the runs that stayed green the
+   same window held four claims and no overlap. It reproduced 1 in 15 runs of
+   the file **alone** with the box loaded, and not at all when it was quiet —
+   which is why it read as an interference from another *file*, and is not.
+
+   So this is not a flake to be waited out, it is the queue's contract: *"There
+   is one claim, and whoever takes it runs; everybody else is told `busy` and
+   asks again. The pump is not privileged — it is this same function in a loop"*
+   (src/jobs.ts § `advanceJob`). A caller that asks once and treats `busy` as a
+   fault is the only thing here that was wrong.
+
+   **Asking again does not soften what the two cases prove.** The failure each
+   is written against — a sweep that never runs, a claim predicate that lets a
+   second runner in — makes `busy` the answer *every* time, so it exhausts the
+   budget and still goes red. Watched, both of them, on 2026-09-04; the
+   mutations and their output are recorded above the blocks that own them.
+   ------------------------------------------------------------------------- */
+
+/**
+ * The number of times, and the gap between them. 40 × 50ms is two seconds
+ * against a backoff whose first step is 250ms — long enough to outlast a
+ * handful of overlapping pumps, short enough that a permanent `busy` is a red
+ * inside the file's timeout rather than a hang.
+ */
+const BUSY_TRIES = 40;
+const BUSY_GAP_MS = 50;
+
+/** `pgJobStore.claim`, asked again while the queue says it is deciding. */
+async function claimOnceItIsFree(
+  id: string,
+  attempt: string,
+): Promise<Awaited<ReturnType<typeof pgJobStore.claim>>> {
+  let outcome = await pgJobStore.claim(id, DEV_OWNER_ID, attempt, 60_000, 4);
+  for (let i = 0; i < BUSY_TRIES && outcome.kind === "busy"; i++) {
+    await new Promise((r) => setTimeout(r, BUSY_GAP_MS));
+    outcome = await pgJobStore.claim(id, DEV_OWNER_ID, attempt, 60_000, 4);
+  }
+  return outcome;
+}
+
+/** `advanceAsOwner`, asked again while it says `busy` — what every caller does. */
+async function advanceOnceItIsFree(id: string): Promise<Awaited<ReturnType<typeof advanceJob>>> {
+  let advanced = await advanceAsOwner(id);
+  for (let i = 0; i < BUSY_TRIES && advanced?.busy; i++) {
+    await new Promise((r) => setTimeout(r, BUSY_GAP_MS));
+    advanced = await advanceAsOwner(id);
+  }
+  return advanced;
+}
+
+/**
+ * Put a claim's lease into the past, **on the database's own clock**.
+ *
+ * This is what `expireLeaseForTests` was, and the difference is the whole point
+ * of the conversion: the filesystem adapter rewrote a `Date.now()` field this
+ * process had written, so the deadline was one clock's arithmetic only because
+ * there was one process. `claim` writes `clock_timestamp() + interval` and
+ * `settleExpired` compares against `clock_timestamp()`, so an expiry expressed
+ * in any other clock is a different fact. `tests/list-reconciles-expired.test.ts`
+ * writes the same statement.
+ */
+async function expireLease(id: string): Promise<void> {
+  await getDb()
+    .update(jobsTable)
+    .set({ leaseExpiresAt: sql`clock_timestamp() - interval '1 second'` })
+    .where(eq(jobsTable.id, id));
+}
+
+/**
+ * ## The mutation for this block, watched red on 2026-09-04
+ *
+ * `settleExpired` in [`src/store/pg-jobs.ts`](../src/store/pg-jobs.ts), with
+ * `leaseIsOver` in its `lapsed` predicate replaced by `leaseIsLive` — the
+ * negation `src/store/job-fence.ts` spells out next door, so the sweep looks at
+ * the wrong side of the deadline and nothing lapses. That predicate is the whole
+ * of what replaced `expireLeaseForTests`, and it is Postgres-only in a way that
+ * matters rather than incidentally: the filesystem adapter rewrote a
+ * `Date.now()` field this process had written, and `clock_timestamp()` is the
+ * row's own clock. The fence is left alone, which is why this is one predicate
+ * rather than the pair.
+ *
+ * ```
+ * × gets inside a job whose claimant stopped answering, from the advance itself
+ *   AssertionError: expected true to be falsy
+ * × refuses while somebody else holds the claim
+ *   AssertionError: expected false to be true
+ * 2 failed | 58 passed
+ * ```
+ *
+ * **The second red is a bonus and is worth reading.** *Refuses while somebody
+ * else holds the claim* lives in the other block, and it goes red because its
+ * fixture claim is made with a 60-second lease that the advance's own sweep then
+ * declines to leave alone — so under this mutation the assertion that the
+ * fixture claim succeeded fails first. The two blocks are not as independent as
+ * their headings suggest.
+ *
+ * **What it does not cover.** One predicate is not the family.
+ *
+ * - The sweep's **other two conjuncts** — `status = 'running'` and the optional
+ *   `owner_id` scoping — are unmutated, and the owner one would stay green here
+ *   because every job in this file belongs to the same reader.
+ *   `tests/list-reconciles-expired.test.ts` is what covers that.
+ * - The **requeue budget** branch beside it: this case's job has none left, so
+ *   it ends rather than going back to `queued`, and a sweep that lost the
+ *   requeue entirely would not be noticed here.
+ * - **`tryEnqueue`'s insert arbitration**, which is what the first and third
+ *   cases below are really about — `jobs_active_work` handing back the running
+ *   job, `jobs_active_slug` letting a second job queue behind it. Neither was
+ *   mutated, and both are the predicates that replaced a `Map` lookup.
+ * - **`finishIn`'s `failure_kind` column**, which the first case asserts. It was
+ *   mutated in `tests/retry-is-only-for-a-failed-job.test.ts` on the same day
+ *   and went red there, so it is covered — but not by this file.
+ */
+when("running a job", () => {
   it("hands back the job already working on a slug rather than starting a second", async () => {
     // A double-click on Add. Both requests must land on one job: the second
     // starting a job of its own would run every step against artefacts the
@@ -833,12 +1018,12 @@ describe("running a job", () => {
    */
   it("hands the store a token the uuid column will take", async () => {
     const slug = "test-advance-token";
-    const job = await enqueue({ slug, steps: ["fetch"] });
-    await settle(job.id);
-    await pause(job, 0);
+    /* Queued straight into the store, so there is no pump to wait out and no
+       settled job to put back — see `queueJob`. */
+    const job = await queueJob(slug, ["fetch"]);
 
     const seen: string[] = [];
-    const claim = vi.spyOn(fsJobStore, "claim");
+    const claim = vi.spyOn(pgJobStore, "claim");
     try {
       /* **Every argument forwarded, `max` included.** A spy that drops one does
          not fail — `maxRunning` arrives `undefined`, `running >= undefined` is
@@ -848,9 +1033,9 @@ describe("running a job", () => {
       claim.mockImplementation(async (id, owner, attempt, lease, max) => {
         seen.push(attempt);
         claim.mockRestore();
-        return fsJobStore.claim(id, owner, attempt, lease, max);
+        return pgJobStore.claim(id, owner, attempt, lease, max);
       });
-      await advanceJob(job.id);
+      await advanceAsOwner(job.id);
       claim.mockRestore();
 
       expect(seen).toHaveLength(1);
@@ -859,13 +1044,11 @@ describe("running a job", () => {
       );
     } finally {
       /* **Cleared even when the assertion fails**, and this is not politeness.
-         A `queued` record left in `data/_jobs/` is picked up by the next run's
-         `enqueue`, which hands it back instead of making a new one — so the
-         next failure is a three-second timeout in a *different* test and says
-         nothing about the fault. It cost half an hour once. */
+         A left-behind `queued` row holds this article's line — `jobs_active_slug`
+         — so the next failure is a `busy` in a *different* test and says nothing
+         about the fault. It cost half an hour once, when the row was a file. */
       claim.mockRestore();
-      await settle(job.id).catch(() => undefined);
-      await forgetJob(job.id).catch(() => undefined);
+      await runAsOwner(DEV_OWNER_ID, () => forgetJob(job.id)).catch(() => undefined);
     }
   });
 
@@ -894,41 +1077,43 @@ describe("running a job", () => {
    */
   it("gets inside a job whose claimant stopped answering, from the advance itself", async () => {
     const slug = "test-advance-sweeps";
-    const job = await enqueue({ slug, steps: ["fetch"] });
-    await settle(job.id);
-    await pause(job, 0);
+    const job = await queueJob(slug, ["fetch"]);
 
     /* A claim nobody will ever release — an instance that was killed mid-step.
-       Its lease is already in the past, which is the state `advanceJob` has to
-       notice without anybody sweeping on its behalf. */
+       Its lease is put into the past below, which is the state `advanceJob` has
+       to notice without anybody sweeping on its behalf. */
     const orphan = mintAttempt();
     /* A cap high enough to be beside the point: this case is not about it. */
-    /* `currentOwnerId()`, not `DEV_OWNER_ID`: this claim has to be the *job's
-       own*, and `enqueue` above wrote it under whoever this process is. Those
-       are the same value only while `SPIDERYARN_OWNER_ID` is unset, so writing
-       the constant here made the claim answer `gone` on any machine that has
-       run scripts/setup-local.ts — and the case then failed on its setup line
-       rather than on the sweep it is about. */
+    /* `DEV_OWNER_ID`, because `queueJob` writes the row under it — and asserted
+       against `currentOwnerId()` so that a machine whose `SPIDERYARN_OWNER_ID`
+       disagrees fails *here*, saying which two owners, rather than three lines
+       down on the sweep this case is actually about.
+
+       **Asked again on `busy`** — a leftover pump deciding its own claim is not
+       this fixture failing. See § *asking again, on `busy`*. */
+    const fixture = await claimOnceItIsFree(job.id, orphan);
     expect(
-      (await fsJobStore.claim(job.id, currentOwnerId(), orphan, 60_000, 4)).kind,
-    ).toBe("claimed");
-    expireLeaseForTests(job.id);
+      { kind: fixture.kind, why: "why" in fixture ? fixture.why : undefined },
+      `the fixture claim must succeed; this process is ${currentOwnerId()}`,
+    ).toEqual({ kind: "claimed", why: undefined });
+    await expireLease(job.id);
 
     try {
-      const advanced = await advanceJob(job.id);
+      const advanced = await advanceOnceItIsFree(job.id);
       /* **Not `busy`**, which is what a `running` row nobody swept answers, and
-         what this said before the sweep line existed. */
+         what this said before the sweep line existed — every time, so the retry
+         above runs out and this is still the assertion that goes red. */
       expect(advanced?.busy).toBeFalsy();
       expect(advanced?.done).toBe(true);
-      const after = await getJob(job.id);
+      const after = await runAsOwner(DEV_OWNER_ID, () => getJob(job.id));
       /* The same row, and it is no longer stuck under a claim nobody holds. */
       expect(after?.id).toBe(job.id);
       expect(after?.slug).toBe(slug);
       expect(after?.status).not.toBe("running");
       expect(after?.finishedAt).toBeDefined();
     } finally {
-      // See the note in the test above: a record left behind breaks the next run.
-      await forgetJob(job.id).catch(() => undefined);
+      // See the note in the test above: a row left behind breaks the next run.
+      await runAsOwner(DEV_OWNER_ID, () => forgetJob(job.id)).catch(() => undefined);
     }
   });
 
@@ -981,37 +1166,6 @@ describe("running a job", () => {
   });
 
   /**
-   * The marker, through the real runner rather than through the store on its
-   * own.
-   *
-   * A step that threw did not finish, and the next run must re-run it rather
-   * than believe whatever half of its output landed. `fetch` here fails for a
-   * reason that has nothing to do with the marker — the fixture has no source
-   * URL — which is what makes it a fair test of the failure path.
-   */
-  it("leaves the marker behind when a step fails, so the step is not done", async () => {
-    const job = await enqueue({ slug: SLUG, steps: ["fetch"] });
-    expect((await settle(job.id)).status).toBe("error");
-    expect(await fsArtifacts.interrupted(SLUG, "fetch")).toBe(true);
-
-    // And it is what `stepIsDone` reads, not merely a file sitting there.
-    const at = contextPaths(SLUG);
-    const ctx = { ...at, slug: SLUG, report: () => undefined, signal: new AbortController().signal, cacheArticle: false };
-    expect(await stepIsDone(STEPS.fetch, ctx, fsArtifacts)).toBe(false);
-
-    /* Removed with `rm`, not with `finishStep`. The marker belongs to the
-       runner's attempt and the test never saw that token — which is the point
-       of the token, and is also why a test that leaves one behind has to clean
-       up by hand. A stray marker here would make the *next* run of this suite
-       start from a slug whose `fetch` is already not-done for the wrong
-       reason. */
-    await rm(path.join(ROOT_DATA, SLUG, "steps"), { recursive: true, force: true });
-    expect(await fsArtifacts.interrupted(SLUG, "fetch")).toBe(false);
-    // Cleared again in `afterAll` as well as here: every job this suite runs
-    // fails, so every one of them leaves a marker, not only this test's.
-  });
-
-  /**
    * **The wiring, not the decision.** `freeSlug` and `slugWithShortId` are
    * tested above without a queue; this asks whether `enqueue` actually calls
    * them, which is the half a unit test cannot see — a correct function nobody
@@ -1030,11 +1184,32 @@ describe("running a job", () => {
       url: "https://spideryarn-test.invalid/test-enqueue-short-id",
       steps: ["fetch"],
     });
+    /* **An upload row that really exists**, and this is the third thing
+       Postgres validates that a JSON file never looked at: `jobs.upload_id` is
+       a foreign key (`jobs_upload_id_uploads_id_fk`), so the invented uuid this
+       case used to pass refuses the *insert* — a `23503` at `enqueue`, before
+       the branch under test is reached. `pending` with no bytes is what the real
+       flow writes before anything arrives, and is what
+       `uploads_verified_has_evidence` allows. */
+    const uploadId = randomUUID();
+    await getDb().insert(uploads).values({
+      id: uploadId,
+      ownerId: currentOwnerId(),
+      filename: "paper.pdf",
+      claimedBytes: 1_024,
+      claimedSha256: "0".repeat(64),
+      status: "pending",
+      grantExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+    MADE_UPLOADS.push(uploadId);
     const uploaded = await enqueue({
       slug: "test-enqueue-short-id-upload",
-      upload: { id: "11111111-2222-4333-8444-666666666666", filename: "paper.pdf" },
+      upload: { id: uploadId, filename: "paper.pdf" },
       steps: ["fetch"],
     });
+    /* Collected before the assertions, so a failure still cleans up: these two
+       slugs are minted and `afterAll` cannot guess them. */
+    MINTED.push(added.slug, uploaded.slug);
     try {
       expect(added.slug).toMatch(/^test-enqueue-short-id-spya-[a-z0-9]{6}$/);
       expect(uploaded.slug).toMatch(/^test-enqueue-short-id-upload-spya-[a-z0-9]{6}$/);
@@ -1042,38 +1217,8 @@ describe("running a job", () => {
       for (const job of [added, uploaded]) {
         await settle(job.id).catch(() => undefined);
         await forgetJob(job.id).catch(() => undefined);
-        await rm(path.join(ROOT_DATA, job.slug), { recursive: true, force: true });
       }
     }
-  });
-
-  it("writes a readable record, still, after all that", async () => {
-    const job = await enqueue({ slug: SLUG, steps: ["fetch"] });
-    await settle(job.id);
-    const files = await readdir(JOBS_DIR);
-    expect(files).toContain(`${job.id}.json`);
-    /* No temp file left behind: a stray `.tmp` is a write that never renamed.
-       **This job's own**, rather than every `.tmp` in the directory, because
-       `data/_jobs/` is shared with every other suite in the run and several of
-       them are writing to it from other workers at this moment — a write in
-       flight elsewhere is not a write that failed here, and asserting over the
-       whole directory made this red at random (seen 2026-09-01, on a temp file
-       belonging to tests/retry-is-only-for-a-failed-job.test.ts). The name is
-       `<id>.json.<pid>.<n>.tmp`, so the prefix is the job.
-
-       **And waited for rather than read once**, which is the half the prefix
-       did not fix. `settle` above polls `getJob`, and terminal status lands in
-       the live map *before* its `persist` completes — `forgetJob` in
-       src/jobs.ts says so, and builds its own tombstone around the same gap. So
-       a single `readdir` here can catch this job's own write mid-rename and
-       call it a leak. Under load it did (2026-09-01). A bounded wait is the
-       honest reading: the file must be gone soon, not instantly. */
-    const strays = async () =>
-      (await readdir(JOBS_DIR)).filter((f) => f.startsWith(job.id) && f.endsWith(".tmp"));
-    for (let i = 0; i < 40 && (await strays()).length; i++) {
-      await new Promise((r) => setTimeout(r, 25));
-    }
-    expect(await strays()).toEqual([]);
   });
 });
 
@@ -1275,43 +1420,109 @@ describe("slugForRetry", () => {
    *succeed*, because there is no offline step that can.
    -------------------------------------------------------------------------- */
 
-/** A slug with a `raw.json`, so `fetch` counts as done and `extract` is next. */
-async function fixtureWithRawJson(slug: string): Promise<void> {
-  const dir = path.join(ROOT_DATA, slug);
-  await mkdir(dir, { recursive: true });
-  // `{ file }` with a non-empty string is what the store's `raw` decoder asks
-  // of it — src/store/artifacts-fs.ts § DECODERS. Nothing reads the file it
-  // names, because `extract` never gets that far without a URL.
-  await writeFile(path.join(dir, "raw.json"), JSON.stringify(RAW_MANIFEST), "utf8");
-}
+/**
+ * **An address that cannot be reached, and a different one per slug.**
+ *
+ * The seeded articles below carry the corpus's own metadata, and `requireUrl`
+ * resolves a job's URL from the article row — so left alone, a real `fetch` here
+ * would fetch `paulgraham.com`. A per-slug `.invalid` address is what keeps the
+ * block offline, and being *distinct* per slug also stops `freeSlug`'s shelf
+ * lookup adopting one of these fixtures for another, since it matches on
+ * `urlKey`.
+ */
+const urlFor = (slug: string) => `https://spideryarn-test.invalid/${slug}`;
 
 /**
- * The same manifest as a value, for the stubs that have to **return** it.
+ * **The artefacts the seeded article was made from**, by kind.
  *
  * `fetch` came off `LEGACY_UNCONVERTED_STEPS` on 2026-08-31, so a stub that
  * writes the artefact itself and returns a bare `{ detail }` is refused by
- * `checkProduct` before anything is written — which is the guard doing its job,
- * and is how these two cases found out. A stub of a converted step returns what
- * the real one returns.
+ * `checkProduct` before anything is written — which is the guard doing its job.
+ * A stub of a converted step returns what the real one returns, and under
+ * Postgres *what the real one returns* is checked: `SHAPE`
+ * (src/store/artifacts.ts) is applied by both adapters, and `writeRawSource`
+ * additionally refuses a manifest whose `storedSha256` names no `raw_sources`
+ * row. `{ file: "raw.html" }` satisfied a JSON file and satisfies nothing here.
+ *
+ * Reading them out of the committed corpus is the cheapest source that
+ * satisfies both, because `scratchArticleInPg` loaded these very bytes a moment
+ * earlier — the row `raw.json` names is the one its own seed inserted. Same
+ * approach, and the same reason, as
+ * `tests/retry-is-only-for-a-failed-job.test.ts` § `CORPUS_FILES`.
  */
-const RAW_MANIFEST = { file: "raw.html" } as unknown as RawManifest;
+const CORPUS_FILES: Partial<Record<ArtifactKind, string>> = {
+  raw: `data/${SCRATCH_SOURCE}/raw.json`,
+  meta: `data/${SCRATCH_SOURCE}/meta.json`,
+  extractedHtml: `output/${SCRATCH_SOURCE}.html`,
+};
 
-/**
- * Put a settled job back into the state a stopped server leaves behind.
- *
- * `getJob` hands back the live record — the same object the queue's map holds —
- * so this is the one honest way to reach "the process died under this job"
- * without killing a process. It is exactly what `sweepStopped` writes: `queued`,
- * nothing running, the finished steps still finished.
- *
- * It has to happen *after* the in-process queue has let the job go, or advance
- * would correctly refuse to touch a job somebody else owns.
- */
-async function pause(job: Job, from: number): Promise<void> {
-  await pauseForTests(job.id, from);
+/** One read per kind for the whole file, because the bytes never change. */
+const corpusCache = new Map<ArtifactKind, unknown>();
+
+async function corpusArtefact(kind: ArtifactKind): Promise<unknown> {
+  const relative = CORPUS_FILES[kind];
+  if (relative === undefined) {
+    throw new Error(
+      `no corpus artefact for "${kind}" — add it to CORPUS_FILES, or stub a step that does not ` +
+        `declare it. A stub cannot invent one: the Postgres store shape-checks every write.`,
+    );
+  }
+  if (!corpusCache.has(kind)) {
+    const text = await readFile(path.join(FIXTURE_ROOT, relative), "utf8");
+    corpusCache.set(kind, relative.endsWith(".json") ? (JSON.parse(text) as unknown) : text);
+  }
+  return corpusCache.get(kind);
 }
 
-describe("advancing a job one step at a time", () => {
+/** Everything one step declares, with this clone's slug and address in it. */
+async function productOf(slug: string, name: StepName, detail: string): Promise<ConvertedProduct> {
+  const parts = Object.fromEntries(
+    await Promise.all(
+      STEPS[name].produces.map(async (kind) => {
+        const value = await corpusArtefact(kind);
+        if (typeof value !== "object" || value === null) return [kind, value];
+        const copy = { ...(value as Record<string, unknown>) };
+        if (typeof copy.slug === "string") copy.slug = slug;
+        if (typeof copy.url === "string") copy.url = urlFor(slug);
+        if (typeof copy.requestedUrl === "string") copy.requestedUrl = urlFor(slug);
+        return [kind, copy];
+      }),
+    ),
+  ) as ArtifactParts;
+  return { parts, detail };
+}
+
+/**
+ * ## The mutation for this block, and **it stayed green** — 2026-09-04
+ *
+ * This is the only converted queue suite whose skip decisions come from *real
+ * rows*: `tests/jobs-walk.test.ts` and `tests/retry-is-only-for-a-failed-job.test.ts`
+ * both replace `session.reads`, so neither can see `stepIsDone` at all. That
+ * makes `hasArtefacts` (src/store/artifacts-pg.ts) the predicate this block
+ * uniquely reaches, and it is the Postgres statement of *"the artefacts say this
+ * step is not done"* — strictly more than the filesystem's file-presence, because
+ * it demands a `revision_step_runs` row saying `done` **as well as** every
+ * artefact reading back.
+ *
+ * Deleting the row half — `if (run?.status !== "done") return false;` — left
+ * **60 passed of 60**.
+ *
+ * **The green is not a dead-code artefact, and that was checked rather than
+ * assumed.** A control in the same function — `if (run) return false;`, so that
+ * nothing is ever done — turned three cases red, including *picks up at the
+ * first step the artefacts say is not done*. So `hasArtefacts` is thoroughly on
+ * this block's path; what nothing here distinguishes is **artefacts present**
+ * from **a step recorded as having run**. A revision holding a previous run's
+ * artefacts with no run row of its own would be skipped, and every case below
+ * would still pass. `tests/store-artefacts-pg.test.ts` is where that belongs.
+ *
+ * **What else the mutation does not cover.** `hasArtefacts`'s artefact loop and
+ * its `siteFor` validation; `stepInterrupted`, which `stepIsDone` asks first and
+ * which no case here puts into the `running` state; and `stampForStep`, which
+ * decides freshness for the stages that stamp and which none of these steps
+ * exercises.
+ */
+when("advancing a job one step at a time", () => {
   const SLUGS = [
     "test-advance-resume",
     "test-advance-one-step",
@@ -1320,12 +1531,52 @@ describe("advancing a job one step at a time", () => {
     "test-advance-queue-owns",
   ];
 
-  afterAll(async () => {
-    for (const slug of SLUGS) await rm(path.join(ROOT_DATA, slug), { recursive: true, force: true });
-    for (const { path: full, record } of await jobFilesOnDisk()) {
-      if (record.slug !== undefined && SLUGS.includes(record.slug)) await rm(full, { force: true });
+  /**
+   * **One seeded article per slug, and it replaces `fixtureWithRawJson`.**
+   *
+   * That helper wrote `data/<slug>/raw.json` so that *`fetch` counts as done and
+   * `extract` is next*. The Postgres statement of the same thing is the raw
+   * columns on a published `article_revisions` row **and** a `revision_step_runs`
+   * row saying `done` — `hasArtefacts` (src/store/artifacts-pg.ts) asks for both,
+   * which is strictly more than a file's presence, and a seeded article has
+   * them. It has them for *every* step, which is why the cases below force the
+   * ones they need to run: `stillForced` (src/jobs.ts) is what makes a step run
+   * against artefacts that are already current.
+   *
+   * `mutate` rewrites the address before the load — see `urlFor`.
+   */
+  const seeded = new Map<string, ScratchArticle>();
+
+  beforeAll(async () => {
+    for (const slug of SLUGS) {
+      seeded.set(
+        slug,
+        await scratchArticleInPg(slug, {
+          /* Owned by `DEV_OWNER_ID` explicitly, because that is who the advance
+             runs as: the Postgres reader filters every article by owner, so a
+             fixture seeded as somebody else is invisible and every claim would
+             refuse. */
+          ownerId: DEV_OWNER_ID,
+          mutate: async (dir) => {
+            for (const name of ["raw.json", "meta.json"]) {
+              const at = path.join(dir, name);
+              const value = JSON.parse(await readFile(at, "utf8")) as Record<string, unknown>;
+              if (typeof value.url === "string") value.url = urlFor(slug);
+              if (typeof value.requestedUrl === "string") value.requestedUrl = urlFor(slug);
+              await writeFile(at, JSON.stringify(value));
+            }
+          },
+        }),
+      );
     }
-  });
+  }, 180_000);
+
+  afterAll(async () => {
+    /* Jobs first, then the article — `jobs.draft_revision_id` is a foreign key
+       into the revision the article delete would be cascading away. */
+    await getDb().delete(jobsTable).where(inArray(jobsTable.slug, SLUGS));
+    for (const slug of SLUGS) await seeded.get(slug)?.remove();
+  }, 120_000);
 
   afterEach(() => {
     vi.restoreAllMocks();
@@ -1337,23 +1588,28 @@ describe("advancing a job one step at a time", () => {
        is somebody's server asked twice and, for the later steps, a model call
        paid for twice. */
     const slug = "test-advance-resume";
-    await fixtureWithRawJson(slug);
-
-    const queued = await enqueue({ slug, steps: ["fetch", "extract"] });
-    const settled = await settle(queued.id);
-    // The in-process queue got there first and skipped `fetch` for the same
-    // reason advance is about to: the artefact is there.
-    expect(settled.steps[0]?.status).toBe("skipped");
-    expect(settled.status).toBe("error");
+    /* `fetch` is not forced and its artefacts are current, so it skips;
+       `extract` is forced, so it runs whatever the artefacts say. That
+       asymmetry is what used to be *"there is a raw.json and nothing else"*. */
+    const queued = await queueJob(slug, ["fetch", "extract"], false);
+    await getDb()
+      .update(jobsTable)
+      .set({
+        steps: queued.steps.map((s) => (s.name === "extract" ? { ...s, force: true } : s)),
+      })
+      .where(eq(jobsTable.id, queued.id));
 
     const fetched = vi.spyOn(STEPS.fetch, "run");
-    await pause(settled, 1);
+    /* Made to fail, because *which* way `extract` ends is not what this case is
+       about and the real one would go and read the raw bytes. What is under test
+       is which step the advance picked up at. */
+    vi.spyOn(STEPS.extract, "run").mockRejectedValue(new Error("stubbed extract failure"));
 
-    const advanced = await advanceJob(queued.id);
+    const advanced = await advanceAsOwner(queued.id);
     expect(advanced).not.toBeNull();
-    // It ran `extract`, not `fetch` — and it worked that out from the file on
-    // disk rather than from the job record, which is what makes a job resumed
-    // a week later land in the right place.
+    // It ran `extract`, not `fetch` — and it worked that out from the store
+    // rather than from the job record, which is what makes a job resumed a week
+    // later land in the right place.
     expect(advanced?.ran).toBe("extract");
     expect(fetched).not.toHaveBeenCalled();
     expect(advanced?.job.steps[0]?.status).toBe("skipped");
@@ -1377,20 +1633,23 @@ describe("advancing a job one step at a time", () => {
      * docs/plans/260830d-v1-imports-on-vercel.md § Stage 3.
      */
     const slug = "test-advance-one-step";
-    const queued = await enqueue({ slug, steps: ["fetch", "extract"] });
-    await settle(queued.id); // fails at `fetch`: no URL, nothing fetched
-    const job = (await getJob(queued.id)) as Job;
+    /* Both forced, so both run against an article whose artefacts are already
+       current — the state a resumed job is never in and this case needs. */
+    const queued = await queueJob(slug, ["fetch", "extract"], true);
 
-    /* Stubbed to succeed. `assertProduced` still asks the store for the
-       artefact afterwards, so the stub has to write one — a step that returns
-       happily having written nothing is caught, and should be. */
-    const fetched = vi.spyOn(STEPS.fetch, "run").mockImplementation(async () => {
-      await fixtureWithRawJson(slug);
-      return { parts: { raw: RAW_MANIFEST }, detail: "stubbed" };
-    });
-    await pause(job, 0);
+    /* Stubbed to succeed. `assertProduced` still asks the store for the artefact
+       afterwards — inside `commit`'s own transaction, over
+       `readsPgArtifacts` — so the stub has to produce one, and one the store
+       will take. A step that returns happily having written nothing is caught,
+       and should be. */
+    const fetched = vi
+      .spyOn(STEPS.fetch, "run")
+      .mockImplementation(() => productOf(slug, "fetch", "stubbed"));
+    vi.spyOn(STEPS.extract, "run").mockImplementation(() =>
+      productOf(slug, "extract", "stubbed extract"),
+    );
 
-    const first = await advanceJob(queued.id);
+    const first = await advanceAsOwner(queued.id);
     expect(fetched).toHaveBeenCalledTimes(1);
     /* `ran` names the **last** step the call ran, and `extract` is the second of
        the two — so this one assertion is the whole change: the old shape could
@@ -1407,7 +1666,7 @@ describe("advancing a job one step at a time", () => {
 
     /* And the job is over, so asking again does nothing at all rather than
        running the second step a second time. */
-    const second = await advanceJob(queued.id);
+    const second = await advanceAsOwner(queued.id);
     expect(second?.ran).toBeNull();
     expect(second?.done).toBe(true);
     expect(fetched).toHaveBeenCalledTimes(1);
@@ -1415,20 +1674,26 @@ describe("advancing a job one step at a time", () => {
 
   it("does nothing to a job that has already finished, however often it is asked", async () => {
     const slug = "test-advance-idempotent";
-    const queued = await enqueue({ slug, steps: ["fetch"] });
-    const settled = await settle(queued.id);
-    expect(settled.status).toBe("error");
+    const queued = await queueJob(slug, ["fetch"]);
+    /* Finished by the first advance, which finds `fetch`'s artefacts current and
+       skips it — the all-skipped ending. It used to be finished by the pump
+       *failing* offline; either is a job that is over, which is the only
+       precondition this case has. */
+    const finished = await advanceAsOwner(queued.id);
+    expect(finished?.done).toBe(true);
+    const settled = await runAsOwner(DEV_OWNER_ID, () => getJob(queued.id));
+    expect(settled?.status).toBe("done");
     const before = JSON.stringify(settled);
 
     const fetched = vi.spyOn(STEPS.fetch, "run");
     for (let i = 0; i < 3; i++) {
-      const advanced = await advanceJob(queued.id);
+      const advanced = await advanceAsOwner(queued.id);
       expect(advanced?.done).toBe(true);
       expect(advanced?.ran).toBeNull();
       expect(advanced?.busy).toBe(false);
     }
     expect(fetched).not.toHaveBeenCalled();
-    expect(JSON.stringify(await getJob(queued.id))).toBe(before);
+    expect(JSON.stringify(await runAsOwner(DEV_OWNER_ID, () => getJob(queued.id)))).toBe(before);
   });
 
   it("turns the second of two simultaneous callers away rather than running twice", async () => {
@@ -1436,9 +1701,7 @@ describe("advancing a job one step at a time", () => {
        two runners writing one article's files, which is the fault this whole
        design is shaped around — docs/plans/260826q-job-queue-rethink.md. */
     const slug = "test-advance-concurrent";
-    const queued = await enqueue({ slug, steps: ["fetch", "extract"] });
-    await settle(queued.id);
-    const job = (await getJob(queued.id)) as Job;
+    const queued = await queueJob(slug, ["fetch", "extract"], true);
 
     let running = 0;
     let most = 0;
@@ -1447,12 +1710,13 @@ describe("advancing a job one step at a time", () => {
       most = Math.max(most, running);
       await new Promise((r) => setTimeout(r, 30));
       running--;
-      await fixtureWithRawJson(slug);
-      return { parts: { raw: RAW_MANIFEST }, detail: "stubbed" };
+      return productOf(slug, "fetch", "stubbed");
     });
-    await pause(job, 0);
+    vi.spyOn(STEPS.extract, "run").mockImplementation(() =>
+      productOf(slug, "extract", "stubbed extract"),
+    );
 
-    const [a, b] = await Promise.all([advanceJob(queued.id), advanceJob(queued.id)]);
+    const [a, b] = await Promise.all([advanceAsOwner(queued.id), advanceAsOwner(queued.id)]);
     expect(fetched).toHaveBeenCalledTimes(1);
     expect(most).toBe(1);
     /* One did the work; the other was told to wait and ask again. Neither is an
@@ -1491,25 +1755,30 @@ describe("advancing a job one step at a time", () => {
      * depends on which of two async callers wins is not testing the rule, it is
      * observing a scheduler. */
     const slug = "test-advance-queue-owns";
-    const queued = await enqueue({ slug, steps: ["fetch"] });
-    /* A cap high enough to be beside the point: this case is not about it. */
-    const held = await fsJobStore.claim(queued.id, DEV_OWNER_ID, "spya-someone", 60_000, 4);
-    /* The pump may have got there first, and that is fine — either way somebody
-       holds it and the assertions below are about what advance says to whoever
-       does not. */
-    const advanced = await advanceJob(queued.id);
+    const queued = await queueJob(slug, ["fetch"]);
+    /* `mintAttempt()`, not a mnemonic: `jobs.attempt_id` is a `uuid` column and
+       `"spya-someone"` fails the insert with `22P02` before the claim is even
+       decided — which would make this case red on its setup line. */
+    const somebody = mintAttempt();
+    /* A cap high enough to be beside the point: this case is not about it, and
+       asked again on `busy` for the reason § *asking again, on `busy`* gives —
+       a leftover pump mid-claim is not this fixture failing. Only the setup
+       line is at risk here: the assertion below *wants* a `busy`. */
+    const held = await claimOnceItIsFree(queued.id, somebody);
+    expect(held.kind, "the fixture claim has to succeed for this to mean anything").toBe("claimed");
+
+    const advanced = await advanceAsOwner(queued.id);
     expect(advanced?.busy).toBe(true);
     expect(advanced?.ran).toBeNull();
     expect(advanced?.done).toBe(false);
     if (held.kind === "claimed") {
-      await fsJobStore.releaseStep(queued.id, "spya-someone", queued.steps, {});
+      await pgJobStore.releaseStep(queued.id, somebody, queued.steps, {});
     }
-    await settle(queued.id);
   });
 
   it("has nothing to say about a job that does not exist", async () => {
     // Null rather than a made-up job, so the route can 404 rather than hand a
     // client a loop over something that was never there.
-    expect(await advanceJob("spya-nosuch")).toBeNull();
+    expect(await advanceAsOwner("spya-nosuch")).toBeNull();
   });
 });

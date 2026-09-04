@@ -22,6 +22,10 @@
  *
  * Each card is a row of `billing_tiers` (`TierOffer`), so raising a quota or
  * changing an amount is an `UPDATE` and this page follows without a deploy.
+ * **The cards themselves are `PlanCards`, shared with `/pricing`** since the
+ * buying moved there on 2026-09-04 — that component is presentational and knows
+ * nothing about billing, so this file still owns every decision below and
+ * `cardFor` is the whole of what it hands over.
  * Nothing here hardcodes a tier name, a quota or a price, and the POST carries
  * **only the tier id** — a price id from the browser is refused by the route
  * rather than ignored.
@@ -48,11 +52,13 @@
  * the muted one, because a plan that ends on a date is the one thing on this
  * card the reader may not already know.
  */
-import { CalendarClock, CreditCard, ExternalLink, TriangleAlert } from "lucide-react";
+import { CalendarClock, CreditCard, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { describeAmounts, describePlan } from "../billing-plan.js";
 import type { TierOffer } from "../billing-plan.js";
+import { PlanCards, RECOMMENDED_TIER } from "./PlanCards.js";
+import type { PlanCard } from "./PlanCards.js";
 import { useBilling } from "./useBilling.js";
 
 export function BillingSection() {
@@ -65,7 +71,24 @@ export function BillingSection() {
         {billing.error ? (
           <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
             <TriangleAlert size={12} /> Couldn't read your plan — {billing.error}{" "}
-            <button type="button" className="linky" onClick={billing.reload}>
+            {/* **Not `className="linky"`, which styled nothing here.** That
+                class is scoped in styles.css to `.controls`, `.cmt-dialog` and
+                `.chat-dialog` ancestors — "a shape, not a shared class", as it
+                says — and this card is in none of them, so the button arrived
+                with no underline and nothing to mark it as pressable in the
+                middle of a sentence. Same fix as `SettingsSection.tsx` and the
+                sharing card, 2026-09-04.
+
+                Two utilities and no more, because the rest is now in the
+                button reset: `border-0`, `background-color: transparent`,
+                `cursor: pointer` and `font: inherit` all come from
+                tailwind.css § the bit of preflight we need. Colour is
+                inherited from the `text-highlight` span around it. */}
+            <button
+              type="button"
+              className="tw:p-0 tw:underline tw:underline-offset-2"
+              onClick={billing.reload}
+            >
               Try again
             </button>
           </span>
@@ -151,15 +174,54 @@ export function BillingSection() {
           `BillingSummary.canCheckout`; GPT Sol, 2026-09-03. */}
       {summary.canCheckout && summary.offers.length > 0 && (
         <div className="tw:flex tw:flex-col tw:gap-2">
-          {summary.offers.map((offer) => (
-            <Offer
-              key={offer.id}
-              offer={offer}
-              busy={billing.busy !== null}
-              pressed={billing.busy?.kind === "upgrade" && billing.busy.tierId === offer.id}
-              onUpgrade={() => billing.upgrade(offer.id)}
-            />
-          ))}
+          {/* **The same component `/pricing` draws**, since the buying moved
+              there on 2026-09-04 (PlanCards.tsx). One rendering of a plan, two
+              pages, and one implementation of the press — which is what makes
+              *"the only way to pay is from the /profile page"* untrue without
+              copying anything. Greg, 2026-09-04.
+
+              **And the numbers here are still the rows', not the website's
+              copy**, which is the property this file has argued for since it was
+              written: raising a quota is one `UPDATE` and this page follows
+              without a deploy. `cardFor` below is the whole of the difference
+              between the two callers. */}
+          <PlanCards
+            plans={summary.offers.map(cardFor)}
+            /* **This page recommends, and until the stage 2 review it did not.**
+               The reasoning it declined on — *its reader has already chosen* —
+               is backwards for the state these cards render in: the whole block
+               is behind `canCheckout`, so anybody looking at it is on the free
+               allowance or lapsed and is choosing between the two paid tiers
+               right now. Which tier is the product's suggestion is
+               `PlanCards`' to say, not this file's, and `PlanCards` drops the
+               eyebrow by itself if the rows do not offer that tier. GPT Sol,
+               stage 2 code review, finding 3. */
+            recommended={RECOMMENDED_TIER}
+            action={(plan) => {
+              /* `plan.id` cannot be null here — every card came from an offer —
+                 but the type says it can, and a cast would be a worse way of
+                 saying so than a branch that cannot run. */
+              const tierId = plan.id;
+              if (tierId === null) return null;
+              const pressed = billing.busy?.kind === "upgrade" && billing.busy.tierId === tierId;
+              return {
+                label: pressed ? "Opening Stripe…" : "Upgrade",
+                /* **Three buttons reading *Upgrade* are one button as far as a
+                   screen reader's button list is concerned**, which is how that
+                   list is actually used: pulled up out of context, with the
+                   card's heading nowhere near it. The visible word stays short
+                   because *Upgrade to Researcher* wraps in a 210px card, and
+                   *Upgrade* is contained in the name below, which is what
+                   WCAG's Label in Name asks. GPT Sol, stage 2 code review,
+                   finding 5. */
+                ariaLabel: pressed ? undefined : `Upgrade to ${plan.name}`,
+                /* Any button on the section is mid-request, so none of them may
+                   be pressed. */
+                disabled: billing.busy !== null,
+                onPress: () => billing.upgrade(tierId),
+              };
+            }}
+          />
           {/* Said once, under the cards, because it is true of all of them and
               because a reader looking at three prices will ask which one they
               pay. */}
@@ -168,10 +230,17 @@ export function BillingSection() {
                 has never checked out has no Manage billing button — the Portal
                 needs a Stripe customer, and the first Upgrade is what makes one.
                 GPT Sol, 2026-09-03. */}
-            Stripe charges in the currency for your location, and takes the card details — they
-            never reach us. Invoices, changing a card and cancelling all happen in Stripe's own
-            billing page, which this page links to once you have a subscription; a cancellation ends
-            at the end of the month you have paid for.
+            {/* **Three currencies named, rather than "yours".** The same
+                overstatement GPT Sol found in `/pricing`'s FAQ (stage 2 code
+                review, finding 2), and it is one click from that page: a tier
+                carries USD, GBP and EUR, and hosted Checkout can only pick a
+                currency the price actually has, so a reader outside those three
+                is not charged in their own. The cards above already show all
+                three, which is what made the sentence read as a promise. */}
+            Stripe charges in dollars, pounds or euros — whichever fits your location — and takes
+            the card details; they never reach us. Invoices, changing a card and cancelling all
+            happen in Stripe's own billing page, which this page links to once you have a
+            subscription; a cancellation ends at the end of the month you have paid for.
           </p>
         </div>
       )}
@@ -185,57 +254,52 @@ export function BillingSection() {
   );
 }
 
-/** One tier: its name, what it costs, its own description, and the button that buys it. */
-function Offer({
-  offer,
-  busy,
-  pressed,
-  onUpgrade,
-}: {
-  offer: TierOffer;
-  /** Any button on the section is mid-request, so none of them may be pressed. */
-  busy: boolean;
-  /** This one is the one being pressed, so only this one says so. */
-  pressed: boolean;
-  onUpgrade: () => void;
-}) {
-  return (
-    <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-3 tw:rounded-md tw:border tw:border-border tw:bg-background tw:p-3">
-      <div className="tw:min-w-0">
-        <p className="tw:m-0 tw:text-sm tw:text-foreground">
-          {offer.name}
-          <span className="tw:text-ink-faint">
-            {" · "}
-            {describeAmounts(offer.amounts)} a month
-          </span>
-        </p>
-        {/* **The allowance comes from `ingestsPerPeriod`, never from the
-            prose**, and this was briefly the other way round.
-     *
-            Rendering only `description` read better on today's rows, because
-            every seeded description opens with the allowance — and it is
-            *wrong*: `ingests_per_period` and `description` are two columns, and
-            billing.md's own recipe for raising a quota is one `UPDATE` of the
-            first. Do that and the wall grants 50 while this card advertises the
-            20 still sitting in the sentence. GPT Sol, 2026-09-03.
-     *
-            So the number is structured and authoritative, and the description
-            is the row's own words beside it. On the seeded rows that reads the
-            allowance twice, which is redundant rather than wrong — and the two
-            saying *different* numbers is a visible symptom rather than a silent
-            lie, which is the trade taken deliberately. A description should not
-            restate the allowance; billing.md § *Adding a tier or a currency*
-            says so, and the seeded ones predate that line. */}
-        <p className="tw:mt-0.5 tw:mb-0 tw:text-xs tw:text-muted-foreground">
-          {offer.ingestsPerPeriod} articles a month. {offer.description}
-        </p>
-      </div>
-      <Button type="button" disabled={busy} onClick={onUpgrade}>
-        {pressed ? "Opening Stripe…" : "Upgrade"}
-        {!pressed && <ExternalLink size={13} />}
-      </Button>
-    </div>
-  );
+/**
+ * One offer, as a `PlanCard`.
+ *
+ * The whole of what this page adds to the shared cards, and every line of it is
+ * a decision that was made once already:
+ *
+ * **The allowance comes from `ingestsPerPeriod`, never from the prose**, and
+ * this was briefly the other way round. Rendering only `description` read better
+ * on today's rows, because every seeded description opens with the allowance —
+ * and it is *wrong*: `ingests_per_period` and `description` are two columns, and
+ * billing.md's own recipe for raising a quota is one `UPDATE` of the first. Do
+ * that and the wall grants 50 while this card advertises the 20 still sitting in
+ * the sentence. GPT Sol, 2026-09-03. So the number is structured and
+ * authoritative, and the description is the row's own words beside it. On the
+ * seeded rows that reads the allowance twice, which is redundant rather than
+ * wrong — and the two saying *different* numbers is a visible symptom rather
+ * than a silent lie, which is the trade taken deliberately. A description should
+ * not restate the allowance; billing.md § *Adding a tier or a currency* says so,
+ * and the seeded ones predate that line.
+ *
+ * **All three currencies at once** rather than one guessed from the locale,
+ * because hosted Checkout picks by the customer's location and this page cannot
+ * know which they will be charged in. `describeAmounts`, src/billing-plan.ts.
+ *
+ * **The plan word, not the product name.** `Spideryarn Reader` is what the row
+ * calls it and `Reader` is what the website calls it; the two pages now sit a
+ * click apart, so they say the same word.
+ */
+function cardFor(offer: TierOffer): PlanCard {
+  return {
+    id: offer.id,
+    name: offer.name.replace(/^Spideryarn /, ""),
+    allowance: `${offer.ingestsPerPeriod} articles a month`,
+    /* **All three in `price`, and no `alt` — which is also what tells the card
+       to set the figure at reading size rather than as a headline.** The website
+       names one currency and lists the other two faintly, so its figure is `$10`
+       and fits at 2.1rem; this page cannot pick one, and three currencies that
+       size overflow a card in a `max-w-3xl` column. PlanCards.tsx § `alt`. */
+    price: describeAmounts(offer.amounts),
+    per: "a month",
+    /* No `trust` line here. *Cancel any time* belongs at the point of decision
+       on a page selling to a stranger; under these cards it would be a third
+       telling, since the paragraph below and the plan card above both already
+       say what cancelling does. */
+    note: offer.description,
+  };
 }
 
 /**

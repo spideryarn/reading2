@@ -21,6 +21,20 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
+/* **The entry stylesheet, and only it** — `main.tsx` imports the same one file
+   and says why: `tailwind.css` pulls `styles.css` in inside `@layer app`, and
+   importing the two side by side leaves the second copy unlayered where it
+   outranks every utility.
+
+   This page had neither until 2026-09-04, which is the *other* half of the same
+   trap: a preview page with no stylesheet mounts the real component and renders
+   it as browser defaults, which is a picture that tells you nothing true
+   (docs/project/browser-testing.md). It matters less here than elsewhere —
+   this page is about the WebRTC plumbing and the event log rather than the
+   layout — but a throwaway page that lies about type and colour is not cheaper
+   than one that does not. */
+import "./tailwind.css";
+
 import { useLiveConversation } from "./live/useLiveConversation.js";
 import type { LiveWiring } from "./live/wiring.js";
 import {

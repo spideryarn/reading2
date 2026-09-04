@@ -62,6 +62,9 @@ import type {
   Quote,
   Quotes,
   NodeId,
+  Timeline,
+  TimelineEvent,
+  TimelineOccurrence,
   Tree,
   TreeNode,
   Tweet,
@@ -75,6 +78,7 @@ import type {
   PublicIdeas,
   PublicQuotes,
   PublicMeta,
+  PublicTimeline,
   PublicTweets,
 } from "../public-types.js";
 import { publicSourceUrl } from "../urls.js";
@@ -374,6 +378,46 @@ function publicQuotes(quotes: Quotes): PublicQuotes {
   };
 }
 
+/**
+ * The timeline, rebuilt event by event.
+ *
+ * The envelope is the work here: `version`, `generator`, `slug`, `sourceHash`,
+ * `generatedAt`, `elapsedMs` and `orderConflicts` all stay behind, and
+ * src/public-types.ts § `PublicTimeline` argues the last of those, which is the
+ * only one that is a close call.
+ *
+ * **The events cross whole**, like `Idea` and `Quote` and unlike the glossary:
+ * every field of a `TimelineEvent` is about the article — a label, the
+ * article's own dating words, the model's ordering, and offsets into blocks the
+ * visitor is already reading. `dating` and `occurrences` are passed through as
+ * the structures they are rather than rebuilt field by field, because
+ * `Dating` is a four-member union whose members a hand-copy would have to
+ * re-switch on, and a `default:` arm that dropped an unhandled kind would
+ * silently publish an event with no date rather than fail. The type is the
+ * allowlist for these two; the day `TimelineEvent` grows a field that is about
+ * a person, this comment is wrong and the test below is what says so.
+ */
+function publicTimeline(timeline: Timeline): PublicTimeline {
+  return {
+    events: timeline.events.map(
+      (event): TimelineEvent => ({
+        id: event.id,
+        label: event.label,
+        dating: event.dating,
+        order: event.order,
+        modality: event.modality,
+        occurrences: event.occurrences.map(
+          (occurrence): TimelineOccurrence => ({
+            blockId: occurrence.blockId,
+            quote: occurrence.quote,
+            start: occurrence.start,
+          }),
+        ),
+      }),
+    ),
+  };
+}
+
 /** The ideas, rebuilt idea by idea and occurrence by occurrence. */
 function publicIdeas(ideas: Ideas): PublicIdeas {
   return {
@@ -439,6 +483,7 @@ export function publicArticle(row: {
   ideas: Ideas | null;
   quotes: Quotes | null;
   tweets: TweetThread | null;
+  timeline: Timeline | null;
 }): PublicArticle {
   return {
     meta: publicMeta(row),
@@ -466,6 +511,7 @@ export function publicArticle(row: {
     ...(row.ideas !== null ? { ideas: publicIdeas(row.ideas) } : {}),
     ...(row.quotes !== null ? { quotes: publicQuotes(row.quotes) } : {}),
     ...(row.tweets !== null ? { tweets: publicTweets(row.tweets) } : {}),
+    ...(row.timeline !== null ? { timeline: publicTimeline(row.timeline) } : {}),
   };
 }
 

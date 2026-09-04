@@ -54,6 +54,7 @@ const AVAILABLE = {
   glossary: true,
   ideas: true,
   quotes: false,
+  timeline: true,
 };
 
 const CASES: { what: string; sharing: ArticleSharing | undefined }[] = [
@@ -80,7 +81,16 @@ const CASES: { what: string; sharing: ArticleSharing | undefined }[] = [
 
 function Page() {
   return (
-    <main className="tw:mx-auto tw:max-w-3xl tw:px-5 tw:py-10 tw:font-sans">
+    /* **`metadata-page`, because that is the class the real card renders
+       inside** (Metadata.tsx), and a preview that skips its component's page
+       container is a preview that can be wrong about anything that container
+       styles. This one was: until 2026-09-04 `.metadata-page button` carried a
+       `font` rule, so every button here drew in the UA's Arial while the real
+       page drew Geist — and it was *this page* that was used to report the
+       typeface as an app-wide bug. It was not app-wide; the Metadata page had
+       been exempt for a day. docs/project/browser-testing.md § A preview page
+       is not the page it previews. */
+    <main className="metadata-page tw:mx-auto tw:max-w-3xl tw:px-5 tw:py-10 tw:font-sans">
       <h1 className="tw:mb-1 tw:text-lg tw:text-foreground">Access &amp; sharing</h1>
       <p className="tw:mb-8 tw:text-sm tw:text-ink-faint">
         Nothing here is connected to anything. What to look at: whether Share reads as a button,

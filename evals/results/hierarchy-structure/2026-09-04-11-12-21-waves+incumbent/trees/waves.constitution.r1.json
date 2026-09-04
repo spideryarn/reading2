@@ -1,0 +1,1600 @@
+{
+  "version": "toc/3",
+  "generator": "claude-sonnet-5",
+  "slug": "constitution",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0012",
+        "n0018",
+        "n0042",
+        "n0052",
+        "n0075",
+        "n0078"
+      ],
+      "range": [
+        "spya-uz5nxd",
+        "spya-z5mzhp"
+      ],
+      "title": "Claude's Constitution",
+      "gist": "This document defines the values, priorities, and helpfulness principles that guide Claude's behavior, ordering safety, ethics, and Anthropic's guidelines above general helpfulness.",
+      "sourceHeading": "Claude's Constitution"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0004",
+        "n0005",
+        "n0006",
+        "n0007",
+        "n0008",
+        "n0009",
+        "n0010",
+        "n0011"
+      ],
+      "range": [
+        "spya-uz5nxd",
+        "spya-hxz0a3"
+      ],
+      "title": "Claude and the mission of Anthropic",
+      "gist": "Claude embodies Anthropic's mission to safely navigate transformative AI by being both genuinely helpful and ethically sound.",
+      "sourceHeading": "Claude and the mission of Anthropic"
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-uz5nxd",
+        "spya-uz5nxd"
+      ],
+      "title": ""
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-a2tws4",
+        "spya-a2tws4"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-cydxv4",
+        "spya-cydxv4"
+      ],
+      "title": ""
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-d903tp",
+        "spya-d903tp"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-gnjwz0",
+        "spya-gnjwz0"
+      ],
+      "title": ""
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-n8j9vj",
+        "spya-n8j9vj"
+      ],
+      "title": ""
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-w2ju34",
+        "spya-w2ju34"
+      ],
+      "title": ""
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-u8yfd9",
+        "spya-u8yfd9"
+      ],
+      "title": ""
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-hxz0a3",
+        "spya-hxz0a3"
+      ],
+      "title": ""
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0013",
+        "n0014",
+        "n0015",
+        "n0016",
+        "n0017"
+      ],
+      "range": [
+        "spya-ehnc9u",
+        "spya-tabzzj"
+      ],
+      "title": "Our approach to Claude's constitution",
+      "gist": "Anthropic favors cultivating Claude's good judgment and values over rigid rules, explaining its reasoning so that Claude's behavior generalizes well.",
+      "sourceHeading": "Our approach to Claude's constitution"
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 2,
+      "parent": "n0012",
+      "children": [],
+      "range": [
+        "spya-ehnc9u",
+        "spya-ehnc9u"
+      ],
+      "title": ""
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 2,
+      "parent": "n0012",
+      "children": [],
+      "range": [
+        "spya-nnh6hn",
+        "spya-nnh6hn"
+      ],
+      "title": ""
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 2,
+      "parent": "n0012",
+      "children": [],
+      "range": [
+        "spya-aj4dr2",
+        "spya-aj4dr2"
+      ],
+      "title": ""
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 2,
+      "parent": "n0012",
+      "children": [],
+      "range": [
+        "spya-ctqg0n",
+        "spya-ctqg0n"
+      ],
+      "title": ""
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 2,
+      "parent": "n0012",
+      "children": [],
+      "range": [
+        "spya-tabzzj",
+        "spya-tabzzj"
+      ],
+      "title": ""
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0019",
+        "n0028",
+        "n0037"
+      ],
+      "range": [
+        "spya-ffu60x",
+        "spya-wqaafx"
+      ],
+      "title": "Claude's core values",
+      "gist": "Claude's core values—being broadly safe, broadly ethical, compliant with Anthropic's guidelines, and genuinely helpful—are prioritized in that order whenever conflicts arise.",
+      "sourceHeading": "Claude's core values"
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 2,
+      "parent": "n0018",
+      "children": [
+        "n0020",
+        "n0023"
+      ],
+      "range": [
+        "spya-ffu60x",
+        "spya-dqx7dn"
+      ],
+      "title": "The four core values",
+      "gist": "Claude is meant to be broadly safe, broadly ethical, compliant with Anthropic's guidelines, and genuinely helpful."
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 3,
+      "parent": "n0019",
+      "children": [
+        "n0021",
+        "n0022"
+      ],
+      "range": [
+        "spya-ffu60x",
+        "spya-ujk7d4"
+      ],
+      "title": "Introducing the four values",
+      "gist": "Claude should balance genuine helpfulness against avoiding broader harms by embodying four core properties."
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 4,
+      "parent": "n0020",
+      "children": [],
+      "range": [
+        "spya-ffu60x",
+        "spya-ffu60x"
+      ],
+      "title": ""
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 4,
+      "parent": "n0020",
+      "children": [],
+      "range": [
+        "spya-ujk7d4",
+        "spya-ujk7d4"
+      ],
+      "title": ""
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 3,
+      "parent": "n0019",
+      "children": [
+        "n0024",
+        "n0025",
+        "n0026",
+        "n0027"
+      ],
+      "range": [
+        "spya-bh2faf",
+        "spya-dqx7dn"
+      ],
+      "title": "The four properties",
+      "gist": "The four properties are being broadly safe, broadly ethical, compliant with Anthropic's guidelines, and genuinely helpful to operators and users."
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 4,
+      "parent": "n0023",
+      "children": [],
+      "range": [
+        "spya-bh2faf",
+        "spya-bh2faf"
+      ],
+      "title": ""
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 4,
+      "parent": "n0023",
+      "children": [],
+      "range": [
+        "spya-c5kghx",
+        "spya-c5kghx"
+      ],
+      "title": ""
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 4,
+      "parent": "n0023",
+      "children": [],
+      "range": [
+        "spya-p4a4rd",
+        "spya-p4a4rd"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 4,
+      "parent": "n0023",
+      "children": [],
+      "range": [
+        "spya-dqx7dn",
+        "spya-dqx7dn"
+      ],
+      "title": ""
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 2,
+      "parent": "n0018",
+      "children": [
+        "n0029",
+        "n0032",
+        "n0035"
+      ],
+      "range": [
+        "spya-sw3v9u",
+        "spya-nuqt3t"
+      ],
+      "title": "Prioritizing the values",
+      "gist": "When conflicts arise, Claude weighs safety above ethics, ethics above Anthropic's guidelines, and guidelines above helpfulness, though most interactions involve no such tension."
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [
+        "n0030",
+        "n0031"
+      ],
+      "range": [
+        "spya-sw3v9u",
+        "spya-zuqd0d"
+      ],
+      "title": "The priority order",
+      "gist": "Claude should holistically weigh safety, ethics, guidelines, and helpfulness in that order, since most everyday tasks involve no real conflict among them."
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 4,
+      "parent": "n0029",
+      "children": [],
+      "range": [
+        "spya-sw3v9u",
+        "spya-sw3v9u"
+      ],
+      "title": ""
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 4,
+      "parent": "n0029",
+      "children": [],
+      "range": [
+        "spya-zuqd0d",
+        "spya-zuqd0d"
+      ],
+      "title": ""
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [
+        "n0033",
+        "n0034"
+      ],
+      "range": [
+        "spya-vby4sy",
+        "spya-enueab"
+      ],
+      "title": "Why safety comes first",
+      "gist": "Because AI training is imperfect, Claude must not undermine human oversight, which means respecting checks on its behavior without requiring blind obedience."
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 4,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-vby4sy",
+        "spya-vby4sy"
+      ],
+      "title": ""
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 4,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-enueab",
+        "spya-enueab"
+      ],
+      "title": ""
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [
+        "n0036"
+      ],
+      "range": [
+        "spya-nuqt3t",
+        "spya-nuqt3t"
+      ],
+      "title": "Ethics above guidelines",
+      "gist": "Anthropic's specific guidelines are meant to refine ethical action, so Claude should act ethically even if that means deviating from those guidelines in genuine conflicts."
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 4,
+      "parent": "n0035",
+      "children": [],
+      "range": [
+        "spya-nuqt3t",
+        "spya-nuqt3t"
+      ],
+      "title": ""
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 2,
+      "parent": "n0018",
+      "children": [
+        "n0038",
+        "n0040"
+      ],
+      "range": [
+        "spya-afvv5h",
+        "spya-wqaafx"
+      ],
+      "title": "Applying the document",
+      "gist": "Because this document is an evolving, imperfect attempt to guide a high-stakes project, Claude should interpret unclear cases in its spirit and expect revisions over time."
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 3,
+      "parent": "n0037",
+      "children": [
+        "n0039"
+      ],
+      "range": [
+        "spya-afvv5h",
+        "spya-afvv5h"
+      ],
+      "title": "Interpreting ambiguity",
+      "gist": "Where it's unclear how to categorize or weigh a consideration, Claude should use its best judgment of the document's spirit."
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 4,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-afvv5h",
+        "spya-afvv5h"
+      ],
+      "title": ""
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 3,
+      "parent": "n0037",
+      "children": [
+        "n0041"
+      ],
+      "range": [
+        "spya-wqaafx",
+        "spya-wqaafx"
+      ],
+      "title": "A living document",
+      "gist": "This document reflects current thinking on a hard, high-stakes project and will be revised as understanding improves."
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 4,
+      "parent": "n0040",
+      "children": [],
+      "range": [
+        "spya-wqaafx",
+        "spya-wqaafx"
+      ],
+      "title": ""
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0043",
+        "n0044",
+        "n0045",
+        "n0046",
+        "n0047",
+        "n0048",
+        "n0049",
+        "n0050",
+        "n0051"
+      ],
+      "range": [
+        "spya-e07b82",
+        "spya-qhr04v"
+      ],
+      "title": "Why helpfulness is one of Claude's most important traits",
+      "gist": "Helpfulness is one of Claude's most important traits because it can create enormous value for people and the world, so unhelpfulness carries real costs too.",
+      "sourceHeading": "Why helpfulness is one of Claude's most important traits"
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [],
+      "range": [
+        "spya-e07b82",
+        "spya-e07b82"
+      ],
+      "title": ""
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [],
+      "range": [
+        "spya-pwpvtw",
+        "spya-pwpvtw"
+      ],
+      "title": ""
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [],
+      "range": [
+        "spya-kgzqvu",
+        "spya-kgzqvu"
+      ],
+      "title": ""
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [],
+      "range": [
+        "spya-uqedqz",
+        "spya-uqedqz"
+      ],
+      "title": ""
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [],
+      "range": [
+        "spya-c8an54",
+        "spya-c8an54"
+      ],
+      "title": ""
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [],
+      "range": [
+        "spya-kgdywh",
+        "spya-kgdywh"
+      ],
+      "title": ""
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [],
+      "range": [
+        "spya-m5228n",
+        "spya-m5228n"
+      ],
+      "title": ""
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [],
+      "range": [
+        "spya-vud0z9",
+        "spya-vud0z9"
+      ],
+      "title": ""
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 2,
+      "parent": "n0042",
+      "children": [],
+      "range": [
+        "spya-qhr04v",
+        "spya-qhr04v"
+      ],
+      "title": ""
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0053",
+        "n0059",
+        "n0067"
+      ],
+      "range": [
+        "spya-humkrw",
+        "spya-aj0j5f"
+      ],
+      "title": "What constitutes genuine helpfulness",
+      "gist": "Genuine helpfulness means weighing principals' immediate desires, final goals, background desiderata, autonomy, and long-term wellbeing rather than naive compliance.",
+      "sourceHeading": "What constitutes genuine helpfulness"
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 2,
+      "parent": "n0052",
+      "children": [
+        "n0054",
+        "n0057"
+      ],
+      "range": [
+        "spya-humkrw",
+        "spya-x78cfu"
+      ],
+      "title": "Weighing principals' needs",
+      "gist": "Helpfulness is defined relative to 'principals'—operators and users—whose instructions and needs Claude must correctly interpret and address.",
+      "sourceHeading": "What constitutes genuine helpfulness"
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [
+        "n0055",
+        "n0056"
+      ],
+      "range": [
+        "spya-humkrw",
+        "spya-ahd063"
+      ],
+      "title": "Defining principals",
+      "gist": "Principals are those whose instructions Claude acts on and gives weight to, distinct from third parties whose interests merely matter.",
+      "sourceHeading": "What constitutes genuine helpfulness"
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 4,
+      "parent": "n0054",
+      "children": [],
+      "range": [
+        "spya-humkrw",
+        "spya-humkrw"
+      ],
+      "title": ""
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 4,
+      "parent": "n0054",
+      "children": [],
+      "range": [
+        "spya-ahd063",
+        "spya-ahd063"
+      ],
+      "title": ""
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [
+        "n0058"
+      ],
+      "range": [
+        "spya-x78cfu",
+        "spya-x78cfu"
+      ],
+      "title": "Introducing the factors",
+      "gist": "Claude must identify the response that correctly weighs several distinct kinds of needs when helping a principal."
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 4,
+      "parent": "n0057",
+      "children": [],
+      "range": [
+        "spya-x78cfu",
+        "spya-x78cfu"
+      ],
+      "title": ""
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 2,
+      "parent": "n0052",
+      "children": [
+        "n0060",
+        "n0064"
+      ],
+      "range": [
+        "spya-nr2han",
+        "spya-dzy3uc"
+      ],
+      "title": "Five factors of helpfulness",
+      "gist": "Genuine helpfulness requires attending to immediate desires, final goals, background desiderata, autonomy, and wellbeing, each interpreted neither too literally nor too liberally."
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [
+        "n0061",
+        "n0062",
+        "n0063"
+      ],
+      "range": [
+        "spya-nr2han",
+        "spya-vgrj84"
+      ],
+      "title": "Desires, goals, and desiderata",
+      "gist": "Claude should meet the stated request, the deeper motivation behind it, and the unstated standards a good response should meet."
+    },
+    "n0061": {
+      "id": "n0061",
+      "depth": 4,
+      "parent": "n0060",
+      "children": [],
+      "range": [
+        "spya-nr2han",
+        "spya-nr2han"
+      ],
+      "title": ""
+    },
+    "n0062": {
+      "id": "n0062",
+      "depth": 4,
+      "parent": "n0060",
+      "children": [],
+      "range": [
+        "spya-dajzd7",
+        "spya-dajzd7"
+      ],
+      "title": ""
+    },
+    "n0063": {
+      "id": "n0063",
+      "depth": 4,
+      "parent": "n0060",
+      "children": [],
+      "range": [
+        "spya-vgrj84",
+        "spya-vgrj84"
+      ],
+      "title": ""
+    },
+    "n0064": {
+      "id": "n0064",
+      "depth": 3,
+      "parent": "n0059",
+      "children": [
+        "n0065",
+        "n0066"
+      ],
+      "range": [
+        "spya-x8b23s",
+        "spya-dzy3uc"
+      ],
+      "title": "Autonomy and wellbeing",
+      "gist": "Claude should respect principals' rights to make their own decisions while also caring about users' long-term flourishing, not just immediate interests."
+    },
+    "n0065": {
+      "id": "n0065",
+      "depth": 4,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-x8b23s",
+        "spya-x8b23s"
+      ],
+      "title": ""
+    },
+    "n0066": {
+      "id": "n0066",
+      "depth": 4,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-dzy3uc",
+        "spya-dzy3uc"
+      ],
+      "title": ""
+    },
+    "n0067": {
+      "id": "n0067",
+      "depth": 2,
+      "parent": "n0052",
+      "children": [
+        "n0068",
+        "n0070",
+        "n0073"
+      ],
+      "range": [
+        "spya-gnvhk6",
+        "spya-aj0j5f"
+      ],
+      "title": "Balancing interpretation and wellbeing",
+      "gist": "Beyond identifying the most plausible interpretation of a request, Claude must avoid fostering unhealthy dependence and instead draw on accumulated human wisdom to genuinely serve wellbeing."
+    },
+    "n0068": {
+      "id": "n0068",
+      "depth": 3,
+      "parent": "n0067",
+      "children": [
+        "n0069"
+      ],
+      "range": [
+        "spya-gnvhk6",
+        "spya-gnvhk6"
+      ],
+      "title": "Finding the right interpretation",
+      "gist": "Claude should infer the most plausible reading of a request without overreaching into unwarranted assumptions, asking for clarification when genuinely ambiguous."
+    },
+    "n0069": {
+      "id": "n0069",
+      "depth": 4,
+      "parent": "n0068",
+      "children": [],
+      "range": [
+        "spya-gnvhk6",
+        "spya-gnvhk6"
+      ],
+      "title": ""
+    },
+    "n0070": {
+      "id": "n0070",
+      "depth": 3,
+      "parent": "n0067",
+      "children": [
+        "n0071",
+        "n0072"
+      ],
+      "range": [
+        "spya-fursdx",
+        "spya-fqwvqr"
+      ],
+      "title": "Wellbeing and engagement",
+      "gist": "Claude should avoid sycophancy and engagement-optimization, instead aiming to leave people genuinely better off like a trusted friend would."
+    },
+    "n0071": {
+      "id": "n0071",
+      "depth": 4,
+      "parent": "n0070",
+      "children": [],
+      "range": [
+        "spya-fursdx",
+        "spya-fursdx"
+      ],
+      "title": ""
+    },
+    "n0072": {
+      "id": "n0072",
+      "depth": 4,
+      "parent": "n0070",
+      "children": [],
+      "range": [
+        "spya-fqwvqr",
+        "spya-fqwvqr"
+      ],
+      "title": ""
+    },
+    "n0073": {
+      "id": "n0073",
+      "depth": 3,
+      "parent": "n0067",
+      "children": [
+        "n0074"
+      ],
+      "range": [
+        "spya-aj0j5f",
+        "spya-aj0j5f"
+      ],
+      "title": "Drawing on human wisdom",
+      "gist": "To serve wellbeing without being paternalistic, Claude relies on humanity's shared understanding that honesty, connection, and growth reflect real care, while flattery and manipulation are corrosive."
+    },
+    "n0074": {
+      "id": "n0074",
+      "depth": 4,
+      "parent": "n0073",
+      "children": [],
+      "range": [
+        "spya-aj0j5f",
+        "spya-aj0j5f"
+      ],
+      "title": ""
+    },
+    "n0075": {
+      "id": "n0075",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0076",
+        "n0077"
+      ],
+      "range": [
+        "spya-d5mr2q",
+        "spya-mn286g"
+      ],
+      "title": "Navigating helpfulness across principals",
+      "gist": "Claude must navigate differing levels of trust and potential conflicts among its three principals—Anthropic, operators, and users.",
+      "sourceHeading": "Navigating helpfulness across principals"
+    },
+    "n0076": {
+      "id": "n0076",
+      "depth": 2,
+      "parent": "n0075",
+      "children": [],
+      "range": [
+        "spya-d5mr2q",
+        "spya-d5mr2q"
+      ],
+      "title": ""
+    },
+    "n0077": {
+      "id": "n0077",
+      "depth": 2,
+      "parent": "n0075",
+      "children": [],
+      "range": [
+        "spya-mn286g",
+        "spya-mn286g"
+      ],
+      "title": ""
+    },
+    "n0078": {
+      "id": "n0078",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0079",
+        "n0092",
+        "n0108",
+        "n0115"
+      ],
+      "range": [
+        "spya-xwjt6x",
+        "spya-z5mzhp"
+      ],
+      "title": "Balancing helpfulness with other values",
+      "gist": "Claude should balance helpfulness against other values using heuristics like the thoughtful-senior-employee and dual-newspaper tests to avoid being both overcautious and overcompliant.",
+      "sourceHeading": "Balancing helpfulness with other values"
+    },
+    "n0079": {
+      "id": "n0079",
+      "depth": 2,
+      "parent": "n0078",
+      "children": [
+        "n0080",
+        "n0083"
+      ],
+      "range": [
+        "spya-xwjt6x",
+        "spya-mcn70k"
+      ],
+      "title": "Avoiding overcaution",
+      "gist": "A thoughtful senior Anthropic employee would be unhappy if Claude were needlessly cautious, wishy-washy, condescending, or refused reasonable requests."
+    },
+    "n0080": {
+      "id": "n0080",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [
+        "n0081",
+        "n0082"
+      ],
+      "range": [
+        "spya-xwjt6x",
+        "spya-t8b0yx"
+      ],
+      "title": "Thoughtful senior employee test",
+      "gist": "Claude can judge whether it is overcautious or overcompliant by imagining how a thoughtful senior Anthropic employee would react to its response.",
+      "sourceHeading": "Balancing helpfulness with other values"
+    },
+    "n0081": {
+      "id": "n0081",
+      "depth": 4,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-xwjt6x",
+        "spya-xwjt6x"
+      ],
+      "title": ""
+    },
+    "n0082": {
+      "id": "n0082",
+      "depth": 4,
+      "parent": "n0080",
+      "children": [],
+      "range": [
+        "spya-t8b0yx",
+        "spya-t8b0yx"
+      ],
+      "title": ""
+    },
+    "n0083": {
+      "id": "n0083",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [
+        "n0084",
+        "n0085",
+        "n0086",
+        "n0087",
+        "n0088",
+        "n0089",
+        "n0090",
+        "n0091"
+      ],
+      "range": [
+        "spya-ut5bsd",
+        "spya-mcn70k"
+      ],
+      "title": "Signs of overcaution",
+      "gist": "Overcautious behavior includes unnecessary refusals, caveats, moralizing, and condescension that make Claude less useful."
+    },
+    "n0084": {
+      "id": "n0084",
+      "depth": 4,
+      "parent": "n0083",
+      "children": [],
+      "range": [
+        "spya-ut5bsd",
+        "spya-ut5bsd"
+      ],
+      "title": ""
+    },
+    "n0085": {
+      "id": "n0085",
+      "depth": 4,
+      "parent": "n0083",
+      "children": [],
+      "range": [
+        "spya-pwrpcx",
+        "spya-pwrpcx"
+      ],
+      "title": ""
+    },
+    "n0086": {
+      "id": "n0086",
+      "depth": 4,
+      "parent": "n0083",
+      "children": [],
+      "range": [
+        "spya-s0gn3k",
+        "spya-s0gn3k"
+      ],
+      "title": ""
+    },
+    "n0087": {
+      "id": "n0087",
+      "depth": 4,
+      "parent": "n0083",
+      "children": [],
+      "range": [
+        "spya-n58h2w",
+        "spya-n58h2w"
+      ],
+      "title": ""
+    },
+    "n0088": {
+      "id": "n0088",
+      "depth": 4,
+      "parent": "n0083",
+      "children": [],
+      "range": [
+        "spya-vgt44b",
+        "spya-vgt44b"
+      ],
+      "title": ""
+    },
+    "n0089": {
+      "id": "n0089",
+      "depth": 4,
+      "parent": "n0083",
+      "children": [],
+      "range": [
+        "spya-egkyk2",
+        "spya-egkyk2"
+      ],
+      "title": ""
+    },
+    "n0090": {
+      "id": "n0090",
+      "depth": 4,
+      "parent": "n0083",
+      "children": [],
+      "range": [
+        "spya-hek4mp",
+        "spya-hek4mp"
+      ],
+      "title": ""
+    },
+    "n0091": {
+      "id": "n0091",
+      "depth": 4,
+      "parent": "n0083",
+      "children": [],
+      "range": [
+        "spya-mcn70k",
+        "spya-mcn70k"
+      ],
+      "title": ""
+    },
+    "n0092": {
+      "id": "n0092",
+      "depth": 2,
+      "parent": "n0078",
+      "children": [
+        "n0093",
+        "n0106"
+      ],
+      "range": [
+        "spya-bvkt68",
+        "spya-g9r8cr"
+      ],
+      "title": "Avoiding harmful compliance",
+      "gist": "The same thoughtful-employee heuristic means Claude should refuse to cause serious harm, share risky content, or take irreversible actions even when a user asks it to."
+    },
+    "n0093": {
+      "id": "n0093",
+      "depth": 3,
+      "parent": "n0092",
+      "children": [
+        "n0094",
+        "n0095",
+        "n0096",
+        "n0097",
+        "n0098",
+        "n0099",
+        "n0100",
+        "n0101",
+        "n0102",
+        "n0103",
+        "n0104",
+        "n0105"
+      ],
+      "range": [
+        "spya-bvkt68",
+        "spya-wmqukz"
+      ],
+      "title": "Signs of harmful compliance",
+      "gist": "A thoughtful senior employee would not want Claude to provide uplift for mass-harm weapons, assist clear threats, share contested opinions, or take severe irreversible actions."
+    },
+    "n0094": {
+      "id": "n0094",
+      "depth": 4,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-bvkt68",
+        "spya-bvkt68"
+      ],
+      "title": ""
+    },
+    "n0095": {
+      "id": "n0095",
+      "depth": 4,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-ahs2q7",
+        "spya-ahs2q7"
+      ],
+      "title": ""
+    },
+    "n0096": {
+      "id": "n0096",
+      "depth": 4,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-kzttxs",
+        "spya-kzttxs"
+      ],
+      "title": ""
+    },
+    "n0097": {
+      "id": "n0097",
+      "depth": 4,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-b54jrm",
+        "spya-b54jrm"
+      ],
+      "title": ""
+    },
+    "n0098": {
+      "id": "n0098",
+      "depth": 4,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-pd58xp",
+        "spya-pd58xp"
+      ],
+      "title": ""
+    },
+    "n0099": {
+      "id": "n0099",
+      "depth": 4,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-bbg92b",
+        "spya-bbg92b"
+      ],
+      "title": ""
+    },
+    "n0100": {
+      "id": "n0100",
+      "depth": 4,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-pu5fda",
+        "spya-pu5fda"
+      ],
+      "title": ""
+    },
+    "n0101": {
+      "id": "n0101",
+      "depth": 4,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-waxdw8",
+        "spya-waxdw8"
+      ],
+      "title": ""
+    },
+    "n0102": {
+      "id": "n0102",
+      "depth": 4,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-a7hv5w",
+        "spya-a7hv5w"
+      ],
+      "title": ""
+    },
+    "n0103": {
+      "id": "n0103",
+      "depth": 4,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-ckmhvd",
+        "spya-ckmhvd"
+      ],
+      "title": ""
+    },
+    "n0104": {
+      "id": "n0104",
+      "depth": 4,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-t3mubq",
+        "spya-t3mubq"
+      ],
+      "title": ""
+    },
+    "n0105": {
+      "id": "n0105",
+      "depth": 4,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-wmqukz",
+        "spya-wmqukz"
+      ],
+      "title": ""
+    },
+    "n0106": {
+      "id": "n0106",
+      "depth": 3,
+      "parent": "n0092",
+      "children": [
+        "n0107"
+      ],
+      "range": [
+        "spya-g9r8cr",
+        "spya-g9r8cr"
+      ],
+      "title": "Purpose of the heuristic",
+      "gist": "The thoughtful-employee heuristic is meant to encourage Claude's independent weighing of costs and benefits, not deference to actual Anthropic staff."
+    },
+    "n0107": {
+      "id": "n0107",
+      "depth": 4,
+      "parent": "n0106",
+      "children": [],
+      "range": [
+        "spya-g9r8cr",
+        "spya-g9r8cr"
+      ],
+      "title": ""
+    },
+    "n0108": {
+      "id": "n0108",
+      "depth": 2,
+      "parent": "n0078",
+      "children": [
+        "n0109",
+        "n0111",
+        "n0113"
+      ],
+      "range": [
+        "spya-rgrzer",
+        "spya-g4z2nx"
+      ],
+      "title": "Testing responses for balance",
+      "gist": "Claude can further check its responses with a dual newspaper test and by using good judgment in ambiguous, gray-area cases while staying transparent about any refusal."
+    },
+    "n0109": {
+      "id": "n0109",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [
+        "n0110"
+      ],
+      "range": [
+        "spya-rgrzer",
+        "spya-rgrzer"
+      ],
+      "title": "Dual newspaper test",
+      "gist": "Claude can check whether a response would be criticized as harmful by one reporter or as needlessly preachy and unhelpful by another."
+    },
+    "n0110": {
+      "id": "n0110",
+      "depth": 4,
+      "parent": "n0109",
+      "children": [],
+      "range": [
+        "spya-rgrzer",
+        "spya-rgrzer"
+      ],
+      "title": ""
+    },
+    "n0111": {
+      "id": "n0111",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [
+        "n0112"
+      ],
+      "range": [
+        "spya-v2n4fx",
+        "spya-v2n4fx"
+      ],
+      "title": "Navigating gray areas",
+      "gist": "In ambiguous or gray-area cases, Claude should use good judgment guided by Anthropic's heuristics and examples."
+    },
+    "n0112": {
+      "id": "n0112",
+      "depth": 4,
+      "parent": "n0111",
+      "children": [],
+      "range": [
+        "spya-v2n4fx",
+        "spya-v2n4fx"
+      ],
+      "title": ""
+    },
+    "n0113": {
+      "id": "n0113",
+      "depth": 3,
+      "parent": "n0108",
+      "children": [
+        "n0114"
+      ],
+      "range": [
+        "spya-g4z2nx",
+        "spya-g4z2nx"
+      ],
+      "title": "Transparent conscientious objector",
+      "gist": "When Claude limits its help, it should be transparent about doing so rather than deceptively sandbagging its response."
+    },
+    "n0114": {
+      "id": "n0114",
+      "depth": 4,
+      "parent": "n0113",
+      "children": [],
+      "range": [
+        "spya-g4z2nx",
+        "spya-g4z2nx"
+      ],
+      "title": ""
+    },
+    "n0115": {
+      "id": "n0115",
+      "depth": 2,
+      "parent": "n0078",
+      "children": [
+        "n0116",
+        "n0124"
+      ],
+      "range": [
+        "spya-jdee9s",
+        "spya-z5mzhp"
+      ],
+      "title": "Practical steps for helpfulness",
+      "gist": "Claude can improve its responses by clarifying the underlying need, considering expert perspectives and alternatives, and critically revising drafts, applying these heuristics holistically rather than mechanically."
+    },
+    "n0116": {
+      "id": "n0116",
+      "depth": 3,
+      "parent": "n0115",
+      "children": [
+        "n0117",
+        "n0118",
+        "n0119",
+        "n0120",
+        "n0121",
+        "n0122",
+        "n0123"
+      ],
+      "range": [
+        "spya-jdee9s",
+        "spya-ekarxh"
+      ],
+      "title": "Steps to maximize helpfulness",
+      "gist": "Claude can identify the real need behind a request, consider multiple interpretations and expert viewpoints, and draft then critique its response to improve it."
+    },
+    "n0117": {
+      "id": "n0117",
+      "depth": 4,
+      "parent": "n0116",
+      "children": [],
+      "range": [
+        "spya-jdee9s",
+        "spya-jdee9s"
+      ],
+      "title": ""
+    },
+    "n0118": {
+      "id": "n0118",
+      "depth": 4,
+      "parent": "n0116",
+      "children": [],
+      "range": [
+        "spya-p75b5w",
+        "spya-p75b5w"
+      ],
+      "title": ""
+    },
+    "n0119": {
+      "id": "n0119",
+      "depth": 4,
+      "parent": "n0116",
+      "children": [],
+      "range": [
+        "spya-uftaze",
+        "spya-uftaze"
+      ],
+      "title": ""
+    },
+    "n0120": {
+      "id": "n0120",
+      "depth": 4,
+      "parent": "n0116",
+      "children": [],
+      "range": [
+        "spya-mr5qbt",
+        "spya-mr5qbt"
+      ],
+      "title": ""
+    },
+    "n0121": {
+      "id": "n0121",
+      "depth": 4,
+      "parent": "n0116",
+      "children": [],
+      "range": [
+        "spya-d3ytg6",
+        "spya-d3ytg6"
+      ],
+      "title": ""
+    },
+    "n0122": {
+      "id": "n0122",
+      "depth": 4,
+      "parent": "n0116",
+      "children": [],
+      "range": [
+        "spya-nh48sh",
+        "spya-nh48sh"
+      ],
+      "title": ""
+    },
+    "n0123": {
+      "id": "n0123",
+      "depth": 4,
+      "parent": "n0116",
+      "children": [],
+      "range": [
+        "spya-ekarxh",
+        "spya-ekarxh"
+      ],
+      "title": ""
+    },
+    "n0124": {
+      "id": "n0124",
+      "depth": 3,
+      "parent": "n0115",
+      "children": [
+        "n0125"
+      ],
+      "range": [
+        "spya-z5mzhp",
+        "spya-z5mzhp"
+      ],
+      "title": "Using heuristics holistically",
+      "gist": "These heuristics are not decisive rules but aids for Claude's holistic judgment in balancing helpfulness against other values."
+    },
+    "n0125": {
+      "id": "n0125",
+      "depth": 4,
+      "parent": "n0124",
+      "children": [],
+      "range": [
+        "spya-z5mzhp",
+        "spya-z5mzhp"
+      ],
+      "title": ""
+    }
+  }
+}

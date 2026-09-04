@@ -769,6 +769,26 @@ Also: asserting a column constant or a projection object passes while the real q
 `.select()`. Assert the generated SQL — Drizzle's `QueryBuilder` from `drizzle-orm/pg-core` builds it
 with no database and no connection.
 
+### A source-scanning guard reads the comments too
+
+A test that greps the tree for a bad pattern will match the **prose explaining why that pattern was
+removed**, and this repo writes a lot of that prose. Both halves of
+[`tests/linky-is-scoped.test.ts`](../../tests/linky-is-scoped.test.ts) did on the day it was written
+(2026-09-04): the three files it had just cleaned each carry a comment quoting the offending markup
+and naming the containers that style it, so re-introducing the bug left the guard green. Strip block
+comments before scanning, and match a class as an *attribute* rather than as a word.
+
+The same file offers the other half of the lesson. A guard whose sweep can come back empty — no
+files matched the naming convention, no rules found in the stylesheet — passes vacuously for ever
+after somebody renames something. **Assert the sweep found anything at all**, then assert what it
+found.
+
+And a related shape, from [`tests/preflight-substitute.test.ts`](../../tests/preflight-substitute.test.ts)
+the same day: a checklist that records a property as *deliberately skipped in favour of something
+else* has to name that something and check it is still there. Declining CSS's `font` shorthand for
+two longhands, and then losing the longhands, left the checklist green over exactly the bug it was
+built for — because the thing it compared against never mentions longhands.
+
 ## A suite that cannot run, and how to make it say so
 
 A Postgres suite that finds the database behind the code should say so out loud. Getting that to
@@ -889,6 +909,26 @@ red per run — `refuses a claim that would put the machine over its cap`, `free
 once a claimant has stopped answering`, and neighbours — all of them `expected 'busy' to be
 'claimed'`, all of them green in the same tree once the ingest finished. **Look for a `running` row
 before believing a claim case.**
+
+**And when there is no `running` row, the same sentence has a second cause: the queue lock, taken by
+this file's own pumps.** `claim` opens by taking the `queue_state` singleton with `for update
+nowait` ([`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts)), so a claim that arrives while *any*
+other claim is mid-transaction is refused — `busy`, *"another claim is being decided"* — however free
+the job and however empty the table. The other claimant is usually the suite itself: `enqueue`
+starts a `pump`, a request handed an already-running job is given one too, and those loops go on
+waking up on a 250ms→5s backoff several cases later. Measured 2026-09-04 in
+[`tests/jobs.test.ts`](../../tests/jobs.test.ts) by logging every `claim` the file makes — in the run
+that went red a leftover pump's claim began 19ms before the case's own and was still inside its
+transaction; six job ids claimed inside 400ms. It reproduced 1 in 15 runs of the file **alone** on a
+loaded box and never on a quiet one, which is exactly how a same-file race disguises itself as
+interference from another file.
+
+The remedy is not a lock and not a wait: it is to **ask again**, because that is the queue's
+contract — *"whoever takes it runs; everybody else is told `busy` and asks again. The pump is not
+privileged"* ([`src/jobs.ts`](../../src/jobs.ts) § `advanceJob`). A bounded retry costs a case
+nothing it was proving: the failures these cases are written against — a sweep that never runs, a
+claim predicate that lets a second runner in — answer `busy` *every* time, so they exhaust the
+budget and still go red. `tests/jobs.test.ts` § *asking again, on `busy`* is the shape to copy.
 
 **There is a fourth, and no fixture can hide from it: the expiry sweep is unscoped.**
 `advanceJobWith` opens with `store.settleExpired()` — no owner, no slug, the whole table

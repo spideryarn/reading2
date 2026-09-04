@@ -15,35 +15,110 @@
  * an effort and a renderer, so the entry one writes is the entry the other reads.
  *
  * docs/postmortems/260903c-the-conditional-article-cache-breakpoint-marks-the-writer-but-never-the-reader.md
+ *
+ * ## The store, since 2026-09-04
+ *
+ * It used to `delete process.env.SPIDERYARN_STORE` and drive `fsJobStore`,
+ * `fsArtifacts` and `fsStoreSession` — a whole walk with no database in it.
+ * Stage B of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * moves it, and the move costs one seeded article and buys the thing this file
+ * is *for*: the walk it now runs is production's. `claimSession` picks the
+ * Postgres session, every step's product is committed into this claim's own
+ * draft, and the job publishes at the end — so `cacheArticle` is read off a
+ * `StepContext` built by the same code path that builds the one a reader pays
+ * for. The filesystem session it used to run under is the branch of
+ * `claimSession` that is being deleted.
+ *
+ * ## The mutations, watched rather than reasoned — 2026-09-04
+ *
+ * Stage B asks each converted file for evidence it can still go red, and for
+ * what that red does not reach. Two were run here, and the second is the more
+ * useful of them because it did not go red at all.
+ *
+ * **1 — the call site this file exists for, and it went red.** `src/jobs.ts`,
+ * the `cacheArticle:` argument, put back to later-steps-only:
+ * `cacheArticleForStep(job.steps.map((s) => s.name), job.steps.indexOf(step))`
+ * made `cacheArticleForStep(job.steps.map((s) => s.name).slice(job.steps
+ * .indexOf(step)), 0)`. **1 failed of 4** — *marks BOTH steps of a same-group
+ * pair*, on `expected [ true, false ] to deeply equal [ true, true ]`, which is
+ * `24335207`'s bug to the value. The other two walks are unmoved, correctly:
+ * neither has a same-group pair in it to lose.
+ *
+ * **2 — the Postgres half of the claim above, and it STAYED GREEN.**
+ * `src/store/pg-session.ts` § `commit`, `if (product.parts) {` made
+ * `if (false && product.parts) {` — every step's product silently not written
+ * into the draft. **4 passed of 4**, and `assertProduced` in the same
+ * transaction, whose whole job is to refuse a step that finished without
+ * writing, did not fire.
+ *
+ * The reason is the fixture. `scratchArticleInPg` clones `data/writes`, which
+ * ships `arc.json`, `tweets.json` and `glossary.json` among its artefacts, and
+ * `openOrBeginJobDraft` carries the published revision forward into this
+ * claim's draft — so `assertProduced` reads back the *fixture's* `arc` and is
+ * satisfied by it. Every step here re-produces an artefact the article already
+ * had. So the sentence above — *every step's product is committed into this
+ * claim's own draft* — is the mechanism this file runs on and **is not
+ * something this file can see**: it would pass over a session that persisted
+ * nothing.
+ *
+ * **What neither covers.** Mutation 1 reaches the call site's arguments and not
+ * `cacheArticleForStep` or `sharesArticleCache` beneath it — tests/article-cache
+ * -group.test.ts owns those, and Sol's original demonstration was that it stays
+ * green under exactly this mutation. Neither mutation says anything about what
+ * the walk *persists*: no assertion here reads a row back, `READS` fakes away
+ * every freshness question, and mutation 2 shows the two facts are connected.
+ * Nor about publication — the job publishes at the end of each walk and nothing
+ * below looks at the revision it left.
  */
 import { vi } from "vitest";
 
-/* `delete` rather than `"files"`: unset is the state a fresh clone is in, and
-   `storeFromEnv` treats the two the same on purpose (src/store/live.ts). Hoisted
-   so it lands before `src/store/live.js` reads the environment. */
+/**
+ * `SPIDERYARN_STORE=postgres` before **any** import — it used to be a `delete`,
+ * on the argument that unset is the state a fresh clone is in.
+ *
+ * `src/store/live.ts` reads the environment once, the first time anything
+ * imports it, and imports are hoisted above every statement in a module. A
+ * plain assignment here would leave `claimSession` handing back the filesystem
+ * session with nothing saying so.
+ */
 const HOISTED = vi.hoisted(() => {
   const previousStore = process.env.SPIDERYARN_STORE;
-  delete process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
   return { previousStore };
 });
 
-import { readFile, readdir, rm } from "node:fs/promises";
-import path from "node:path";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { closeDb, getDb } from "../src/db/client.js";
+import { jobs as jobsTable } from "../src/db/schema.js";
+import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
-import { advanceJobWith } from "../src/jobs.js";
+import { advanceJobWith, claimSession } from "../src/jobs.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEPS, type PipelineStep, type StepContext } from "../src/pipeline.js";
-import { fsArtifacts } from "../src/store/artifacts-fs.js";
-import { fsJobStore } from "../src/store/jobs-fs.js";
 import { STORE } from "../src/store/live.js";
-import { fsStoreSession } from "../src/store/session.js";
+import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { ArtifactReads } from "../src/store/artifacts.js";
 import type { StoreSession } from "../src/store/session.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
 
-if (HOISTED.previousStore !== undefined) process.env.SPIDERYARN_STORE = HOISTED.previousStore;
+/* Put the flag back straight after the imports: vitest reuses a worker across
+   files and does not reset `process.env` between them. */
+if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
+
+loadEnvLocal();
+
+const { reachable } = await pgReady({
+  suite: "tests/article-cache-call-site.test.ts",
+  tables: ["spideryarn.articles", "spideryarn.jobs"],
+});
+
+const when = reachable ? describe : describe.skip;
 
 /** What each step was told, in the order the walk told them. */
 const seen: { step: StepName; cacheArticle: boolean | undefined }[] = [];
@@ -93,10 +168,20 @@ const READS = {
   hasEarlierBlocks: async () => false,
 } as unknown as ArtifactReads;
 
-/** One slug for every job here, so the artefacts land in one directory to remove. */
+/** One slug for every job here, so one article carries the whole file. */
 const SLUG = "article-cache-call-site-fixture";
 
-const MADE: string[] = [];
+/**
+ * The article the jobs below run on.
+ *
+ * **It has to exist**, and that is the one thing the move cost. `claimSession`
+ * opens this claim's draft by carrying the published revision forward
+ * (`openOrBeginJobDraft`), so a late step against a slug no article holds has
+ * nothing to carry and nothing to publish into. On the filesystem session there
+ * was no draft and no publication, so a job could be walked against a bare
+ * directory name.
+ */
+let article: ScratchArticle | undefined;
 
 async function queueTwoModeJob(steps: StepName[]): Promise<Job> {
   const wanted: Job = {
@@ -107,17 +192,25 @@ async function queueTwoModeJob(steps: StepName[]): Promise<Job> {
     status: "queued",
     createdAt: new Date().toISOString(),
   };
-  const { job } = await fsJobStore.enqueueOrGet(wanted, {
+  const { job } = await pgJobStore.enqueueOrGet(wanted, {
     workKey: `article-cache-call-site-${wanted.id}`,
     reservesName: false,
   });
-  MADE.push(job.id);
   return job;
 }
 
-/** The real filesystem session, with only the freshness reads replaced. */
-function session(): StoreSession {
-  return { ...fsStoreSession({ artifacts: fsArtifacts, jobs: fsJobStore }), reads: READS };
+/**
+ * **Production's own session factory, with only the freshness reads replaced.**
+ *
+ * `claimSession` is exported for exactly this (src/jobs.ts § *Exported so a
+ * test can drive the real one*): a test may supply fake **steps**, because the
+ * thirteen real ones cost money, but the session under them has to be the one
+ * production builds or this is a test of its own wiring. Spreading it is safe —
+ * `pgStoreSession` returns an object of closures, not methods that need a
+ * `this`.
+ */
+function session(job: Job, attempt: string): Promise<StoreSession> {
+  return claimSession(job, attempt).then((real) => ({ ...real, reads: READS }));
 }
 
 /**
@@ -138,7 +231,7 @@ async function walk(steps: StepName[]): Promise<void> {
        than hanging it. One spare turn past the number of steps. */
     for (let turn = 0; turn <= steps.length; turn++) {
       const advanced = await advanceJobWith(job.id, {
-        session: async () => session(),
+        session,
         steps: { ...STEPS, ...registry } as never,
       });
       if (advanced?.done !== false) return;
@@ -146,26 +239,34 @@ async function walk(steps: StepName[]): Promise<void> {
   });
 }
 
-describe("the cacheArticle flag, as the job walk actually sets it", () => {
-  beforeAll(() => {
-    /* The control on the control: a flag that failed to take would run this
-       against Postgres, which is a different session and a different test. */
-    expect(STORE).toBe("files");
+describe("the store this walk is actually running on", () => {
+  it("is the Postgres one", () => {
+    /* The control on the control, and **not** gated on `reachable`: a flag that
+       failed to take would run this against the filesystem session, which is a
+       different `claimSession` branch and therefore a different test — and one
+       that would pass, since `cacheArticle` is computed the same way on both
+       sides. A control that vanishes when the database is missing vanishes
+       exactly when it matters. */
+    expect(STORE).toBe("postgres");
   });
+});
+
+when("the cacheArticle flag, as the job walk actually sets it", () => {
+  beforeAll(async () => {
+    /* Owned by `DEV_OWNER_ID` explicitly, because that is who the walk runs as:
+       the Postgres reader filters every article by owner, so a fixture seeded as
+       somebody else is invisible and every claim would refuse. */
+    article = await scratchArticleInPg(SLUG, { ownerId: DEV_OWNER_ID });
+  }, 120_000);
 
   afterAll(async () => {
-    /* Both of the repository directories this writes into. `fsJobStore` and
-       `fsArtifacts` use module-level constants rather than a scratch root, so
-       the records and the artefacts have to be taken out by hand — as
-       tests/all-skipped-publication-log.test.ts does for the first of them. */
-    const jobsDir = path.resolve(import.meta.dirname, "..", "data", "_jobs");
-    for (const file of await readdir(jobsDir).catch(() => [])) {
-      const full = path.join(jobsDir, file);
-      const record = JSON.parse(await readFile(full, "utf8").catch(() => "{}")) as { id?: string };
-      if (record.id !== undefined && MADE.includes(record.id)) await rm(full, { force: true });
-    }
-    await rm(path.resolve(import.meta.dirname, "..", "data", SLUG), { recursive: true, force: true });
-  });
+    /* Jobs first: a job row's `draft_revision_id` is a foreign key into the
+       revision the article delete would be trying to cascade away. By slug
+       rather than by id, so a case that died mid-walk leaves nothing behind. */
+    await getDb().delete(jobsTable).where(eq(jobsTable.slug, SLUG));
+    await article?.remove();
+    await closeDb();
+  }, 60_000);
 
   it("marks BOTH steps of a same-group pair — the reader as well as the writer", async () => {
     await walk(["arc", "tweets"]);

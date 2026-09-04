@@ -20,26 +20,152 @@
  * docs/plans/260831l-live-conversation-in-chat.md § 1d.
  *
  * `fetch` is stubbed, so nothing here reaches OpenAI and no key is needed.
+ *
+ * ## It ran on the filesystem store until 2026-09-04
+ *
+ * The conversation the ticket seeds from used to be a `chat.json` under a
+ * throwaway `data/<slug>/`, so the claim in this file's own title — *the
+ * history and the id of the row that is currently last, from one read* — was
+ * being made about a JSON array, against the store that is not deployed
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § B). Under Postgres *last* is a fact about `chat_messages.ordinal`, resolved
+ * by a second query and an `orderBy` — so **the tail can now be wrong**, which
+ * is the whole reason the sentence is worth asserting. On files it could not
+ * be: the messages come back in the order they were written into the object.
+ *
+ * The other half the move buys is silent until you look for it: the ticket
+ * writes a `realtime_sessions` row **before** the token leaves this server, and
+ * on the filesystem store that journal is a file nobody in production reads.
+ *
+ * ## The mutations, watched rather than reasoned — 2026-09-04
+ *
+ * One for each of the two halves above. The first is red and the second is not,
+ * and the second is the one worth reading.
+ *
+ * **1 — the ordering the tail is a fact about.** `src/store/pg-chat.ts` §
+ * `threadsFor`: `.orderBy(asc(chatMessages.threadId), asc(chatMessages
+ * .ordinal))` made `.orderBy(asc(chatMessages.threadId), sql`…ordinal desc`)`.
+ * **2 failed of 11** — *seeds from the thread, and names the row that is last*
+ * (`expected [] to deeply equal [ { role: 'user', …(1) }, …(1) ]`) and *takes
+ * the block ids OUT of what the model is shown of its own speech*. Note the
+ * shape of the first failure: the seed came back **empty** rather than
+ * reversed, because `recentHistory` (src/live.ts) reads the array as a
+ * chronology and walks it from the end. So the ordering is load-bearing twice
+ * over, and this is the mutation the filesystem version could not have had —
+ * its messages come back in the order the object holds them.
+ *
+ * *(A first attempt used `desc(chatMessages.ordinal)`, which `pg-chat.ts` does
+ * not import: all 11 failed, including the ungated `STORE` control. A whole-file
+ * red is a module that would not load, not a finding. Recorded because the two
+ * look identical in a summary line.)*
+ *
+ * **2 — the journal, and it STAYED GREEN.** `src/routes.ts`, the live-ticket
+ * branch: `await realtimeSessionStore.issue({…})` made `if (false) await
+ * realtimeSessionStore.issue({…})`, so no `realtime_sessions` row is written
+ * before the token goes out. **11 passed of 11.** Nothing in this file asks
+ * whether the row exists — `spideryarn.realtime_sessions` appears in the
+ * `pgReady` table list and in the teardown note, and nowhere else. So the last
+ * paragraph above describes a mechanism this file **does not test**: an
+ * unjournalled ticket would ship green through here.
+ * tests/realtime-usage.test.ts and tests/store-realtime-sessions.test.ts are
+ * where that row is held.
+ *
+ * **What neither covers.** Mutation 1 breaks the ordinal ordering and says
+ * nothing about `chat_messages.ordinal` being *assigned* right — `begin` and
+ * `appendSpoken` derive it from the pure function's array indices, and a
+ * mis-assignment would be invisible to a query that then sorted by it. It says
+ * nothing about the thread-level `orderBy` beside it. And neither mutation
+ * reaches the claim that the seed and the tail come from **one** read: both
+ * come out of the same `threadsFor` call, so no mutation short of splitting
+ * that call can make them disagree, and this file would not notice if somebody
+ * did.
  */
-import { cp, rm } from "node:fs/promises";
-import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { handleApi } from "../src/routes.js";
-import { LIVE_MODEL } from "../src/live.js";
-import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
+/**
+ * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
+ * reads the flag once and imports are hoisted above every statement. Copied
+ * from tests/candidates-route.test.ts, which explains the shape.
+ */
+const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
+  const previous = process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
+  return previous;
+});
 
+import { closeDb } from "../src/db/client.js";
+import { loadEnvLocal } from "../src/env.js";
+import { LIVE_MODEL } from "../src/live.js";
+import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
+
+loadEnvLocal();
+
+/** A throwaway slug, so the conversations written below belong to nobody. */
 const SLUG = "test-chat-live-ticket";
-const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
-const EXAMPLE = path.resolve(import.meta.dirname, "..", "example");
-const reseed = async () => {
-  await rm(DIR, { recursive: true, force: true });
-  await cp(EXAMPLE, DIR, { recursive: true });
-};
-beforeAll(reseed);
-afterEach(reseed);
-afterAll(() => rm(DIR, { recursive: true, force: true }));
+
+const { reachable } = await pgReady({
+  suite: "tests/chat-live-ticket-route.test.ts",
+  tables: [
+    "spideryarn.chat_threads",
+    "spideryarn.chat_messages",
+    "spideryarn.realtime_sessions",
+    "spideryarn.revision_blocks",
+  ],
+});
+
+const { handleApi } = await import("../src/routes.js");
+const { chatStore, STORE } = await import("../src/store/index.js");
+
+if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
+
+const when = reachable ? describe : describe.skip;
+
+describe("the store these tests are actually talking to", () => {
+  it("is the Postgres one", () => {
+    /* Not gated on the database being up, deliberately: a control that vanishes
+       when Postgres is missing vanishes exactly when it matters. A flag that
+       failed to take looks precisely like this suite working — the filesystem
+       chat store hands back its messages in array order, so `tailId` is right
+       there however the ordering is done. */
+    expect(STORE).toBe("postgres");
+  });
+});
+
+let article: ScratchArticle | undefined;
+
+beforeAll(async () => {
+  if (!reachable) return;
+  /* `TEST_OWNER`, because `acceptAny` authenticates as that reader and the
+     Postgres reader filters every article by owner. An article seeded as
+     anybody else is invisible and every route below answers 404, which looks
+     exactly like a broken route — `ScratchOptions.ownerId`. */
+  article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
+}, 60_000);
+
+/**
+ * Conversations, and nothing a previous case wrote beside them.
+ *
+ * Where the filesystem version re-copied `example/` into `data/<slug>/` after
+ * every case, which threw the chat file away along with it. Deleting the
+ * threads and keeping the article is the same reset: nothing here writes to the
+ * article, and a published revision is not editable anyway. The
+ * `realtime_sessions` rows the ticket journals go with the article at the end.
+ */
+beforeEach(async () => {
+  if (!article) return;
+  await asTestOwner(async () => {
+    for (const thread of await chatStore.load(SLUG)) await chatStore.remove(SLUG, thread.id);
+  });
+});
+
+afterAll(async () => {
+  await article?.remove();
+  await closeDb();
+});
 
 /** What OpenAI was asked to create, so a test can read the session back. */
 let minted: Record<string, unknown> | null = null;
@@ -109,7 +235,7 @@ const ticket = (threadId: string, body: unknown = {}) =>
 const speak = (threadId: string, body: Record<string, unknown>) =>
   post(`/api/chat/${SLUG}/${threadId}/spoken`, body);
 
-describe("the ticket", () => {
+when("the ticket", () => {
   it("hands back a key, and never the prompt", async () => {
     /* A client that is handed the instructions is a client that can be talked
        into sending different ones. The created session already holds all of it.
@@ -170,7 +296,7 @@ describe("the ticket", () => {
   });
 });
 
-describe("the tool a live session may ask us to run", () => {
+when("the tool a live session may ask us to run", () => {
   /* **The one route where the browser names the tool.** In typed chat the name
      comes off the model's own output on this server; here the model is talking
      to the browser, so the call arrives second-hand. That is one step further
@@ -209,7 +335,7 @@ describe("the tool a live session may ask us to run", () => {
   });
 });
 
-describe("what the session is created with", () => {
+when("what the session is created with", () => {
   it("maps the reader's placement onto the field OpenAI takes", async () => {
     /* `near_field` / `far_field` runs before the voice-activity detector, so it
        decides how often a room is treated as somebody talking — which is the

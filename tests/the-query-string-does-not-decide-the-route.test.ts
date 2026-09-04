@@ -21,15 +21,113 @@
  * file asked only about an absent slug, where both branches answer
  * `{ threads: [] }`; GPT Sol pointed out that deleting the `summary` branch
  * outright would have left it green.
+ *
+ * ## It ran on the filesystem store until 2026-09-04
+ *
+ * The thread that *really exists* used to be a `chat.json` under a throwaway
+ * `data/<slug>/`, written by a `chatStore` the flag had left pointing at the
+ * filesystem — so the branch this file was written to prove was being proved
+ * against the store that is not deployed
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § B). It now pins `postgres` before any import and seeds a real article with
+ * `scratchArticleInPg`.
+ *
+ * **`summarise` is a projection either way** — it takes the loaded threads and
+ * drops their transcripts — so what moved is not that half of the branch but
+ * the sentence under it. On files, *a thread that really exists* meant a JSON
+ * file this suite had just written, and the list route would answer 200 for a
+ * slug no article had ever been published under. Under Postgres it means rows
+ * that exist only because the article, its current revision and the requesting
+ * owner all line up, which is the condition the shipped route is under.
+ *
+ * ## The mutations, watched rather than reasoned — 2026-09-04
+ *
+ * Stage B asks each converted file for evidence it can still go red, and for
+ * what that red does not reach. Two were run here.
+ *
+ * **1 — the subject of the file, and it went red.** `src/routes.ts` §
+ * `serveApi`: `const path = url.split("?")[0] ?? url;` made `const path = url;`,
+ * which is the postmortem's bug put back. **2 failed of 4** — *reaches the
+ * summaries branch when it carries ?summary=1* and *ignores a query string
+ * nothing reads*, both on `expected 'No API route for GET /api/chat/test-t…'
+ * not to match /^No API route for/`. The two that stayed green are the control
+ * pair: the no-query-string case, and the `STORE` check.
+ *
+ * **2 — the Postgres-only half of the sentence above, and it STAYED GREEN.**
+ * `src/store/owned-slug.ts` § `ownedSlug`: `return and(eq(articles.slug, slug),
+ * eq(articles.ownerId, ownerId ?? currentOwnerId()));` made `return
+ * and(eq(articles.slug, slug));` — the owner term deleted from the one
+ * sanctioned article lookup. **4 passed of 4.** The reason is the seeding: this
+ * file makes exactly one article, owns it as `TEST_OWNER`, and asks for it as
+ * `TEST_OWNER` through `acceptAny`. A predicate that has narrowed to one row
+ * anyway cannot be caught narrowing it for the wrong reason. So *rows that
+ * exist only because … the requesting owner line up* is true of the store and
+ * **is not tested here**; tests/owner-isolation.test.ts is where it is held.
+ *
+ * **And the same run corrects the sentence.** `chatStore.load` reaches the
+ * article through `articleIdForOwned`, which predicates on `ownedSlug` **alone**
+ * — `onTheShelf`, the *has a published revision* rule, is not in this path at
+ * all. So "its current revision" above is wrong about which predicate does the
+ * work, and nothing here could have told you.
+ *
+ * **What neither mutation covers.** Mutation 1 says nothing about the other
+ * half of the same split (`query`, parsed from `url.slice(path.length)`):
+ * breaking that makes `?summary=1` an unreachable *branch* rather than an
+ * unreachable *route*, which this file would catch on the `messages` assertion
+ * but for a different reason than it claims. It says nothing about the three
+ * other route families that read a query string. Mutation 2 reaches only the
+ * owner term; `threadsFor`'s own `articleId` scoping — the predicate that stops
+ * one article's conversations appearing under another — is untouched by both,
+ * and with one seeded article this file could not see it move.
  */
-import { rm } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { handleApi } from "../src/routes.js";
-import { chatStore } from "../src/store/index.js";
-import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
+/**
+ * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
+ * reads the flag once and imports are hoisted above every statement. Copied
+ * from tests/candidates-route.test.ts, which explains the shape.
+ */
+const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
+  const previous = process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
+  return previous;
+});
+
+import { closeDb } from "../src/db/client.js";
+import { loadEnvLocal } from "../src/env.js";
+import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
+
+loadEnvLocal();
+
+/** A throwaway slug, so the conversation written below belongs to nobody. */
+const SLUG = "test-the-query-string-does-not-decide-the-route";
+
+const { reachable } = await pgReady({
+  suite: "tests/the-query-string-does-not-decide-the-route.test.ts",
+  tables: ["spideryarn.chat_threads", "spideryarn.revision_blocks"],
+});
+
+const { handleApi } = await import("../src/routes.js");
+const { chatStore, STORE } = await import("../src/store/index.js");
+
+if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
+
+const when = reachable ? describe : describe.skip;
+
+describe("the store these tests are actually talking to", () => {
+  it("is the Postgres one", () => {
+    /* Not gated on the database being up, deliberately: a control that vanishes
+       when Postgres is missing is a control that vanishes exactly when it
+       matters. A flag that failed to take looks precisely like this suite
+       working — the filesystem chat store answers both branches happily for a
+       slug that is not an article at all. */
+    expect(STORE).toBe("postgres");
+  });
+});
 
 /** Drive `handleApi` with a fake GET, and give back the status and parsed body. */
 async function get(url: string): Promise<{ status: number; body: Record<string, unknown> }> {
@@ -65,28 +163,44 @@ async function get(url: string): Promise<{ status: number; body: Record<string, 
  */
 const NO_ROUTE = /^No API route for/;
 
-/** A throwaway slug, so the conversation written below belongs to nobody. */
-const SLUG = "test-the-query-string-does-not-decide-the-route";
-const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
-afterAll(() => rm(DIR, { recursive: true, force: true }));
+let article: ScratchArticle | undefined;
+/** The id the store minted, read back rather than guessed. */
+let THREAD = "";
 
-/* One real conversation, written straight to the store. No model is involved:
-   `begin` appends the question and a pending answer, which is all the two
-   assertions below need — one turn, and a `messages` array to be missing from
-   the summary. */
-await chatStore.begin(SLUG, {
-  threadId: "spya-qryst1",
-  question: "Does the query string route?",
+beforeAll(async () => {
+  if (!reachable) return;
+  /* `TEST_OWNER`, because `acceptAny` authenticates as that reader and the
+     Postgres reader filters every article by owner — an article seeded as
+     anybody else is invisible and both routes below answer 404, which looks
+     exactly like the bug this file is about. `ScratchOptions.ownerId`. */
+  article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
+  /* One real conversation, written straight to the store. No model is involved:
+     `begin` appends the question and a pending answer, which is all the two
+     assertions below need — one turn, and a `messages` array to be missing from
+     the summary. Under Postgres it needs the article row above to hang off. */
+  await asTestOwner(async () => {
+    await chatStore.begin(SLUG, {
+      threadId: "spya-qryst1",
+      question: "Does the query string route?",
+    });
+    /* Read back rather than assumed: the store mints the id it stores, and
+       asserting against the one this file asked for would be asserting against
+       a guess. */
+    const id = (await chatStore.load(SLUG))[0]?.id;
+    if (id === undefined) throw new Error("the store kept no conversation for this slug");
+    THREAD = id;
+  });
+}, 60_000);
+
+afterAll(async () => {
+  await article?.remove();
+  await closeDb();
 });
-/* Read back rather than assumed: the store mints the id it stores, and asserting
-   against the one this file asked for would be asserting against a guess. */
-const THREAD = (await chatStore.load(SLUG))[0]?.id;
-if (THREAD === undefined) throw new Error("the store kept no conversation for this slug");
 
 type Thread = Record<string, unknown>;
 const threadsIn = (body: Record<string, unknown>): Thread[] => body.threads as Thread[];
 
-describe("a query string does not decide whether a route exists", () => {
+when("a query string does not decide whether a route exists", () => {
   it("answers the chat list when the URL carries no query string", async () => {
     const { status, body } = await get(`/api/chat/${SLUG}`);
     expect(status).toBe(200);

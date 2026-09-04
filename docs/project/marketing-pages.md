@@ -1,8 +1,16 @@
 # The marketing pages, and how to shoot them
 
-`/` and `/features` — the two pages a stranger sees before they sign in. This doc is the **how**:
-how the visual language works, how to take a screenshot that shows what it is meant to show, and
-how to photograph the pages themselves without a lying picture.
+`/`, `/features` and — since 2026-09-04 — `/pricing`: the pages a stranger sees before they sign in.
+This doc is the **how**: how the visual language works, how to take a screenshot that shows what it
+is meant to show, and how to photograph the pages themselves without a lying picture.
+
+**`/pricing` was the odd one out until then**, and it is worth knowing why it joined rather than
+being left alone. It was a bare `<main class="max-w-3xl">` with a *← Back* link and no navigation,
+so its content column started at x=360 where the other two start at x=168 — and because every
+`--site-*` custom property is declared on `.site`, none of the language below was even available on
+it. Joining the family is `className="site"`, `SiteNav here="pricing"`, a hero and
+`SiteFooter variant="marketing"`; [website-text.md § The pricing page](website-text.md#the-pricing-page)
+has the copy side of the same change.
 
 The **what** lives elsewhere and is not repeated here. [positioning.md](positioning.md) is who the
 pages speak to and whose words they use; [website-text.md](website-text.md) is the copy and the
@@ -15,9 +23,10 @@ this sits under.
 |---|---|
 | [`src/web/LandingPage.tsx`](../../src/web/LandingPage.tsx) | `/` — the hero, the pictures, the bento, the plans, the sign-in panel |
 | [`src/web/FeaturesPage.tsx`](../../src/web/FeaturesPage.tsx) | `/features` — every mode, grouped |
-| [`src/web/SiteBits.tsx`](../../src/web/SiteBits.tsx) | the furniture both pages share, so they cannot drift into two |
-| [`src/web/SiteFooter.tsx`](../../src/web/SiteFooter.tsx) | the footer row, which these two pages share with the other four — `variant="marketing"` keeps this design's spacing |
-| [`src/web/Plans.tsx`](../../src/web/Plans.tsx) | the three plans, on both pages |
+| [`src/web/PricingPage.tsx`](../../src/web/PricingPage.tsx) | `/pricing` — the plans, the buttons that buy them, the sign-in panel, the FAQ |
+| [`src/web/SiteBits.tsx`](../../src/web/SiteBits.tsx) | the furniture all three pages share, so they cannot drift into three |
+| [`src/web/SiteFooter.tsx`](../../src/web/SiteFooter.tsx) | the footer row, which these three pages share with the other four — `variant="marketing"` keeps this design's spacing |
+| [`src/web/PlanCards.tsx`](../../src/web/PlanCards.tsx) | the three plans, on all three pages — and, since 2026-09-04, the buttons that buy them on `/pricing` and `/profile` |
 | [`src/web/shots.ts`](../../src/web/shots.ts) | every screenshot: file, pixel size, alt text |
 | `styles.css` § the site | the `site-*` classes — the whole visual language, in one block |
 
@@ -90,15 +99,23 @@ stretched 1.95×, on a page that otherwise looked completely fine. The story is 
 
 ## Screenshotting the pages themselves, for review
 
-**A full-page capture of these pages lies, twice.** Both are capture artifacts rather than page bugs,
-and both are indistinguishable from real bugs in a picture — which is the
-[silent-success](../reusable/silent-success.md) shape pointed at your own eyes.
+**A full-page capture of these pages lies, twice, and an element capture lies a third way.** All
+three are capture artifacts rather than page bugs, and all three are indistinguishable from real bugs
+in a picture — which is the [silent-success](../reusable/silent-success.md) shape pointed at your own
+eyes.
 
 - **Every reveal below the first viewport comes back blank.** Playwright's `fullPage` stitches
   without really scrolling, so a `animation-timeline: view()` section never enters the view and keeps
   its start state.
 - **Composited frames come back empty** — a screenshot inside a transformed element renders as its
   own background colour.
+- **`locator.screenshot()` clips to the bounding box, and the raised plan card sticks out of its
+  own.** The recommended card in [`PlanCards.tsx`](../../src/web/PlanCards.tsx) is lifted above the
+  row by a negative margin (`tw:lg:-my-4`), which does not grow the box the clip is taken from — so
+  the shot arrives with the RECOMMENDED label sliced off the top and the card looking like the
+  design is broken. Found on 2026-09-04 while shooting the stage 2 evidence. Shoot the **viewport**
+  and crop, or pass a `clip` with headroom above the element's `y`; a wrapper element with padding
+  is the other answer, and it changes the thing you were photographing.
 
 So: **capture one viewport at a time, scrolling between shots.** That is what a reader sees anyway.
 If you must take a full-page shot, inject
@@ -133,6 +150,17 @@ decisions rather than taste, and are the ones to preserve:
 drawn 689px wide renders the app's own prose at 48% — legible as a texture, not as words. A page
 selling careful reading cannot show unreadable reading.
 
+**One piece of the language travels off these pages, and only one.** The `--site-*` custom
+properties are declared on `.site` **and** on `.plan-cards`, because the price cards
+([`PlanCards.tsx`](../../src/web/PlanCards.tsx)) are also drawn on `/profile`, from the billing rows.
+Without those values there a `site-panel` is a transparent border over no fill and a
+`site-cta-ghost` has no outline — which looks like a class somebody forgot to define rather than a
+bug, so nobody reports it. The component carrying its own tokens is what makes it portable; giving
+`/profile` a `.site` ancestor instead would have handed a panel inside the app the marketing page's
+background as well. **Do not widen that list further** — the block stages its own surfaces precisely
+because the app's own tokens cannot do this job, and a third selector on it is the beginning of the
+site's look leaking into the reading view.
+
 ### The reduced-motion guard here is its own, and testing it needs care
 
 `tailwind.css`'s global guard sets `animation-duration: 0.01ms !important`, which is the right
@@ -151,7 +179,7 @@ green for the wrong reason. Verified that way on 2026-09-03: `none` for tilt, re
 
 ## The copy is not yours to write
 
-Every sentence on both pages carries a comment naming its source, or `[tissue]` for the connecting
+Every sentence on all three pages carries a comment naming its source, or `[tissue]` for the connecting
 lines an agent wrote. Restructuring may move a sentence; it may not rewrite one.
 [positioning.md § Whose words](positioning.md#whose-words) is the rule and Greg's reason for it.
 
@@ -161,7 +189,7 @@ page said "six diagrams" for a day, having been written from a doc, when there w
 ## Before you call it done
 
 `npm test` and `npm run typecheck`; `tests/landing-assets.test.ts` specifically if any picture
-changed. Then look at both pages at 1440 and at 390 wide, a viewport at a time, and ask of every
+changed. Then look at all three pages at 1440 and at 390 wide, a viewport at a time, and ask of every
 screen: *what is this screen for, and is that the thing the eye lands on?*
 
 ---

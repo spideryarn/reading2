@@ -36,20 +36,82 @@
  *   was being handed a failure's sentence for something nobody would call a
  *   failure.
  *
- * And the persisted assertions are read back **off the file the queue wrote**,
+ * And the persisted assertions are read back **off the row the queue wrote**,
  * not off `getJob` — see `persisted`.
+ *
+ * ## It ran on the filesystem queue until 2026-09-04
+ *
+ * Every job here was a JSON file under `data/_jobs/`, every session was
+ * `fsStoreSession`, and `persisted` parsed the file back. That made the whole
+ * file a test of a queue production does not run
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § B),
+ * and it made the *sharpest* thing in it — *read back off what the queue really
+ * wrote* — a claim about a JSON round trip rather than about a `text` column and
+ * a `jsonb` one.
+ *
+ * The flag is now pinned to `postgres` before any import; `enqueue` and
+ * `advanceJobWith` drive the real `pgJobStore` and the session `claimSession`
+ * builds; and `persisted` selects the two columns straight out of
+ * `spideryarn.jobs`. **No article is seeded**, and that is deliberate rather
+ * than a saving: these jobs are first ingests of a slug nothing holds, so
+ * `openOrBeginJobDraft` → `lockOrCreateArticle` makes the row the way a real one
+ * would — which is the state the `fetch` step actually fails in. The rows are
+ * taken away by slug in `afterAll`.
+ *
+ * ## The mutation, watched red on 2026-09-04
+ *
+ * `steps: ending.steps` in `finishIn` (src/store/pg-jobs.ts) made
+ * `steps: ending.steps.map((s) => ({ ...s, error: undefined }))` — a field lost
+ * on the way to a column, which is the precise failure `persisted` was written
+ * for. **5 of 8 red**, and see `persisted` for what that count says about the
+ * function's own justification.
+ *
+ * **What it does not cover.** The `jsonb` column and not the `text` one beside
+ * it: `job.error` survives this mutation untouched, so the band's field is
+ * covered by nothing here. Nor `releaseStepIn`, which writes the same `steps`
+ * array *between* steps and is what a reader watching a multi-step job actually
+ * sees — every job in this file has one step and ends on the first failure, so
+ * the mid-walk writer is never exercised. Nor the fence in the same `where`, nor
+ * `claimIn`. And this file still cannot see a step whose product was never
+ * written: nothing here asserts on a revision.
+ *
+ * **The race this file was seen losing is gone.** It had failed once under heavy
+ * load on a read-after-write against `data/_jobs/` — a test of the very store
+ * being deleted. There is no `data/_jobs/` in it any more, and neither
+ * `persisted` nor `settle` reads a directory. Ten consecutive runs, 2026-09-04,
+ * on a sixteen-core box at load average 32–52 with several other worktrees
+ * running their own suites: ten green, 9/9 every time. That is a measurement
+ * with a date on it rather than a proof — the old failure was seen once — but it
+ * is the measurement the plan asked for and the mechanism it blamed is gone.
  *
  * See docs/project/copy.md § The seam between the two audiences, and
  * docs/plans/260903c-fix-quiz-build-band-spread-failure-and-lost-quiz-answers.md § Stage 2.
  */
-import path from "node:path";
-import { rm } from "node:fs/promises";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
+/**
+ * `SPIDERYARN_STORE=postgres`, before **any** import runs. `src/store/live.ts`
+ * reads the flag once and imports are hoisted above every statement, and
+ * `src/jobs.ts` picks both its job store and its `claimSession` branch off it at
+ * module load.
+ */
+const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
+  const previous = process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
+  return previous;
+});
+
+import { eq, inArray } from "drizzle-orm";
+
+import { closeDb, getDb } from "../src/db/client.js";
+import { articles, jobs as jobsTable } from "../src/db/schema.js";
+import { loadEnvLocal } from "../src/env.js";
+import { mintId } from "../src/ids.js";
 import {
   type AdvanceParts,
   advanceJobWith,
   cancelJob,
+  claimSession,
   DEADLINE_MARGIN_MS,
   enqueue,
   getJob,
@@ -59,21 +121,33 @@ import { STEPS } from "../src/pipeline.js";
 import { jobWorthRetrying, stageFailure } from "../src/job-failure.js";
 import { ANSWER_OVERFLOWED_FIXED_ASK, MODEL_REFUSED, worthRetrying } from "../src/messages.js";
 import { currentOwnerId } from "../src/owner.js";
-import { fsArtifacts } from "../src/store/artifacts-fs.js";
-import { fsJobStore } from "../src/store/jobs-fs.js";
+import { STORE } from "../src/store/live.js";
+import { pgJobStore } from "../src/store/pg-jobs.js";
 import { PublishRefused } from "../src/store/pg-revisions.js";
-import { fsStoreSession } from "../src/store/session.js";
+import type { StoreSession } from "../src/store/session.js";
 import type { Job } from "../src/types.js";
-import { jobFilesOnDisk } from "./helpers/job-files.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
-const ROOT_DATA = path.resolve(import.meta.dirname, "..", "data");
+/* Put the flag back straight after the imports: vitest reuses a worker across
+   files and does not reset `process.env` between them. */
+if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
+
+loadEnvLocal();
+
+const { reachable } = await pgReady({
+  suite: "tests/step-failure-seam.test.ts",
+  tables: ["spideryarn.articles", "spideryarn.jobs"],
+});
+
+const when = reachable ? describe : describe.skip;
 
 /**
- * One slug per case, and each is removed afterwards.
+ * One slug per case, and every row under them is removed afterwards.
  *
- * `beginStep` makes `data/<slug>/steps/` before the stage runs, so a job that
- * fails on its first step still leaves a directory behind — which every suite
- * that reads the shelf then walks. tests/jobs.test.ts learned this the same way.
+ * Three cases share `test-seam-undeclared` on purpose — they are three questions
+ * about one failure — and that is safe because each waits for its own job to
+ * reach a terminal status before the next enqueues.
  */
 const SLUGS = [
   "test-seam-cancelled",
@@ -93,15 +167,15 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-afterAll(async () => {
-  for (const { path: full, record } of await jobFilesOnDisk()) {
-    if (record.slug !== undefined && SLUGS.includes(record.slug)) {
-      await rm(full, { force: true });
-    }
-  }
-  for (const slug of SLUGS) {
-    await rm(path.join(ROOT_DATA, slug), { recursive: true, force: true });
-  }
+describe("the store this queue is actually running on", () => {
+  it("is the Postgres one", () => {
+    /* Not gated on `reachable`, deliberately: a flag that failed to take would
+       run every case below against the filesystem queue — a different store, a
+       different `claimSession` branch, and a `persisted` that would then be
+       reading a column nothing had written. A control that vanishes when
+       Postgres is missing vanishes exactly when it matters. */
+    expect(STORE).toBe("postgres");
+  });
 });
 
 /** Poll until the job stops moving, or give up. */
@@ -127,27 +201,53 @@ async function failingJob(slug: string, err: unknown) {
 }
 
 /**
- * **The persisted pair, read back off the file the queue actually wrote.**
+ * **The persisted pair, read back off the row the queue actually wrote.**
  *
- * `getJob` under the filesystem store hands back a `structuredClone` of the
- * in-memory index (src/store/jobs-fs.ts § `get`), so every assertion made
- * against it is an assertion about the object this process just built. A leak
- * that only appeared once the record was serialised — or a field lost on the
- * way to a column — would pass all of them. GPT Sol's point on the first
- * version of this file, and it is the same shape as the assertion it was
- * already making about the band and the card: check the thing that is really
- * read, not a copy that happens to agree.
+ * The argument for this function is older than the store it now reads. Under the
+ * filesystem queue `getJob` handed back a `structuredClone` of the in-memory
+ * index (src/store/jobs-fs.ts § `get`), so every assertion made against it was
+ * an assertion about the object this process had just built, and a leak that
+ * only appeared once the record was serialised would pass all of them. GPT Sol's
+ * point on the first version of this file, and it is the same shape as the
+ * assertion it was already making about the band and the card: check the thing
+ * that is really read, not a copy that happens to agree.
  *
- * `jobFilesOnDisk` is the loader the queue's own `loadFromDisk` mirrors, so
- * this is a genuine JSON round trip.
+ * **Postgres weakens most of that, and the honest thing is to say by how much.**
+ * `getJob` is a `SELECT` now, so `settle()`'s answer is already a round trip and
+ * the every-assertion-so-far-is-about-an-object-this-process-built sentence
+ * above is simply no longer true of this file. Measured rather than reasoned:
+ * the mutation below, which drops `error` from the steps on their way into the
+ * column, turns **five** cases red, and the first thing it breaks is one of the
+ * *in-memory* assertions. So the two kinds of read now differ by exactly one
+ * thing — `toJob(row)`, a mapping with its own opportunities to lose a field —
+ * and this function is kept for that difference and for the plainness of the
+ * claim it makes: *what is in the database is not a leak*.
  */
-async function persisted(id: string): Promise<Partial<Job>> {
-  const found = (await jobFilesOnDisk()).find((f) => f.record.id === id);
-  if (!found) throw new Error(`no file on disk for job ${id}`);
-  return found.record;
+async function persisted(id: string): Promise<{ error: string | null; steps: Job["steps"] }> {
+  const rows = await getDb()
+    .select({ error: jobsTable.error, steps: jobsTable.steps })
+    .from(jobsTable)
+    .where(eq(jobsTable.id, id));
+  const row = rows[0];
+  if (!row) throw new Error(`no row in spideryarn.jobs for job ${id}`);
+  return { error: row.error, steps: row.steps as Job["steps"] };
 }
 
-describe("an error nobody wrote a reader sentence for", () => {
+/**
+ * Everything these jobs made, by slug — the `articles` rows included.
+ *
+ * Jobs first: a job row's `draft_revision_id` is a foreign key into the revision
+ * the article delete would be trying to cascade away.
+ */
+afterAll(async () => {
+  if (reachable) {
+    await getDb().delete(jobsTable).where(inArray(jobsTable.slug, SLUGS));
+    await getDb().delete(articles).where(inArray(articles.slug, SLUGS));
+  }
+  await closeDb();
+}, 60_000);
+
+when("an error nobody wrote a reader sentence for", () => {
   /**
    * The text below is every genre this seam has actually leaked, in one string:
    * a source-file reference, a section name, band arithmetic addressed to
@@ -182,13 +282,13 @@ describe("an error nobody wrote a reader sentence for", () => {
     expect(row.error, "the raw message reached the persisted job.error").not.toContain(
       "src/quiz.ts",
     );
-    expect(row.steps?.[0]?.error, "the raw message reached the persisted step.error").not.toContain(
+    expect(row.steps[0]?.error, "the raw message reached the persisted step.error").not.toContain(
       "src/quiz.ts",
     );
     expect(row.error, "the sentence did not survive being written down").toMatch(
       /\[jb-step-again\]$/,
     );
-    expect(row.steps?.[0]?.error).toMatch(/\[jb-step-again\]$/);
+    expect(row.steps[0]?.error).toMatch(/\[jb-step-again\]$/);
   });
 
   it("is replaced by something the reader can read, with a code to quote", async () => {
@@ -212,7 +312,7 @@ describe("an error nobody wrote a reader sentence for", () => {
   });
 });
 
-describe("an error that declared its reader sentence", () => {
+when("an error that declared its reader sentence", () => {
   it("arrives word for word, and its diagnostic does not", async () => {
     const detail = "stop_reason=refusal after 41.2s — src/quiz.ts:530";
     const finished = await failingJob(
@@ -270,11 +370,12 @@ describe("an error that declared its reader sentence", () => {
  * same thing against a real row).
  *
  * The refusal is injected into the session's own `settleJob` rather than
- * reached through Postgres, so this stays a filesystem test: it is the
- * coordinator's handling of the throw that is under test, not the query that
- * produces it.
+ * provoked with a real lineage conflict, and that is still right after the move
+ * to Postgres: it is the coordinator's handling of the throw that is under test,
+ * not the query that produces it. `tests/all-skipped-publication-refusal.test.ts`
+ * is the one that makes a real row refuse.
  */
-describe("a publication that was refused", () => {
+when("a publication that was refused", () => {
   it("tells the reader the publication failed, not why the tree was rejected", async () => {
     const slug = "test-seam-publish-refused";
     const refusal = new PublishRefused(slug, [
@@ -286,18 +387,27 @@ describe("a publication that was refused", () => {
        and claiming the job out from under it — tests/jobs-walk.test.ts §
        `queueJob` learned this first. */
     const queued: Job = {
-      id: `spya-seam${Math.random().toString(36).slice(2, 4)}`,
+      /* **`mintId()`, not a hand-written mnemonic.** `jobs_id_format` requires
+         the body to start with a letter, so the old `spya-seam<2 random>` — and
+         `spya-seamc<1>` below — are refused by Postgres outright. The filesystem
+         store validated nothing, which is why a decade of fixture ids were never
+         wrong until now. */
+      id: mintId(),
       ownerId: currentOwnerId(),
       slug,
       steps: [{ name: "fetch", label: STEPS.fetch.label, status: "pending" }],
       status: "queued",
       createdAt: new Date().toISOString(),
     };
-    await fsJobStore.enqueueOrGet(queued, { workKey: `seam-${queued.id}`, reservesName: false });
+    await pgJobStore.enqueueOrGet(queued, { workKey: `seam-${queued.id}`, reservesName: false });
 
     const parts: AdvanceParts = {
-      session: async () => {
-        const real = fsStoreSession({ artifacts: fsArtifacts, jobs: fsJobStore });
+      /* **Production's own session factory**, with two things replaced — the
+         freshness reads, so the step skips, and the successful settlement, so
+         the publication throws. Spreading it is safe: `pgStoreSession` returns
+         an object of closures, not methods that need a `this`. */
+      session: async (job: Job, attempt: string): Promise<StoreSession> => {
+        const real = await claimSession(job, attempt);
         return {
           ...real,
           /* `stepIsDone` asks these three before it ever looks at the step, so
@@ -379,18 +489,18 @@ describe("a publication that was refused", () => {
  * that combination is what produced the contradiction, and a test using a plain
  * `new Error` would have missed it.
  */
-describe("a run the reader stopped", () => {
+when("a run the reader stopped", () => {
   it("says they stopped it, rather than reporting a failure they chose", async () => {
     const slug = "test-seam-cancelled";
     const queued: Job = {
-      id: `spya-seamc${Math.random().toString(36).slice(2, 3)}`,
+      id: mintId(),
       ownerId: currentOwnerId(),
       slug,
       steps: [{ name: "fetch", label: STEPS.fetch.label, status: "pending" }],
       status: "queued",
       createdAt: new Date().toISOString(),
     };
-    await fsJobStore.enqueueOrGet(queued, { workKey: `seam-${queued.id}`, reservesName: false });
+    await pgJobStore.enqueueOrGet(queued, { workKey: `seam-${queued.id}`, reservesName: false });
 
     vi.spyOn(STEPS.fetch, "run").mockImplementation(async () => {
       /* Stop arriving *inside* the step, which is the path that aborts the
@@ -400,10 +510,7 @@ describe("a run the reader stopped", () => {
       throw stageFailure(MODEL_REFUSED, "the model answered with stop_reason: refusal");
     });
 
-    const advanced = await advanceJobWith(queued.id, {
-      session: async () => fsStoreSession({ artifacts: fsArtifacts, jobs: fsJobStore }),
-      steps: STEPS,
-    });
+    const advanced = await advanceJobWith(queued.id, { session: claimSession, steps: STEPS });
 
     expect(advanced?.job.status, "it was not cancelled, so this proves nothing").toBe("cancelled");
 
@@ -453,16 +560,25 @@ describe("a run the reader stopped", () => {
  * and what the ending says once the windows are gone, which is what this case
  * always asserted.
  */
-describe("a run its own deadline stopped", () => {
+when("a run its own deadline stopped", () => {
   /**
    * One overrunning job, driven until it either pauses or ends.
    *
    * `leaseMs` is `DEADLINE_MARGIN_MS + 100`, so the claimant gives up a tenth of
    * a second in — the deadline is `leaseMs - DEADLINE_MARGIN_MS` after the claim.
+   *
+   * **Merged 2026-09-04, and the resolution is worth recording.** Two agents
+   * added a block of this name within hours: one here for the pause, driving the
+   * filesystem store, and one from `dev` driving Postgres. `dev` had converted
+   * this whole file off the filesystem deliberately (see the header), so the fs
+   * fixtures no longer exist — keeping them would have re-opened a decision
+   * somebody had just made. What survives is `dev`'s store and this side's
+   * coverage: the second case below, a job merely put down, which the pause
+   * added and which nothing else in this file asserts.
    */
   async function overrun(id: string) {
     return await advanceJobWith(id, {
-      session: async () => fsStoreSession({ artifacts: fsArtifacts, jobs: fsJobStore }),
+      session: claimSession,
       steps: {
         ...STEPS,
         fetch: {
@@ -486,14 +602,14 @@ describe("a run its own deadline stopped", () => {
 
   async function anOverrunningJob(seed: string): Promise<Job> {
     const queued: Job = {
-      id: `spya-seam${seed}${Math.random().toString(36).slice(2, 3)}`,
+      id: mintId(),
       ownerId: currentOwnerId(),
       slug: `test-seam-overran-${seed}`,
       steps: [{ name: "fetch", label: STEPS.fetch.label, status: "pending" }],
       status: "queued",
       createdAt: new Date().toISOString(),
     };
-    await fsJobStore.enqueueOrGet(queued, { workKey: `seam-${queued.id}`, reservesName: false });
+    await pgJobStore.enqueueOrGet(queued, { workKey: `seam-${queued.id}`, reservesName: false });
     return queued;
   }
 

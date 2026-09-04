@@ -37,18 +37,24 @@ describe("the hierarchy-structure eval's incumbent", () => {
     /* Against the literal, not against PRODUCTION_EFFORT: an expectation read
        from the thing it checks agrees with every value of it. This is the same
        argument the request-parity pin makes about EFFORT, and the reason that
-       file spells "medium" out too. When production genuinely moves, both
-       literals change in the same commit, on purpose. */
-    expect(arm.call.effort).toBe("medium");
-    expect(PRODUCTION_EFFORT).toBe("medium");
+       file spells the value out too. When production genuinely moves, both
+       literals change in the same commit, on purpose — which is what happened
+       on 2026-09-04, `medium` to `low`. */
+    expect(arm.call.effort).toBe("low");
+    expect(PRODUCTION_EFFORT).toBe("low");
     expect(arm.call.model).toBe(CAPABLE_MODEL_OPENROUTER);
   });
 
   it("is the arm the noise floor and the isolated arms are measured against", () => {
     const incumbent = armByName("incumbent");
     const repeat = armByName("incumbent-repeat");
-    const low = armByName("smart-low");
-    if (incumbent.kind !== "one-call" || repeat.kind !== "one-call" || low.kind !== "one-call") {
+    /* `smart-medium` until 2026-09-04 was `smart-low`, and the rename is the
+       flip: production moved to `low`, so the arm that isolates effort had to
+       move to `medium` or become a second copy of the incumbent under a
+       different name. The assertion below is what forced the question — it went
+       red on the flip, which is it working. */
+    const other = armByName("smart-medium");
+    if (incumbent.kind !== "one-call" || repeat.kind !== "one-call" || other.kind !== "one-call") {
       throw new Error("all three are one-call arms");
     }
 
@@ -58,12 +64,12 @@ describe("the hierarchy-structure eval's incumbent", () => {
     expect(repeat.call).toEqual(incumbent.call);
     expect(repeat.seed).toBe(incumbent.seed);
 
-    /* `smart-low` claims `isolated`, and that claim is only true if effort is
-       the ONE thing it moves. This is the assertion that was false for eight
-       days: same model, same seed, effort the single delta. */
-    expect(low.comparison).toBe("isolated");
-    expect(low.call.model).toBe(incumbent.call.model);
-    expect(low.seed).toBe(incumbent.seed);
-    expect(low.call.effort).not.toBe(incumbent.call.effort);
+    /* The isolated-effort arm claims `isolated`, and that claim is only true if
+       effort is the ONE thing it moves. This is the assertion that was false for
+       eight days: same model, same seed, effort the single delta. */
+    expect(other.comparison).toBe("isolated");
+    expect(other.call.model).toBe(incumbent.call.model);
+    expect(other.seed).toBe(incumbent.seed);
+    expect(other.call.effort).not.toBe(incumbent.call.effort);
   });
 });

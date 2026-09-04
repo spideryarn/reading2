@@ -57,7 +57,6 @@ import { orderFound, resolveTimelineEvent } from "./search-hits.js";
 import { MODE_IDEAL, MODE_MIN } from "./layout.js";
 import type { Block, BlockId, Dating, Timeline } from "../types.js";
 import fixture from "./preview-timeline-fixture.json";
-import "./styles.css";
 import "./tailwind.css";
 
 const FIXTURE = fixture as unknown as {
@@ -190,7 +189,7 @@ function Band({ slug, width, label }: { slug: string; width: number; label: stri
       >
         <div style={{ position: "relative", width, height: 620 }}>
           <TimelinePanel
-            owner={timeline}
+            access={{ kind: "owner", owner: timeline }}
             eventId={eventId}
             onEvent={(next) => {
               setEventId(next);
