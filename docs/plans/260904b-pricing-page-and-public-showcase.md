@@ -564,35 +564,55 @@ tier's budget is `limit * 2`, and the wall compares half-units to half-units. `u
 untouched, which is the argument for half-units rather than fractions, and not a stylistic
 preference.
 
-### Stage 4b — the upgrade that makes us money, opened
+### Stage 4b — the upgrade path, which turned out to be mostly built
 
-Added 2026-09-04 because stage 5's offer needs somewhere real to land. Greg:
+Added 2026-09-04 because stage 5's offer needs somewhere a paying subscriber can act on. Greg:
 
 > it should go to $10/month subscribers when they're at their quota limit too. And also, it should
 > provide a direct link to the /buy page as an alternative!
 
-**The link is one line; the problem is that today it is a dead end.** A Reader at their monthly
-ceiling has `canCheckout: false` (any non-terminal subscription), so `/pricing` draws them no button,
-and the live Portal configuration has `subscription_update: { enabled: false }`, so there is no
-*Switch plan* button either. That is the warning already written down in
-[billing.md § A paying Reader cannot become a Researcher](../project/billing.md#a-paying-reader-cannot-become-a-researcher):
-*"the one upgrade that makes us more money is the one there is no way to perform"*. Greg chose on
-2026-09-04 to **open the path first** rather than link at it and hope.
+**The question I put to Greg was based on a stale doc, and the answer is cheaper than the question
+implied.** [billing.md § A paying Reader cannot become a Researcher](../project/billing.md) describes
+a closed loop — Portal `subscription_update` disabled, `startCheckout` sending subscribers there
+anyway — and every step of it was fixed by
+[260903i](260903i-fix-the-upgrade-path-and-the-cancellation-telling.md) on 2026-09-04. That plan's
+log records `stripe:setup --prod --apply` moving the Portal fields and `stripe:check --prod` going
+from five blocking problems to none. `scripts/stripe-setup.ts` § `SUBSCRIPTION_UPDATE` sets
+`default_allowed_updates: ["price"]`, `billing_cycle_anchor: "unchanged"` and
+`proration_behavior: "always_invoice"`; `ensurePortalConfiguration` now reconciles an existing
+configuration rather than returning early. **So the Stripe half is open and no live configuration
+needs touching.**
 
-- **The two Stripe defaults are not defaults; billing.md already argues both.**
-  `proration_behavior: create_prorations` — `none` would give Researcher away for the rest of the
-  month. `billing_cycle_anchor: unchanged` — it keeps the dates, which is what makes usage already
-  spent this period count against the new 150 rather than resetting it.
-- **`ensurePortalConfiguration` does not reconcile a configuration that already exists**, so editing
-  the script is not enough to move the live account. That is the trap in this stage.
-- **The allowance side is already built.** `quota-adjustment.ts` exists for exactly this — a plan
-  change mid-period, stored as a delta rather than an absolute so it does not go stale when a tier
-  moves. Nothing new is needed there, and stage 5 must not disturb its units (P1 below).
-- **`stripe:check` never asked whether a plan switch is possible**, and passed cleanly on live day
-  with the upgrade path shut. It gains that check in this stage, because a gate that has never seen
-  its subject fail is [not evidence](../reusable/silent-success.md).
-- **Done:** a Reader signed in at `/pricing` is offered Researcher and reaches something that takes
-  the money; `stripe:check` fails if `subscription_update` is ever turned back off.
+**The dead end moved into our own UI, and that is what this stage is.**
+`canCheckout` ([`summary.ts`](../../src/billing/summary.ts)) is
+`!(row?.stripeSubscriptionId && !isTerminalStatus(row.status))` — a boolean meaning *has no open
+subscription*, not *has nowhere to go*. Every render site gates on it
+([`BillingSection.tsx`](../../src/web/BillingSection.tsx),
+[`PricingPage.tsx`](../../src/web/PricingPage.tsx)), so a Reader sees no button on either page while
+the Portal behind them would take the switch.
+
+- **What changes:** `canCheckout` becomes tier-aware, or gains a sibling that is — true when a
+  *higher* tier exists to move to. The button for an existing subscriber opens the Portal rather than
+  a Checkout Session, because `startCheckout` already forces that and is right to: Reader and
+  Researcher are separate Stripe **Products**, so a scheduled change between their prices is not
+  available and the Portal's `subscription_update` is the mechanism. A direct `subscriptions.update()`
+  was considered by 260903i and not built.
+- **Three docs argue from the fact that stopped being true**, and one is a comment written on
+  2026-09-04 by this plan's own stage 2: billing.md's warning block, `PricingPage.tsx`'s *"the hosted
+  Portal cannot switch tiers either"*, and `QuotaNotice.tsx`'s header, whose third reason for sending
+  `pay-limit` to `/profile` is now false. All three are corrected in this stage. The routing itself
+  is decided here rather than there.
+- **The allowance side needs nothing.** `quota-adjustment.ts` already computes
+  `floor(limit + (allowance(new) − allowance(old)) × fractionRemaining)`, keyed on
+  `(subscriptionId, periodStart)`. Its `delta` is **a signed count of whole ingests** — read that
+  twice before stage 5, which is where doubling it would grant ninety-one articles to somebody
+  entitled to thirty-three.
+- **What has never actually happened:** 260903i's own log says no real Reader → Researcher event has
+  ever reached `nextQuotaAdjustment`. The upgrade was impossible until minutes before that plan
+  ended, so the delta arithmetic is proven by unit tests and by nothing else. Worth knowing before
+  we invite people down it.
+- **Done:** a signed-in Reader at `/pricing` is offered Researcher and reaches something that takes
+  the money; the three stale arguments are gone; `stripe:check` still passes.
 
 ### What GPT Sol found in stage 5's design, 2026-09-04
 
