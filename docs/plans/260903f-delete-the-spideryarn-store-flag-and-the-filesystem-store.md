@@ -3129,6 +3129,37 @@ time, each saying what changed. They had been hiding behind the four `dynamic` o
 assertion, and only surfaced once those were cleared — **one wrong entry masking another in the same
 check** is worth watching for elsewhere.
 
+#### The guard fires on other people's arrivals, and that is a running cost until G
+
+Found by merging `origin/dev` **immediately after committing B3**. The merge brought thirteen new
+test files from other worktrees, and § *leaves no file that the import graph can reach and nothing
+accounts for* went red on one of them — `tests/feedback-dictation-vocabulary.test.tsx`, which nobody
+here wrote and which has nothing to do with this plan.
+
+The guard was right: the file's import graph reaches a condemned module, and neither the registry nor
+a witness measurement accounted for it. But **in a tree where six agents land test files continuously,
+that makes every unrelated arrival this plan's problem**, and it will keep happening until stage G
+deletes the adapters and the static universe empties.
+
+The three ways out, and what each costs:
+
+| | cost | honest? |
+| --- | --- | --- |
+| re-run `--full` | ~25 min on a loaded box, and more files arrive while it runs | yes, and it re-measures everything the merge changed |
+| `--files <the arrival>` | ~10 seconds | **measures correctly and does not satisfy the guard** — the JSON has no way to take one file |
+| hand-add it to `ranAndTouchedNothing` | seconds | **no.** That file is a dated measurement carrying its own regeneration command; editing one by hand so a guard goes green is the shape of thing this plan exists to delete |
+
+**Taken: the full re-run**, 2026-09-04 23:1x — 661 files (13 more than the run 40 minutes earlier),
+**91 touching, unchanged**, 568 clean, the same single unresolved file. So every one of the merge's
+arrivals touches nothing, which is the answer `--files` had already given for the one that fired.
+
+**Do not "fix" this by loosening the check.** The cheap-looking move — let a file off if the witness
+has never seen it — deletes the guard, because a genuinely new file that *does* touch the store is
+exactly the case it is for. If the re-run cost becomes intolerable before G, the thing to build is a
+way for `--files` to merge one measured file into the JSON with its own timestamp, so a single
+arrival costs ten seconds and still carries provenance. **Not built now** — it is machinery on the
+critical path of a plan whose point is to remove machinery, and the cost so far is one 25-minute run.
+
 ### C — ledger isolation, its own reviewed stage
 
 Replacing `NODE_ENV === "test"` → filesystem is **not** "Postgres plus cleanup". Routes use a global
