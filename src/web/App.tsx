@@ -1086,11 +1086,22 @@ function OwnedArticle({
     (forSlug: string, next: string) => setRenamed({ slug: forSlug, title: next }),
     [],
   );
-  const sharedTo = useCallback(
-    (forSlug: string, next: Visibility | null) =>
-      setShared({ slug: forSlug, visibility: next ?? "unknown" }),
-    [],
-  );
+  /**
+   * **The same answer twice is not a change.**
+   *
+   * The card reports what the metadata page's own fetch said as well as what a
+   * write said (AccessSharing.tsx), so the ordinary visit — open the page, read
+   * the value the payload already carried, go back — reports a value identical
+   * to the one in hand. Returning the same state object for that keeps
+   * `article` referentially stable, and `Reader` rebuilds its whole geometry
+   * from `article` by identity.
+   */
+  const sharedTo = useCallback((forSlug: string, next: Visibility | null) => {
+    const now: Visibility | "unknown" = next ?? "unknown";
+    setShared((was) =>
+      was?.slug === forSlug && was.visibility === now ? was : { slug: forSlug, visibility: now },
+    );
+  }, []);
 
   /**
    * One more open, for the shelf's tooltip to count.

@@ -50,7 +50,12 @@
  */
 import { useMemo, type ReactNode } from "react";
 import { ArrowLeft, ExternalLink, FileQuestion, Globe, Lock, Upload } from "lucide-react";
-import { SHARING_MARK_PRIVATE, SHARING_MARK_PUBLIC } from "../messages.js";
+import {
+  SHARING_MARK_NAME_PRIVATE,
+  SHARING_MARK_NAME_PUBLIC,
+  SHARING_MARK_PRIVATE,
+  SHARING_MARK_PUBLIC,
+} from "../messages.js";
 import type { Article, Meta, Visibility } from "../types.js";
 /* The shared one, which drops a leading `www.` — three copies of this used to
    live in the client and its header asks the next caller not to make a fourth.
@@ -454,12 +459,21 @@ function OriginMark({
  * ## Why a `Tooltip` here when `OriginMark` above uses a bare `title`
  *
  * Because Greg asked for a clear one, and a `title` attribute is not: it waits
- * about a second, it is unreachable by touch, it is a system font in a system
- * box, and a keyboard reader tabbing onto the link never sees it at all. The
- * two marks beside each other therefore behave slightly differently on hover,
- * which is a real inconsistency and the smaller of the two — `OriginMark` is a
- * statement and this is a control with a sentence attached to it. Worth
- * levelling up rather than down if anybody touches the pair.
+ * about a second, it is a system font in a system box, and it opens on hover
+ * only — so a reader who tabs onto the link never sees it. The `Tooltip` fixes
+ * all three, and `useFocus` is the half that matters most.
+ *
+ * **It does not fix touch, and an earlier version of this comment claimed it
+ * did.** On a touch device the tap that would open the tooltip is the tap that
+ * follows the link, so neither spelling of hover help is reachable there — the
+ * `aria-label` and the destination are what a touch reader actually gets. GPT
+ * Sol, 2026-09-04. Real touch help would need a deliberate reveal or visible
+ * text, and neither is worth a second control beside the title.
+ *
+ * The two marks beside each other therefore behave slightly differently on
+ * hover, which is a real inconsistency and the smaller of the two —
+ * `OriginMark` is a statement and this is a control with a sentence attached to
+ * it. Worth levelling up rather than down if anybody touches the pair.
  *
  * `Link`, not `IconButton`: this navigates, so it has to be an `<a>` with a
  * real `href` — command-click opens the metadata page in a tab, and the status
@@ -476,7 +490,11 @@ function SharingMark({
   if (visibility === undefined) return null;
 
   const shared = visibility === "public";
-  const label = shared ? SHARING_MARK_PUBLIC : SHARING_MARK_PRIVATE;
+  /* Two strings, and they are deliberately not one — see `SHARING_MARK_NAME_PUBLIC`
+     in src/messages.ts. The tooltip becomes `aria-describedby`, so a name
+     holding the same sentence is announced twice. */
+  const tip = shared ? SHARING_MARK_PUBLIC : SHARING_MARK_PRIVATE;
+  const name = shared ? SHARING_MARK_NAME_PUBLIC : SHARING_MARK_NAME_PRIVATE;
 
   /* The view state carried across, so stepping out to the switch and coming
      back returns the reader to the paragraph they left — the same
@@ -487,15 +505,16 @@ function SharingMark({
   const href = readHref(slug, carriedSearch(location.search), "metadata");
 
   return (
-    <Tooltip content={label} placement="bottom">
+    <Tooltip content={tip} placement="bottom">
       <Link
         href={href}
         /* The tooltip is the sentence a sighted reader gets; `aria-label` is
-           the name a screen reader reads. No `title` beside them — that would
-           be a second tooltip saying the same thing a beat later. The same
-           rule IconButton.tsx states, with the hover half moved to a component
-           that can style it. */
-        aria-label={label}
+           the *name*, which is a shorter and different thing. No `title`
+           beside them — that would be a second tooltip saying the same thing a
+           beat later. The same rule IconButton.tsx states, with the hover half
+           moved to a component that can style it, and the name kept distinct
+           from the description. */
+        aria-label={name}
         /* `OriginMark`'s box, to the pixel, so the two marks and the pencil sit
            on one line at any title length. `text-highlight` when it is out in
            the world, matching the shelf's own `SharedBadge` (ShelfEntry.tsx) —

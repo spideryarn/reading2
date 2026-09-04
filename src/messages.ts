@@ -2288,6 +2288,26 @@ export const SHARING_MARK_PUBLIC = `${SHARING_ON} Change who can read it.`;
 export const SHARING_MARK_PRIVATE = `${SHARING_OFF} Share it with anyone.`;
 
 /**
+ * **The mark's *name*, which is not its tooltip** — and the two have to differ.
+ *
+ * Floating UI gives the tooltip to the link as `aria-describedby`, so an
+ * `aria-label` holding the same sentence has a screen reader read it twice: once
+ * as the link's name, once as its description. GPT Sol, finding 5, 2026-09-04.
+ *
+ * So the name is what a link's name should be — the state, and where pressing
+ * it goes — and the tooltip stays the sentence. Short enough to be worth hearing
+ * in a list of links, which is the other thing a name is for.
+ *
+ * `SHARING_BADGE` is the shelf's word for the same state and is deliberately
+ * reused: an owner who has met *Shared* on a card should meet the same word here
+ * rather than a synonym.
+ */
+export const SHARING_MARK_NAME_PUBLIC = `${SHARING_BADGE} — change who can read this`;
+
+/** The other state of the name above. There is no shelf word for this one. */
+export const SHARING_MARK_NAME_PRIVATE = "Private — change who can read this";
+
+/**
  * **What a shared link carries, in one line, for the visitor** — the reader of
  * the page a shared link actually reaches.
  *

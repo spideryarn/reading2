@@ -582,6 +582,36 @@ describe("when a write does not come back cleanly", () => {
  * docs/plans/260904b-sharing-mark-on-the-article-masthead.md.
  */
 describe("telling the rest of the page what changed", () => {
+  /**
+   * **`reported` is asserted whole, as a sequence.**
+   *
+   * Every case here has at least two entries and the order is the point: the
+   * card says *I no longer know* when the write goes out and the answer only
+   * afterwards. Asserting the last entry alone would pass on a card that never
+   * said the first, which is the bug GPT Sol found (finding 1).
+   *
+   * The leading entry is the page's own fetch — see
+   * `reports what the page's own fetch said`.
+   */
+  it("reports what the page's own fetch said, without being pressed", async () => {
+    await mount(SHARED);
+
+    expect(reported).toEqual(["public"]);
+    /* And still no request of its own — the whole point of the card reading a
+       field the page already has. */
+    expect(calls).toEqual([]);
+  });
+
+  it("reports nothing at all from a store that could not say", async () => {
+    await mount(undefined);
+
+    /* The absence is not a value, and handing `null` up here would be
+       indistinguishable from a write that went missing. The masthead draws
+       nothing either way, but the parent's overlay must stay empty so the
+       payload's own answer — which on Postgres is a real one — still stands. */
+    expect(reported).toEqual([]);
+  });
+
   it("reports the server's answer, not the value it sent", async () => {
     /* The same disagreement `draws what the server said` above uses: asking for
        a state the article is already in returns the current representation and
@@ -593,7 +623,7 @@ describe("telling the rest of the page what changed", () => {
     press("Share it");
     await settle();
 
-    expect(reported).toEqual(["private"]);
+    expect(reported).toEqual(["private", null, "private"]);
   });
 
   it("reports the publish when it lands", async () => {
@@ -604,7 +634,7 @@ describe("telling the rest of the page what changed", () => {
     press("Share it");
     await settle();
 
-    expect(reported).toEqual(["public"]);
+    expect(reported).toEqual(["private", null, "public"]);
   });
 
   /**
@@ -625,7 +655,7 @@ describe("telling the rest of the page what changed", () => {
     press("Share it");
     await settle();
 
-    expect(reported).toEqual([null]);
+    expect(reported).toEqual(["private", null, null]);
   });
 
   it("says it no longer knows when the answer cannot be parsed", async () => {
@@ -636,15 +666,71 @@ describe("telling the rest of the page what changed", () => {
     press("Share it");
     await settle();
 
-    expect(reported).toEqual([null]);
+    expect(reported).toEqual(["private", null, null]);
   });
 
-  it("reports nothing at all until the owner presses something", async () => {
-    await mount(SHARED);
+  /**
+   * **The press is when the old answer stops being true, not when the new one
+   * lands.**
+   *
+   * Between the two the server may have committed already, and a masthead still
+   * drawing the state from before the press is a lock over a document that may
+   * by now be public. The owner can be looking at it: pressing Share and going
+   * back to the article is an ordinary thing to do, and it does not wait for
+   * the request. GPT Sol, finding 1, 2026-09-04.
+   */
+  it("stops claiming to know the moment the write goes out", async () => {
+    hold = true;
+    await mount(PRIVATE);
+    press("Share with anyone");
+    tickTheBox();
+    press("Share it");
+    await settle();
 
-    expect(reported).toEqual([]);
+    /* **While the request is still out.** `hold` is what makes this
+       observable — with an instant reply the pending state is real and
+       unobservable, which is how the gap went unnoticed in the first place.
+       docs/reusable/silent-success.md. */
+    expect(reported).toEqual(["private", null]);
+
+    release();
+    await settle();
+    expect(reported).toEqual(["private", null, "public"]);
+  });
+
+  /**
+   * **A card that has left the page says nothing**, and does not need to.
+   *
+   * Publish, leave, come back, unpublish: if the first request is slow enough
+   * its `public` lands *after* the second's `private`, and last-writer-wins puts
+   * a globe over a private article. The dead card is silent instead — and the
+   * live one has already said `null`, so nothing anywhere is drawing a stale
+   * claim in the meantime. GPT Sol, finding 2, 2026-09-04.
+   */
+  it("says nothing once it has left the page, however late the answer is", async () => {
+    hold = true;
+    await mount(PRIVATE);
+    press("Share with anyone");
+    tickTheBox();
+    press("Share it");
+    await settle();
+    expect(reported).toEqual(["private", null]);
+
+    /* The owner goes back to the article. `Metadata` unmounts, and with it this
+       card — while its `PUT` is still in the air. */
+    await act(async () => root.unmount());
+    root = createRoot(host);
+
+    release();
+    await settle();
+
+    /* Still just the two from before. The answer arrived into a tree that is
+       gone, and reporting it would have been a claim nobody could order against
+       the next one. */
+    expect(reported).toEqual(["private", null]);
   });
 });
+
 
 describe("turning it off", () => {
   it("sends no rightsConfirmed at all", async () => {

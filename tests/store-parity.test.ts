@@ -455,6 +455,16 @@ when("the filesystem and Postgres stores agree", () => {
         fsArticleReader.loadArticle(slug),
         pgArticleReader.loadArticle(slug),
       ]);
+      /* **The half the exemption above would otherwise have thrown away.**
+         Dropping `visibility` from the comparison says nothing about what
+         either store answers, and the dangerous direction is this one: if the
+         filesystem reader ever defaults to `"private"`, every test in this
+         suite still passes and every owner in development gets a lock over an
+         article nobody was ever asked about — the one claim this field exists
+         not to make (src/types.ts § `Article.visibility`). Asserted per slug,
+         because a default would arrive for all of them at once and one sample
+         would be enough to miss it. GPT Sol, finding 4, 2026-09-04. */
+      expect("visibility" in fromFiles, `${slug} invented a visibility on disk`).toBe(false);
       expect(wire(comparable(fromPg))).toEqual(wire(comparable(fromFiles)));
       /* And again WITHOUT serialising, because the two assertions catch
          different things. `toStrictEqual` is the only one that separates

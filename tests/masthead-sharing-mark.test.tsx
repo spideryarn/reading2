@@ -36,7 +36,12 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SHARING_MARK_PRIVATE, SHARING_MARK_PUBLIC } from "../src/messages.js";
+import {
+  SHARING_MARK_NAME_PRIVATE,
+  SHARING_MARK_NAME_PUBLIC,
+  SHARING_MARK_PRIVATE,
+  SHARING_MARK_PUBLIC,
+} from "../src/messages.js";
 import type { Article, Visibility } from "../src/types.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
@@ -130,12 +135,28 @@ const hrefs = () => [...host.querySelectorAll("a[href]")].map((a) => a.getAttrib
 const names = () =>
   [...host.querySelectorAll("[aria-label]")].map((el) => el.getAttribute("aria-label"));
 
+/**
+ * **The name and the tooltip are different strings, and that is the assertion.**
+ *
+ * Floating UI hands the tooltip to the link as `aria-describedby`, so a name
+ * holding the same sentence is read out twice. Checking the tooltip *sentence*
+ * is absent from the accessible names is how a later tidy-up that collapses the
+ * two back into one gets caught. src/messages.ts § `SHARING_MARK_NAME_PUBLIC`.
+ */
+function marked(name: string, tip: string): void {
+  expect(names()).toContain(name);
+  expect(names()).not.toContain(tip);
+  /* Shorter, as a name should be — and the check is not decoration: the failure
+     it guards is somebody passing the sentence as both. */
+  expect(name.length).toBeLessThan(tip.length);
+}
+
 describe("the sharing mark beside the title", () => {
   it("says an article is out in the world, and links to the switch", async () => {
     await mount("public", true);
 
-    expect(names()).toContain(SHARING_MARK_PUBLIC);
-    expect(names()).not.toContain(SHARING_MARK_PRIVATE);
+    marked(SHARING_MARK_NAME_PUBLIC, SHARING_MARK_PUBLIC);
+    expect(names()).not.toContain(SHARING_MARK_NAME_PRIVATE);
     expect(hrefs()).toContain(METADATA);
   });
 
@@ -147,7 +168,7 @@ describe("the sharing mark beside the title", () => {
        here the question — *would the link I am about to paste work?* — is asked
        exactly as often about a private article, and answering it by absence is
        indistinguishable from a mark that has not loaded. */
-    expect(names()).toContain(SHARING_MARK_PRIVATE);
+    marked(SHARING_MARK_NAME_PRIVATE, SHARING_MARK_PRIVATE);
     expect(hrefs()).toContain(METADATA);
   });
 
@@ -158,8 +179,8 @@ describe("the sharing mark beside the title", () => {
   it("draws nothing at all when the store could not say", async () => {
     await mount(undefined, true);
 
-    expect(names()).not.toContain(SHARING_MARK_PRIVATE);
-    expect(names()).not.toContain(SHARING_MARK_PUBLIC);
+    expect(names()).not.toContain(SHARING_MARK_NAME_PRIVATE);
+    expect(names()).not.toContain(SHARING_MARK_NAME_PUBLIC);
     expect(hrefs()).not.toContain(METADATA);
   });
 
@@ -172,7 +193,7 @@ describe("the sharing mark beside the title", () => {
   it("tells a visitor nothing, even handed the fact", async () => {
     await mount("public", false);
 
-    expect(names()).not.toContain(SHARING_MARK_PUBLIC);
+    expect(names()).not.toContain(SHARING_MARK_NAME_PUBLIC);
     expect(hrefs()).not.toContain(METADATA);
   });
 

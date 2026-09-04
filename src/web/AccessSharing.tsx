@@ -41,7 +41,7 @@
  * anyway (src/routes.ts § parseVisibilityRequest), so the box is a statement
  * the owner makes rather than a gate the client keeps.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Copy, Globe, Link2Off, Lock } from "lucide-react";
 
 import type { StepName } from "../types.js";
@@ -300,6 +300,41 @@ export function AccessSharing({
    */
   const inventory = sharing?.available ? sharedInventory(sharing.available) : undefined;
 
+  /**
+   * **Is this card still on screen** — the guard on every report upwards.
+   *
+   * A `PUT` outlives the card that sent it: the owner can press Share and leave
+   * for the article before the answer lands, and this component then resolves
+   * its promise from inside a tree React has already thrown away. Its own
+   * `setActed` is harmless there (React drops it), but `onVisibility` is not —
+   * it writes into the *parent*, which is still mounted, and the parent has no
+   * way to tell a live answer from a dead one.
+   *
+   * That is the out-of-order case, and it is not hypothetical: publish, leave,
+   * come back to this page, unpublish, and if the first request was slow enough
+   * its `public` lands **after** the second's `private` and the masthead ends
+   * up wearing a globe over a private article. Last writer wins is exactly the
+   * wrong rule when the writers are two requests about one document.
+   *
+   * So a dead card says nothing at all, and it does not need to: it has already
+   * reported `null` at the moment it started writing (see `report` below), so
+   * whatever is drawing this fact elsewhere is already saying *we cannot say*
+   * rather than something stale. Silence is a state this design has; a wrong
+   * answer is not. GPT Sol, finding 2, 2026-09-04.
+   *
+   * Set in the effect body rather than only cleared in its cleanup, because
+   * `<StrictMode>` mounts, unmounts and remounts every component in
+   * development — a ref only ever set to `false` would leave every card in the
+   * app silently dead. docs/reusable/silent-success.md.
+   */
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
+
   /* One article's answer must not survive into another's. `Metadata` is keyed
      on the slug so this component remounts anyway; the effect is what keeps
      that true if the key ever moves. */
@@ -311,12 +346,55 @@ export function AccessSharing({
     setError(null);
   }, [slug]);
 
+  /**
+   * **Tell the rest of the page, or say nothing** — every report goes through
+   * here, and there is no second spelling of the guard.
+   *
+   * `null` is *we no longer know*, which every other view of this fact draws as
+   * no claim at all rather than as a stale one.
+   */
+  function report(visibility: Visibility | null): void {
+    if (live.current) onVisibility?.(slug, visibility);
+  }
+
+  /**
+   * **What the page already knew, handed upwards once.**
+   *
+   * The reading view's payload carries `Article.visibility` from the moment it
+   * was fetched and is never refetched between an article's views — so after a
+   * write this card could not confirm, the masthead goes on drawing nothing
+   * even though *this* page has since asked the server again and been told.
+   * `GET /api/metadata/:slug` is a validated read, and it is better information
+   * than a payload from ten minutes ago. GPT Sol, finding 3, 2026-09-04.
+   *
+   * **Only while this card has done nothing**, which is what keeps it in order:
+   * `acted` goes to `pending` synchronously at the first press, so a slow
+   * metadata read that lands mid-write cannot report the state from before it
+   * over the top of the write's own answer.
+   *
+   * The parent ignores a report that changes nothing, so the common case — open
+   * the page, read the same value the payload already had, go back — costs no
+   * re-render. src/web/App.tsx § `OwnedArticle`.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `report` is a fresh closure every render over a ref and a prop that do not change; listing it would re-run this on every render, and what it must fire on is what the server said and whether this card has acted
+  useEffect(() => {
+    if (acted !== null || !sharing) return;
+    report(sharing.visibility);
+  }, [sharing, acted]);
+
   async function set(to: "private" | "public"): Promise<void> {
     /* The pending state replaces the buttons rather than disabling them, so a
        second press is not merely refused — there is nothing there to press.
        Sol asked for a double-click test; this is the shape that makes one
        pass. */
     setActed({ kind: "pending", to });
+    /* **Before the request, not only after it.** Until the answer arrives
+       nobody knows what is true — the server may have committed already — and
+       a masthead still drawing the state from before the press is a lock over
+       a document that may by now be public. The press is the moment the old
+       answer stops being trustworthy, not the moment the new one lands. GPT
+       Sol, finding 1, 2026-09-04. */
+    report(null);
     setError(null);
     try {
       const res = await apiFetch(`/api/article/${encodeURIComponent(slug)}/visibility`, {
@@ -347,7 +425,7 @@ export function AccessSharing({
          honoured, and an unparseable one is the absence of an answer rather
          than the value we asked for. `null` in that case, which every other
          view of this fact renders as *we cannot say*. */
-      onVisibility?.(slug, state ? state.visibility : null);
+      report(state ? state.visibility : null);
       setConfirming(false);
       setRights(false);
     } catch (e) {
@@ -364,7 +442,7 @@ export function AccessSharing({
       /* And the same sentence to everybody else drawing this fact. A failed
          request is not proof nothing was written, so the masthead must stop
          claiming either state rather than keep the one from before the write. */
-      onVisibility?.(slug, null);
+      report(null);
     }
   }
 

@@ -111,8 +111,46 @@ says. The mark then draws nothing, which is exactly what the card is saying two 
    the parity exemption and its compensating assertion.
 2. **Draw the mark.** The tooltip copy in `src/messages.ts`, the component in
    `src/web/Masthead.tsx`, a test that pins all three states and the visitor's nothing.
-3. **Stop it going stale.** `onVisibility` from the card to `OwnedArticle`, and five cases in
-   `tests/access-sharing.test.tsx` — see above.
+3. **Stop it going stale.** `onVisibility` from the card to `OwnedArticle`, and eight cases in
+   `tests/access-sharing.test.tsx` — see above, and *What the cross-family review changed* below,
+   which is most of what that seam ended up being.
+
+## What the cross-family review changed
+
+The code went to GPT Sol on 2026-09-04 with the scoped diff, the plan and the new test file. Four
+findings were real and all four are fixed; the reasoning is at each site.
+
+- **The masthead stayed authoritative while a `PUT` was in the air.** The card went `pending` and
+  told nobody, so an owner who pressed Share and went straight back to the article kept the lock
+  for as long as the request took — over an article the server may already have published. The
+  press is the moment the old answer stops being trustworthy, so the card now reports
+  *we cannot say* **before** the request, and the answer after it.
+- **Two writes about one article could land out of order.** Publish, leave, come back, unpublish —
+  and if the first request is slow enough its `public` arrives after the second's `private`, with
+  last-writer-wins putting a globe over a private article. A card that has been unmounted now
+  reports nothing at all; it has already said *we cannot say* on its way out, so nothing anywhere
+  is left drawing something stale.
+- **A validated read was being thrown away.** Only writes reported upward, so after a write the
+  card could not confirm, the mark stayed missing even once this page had asked the server again
+  and been told. `GET /api/metadata/:slug` is better information than a payload from ten minutes
+  ago, so it is handed up too — but only while the card has not acted, which is what keeps a slow
+  read from landing on top of a write's own answer.
+- **The parity exemption had removed the check that mattered most.** Dropping `visibility` from
+  both sides says nothing about what either store answers, and the dangerous direction is the
+  filesystem one: a later `visibility: "private"` default there would pass every test in the suite
+  and put a lock over every article in development. The parity test now asserts the **absence**,
+  per slug, before normalising.
+
+Also taken: the mark's accessible *name* is now shorter than and different from its tooltip, because
+Floating UI hands the tooltip over as `aria-describedby` and a name holding the same sentence is
+announced twice. And a claim in this file's first draft — that the `Tooltip` fixes touch, where
+`title` does not — was **false**, and is corrected in `SharingMark`'s own header: on a touch device
+the tap that would open it is the tap that follows the link, so neither is reachable there.
+
+Sol also confirmed what the design was betting on: the public projection is an explicit allowlist,
+so `visibility` cannot reach a visitor; both owner gates are meaningful; the payload field beats a
+second request; and the geometry rebuild on a flip is rare and invisible, because the tree and block
+identities do not change.
 
 ## Checked in a browser
 
