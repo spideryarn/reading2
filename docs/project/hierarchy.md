@@ -261,6 +261,75 @@ Three things about the shape are load-bearing:
   is the same boundary the last child's own stretch names, so `repairedBlockCount` folds the two into
   one rather than charging the article twice for one slip.
 
+#### A section that starts one block below its own heading is snapped onto it <a id="heading-snap"></a>
+
+**The model was not ignoring the author. It was cutting one block late.** Measured on a 142-page
+Kuhn paper, 2026-09-04, replaying the saved structure answer: of 82 non-root nodes, **24 started on
+a heading block and 53 on the block immediately after one**, and 75 of the 82 named a
+`sourceHeading`. Every unbacked claim reproduced was at that offset — the heading fell into the
+previous section's tail, `planChildRanges` believed the start, and `buildTree` dropped the claim as
+out of range. `droppedHeadings: 59` was counting that, and it read as the author's structure being
+overruled. It was not.
+
+So the repair is code, in `snapStartsToHeadings` ([`src/hierarchy.ts`](../../src/hierarchy.ts)): a
+kept child whose start is the block after a heading run **it names** moves back to the run's first
+heading. Three things about it are load-bearing.
+
+- **The child's own `sourceHeading` has to match a heading in the run**, read with the same
+  `sameHeading` that decides whether a claim is backed. The unconditional rule — snap any start that
+  sits one block after a heading — takes headings the model deliberately left in the section before,
+  and the fixture for that is already in `tests/hierarchy-repairs.test.ts`. Requiring the claim makes
+  this self-evidencing: it only ever honours a boundary the answer already stated, which is what
+  makes it a repair rather than a guess.
+- **The run is taken back to its first heading, but never past one the section above it names.** The
+  floor of "the previous section's own start" is not enough: a section can begin on a preamble and
+  quote an `h1` further down, and carrying that `h1` forward would strip its provenance and leave its
+  title and gist describing prose its heading had left.
+- **It is a `PartitionRepair` of its own `kind`**, not a quiet mend. This is the one fault where the
+  model's two claims about the boundary *agree* and are both wrong, so nothing else can see it.
+- **`recordBoundaryFaults` runs first, on the raw starts.** Measuring after the snap would compare
+  the answer against a value we chose ourselves — a section moved back onto its heading reports a
+  phantom `overlap` against its own correct start — and the snap would vanish from the telemetry that
+  exists to watch it.
+
+**Measured, before and after, on the real answer** (no paid calls — the saved answer replayed through
+`buildTree`; the plan has the table):
+
+| | Kuhn, 142pp | noema × 43 saved trees |
+|---|---|---|
+| backed `sourceHeading` | 24 → **74** of 75 claimed | unchanged |
+| `droppedHeadings` | 59 → **9** | 0 → 0 |
+| headings starting a node | 21 → **67** of 254 | unchanged |
+| `repairedBlocks` | 40 → 86 | 0 → 0 |
+| `checkTree` problems | 0 → 0 | 0 → 0 |
+
+`repairedBlocks` **rises**, and that is the repair being honest rather than a regression: 46 headings
+really did change hands. The no-op half is the half that matters — 43 saved trees over noema and
+`openai-huggingface` come out byte-identical, because the model already put those starts on the
+headings.
+
+**`repairedBlocks` also over-counts now, by a known and bounded amount.** A boundary the model got
+*both* misplaced and one block late is recorded twice — by `recordBoundaryFaults` at the coordinate
+the model named, and by the snap at the coordinate it ended up — and `repairedBlockCount` groups by
+coordinate, so it sums two records of one movement. Auditing Kuhn's repairs by the union of their
+intervals gives **64** rather than 86 (40 before). Fixing it means giving a repair a boundary
+identity and a `from`/`to` instead of an `at` and a `size`, here and in
+`src/hierarchy-cascade.ts`; the error errs toward reporting more, and this number is a "go and look"
+signal rather than a gate — **but it must be fixed before anyone fits a threshold to it**, which is
+what the re-ask trigger above would be. ⟨GPT Sol's review of stage 8a, finding 1⟩
+
+**What this does not fix.** Kuhn's largest section is still 241 blocks and five are over `MAX_BATCH`.
+That is the genuine capacity conflict between the prompt's depth and fan-out numbers and an author
+who numbered three deep, and it is stage 8b of
+[260904b](../plans/260904b-a-long-pdf-finishes-without-a-retry-click.md).
+
+**When the wave cascade is wired up it needs the same thing.**
+[`src/hierarchy-cascade.ts`](../../src/hierarchy-cascade.ts) fixes each answer's ranges before the
+next call is made, precisely so no subtree is generated against a range that later moves — and it
+tells its caller to hand the final `buildTree` a fresh report because "there is nothing left for it
+to mend". The snap is now something left for it to mend. Nothing wires that module into the pipeline
+or the evals today, so this is a note for whoever does.
+
 #### Measurement is what stands where the bounds stood
 
 Every boundary the model got wrong is recorded with its position, direction and size; dropped

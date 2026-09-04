@@ -62,8 +62,15 @@ import { withLedger } from "./cli-ledger.js";
 import { log } from "./log.js";
 
 /* Bumped to 2 when the nav labels moved out to src/labels.ts: this prompt no
-   longer asks for them, and a tree written by toc/1 is a different artefact. */
-export const PROMPT_VERSION = "toc/3";
+   longer asks for them, and a tree written by toc/1 is a different artefact.
+
+   Bumped to 4 for the heading snap (`snapStartsToHeadings`), which is not a
+   prompt change at all: the wire request is byte-identical. The stamp still has
+   to move, because it is what the structure *checkpoint* is keyed on, and the
+   same answer now builds a different tree — a document part-way through the
+   stage would otherwise resume onto the old boundaries and nothing would say
+   so. One replayed call per article in flight, and that is the whole cost. */
+export const PROMPT_VERSION = "toc/4";
 
 /**
  * How hard the model thinks before it starts writing.
@@ -852,8 +859,13 @@ export interface PartitionRepair {
    * Which way the model's two claims about this boundary disagreed: the next
    * section started late (`gap`) or early (`overlap`), or the last child stopped
    * before its parent ended (`short`) or ran past it (`over`).
+   *
+   * `heading` is the odd one out and deliberately a `kind` rather than a
+   * quiet mend: **the model's two claims agreed and were both one block late**,
+   * putting the section's own heading in the section before it, so nothing
+   * above can see it. `snapStartsToHeadings` has the measurement it comes from.
    */
-  kind: "gap" | "overlap" | "short" | "over";
+  kind: "gap" | "overlap" | "short" | "over" | "heading";
   /**
    * **The boundary's coordinate: the index of the first block after it.** A
    * node's own start, a child's start, and one past the parent's last block are
@@ -918,6 +930,26 @@ export interface PartitionRepair {
  * `largestRepair` needs no such treatment — a maximum over duplicates is the
  * same maximum — and is deliberately left as it is rather than routed through
  * here for symmetry.
+ *
+ * ## Known over-count: a boundary that was both misplaced and one block late
+ *
+ * ⟨GPT Sol's review of the heading snap, 2026-09-04, finding 1⟩ A boundary can
+ * now be recorded **twice at two coordinates**: `recordBoundaryFaults` records
+ * it where the model named it, and `snapStartsToHeadings` records it where it
+ * ended up. Grouping by `at` cannot see those as one movement, so their sizes
+ * are summed — and their *blocks* overlap, because a snap moving back inside
+ * ground a `gap` already covers moves nothing new. The union per boundary is
+ * `max(gap, snap)` for a gap and `gap + snap` for an overlap. On the 142-page
+ * Kuhn paper that is 64 blocks against the 86 this reports.
+ *
+ * **It is written down rather than fixed** because fixing it means giving every
+ * repair a stable boundary identity and a `from`/`to` in place of `at` and
+ * `size`, here, in the tests, and in the parallel implementation in
+ * src/hierarchy-cascade.ts. The error is bounded by the snap's own size and
+ * errs toward reporting more, and this is a "go and look" number rather than a
+ * gate. **Fix it before fitting any threshold to `repairedBlocks`** — which is
+ * exactly what the re-ask trigger this function's own docs describe would be.
+ * docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md § Stage 8a.
  */
 export function repairedBlockCount(repairs: PartitionRepair[]): number {
   const byBoundary = new Map<number, PartitionRepair[]>();
@@ -1162,6 +1194,16 @@ function planChildRanges(
     kept.push({ childIndex: i, start });
   }
 
+  /* **Before the snap, and that order is the whole of it.** This measures the
+     model's two claims about every boundary against where the boundary ended
+     up, so running it afterwards would compare the answer with a value we chose
+     ourselves — a section moved back onto its heading would report a phantom
+     `overlap` against its own correct start, and the snap would be invisible in
+     the telemetry that exists to watch it. `snapStartsToHeadings` records its
+     own repairs; nothing else measures it. */
+  recordBoundaryFaults(kept, spans, parent, where, repairs);
+  snapStartsToHeadings(children, kept, blocks, where, repairs);
+
   const plans: ChildPlan[] = children.map(() => ({ keep: false }));
   for (const [k, child] of kept.entries()) {
     const next = kept[k + 1];
@@ -1176,8 +1218,110 @@ function planChildRanges(
     };
   }
 
-  recordBoundaryFaults(kept, spans, parent, where, repairs);
   return plans;
+}
+
+/**
+ * **A section that begins one paragraph below the heading it names is moved
+ * back onto it.**
+ *
+ * Measured on a 142-page Kuhn paper, 2026-09-04 (Fable): of the model's 82
+ * non-root nodes, 24 started *on* a heading block and **53 on the block
+ * immediately after one**, and every unbacked `sourceHeading` claim reproduced
+ * was at that offset. The model was not overruling the author — it named the
+ * author's heading correctly and put the boundary one block late. The heading
+ * then fell into the previous section's tail, this file believed the start, and
+ * `buildTree` dropped the claim as out of range. `droppedHeadings: 59` was
+ * counting that.
+ *
+ * So the answer is code rather than a prompt line: a prompt can be ignored, and
+ * the model was already doing what a prompt would have asked for.
+ *
+ * ## Why the claim has to match
+ *
+ * The obvious rule — snap any start that sits one block after a heading — takes
+ * headings the model deliberately left in the section before it. The fixture is
+ * already in tests/hierarchy-repairs.test.ts: a model that puts "The First
+ * Part" inside child 1 and starts child 2 on the paragraph beneath it has
+ * proposed a boundary, and moving that heading forward would invent a different
+ * one. **Requiring the child's own `sourceHeading` to name a heading in the run
+ * makes this self-evidencing** — it only ever honours a claim the answer
+ * already made, which is also why it can be a repair rather than a heuristic.
+ * The `typeof` guard is not decoration: `sourceHeading` is model output behind
+ * a cast, and `sameHeading` throws inside `.replace` on a number.
+ *
+ * ## The run, and the floor under it
+ *
+ * Headings come in runs — an `h2` directly beneath an `h1` — and the section
+ * begins at the *first* of the run, not the nearest, because the `h1` above it
+ * introduces the same prose. The floor is the previous kept child's start: a
+ * section cannot begin where its predecessor begins, so a run reaching back to
+ * a heading the previous section starts on is entered at the first block after
+ * it. That is the real case of a sub-section under a part title, not a corner.
+ *
+ * The first kept child is never snapped — it is pinned to its parent's start,
+ * because nothing else can supply that block.
+ *
+ * Mutates `kept` in place, and records one `PartitionRepair` per boundary it
+ * moved. `at` is where the boundary *ended up*, as everywhere else, which is
+ * what lets `repairedBlockCount` see the pin it cascades into one level down as
+ * the same movement rather than a second one.
+ */
+function snapStartsToHeadings(
+  children: ModelNode[],
+  kept: KeptChild[],
+  blocks: Block[],
+  where: string,
+  repairs: PartitionRepair[],
+): void {
+  const heading = (i: number) => blocks[i]?.kind === "heading";
+  for (let k = 1; k < kept.length; k++) {
+    const child = kept[k]!;
+    const start = child.start;
+    // Already on a heading, or not one block after one: nothing to do. This is
+    // the no-op on every document the model gets right.
+    if (heading(start) || !heading(start - 1)) continue;
+
+    const claim = children[child.childIndex]?.sourceHeading;
+    if (typeof claim !== "string" || claim.trim() === "") continue;
+
+    let first = start - 1;
+    while (heading(first - 1)) first -= 1;
+    // The floor: never back onto, or past, the previous section's own start.
+    first = Math.max(first, kept[k - 1]!.start + 1);
+    /* **And never past a heading the previous section itself names.** The floor
+       above stops the run reaching a heading the previous section *starts on*,
+       which is not the same thing. A section can begin on a preamble and quote
+       the `h1` further down; taking that `h1` forward would strip its
+       provenance and leave its title and gist describing prose its own heading
+       is no longer in. One matched heading justifies moving that heading, not
+       every heading above it. ⟨GPT Sol, finding 2⟩ */
+    const prior = children[kept[k - 1]!.childIndex]?.sourceHeading;
+    if (typeof prior === "string" && prior.trim() !== "") {
+      for (let j = start - 1; j >= first; j--) {
+        if (sameHeading(blocks[j]!.text, prior)) {
+          first = j + 1;
+          break;
+        }
+      }
+    }
+    if (first >= start) continue;
+
+    /* The claim must name one of the headings actually being moved. Read with
+       `sameHeading`, the same tolerant comparison `buildTree` and `checkTree`
+       use to decide whether a claim is backed — a match by any other rule would
+       move a boundary to make a badge that then gets dropped anyway. */
+    const named = blocks.slice(first, start).some((b) => sameHeading(b.text, claim));
+    if (!named) continue;
+
+    repairs.push({
+      where: `${where} > child ${child.childIndex + 1}`,
+      kind: "heading",
+      at: first,
+      size: start - first,
+    });
+    child.start = first;
+  }
 }
 
 /** One kept child: where it sits in the model's proposal, and where it starts. */
