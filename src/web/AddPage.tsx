@@ -192,7 +192,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
    * the poll that clears it (see `lastFailure` in useJobs.ts), so the server's
    * reason for refusing was replaced by the generic *"It didn't get as far as
    * the queue"* before anybody could read it. On a free account at its quota
-   * that meant the refusal — and the link to `/profile` that the whole
+   * that meant the refusal — and the link to the plans that the whole
    * `QuotaNotice` change is for — never appeared at all.
    *
    * `queue.lastFailure()` is the durable record and is snapshotted *here*, right
@@ -496,7 +496,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
       {/* **This is where a 402 lands for a pasted URL.** The shelf's Add button
           navigates here and the effect above posts, so the quota's refusal is
           read on this page rather than on the shelf — which is why the link to
-          `/profile` has to be here too, and not only in the add box.
+          the plans has to be here too, and not only in the add box.
           QuotaNotice.tsx.
 
           `failure.reason` first and `queue.error` behind it: the first is the

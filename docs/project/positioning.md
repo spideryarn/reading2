@@ -61,7 +61,7 @@ happened, sign-up is open to anyone, and the two honest lines that stood in for 
 landing page's beta strip and the sentence under the plans — are deleted. Writing the copy forward
 is why nothing else had to change.
 
-Prices are the three plans in [billing.md](billing.md), rendered by `Plans.tsx` on the landing,
+Prices are the three plans in [billing.md](billing.md), rendered by `PlanCards.tsx` on the landing,
 features and pricing pages. The 2025 thinking was $20 a month for as many articles as you like; what
 shipped is Free / Reader / Researcher, paid by individuals first and institutions later.
 
