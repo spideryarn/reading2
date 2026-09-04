@@ -459,6 +459,22 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "with `readFile`, which the graph walk cannot see and stage G's corpus decision still owns.",
   },
   /**
+   * **Landed after the witness ran, so the verdict is the graph's plus the
+   * file's own subject** — the same position, and the same classification, as
+   * the eval-parity entry below it.
+   */
+  "tests/hierarchy-cascade.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "The pure arithmetic of the hierarchy cascade — the stopping rule, the batch packing and " +
+      "the starts-only range derivation. Every function under test is a function of an article " +
+      "and a recipe, with no model, no network and no store; it reaches a condemned module only " +
+      "because `src/hierarchy.ts` imports the app to reach `generateHierarchy`. Nothing here " +
+      "changes when the filesystem store goes.",
+  },
+  /**
    * **Arrived from `dev` after the registry was written, and the hole check
    * caught it** — which is the whole reason that check re-derives the import
    * graph live rather than reading a stored answer. Named, classified, kept.

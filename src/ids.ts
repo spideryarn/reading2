@@ -54,6 +54,47 @@ export function isSpideryarnId(value: string | null | undefined): boolean {
   return typeof value === "string" && ID_PATTERN.test(value);
 }
 
+/**
+ * **How to name a value from the model in an error message — and when not to.**
+ *
+ * An error thrown while reading a model's answer is a value that travels: a
+ * step that throws is logged by src/jobs.ts through `errorFields`, and
+ * src/log.ts's serialiser keeps the error's `message` *and* its `stack`, which
+ * contains the message again. So anything interpolated into one is written into
+ * the log twice, and `redact` matches paths in the object rather than text in a
+ * string, so it reaches neither copy. See docs/project/logging.md § An error is
+ * not a safe thing to log whole.
+ *
+ * The awkward case is a stage whose inputs are `JSON.parse` of the model's
+ * response with a TypeScript cast in front of them, because **the cast proves
+ * nothing at runtime**. Nothing stops the model writing
+ * `"range": ["Feeling is metabolic, not computational", "spya-k3m9qt"]`, and
+ * that is precisely the input that reaches the lookup — a sentence of the
+ * article is never in `blocks.json`, so the lookup misses and we throw. The
+ * message would then carry the article's own prose into the log exactly when
+ * the model misbehaves.
+ *
+ * The one value that is safe to quote is one that has passed `isSpideryarnId`:
+ * `spya-` plus six characters drawn from the fixed alphabet above, which cannot
+ * spell a word of anybody's article. Everything else is described by its shape
+ * and withheld — a length and a type are enough to tell a truncated id from a
+ * paragraph.
+ *
+ * **It lives here rather than in src/hierarchy.ts**, where it was written and
+ * where its only caller was, because src/hierarchy-cascade.ts throws the same
+ * kind of message about the same kind of value. Importing it from the stage
+ * module would make a pure arithmetic file load the whole of stage 4 at
+ * runtime, and would become a real `hierarchy → cascade → hierarchy` cycle the
+ * moment `generateHierarchy` wires the cascade in. This module imports nothing
+ * at all, which is what makes it the safe home. ⟨GPT Sol, 2026-09-04⟩
+ */
+export function nameValue(value: unknown): string {
+  if (typeof value === "string" && isSpideryarnId(value)) return `"${value}"`;
+  if (value === null) return "not a block id (null)";
+  if (typeof value !== "string") return `not a block id (a ${typeof value})`;
+  return `not a block id (a ${value.length}-character string, withheld)`;
+}
+
 /** Mint an id that isn't in `taken`, and reserve it. */
 export function mintUniqueId(taken: Set<string>, random?: () => number): string {
   for (let attempt = 0; attempt < 1000; attempt++) {

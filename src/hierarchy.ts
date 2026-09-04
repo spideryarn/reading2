@@ -43,7 +43,7 @@ import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { blocksArtefact } from "./blocks.js";
 import { isBodyEvidence, isStructural } from "./block-policy.js";
-import { isSpideryarnId } from "./ids.js";
+import { isSpideryarnId, nameValue } from "./ids.js";
 import { COVERAGE_FLOOR, generateLabels, mergeLabels, type LabelsFile } from "./labels.js";
 import { hashBlocks } from "./source-hash.js";
 import { nullCheckpointStore, type CheckpointStore } from "./store/checkpoints.js";
@@ -326,38 +326,11 @@ export function structureRequest(body: Block[]): {
  */
 export { COVERAGE_FLOOR };
 
-/**
- * How to name a value from the model in an error message — and when not to.
- *
- * **An error thrown in this file is a value that travels.** A step that throws
- * is logged by src/jobs.ts through `errorFields`, and src/log.ts's serialiser
- * keeps the error's `message` *and* its `stack`, which contains the message
- * again. So anything interpolated here is written into the log twice, from a
- * file that never calls the logger at all, and `redact` matches paths in the
- * object rather than text in a string, so it reaches neither copy. See
- * docs/project/logging.md § An error is not a safe thing to log whole.
- *
- * What makes stage 4 the awkward case is that its inputs are `JSON.parse` of
- * the model's response with a TypeScript cast in front of them, and **the cast
- * proves nothing at runtime**. Nothing stops the model writing
- * `"range": ["Feeling is metabolic, not computational", "spya-k3m9qt"]`, and
- * that is precisely the input that reaches the branches below — a sentence of
- * the article is never in `blocks.json`, so the lookup misses and we throw. The
- * message would then carry the article's own prose into the log exactly when
- * the model misbehaves.
- *
- * The one value that is safe to quote is one that has passed `isSpideryarnId`:
- * `spya-` plus six characters drawn from a fixed 32-character alphabet
- * (src/ids.ts, docs/project/block-ids.md), which cannot spell a word of
- * anybody's article. Everything else is described by its shape and withheld —
- * a length and a type are enough to tell a truncated id from a paragraph.
- */
-function nameValue(value: unknown): string {
-  if (typeof value === "string" && isSpideryarnId(value)) return `"${value}"`;
-  if (value === null) return "not a block id (null)";
-  if (typeof value !== "string") return `not a block id (a ${typeof value})`;
-  return `not a block id (a ${value.length}-character string, withheld)`;
-}
+/* `nameValue` — what is safe to quote from a model's answer in a message that
+   reaches the log — moved to src/ids.ts on 2026-09-04. It is a statement about
+   ids, and src/hierarchy-cascade.ts needs the same rule; importing it from here
+   would make that pure module load the whole of this one, and would be a real
+   import cycle the moment `generateHierarchy` wires the cascade in. ⟨GPT Sol⟩ */
 
 /**
  * Did the answer actually cover the article?
@@ -1190,7 +1163,7 @@ export function buildTree(
          which is why the first version of this fix was only half of one: both
          ends are model output behind a cast, and an end that is a phrase of the
          article is exactly what lands here, since a phrase is never a key in
-         `index`. `nameValue` is where the rule lives. */
+         `index`. `nameValue` (src/ids.ts) is where the rule lives. */
       const bad = [
         ...(lo === undefined ? [`start ${nameValue(range[0])}`] : []),
         ...(hi === undefined ? [`end ${nameValue(range[1])}`] : []),

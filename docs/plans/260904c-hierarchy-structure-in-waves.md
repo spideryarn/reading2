@@ -175,9 +175,18 @@ split across calls. On a 360-block article that is 1 call for wave 1, 1–2 for 
 third wave only for the sections still over the terminal size — far below the ~39 the research doc
 feared, and fewer than the four and five calls the unpacked eval arm made.
 
-**None of these three numbers is evidence-backed yet**, because the arm that has run makes one call
-per parent and therefore validates none of them. They are a starting heuristic; the cascade records
+**None of these numbers is evidence-backed yet**, because the arm that has run makes one call per
+parent and therefore validates none of them. They are a starting heuristic; the cascade records
 **predicted against actual children** per call so they can be tuned from a run rather than re-guessed.
+`maxInputTokensPerBatch` is the weakest of them — 24,000, chosen as roughly twice the incumbent's
+measured 11,114 input tokens on the real corpus, which is an order-of-magnitude argument and not a
+measurement.
+
+**And only the token cap can be breached by a single parent**, which is worth knowing before anyone
+tunes it: `predictedChildren` clamps at 9, well under the 36 cap, and one parent is never more than
+the 4-parent cap. So "an oversized parent gets a call to itself" means precisely "a parent whose
+slice is too long to send", and raising `maxInputTokensPerBatch` removes the only escape hatch a
+single parent has.
 
 **Packing is not an optimisation, it is what makes the cascade affordable.** On the real corpus the
 unpacked arm made 7 and 8 calls and spent $0.39 and $0.52, against the incumbent's single call at
@@ -199,11 +208,31 @@ are folded into that one sentence:
   a hard boundary everywhere else. The heading clause is what stops the terminal level quietly
   merging across one.
 
+**"Unresolved" needed a definition, and the obvious one never terminates.** Read literally — a
+heading that is not already the start of one of the node's children — a node with no children yet
+has *every* heading in its range unresolved, **including the one it starts on**. Since a node created
+from a heading begins on one, every such node would expand for ever, bounded only by the depth cap.
+So *resolved* includes the node's own start. That is the difference between a working governor and an
+infinite cascade, and the first draft of this plan did not have it.
+
+**Structural blocks, not raw ones, in the prediction too.** The plan's formula said
+`ceil(parentBlockCount / 9)` while its stopping rule counted structural blocks, and the two must
+agree: a node padded with images and withheld apparatus would otherwise be called *terminal* by the
+governor and predicted four children by the packer, which is a prediction the governor contradicts.
+The formula is `clamp(2, 9, ceil(structuralBlocks / terminalBlocks))`.
+
 Depth then falls out of the article: a short post gets one internal level, a paper three, a book
 five. That is [Fable's bottom-anchoring argument](#reviews) — the reader reads the zoom slider as
 *stride*, not as a depth number, so the rightmost gist column always means "one sentence per ~7
 paragraphs" and extra altitude appears on the left, where a reader expects a long piece to have more
 of it.
+
+**A single-child expansion does not terminate either, and the cap is not the answer.** If an answer
+proposes exactly one child, that child inherits its parent's whole range and the governor says the
+same thing one level down. `maxDepth` bounds it, but absorbing it there is silent — it burns four
+calls and reports `capReached` for a reason that is not about the article. **It is a retry trigger**,
+owned by stage 2 along with the rest of the retry semantics, not something the governor should paper
+over.
 
 **The depth cap is 5, and what happens when it is reached is part of the contract.** It is not "UI
 sanity" — a node that is still over the terminal size at depth 5 is a node whose label sibling set
@@ -336,6 +365,25 @@ immediately from strictly increasing starts. `sourceHeading` is optional and mus
 schema: it is how a node records that the author wrote its title, it is what the `§` badge in the
 reading view is drawn from, and a response format that omits it would silently strip the provenance
 from every node the cascade creates.
+
+**Starts-only removes the duplicate-start fallback rather than replacing it, and that is the
+decision.** An earlier draft of this section said the fallback "needs replacing rather than being
+silently unavailable" — but its only input *was* the previous child's claimed end, so there is
+nothing left to fall back to. Two children claiming one start is therefore **drop and count**, which
+is exactly what `planChildRanges` already does when a backwards end makes its own fallback ineligible
+([above](#backwards-child)). The alternative — hand the colliding child the next block — writes a
+boundary nobody proposed, which the derivation explicitly refuses to do. Nothing of the article is
+lost either way; what is lost is that section's *name*.
+
+> [!WARNING]
+> **The cascade's repair figures are not comparable with the incumbent's, and nothing about them says
+> so.** `PartitionRepair` has four kinds, and `"short"` and `"over"` are both statements about a
+> child's claimed *end*. With ends out of the schema an answer **cannot disagree with itself**: two
+> of the four kinds become unreachable, interior repairs reduce to clamping distance, and the closing
+> boundary can never fault. So a cascade arm will show fewer repairs than a one-call arm **as a
+> property of its response format**, not as a better run — and `repairedBlocks` is the figure
+> `hierarchy.md` tells you to read first. Anyone scoring the two against each other has to know this,
+> and the eval must label it rather than leaving it to be noticed.
 
 **An expansion answer may not redefine its target's own range.** The ordinal already identifies a
 parent whose range the code owns; a wave that answered about a different stretch than it was given is
@@ -550,6 +598,78 @@ exists to remove, and inheriting it would leave `TooLongForOnePass` in place und
 **Done:** deterministic tests pass; incumbent bytes unchanged; a repeated run over three documents
 (well-headed, misleading-headings, headingless) reports measured wall time, cache accounting,
 reasoning distributions, `capReached`, and predicted-against-actual children.
+
+*Landed so far:*
+
+- **1a — the eval measures wall clock** (2026-09-04). `ArmResult.elapsedMs` around the whole cell,
+  `performance.now()` not `Date.now()`, present on a `threw` row too; per-call `wave`,
+  `startedOffsetMs`, `endedOffsetMs` so the barrier structure is visible rather than inferred. All
+  optional, because a run.json written before today has no such measurement and should stay silent
+  rather than be backfilled with the approximation it replaces. The load-bearing test is the one that
+  fails if anyone later folds `elapsedMs` back into a sum.
+  **A note on how those were seen red**, because the obvious way does not work here: vitest strips
+  types without checking them, so removing a field from an interface leaves fixture literals passing
+  at `npm test`. The gate is `npx tsc --noEmit -p tests/tsconfig.json`, which `npm run typecheck`
+  runs and a bare `tsc -p tsconfig.json` does not.
+- **1b — the deterministic core**, `src/hierarchy-cascade.ts`: `shouldExpand`, `structuralBlocksIn`,
+  `predictedChildren`, `estimateExpansionTokens`, `planExpansionBatches`, `normaliseExpansion`,
+  `assertCascadeComplete`, and the `pending | terminal | expanded` state. Pure — no model, no
+  network, no store. 24 tests, 18 of them watched red against a naive stub and three more under
+  individual perturbation. It is **not wired into `generateHierarchy`**; nothing in production calls
+  it yet. `nameValue` is exported from `src/hierarchy.ts` rather than copied, because it is one rule
+  about what is safe to put in a log line and a second copy could only drift into leaking a
+  paragraph.
+
+*What the review changed, because the first version of 1b was not acceptable.* GPT Sol's verdict was
+that "the completion state and single-child handling leave exactly the silent-success path this
+module says it prevents", and it reproduced each finding rather than reasoning to it:
+
+- **`assertCascadeComplete` did not prove completeness.** A ten-structural-block root marked
+  `"expanded"` with no children passed the guard, made `shouldExpand` say `true`, and had `buildTree`
+  quietly grow ten leaves under it — a whole wave of the article missing, with the module's own guard
+  as the casualty. Status and shape are now one discriminated union (`terminal` has no children,
+  `expanded` has at least two *in the type*, `pending` has none), revalidated at runtime because a
+  resumed cascade arrives as checkpoint JSON where a cast proves nothing, and cross-checked against
+  `capReached` both ways. `finaliseCascade` is the one road to a buildable tree.
+- **A one-child answer was accepted as an expansion**, and one child inherits its parent's whole
+  range, so the governor asks the identical question one level down until `maxDepth` runs out.
+  Fewer than two *kept* children — counted after planning, so a collapse is seen too — is now
+  `ExpansionRefused`, and the refusal carries the drops that caused it without merging them into the
+  run's report, which would have double-counted a retried batch.
+- **The token cap was one number doing two jobs.** It is now a soft `maxEvidenceTokensPerBatch` for
+  packing and a hard `maxRequestTokensPerBatch` for feasibility, and an oversized target is a union
+  member rather than a flag, so a `switch` that ignores it does not compile. The estimator counts the
+  ±1 context blocks, whose "effectively constant" was simply false.
+- **A privacy leak.** The completeness error interpolated raw model ranges; Sol reproduced one
+  carrying a sentence of article prose. It routes through `nameValue` now, as every other throw in
+  the file already did.
+- **`nameValue` moved to `src/ids.ts`.** Exporting it from `src/hierarchy.ts` made a pure arithmetic
+  module load the whole of stage 4 at runtime, and would have become a real
+  `hierarchy → cascade → hierarchy` cycle the moment `generateHierarchy` wired the cascade in.
+- **`sourceHeading: ""` was silently deleted** by a truthiness spread, so the cascade would have
+  reported fewer `droppedHeadings` than the incumbent on identical output.
+- **The heading clause filters to `isBodyEvidence`**, because a supplement heading's text is withheld
+  from the prompt and expanding on one asks the call to split at a boundary it cannot see. This
+  matters more since stage 0b: `splitBlocks` reports stranded supplements now, and its fallback hands
+  the whole article through.
+
+*Tests went 24 → 38*, each new one watched red under its own perturbation. The one that matters most
+is the **differential test**: normalise an answer, hand it to the real `buildTree`, and require that
+it changes no range and records no repair. That is what makes keeping the two derivations separate
+safe, and it replaces an "idempotence" test that never touched `buildTree` at all.
+
+*The maintenance debt this stage creates, named rather than left to be found:* `normaliseExpansion`
+is about 90% of `planChildRanges`, deliberately not shared — they differ exactly where it matters,
+and parameterising on an optional `ends` would thread a conditional through every line of both. Sol
+agreed, and named the seam for the day it is needed:
+`{ childIndex, claimedStart, fallbackStart? }`. **The derivation rule must not fork**, and the
+differential test is what says so out loud.
+
+*Two things stage 2 inherits, explicitly.* `maxRequestTokensPerBatch: 120_000` is a placeholder with
+a discoverable right answer — the context window less the output budget — and should be read off
+`src/models.ts` rather than kept. And the hard bound is only as hard as the overhead the caller
+declares: `UNMEASURED_OVERHEAD` exists so that passing nothing is visible, but a real
+serialise-and-count belongs in the request builder.
 
 **Stage 2 — the production-grade cascade core, still not selected by `generateHierarchy`.**
 Explicit `pending | terminal | expanded` state, `assertCascadeComplete`, batching, abort-on-first-
