@@ -2350,6 +2350,18 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
 
   /* ---- no row needed, and why -------------------------------------------- */
 
+  "tests/billing-tiers.test.ts": {
+    "b1111111-0000-4000-8000-000000000001": {
+      kind: "no-row-needed",
+      why:
+        "the owner id handed to `standingFor` and `tiersToOffer`, both pure — this file builds " +
+        "billing rows and tier rows as plain objects and asserts what they are offered. Nothing " +
+        "here opens a database, so the id is never on the writing side of the auth.users key. " +
+        "If this file ever gains a Postgres lane, the same owner starts being written under and " +
+        "this verdict has to become `seeded`.",
+    },
+  },
+
   "tests/export-route.test.ts": {
     "0e5c0001-0000-4000-8000-0000000000b9": {
       kind: "no-row-needed",

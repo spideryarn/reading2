@@ -227,7 +227,12 @@ describe("whether a row already holds a subscription", () => {
  * state is still reachable.
  */
 describe("what a billing row is offered, end to end through the decision", () => {
-  const OWNER = "00000000-0000-4000-8000-00000000beef" as OwnerId;
+  /* Its own id, not a memorable one. `…beef` was already claimed by
+     tests/public-dispatch.test.ts, and tests/fixture-ids.test.ts refuses a
+     uuid two files both spell out — the collision is invisible until two
+     suites touch the same row and one of them starts failing for the other
+     one's reasons. Nothing here depends on the value. */
+  const OWNER = "b1111111-0000-4000-8000-000000000001" as OwnerId;
   const READER = tier({ sortOrder: 10, stripePriceId: "price_reader" });
   const RESEARCHER = tier({
     id: "researcher",
