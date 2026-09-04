@@ -83,15 +83,35 @@ a filter*. A public index changes what an owner agreed to.
 Sol offered three ways out; **Greg chose the third on 2026-09-04: list every public article, and
 change the promise.** So two things are load-bearing and neither may slip:
 
-- **The sharing copy changes before the listing ships, not after.** `SHARING_ON`, the confirmation
-  dialogue (`SHARING_CONFIRM_TITLE` and its body) and `SHARING_CANNOT_UNRING` must say that a shared
-  article may be listed publicly. Shipping the listing first would retroactively publish material
-  people shared under a narrower promise. This is a gate, not a task ordering preference.
-- **Before deploying, count the public articles that are not Greg's.** This box reaches only the
-  local Supabase, where there are currently **zero** public articles. If production holds public
-  articles owned by somebody else, they were shared under the old sentence, and Greg decides per
-  article whether to notify, unshare or leave — before the index is live, not after. The plan cannot
-  make that call and does not.
+- **The sharing copy changes.** `SHARING_ON`, the confirmation dialogue (`SHARING_CONFIRM_TITLE` and
+  its body) and `SHARING_CANNOT_UNRING` say that a shared article may be listed publicly.
+
+### And then it stopped being a gate, for a reason about today rather than about the design
+
+The first version of this section made two things load-bearing: that the copy ship *before* the
+listing, and that somebody count the public rows in production that are not Greg's. Both existed to
+protect owners who shared under a narrower promise.
+
+Meanwhile a second worktree (`260904c-more-modes-on-a-shared-link`) was widening the same promise
+from the other side: a visitor to a shared article would also get the owner's **comments, chat
+transcripts and saved searches**. Its agent flagged the same retroactive-consent problem
+independently, and the two changes together are different in kind from either alone — an article
+shared in July under *"anyone with the link can read this"* would become listed *and* carry the
+reader's own questions about it, with the owner pressing nothing.
+
+Put to Greg as one decision, 2026-09-04:
+
+> There are no users yet, only me. So no risk. Do what's simplest.
+
+So: **both changes apply retroactively to every public article, with no grandfathering flag, no
+old-versus-new consent distinction, and no notice.** The pre-deploy count is dropped with them.
+
+**The reason is a fact about today, not a judgement that the exposure does not matter**, and that
+distinction is the whole reason this section survives rather than being deleted. It rests on there
+being one account holder. The moment there is a second, the question returns — so the dialog copy
+still has to say plainly what a shared link now carries, which is cheap and worth doing properly for
+an audience of one. Written down so that a later reader does not mistake *"we decided this was
+fine"* for *"we decided this did not apply to anybody yet"*.
 
 ### 2. The URL cannot be the consent, and the first mechanism did not work
 
@@ -388,6 +408,111 @@ preference.
 
 ## Log
 
+- **2026-09-04, what the neighbouring worktree settled, and what it costs this plan.**
+  `260904c-more-modes-on-a-shared-link` is widening a shared link from the other side, and two of its
+  findings land on this plan rather than only on its own.
+  - **Chat is not shareable, and the reason is not a missing allowlist entry.** A stored chat answer
+    can quote the owner's *other private articles*, because `search_library` and
+    `read_library_passage` range over the whole shelf — so the disclosure sits in the prose of
+    `chat_messages.text`, the one column the feature cannot exist without. Stripping every
+    surrounding field leaves *"In your other piece on X, the author argues…"* untouched. Written up
+    in [chat-tools.md](../project/chat-tools.md); the consequence here is that **the sharing copy
+    must not promise conversations**.
+  - **`PrivacyPage.tsx`'s "Who can see your shelf" paragraph is wanted by both plans**, and is being
+    edited sequentially rather than split: that worktree takes the whole paragraph first, adding
+    nothing about listing, and the listing clause is added here afterwards — because the page must
+    not claim a public index before there is one. Two sessions editing one paragraph is a merge
+    conflict inside a sentence.
+  - Its stage order is timeline, diagram, comments, saved searches — chat dropped.
+- **2026-09-04, a subagent deleted three untracked files it did not create** — `.tmp-smoke.mts`,
+  `privacy-1280.png`, `privacy-390.png` — while tidying its own scratch files out of the worktree
+  root. Copies survive in the shared primary checkout, dated 2026-09-02 and 09-03, so nothing is
+  known to be lost; they were **not** copied back, because a file that cannot be confirmed identical
+  is worse in a shared tree than a gap. The cause is a brief that said *keep your files out of the
+  repo root* without saying *delete nothing you did not write*, and every brief since says the
+  second thing. [version-control.md](../project/version-control.md) already forbids the git commands
+  that throw work away; `rm` is the hole in that rule.
+- **2026-09-04, stage 2 built.** `/pricing` joined the marketing pages (`.site`, `SiteNav`, hero,
+  `SiteFooter variant="marketing"`), the table became variant B's cards, and the four *How it works*
+  paragraphs are folded into a seven-question FAQ. Six things worth knowing:
+  - **The design was spiked before it was argued about.** Three variants on a throwaway page,
+    looked at side by side and at a real 390px viewport in an iframe; B won and the spike was
+    deleted. Cheaper than a discussion, and the file is gone, which is what a spike is for.
+  - **`site-panel` needed to leave `.site`, and the fix is one selector.** `/profile` draws the
+    same cards from the billing rows and is not a marketing page, so the `--site-*` properties are
+    now declared on `.plan-cards` as well. The failure this avoids is silent: transparent border,
+    no fill, no error.
+  - **The drift guard's records changed shape and the binding was re-checked.** `allowance` carries
+    the noun now (`20 articles a month` — `20 a month` said nothing on a card with no columns) and
+    the price is a headline plus a fainter line of the other currencies, so the guard reads both.
+    Sol's swapped-id mutation was re-run: it still goes red, on the name.
+  - **`/profile` declines the headline currency, and that one is not cosmetic.** It cannot know
+    which of three Checkout will pick, so it puts all of them in `price` and the card sizes the
+    figure smaller because `alt` is unset. Three currencies at 2.1rem in a 230px column is an
+    overflow.
+
+    **It declined `recommended` too, and that was wrong** — corrected after the stage 2 review
+    below. The reasoning written here on the day was *its reader has already chosen*, which is
+    backwards for the state those cards actually render in: the whole block is behind
+    `canCheckout`, so anybody looking at it is free or lapsed and is choosing between the two paid
+    tiers right now. The recommendation is now attached to **whether somebody is choosing**, not to
+    which page they are on.
+  - **Three FAQ answers were checked against the admission path, not against a doc.** A failed
+    fetch costs nothing; pasting the same URL again costs a second article even though every step
+    then skips; a re-run against a slug you already own is free. And the *what happens at my limit*
+    answer offers a subscriber no upgrade, because there is not one — `canCheckout` is false while
+    a subscription is live and the Portal cannot switch tiers.
+  - **The screenshots, and what they measured.** Signed out, one viewport at a time, headless
+    system Chrome: `/pricing` at 1440 in three screens and at 390 in five, plus the plans block on
+    `/` and `/features` at both widths. The captures were session scratch and were not kept; what
+    they settled is written down instead, because a picture in a directory nobody will open is not
+    evidence:
+    - The `h1` content column starts at **x=168** on all three pages. It was x=360 on `/pricing`,
+      which is the defect this stage was for, and the number is the whole of what "joins the
+      family" means.
+    - The raised card reads at a glance: `rgba(255,255,255,0.05)` on `rgba(255,255,255,0.16)`
+      against `0.027`/`0.1` for its neighbours.
+    - **No horizontal scroll at 390**, and zero console errors on any of the eight screens.
+    - **A trap worth the ten minutes it cost**, now in
+      [marketing-pages.md](../project/marketing-pages.md#screenshotting-the-pages-themselves-for-review):
+      `locator.screenshot()` clips to the bounding box, and the raised card is lifted out of its own
+      by a negative margin — so an element shot of it arrives with RECOMMENDED sliced off and looks
+      like a broken design.
+- **2026-09-04, stage 2 code-reviewed by GPT Sol and fixed before committing**
+  ([the review](260904b-stage2-code-review-sol.md)). One P1, four P2s, two documentation gaps:
+  - **The top bar's *Sign in* now knows who is reading it.** `SiteNav` chose its destination from
+    `here` alone, but `/features` and `/pricing` are mounted signed in too — where `#sign-in` names
+    nothing on `/pricing` (the anchor is inside `PlansForAStranger`) and `/#sign-in` lands on the
+    shelf. Two dead links, of which the `/features` one predates this stage. `signedIn` is a
+    required prop with no default, so a new caller has to answer the question;
+    `tests/site-nav-sign-in.test.tsx` mounts both pages both ways and was red on both signed-in
+    cases first.
+  - **Four sentences said more than the code guarantees.** *"You are charged in your own currency"*
+    → the three currencies a tier actually carries; *"until your allowance starts again"* → a plan
+    that is *ending* falls back to the lifetime free allowance, which counts the articles added
+    while subscribed (`usageSql`, src/store/pg-billing.ts), so there is no fresh allowance for
+    somebody already past three; *"You pay for the articles you add"* → a fixed monthly price with
+    a capped allowance, since nothing here is metered; *"a paywall … costs you nothing"* → *a
+    paywall that leaves no readable article*, because what the code refuses is an extraction that
+    produced no blocks, and a soft paywall that yields prose ends `done` and is charged. The same
+    currency overstatement was on `/profile` and is fixed in the same breath.
+  - **The recommendation follows the choice, not the route.** `WebsitePlans` took `recommend`, a
+    boolean each caller answers: `/` always (only strangers reach it), `/features` when signed out,
+    `/pricing` for a stranger, and for a signed-in reader only when `canCheckout` *and* the tier is
+    in `offers` — so a Researcher no longer sees the downgrade they cannot buy labelled
+    Recommended. `/profile` now recommends, for the reason in the corrected bullet above.
+    `WEBSITE_PLANS` is `as const satisfies`, so `RECOMMENDED_TIER` is checked against the ids that
+    exist; a runtime throw would have been wrong, because a tier legitimately absent from one
+    reader's offers is the normal case.
+  - **`/pricing` has an `h2` again**, `sr-only`, because the plan titles are `h3` and the page went
+    `h1` → `h3`. The other three callers each supply one of their own.
+  - **`/profile`'s three Upgrade buttons have three names.** `PlanCardAction.ariaLabel` carries
+    *Upgrade to Reader* / *Upgrade to Researcher*; the visible word stays short because the long
+    form wraps in a 210px card, and it is contained in the accessible name, which is what WCAG's
+    Label in Name asks.
+  - **The `.plan-cards` token change stays** — Sol checked the leak and found none — but three
+    comments describing a two-page world were false and are not any more: styles.css § the site,
+    `SiteFooter.tsx`'s page count, and marketing-pages.md.
 - **2026-09-04, stage 1 built.** `PlanCards` is the presentational component (`src/web/Plans.tsx`
   renamed to `src/web/PlanCards.tsx`, since the numbers moved into it as data); `/`, `/features` and
   `/pricing` render `WebsitePlans`, the copy plus its footnote, and `/profile` renders `PlanCards`

@@ -37,6 +37,7 @@ import type {
   Ideas,
   Quotes,
   NodeId,
+  Timeline,
   Tree,
   TreeNode,
   TweetThread,
@@ -55,6 +56,7 @@ const NO_ARTEFACTS = {
   ideas: null,
   quotes: null,
   tweets: null,
+  timeline: null,
 } as const;
 
 /** Every key path in a value, dotted, with array elements collapsed to `[]`. */
@@ -272,6 +274,7 @@ const FORBIDDEN_ON_META = [
 ];
 
 describe("the public article payload", () => {
+
   const built = publicArticle({
     slug: "noema",
     title: "The mythology of conscious AI",
@@ -853,6 +856,57 @@ describe("the artefacts a shared link carries", () => {
     ],
   };
 
+  /**
+   * **A real one, not `null`**, for the reason `QUOTES` above is real: an
+   * assertion about an absent artefact agrees with a projection that returns
+   * nothing, which is the vacuous pass this file was caught in once already.
+   *
+   * **Two events, and the `dating` union is why.** A `TimelineEvent`'s date is a
+   * four-member union, and a single `dated` event would leave the projection's
+   * treatment of the other three unexercised — the same shape as the
+   * `TreeNode.treatment` regression in src/public/dto.ts's own header, where a
+   * field that never crossed was invisible because every fixture had it.
+   */
+  const TIMELINE: Timeline = {
+    version: "timeline/1",
+    generator: "some-model",
+    slug: "noema",
+    sourceHash: "abc123",
+    orderConflicts: 2,
+    generatedAt: "2026-08-31T10:14:21.120Z",
+    elapsedMs: 31_000,
+    events: [
+      {
+        id: "spya-event1",
+        label: "The first example is offered",
+        dating: {
+          kind: "dated",
+          when: {
+            earliest: "2026-07-04",
+            latest: "2026-07-04",
+            extent: "instant",
+            phrase: "on 4 July",
+            at: { blockId: "spya-k3m9qt", start: 3, end: 12 },
+            yearFilled: true,
+          },
+        },
+        order: 1,
+        modality: "happened",
+        occurrences: [
+          { blockId: "spya-k3m9qt", quote: "does not survive its own first example", start: 17 },
+        ],
+      },
+      {
+        id: "spya-event2",
+        label: "The trouble is named",
+        dating: { kind: "words", phrase: "another month later" },
+        order: 2,
+        modality: "predicted",
+        occurrences: [{ blockId: "spya-k3m9qt", quote: "which is the whole trouble", start: 56 }],
+      },
+    ],
+  };
+
   const built = publicArticle({
     slug: "noema",
     title: "The mythology of conscious AI",
@@ -870,6 +924,7 @@ describe("the artefacts a shared link carries", () => {
     ideas: IDEAS,
     quotes: QUOTES,
     tweets: THREAD,
+    timeline: TIMELINE,
   });
 
   /** Everything under one key, deeply, against the allowlist for that artefact. */
@@ -968,6 +1023,44 @@ describe("the artefacts a shared link carries", () => {
   });
 
   /**
+   * **The events, and not the count of the model's own mistakes.**
+   *
+   * `orderConflicts` is the field to look for in this list and not find. It is
+   * the number of pairs the article's own dates order one way and the model
+   * ordered the other — a fact about our pipeline's quality, shown to nobody,
+   * and src/public-types.ts § PublicTimeline argues it against
+   * `PublicQuotes.discarded`, which *does* cross because a reader is shown it.
+   */
+  it("carries the events and none of the pipeline around them", () => {
+    expect(pathsUnder("timeline")).toEqual(
+      [
+        "events",
+        "events[].dating",
+        "events[].dating.kind",
+        "events[].dating.phrase",
+        "events[].dating.when",
+        "events[].dating.when.at",
+        "events[].dating.when.at.blockId",
+        "events[].dating.when.at.end",
+        "events[].dating.when.at.start",
+        "events[].dating.when.earliest",
+        "events[].dating.when.extent",
+        "events[].dating.when.latest",
+        "events[].dating.when.phrase",
+        "events[].dating.when.yearFilled",
+        "events[].id",
+        "events[].label",
+        "events[].modality",
+        "events[].occurrences",
+        "events[].occurrences[].blockId",
+        "events[].occurrences[].quote",
+        "events[].occurrences[].start",
+        "events[].order",
+      ].sort(),
+    );
+  });
+
+  /**
    * **And the artefacts are really there**, which every assertion above passes
    * without. A DTO returning `{}` for all four satisfies every key set and
    * every "does not contain", and it is the failure this repo keeps writing up:
@@ -981,6 +1074,15 @@ describe("the artefacts a shared link carries", () => {
     expect(built.ideas?.ideas[0]?.occurrences[0]?.quote).toContain("first example");
     expect(built.tweets?.tweets[0]?.text).toBe("The first post.");
     expect(built.tweets?.limit).toBe(280);
+    expect(built.timeline?.events).toHaveLength(2);
+    expect(built.timeline?.events[0]?.label).toBe("The first example is offered");
+    /* The second event's `words` dating, which is the arm a one-event fixture
+       would not reach: the article dated it as far as it ever will, and losing
+       the phrase would lose the only thing it said. */
+    expect(built.timeline?.events[1]?.dating).toEqual({
+      kind: "words",
+      phrase: "another month later",
+    });
   });
 
   /**
@@ -1014,6 +1116,7 @@ describe("the artefacts a shared link carries", () => {
       ideas: { ...IDEAS, ideas: [] },
       quotes: null,
       tweets: null,
+      timeline: null,
     });
     expect("glossary" in empty).toBe(true);
     expect(empty.glossary?.entries).toEqual([]);

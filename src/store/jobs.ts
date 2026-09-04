@@ -17,14 +17,21 @@
  * commit a step onto a job the reader had already stopped. Named transitions
  * put both conditions inside the statement.
  *
- * ## One claim covers one step, and then lets go
+ * ## A claim covers a whole job, and there are three ways to put it down
  *
- * `claim` → run a step → `releaseStep`, or `finish` when the job is over.
- * A claim that outlived its step would leave the job `running` with a token
- * nobody holds, and the next advance — a different request, a different token —
- * would be told `busy` until the lease expired. That is the endpoint
- * deadlocking itself on the happy path, and it is the shape the first draft of
- * this design actually had; GPT Sol found it before it was written.
+ * `claim` → run every step → `finish`. It covered **one step** until
+ * 2026-08-30, and that shape cannot finish an ingest on a serverless host at
+ * all: the next request lands on a different instance and step 2 finds nothing
+ * step 1 wrote. `walkClaim` (src/jobs.ts) is where the argument lives.
+ *
+ * What survives from the one-step design is that a claim must never *outlive*
+ * the claimant. A claim held open by a process that has stopped leaves the job
+ * `running` with a token nobody holds, and every later advance is told `busy`
+ * until the lease expires — the endpoint deadlocking itself on the happy path,
+ * which is the shape the first draft of this design actually had; GPT Sol found
+ * it before it was written. So there are exactly three doors out:
+ * `releaseStep` between two steps, `pauseForDeadline` from inside one, and
+ * `finish` when the job is over.
  *
  * ## What an expired lease means, and what it deliberately does not
  *
@@ -200,6 +207,70 @@ export interface ExpirySettlement {
   status: Extract<JobStatus, "error" | "cancelled" | "queued">;
 }
 
+/**
+ * **What `pauseForDeadline` did** — four answers, because zero rows moved is
+ * four different events and only one of them may end the job.
+ *
+ * A discriminated union rather than a boolean or a count ⟨GPT Sol, finding 3 on
+ * docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md⟩. "The
+ * statement moved nothing, so the budget must be spent" is false: it can equally
+ * mean Stop set `cancelling`, the lease lapsed during the claimant's unwind
+ * margin, another sweep got there first, or the attempt changed. Three of those
+ * want three different things from the caller, and the fourth — Stop — wants the
+ * opposite of an ending nobody asked for.
+ *
+ * **Only `requeued` writes the row.** The other three leave it exactly as they
+ * found it, so the claimant still holds a live claim and can settle the job
+ * through its own session — which is the transaction that disposes of the draft.
+ * A store method that terminalised the job here would leave
+ * `jobs.draft_revision_id` pointing at a revision `sweepAbandonedDrafts` spares
+ * for ever.
+ */
+export type PauseOutcome =
+  /**
+   * **Back to `queued` on this same row, with the draft kept.** The next request
+   * claims it and carries on.
+   *
+   * **The draft is why this is a separate statement, and since 2026-09-04
+   * `settleExpired`'s requeue keeps it too.** On a first ingest there is no
+   * published revision to copy from, so a fresh draft re-runs `blocks` as a
+   * genuine first ingest and **mints every block id afresh** (src/ids.ts).
+   * Everything keyed on those ids — the hierarchy structure checkpoint above all
+   * — becomes permanently unreachable, so every window re-buys the most
+   * expensive call in the pipeline. ⟨GPT Sol, finding 2 on the plan, reproduced:
+   * `same: false` over identical HTML; and finding 1 on the built stage, which
+   * is that the *lapsed* half was still throwing it away and the two therefore
+   * did not compose⟩ The requeue's own note in src/store/pg-jobs.ts is where the
+   * reasoning lives.
+   */
+  | { kind: "requeued"; job: Job }
+  /**
+   * **The reader pressed Stop.** Nothing was requeued and nothing may be: end
+   * the job as cancelled.
+   *
+   * Falling through to the interrupted ending here is the failure this outcome
+   * exists to name. `finishIn` clears `cancelling` and keeps whatever ending it
+   * is handed, so a job the reader chose to stop would go terminal `error` with
+   * a Retry button and a sentence saying nobody came back.
+   */
+  | { kind: "cancelled" }
+  /**
+   * **No windows left.** End the job the way an overrun has always ended it —
+   * `INTERRUPTED`, retryable — rather than going round again.
+   *
+   * See `REQUEUE_BUDGET` in src/jobs.ts for why there is a number at all, and
+   * for the fact that this counter is **shared** with the lapsed-lease path.
+   */
+  | { kind: "budget-spent" }
+  /**
+   * **This claimant may no longer write.** The lease lapsed while the step was
+   * coming apart, the attempt moved, or the job is no longer `running`.
+   *
+   * Nothing this claimant does now can be recorded — an ending included — so the
+   * caller reports a lost claim and lets the client ask again.
+   */
+  | { kind: "stale" };
+
 /** How a job ended, and everything the card needs to say so. */
 export interface JobEnding {
   status: Extract<JobStatus, "done" | "error" | "cancelled">;
@@ -305,7 +376,13 @@ export interface JobStore {
   enqueueOrGet(job: Job, ticket: EnqueueTicket): Promise<EnqueueOutcome>;
 
   /**
-   * Take this job for **one** step, or say why not.
+   * Take this job, or say why not.
+   *
+   * **For the whole of it**, not for one step — `walkClaim` (src/jobs.ts) runs
+   * every runnable step on this one claim, and puts it down through
+   * `releaseStep`, `pauseForDeadline` or `finish`. This said *"for **one**
+   * step"* until 2026-09-04, which was the shape before 2026-08-30 and is the
+   * one thing a reader must not believe about a claim's lifetime.
    *
    * Refuses rather than waits, always: a claim that blocked would hold a
    * serverless invocation open doing nothing, and the caller has a perfectly
@@ -353,6 +430,57 @@ export interface JobStore {
    * own former claimant's write and report one row affected.
    */
   releaseStep(id: string, attempt: string, steps: JobStep[], outcome: StepOutcome): Promise<Job>;
+
+  /**
+   * The claimant ran out of **its own** deadline part-way through a step: put
+   * the job down cleanly, keeping the draft — **or say why it may not.**
+   *
+   * ## Why this exists at all
+   *
+   * `releaseStep` is the hand-back *between* two steps, and the walk takes it
+   * when there is not enough deadline left for the next one. It cannot cover a
+   * step that overruns once started, and a step that cannot fit in one 740 s
+   * window is routine rather than rare: a 142-page PDF's `hierarchy` needs
+   * 658–778 s on its own. Until 2026-09-04 that ended the job terminal `error`
+   * with a Retry button on a claimant that was alive, had unwound cleanly, and
+   * could have handed the job back.
+   *
+   * ## What it does, and what it deliberately does not
+   *
+   * **One atomic transition** ⟨GPT Sol, finding 3⟩, fenced on the whole of
+   * `liveAttempt` — the row is locked, read and written inside one transaction,
+   * so the four answers of `PauseOutcome` cannot be inferred from a row count
+   * that four different events produce.
+   *
+   * **It keeps `draft_revision_id`** — see `PauseOutcome`. That was the one
+   * thing distinguishing it from `settleExpired`'s requeue until 2026-09-04,
+   * when that branch stopped clearing the pointer as well: the two halves of the
+   * budget have to leave the job in the same shape or a lapse in between undoes
+   * the pause. What is left distinguishing them is the *reason* they are
+   * separate statements — this one is fenced on a live claim and answers four
+   * outcomes; that one sweeps whatever the lease has abandoned.
+   *
+   * The old worry about a lapsed claimant — that it vanished mid-write, so what
+   * is in its draft is whatever it had got to — does not survive the
+   * transactional stage runner: artefacts, step completion and the job
+   * transition commit together or not at all (src/store/pg-session.ts), so a
+   * killed claim leaves a finished step or nothing. `beginStepRun` already lets
+   * a later attempt reopen the step row an abort left `running`.
+   *
+   * **It does not end the job**, on any of the three refusals. Ending is the
+   * claimant's, through its session, because that is the transaction that
+   * disposes of the draft; this method would have to duplicate it and would get
+   * it wrong.
+   *
+   * **The budget is `requeues`, shared with `settleExpired`**, and the caller
+   * passes it exactly as it passes `leaseMs` and `maxRunning`. Every hand-back
+   * before this one was preceded by a *completed* step, so progress was
+   * structurally guaranteed and no counter was needed; a mid-step pause breaks
+   * that guarantee, and without a cap a step that can never fit would pause,
+   * re-claim and spend another window for ever. `REQUEUE_BUDGET` in src/jobs.ts
+   * is the number and says why three windows.
+   */
+  pauseForDeadline(id: string, attempt: string, requeueBudget: number): Promise<PauseOutcome>;
 
   /**
    * A step is **still running**: write what the card should say, keep the claim.
@@ -437,6 +565,15 @@ export interface JobStore {
    * does not move, so the article's checkpoints (checkpoints.ts) are still
    * reachable. A new job could not have that.
    *
+   * **And the requeued row keeps its draft**, since 2026-09-04. It did not, and
+   * that made this half of the budget undo the other half: a job that had paused
+   * cleanly and was then deployed over came back with `draft_revision_id` null,
+   * re-minted every block id and could not reach the structure checkpoint the
+   * previous window had paid for. The reasoning, and why the *terminal* branch
+   * still clears the pointer, is on the statement itself in src/store/pg-jobs.ts.
+   * ⟨GPT Sol, reviewing the built stage 3 of
+   * docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md, finding 1⟩
+   *
    * **A budget rather than a flag, because without one it never stops.** A job
    * that overruns every lease would requeue for ever, buying model calls nobody
    * is waiting for. It is the *caller's* number and the store's to enforce, the
@@ -486,8 +623,10 @@ export interface JobStore {
    * **There is no "force stop" short of that**, deliberately. A live claim may
    * genuinely be working, and clearing it is how two writers get one article.
    *
-   * **The lapsed branch copies `settleExpired`'s field set, not the running
-   * one's.** In particular it nulls `draftRevisionId`: the running branch
+   * **The lapsed branch copies `settleExpired`'s *settlement* field set, not
+   * its requeue's and not the running one's.** In particular it nulls
+   * `draftRevisionId` — a requeued row is not terminal and keeps its draft,
+   * which is a different rule for a different state. The running branch
    * leaves the pointer alone because the claimant disposes of it, and a job
    * that goes terminal still holding one is a draft `sweepAbandonedDrafts`
    * spares for ever, since it reads any job's pointer as ownership. That is the

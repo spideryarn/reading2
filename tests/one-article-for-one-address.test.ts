@@ -59,34 +59,41 @@
  * Two, one for each half of the claim above: the repair, and the arbiter that
  * triggers it. Both red.
  *
- * **1 — the repair, put back to the version Sol found.** `src/jobs.ts`, the
- * `sourceTaken` branch of `enqueue`: `allocation = request.url ? await
+ * **Mutation.** 1 — the repair, put back to the version Sol found. `src/jobs.ts`,
+ * the `sourceTaken` branch of `enqueue`: `allocation = request.url ? await
  * freeSlug(request.slug, request.url) : { kind: "adopted", slug:
  * outcome.job.slug };` made `allocation = { kind: "adopted", slug:
- * outcome.job.slug };` — the hand-written adoption, revalidating nothing.
- * **1 failed of 5**: *does not adopt the slug of a holder that has since gone*,
- * `the loser adopted a slug whose holder had gone: expected 'gone-spya-a53280'
- * not to be 'gone-spya-a53280'`. Note which four stayed green — including *makes
- * one article out of two simultaneous pastes of one address*, because when the
+ * outcome.job.slug };` — the hand-written adoption, revalidating nothing. The
+ * run printed `1 failed of 5`: *does not adopt the slug of a holder that has
+ * since gone*, `the loser adopted a slug whose holder had gone: expected
+ * 'gone-spya-a53280' not to be 'gone-spya-a53280'`.
+ *
+ * **Note which four stayed green** — including *makes one article out of two
+ * simultaneous pastes of one address*, because when the
  * holder is still there the hand-written answer and the re-asked one agree.
  * That case alone cannot tell the two apart, which is exactly the gap Sol's
  * finding 3 named.
  *
- * **2 — the Postgres arbiter.** `src/store/pg-jobs.ts` § `classify`: `if
- * (ticket.reservesName && ticket.urlKey !== undefined) {` made `if (false &&
- * …) {`, so a conflict on `jobs_active_source` is never reported as
- * `sourceTaken` and falls through to the name check. **3 failed of 5** — *makes
- * one article out of two simultaneous pastes of one address*, *does not adopt
+ * **Mutation.** 2 — the Postgres arbiter. `src/store/pg-jobs.ts` § `classify`:
+ * `if (ticket.reservesName && ticket.urlKey !== undefined) {` made `if (false
+ * && …) {`, so a conflict on `jobs_active_source` is never reported as
+ * `sourceTaken` and falls through to the name check. The run printed `3 failed
+ * of 5`.
+ *
+ * **Which three**: *makes one article out of two simultaneous pastes of one
+ * address*, *does not adopt
  * the slug of a holder that has since gone*, and *a retry told sourceTaken does
  * not leave the address unreserved*. The one that survived is the `nameTaken`
  * retry, correctly: it never reaches this branch.
  *
- * **What neither covers.** Both mutate the *classifier* and the *repair*, and
- * neither touches `jobs_active_source` itself — the partial unique index in
- * src/db/schema.ts is still doing the refusing in both runs, and this file
- * cannot tell a wrong index from a right one. Dropping its `where` clause, or
- * its owner column, is a migration rather than an edit, and
- * tests/store-jobs-parity.test.ts is where the index is proved. Mutation 2
+ * **Blind to.** The index. Both mutations move the *classifier* and the
+ * *repair*, and neither touches `jobs_active_source` itself — the partial
+ * unique index in src/db/schema.ts is still doing the refusing in both runs,
+ * and this file cannot tell a wrong index from a right one. Dropping its
+ * `where` clause, or its owner column, is a migration rather than an edit, and
+ * tests/store-jobs-parity.test.ts is where the index is proved.
+ *
+ * **Blind to.** How each mutation was made. Mutation 2
  * removed the branch entirely rather than loosening it: the ordering claim
  * beside it — *the address before the name*, when both could answer — is a
  * different mutation and was not run. Nor does either say anything about

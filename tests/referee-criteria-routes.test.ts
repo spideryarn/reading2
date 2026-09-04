@@ -43,6 +43,24 @@
  * client makes of a missing key belongs to
  * tests/referee-criteria-panel.test.tsx § "answered about an older paper", as
  * the old comment already said.
+ *
+ * ### The mutation that bears on every case here, and it stayed green
+ *
+ * One per `describe` below, written beside the assertion each one reached.
+ * This one belongs to no single case because it belongs to all of them.
+ *
+ * **Mutation.** `criteriaFor` in src/store/pg-referee-criteria.ts with its
+ * `.where(eq(refereeCriteria.articleId, articleId))` deleted, so every read in
+ * this file answers with every criterion row in the database rather than this
+ * paper's. Re-run 2026-09-04: *20 passed (20)*. Green is the finding here, not
+ * a failure.
+ *
+ * **Blind to.** Which paper a criterion belongs to, completely. One seeded
+ * article in a database minted for this run means "this paper's criteria" and
+ * "every criterion there is" fetch the same rows, so no assertion below can
+ * separate a scoped read from an unscoped one. A criterion written against
+ * somebody else's paper appearing in this list would pass every case here.
+ * Pinning that needs a second seeded article, which this file has never had.
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -283,6 +301,20 @@ when("Referee's criteria routes", { timeout: 60_000 }, () => {
       expect(reply.body.error).toMatch(/small whole number/);
     });
 
+    /**
+     * **Mutation.** `recolour` in src/store/pg-referee-criteria.ts, `.set({
+     * colour })` made `.set({ colour: colour || null })` — the falsy test the
+     * case is named after, written into the store instead of the client. Re-run
+     * 2026-09-04: *1 failed | 19 passed (20)*, this case, `expected undefined
+     * to be +0`.
+     *
+     * **Blind to.** Every colour but zero. Slot 3 and an explicit `null` are
+     * asserted by the two neighbours and both survive that mutation untouched,
+     * and nothing in this describe reaches `requireColour`'s own arithmetic —
+     * a store that wrote 4 where the request said 3 would pass all five cases
+     * here, because only the 400 case and this one ever look at the number that
+     * came back.
+     */
     it("takes slot 0, which every `if (!colour)` in this app would have refused", async () => {
       const begun = await begin("Controls?");
       const reply = await call("PATCH", `${POST}/${begun.id}`, { colour: 0 });
@@ -328,6 +360,21 @@ when("Referee's criteria routes", { timeout: 60_000 }, () => {
   });
 
   describe("DELETE", () => {
+    /**
+     * **Mutation.** `remove` in src/store/pg-referee-criteria.ts, its
+     * `eq(refereeCriteria.id, id)` dropped so the `DELETE` keeps only the
+     * article predicate and takes the paper's whole list. Re-run 2026-09-04:
+     * *1 failed | 19 passed (20)*, this case, `expected [] to have a length of
+     * 1 but got +0` — which is why the second criterion is begun and never
+     * touched.
+     *
+     * **Blind to.** The reverse mistake and the wrong-paper one. A `remove`
+     * that deleted nothing at all is caught by the length, but a `DELETE` that
+     * kept the id predicate and lost the article one would still leave exactly
+     * this list behind, because there is one paper here to be wrong about.
+     * Deleting somebody else's criterion of the same id is unreachable from
+     * this file.
+     */
     it("removes the criterion and answers with what is left", async () => {
       const a = await begin("Controls?");
       await begin("Prior work?");
@@ -353,6 +400,21 @@ when("Referee's criteria routes", { timeout: 60_000 }, () => {
       expect(typeof reply.body.sourceHash).toBe("string");
     });
 
+    /**
+     * **Mutation.** `sweepPending` in src/store/pg-referee-criteria.ts writing
+     * `status: "pending"` instead of `status: "error"`, so an abandoned row is
+     * touched, logged and left exactly as spinning as it was. Re-run
+     * 2026-09-04: *1 failed | 19 passed (20)*, this case, `expected 'pending'
+     * to be 'error'`.
+     *
+     * **Blind to.** When the sweep fires, rather than what it writes. Its
+     * companion below holds the young row, but both sit either side of one
+     * threshold: `attempt_started_at` compared against a cutoff this file moves
+     * by faking `Date`, so a store reading the wrong column, or comparing a
+     * timestamp the database never stamped, is invisible from here. `keep` —
+     * the guard that stops a process sweeping its own live attempt — is not
+     * exercised by either case.
+     */
     it("sweeps a pending criterion no process is running, so it can be run again", async () => {
       const begun = await begin("Controls?");
 

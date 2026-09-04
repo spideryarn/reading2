@@ -64,6 +64,7 @@ import type {
   Idea,
   Quote,
   QuoteDrops,
+  TimelineEvent,
   Tree,
   Tweet,
 } from "./types.js";
@@ -240,6 +241,7 @@ export interface PublicArtefactSet {
   ideas?: PublicIdeas;
   quotes?: PublicQuotes;
   tweets?: PublicTweets;
+  timeline?: PublicTimeline;
 }
 
 /**
@@ -326,6 +328,30 @@ export interface PublicQuotes {
 export interface PublicTweets {
   limit: number;
   tweets: Tweet[];
+}
+
+/**
+ * **When the piece says these things happened.**
+ *
+ * `TimelineEvent` carries nothing about a person — a label, what the article's
+ * own words said about when, the model's reading of the sequence, and the
+ * offsets of the passages it came from. So the events cross whole, exactly as
+ * `Idea` and `Quote` do, and the projection's whole job is the envelope around
+ * them.
+ *
+ * **`orderConflicts` does not cross**, and it is the one field here worth
+ * arguing about. It is the count of pairs the article's own dates order one way
+ * and the model ordered the other, and `src/types.ts` says of it: *"Changes
+ * nothing on screen and is not shown to a reader; it is the only signal we get
+ * that the model misread the chronology."* That makes it a fact about our
+ * pipeline's quality rather than about the piece, which is the line this file
+ * draws everywhere else. Note the contrast with `PublicQuotes.discarded`, which
+ * *does* cross because the panel puts it in a sentence a visitor reads: the
+ * test is whether the reader is shown it, not whether it is a number.
+ */
+export interface PublicTimeline {
+  /** In the order they are to be shown. **Never re-sorted by a reader.** */
+  events: TimelineEvent[];
 }
 
 /**

@@ -186,6 +186,110 @@ describe("the store-migration registry", () => {
     expect(understated, "entries marked static-only that the witness did watch").toEqual([]);
   });
 
+  /**
+   * **Every converted file shows its working.**
+   *
+   * Stage B's rule is that a conversion is proved by a mutation: break
+   * something in the Postgres store, run the suite, watch what happens, put the
+   * source back — and **write down what it does not cover**, because one
+   * predicate is not the family. On 2026-09-04 a cross-family review found that
+   * the first ten conversions had *reported* that evidence and not kept it, so
+   * nothing in the tree distinguished "watched red" from "reported green".
+   *
+   * This is the guard for that, and it is deliberately narrow. It checks the
+   * **citation exists**, never that it is true — a mutation nobody ran can
+   * still be written down. What it makes impossible is the specific thing that
+   * happened: a batch landing with the evidence in a subagent's report and
+   * nowhere else.
+   *
+   * Two markers, because they are two different claims and only the second one
+   * costs anything to write honestly. `**Mutation.**` says what was broken and
+   * what the run printed; `**Blind to.**` says what the mutation is silent
+   * about. A file may carry several of each.
+   */
+  /**
+   * Each marker, and the prose between it and whatever ends it.
+   *
+   * **Written as a scan rather than as one regex, and the reason is a bug this
+   * had twice.** The first version stopped a marker's body at the next `**`,
+   * which in files that bold things mid-sentence captured *"Deleting"* — eight
+   * characters — and would have failed good prose as too short, teaching
+   * authors to strip emphasis out to satisfy a guard. The second stopped at the
+   * next marker or `*​/` but only looked 900 characters ahead, so a second
+   * marker further than that from its terminator matched nothing and was
+   * **silently not counted** while the file still passed on its first one.
+   *
+   * A scan has no window and therefore no cliff. Noticed by the agent using it,
+   * which is the only reason the second one did not survive.
+   */
+  function markersIn(source: string): { kind: string; body: string }[] {
+    const hits = [...source.matchAll(/\*\*(Mutation|Blind to)\.\*\*/g)];
+    return hits.map((hit, i) => {
+      const from = (hit.index ?? 0) + hit[0].length;
+      const nextMarker = hits[i + 1]?.index ?? source.length;
+      const closes = source.indexOf("*/", from);
+      const to = Math.min(nextMarker, closes === -1 ? source.length : closes);
+      return {
+        kind: hit[1] ?? "",
+        /* Strip the leading `*` of each comment line, then collapse. */
+        body: source.slice(from, to).replace(/^\s*\*/gm, " ").replace(/\s+/g, " ").trim(),
+      };
+    });
+  }
+
+  it("makes every converted file show its working", () => {
+    const converted = Object.entries(STORE_MIGRATION)
+      .filter(([, e]) => e.convertedInB !== undefined)
+      .map(([f]) => f);
+
+    /* The control. Every assertion below is vacuous over an empty list, and
+       `convertedInB` is a field somebody has to remember to set — so a rename
+       that silently emptied this would look exactly like a clean run. 25 is
+       what stage B had converted when this guard was written; the floor is
+       under it rather than on it, because B2 adds one more and stage G removes
+       files wholesale. */
+    expect(converted.length, "no entry is marked as converted, so nothing below was checked")
+      .toBeGreaterThan(20);
+
+    const missing: string[] = [];
+    const thin: string[] = [];
+    const texts = new Map<string, string[]>();
+
+    for (const file of converted) {
+      const source = readFileSync(path.join(REPO, file), "utf8");
+      const found = markersIn(source);
+      const mutations = found.filter((m) => m.kind === "Mutation");
+      const blind = found.filter((m) => m.kind === "Blind to");
+
+      if (mutations.length === 0 || blind.length === 0) {
+        missing.push(
+          `${file} (${mutations.length} mutation, ${blind.length} blind-to)`,
+        );
+        continue;
+      }
+
+      /* Same floor and the same reasoning as `reason` above: roughly one
+         clause. It catches the marker added to satisfy this test and left
+         empty, not prose it dislikes. */
+      for (const { body } of found) {
+        if (body.length < 60) thin.push(`${file}: "${body}"`);
+        texts.set(body.toLowerCase(), [...(texts.get(body.toLowerCase()) ?? []), file]);
+      }
+    }
+
+    expect(missing, "converted files with no mutation evidence written into them").toEqual([]);
+    expect(thin, "mutation evidence too short to say anything specific").toEqual([]);
+
+    /* Exact duplicates across *different* files only. A file may legitimately
+       repeat itself — several carry the same "one owner cannot see a scoped
+       predicate" note against different predicates — but the same sentence in
+       two files is a block copied down. */
+    const copied = [...texts.values()]
+      .map((files) => [...new Set(files)])
+      .filter((files) => files.length > 1);
+    expect(copied, "mutation evidence shared word for word between files").toEqual([]);
+  });
+
   it(
     "leaves no file that the import graph can reach and nothing accounts for",
     { timeout: 180_000 },

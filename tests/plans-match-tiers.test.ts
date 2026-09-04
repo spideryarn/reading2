@@ -41,6 +41,23 @@
  *
  * The free allowance is checked too, from `FREE_LIFETIME_INGESTS` rather than
  * the tiers table, because free is the absence of a subscription and has no row.
+ *
+ * ## The records changed shape when the table became cards, and the binding did not
+ *
+ * Two fields moved on 2026-09-04 and both are checked in their new spelling:
+ * `allowance` carries the noun (`20 articles a month` — `20 a month` said what
+ * it was under a column headed *Articles* and says nothing on a card), and the
+ * price is a headline figure plus a fainter line of the other currencies, so
+ * `figuresOn` reads both halves of the row rather than one string. **The
+ * property that matters is untouched**: the row is found by tier id and every
+ * field is then asserted *of that row*, so the swapped-`reader`/`researcher`
+ * mutation still fails. It was re-run against this version and goes red on the
+ * name.
+ *
+ * There is one fact on the card no assertion here can check — the sentence
+ * translating the allowance into a reading habit is arithmetic on a number that
+ * lives in the database. So the only remedy is to say so where the failure
+ * prints, which the `habit` assertion below does.
  */
 import { describe, expect, it } from "vitest";
 
@@ -103,12 +120,28 @@ function quotes(price: string, written: string): boolean {
   return new RegExp(`${escaped}(?!\\d)`).test(price);
 }
 
+/**
+ * Every currency figure the row shows, as one string.
+ *
+ * The row was one `price` string until the cards arrived on 2026-09-04; it is
+ * now a headline figure and a fainter line of the others (`$10` over `£8 · €9`),
+ * because a card sets its price large and three currencies at that size do not
+ * fit. Both halves are still that row's, so the check below is unchanged in
+ * substance: **every currency the tier sells in must be quoted somewhere on this
+ * row**, and a figure that moved to another plan's row still fails, because the
+ * lookup that produced the row was by tier id.
+ */
+const figuresOn = (row: PlanCard): string => `${row.price} ${row.alt ?? ""}`;
+
 describe("the website's price table", () => {
   it("states the free allowance the code enforces", () => {
     const free = WEBSITE_PLANS.find((plan) => plan.id === null);
     expect(free, "no row for the free tier, which is the one every reader starts on").toBeTruthy();
     expect(free?.name).toBe("Free");
-    expect(free?.allowance).toBe(`${FREE_LIFETIME_INGESTS}, for life`);
+    /* The noun moved into the string on 2026-09-04, when the table became
+       cards: `3, for life` under a column headed *Articles* said what it was,
+       and on a card with no columns it says nothing. */
+    expect(free?.allowance).toBe(`${FREE_LIFETIME_INGESTS} articles, for life`);
   });
 });
 
@@ -146,14 +179,25 @@ describe("the website's price table, against the real rows", () => {
       expect(
         row.allowance,
         `"${tier.id}" allows ${tier.ingestsPerPeriod} a month and its row says "${row.allowance}"`,
-      ).toBe(`${tier.ingestsPerPeriod} a month`);
+      ).toBe(`${tier.ingestsPerPeriod} articles a month`);
+
+      /* **A quota that moved has a second edit in this file, and it is the one
+         that will be forgotten.** The card carries a sentence translating the
+         allowance into a reading habit — "About one on every weekday" for 20 a
+         month — which no assertion can check the arithmetic of. Saying so where
+         the failure above prints is the whole of the remedy. */
+      expect(
+        row.habit,
+        `the "${tier.id}" row has no habit line — if the quota just changed, the sentence under ` +
+          "the allowance in src/web/PlanCards.tsx is arithmetic on it and needs rewriting too",
+      ).toBeTruthy();
 
       for (const [currency, minorUnits] of Object.entries(tier.amounts)) {
         const written = asWritten(currency, minorUnits);
         expect(
-          quotes(row.price, written),
-          `"${tier.id}" costs ${written} and its row says "${row.price}" — raising a price is ` +
-            "one UPDATE and one edit to src/web/PlanCards.tsx",
+          quotes(figuresOn(row), written),
+          `"${tier.id}" costs ${written} and its row says "${figuresOn(row).trim()}" — raising a ` +
+            "price is one UPDATE and one edit to src/web/PlanCards.tsx",
         ).toBe(true);
       }
     }

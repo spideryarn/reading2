@@ -580,7 +580,7 @@ because stage 0 just made that article publishable.
 with a control proving zero is still reachable; the real article now reports its one stranded note.
 The effort evidence is written into `EFFORT`'s own comment, where the previous two flips are argued.
 
-**Stage 0c — a backwards child range is derived from, not refused. Landed 2026-09-04.**
+**Stage 0c — a backwards child range is derived from, not refused. Landed 2026-09-04.** <a id="backwards-child"></a>
 The `low` flip's one genuine failure in four draws was `smart-low` losing `gwern-scaling-long` to
 *"root > child 7 > child 1 has a range that runs backwards"*. The obvious pairing was the automatic
 retry the eval asked for on 2026-09-03 — and it **does not fit the job lease**: the arithmetic

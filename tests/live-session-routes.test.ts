@@ -49,20 +49,23 @@
  *
  * ## The mutation, watched red on 2026-09-04
  *
- * `isNull(realtimeSessions.connectedAt)` deleted from `markConnected`'s `where`
- * in src/store/realtime-sessions-pg.ts — the earliest-wins predicate, which is
- * SQL the filesystem adapter has no counterpart for. *records the data channel
- * opening, and keeps the first time* fails with the two timestamps 14ms apart.
+ * **Mutation.** `isNull(realtimeSessions.connectedAt)` deleted from
+ * `markConnected`'s `where` in src/store/realtime-sessions-pg.ts — the
+ * earliest-wins predicate, which is SQL the filesystem adapter has no
+ * counterpart for. The run went red on *records the data channel opening, and
+ * keeps the first time*, with the two timestamps 14ms apart instead of equal.
  *
- * **What it does not cover.** One predicate of one statement. The owner
- * condition beside it in the same `where` is **not** covered — nothing in this
- * file is cross-owner, so deleting `eq(ownerId)` from `markConnected`, from
+ * **Blind to.** One predicate of one statement. The owner condition beside it
+ * in the same `where` is untouched — nothing in this file is cross-owner, so
+ * deleting `eq(ownerId)` from `markConnected`, from
  * `close` or from `find` leaves every case green, and the second bullet at the
  * top of this header (*the session is looked up for the authenticated owner*) is
- * therefore a claim this file states and does not test. `tests/owner-isolation.test.ts`
- * greps this directory for the unsanctioned spelling, which is a different and
- * weaker guarantee. Nor does it touch `close`'s `is null` first-close-wins
- * guard, its `coalesce` backfill, or `issue`'s slug-to-`article_id` resolution.
+ * therefore a claim this file states and does not test.
+ *
+ * `tests/owner-isolation.test.ts` greps this directory for the unsanctioned
+ * spelling, which is a different and weaker guarantee. Nor does the mutation
+ * touch `close`'s `is null` first-close-wins guard, its `coalesce` backfill, or
+ * `issue`'s slug-to-`article_id` resolution.
  *
  * `fetch` is stubbed, so nothing reaches OpenAI and no key is needed.
  */

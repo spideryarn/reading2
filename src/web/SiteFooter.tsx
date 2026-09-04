@@ -9,7 +9,7 @@
  * It existed twice before this file did — hand-written in `LandingPage.tsx` and
  * again in `FeaturesPage.tsx`, already disagreeing about which links they
  * carried. Adding a third copy per page is how a Terms link ships on two pages
- * out of six, so the row is a component and the list below is the whole of it:
+ * out of seven, so the row is a component and the list below is the whole of it:
  * a Terms page is one entry in `LINKS`, not an edit to every page.
  *
  * **And it very nearly existed twice again.** The marketing redesign of
@@ -23,12 +23,14 @@
  *
  * ## Where it goes, and where it does not
  *
- * Every page a reader *lands on and reads*, and there are six:
- * `LandingPage`, `FeaturesPage`, `PrivacyPage` and `SignInPage` signed out, and
- * the signed-in pages of the same shape — the shelf, `/profile`, and those same
- * policy pages when a signed-in reader opens them.
+ * Every page a reader *lands on and reads*, and there are seven:
+ * `LandingPage`, `FeaturesPage`, `PricingPage`, `PrivacyPage` and `SignInPage`
+ * signed out, and the signed-in pages of the same shape — the shelf,
+ * `/profile`, and those same policy and marketing pages when a signed-in reader
+ * opens them. `/pricing` is the seventh, since 2026-09-03.
  * `tests/site-footer.test.tsx` pins the list, so this paragraph and the code
- * cannot drift apart quietly.
+ * cannot drift apart quietly — and it was the test, not this paragraph, that
+ * was right for a day (GPT Sol, stage 2 code review, finding 6).
  *
  * **Nothing under `/read/`**, which is Greg's exclusion, taken at its word:
  * *"NOT on any `/read/*` pages"*. The obvious reason is the reading view — one
@@ -53,8 +55,8 @@
  *
  * ## The link for the page you are already on is dropped
  *
- * Rather than drawn dead. `useRoute()` answers it by default, so four of the
- * six callers pass nothing and cannot get it wrong — the failure the two
+ * Rather than drawn dead. `useRoute()` answers it by default, so five of the
+ * seven callers pass nothing and cannot get it wrong — the failure the two
  * hand-written footers had already found, one of them linking to Features from
  * Features.
  *
@@ -170,7 +172,7 @@ export function SiteFooter({
    * arrangement that cannot drift.
    */
   here?: FooterPage;
-  /** Which spacing — see `SPACING`. The two marketing pages pass `marketing`. */
+  /** Which spacing — see `SPACING`. The three marketing pages pass `marketing`. */
   variant?: keyof typeof SPACING;
 }) {
   const route = useRoute();
