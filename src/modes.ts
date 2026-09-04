@@ -39,7 +39,7 @@ export const MODES = [
   /* Renamed from `toc` on 2026-08-29, at Greg's request: the reader sees
      "Hierarchy" and the code now says the same word. It also ends a collision
      that had lasted as long as the list — `toc` was simultaneously this mode and
-     the *pipeline step* that builds tree.json (src/pipeline.ts § STEP_ORDER), so
+     the *pipeline step* that builds tree.json (src/step-order.ts § STEP_ORDER), so
      one word meant two things in one repo. The step keeps the name; the mode
      gives it up. docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 3.
 

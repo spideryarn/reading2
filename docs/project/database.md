@@ -87,6 +87,21 @@ able to write them without passing through our server — a serverless function 
 Storage additionally holds a copy at `sha256/<hash>.pdf`, keyed by its own contents so two readers
 with the same paper converge on one object.
 
+**What the bucket will accept is a decision, and it is enforced on both sides.** `sources` declares
+five types in [`supabase/config.toml`](../../supabase/config.toml) — PDF, HTML, and PNG/JPEG/GIF for
+the article images that arrived with [260829b](../plans/260829b-hosting-the-articles-images.md) — and
+our own byte-sniffing in [`src/assets.ts`](../../src/assets.ts) independently admits those same three
+image kinds. **SVG is absent from both on purpose**, an SVG being a script-bearing document rather
+than a picture; Storage answers `415` to one even under the service key, measured against the running
+container. So it cannot be stored today even by mistake, which is the point of having the line twice.
+
+The hazard is that the two sides are widened separately, and the doc that owns that hazard is
+[deployment.md § the bucket checks](deployment.md#who-can-reach-it) — `bucketDrift` in
+[`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts) compares declared against running. It
+exists because the allowlist has drifted on production twice
+([260903f](../postmortems/260903f-the-bucket-allowlist-drifted-again-on-production.md)). Adding an
+image format means the config, the sniffer, and a thought about what the sanitiser now has to survive.
+
 So there are now **two** stores under the filesystem era, and the seam between them is
 [`src/store/blobs.ts`](../../src/store/blobs.ts). That is early rather than premature: the eventual
 design has *every* raw document — fetched or uploaded, HTML or PDF — as an object with the row

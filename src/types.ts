@@ -1858,7 +1858,7 @@ export interface ArticleMetadata {
   slug: string;
   /** Where the artefacts actually are, repo-relative — `example` for the fixture. */
   dir: string;
-  /** In pipeline order — `STEP_ORDER` in src/pipeline.ts. */
+  /** In pipeline order — `STEP_ORDER` in src/step-order.ts. */
   stages: StageState[];
   /**
    * How many questions have been asked about this article.
@@ -2154,7 +2154,7 @@ export interface Comment {
    See docs/project/ingest-queue.md. */
 
 /**
- * One stage of the pipeline. Ordered by `STEP_ORDER` in src/pipeline.ts.
+ * One stage of the pipeline. Ordered by `STEP_ORDER` in src/step-order.ts.
  *
  * `tweets` and `glossary` are in that order but **not** in
  * `DEFAULT_INGEST_STEPS` — they are steps you can ask for by name, not ones a

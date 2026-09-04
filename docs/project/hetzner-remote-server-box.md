@@ -602,9 +602,44 @@ waiting begins. Three things follow from where the sleep is:
   `claude` is on its PATH, *then* sleeps. Reversed, a box with a stock PATH would say nothing for
   two hours and then end the session, at the one moment nobody is watching. Verified by reading the
   generated job back off the box rather than by reading the source that writes it.
-- **It does not attach**, and says so. There is nothing to watch but a sleep.
+- **The pane you attach to is the pane Claude appears in.** The sleep and the `claude` line are
+  consecutive lines of one job script in one tmux pane, so an attached client reads
+  `waiting 15h before starting Claude`, then `the wait is over`, and then Claude takes that same
+  pane over. Nothing is re-attached; there is only ever the one pane.
 - **It says `✓ created`, never `✓ started`.** Claude has not started, and the tick that says it has
   is the one this tool has had to earn back twice.
+
+### It attaches, and for a long wait you don't want that
+
+`--wait` takes the same path every other launch takes: it attaches, unless you say `--no-attach`.
+Until 2026-09-04 it did the opposite, on the grounds that there is nothing to watch but a sleep.
+
+> I'm saying default = attach.
+>
+> — Greg, 2026-09-04
+
+The reversal is right for a short wait, because of the bullet above: you sit in the pane, it tells
+you how long it has left, and it becomes Claude in front of you. **For a long one, say
+`--no-attach`** — and the reason is the tab, not the connection. mosh is the default transport and
+rides through a closed lid, so the attach usually does survive; what it costs you is a terminal you
+cannot use for fifteen hours, and the ability to queue several waited jobs from one shell. Whatever
+happens to the client, the job on the box is untouched and `gjd-remote resume` returns to it.
+
+Off a terminal altogether — a cron job, another agent's subprocess — it says there is nothing to
+attach to and **exits 0**. Everywhere else that is a `die()` telling you to pass `--no-attach`,
+which is right for a session that is running and wrong for one that is asleep: the session was
+created exactly as asked, and only the watching is missing. That is the whole reason the decision
+is a function, `waitHandover` in [`scripts/gjd-remote-run.ts`](../../scripts/gjd-remote-run.ts),
+rather than an `if` at the call site.
+
+**Whether there is a terminal is `haveTerminal`, not `interactiveStdin`**, and the difference is a
+bug this change shipped for about an hour before GPT Sol found it. `interactiveStdin()` returns the
+descriptor the attach should *use*, and its `"inherit"` means only that nothing has taken stdin
+away — it never asks whether stdin is a terminal, because before this every caller was a command
+that would go on to fail usefully if it wasn't. So `--wait 2h -p "…" </dev/null` from a cron job
+read as "terminal", took the attach path, and exited non-zero out of `tmux attach` over a session
+that had been created exactly as asked. `-p -` was fine throughout, because a consumed stdin is
+what makes `interactiveStdin()` go and open `/dev/tty` in the first place.
 
 Two things it is not. **It is not a queue** — nothing counts how many sessions are running, and ten
 `--wait 2h` jobs all start at once, two hours from now. And **a waiting session does not survive the

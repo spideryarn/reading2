@@ -71,6 +71,15 @@ const SHARED = new Set([
      See src/asked-term.ts and docs/project/glossary.md § Looking a term up. */
   "asked-term.js",
   "quote-match.js",
+  /* The order the steps run in, and the two types read off it. On the list
+     because it was made a leaf for this — `useStepJob` needs `StepBefore` to
+     hold a caller's `precededBy` to steps that really do precede, and it read
+     that type off `src/pipeline.ts`, a server module, until this test went red
+     on it (2026-09-04). It imports `StepName` from `types.js` and nothing else,
+     and `src/pipeline.ts` re-exports it, so the ordering still has one home.
+     This is the outcome the long comment below argues for, reached one more
+     time. See src/step-order.ts. */
+  "step-order.js",
   // Whether a saved search still describes the article. The panel puts a
   // warning on a row and the server answers the same question at the read seam;
   // src/source-hash.ts computes the fingerprints and needs `node:crypto`, so

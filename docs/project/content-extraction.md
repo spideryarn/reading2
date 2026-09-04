@@ -58,9 +58,23 @@ The differences that matter to a reader:
   *renderer* fix is free. A **prompt** change is deliberately not free: the key carries
   `promptFingerprint()`. And `npm run pdf` remembers nothing between runs at all, because a command
   line has no article to key on and takes `nullCheckpointStore()`.
-- **It is checked, and it can fail.** The transcription is scored per page against the PDF's own text
-  layer ([`src/pdf-score.ts`](../../src/pdf-score.ts)) and the step fails, naming the page, rather
-  than writing a half-transcribed article that reads fluently.
+- **It is checked, and since 2026-08-30 it no longer fails.** The transcription is scored per page
+  against the PDF's own text layer ([`src/pdf-score.ts`](../../src/pdf-score.ts)). This used to
+  `throw`, and the argument for throwing was the point of the whole stage — a model can drop a
+  paragraph, summarise one or invent one, and all three read as fluent English. What changed was
+  evidence, not opinion: the first PDFs on production were refused over rotated stamps, chart labels
+  and maths notation. Greg's call, 2026-08-30, against the stated order of capability then
+  robustness: *"publish it and say what looked wrong. A reader can see the note and judge; a reader
+  with no article cannot."* `1ed4407e`.
+
+  **The saying-so is the half that is not built.** The *score* is shown — the masthead's source note
+  and the metadata page's `Missed` row both report recall and pages checked. The specific complaints
+  go to `meta.quality`, and **nothing renders it**, so the sentence in
+  [`src/pdf-read.ts`](../../src/pdf-read.ts) § `runPdfExtract` — "if the reader does not look, nobody
+  looks" — currently describes a reader who cannot. Restoring a gate later means choosing which
+  failures are fatal, and the missing-run check is the one worth it; note that `coverageOf`'s
+  `missing` is *any requested page with no record at all*, so a gate on it as-is would refuse a blank
+  verso or a full-page figure, which is the false-refusal class that stood the old one down.
 - **A PDF can be too long, and on the queue's path it is refused in stage 1.** The cap is
   [`src/uploads.ts`](../../src/uploads.ts) § `MAX_PAGES` — a limit on what reading a document is
   allowed to cost, not a technical one — and since 2026-09-04 it is enforced where the bytes first
@@ -86,6 +100,12 @@ The differences that matter to a reader:
   429 the thing to fix: it used to be fatal at the first one, and now the chunk waits and asks
   again, honouring the provider's own `Retry-After` in full up to `MAX_RETRY_AFTER_MS` (60 s) and
   failing this attempt rather than truncating a wait the provider actually asked for.
+- **A chunk is bounded by bytes as well as by words.** Words alone let a run of image-heavy pages
+  through, so `MAX_CHUNK_BYTES` (3 MB) is a *planning* bound on the encoded page images — distinct
+  from `MAX_ENCODED_BYTES` (30 MB), the hard request ceiling. Both are in
+  [`src/pdf-read.ts`](../../src/pdf-read.ts), and the planning bound **cannot split a page**: a
+  single page heavier than it still goes out over the limit, which is the honest edge rather than an
+  oversight.
 - **A long PDF is expected to need two lease windows, and that is what the checkpoints are for.**
   Measured in a browser on 2026-09-04: a 144-page paper spent nearly all of the first window in
   `extract`, and `hierarchy` was cut off. The second window is a press of Retry rather than an

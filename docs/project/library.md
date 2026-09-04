@@ -905,6 +905,14 @@ fortnight testing `Array.isArray(body)` against a payload that has never been an
 returned the shelf untouched every single time and the test covering it had invented a third shape
 — [260903e-offline-shelf-filter-never-ran.md](../postmortems/260903e-offline-shelf-filter-never-ran.md).
 
+**Three deliberate limits, so nobody builds them by accident.** There is **no service worker and no
+sync queue** — the fallback is for a failed *transport*, not a general offline mode, and nothing a
+reader does offline is replayed when they return. The cache key is user-plus-URL, so one browser's
+two readers never see each other's shelf; eviction is whole-article rather than per-response, so a
+half-evicted article cannot half-open. And a remembered identity **never authorises a request**: what
+is cached is what this reader already fetched, not permission to fetch more.
+[260827r-offline-reading.md](../plans/260827r-offline-reading.md) has the reasoning.
+
 ## The fixture is always on the shelf
 
 `example/` is listed under the slug `example`, flagged, and sorted below the real articles. A fresh
