@@ -70,10 +70,11 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 
 | File | What it does |
 |---|---|
-| [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | the wrapper: `<Tooltip content={…}>{trigger}</Tooltip>`, plus `TooltipGroup` |
+| [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | the wrapper: `<Tooltip content={…}>{trigger}</Tooltip>`, plus `TooltipGroup` and `TipNote` — the latter being the panel's text where the panel is only a sentence, which is most of them outside the reading view |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | `BandCard` — what a spine band actually says |
 | [`src/web/ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) | the other one — see below |
 | [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage masthead's three links, and the one place a tooltip's trigger is not a host element |
+| [`src/web/AccessSharing.tsx`](../../src/web/AccessSharing.tsx) | the sharing card's three controls, and its two dozen inventory chips — where a tooltip is the *only* place a row's sentence is written, which is why each chip is a `<button>` rather than a `title` attribute ([security-map.md § the inventory](security-map.md#the-owner-is-shown-the-inventory-before-they-publish)) |
 | [`src/web/styles.css`](../../src/web/styles.css) § tooltip | every pixel of the appearance; the library ships none — [design-css-overview.md](design-css-overview.md) says where that file sits in the load order |
 
 `Tooltip` is deliberately generic — nothing in it knows about the spine.

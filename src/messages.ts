@@ -2207,6 +2207,39 @@ export const SHARING_OFF = "Only you can read this.";
 export const SHARING_ON = "Anyone with the link can read this, without signing in.";
 
 /**
+ * **The three tooltips on the three controls**, and the first one is the one
+ * that earns its keep.
+ *
+ * > the Share button should visibly be a button with rich tooltip
+ * >
+ * > — Greg, 2026-09-04
+ *
+ * `SHARING_OPEN_TIP` answers the question an owner actually has with the
+ * pointer over that button: *if I press this, is it done?* It is not — the
+ * press opens a confirmation — and until 2026-09-04 the only way to find that
+ * out was to press it, on the one control in this app whose act cannot be
+ * un-rung (`SHARING_CANNOT_UNRING`). That is a bad way to learn it.
+ *
+ * The other two say what their button does to a page that is already out, which
+ * is the same distinction from the other side: `Stop sharing` refuses the next
+ * request and nothing more, and `Copy` puts an address on the clipboard without
+ * changing anything at all.
+ */
+export const SHARING_OPEN_TIP =
+  "Nothing goes out yet. This opens a list of exactly what a visitor would get, and asks you to " +
+  "confirm before anything leaves.";
+
+/** @see SHARING_OPEN_TIP */
+export const SHARING_STOP_TIP =
+  "Takes the public page down, so the next request for it is refused. What somebody has already " +
+  "read or copied stays with them.";
+
+/** @see SHARING_OPEN_TIP */
+export const SHARING_COPY_TIP =
+  "Puts the link on your clipboard. Copying it shares nothing on its own — the article is already " +
+  "readable by anyone who has this address.";
+
+/**
  * **The same fact, small enough for a corner of a card on the shelf.**
  *
  * The owner's own word for it — the sharing card says *"Shared since …"* — and

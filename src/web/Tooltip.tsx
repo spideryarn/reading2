@@ -322,3 +322,29 @@ export function ControlTip({
     </>
   );
 }
+
+/**
+ * **The text inside a plain tooltip** — a sentence or two, and nothing else.
+ *
+ * Lived in `Metadata.tsx` as `Note` until 2026-09-04, when `AccessSharing.tsx`
+ * on the same page needed one too. Here rather than copied, because the whole
+ * body of it is a font-size that exists for the reason below, and two spellings
+ * of that would be two things to keep in step.
+ *
+ * `.tooltip` styles the panel and deliberately sets no font-size, so a bare
+ * string inherits `body`'s 1rem — noticeably bigger than every other tooltip in
+ * the app, all of which are on classed content (`.tip-crumb`, `.tip-search`,
+ * `.tip-soon`). Sized here rather than by adding a rule to styles.css, which
+ * would be a fifth spelling of the same thing.
+ *
+ * `foreground/85` and NOT `ink-soft`, which is what the eye wants and what the
+ * other tooltips use: `--ink-soft` is declared in styles.css but is not one of
+ * the four reading-view names bridged into Tailwind's theme (tailwind.css), so
+ * `tw:text-ink-soft` compiles to nothing at all and the text would simply
+ * inherit — no error, no missing class, just the wrong colour.
+ */
+export function TipNote({ children }: { children: ReactNode }) {
+  return (
+    <span className="tw:block tw:text-xs tw:leading-relaxed tw:text-foreground/85">{children}</span>
+  );
+}

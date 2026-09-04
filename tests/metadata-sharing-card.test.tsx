@@ -21,6 +21,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Article } from "../src/types.js";
+import { CARD } from "../src/web/card.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -261,7 +262,15 @@ describe("the sharing card, on the page that owns it", () => {
         (p.textContent ?? "").includes(heading),
       );
       const list = head?.parentElement?.querySelector("ul");
-      return [...(list?.querySelectorAll("li") ?? [])].map((li) => li.textContent ?? "");
+      /* `firstChild`, not `textContent`. Since 2026-09-04 each chip also
+         carries an `sr-only` span holding the whole sentence behind the row —
+         the thing a screen reader reads, because a tooltip is only in the
+         accessibility tree while it is open (AccessSharing.tsx § Inventory).
+         `textContent` swallows it and this test would be comparing labels
+         against label-plus-paragraph. */
+      return [...(list?.querySelectorAll("li") ?? [])].map(
+        (li) => li.firstChild?.textContent?.trim() ?? "",
+      );
     };
 
     expect(under("Anyone with the link gets these")).toEqual(
@@ -394,5 +403,46 @@ describe("the sharing card, on the page that owns it", () => {
     expect(host.textContent).toContain("could not check");
     // And no switch is offered, because we have no idea what it would toggle.
     expect(host.textContent).not.toContain("Share with anyone");
+  });
+
+  /**
+   * **The section sits in a box, like every other section on this page.**
+   *
+   * Greg, 2026-09-04: *"the section should be inside a box like the other
+   * sections"*. It was the one section whose contents sat straight on the page
+   * background.
+   *
+   * Here rather than in the preview page or the component's own suite, and
+   * that is the whole point of it: the wrapper lives in `SharingSection`, which
+   * only this page draws. `preview-sharing.tsx` puts the card round it by hand
+   * for the screenshots, so it would go on *looking* boxed for ever after
+   * somebody deleted the real one. GPT Sol, 2026-09-04.
+   */
+  it("draws the section inside the page's card, like its neighbours", async () => {
+    sharing = {
+      visibility: "private",
+      publicAt: null,
+      personalised: [],
+      available: { arc: false, tweets: false, glossary: true, ideas: false, quotes: false },
+    };
+
+    await open();
+
+    const section = [...host.querySelectorAll("section")].find(
+      (s) => s.dataset.section === "Access & sharing",
+    );
+    expect(section, "the sharing section is not on the page at all").toBeTruthy();
+    /* `CARD` itself, imported, so this cannot pass against a stale copy of the
+       class string — src/web/card.ts. Matched with `classList` rather than a
+       CSS selector: every one of these class names contains a `:`, which a
+       selector reads as a pseudo-class unless it is escaped, and the escaped
+       form is its own small bug waiting to happen. */
+    const wanted = CARD.split(" ");
+    const box = [...(section?.querySelectorAll("div") ?? [])].find((d) =>
+      wanted.every((c) => d.classList.contains(c)),
+    );
+    expect(box, `no element under the section carries CARD ("${CARD}")`).toBeTruthy();
+    // And the switch is inside it, rather than the box being an empty sibling.
+    expect(box?.textContent).toContain("Only you can read this");
   });
 });
