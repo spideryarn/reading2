@@ -497,11 +497,42 @@ which is when it stopped being optional.
 `OWNER_MODE_NOTE.diagram` was stale too, in the same card: it named *"the tree, the neighbours, the
 projection"* — one picture cut on 2026-08-30 and two behind the experimental switch.
 
+### The measurement the architectural call owed
+
+**Taken 2026-09-04**, through `pgPublicReader.loadArticle` itself — the function the route calls, so
+what was counted is the object that gets serialised rather than a reconstruction of it.
+`Buffer.byteLength(JSON.stringify(payload))`, which is the response body before compression.
+**Scope: the local development database, five public articles.** Not production; treat the shape of
+the answer as the finding and the numbers as a dated example.
+
+| | bytes | of the 4.5 MB Vercel cap |
+|---|---|---|
+| Largest public payload (`scaling-hypothesis`) | **418.8 KB** | **9.5%** |
+| — of which `blocks` | 353.9 KB | 85% of that payload |
+| — of which `tree` | 49.3 KB | |
+| — of which reader work (comments + searches) | 0 KB | |
+| Reader work across all five public articles | 3.9 KB | 0.09% |
+
+Per row, across the whole local database (8 runs, 59 hits, 11 comments): **a saved search is ~2.4 KB
+and at most 4.8 KB; one hit is ~275 bytes; a comment is ~760 bytes and at most 2.1 KB.**
+
+**So the answer is no, and by a wide margin.** The payload is dominated by the article's own prose
+and its HTML, which was true before this plan and is unchanged by it. Reaching 4.5 MB from reader
+work alone would take something like **1,800 saved searches or 5,900 comments on one article**, which
+is not a state a person reaches; an article long enough to breach it on `blocks` is the one real
+risk, and that is
+[260902j § Cluster G](260902j-public-read-only-access-audit-and-improvements.md)'s existing,
+**not public-specific** worry — the owner's own route carries the same bytes.
+
+**Sol's per-collection endpoint therefore stays unbuilt**, and § The one architectural call remains
+the design already written for the day something changes. What would change it is not more reader
+work; it is chat, which is much the largest of the three and is deferred for an unrelated reason.
+Whoever builds chat re-runs this measurement first.
+
 ### Still open
 
-- **The payload measurement** § The one architectural call owes. Not done, and it is stage 5's —
-  and stage 4 makes it more pressing rather than less, since a `search_runs.hits` array is the
-  largest per-row thing this plan has put on the wire.
+- ~~**The payload measurement**~~ — **done, 2026-09-04, and it does not overturn the design.** See
+  below.
 - **`SHARED_WITH_YOU`** says *"Somebody shared this article with you"* on every public article,
   which the peer session's public listing makes false for anybody arriving through the listing
   rather than through a link. It is their consequence and they offered to take it; left to them.

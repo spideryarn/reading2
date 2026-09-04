@@ -94,6 +94,27 @@ Then the residue nothing refuses at compile time:
   read's projection exactly against `REVISION_READ_POLICY`'s grants;
   *[`tests/public-dto.test.ts`](../../tests/public-dto.test.ts)* pins the keys a public DTO may emit,
   against inputs deliberately over-full so a projection that copied its argument would fail.
+- **And if what a visitor reads is a *table* rather than a column on the revision**, four more
+  things, learned by doing it twice on 2026-09-04 (comments, then saved searches —
+  [260904c](../plans/260904c-more-modes-on-a-shared-link.md)). A mode whose content is the
+  **reader's own work** is a different job from a mode whose content is a generated artefact:
+    - **its own query in `public-reader.ts`**, naming its columns and **repeating `publicSlug` in
+      its own `where`**. Resolving an article id and handing it to the owner's reader is the exact
+      escape hatch *[`tests/public-imports.test.ts`](../../tests/public-imports.test.ts)* exists to
+      close, and that test's **table allowlist** has to be widened deliberately, with the three
+      sentences its docblock demands written about the new line;
+    - **the row filters in SQL, never in a `map`** — a filter in a projection is one satisfied
+      typechecker away from being widened, and a row that was never selected has to be put back on
+      purpose. *[`tests/public-reads.test.ts`](../../tests/public-reads.test.ts)* reads them off the
+      generated statement;
+    - **an `access` union on the panel**, whose visitor arm carries **none of the verbs** rather
+      than a `readOnly` flag beside them — and none of the fetch state either, since a visitor makes
+      no request. React forbids a conditional hook, so the owner/visitor seam is a component
+      boundary ([reader-capability.ts](../../src/web/reader-capability.ts));
+    - **a second fixture article in the Postgres test**, private, with rows of its own. With one
+      article in the fixture a query filtering on nothing returns the same rows as one filtering
+      correctly, so the predicate is untestable —
+      *[`tests/public-visibility-pg.test.ts`](../../tests/public-visibility-pg.test.ts)*.
 - **Pressing the mode's button with nothing in it runs the job**; arriving does not —
   [`useAutoRun.ts`](../../src/web/useAutoRun.ts) is the whole rule, and
   [reading-view-overview.md § True across the whole view](reading-view-overview.md#true-across-the-whole-view)
