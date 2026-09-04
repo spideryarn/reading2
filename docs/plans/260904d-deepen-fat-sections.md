@@ -145,6 +145,71 @@ a bounded cascade into a bill. The floor and the cap are what make that merely e
 unbounded, and the eval has to report **how often the self-assessment says yes** as a first-class
 number, not just the tree it produced.
 
+### The four bounds, and which of them can overrule the verdict
+
+⟨Fable, 2026-09-04, on the two questions the spike raised.⟩ Three bounds are mechanical and one is
+the cap; the verdict decides everything they leave open.
+
+| bound | rule | overrules the verdict? |
+|---|---|---|
+| **divisibility floor** | never expand a node under ~10 structural blocks | yes — refuses |
+| **two-headings rule** | a node whose range contains **two or more authored heading blocks is never finished**, whatever it says | yes — forces open |
+| **forced-open ceiling** | a node over ~2,000 words and over the floor, marked finished, is opened anyway and counted as `forcedOpen` | yes — forces open |
+| **depth cap** | past it, a node that still wants expanding is recorded as `capReached` | yes — refuses |
+
+**The two-headings rule is the most valuable line in this plan.** It is purely mechanical, costs
+nothing, and on Moby-Dick's current tree it fires on **22 of 54 sections holding 69% of the body
+words** — which is the hundred lost chapter headings, caught by arithmetic rather than by judgment.
+On Darwin, which has 24 headings in 1,326 blocks, it fires on 3 sections and 1% of the words. It
+cannot be left to the model: the whole finding above is that the model resolves the
+headings-versus-stride collision differently on different runs.
+
+### Where the author's headings and the fan-out target collide, the author wins
+
+The prompt's *"headings are HARD boundaries"* and *"aim for 5-9 children"* have no stated order, so
+the model picks one at random — that is run A versus run B, and it is a precedence bug rather than a
+product choice. ⟨Fable.⟩ The order is:
+
+> An authored heading always begins a child, and no child may contain more than one authored
+> heading. Aim for 5-9 children **only where you are inventing the boundaries yourself**; if the
+> headings give you more, return more.
+
+So run B's shape, deterministically. What that trades away is an even stride at that level — twenty
+siblings under one node is over the target — and the argument for paying it is that the invented
+grouping is content-free: *"Quarter-Deck, Sunset, Dusk"* is a list of its children's names, which is
+the tell that the model had nothing to say about the group, and the *"four sections all end up
+meaning 'Background'"* failure by another name. If twenty under one L1 node is genuinely too flat,
+the fault is at wave 1 — a 382-block, 20-heading L1 node was too big an L1 node — and it should be
+fixed there rather than by inventing a layer below it.
+
+### Where I checked Fable and it was wrong
+
+Fable's answer to the word-burden question rested on the claim that the "46% of Darwin's words sit in
+a fat section" figure counts words alone, and that the children in question are under the
+divisibility floor, so *"the model and the plan agree; only the metric disagrees"*. **The first half
+is not true.** That figure already applies `blocks ≥ 10`; words alone would have been 94%. Measured
+again on 2026-09-04:
+
+| Origin of Species, 4-level tree, 126 sections | sections | % of body words |
+|---|---|---|
+| words alone, `w > 800` | 70 | 94% |
+| `w > 800 & b ≥ 10` — the 46% figure | 25 | **46%** |
+| `w > 2000 & b ≥ 10` — over the forced-open ceiling | 20 | **41%** |
+| below the floor but heavy: `b < 10 & w > 1200` | 39 | 45% |
+
+So the residual is real: **41% of Darwin's words are in sections that are both divisible and past the
+ceiling**, and the forced-open rule is doing substantial work rather than tidying an artefact.
+
+But the last row is the more interesting one, and it makes Fable's *conclusion* right for a reason
+its argument did not give. Thirty-nine of Darwin's sections are **nine paragraphs of 300 words
+each** — heavy, and genuinely indivisible, because the block is the atom. No tree can offer a rung
+finer than the paragraph there. The rung the reader gets is the one that already exists: the
+`navLabel` on each paragraph, which
+[hierarchy.md § Entry length grows with depth](../project/hierarchy.md#granularity) says is 6–20
+words and exists precisely to tell same-topic siblings apart. **If Darwin reads badly it is a
+question about when the Para column opens, not about how deep the tree goes** — and that is a much
+cheaper thing to fix than a model call.
+
 ### What this is, honestly: 260904c with a better argument
 
 This is the breadth-first cascade that
