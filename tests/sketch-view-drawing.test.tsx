@@ -148,7 +148,7 @@ afterEach(() => {
    looks like. */
 async function mount() {
   await act(async () => {
-    root.render(<SketchView slug="s" blocks={BLOCKS} atRow={0} onJump={() => {}} />);
+    root.render(<SketchView access={{ kind: "owner", slug: "s" }} blocks={BLOCKS} atRow={0} onJump={() => {}} />);
     await new Promise((r) => setTimeout(r, 0));
   });
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });

@@ -566,8 +566,9 @@ one should be read as proposals to take on card-adjacent risk we have deliberate
 ## The quota, and the one thing it has to survive
 
 A slot is **one successful new ingest** — a URL added, or a PDF uploaded. Re-running a pipeline
-step on an article you already have is free. A failed ingest is free. Deleting an article does not
-give the slot back.
+step on an article you already have is free. A failed ingest is free. Archiving an article does not
+give the slot back — and archiving is the only removal the interface offers
+([library.md](library.md#archive-and-undo-is-the-confirmation)).
 
 It is an **abuse boundary against model spend**, not an invoice. Nothing is derived from it and it
 reconciles against nothing; the subscription is a fixed charge. (Cost attribution lives in

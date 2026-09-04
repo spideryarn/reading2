@@ -286,6 +286,11 @@ const PUBLIC_PROJECTIONS = {
        never having had a timeline. Nothing goes red anywhere.
        tests/public-projection-columns.test.ts is what would. */
     timeline: articleRevisions.timeline,
+    /* **The seventh, and the one that cost real money to make.** A visitor sees
+       the Sketch the owner already paid for; nothing on their side can start
+       another. docs/project/security-map.md § the hazard this section is really
+       about. */
+    sketch: articleRevisions.sketch,
   },
   /**
    * **Enough to fill in a `<head>`, and deliberately not enough to render.**
@@ -589,6 +594,7 @@ export const pgPublicReader: PublicArticleReader = {
         quotes: found.revision.quotes,
         tweets: found.revision.tweets,
         timeline: found.revision.timeline,
+        sketch: found.revision.sketch,
         /* `null` columns become absent keys, exactly as the artefacts do — the
            mapping is here rather than in the DTO because Drizzle hands back
            `null` and `Comment` says `undefined`. */

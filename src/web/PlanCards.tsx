@@ -505,8 +505,16 @@ export function PlanCards({
  * translucent white the block already uses; nothing new, and nothing in
  * tokens.css.
  *
- * `tw:order-first` is what puts the raised card at the top of the stack below
- * `lg`, where *the middle card* means nothing.
+ * **The stack below `lg` stays in price order, and it did not for a day.** The
+ * raised card carried `tw:order-first`, on the reasoning that *the middle card*
+ * means nothing once the row becomes a column — so a phone got $10, No charge,
+ * $50, and a ladder of prices that does not climb reads as three unrelated
+ * offers rather than three rungs. Order is the only thing a stack has left to
+ * say with, and it should say the same thing the row says: cheapest first. What
+ * marks the recommendation on a narrow screen is the eyebrow, the raised
+ * surface and the filled button, all of which survive the stack; the lift
+ * (`lg:-my-4`) does not, and does not need to, because there is no row to stand
+ * out of.
  */
 function OnePlan({
   plan,
@@ -525,8 +533,9 @@ function OnePlan({
       "tw:shadow-[inset_0_1px_0_rgb(255_255_255/0.11)] " +
       /* Taller than its neighbours at desktop, so the card physically stands
          out of the row rather than only being a different colour. Below `lg`
-         the row is a stack and there is nothing to stand out of. */
-      "tw:order-first tw:lg:order-none tw:lg:-my-4 tw:lg:py-10"
+         the row is a stack and there is nothing to stand out of — and nothing
+         here reorders it, for the reason in the header. */
+      "tw:lg:-my-4 tw:lg:py-10"
     : "site-panel-hover";
 
   return (

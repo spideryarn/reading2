@@ -26,6 +26,7 @@ import { Tooltip } from "./Tooltip.js";
 import { parseRoute } from "./router.js";
 import { useDictationField } from "./useDictationField.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
+import { keyboardInsetStyle, useVisualViewport } from "./useVisualViewport.js";
 
 /**
  * **What this reader may do with the comment they are looking at.**
@@ -134,6 +135,11 @@ export function CommentDialog({
     context: route.kind === "read" ? { kind: "article", slug: route.slug } : { kind: "profile" },
   });
 
+  /* On screen for as long as it is mounted — this dialog has no shut state of
+     its own, its parent simply stops rendering it — so the viewport listeners
+     live exactly as long as the component does. */
+  const visible = useVisualViewport(true);
+
   /**
    * Is text arriving right now?
    *
@@ -200,6 +206,14 @@ export function CommentDialog({
       className={`cmt-dialog${dodging ? " dodging" : ""}${
         comment.status === "pending" ? " busy" : ""
       }`}
+      /* **Up out of the keyboard's way.** This box is pinned to the bottom of
+         the *layout* viewport, which on iOS is where the keyboard is — so with
+         the follow-up field focused the whole panel can be behind the keys.
+         `--kb-inset` is how much of the layout viewport is hidden, and
+         styles.css adds it to both `bottom` and `max-height`. `undefined`
+         wherever there is no `visualViewport`, and then the stylesheet's `0px`
+         fallbacks leave the geometry alone. useVisualViewport.ts. */
+      style={keyboardInsetStyle(visible)}
       role="dialog"
       /* **Not always an explanation any more.** A comment with no answer is the
          reader's own mark on the passage, and calling that "Explanation" to a
@@ -391,7 +405,12 @@ export function CommentDialog({
             /* Not while a transcript is on its way: `readOnly` stops typing and
                not Enter, and sending here would hand chat the rough guess a
                moment before the good words landed. GPT Sol's plan review. */
-            if (dictate.readOnly) return;
+            /* **And not while the microphone is still on.** `readOnly` is the
+               two seconds after the reader presses stop; `armed` is the
+               microphone actually recording, and Enter arrives from a soft
+               keyboard as readily as from a hard one. dictation.md § Adding it
+               to a box calls this the guard everybody forgets. */
+            if (dictate.readOnly || dictate.dictation.armed) return;
             const q = followUp.trim();
             if (!q) return;
             setFollowUp("");
@@ -401,6 +420,9 @@ export function CommentDialog({
           <input
             type="text"
             ref={followUpBox}
+            /* Enter submits this form, which puts the question into chat. `send`
+               rather than `done` because what it does is post a message. */
+            enterKeyHint="send"
             value={followUp}
             readOnly={dictate.readOnly}
             onChange={(e) => setFollowUp(e.target.value)}
@@ -422,7 +444,11 @@ export function CommentDialog({
           <button
             type="submit"
             className="linky"
-            disabled={dictate.readOnly || !followUp.trim()}
+            /* **`armed` as well as `readOnly`**, or the button stays lit over a
+               submit handler that returns without doing anything — the guard
+               above is correct and silent, which is the worse half of the two.
+               GPT Sol, 2026-09-04. */
+            disabled={dictate.readOnly || dictate.dictation.armed || !followUp.trim()}
           >
             Ask in chat
           </button>

@@ -1513,6 +1513,8 @@ function AskATerm({
         <input
           className="gloss-ask-input"
           type="search"
+          /* Enter submits this form, so the soft keyboard may say so. */
+          enterKeyHint="search"
           value={term}
           maxLength={MAX_ASKED_TERM}
           placeholder="Look up a term…"

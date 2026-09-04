@@ -657,7 +657,13 @@ describe("the one query that lists articles for nobody in particular", () => {
       const uses = await usesOf(file);
       expect(uses.length, `${file} names the articles table nowhere`).toBeGreaterThan(0);
       const stray = uses
-        .filter((u) => u.fn === undefined || !fns.includes(u.fn))
+        /* `fn` is `string | null` — null is a use at the top level of the
+           module, outside any function at all. That is a stray by definition:
+           the rule is that every query sits in a function somebody named on
+           purpose, and a top-level one names none. Written as an explicit
+           `null` arm rather than left to `includes(null)` being false, which
+           was the same answer reached by accident and typed wrong. */
+        .filter((u) => u.fn === null || !fns.includes(u.fn))
         .map((u) => `line ${u.line} in ${u.fn ?? "no function"} (${u.how}) ${u.text}`);
       expect(
         stray,
@@ -855,6 +861,25 @@ describe("the one query that lists articles for nobody in particular", () => {
   it("and asks the same two questions of a revision that the article read does", () => {
     expect(whereClause).toMatch(/"article_revisions"\."tree" is not null/);
     expect(whereClause).toMatch(/exists \(\s*select 1 from "spideryarn"\."revision_blocks"/);
+  });
+
+  /**
+   * **An archived article is off this shelf too.**
+   *
+   * Visibility decides whether the *link* works; archiving decides whether the
+   * article is *listed*. Without this clause an owner who archives something
+   * they had shared loses sight of it on their own shelf while strangers go on
+   * finding it here — and the payload carries no `archived_at`, so nothing on
+   * either end would ever show that it had. GPT Sol, 2026-09-04.
+   *
+   * In the `where` for the same reason the readability bar is: `limit` should
+   * count rows a visitor is actually going to be shown.
+   *
+   * **Red first:** deleting `isNull(articles.archivedAt)` from the `where` on
+   * 2026-09-04 failed this.
+   */
+  it("and leaves out an article its owner has archived", () => {
+    expect(whereClause).toMatch(/"spideryarn"\."articles"\."archived_at" is null/);
   });
 
   /**

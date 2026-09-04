@@ -51,6 +51,7 @@
  */
 
 import type { Assets } from "../assets.js";
+import type { Sketch } from "../sketch-scene.js";
 import type {
   Arc,
   ArcEntry,
@@ -81,6 +82,7 @@ import type {
   PublicComment,
   PublicQuotes,
   PublicMeta,
+  PublicSketch,
   PublicTimeline,
   PublicTweets,
 } from "../public-types.js";
@@ -476,6 +478,28 @@ function publicCitations(citations: Citation[] | undefined): { citations?: Citat
   return kept.length === 0 ? {} : { citations: kept };
 }
 
+/**
+ * The Sketch, as three fields of the artefact's nine.
+ *
+ * **The scenes are passed through whole**, and src/public-types.ts
+ * § `PublicSketch` argues it: a scene is geometry and the model's own labels,
+ * with `SketchNode.block` carrying a block id of the article the visitor is
+ * already reading. There is nothing in it about a person, so copying a hundred
+ * nested fields by hand would buy a transcription error rather than safety.
+ *
+ * **`profileHash` is the field to notice going.** It is who the drawing was
+ * made for — a hash of the owner's reader profile — and a visitor is looking at
+ * a picture drawn for somebody else. The other four absences are the ordinary
+ * pipeline ones.
+ */
+function publicSketch(sketch: Sketch): PublicSketch {
+  return {
+    title: sketch.title,
+    caption: sketch.caption,
+    scenes: sketch.scenes,
+  };
+}
+
 /** The ideas, rebuilt idea by idea and occurrence by occurrence. */
 function publicIdeas(ideas: Ideas): PublicIdeas {
   return {
@@ -543,6 +567,7 @@ export function publicArticle(row: {
   tweets: TweetThread | null;
   timeline: Timeline | null;
   comments: readonly Comment[];
+  sketch: Sketch | null;
 }): PublicArticle {
   return {
     meta: publicMeta(row),
@@ -571,6 +596,7 @@ export function publicArticle(row: {
     ...(row.quotes !== null ? { quotes: publicQuotes(row.quotes) } : {}),
     ...(row.tweets !== null ? { tweets: publicTweets(row.tweets) } : {}),
     ...(row.timeline !== null ? { timeline: publicTimeline(row.timeline) } : {}),
+    ...(row.sketch !== null ? { sketch: publicSketch(row.sketch) } : {}),
     /* **A required key, so leaving this line out is a type error** — unlike the
        artefacts above it, where an absent key is the meaning. An article with
        no comments crosses as `[]`. See PublicArticle.comments. */

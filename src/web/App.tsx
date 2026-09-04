@@ -276,6 +276,7 @@ const OWNER_HAS_EVERYTHING: PublicArtefacts = {
   ideas: true,
   quotes: true,
   timeline: true,
+  sketch: true,
 };
 
 
@@ -3149,7 +3150,11 @@ function Reader({
           docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */}
       {mode === "diagram" && (
         <DiagramBand
-          access={{ kind: owner ? "owner" : "visitor" }}
+          /* The visitor arm carries the drawing itself, out of the payload —
+             `artefacts.sketch` is absent when nobody has drawn one, which is the
+             ordinary case and is a sentence rather than a missing picture.
+             docs/plans/260904c-more-modes-on-a-shared-link.md § Sketch. */
+          access={owner ? { kind: "owner" } : { kind: "visitor", sketch: artefacts?.sketch }}
           /* Which of the five picture chips the row draws — the same answer the
              bar below is given, from the same hook, so the two cannot disagree
              about what this reader is being shown.
