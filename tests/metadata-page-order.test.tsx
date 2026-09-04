@@ -140,6 +140,7 @@ async function mount(meta: Partial<Meta> = {}) {
         slug: SLUG,
         article: { ...a, meta: { ...a.meta, ...meta } },
         onRenamed: () => {},
+        onVisibility: () => {},
       }),
     );
   });

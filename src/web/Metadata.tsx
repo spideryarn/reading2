@@ -180,6 +180,7 @@ import type {
   Meta,
   StageState,
   StepName,
+  Visibility,
 } from "../types.js";
 import { MAX_PURPOSE_CHARS } from "../types.js";
 import { WPM } from "../reading-time.js";
@@ -303,6 +304,7 @@ export function Metadata({
   slug,
   article,
   onRenamed,
+  onVisibility,
 }: {
   slug: string;
   article: Article;
@@ -314,6 +316,15 @@ export function Metadata({
    * the same reason the masthead's pencil reports upwards too.
    */
   onRenamed: (slug: string, title: string) => void;
+  /**
+   * The reader threw the sharing switch below — handed up for the same reason
+   * `onRenamed` is, and it is the same hazard: the article payload is fetched
+   * once for all three views and never refetched between them, so a fact
+   * changed here goes stale in the reading view's masthead one click away.
+   * `AccessSharing` § `onVisibility` has the long version, including why `null`
+   * is one of the values.
+   */
+  onVisibility: (slug: string, visibility: Visibility | null) => void;
 }) {
   const { meta, tree, arc } = article;
   const stats = useMemo(() => articleStats(article), [article]);
@@ -744,6 +755,7 @@ export function Metadata({
             and a control that can only fail is worse than no control because
             pressing it is how you find out. */}
         <SharingSection
+          onVisibility={onVisibility}
           slug={slug}
           title={meta.title}
           /* **Not `hasShelfRow`**, which is false while the fetch is out and
@@ -911,9 +923,12 @@ function SharingSection({
   title,
   offer,
   sharing,
+  onVisibility,
 }: {
   slug: string;
   title: string;
+  /** Straight through to the card — see `Metadata`'s prop of the same name. */
+  onVisibility: (slug: string, visibility: Visibility | null) => void;
   /** There is a shelf row and we know it — `hasShelfRow` in `Metadata`. */
   offer: boolean;
   /**
@@ -939,7 +954,12 @@ function SharingSection({
           sentence"'s `p-5`: both of these are a control with a sentence beside
           it, and the two sit next to each other. */}
       <div className={`${CARD} tw:p-4`}>
-        <AccessSharing slug={slug} title={title} sharing={sharing} />
+        <AccessSharing
+          slug={slug}
+          title={title}
+          sharing={sharing}
+          onVisibility={onVisibility}
+        />
       </div>
     </Section>
   );

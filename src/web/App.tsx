@@ -19,6 +19,7 @@ import type {
   Quote,
   RememberStance,
   ThreadKind,
+  Visibility,
 } from "../types.js";
 import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
@@ -1032,19 +1033,75 @@ function OwnedArticle({
    */
   const [renamed, setRenamed] = useState<{ slug: string; title: string } | null>(null);
   const title = renamed?.slug === slug ? renamed.title : null;
-  const article = useMemo(
-    () =>
-      /* `!== null`, not truthiness: clearing an override restores the
-         extractor's title, and `Meta.title` may be the empty string. Read as
-         truthy that would silently fall through to `fetched`, which is still
-         carrying the override that was just cleared. */
-      title !== null ? { ...fetched, meta: { ...fetched.meta, title } } : fetched,
-    [fetched, title],
+
+  /**
+   * **Who can read this, if the reader has just changed it** — the second thing
+   * layered over the payload, and it is here for the same reason the rename is.
+   *
+   * This component does not remount when only the view changes, which is the
+   * whole point of the fetch living a level up: stepping out to the metadata
+   * page and back is free rather than 150KB and a spinner. The cost is that a
+   * fact the metadata page *changes* stays as it was fetched — and one of the
+   * facts on that page is now also drawn in the masthead
+   * (src/web/Masthead.tsx § `SharingMark`). Without this, publishing an article
+   * and pressing Back left a lock over a document anyone with the link could
+   * read: not a stale number, the one sentence about sharing that must never be
+   * wrong. Nothing would have caught it — the payload is correct, the card is
+   * correct, and they disagree.
+   *
+   * **`"unknown"` is a third value rather than a missing one.** A write that
+   * failed after the server committed leaves `AccessSharing` unable to say what
+   * is true (`WRITE_UNCERTAIN` there), and the honest thing for the masthead is
+   * to stop claiming a state rather than keep the one from before the write. It
+   * *removes* the key, because an absent `Article.visibility` already means
+   * *nobody could tell us* — the same thing the filesystem store's silence
+   * means (src/types.ts).
+   *
+   * The slug travels beside it for the reason it travels beside the title: the
+   * `PUT` behind it resolves after the reader may have moved on.
+   */
+  const [shared, setShared] = useState<{ slug: string; visibility: Visibility | "unknown" } | null>(
+    null,
   );
+  const visibility = shared?.slug === slug ? shared.visibility : null;
+
+  const article = useMemo(() => {
+    /* `!== null`, not truthiness: clearing an override restores the
+       extractor's title, and `Meta.title` may be the empty string. Read as
+       truthy that would silently fall through to `fetched`, which is still
+       carrying the override that was just cleared. */
+    const named = title !== null ? { ...fetched, meta: { ...fetched.meta, title } } : fetched;
+    if (visibility === null) return named;
+    if (visibility === "unknown") {
+      /* Deleted rather than set to `undefined`: `exactOptionalPropertyTypes`
+         makes those different values, and the one that means *we cannot say*
+         is the absent key. */
+      const { visibility: _cleared, ...rest } = named;
+      return rest;
+    }
+    return { ...named, visibility };
+  }, [fetched, title, visibility]);
+
   const renameTo = useCallback(
     (forSlug: string, next: string) => setRenamed({ slug: forSlug, title: next }),
     [],
   );
+  /**
+   * **The same answer twice is not a change.**
+   *
+   * The card reports what the metadata page's own fetch said as well as what a
+   * write said (AccessSharing.tsx), so the ordinary visit — open the page, read
+   * the value the payload already carried, go back — reports a value identical
+   * to the one in hand. Returning the same state object for that keeps
+   * `article` referentially stable, and `Reader` rebuilds its whole geometry
+   * from `article` by identity.
+   */
+  const sharedTo = useCallback((forSlug: string, next: Visibility | null) => {
+    const now: Visibility | "unknown" = next ?? "unknown";
+    setShared((was) =>
+      was?.slug === forSlug && was.visibility === now ? was : { slug: forSlug, visibility: now },
+    );
+  }, []);
 
   /**
    * One more open, for the shelf's tooltip to count.
@@ -1080,7 +1137,14 @@ function OwnedArticle({
   }, [slug]);
 
   if (view === "metadata")
-    return <Metadata slug={slug} article={article} onRenamed={renameTo} />;
+    return (
+      <Metadata
+        slug={slug}
+        article={article}
+        onRenamed={renameTo}
+        onVisibility={sharedTo}
+      />
+    );
   if (view === "tweets") return <Tweets slug={slug} article={article} />;
   return <OwnedReader slug={slug} article={article} onRenamed={renameTo} />;
 }

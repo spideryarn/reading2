@@ -31,8 +31,11 @@
  * of it in old links, `?about=1` and `?panel=about`, and main.tsx rewrites both
  * to the page.
  *
- * Whether this masthead should link there is open — it shows the title and
- * byline, and a reader who wants more currently has to find the bottom bar.
+ * Whether this masthead should link there was open until 2026-09-04, when half
+ * of it was answered: `SharingMark` below is a link to that page, because the
+ * fact it draws — who can read this — is changed there and nowhere else. The
+ * other half is still open. A reader who wants the *rest* of what the metadata
+ * page holds has to find the bottom bar.
  *
  * Since 2026-08-27 the title here is **editable**: a pencil beside it opens the
  * same in-place editor the shelf has, because the page you are reading is the
@@ -46,8 +49,14 @@
  * stays with you as you read is the spine and the arc column, not this.
  */
 import { useMemo, type ReactNode } from "react";
-import { ArrowLeft, ExternalLink, FileQuestion, Upload } from "lucide-react";
-import type { Article, Meta } from "../types.js";
+import { ArrowLeft, ExternalLink, FileQuestion, Globe, Lock, Upload } from "lucide-react";
+import {
+  SHARING_MARK_NAME_PRIVATE,
+  SHARING_MARK_NAME_PUBLIC,
+  SHARING_MARK_PRIVATE,
+  SHARING_MARK_PUBLIC,
+} from "../messages.js";
+import type { Article, Meta, Visibility } from "../types.js";
 /* The shared one, which drops a leading `www.` — three copies of this used to
    live in the client and its header asks the next caller not to make a fourth.
    `isWebUrl` is not imported here any more: the one URL sink in this file is the
@@ -56,8 +65,9 @@ import type { Article, Meta } from "../types.js";
 import { hostOf } from "../urls.js";
 import { Link } from "./Link.js";
 import { SourceLink, webSource } from "./SourceLink.js";
-import { LIBRARY_HREF } from "./router.js";
+import { carriedSearch, LIBRARY_HREF, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
+import { Tooltip } from "./Tooltip.js";
 import { EditableTitle, useArticleRename } from "./TitleEditor.js";
 
 interface Props {
@@ -163,6 +173,18 @@ export function Masthead({ article, slug, onRenamed }: Props) {
            no URL (a lost `meta.json`, an import that carried neither), and
            calling that an upload is a false sentence about their library. */
         origin={onRenamed === undefined ? null : meta.source === "pdf" ? "upload" : "unrecorded"}
+      />
+      {/* **Owner-only, twice over.** `article.visibility` is on the owner's
+          payload and on no other, so a visitor's article has nothing to draw
+          from — and the gate is written out anyway, on the same
+          `onRenamed !== undefined` stand-in for *is this yours* that
+          `OriginMark` above uses. Two guards for one fact because the cost of
+          the second is a term and the cost of being wrong is the owner's
+          sentence about their own library shown to a stranger, over a link to
+          a page that stranger cannot open. */}
+      <SharingMark
+        slug={slug}
+        visibility={onRenamed === undefined ? undefined : article.visibility}
       />
     </>
   );
@@ -394,6 +416,116 @@ function OriginMark({
         <FileQuestion size={14} strokeWidth={1.75} />
       )}
     </span>
+  );
+}
+
+/**
+ * **Who can read this, at the top of the page you read it on** — and the way to
+ * change it.
+ *
+ * Greg, 2026-09-04:
+ *
+ * > Make it a bit clearer at the top of an article page with an icon if it's
+ * > public or not - actually, make that a clickable button with clear tooltip
+ * > that takes you to the profile to change whether the article is
+ * > private/public
+ *
+ * "The profile" is this article's **Metadata** page: `AccessSharing` is the
+ * only control in the app that changes an article's visibility, and it lives in
+ * that page's *Access & sharing* section — the third of eight, because Greg
+ * asked for it to be moved up (Metadata.tsx).
+ *
+ * **The link stops at the page and does not aim at the section**, which was the
+ * first design and is the one thing here that was cut rather than forgotten.
+ * Aiming needs a place in the address for "which section", and this app took
+ * the fragment out on purpose: docs/project/url-state.md § Why the query string
+ * and not the hash — one query string, one listener. Adding either a `#` or a
+ * `?focus=` back is a new piece of URL state, a row in that doc's table and a
+ * scroll that has to wait for a page that renders after its own fetch, to save
+ * a reader half a screen of scrolling on arrival. Worth doing if the landing
+ * turns out to feel wrong; not worth doing first.
+ *
+ * ## Absence is the third state, and it draws nothing
+ *
+ * `undefined` means *nobody could tell us*, never *private*. The filesystem
+ * store has no visibility column (src/api.ts § `loadArticle`), so on that
+ * store this is silent — and silent is the only honest thing it can be. A lock
+ * is a claim, and a lock drawn over a store that was never asked would tell an
+ * owner that only they can read an article nobody enquired about. That is the
+ * one sentence this control must never get wrong, which is the rule
+ * `AccessSharing` was rebuilt around and the class in
+ * docs/reusable/silent-success.md.
+ *
+ * ## Why a `Tooltip` here when `OriginMark` above uses a bare `title`
+ *
+ * Because Greg asked for a clear one, and a `title` attribute is not: it waits
+ * about a second, it is a system font in a system box, and it opens on hover
+ * only — so a reader who tabs onto the link never sees it. The `Tooltip` fixes
+ * all three, and `useFocus` is the half that matters most.
+ *
+ * **It does not fix touch, and an earlier version of this comment claimed it
+ * did.** On a touch device the tap that would open the tooltip is the tap that
+ * follows the link, so neither spelling of hover help is reachable there — the
+ * `aria-label` and the destination are what a touch reader actually gets. GPT
+ * Sol, 2026-09-04. Real touch help would need a deliberate reveal or visible
+ * text, and neither is worth a second control beside the title.
+ *
+ * The two marks beside each other therefore behave slightly differently on
+ * hover, which is a real inconsistency and the smaller of the two —
+ * `OriginMark` is a statement and this is a control with a sentence attached to
+ * it. Worth levelling up rather than down if anybody touches the pair.
+ *
+ * `Link`, not `IconButton`: this navigates, so it has to be an `<a>` with a
+ * real `href` — command-click opens the metadata page in a tab, and the status
+ * bar says where it goes. `IconButton` is a `<button>` with an `onClick`.
+ */
+function SharingMark({
+  slug,
+  visibility,
+}: {
+  slug: string;
+  /** `undefined` means the store could not say — see the header. */
+  visibility: Visibility | undefined;
+}) {
+  if (visibility === undefined) return null;
+
+  const shared = visibility === "public";
+  /* Two strings, and they are deliberately not one — see `SHARING_MARK_NAME_PUBLIC`
+     in src/messages.ts. The tooltip becomes `aria-describedby`, so a name
+     holding the same sentence is announced twice. */
+  const tip = shared ? SHARING_MARK_PUBLIC : SHARING_MARK_PRIVATE;
+  const name = shared ? SHARING_MARK_NAME_PUBLIC : SHARING_MARK_NAME_PRIVATE;
+
+  /* The view state carried across, so stepping out to the switch and coming
+     back returns the reader to the paragraph they left — the same
+     `carriedSearch(location.search)` the dock's Metadata button uses, read at
+     render for the reason Dock.tsx sets out: nuqs writes the URL itself, so
+     `location.search` is always current, and this masthead re-renders with the
+     page that is subscribed to every parameter in it. */
+  const href = readHref(slug, carriedSearch(location.search), "metadata");
+
+  return (
+    <Tooltip content={tip} placement="bottom">
+      <Link
+        href={href}
+        /* The tooltip is the sentence a sighted reader gets; `aria-label` is
+           the *name*, which is a shorter and different thing. No `title`
+           beside them — that would be a second tooltip saying the same thing a
+           beat later. The same rule IconButton.tsx states, with the hover half
+           moved to a component that can style it, and the name kept distinct
+           from the description. */
+        aria-label={name}
+        /* `OriginMark`'s box, to the pixel, so the two marks and the pencil sit
+           on one line at any title length. `text-highlight` when it is out in
+           the world, matching the shelf's own `SharedBadge` (ShelfEntry.tsx) —
+           one article, one colour, whichever page you meet it on. */
+        className={`tw:mt-1 tw:inline-flex tw:size-7 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-md tw:no-underline tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground ${
+          shared ? "tw:text-highlight" : "tw:text-ink-faint"
+        }`}
+      >
+        {shared ? <Globe size={14} strokeWidth={1.75} /> : <Lock size={14} strokeWidth={1.75} />}
+      </Link>
+    </Tooltip>
   );
 }
 

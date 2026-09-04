@@ -2197,6 +2197,21 @@ const rawPgArticleReader: ArticleReader = {
       tree: tree as Tree,
       ...(arc ? { arc: arc as Arc } : {}),
       assets,
+      /* **Free, off the row `shelfFrom` is already reading**, and the reason
+         the masthead's sharing mark costs no request: `currentRevision`
+         selects `articles` whole.
+
+         Always a value here, never conditional on it being `public` — the
+         mark has three states and one of them is *we could not say*, which is
+         what the filesystem store's absence means. `describeArticle` keeps the
+         key only when it says `public` because the shelf has no private twin
+         to draw (src/api.ts); this one draws a lock.
+
+         The cast is the same boundary `articleMetadata` and `listArticles`
+         cross: a `text` column with a CHECK on it (`articles_visibility`,
+         drizzle/0024) is a two-member union TypeScript cannot see the
+         guarantee for. */
+      visibility: found.article.visibility as Visibility,
     };
   },
 
