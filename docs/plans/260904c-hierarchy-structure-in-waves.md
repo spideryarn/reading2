@@ -429,12 +429,23 @@ Taken from Fable's review, with the reasoning kept:
   the cascade ships bundles an independently-supported improvement into a later project for nothing.
   **(b) The wave recipe's effort** is measured separately, because effort may interact with the
   smaller task shape, and because every wave must share one value or the cohort loses its prefix.
-- **Heading seeding is measured, not assumed.** Fable argues the free carving should *be* the L1
-  geometry wherever the headings are usable, which would delete wave 1's hardest question. Sol warns
-  that "a list of heading blocks" and "a whole deterministic proposal" are two different
-  interventions whose evidence must not be pooled — and `headings-listed` and `headings-seeded`
-  already exist as separate arms and have never been run. Both run in this plan's eval; whichever
-  wins is adopted afterwards, as its own change.
+- **Heading seeding is measured, not assumed — and its first measurement is encouraging.** Fable
+  argues the free carving should *be* the L1 geometry wherever the headings are usable, which would
+  delete wave 1's hardest question. Sol warns that "a list of heading blocks" and "a whole
+  deterministic proposal" are two different interventions whose evidence must not be pooled — and
+  `headings-listed` and `headings-seeded` exist as separate arms.
+
+  `headings-seeded` ran for the first time on 2026-09-04, two draws on two documents: **$0.196 and
+  128s on `gwern-scaling-long` against the incumbent's $0.244 and 168s**, and **seven depth-1 parts
+  on all four draws** where the incumbent gave six and then seven. Cheaper, faster and *more stable*
+  than production. It is not a finding at n=2 — its first draw was the slowest cell in the whole run
+  before its second draw arrived, which is a fair warning about this stage — but it makes seeding the
+  most promising unexplored option and it bears directly on what wave 1 should be asked to do.
+
+  **And Moby-Dick says seeding cannot simply be adopted at book length**: its heading tree finds 137
+  depth-1 parts, so a wave 1 that merely accepts the author's boundaries hands the reader a 137-item
+  top level. Seeding and grouping have to be the same call. Both arms run properly in stage 1's
+  measurement; whichever wins is adopted afterwards, as its own change.
 
 ## Stages
 

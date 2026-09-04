@@ -403,6 +403,12 @@ known product gap, not this eval's to fix. And the heading rule's thresholds wer
 dev corpus** — `--sensitivity` prints the carving at 0/10/20/40 stub words, and held-out documents
 judge the rule as it stands, never re-tuned.
 
+**`elapsedMs` on each result is the wall clock; summed `calls[].ms` is not.** Since 2026-09-04,
+`run.ts` times each cell end to end — every call plus parsing, `buildTree` and assembly — with
+`performance.now()`. Summing the per-call `ms` figures instead misses that time entirely and, for
+a `waves` arm's parallel calls, double-counts concurrent seconds on top of it; a results file
+written before that date has no `elapsedMs` and should not have one reconstructed for it.
+
 ## `cost/` — what does one article actually cost us?
 
 ```
