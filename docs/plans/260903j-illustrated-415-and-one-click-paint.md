@@ -1,6 +1,6 @@
 # Illustrated: the 415 that ate every plate, and one press that draws then paints
 
-Status: **stage 1 landed, production repaired**; stages 2-3 to come. Worktrees
+Status: **all three stages landed**; production repaired and the one-press chain verified in a browser. Worktrees
 `illustrated-415-and-one-click` (planning, on the Hetzner box) then `illustrated-415-mac` (stage 1,
 on the Mac — it is where `.env.prod` is), 2026-09-03.
 
@@ -285,6 +285,54 @@ a bulk job over real readers' articles and was deliberately not done here — it
 work: consecutive clean-tree runs gave 4 then 10 failing files, all database-backed, against one
 shared local Supabase, with the suite's own test count moving underneath. Targeted file runs are the
 trustworthy signal.
+
+## Stages 2 and 3, 2026-09-03
+
+**Stage 2 shipped the chain.** `useStepJob` gained `precededBy`, `useIllustrated` gained
+`drawThenPaint`, and the three refusal branches gained the button. The request is **unforced** on
+purpose, though the reason first written here was wrong twice over and GPT Sol caught it. It said a
+force "would name `sketch`" — it would name `illustrated`, the hook's own step — and that neither
+step was in `FORCE_ONLY_WHEN_NAMED`, when **both are**. That second error is worth naming: the set
+spans lines 430–481 of `src/pipeline.ts` and was checked with a 440–470 line window, which clipped
+exactly the tail the two members sit in, and the truncated answer looked complete. Bound a check by
+the construct, never by a line range. Unforced hands the decision to `stepIsDone`, which is what makes `stale` and
+`profile-changed` re-draw rather than adopt — asserted, and it holds *structurally*: the sketch
+stamp is read out of the artefact's own `sourceHash`/`profileHash`, the same two fields the route
+reports those states from, so there is no second copy to drift.
+
+**Stage 3, and the plan was wrong about the tooling.** It said Playwright; this ran on Greg's Mac,
+where [browser-control.md](../project/browser-control.md) is explicit that the automation is the
+Claude-in-Chrome extension and that the choice belongs to the machine. Corrected here rather than
+worked around.
+
+**What the browser proved.** One press on an article with no Sketch created job `spya-zkmjs2` naming
+`[sketch, illustrated]` from the start; Sketch ran 18:30:19→18:33:59, Illustrated 18:33:59→18:40:06,
+finishing `done` with *"3 plate(s) painted"* — not `N painted, M failed`. Three real `image/jpeg`
+objects (408/419/459 KB) were written to Storage at 18:40:06: **the exact PUT the 415 used to
+block.** One was fetched back and looked at — a genuine 1024×1536 illuminated-manuscript painting,
+not prompts. No console errors mentioning storage, 415 or mime.
+
+**What it did NOT prove, stated rather than glossed.** There is no in-app screenshot of the finished
+plate, for two reasons that collided: the driving tab was occluded for the whole ten-minute wait, so
+the client's own `GET /api/jobs` polling froze at 18:30:19 and the band sat on a stale label; and a
+peer's concurrent run in this shared local Supabase replaced that article's revision at 18:40:29,
+cascading the artefacts away, so a reload showed `absent` again. The job row and the Storage objects
+are independent of that revision and are what the evidence above rests on. So **the in-flight band
+label during the Sketch half is covered by a test and not by a human eye**, and a second attempt was
+not bought at $0.60. One further oddity — a click that produced no POST — is recorded as unresolved
+and low-confidence rather than dropped or promoted to a bug.
+
+**A product consequence worth naming.** One press is now a nine-to-ten-minute job, which sharply
+raises the chance the reader switches tabs — and an occluded tab stops polling, so they come back to
+a stale band rather than their plate. That is pre-existing behaviour, but this feature makes it much
+easier to meet. Not fixed here; flagged for Greg.
+
+**A trap this work turned up.** Four source files — `src/html.ts`, `src/illustrated-plate.ts`,
+`src/web/useIllustrated.ts`, `src/web/IllustratedView.tsx` — carry deliberate `\x00` separators in
+composite keys, so `file` calls them `data` and **plain `grep` silently finds nothing in them**.
+`LC_ALL=C grep -a` works. An agent sweeping this tree after a rename has a permanent, silent blind
+spot over those four, which is the same shape as everything else in this write-up. Undocumented;
+proposed for AGENTS.md's rename guidance, which is Greg's to approve.
 
 ## Stages
 

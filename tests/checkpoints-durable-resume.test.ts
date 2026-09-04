@@ -48,9 +48,31 @@
  */
 import { readFile } from "node:fs/promises";
 import { PDFDocument } from "pdf-lib";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { eq, sql } from "drizzle-orm";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+/**
+ * **`SPIDERYARN_STORE=postgres` before any import**, because the first case
+ * below now queues a real job and presses a real Retry, and `src/jobs.ts` picks
+ * its `JobStore` off this flag at *module load*. A plain assignment would leave
+ * `enqueue` driving the filesystem queue, where the article identity this file
+ * is about is not expressible at all. Same trick, same reason, as
+ * tests/retry-keeps-the-checkpoints.test.ts.
+ */
+const HOISTED = vi.hoisted(() => {
+  const previousStore = process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
+  return { previousStore };
+});
+
+import { eq, like, sql } from "drizzle-orm";
+
+import { enqueue, getJob, retryJob } from "../src/jobs.js";
+import { INTERRUPTED } from "../src/messages.js";
+import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
+import { mintAttempt } from "../src/store/jobs.js";
+import { pgJobStore } from "../src/store/pg-jobs.js";
+import { lockOrCreateArticle } from "../src/store/pg-revisions.js";
+import type { Job } from "../src/types.js";
 import type { Pass0, PdfRecord } from "../src/pdf.js";
 import { pass0 } from "../src/pdf.js";
 import { type PdfReader, planChunks, runPdfExtract } from "../src/pdf-read.js";
@@ -63,6 +85,12 @@ import {
 import type { CheckpointStore } from "../src/store/checkpoints.js";
 import type { Block, Tree, TreeNode } from "../src/types.js";
 import { failIfPostgresRequired, type MissingKind } from "./helpers/pg-ready.js";
+import { takeRunLock } from "./helpers/run-lock.js";
+
+/* Put the flag back straight after the imports: vitest reuses a worker across
+   files and does not reset `process.env` between them. */
+if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
 
 const EASY = new URL("../evals/pdf/easy/source.pdf", import.meta.url);
 
@@ -107,6 +135,17 @@ if (!reachable) {
   failIfPostgresRequired("tests/checkpoints-durable-resume.test.ts", why, kind);
 }
 const when = reachable ? describe : describe.skip;
+
+/**
+ * **One suite at a time may hold a running job.** The first case queues real
+ * jobs and claims them in order to fail them, and the concurrency cap is counted
+ * across the whole `spideryarn.jobs` table — so a peer suite inside its own
+ * `running` row makes `claim` here answer `busy`, and the case fails on its
+ * setup rather than on the question it asks. tests/helpers/run-lock.ts.
+ */
+const runLock = reachable
+  ? await takeRunLock("tests/checkpoints-durable-resume.test.ts")
+  : undefined;
 
 /* -------------------------------------------------------------- the reader -- */
 
@@ -188,11 +227,19 @@ async function manyChunkPdf(pages: number): Promise<Uint8Array> {
 when("a checkpoint survives the job that paid for it", () => {
   const SLUG = "test-durable-resume";
   const OTHER_SLUG = "test-durable-resume-other";
+  /**
+   * The name the first case's real ingest asks for. `enqueue` mints from it —
+   * `test-durable-resume-job-spya-k3m9qt` — so it is a *prefix*, and the sweep at
+   * the end takes everything under it.
+   */
+  const JOB_STEM = "test-durable-resume-job";
+  const OWNER = DEV_OWNER_ID;
 
   let mod: Awaited<ReturnType<typeof importDb>>;
   let db: Awaited<ReturnType<typeof importDb>>["db"];
   let articleId = "";
   let otherArticleId = "";
+  let vercel: string | undefined;
 
   async function importDb() {
     const client = await import("../src/db/client.js");
@@ -216,12 +263,21 @@ when("a checkpoint survives the job that paid for it", () => {
     return mod.pg.createPgCheckpointStore({ slug, articleId: id });
   }
 
+  /**
+   * Take away everything under a name — the article, its revisions and its
+   * checkpoints, and **the job rows first**, since a job's `draft_revision_id` is
+   * a foreign key into a revision the article delete would be cascading away.
+   *
+   * `like`, because the first case's slugs come out of the real allocator and so
+   * carry a random short id nobody here can name in advance.
+   */
   async function wipe(slug: string): Promise<void> {
     const { schema } = mod;
+    await db.delete(schema.jobs).where(like(schema.jobs.slug, `${slug}%`));
     const rows = await db
       .select({ id: schema.articles.id })
       .from(schema.articles)
-      .where(eq(schema.articles.slug, slug));
+      .where(like(schema.articles.slug, `${slug}%`));
     for (const { id } of rows) {
       await db.execute(
         sql`update ${schema.articles} set current_revision_id = null where id = ${id}::uuid`,
@@ -233,11 +289,18 @@ when("a checkpoint survives the job that paid for it", () => {
   }
 
   beforeAll(async () => {
+    /* **`VERCEL`, so `enqueue` does not start driving what it queues** — `pump`
+       returns immediately when it is set. Without it the queued attempts run a
+       real `fetch` against an address that does not exist, racing the assertions
+       and the sweep. */
+    vercel = process.env.VERCEL;
+    process.env.VERCEL = "1";
     mod = await importDb();
     db = mod.db;
     const { schema, admin } = mod;
     await wipe(SLUG);
     await wipe(OTHER_SLUG);
+    await wipe(JOB_STEM);
     const [a] = await db
       .insert(schema.articles)
       .values({ ownerId: admin.ADMIN_USER_ID_LOCAL, slug: SLUG })
@@ -258,8 +321,12 @@ when("a checkpoint survives the job that paid for it", () => {
   });
 
   afterAll(async () => {
+    await wipe(JOB_STEM);
     await wipe(SLUG);
     await wipe(OTHER_SLUG);
+    if (vercel === undefined) delete process.env.VERCEL;
+    else process.env.VERCEL = vercel;
+    await runLock?.release();
   });
 
   /**
@@ -269,16 +336,88 @@ when("a checkpoint survives the job that paid for it", () => {
    * longer fuse; a timeout that throws says which number it was stuck at, so a
    * genuine failure of the write path reads as one rather than as a hang.
    */
-  async function untilRows(n: number, ms = 20_000): Promise<void> {
+  async function untilRows(n: number, id?: string, ms = 20_000): Promise<void> {
     const until = Date.now() + ms;
     for (;;) {
-      const have = await chunkRows();
+      const have = await chunkRows(id);
       if (have >= n) return;
       if (Date.now() > until) {
         throw new Error(`Waited ${ms}ms for ${n} checkpoint rows and only ${have} arrived.`);
       }
       await new Promise((r) => setTimeout(r, 20));
     }
+  }
+
+  /* ------------------------------------------------- the real Retry path -- */
+
+  /**
+   * **The article a claim on this slug would work in** — the call the session
+   * itself makes, rather than an `insert` of our own.
+   *
+   * `openPgStoreSession` → `openOrBeginJobDraft` → `lockOrCreateArticle(tx, slug)`
+   * is where `ref.articleId` comes from, and `pgStoreSession` binds the
+   * checkpoint store to exactly that (src/store/pg-session.ts). So this is the
+   * article identity a stage on this job *would be handed*.
+   */
+  async function articleForSlug(slug: string): Promise<string> {
+    return await runAsOwner(OWNER, async () =>
+      db.transaction(async (tx) => (await lockOrCreateArticle(tx, slug)).id),
+    );
+  }
+
+  /** End a queued job the way a lapsed lease ends one, so Retry is really offered on it. */
+  async function failIt(job: Job): Promise<void> {
+    const attempt = mintAttempt();
+    const claimed = await pgJobStore.claim(job.id, OWNER, attempt, 60_000, 4);
+    expect(claimed.kind, "the fixture job could not be claimed, so it cannot be failed").toBe(
+      "claimed",
+    );
+    await pgJobStore.finish(job.id, attempt, {
+      status: "error",
+      steps: job.steps,
+      error: INTERRUPTED.message,
+      failureKind: INTERRUPTED.kind,
+    });
+  }
+
+  /**
+   * **Three attempts at one document, through the real queue** — an ingest, a
+   * Retry, and a second Retry — with the article each one would work in.
+   *
+   * This replaces a hand-built `articleId`, and that substitution is the whole
+   * point of it. The version of this file that shipped constructed every
+   * "attempt" with the *same* `articleId` by hand, which proves the store works
+   * over an assumption about the caller that was false: `enqueue` allocated the
+   * slug afresh on every call, so a real Retry landed on a different article and
+   * could not see one chunk the failed attempt had paid for. The store was
+   * tested, the caller was tested, and the value that travels between them was
+   * not. docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md § Bug 2.
+   *
+   * So the ids below come out of `enqueue`/`retryJob`, and the case asserts that
+   * the three agree before it asserts anything about chunks. Regress
+   * `slugForRetry` and this goes red on that line rather than passing while the
+   * shipped path re-buys every page.
+   */
+  async function threeAttempts(): Promise<{ jobs: Job[]; articles: string[] }> {
+    const url = `https://durable-resume.test/${JOB_STEM}-${Date.now()}.pdf`;
+    const first = await runAsOwner(OWNER, () =>
+      enqueue({ slug: JOB_STEM, url, steps: ["fetch", "extract"] }),
+    );
+    const made: Job[] = [first];
+    for (let i = 0; i < 2; i++) {
+      const previous = made[made.length - 1]!;
+      await failIt(previous);
+      const settled = await runAsOwner(OWNER, () => getJob(previous.id));
+      expect(settled?.status, "the attempt has to have failed for a Retry to mean anything").toBe(
+        "error",
+      );
+      const next = await runAsOwner(OWNER, () => retryJob(previous.id));
+      if (!next) throw new Error("retryJob refused the failed job");
+      made.push(next);
+    }
+    const articles = [];
+    for (const job of made) articles.push(await articleForSlug(job.slug));
+    return { jobs: made, articles };
   }
 
   /** How many `pdf-chunk` rows this article has — the cause, where `asked` is the effect. */
@@ -293,6 +432,22 @@ when("a checkpoint survives the job that paid for it", () => {
   it(
     "a second job over the same article does not re-read the chunks the first one finished",
     async () => {
+      /**
+       * **The three attempts, and the article each of them would work in.**
+       *
+       * Asserted before anything is read or written, because if the three
+       * disagree then every number below is measuring a different question. This
+       * is the line that used to be assumed: the file built one `articleId` by
+       * hand and handed it to both halves of every case, so a Retry that moved
+       * the article was invisible to it.
+       */
+      const { jobs, articles } = await threeAttempts();
+      const article = articles[0]!;
+      expect(
+        articles,
+        "Retry moved the article, so attempt 2 cannot reach a chunk attempt 1 paid for",
+      ).toEqual([article, article, article]);
+
       const bytes = await manyChunkPdf(12);
       const pass = await pass0(bytes);
       const total = planChunks(pass).length;
@@ -325,7 +480,7 @@ when("a checkpoint survives the job that paid for it", () => {
       const isVictim = (pages: number[]): boolean => pages.includes(lastPage);
       const dying = countingReader(pass, {
         hold: async (pages) => {
-          if (isVictim(pages)) await untilRows(total - 1);
+          if (isVictim(pages)) await untilRows(total - 1, article);
         },
         refuse: isVictim,
       });
@@ -333,13 +488,13 @@ when("a checkpoint survives the job that paid for it", () => {
         runPdfExtract({
           bytes,
           url: "https://example.test/long.pdf",
-          checkpoints: storeFor(),
-          slug: SLUG,
+          checkpoints: storeFor(article, jobs[0]!.slug),
+          slug: jobs[0]!.slug,
           reader: dying,
         }),
       ).rejects.toThrow();
 
-      const saved = await chunkRows();
+      const saved = await chunkRows(article);
       /* The first attempt got somewhere and did not finish. Both halves matter:
          nothing saved makes the second attempt's number meaningless, and
          everything saved means the kill did not kill anything. */
@@ -355,8 +510,8 @@ when("a checkpoint survives the job that paid for it", () => {
       const result = await runPdfExtract({
         bytes,
         url: "https://example.test/long.pdf",
-        checkpoints: storeFor(),
-        slug: SLUG,
+        checkpoints: storeFor(articles[1]!, jobs[1]!.slug),
+        slug: jobs[1]!.slug,
         reader: retry,
       });
 
@@ -368,13 +523,13 @@ when("a checkpoint survives the job that paid for it", () => {
       expect(result.chunks).toBe(total);
       /* And a third attempt would pay nothing at all, which is the end state a
          document too long for one invocation has to be able to reach. */
-      expect(await chunkRows()).toBe(total);
+      expect(await chunkRows(article)).toBe(total);
       const third = countingReader(pass);
       await runPdfExtract({
         bytes,
         url: "https://example.test/long.pdf",
-        checkpoints: storeFor(),
-        slug: SLUG,
+        checkpoints: storeFor(articles[2]!, jobs[2]!.slug),
+        slug: jobs[2]!.slug,
         reader: third,
       });
       expect(third.asked.length).toBe(0);

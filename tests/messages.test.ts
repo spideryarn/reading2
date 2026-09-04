@@ -21,6 +21,11 @@ import {
   authProviderRefused,
   ingestQuotaReached,
   type ReaderFacingFailure,
+  pdfChunkTooBig,
+  pdfPagesCutOff,
+  pdfPagesFiltered,
+  pdfTooManyPages,
+  placingFailed,
   saidNothing,
   stepGaveUp,
   quizBandsNotSpread,
@@ -46,36 +51,72 @@ import {
  * one.
  *
  * The constants come out of the namespace import. The factories cannot — they
- * need arguments — so they stay explicit, and `everyFactoryIsCovered` below is
- * what stops a new one being forgotten.
+ * need arguments — so they are called by hand below, but *which* of them there
+ * are is derived, by `FactoryName`.
  */
 const isFailure = (v: unknown): v is ReaderFacingFailure =>
   typeof v === "object" && v !== null && "kind" in v && "message" in v;
 
 const CONSTANTS: ReaderFacingFailure[] = Object.values(messages).filter(isFailure);
 
-/** The exported functions that mint a failure, and arguments that exercise each branch. */
-const FROM_FACTORIES: ReaderFacingFailure[] = [
-  ...[400, 401, 402, 403, 404, 408, 409, 413, 418, 422, 429, 451, 500, 502, 503, 504, 599].map(
-    providerHttpFailure,
-  ),
-  authProviderRefused("server_error"),
-  tookTooLong(60),
-  wentQuiet(20),
-  saidNothing(null),
-  saidNothing("content_filter"),
-  saidNothing("length"),
+/**
+ * **Every exported function of `src/messages.ts` that mints a failure**, read
+ * off the module's own types.
+ *
+ * This is the guard the header above promised as `everyFactoryIsCovered` and
+ * did not have — for a year the factories were a list somebody remembered to
+ * add to, in a file whose whole subject is two hand-maintained lists agreeing
+ * by shared omission. It already had a victim: `placingFailed` was exported,
+ * used by src/routes.ts, and in no list here, so none of the invariants below
+ * had ever seen it. docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md § Stage 1.
+ *
+ * **It fails `npm run typecheck` rather than here**, the same shape as
+ * `_ownedNamesEveryProfiledArtefact` further down and for the same reason: the
+ * fact it needs — *does this function return a `ReaderFacingFailure`* — exists
+ * only in the type system. At runtime a function is a function, and the only
+ * way to find out what it returns is to call it with arguments this file
+ * invented, which is how you get a green test that proves nothing.
+ *
+ * `(...args: never[])` rather than `(...args: any[])`: parameters are checked
+ * contravariantly, so `never` is assignable to whatever each factory actually
+ * takes and the match is on the **return type** alone.
+ */
+type FactoryName = {
+  [K in keyof typeof messages]: (typeof messages)[K] extends (
+    ...args: never[]
+  ) => ReaderFacingFailure
+    ? K
+    : never;
+}[keyof typeof messages];
+
+/**
+ * The arguments that exercise each branch of each factory.
+ *
+ * A missing key is a red compile — that is `FactoryName`'s job. An entry with
+ * too few calls is not caught by anything, so the comments say which branches
+ * each one is reaching.
+ */
+const FROM_FACTORIES: Record<FactoryName, ReaderFacingFailure[]> = {
+  providerHttpFailure: [
+    400, 401, 402, 403, 404, 408, 409, 413, 418, 422, 429, 451, 500, 502, 503, 504, 599,
+  ].map(providerHttpFailure),
+  authProviderRefused: [authProviderRefused("server_error")],
+  tookTooLong: [tookTooLong(60)],
+  wentQuiet: [wentQuiet(20)],
+  saidNothing: [saidNothing(null), saidNothing("content_filter"), saidNothing("length")],
   /* All three branches: the free tier has no reset date, the paid tier does, and
      a lapsed subscriber gets neither sentence — three codes, three sentences. */
-  ingestQuotaReached({ limit: 3 }),
-  ingestQuotaReached({ limit: 100, resetAt: new Date("2026-10-01T00:00:00Z") }),
-  ingestQuotaReached({ limit: 3, lapsed: true }),
+  ingestQuotaReached: [
+    ingestQuotaReached({ limit: 3 }),
+    ingestQuotaReached({ limit: 100, resetAt: new Date("2026-10-01T00:00:00Z") }),
+    ingestQuotaReached({ limit: 3, lapsed: true }),
+  ],
   /* All four kinds, because `stepGaveUp` is a total map over `FailureKind` and
      a branch missing from here is a sentence that has been through none of the
      invariants below — which is the shape that let `NO_RESPONSE` and
      `TOOL_CALL_LOST` ship unchecked. The step label is the one the reader would
      actually see. */
-  ...(["retry", "ours", "bug", "blocked"] as const).map((kind) =>
+  stepGaveUp: (["retry", "ours", "bug", "blocked"] as const).map((kind) =>
     stepGaveUp(kind, "Writing the questions"),
   ),
   /* **One call, not one per missing end.** This list is one entry per *code*,
@@ -84,10 +125,35 @@ const FROM_FACTORIES: ReaderFacingFailure[] = [
      sentences sharing a code and fail it, exactly as `tookTooLong(60)` would if
      it appeared twice with two numbers. The production case: nine survivors,
      no hard one. tests/quiz.test.ts covers the wording of every `gap` clause. */
-  quizBandsNotSpread(9, "there is no hard one among them to finish on"),
-];
+  quizBandsNotSpread: [quizBandsNotSpread(9, "there is no hard one among them to finish on")],
+  /* **The one the guard above was written to find**, and it contributes no new
+     code: all four branches defer to a `PLACING_*` constant or to
+     `providerHttpFailure`, which is exactly why nothing noticed it was
+     unlisted. What it does add is the routing — a `provider` failure *with* a
+     status must not come back as the retryable "did not answer" sentence, which
+     is the bug src/messages.ts § `placingFailed` records. */
+  placingFailed: [
+    placingFailed("config"),
+    placingFailed("provider"),
+    placingFailed("busy"),
+    placingFailed("provider", 402),
+  ],
+  /* Reading a PDF. One call each — these have no branches, only numbers, and a
+     second call with different numbers would read as two sentences under one
+     code and fail the invariant below.
 
-const EVERY: ReaderFacingFailure[] = [...CONSTANTS, ...FROM_FACTORIES];
+     The arguments are kept clear of 400-599, which the "never repeats the raw
+     status number" invariant reads as a status wherever it appears. A real
+     450-page PDF would trip it; that is the invariant being a little too broad
+     rather than this message being wrong, and it is cheaper to note than to
+     narrow a check that has never had a false negative. */
+  pdfTooManyPages: [pdfTooManyPages(142, 100)],
+  pdfChunkTooBig: [pdfChunkTooBig(34, 30)],
+  pdfPagesCutOff: [pdfPagesCutOff([12, 13])],
+  pdfPagesFiltered: [pdfPagesFiltered([12, 13])],
+};
+
+const EVERY: ReaderFacingFailure[] = [...CONSTANTS, ...Object.values(FROM_FACTORIES).flat()];
 
 const codeOf = (m: string) => m.match(/\[([a-z0-9-]+)\]$/)?.[1];
 

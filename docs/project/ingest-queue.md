@@ -97,8 +97,10 @@ three PDFs in this project's own eval set are bigger than that. So:
 
 ```
   POST /api/uploads   {filename, bytes, sha256}   ~200 bytes of JSON to us
+     └─ navigate to /add/upload/<id> here, with zero bytes sent
   PUT  <signed url>   the whole file              straight to Supabase Storage, no credentials
   POST /api/jobs      {uploadId}                  ~60 bytes of JSON to us
+     └─ the server HEADs the staging object first: no object, no job
 ```
 
 The middle step carries no bearer token and no API key. The grant is in the URL, it is bound to one
@@ -116,12 +118,18 @@ reviews are in [260826u-pdf-upload-and-storage.md](../plans/260826u-pdf-upload-a
 
 ### Four things about it that are not obvious
 
-**The upload is not the ingest, and they happen in different places.** The transfer runs on the
-shelf, because that is where the `File` is — a file handle is not something an address can carry,
-so navigating first and uploading there is not available. Only when the bytes have landed does the
-reader go to `/add/upload/<uploadId>`, which queues the job and watches it exactly as `/add/<url>`
-does. So an ingest still has one place and one address, and the thing that *cannot* have an address
-is over before the navigation happens.
+**The upload is not the ingest, and they happen in different places.** The transfer starts on the
+shelf, because that is where the `File` is — a file handle is not something an address can carry.
+But since 2026-09-03 it does not *stay* there: it belongs to
+[`src/web/uploadEngine.ts`](../../src/web/uploadEngine.ts), a tab-level singleton beside
+[`jobEngine`](../../src/web/jobEngine.ts), which owns hashing, the grant, the PUT **and** the
+`POST /api/jobs` that follows it. The reader presses Add and is sent to `/add/upload/<uploadId>`
+**at byte zero**, and can then go anywhere in the app while the file goes up and the ingest starts
+itself. [§ Add commits, and does not wait](#add-commits-and-does-not-wait).
+
+Closing the tab still loses the upload, because the bytes exist only in the browser until they
+reach Storage — there is no server-side copy to resume from, which is the same 4.5 MB body limit
+that put them there in the first place.
 
 **There is no new step in the pipeline.** An upload's first step is still called `fetch`; it simply
 has two halves, and the branch on `ctx.upload` is the only place in the whole pipeline that knows
@@ -157,9 +165,93 @@ two of them one article — two files called `paper.pdf` get two, per
 short id (`paper-spya-k3m9qt`, [`src/ingest.ts`](../../src/ingest.ts) § `slugWithShortId`), so an
 upload takes a name nothing else can want. `freeUploadSlug` and `slugIsSpokenFor` walked a `-2`…`-99`
 counter and read the candidate's fetch manifest to ask *is this article this upload's own*; both are
-gone, and so is the Retry bug that question existed to avoid — a retry now mints a fresh name, which
-costs nothing, rather than finding its own slug occupied by itself and paying for the transcription
-twice. See [the plan](../plans/260831b-finish-the-database-move.md) § Stage 3 item 0.
+gone, and nothing collides any more.
+See [the plan](../plans/260831b-finish-the-database-move.md) § Stage 3 item 0.
+
+### A retry keeps the failed attempt's name, and that is a decision
+
+**A retry is the continuation of one named prior attempt, and a second upload of the same file is
+not.** `retryJob` says which of the two it is —
+[`slugForRetry`](../../src/jobs.ts), reached only when the request carries a `retryOf` — and where a
+fresh request would *mint*, a retry takes the name the attempt it repeats already had. It asks the
+**shelf** first, so an address that already has a published article wins over the remembered name;
+and it *reserves* everywhere else, so the queued retry sits inside `jobs_active_source` and a racing
+paste of the same URL is refused rather than minting a second article for one address.
+
+**The shelf and nothing else, and a refused retry inserts no row at all.** Both halves were different
+until GPT Sol's review on 2026-09-03, and both were the same hole: an adopted row *reserves nothing*,
+so it is outside `jobs_active_source` and is safe only while some other active row reserves that
+address on its behalf — which is liveness, not a guarantee. Sol reproduced two active articles for
+one address twice over, by letting the holder go terminal between the repair's lookup and the insert
+it then makes. So a retry now adopts only what the shelf holds — a *durable* fact, which every later
+lookup finds too — and when the index refuses it, `enqueue` **hands back the job that refused it**
+rather than repairing the allocation and inserting anyway
+([`handBackToARetry`](../../src/jobs.ts)). No second row, no hole, and semantically what the reader
+asked for: another ingest of that address is live, so they get the live one.
+`tests/one-article-for-one-address.test.ts` § *and a retry's two*.
+
+The same shape survives for a *fresh* paste, which adopts from a live job through `freeSlug`. Its
+window is one round trip rather than two, it predates this work, and closing it the same way would
+turn a second URL request for one unpublished article into a dedup rather than a queued job. Written
+down rather than changed; the durable fix for the class is a table that claims an address.
+
+Between 2026-08-31 and 2026-09-03 it minted a fresh name instead, and *"which costs nothing"* is what
+this paragraph used to say. It stopped being true on 2026-09-01, when per-chunk checkpoints landed
+keyed on the **article** ([content-extraction.md](content-extraction.md)): the article is a pure
+function of the slug, so a retry that moved the name moved the article and could not see one chunk
+the failed attempt had paid for. On a PDF too long to finish inside one lease that is not a bill but
+a cliff — every attempt starts from zero, so it can never finish at all. The visible fingerprint
+nobody read was the slug: three retries gave `…-spya-aaa-spya-bbb-spya-ccc`, three articles, three
+invoices. `tests/retry-keeps-the-checkpoints.test.ts` and
+[the plan](../plans/260903k-pdf-page-cap-refused-with-no-reason-given.md) § Bug 2.
+
+### Add commits, and does not wait
+
+> sometimes it takes a while to upload over a slow connection. I have to wait before I can then
+> click the Add button … I'd like to be able to upload and then click Add immediately, which would
+> then wait for the upload to finish and run the ingestion queue immediately, so I could go off and
+> do something else in the meantime.
+>
+> — Greg, 2026-09-03
+
+Add is now **one button for both ways in** — a typed URL or a chosen PDF, whichever was touched
+last, and the label says which (*Add* or *Add PDF*). The *Send it* button is gone. Pressing it with
+a file chosen mints the grant, navigates, and leaves; `uploadEngine` finishes the transfer and
+queues the ingest wherever the reader has gone.
+
+**Handing out the address at byte zero needed a lock on the other end**, and that is the part worth
+knowing. `POST /api/jobs { uploadId }` now asks Storage whether the staging object is there before
+it claims anything (`uploadHasArrived`, [`src/routes.ts`](../../src/routes.ts)) and answers
+`UPLOAD_STILL_ARRIVING` when it is not — taking no claim, no job and **no quota slot**. Without it,
+three ordinary gestures queue an ingest over a file that has not arrived — reload the page, open it
+in a second tab, press Stop and reload — and `acquireUpload` refuses each of those *terminally*, so
+a reader's own reload destroyed their upload.
+
+The object's existence is the readiness state rather than a `ready` column, because a column would
+need a writer and the only candidate is the browser saying it has finished. It is a true test
+rather than a proxy, and that is measured: a PUT aborted at 320 KB of 5 MB leaves **no object at
+all**, and re-PUTting the same grant then succeeds. The table, and the rest of the design, is in
+[260903j-background-pdf-upload-so-add-does-not-wait.md](../plans/260903j-background-pdf-upload-so-add-does-not-wait.md).
+
+Two consequences that follow from the gate rather than from the feature:
+
+- **An upload's existing job is found before the quota slot is reserved.** `admitIngest` throws 402
+  before its callback runs, so a reader on their last slot who reloaded the ingest page used to be
+  refused for having no allowance when the right answer was the job their first request had already
+  made.
+- **A cancelled transfer can never become a job**, however many times its address is opened. Nothing
+  told the server it was cancelled; the object simply never arrived, and that is now enough.
+
+### Abandoned uploads are not swept, and nothing sweeps them
+
+`sweepable()` in [`src/source.ts`](../../src/source.ts) has **no production caller** — only its own
+definition and `tests/source.test.ts`. So an expired `pending` record and its staging object stay
+where they are. `asOf` *reports* an expired grant without rewriting the row, which is right, but
+nothing ever deletes anything. Cancelling got easier on 2026-09-03, so the pile grows faster.
+
+Written down rather than fixed (2026-09-03, verified by grep). Whoever writes the sweep: it must not
+delete an object whose record could still be claimed, because the readiness gate above now treats
+that object as the fact.
 
 ### `/add/upload/<id>` has to survive a reload, and for a day it did not
 
@@ -729,6 +821,13 @@ returns `{slug, kind: "minted" | "adopted"}` rather than a string
 ([`freeSlug`](../../src/jobs.ts)). An upload always mints, there being no address that could make two
 uploads one article.
 
+**A retry reserves everywhere except a published address**, which is what keeps re-taking the
+failed attempt's name from opening the race `jobs_active_source` closes — and when the index refuses
+it, it takes the holder's job rather than inserting an unreserved row. See
+[§ A retry keeps the failed attempt's name](#a-retry-keeps-the-failed-attempts-name-and-that-is-a-decision).
+Nothing on `jobs_reserved_slug` can object to re-taking the name, because all four of these indexes
+are partial over `queued`/`running` and the attempt being retried is terminal.
+
 **Which conflict fired is decided by re-reading, never by the constraint name.** One insert can
 violate two of those indexes at once and Postgres promises nothing about which it reports; read as
 the wrong one, the caller renames an article and pays for a second model call. So `enqueueOrGet`
@@ -1070,9 +1169,8 @@ nothing on disk can have work happening against it; Postgres cannot reason that 
 which stages finished, and **Retry queues the same steps and skips them**.
 
 **A lease that nothing enforces is a note.** `settleExpired` is what turns an abandoned claim back
-into something a reader can act on — with a sentence saying the job was interrupted and a Retry
-button, rather than taken over. It runs at the top of every advance rather than on a
-timer: there is no scheduler on Vercel, that is the exact moment somebody wants the slot, and it is
+into something a reader can act on, rather than taken over. It runs at the top of every advance
+rather than on a timer: there is no scheduler on Vercel, that is the exact moment somebody wants the slot, and it is
 one indexed `UPDATE` over rows that are almost always none. It had **no caller at all** for the first
 day of its life, which meant a killed instance left its job `running` for ever and every advance
 answered `busy` — the in-memory queue had self-healed on restart, so this was a regression rather
@@ -1087,6 +1185,30 @@ job* rather than on *any expired lease*. That gate is deliberately the blunter o
 the wire carries no lease, and sharpening it would mean exporting one, which is what keeps ownership
 decisions on the server. Both log lines carry a `where` field, because the interesting question about
 a settlement is which door found it.
+
+**And it does not always end the job.** Since 2026-09-03 a lapsed claim on a job that has not used up
+its budget goes back to `queued` **on its own row** — running steps back to `pending`, everything
+else untouched — and only after that is it settled `error` / `[jb-gone]` with a Retry button. That
+is what the filesystem adapter's `sweepStopped` has always done at restart, and Postgres had no
+equivalent: on the store we actually ship, a deploy landing mid-ingest cost the reader their job. The
+same row is the whole point, because the row keeps the slug, the slug keeps the article, and the
+article keeps its checkpoints.
+
+The budget is [`REQUEUE_BUDGET`](../../src/jobs.ts) — **two requeues, so three lease windows in
+all** — and the number is the caller's while enforcing it is the store's, the same division
+`LEASE_MS` and the concurrency cap already have. Without one a job that overruns every lease requeues
+for ever, buying model calls nobody is waiting for. Three windows because each attempt starts with
+every checkpointed chunk already banked, so one is the ordinary case, two covers a bad tail, and
+three covers a deploy landing during the second. **It said three requeues until 2026-09-03**, which
+was four windows against a justification that counted three — the constant and its reasoning meant
+different things, and the reasoning was the half that was right (GPT Sol). Nothing requires *progress*
+before a window is granted, so an un-checkpointed paid call can be bought once per window; the two
+expensive fan-outs are checkpointed, which is why the number is the whole of the protection. The
+budget is per *job*: pressing Retry makes a new job with a fresh two, so the reader is the outer loop,
+and the machine gives up before the person does. `jobs.requeues` is the counter on Postgres; the
+filesystem adapter keeps it in memory, so a restart resets the cap there — weaker parity, accepted
+because a restart there is `sweepStopped`, which requeues with no budget at all, and because that
+store is not what ships.
 
 **What that costs, measured rather than asserted.** Statements per poll go **1 → 2 while a job is
 running**, about **+1.5 ms** each locally, nearly all of it round trip rather than work — counted at
@@ -1209,6 +1331,11 @@ ids over rather than minting new ones.
 3. **Automatic resume on startup**, rather than a sweep to `error` and a Retry button. Cheap once
    (1) and (2) hold, and unwise before then: automatically re-running steps against artefacts we
    cannot vouch for is how you get a tree built for the previous version of an article.
+   **Built on 2026-09-03, twice over** — `REQUEUE_BUDGET` above. The reason it became safe is
+   (1) and (2): the requeue drops the job's draft pointer, so every step re-asks `stepIsDone` about
+   *artefacts* rather than trusting its own record, and the expensive half is held by the checkpoints
+   instead. Carrying the draft across attempts is still not done — that is decision 8 of
+   [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md).
 
 The sweep-then-retry shape is deliberately the same one
 [`sweepOrphaned`](../../src/routes.ts) uses for comments, and for the same reason: a status of

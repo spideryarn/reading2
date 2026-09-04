@@ -113,6 +113,17 @@ interface QueueState {
    * ever shown. See ./jobs.ts § `EnqueueTicket`.
    */
   tickets: Map<string, EnqueueTicket>;
+  /**
+   * How many times `settleExpired` has given each job back to the queue rather
+   * than ending it — the budget's counter. See jobs.ts § `settleExpired`.
+   *
+   * **In memory, unlike the Postgres column it stands in for**, and that is the
+   * same single-process argument the rest of this file rests on: a restart
+   * empties this map, and a restart is `sweepStopped`, which requeues everything
+   * running with no budget at all. A count that outlived the process would be a
+   * budget against an interruption this store does not have.
+   */
+  requeues: Map<string, number>;
   /** Jobs the reader has dismissed. A late write must not bring one back. */
   forgotten: Set<string>;
   /** One write at a time per job, and the last one in flight for each. */
@@ -134,10 +145,11 @@ interface QueueState {
    tell a careful bump from a lazy one. Never touch the *name*: a second key is a
    second lock universe with the first claimant still running inside the old one,
    which is the bug src/process-state.ts exists to prevent. */
-const state = processSingleton<QueueState>("jobs-fs", "2026-09-02-tickets", () => ({
+const state = processSingleton<QueueState>("jobs-fs", "2026-09-03-requeues", () => ({
   index: new Map(),
   attempts: new Map(),
   tickets: new Map(),
+  requeues: new Map(),
   forgotten: new Set(),
   writes: new Map(),
   writeCounter: 0,
@@ -147,7 +159,7 @@ const state = processSingleton<QueueState>("jobs-fs", "2026-09-02-tickets", () =
 /* Bound locally so the rest of this file reads as it always did. These are the
    *same objects* every copy of the module sees, which is the whole point; the
    two scalars are reached through `state` because a `const` cannot be. */
-const { index, attempts, tickets, forgotten, writes } = state;
+const { index, attempts, tickets, requeues, forgotten, writes } = state;
 
 function jobFile(id: string): string {
   return path.join(JOBS_DIR, `${id}.json`);
@@ -642,7 +654,11 @@ export const fsJobStore: JobStore = {
    * there. An entry with no job behind it belongs to nobody, so an
    * owner-scoped call leaves that alone too.
    */
-  async settleExpired(now: Date = new Date(), owner?: OwnerId): Promise<ExpirySettlement[]> {
+  async settleExpired(
+    now: Date = new Date(),
+    owner?: OwnerId,
+    requeueBudget = 0,
+  ): Promise<ExpirySettlement[]> {
     await ready();
     const settled: ExpirySettlement[] = [];
     for (const [id, held] of attempts) {
@@ -651,6 +667,25 @@ export const fsJobStore: JobStore = {
       if (owner !== undefined && job?.ownerId !== owner) continue;
       attempts.delete(id);
       if (!job || TERMINAL.has(job.status)) continue;
+      /* **Another go, on this same record**, where the budget allows one and the
+         reader has not pressed Stop — the contract in jobs.ts § `settleExpired`.
+         `sweepStopped` is the shape, and calling it rather than writing the
+         fields again is the point: a restart and a lapsed lease are the same
+         interruption reached two ways, and they must not drift into two answers.
+
+         **The count is in memory rather than on the record**, which is the one
+         place this adapter differs from Postgres and is sound for the reason
+         every other single-process argument in this file is sound: a restart
+         empties this map, and a restart is `sweepStopped`, which requeues
+         everything running with no budget at all. So a count that outlived the
+         process would be a budget against an event this store does not have. */
+      if (!job.cancelling && (requeues.get(id) ?? 0) < requeueBudget) {
+        requeues.set(id, (requeues.get(id) ?? 0) + 1);
+        sweepStopped(job);
+        await persist(job);
+        settled.push({ id, status: job.status as ExpirySettlement["status"] });
+        continue;
+      }
       settleAbandoned(job);
       await persist(job);
       settled.push({ id, status: job.status as ExpirySettlement["status"] });
@@ -799,6 +834,7 @@ async function removeJob(id: string): Promise<void> {
   index.delete(id);
   attempts.delete(id);
   tickets.delete(id);
+  requeues.delete(id);
   await writes.get(id)?.catch(() => undefined);
   writes.delete(id);
   await unlink(jobFile(id)).catch(() => undefined);

@@ -12,6 +12,8 @@
  * See docs/plans/260827v-deploy-pipeline.md for what each of these is guarding.
  */
 
+import { parse as parseToml, TomlError } from "smol-toml";
+
 import {
   compareMigrations,
   type AppliedMigration,
@@ -948,19 +950,39 @@ function mimeDrift(
 /**
  * The `[storage.buckets.*]` blocks of `supabase/config.toml`, parsed.
  *
- * **A hand-written parser rather than a TOML library.** When this was written
- * the only TOML parser in `node_modules` was `smol-toml`, there transitively
- * through `knip`, and importing a transitive dependency is a build that breaks
- * the day something upstream drops it. Since 2026-09-02 `smol-toml` IS a direct
- * dependency (scripts/gjd-remote-config.ts), so that objection is gone; this
- * parser stays because it is a deploy gate that has been watched going red on
- * exactly these four keys, and swapping it is a change for no drift caught.
+ * **`smol-toml`, since 2026-09-03, and the hand-written parser it replaced was
+ * a gate that failed open.** That parser read the file line by line and did
+ * `if (!pair) continue` on any assignment its regex missed — then supplied the
+ * defaults for whatever it had therefore never seen. So
  *
- * So it reads exactly what those blocks contain and **throws on anything it
- * does not understand** — an unknown size unit, a key it cannot parse. A
- * parser that returns `null` for a line it failed on is a parser that reports
- * "no drift" about a file it could not read, which is the failure this whole
- * check exists to stop.
+ *     [storage.buckets.sources]
+ *     public =
+ *     file_size_limit =
+ *     allowed_mime_types =
+ *
+ * parsed as private, unlimited, any MIME type; against a bucket in that state
+ * `bucketDrift` returned `[]`, and the deploy recorded "the buckets match the
+ * file" about a file it had not understood one line of. GPT Sol reproduced it
+ * in review. It is the same class as the failure this whole check exists for —
+ * a tick printed about something other than the thing asked about
+ * (docs/reusable/silent-success.md).
+ *
+ * The original objection to a library was that `smol-toml` was in
+ * `node_modules` only transitively, through knip. It has been a **direct**
+ * dependency since 2026-09-02 (scripts/gjd-remote-config.ts, which is where the
+ * `TomlError` handling below comes from), so what remained was a second way to
+ * do a thing the repo already does — and this way could not read TOML.
+ *
+ * **It now fails on the whole file, not only on the bucket blocks**, because a
+ * `parse` either understands a document or does not. That is a widening of what
+ * makes this throw, and it is the safe direction: a `supabase/config.toml` that
+ * is not valid TOML is not a file anything should be deploying against, and
+ * `supabase start` would refuse it too.
+ *
+ * Everything it *can* read it still type-checks and **throws on anything it
+ * does not understand** — an unknown size unit, a `public` that is not a
+ * boolean, a MIME list holding a number. A parser that shrugs at a value it
+ * failed on is a parser that reports "no drift" about a file it could not read.
  *
  * Pure and exported so `tests/deploy-checks.test.ts` can run it against the
  * real file: the fixture is the repository, so a change to the config's shape
@@ -968,42 +990,66 @@ function mimeDrift(
  * a bucket.
  */
 export function declaredBuckets(toml: string): DeclaredBucket[] {
-  const buckets: DeclaredBucket[] = [];
-  let current: Partial<DeclaredBucket> & { name?: string } = {};
-  const flush = () => {
-    if (current.name !== undefined) {
-      buckets.push({
-        name: current.name,
-        public: current.public ?? false,
-        fileSizeLimit: current.fileSizeLimit ?? null,
-        allowedMimeTypes: current.allowedMimeTypes ?? null,
-      });
+  let document: unknown;
+  try {
+    document = parseToml(toml);
+  } catch (err) {
+    if (err instanceof TomlError) {
+      throw new Error(
+        `supabase/config.toml is not valid TOML, at line ${err.line}, column ${err.column}: ` +
+          `${err.message.split("\n")[0]}`,
+      );
     }
-    current = {};
-  };
-
-  for (const raw of toml.split("\n")) {
-    const line = raw.trim();
-    if (line.startsWith("#") || line.length === 0) continue;
-
-    const header = /^\[([^\]]+)\]$/.exec(line);
-    if (header) {
-      flush();
-      const bucket = /^storage\.buckets\.(.+)$/.exec(header[1] ?? "");
-      if (bucket) current = { name: (bucket[1] ?? "").replace(/^"|"$/g, "") };
-      continue;
-    }
-    if (current.name === undefined) continue;
-
-    const pair = /^([A-Za-z_]+)\s*=\s*(.+?)\s*(?:#.*)?$/.exec(line);
-    if (!pair) continue;
-    const [, key, value] = pair as unknown as [string, string, string];
-    if (key === "public") current.public = value === "true";
-    else if (key === "file_size_limit") current.fileSizeLimit = sizeInBytes(value);
-    else if (key === "allowed_mime_types") current.allowedMimeTypes = stringList(value);
+    throw new Error(`supabase/config.toml could not be parsed: ${(err as Error).message}`);
   }
-  flush();
-  return buckets;
+
+  const declared = asTable(asTable(asTable(document)?.storage)?.buckets);
+  if (!declared) return [];
+
+  return Object.entries(declared).map(([name, block]) => {
+    const table = asTable(block);
+    if (!table) {
+      throw new Error(`supabase/config.toml: [storage.buckets.${name}] is not a table`);
+    }
+    return {
+      name,
+      public: bucketPublic(name, table.public),
+      fileSizeLimit: table.file_size_limit === undefined
+        ? null
+        : sizeInBytes(name, table.file_size_limit),
+      allowedMimeTypes: table.allowed_mime_types === undefined
+        ? null
+        : stringList(name, table.allowed_mime_types),
+    };
+  });
+}
+
+/** A TOML table, or `null` for anything else — an array and `null` included. */
+function asTable(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+/**
+ * `public`, which defaults to false and must otherwise really be a boolean.
+ *
+ * The old parser asked `value === "true"`, so `public = "yes"`, `public = 1` and
+ * `public =` were all quietly `false` — and `false` is the state that says
+ * "these are readers' own documents", which is not a thing to conclude from a
+ * line you could not read.
+ */
+function bucketPublic(bucket: string, value: unknown): boolean {
+  if (value === undefined) return false;
+  if (typeof value !== "boolean") {
+    throw new Error(
+      /* `String` first, here and in the two below: `JSON.stringify` throws on
+         a bigint and on a circular value, and an error message that throws is
+         a gate failing with somebody else's sentence. */
+      `supabase/config.toml: [storage.buckets.${bucket}] public is ${JSON.stringify(String(value))}, ` +
+        "and it has to be true or false",
+    );
+  }
+  return value;
 }
 
 const UNITS: Record<string, number> = {
@@ -1016,9 +1062,25 @@ const UNITS: Record<string, number> = {
   GIB: 1024 ** 3,
 };
 
-/** `"50MiB"` → 52428800. Throws on a unit it does not know. */
-function sizeInBytes(value: string): number {
-  const text = value.trim().replace(/^"|"$/g, "");
+/**
+ * `"50MiB"` → 52428800, and a bare `1024` → 1024. Throws on a unit it does not
+ * know, and on a value TOML gave us that is not a size at all.
+ *
+ * An integer past `Number.MAX_SAFE_INTEGER` never reaches here — smol-toml
+ * refuses the document, "integer value cannot be represented losslessly",
+ * measured 2026-09-03 — so this needs no bigint arm. The `Number.isSafeInteger`
+ * test stays as the thing that makes that true here rather than somewhere else.
+ */
+function sizeInBytes(bucket: string, value: unknown): number {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return value;
+  if (typeof value !== "string") {
+    throw new Error(
+      `supabase/config.toml: [storage.buckets.${bucket}] file_size_limit is ` +
+        `${JSON.stringify(String(value))}, and a size is a whole number of bytes or a string ` +
+        'like "50MiB".',
+    );
+  }
+  const text = value.trim();
   const parsed = /^(\d+)\s*([A-Za-z]*)$/.exec(text);
   const unit = UNITS[(parsed?.[2] ?? "").toUpperCase()];
   if (!parsed || unit === undefined) {
@@ -1030,18 +1092,22 @@ function sizeInBytes(value: string): number {
   return Number(parsed[1]) * unit;
 }
 
-/** `["a", "b"]` → `["a", "b"]`. Throws rather than returning a partial list. */
-function stringList(value: string): string[] {
-  const text = value.trim();
-  if (!text.startsWith("[") || !text.endsWith("]")) {
-    throw new Error(`supabase/config.toml: expected a list and found "${text}"`);
+/** The MIME list, checked entry by entry rather than trusted to be strings. */
+function stringList(bucket: string, value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(
+      `supabase/config.toml: [storage.buckets.${bucket}] allowed_mime_types is ` +
+        `${JSON.stringify(String(value))}, and it has to be a list of strings.`,
+    );
   }
-  const inner = text.slice(1, -1).trim();
-  if (inner.length === 0) return [];
-  return inner.split(",").map((item) => {
-    const quoted = /^\s*"([^"]*)"\s*$/.exec(item);
-    if (!quoted) throw new Error(`supabase/config.toml: cannot read the list entry "${item}"`);
-    return quoted[1] as string;
+  return value.map((item: unknown) => {
+    if (typeof item !== "string") {
+      throw new Error(
+        `supabase/config.toml: [storage.buckets.${bucket}] allowed_mime_types holds ` +
+          `${JSON.stringify(String(item))}, which is not a mime type.`,
+      );
+    }
+    return item;
   });
 }
 

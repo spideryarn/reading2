@@ -206,6 +206,29 @@ these is a section of `browser-testing.md` that does not apply here.
   `addInitScript` with a **`content` string**, not a function, or the helper's own body goes through
   the same compiler and needs what it is defining.
 
+### Under `isMobile: true`, three things lie to you
+
+All three cost a browser pass an hour on 2026-09-03, checking the glossary card at 390×844
+([260903l](../plans/260903l-glossary-underlines-in-every-mode-and-the-touch-card-that-closed-itself.md)).
+
+- **`window.innerWidth` misreports** — 423 for a 390px viewport, on the reading view.
+  `document.documentElement.clientWidth` and `visualViewport.width` are right. Anything branching on
+  the window's own width is measuring the emulator.
+- **Raw `page.touchscreen.tap(x, y)` and `page.mouse.move(x, y)` land somewhere else**, with a large
+  non-uniform vertical offset between the coordinates you pass and the `clientY` the page receives —
+  confirmed by comparing `elementFromPoint` against the delivered event. `locator.tap()` and
+  `locator.hover()` resolve coordinates correctly; **coordinate pairs do not**. When you need the
+  exact event sequence rather than the gesture, dispatch synthetic `pointerdown`/`pointerup` on the
+  element, as `tests/hover-card-touch.test.tsx` does.
+- **`locator.tap()` scrolls first, and this app's prose re-renders when it does.**
+  `scrollIntoViewIfNeeded` — and a bare `element.scrollIntoView()` — swaps a row in and out of
+  `.prose` about 300–400ms later, which correctly trips `useHoverCard`'s "the anchor left the
+  document" guard and closes any open card. So a naive tap-then-assert reports a false negative on a
+  feature that works. Separate *scroll and let it settle* from *then tap*.
+
+  Whether a reader who scrolls and immediately taps hits the same thing is **an open question nobody
+  has chased**; it reproduced 5s after page settle, which is longer than it should need.
+
 ## The insets are zero here, and a phone's are not
 
 `index.html` carries `viewport-fit=cover`, so on a phone the document runs under the notch and the

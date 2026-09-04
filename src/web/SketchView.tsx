@@ -83,6 +83,26 @@ import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useSketch } from "./useSketch.js";
 import { UseProfile } from "./WrittenForYou.js";
 
+/**
+ * **What a draw costs and how long it takes, in exactly one place each.**
+ *
+ * *One model call, 121–194 seconds, about $0.20 — measured over seven draws of
+ * five articles* (docs/project/diagram.md § What it costs). Constants rather
+ * than prose because this panel is no longer the only place that has to say it:
+ * Illustrated's *"Draw the Sketch, then paint"* names both halves of what one
+ * press buys, and two sentences about one price are two sentences that can
+ * drift apart. Only one of them would be on screen at a time, so nothing would
+ * ever show the disagreement.
+ *
+ * `SKETCH_WAIT` keeps the wording this panel has always shown rather than the
+ * measured range: *about two minutes* is what a reader has been told since the
+ * mode shipped, and widening it to *two to three* is a copy change nobody has
+ * asked for. The measurement is one link away, above.
+ */
+export const SKETCH_PRICE = "about $0.20";
+/** Measured 121–194 s; the wording is this panel's own. See `SKETCH_PRICE`. */
+export const SKETCH_WAIT = "about two minutes";
+
 /** One drawing primitive as an element. Nothing here knows a colour. */
 function Shape({ p }: { p: Prim }) {
   const style = p.tone === undefined ? undefined : ({ "--cat-rgb": `var(--cat-${p.tone}-rgb)` } as React.CSSProperties);
@@ -625,8 +645,8 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
             is owed the sentence. */}
         <p className="sk-empty-why">
           A model reads the whole article, works out what shape the argument is, and draws that. It
-          is the slowest thing here — about two minutes — and it costs a model call, so it is never
-          drawn until you ask.
+          is the slowest thing here — {SKETCH_WAIT} — and it costs one model call, {SKETCH_PRICE}, so
+          it is never drawn until you ask.
         </p>
         <div className="sk-run">
           <UseProfile

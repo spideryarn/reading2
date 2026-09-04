@@ -341,6 +341,16 @@ export async function writeRawFiles(
  * docs/plans/260831b-finish-the-database-move.md makes refetching the right answer for
  * an old article — but only if the state says so out loud, which is what a
  * thrown error does and what a quiet default did not.
+ *
+ * **Every `message` handed to this constructor must be written here**, and that
+ * is a constraint rather than a habit. Stage 2's catch (src/pipeline.ts §
+ * `extract`) forwards it to Sentry under `{ authored }` — the claim that we
+ * wrote every character of it and none of it came from a provider, a document
+ * or a reader. The four call sites below keep that true: fixed prose around a
+ * slug, a content-addressed key, byte counts, a local digest, and
+ * `credentialsSeen()`, which reports whether two environment variables are set
+ * and never their values. A fifth that interpolated a response body, a page, or
+ * another library's `err.message` would break the claim silently.
  */
 export class RawDocumentUnavailable extends Error {
   constructor(
