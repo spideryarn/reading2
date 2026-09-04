@@ -1882,12 +1882,22 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            has for a scan. For a fetched PDF it stays the URL's last segment,
            which is what it always was. */
         ...(manifest.filename ? { filename: manifest.filename } : {}),
-        /* **The chunk checkpoints, which is what makes a hundred-page PDF
-           finishable at all.** It was `ctx.dir` until 2026-09-01 — job-scoped
-           `/tmp` on Vercel — and a retry is a new job id on a different machine,
-           so every attempt started from zero and a long document could fail for
-           ever without ever accumulating enough finished chunks to get under the
-           deadline. This store is keyed on the article, so it survives both.
+        /* **The chunk checkpoints, which is what makes a 250-page PDF
+           finishable at all** — and the ceiling is 250 rather than 100 since
+           2026-09-04 precisely because they work now (src/pdf-read.ts §
+           `MAX_PAGES`).
+
+           It was `ctx.dir` until 2026-09-01 — job-scoped `/tmp` on Vercel — and
+           a retry is a new job id on a different machine, so every attempt
+           started from zero and a long document could fail for ever without
+           ever accumulating enough finished chunks to get under the deadline.
+           This store is keyed on the article, which survives both.
+
+           **That last sentence was a wish until 2026-09-03**, because a retry
+           minted a fresh article as well as a fresh job, so the article was not
+           a thing that survived either. `slugForRetry` (src/jobs.ts) is what
+           makes it true; the whole story is
+           docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md.
            docs/plans/260901d-simpler-finish-sol.md § 4. */
         checkpoints,
         slug: ctx.slug,
@@ -2227,6 +2237,17 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              absence nobody can. src/labels.ts § `droppedBudget`,
              docs/reusable/silent-success.md. */
           labelsDropped: run.labelsDropped,
+          /* **What the checkpoints actually bought this run**, at zero as well
+             as above it. `generateLabels` logs `{ asked, found }` at its read,
+             which is what the store returned; these two are what the stage
+             *accepted*, and the gap between them is a batch that was stored and
+             then rejected as not covering the blocks it was asked about — a
+             failure with no other symptom. Neither number was logged at all
+             until 2026-09-04:
+             docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md,
+             recommendation 2. */
+          labelBatches: run.labelBatches,
+          labelsResumed: run.labelsResumed,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
           cacheReadTokens: run.cacheReadTokens,

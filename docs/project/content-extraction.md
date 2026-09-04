@@ -52,7 +52,12 @@ they are named by what they *are*, so a manifest cannot point at last week's doc
 The differences that matter to a reader:
 
 - **A PDF costs money to extract.** Readability is free and deterministic; a model reading pages is
-  neither. Every chunk's raw response is cached, so re-running the stage after a renderer fix is free.
+  neither. Every chunk's raw response is checkpointed against the **article**, one row per chunk
+  ([`src/store/checkpoints.ts`](../../src/store/checkpoints.ts)), so a second attempt at a document
+  the first one ran out of time on buys only the chunks it has not got — and re-running after a
+  *renderer* fix is free. A **prompt** change is deliberately not free: the key carries
+  `promptFingerprint()`. And `npm run pdf` remembers nothing between runs at all, because a command
+  line has no article to key on and takes `nullCheckpointStore()`.
 - **It is checked, and it can fail.** The transcription is scored per page against the PDF's own text
   layer ([`src/pdf-score.ts`](../../src/pdf-score.ts)) and the step fails, naming the page, rather
   than writing a half-transcribed article that reads fluently.
@@ -73,6 +78,20 @@ The differences that matter to a reader:
   generic retryable one, which is a button that could never work
   ([copy.md](copy.md#the-four-rules), rule 2). Stage 1's page counter deliberately lets such a file
   through — a cost gate is not a validity gate — so this is where it lands.
+- **Sixteen chunks at a time, and the width buys latency rather than money.** `CHUNK_CONCURRENCY`
+  went 8 → 16 on 2026-09-04, measured against the step's 740-second deadline
+  ([`src/pdf-read.ts`](../../src/pdf-read.ts) has the table and the binding constraint). Cost is
+  unchanged by width — the system prompt is sent per chunk and nothing on this path is cached — so
+  what widening changes is memory and the request rate into one upstream. Both of those made the
+  429 the thing to fix: it used to be fatal at the first one, and now the chunk waits and asks
+  again, honouring the provider's own `Retry-After` in full up to `MAX_RETRY_AFTER_MS` (60 s) and
+  failing this attempt rather than truncating a wait the provider actually asked for.
+- **A long PDF is expected to need two lease windows, and that is what the checkpoints are for.**
+  Measured in a browser on 2026-09-04: a 144-page paper spent nearly all of the first window in
+  `extract`, and `hierarchy` was cut off. The second window is a press of Retry rather than an
+  automatic requeue — a cooperative deadline abort is not a lapsed lease
+  ([ingest-queue.md](ingest-queue.md)) — and the chunks the first attempt finished are read back
+  rather than re-bought.
 - **A scan cannot be checked at all**, has no text layer to check against, and says so on the page.
 - **A word broken by a page break is mended from the text layer, not by a second model call.** The
   chunks are read in parallel and none of them sees over its own edge, so `dis-` / `patcher` arrives

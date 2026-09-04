@@ -1388,11 +1388,25 @@ function chunkKey(
  * outage — which is exactly what the filesystem version could do, since a full
  * `/tmp` made `mkdir` and `writeFile` throw straight out of the stage.
  *
- * **Logged, at `warn`, so it is not silent.** A store that quietly answered
- * nothing for ever would look exactly like a store nobody had wired up, and the
- * only other symptom is a larger bill. docs/reusable/silent-success.md. No
- * value and no article text reaches the line — the key is a digest and the slug
- * is already in the URL. src/store/checkpoints-pg.ts § What may be logged.
+ * **The hit rate is logged, not the exception**, and the difference is the
+ * whole of recommendation 2 of
+ * docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md.
+ * This paragraph
+ * used to say *"logged, at `warn`, so it is not silent — a store that quietly
+ * answered nothing for ever would look exactly like a store nobody had wired
+ * up, and the only other symptom is a larger bill"*, and every word of that was
+ * right about the hazard and wrong about the instrument: the line sat inside the
+ * `catch`, and the failure it described **does not throw**. For the whole life
+ * of the feature the read succeeded and returned an empty map, because a retry
+ * minted a fresh article and the keys were looked up under an id that had none.
+ * The warning never fired once.
+ *
+ * So `{ asked, found }` goes out on **every** read, at `info` — which is the
+ * production level (src/log.ts § `level`), where `debug` is not — and *"every
+ * attempt ever found zero"* is one log query rather than a bill nobody
+ * reconciles. No value and no article text reaches the line: the counts are
+ * counts, the key is a digest, and the slug is already in the URL.
+ * src/store/checkpoints-pg.ts § What may be logged.
  */
 async function storedChunks(
   checkpoints: CheckpointStore,
@@ -1400,7 +1414,12 @@ async function storedChunks(
   keys: readonly string[],
 ): Promise<Map<string, unknown>> {
   try {
-    return await checkpoints.read<unknown>(slug, "pdf-chunk", keys);
+    const stored = await checkpoints.read<unknown>(slug, "pdf-chunk", keys);
+    log("pipeline").info(
+      { slug, namespace: "pdf-chunk", asked: keys.length, found: stored.size },
+      "read the pdf chunk checkpoints",
+    );
+    return stored;
   } catch (err) {
     log("pipeline").warn(
       { slug, chunks: keys.length, err },

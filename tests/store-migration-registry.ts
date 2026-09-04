@@ -1023,7 +1023,9 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     reason:
       "Arrived after the witness ran, with the swallowed-sentence work " +
       "(docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md § Stage 1). Builds a real " +
-      "142-page PDF and asks what `readerFailureOf` gives the reader when `pass0` refuses it. Its " +
+      "over-cap PDF — `MAX_PAGES + 42` pages, derived rather than pinned — and asks what " +
+      "`readerFailureOf` gives the reader when `pass0` refuses it; its sibling case builds the " +
+      "142-page paper that prompted the work and asserts it is now accepted. Its " +
       "whole static reach is `src/pdf-read.ts` importing `cli-ledger.ts` for its command-line " +
       "half; the refusal is thrown before any paid call, so no ledger row is ever written and the " +
       "checkpoint store is a `Map`. Re-run witness 2 to confirm.",
@@ -1040,6 +1042,20 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "static reach is the same `src/pdf-read.ts` → `cli-ledger.ts` import its two siblings above " +
       "have, and no paid call is ever recorded because the wire is a stub. Re-run witness 2 to " +
       "confirm.",
+  },
+  "tests/checkpoint-hit-rate-is-logged.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with the checkpoint-instrumentation work " +
+      "(docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md § Stage 6, building " +
+      "recommendation 2 of docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-" +
+      "checkpoints-could-never-be-found.md). It drives `runPdfExtract` with a stub `PdfReader` " +
+      "and `generateLabels` with no credential, over a `Map` checkpoint store, and reads what " +
+      "the logger wrote. No database, no blobs, no artefacts on disk; its whole static reach is " +
+      "the same `src/pdf-read.ts` → `cli-ledger.ts` import its page-cap siblings have, and no " +
+      "paid call is ever made so no ledger row is written. Re-run witness 2 to confirm.",
   },
   "tests/a-long-pdf-is-refused-before-it-is-stored.test.ts": {
     category: "database-integration",

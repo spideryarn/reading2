@@ -1856,11 +1856,19 @@ async function main(): Promise<void> {
   console.log(
     `\nNodes:     ${Object.keys(run.parts.tree.nodes).length} (${run.internal} internal)`,
   );
+  /* **Said even when it is zero**, which on this command line it always is —
+     the stage commands have no `articleId` to key on and pass
+     `nullCheckpointStore()` (src/store/checkpoints.ts). That is the point: this
+     is the number `generateHierarchy`'s own docstring promises will tell a
+     caller that meant to checkpoint and did not, and a number printed only when
+     it is interesting cannot say the uninteresting thing. It was suppressed at
+     zero until 2026-09-04, and the sibling suppression at the other end left
+     the chunk checkpoints inert for the whole life of the feature
+     (recommendation 2 of
+     docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md). */
   console.log(
-    `Labelled:  ${run.labelled} / ${run.structural} blocks, in ${run.labelCalls} call(s)` +
-      (run.labelsResumed > 0
-        ? ` (${run.labelsResumed} of ${run.labelBatches} batches resumed from a checkpoint)`
-        : ""),
+    `Labelled:  ${run.labelled} / ${run.structural} blocks, in ${run.labelCalls} call(s) ` +
+      `(${run.labelsResumed} of ${run.labelBatches} batches resumed from a checkpoint)`,
   );
   /* Only when it happened, unlike the two lines below — the ratio above already
      says it every run, and this line is the *reason* for a ratio under one. A

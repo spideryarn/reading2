@@ -5,11 +5,15 @@
  *
  * ## This is not a saving, it is whether a long PDF can finish at all
  *
- * `MAX_PAGES` is 100 and `planChunks` will make a one-page chunk out of a dense
- * enough page, so a hundred pages can be a hundred chunks. `CHUNK_CONCURRENCY`
- * does the arithmetic in its own comment: `ceil(100/8) × 45s = 585s` against a
- * 740s step deadline, which has margin at the *mean* call duration and would
- * still fail at a bad enough p95.
+ * `planChunks` will make a one-page chunk out of a dense enough page, so
+ * `MAX_PAGES` pages can be `MAX_PAGES` chunks — and since 2026-09-04 that cap
+ * is 250 rather than 100, with `CHUNK_CONCURRENCY` 16 rather than 8
+ * (src/pdf-read.ts). The arithmetic is kept there rather than copied here,
+ * because two copies of a table drift and only one of them is beside the
+ * constants: what it says now is that the adversarial 250-one-page-chunk case
+ * is sixteen waves and 720 s at the mean, against a 740 s step deadline, and
+ * past it at the tail. Raising the cap made the *second attempt* load-bearing,
+ * which is what this file is about.
  *
  * Until 2026-09-01 the finished chunks were written to
  * `data/<slug>/pdf-chunks/`, which on Vercel is a job-scoped `/tmp`
