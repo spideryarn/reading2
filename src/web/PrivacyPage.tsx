@@ -274,13 +274,33 @@ export function PrivacyPage() {
         <p>
           Your articles and notes are yours. Another reader signed into Spideryarn cannot see them.
         </p>
+        {/* **Rewritten 2026-09-04, and the sentence that went said "Your notes,
+            your comments and your conversations are not shared".** Two of those
+            three now are: a shared link carries the reader's comments, what
+            they wrote, and what the model answered. Greg's decision.
+            docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
+
+            **Conversations are still true and are said separately**, rather
+            than being quietly dropped along with the other two. A reader who
+            read the old sentence should be able to find out which half of it
+            survived; a page that just stopped mentioning conversations would
+            leave them guessing.
+
+            The list of what goes out is deliberately *not* exhaustive here —
+            the Access & Sharing card derives the full inventory at the moment
+            of sharing (src/web/shared-inventory.ts), and two lists of the same
+            thing is how one of them goes stale. This says the shape of it and
+            points at the card. */}
         <p>
           Two exceptions, and both are worth knowing. If you mark an article{" "}
           <strong className="tw:text-foreground">public</strong>, anyone with the link can read it
           without signing in — that is what the setting is for. They get the article, its outline,
-          its arc, the glossary, the ideas, the quotes and the thread, some of which the model wrote
-          knowing what your profile says about you, even though the profile itself is not shared.
-          Your notes, your comments and your conversations are not shared. And{" "}
+          its arc, the glossary, the ideas, the quotes, the timeline and the thread, some of which
+          the model wrote knowing what your profile says about you, even though the profile itself
+          is not shared. <strong className="tw:text-foreground">They also get your comments</strong>
+          {" "}— the passages you marked, what you wrote about them, and what the model answered when
+          you asked. Your chat conversations are not shared, and neither is your profile. The
+          sharing card lists exactly what will go out before you turn it on. And{" "}
           <strong className="tw:text-foreground">we can see what is in the app</strong>: there is an
           administrator’s view across all accounts, and we may read your articles and what you have
           written in order to fix a bug or make the thing better. We won’t sell it, publish it, or

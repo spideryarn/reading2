@@ -56,6 +56,8 @@ import type {
   ArcEntry,
   Block,
   BlockKind,
+  Citation,
+  Comment,
   Glossary,
   Idea,
   Ideas,
@@ -76,12 +78,13 @@ import type {
   PublicGlossary,
   PublicGlossaryEntry,
   PublicIdeas,
+  PublicComment,
   PublicQuotes,
   PublicMeta,
   PublicTimeline,
   PublicTweets,
 } from "../public-types.js";
-import { publicSourceUrl } from "../urls.js";
+import { publicCitationUrl, publicSourceUrl } from "../urls.js";
 
 /**
  * The masthead.
@@ -418,6 +421,61 @@ function publicTimeline(timeline: Timeline): PublicTimeline {
   };
 }
 
+/**
+ * The owner's comments, rebuilt comment by comment and citation by citation.
+ *
+ * **The filtering is not here**, and that is deliberate rather than an
+ * oversight: the two rows that must never reach a visitor — a referee's note,
+ * and an unfinished or failed model call — are refused **in SQL**, by
+ * `PUBLIC_COMMENTS_WHERE` in src/store/public-reader.ts. A projection that
+ * dropped them would be a second answer to the same question, and the one that
+ * ran second would be the one nobody tested. See that predicate for the
+ * argument.
+ *
+ * What this does is the allowlist half: name every key, and re-judge the one
+ * value in a comment that is an address.
+ */
+function publicComments(comments: readonly Comment[]): PublicComment[] {
+  return comments.map(
+    (comment): PublicComment => ({
+      id: comment.id,
+      blockId: comment.blockId,
+      quote: comment.quote,
+      start: comment.start,
+      createdAt: comment.createdAt,
+      ...opt(comment, "body"),
+      ...opt(comment, "answer"),
+      ...publicCitations(comment.citations),
+    }),
+  );
+}
+
+/**
+ * **The citations, re-judged one at a time**, or the key left off entirely.
+ *
+ * `publicCitationUrl` (src/urls.ts) refuses a credential in the address and a
+ * host a stranger could not have reached anyway. A citation that fails is
+ * **dropped rather than blanked**: a footnote whose address has been replaced
+ * by nothing is a claim the reader cannot follow and cannot see the failure of.
+ *
+ * **An empty result drops the key**, rather than crossing as `[]`. The two
+ * would render differently — `citations: []` is *"the model cited nothing"* and
+ * an absent key is *"this comment has no citations"* — and after this function
+ * has thrown one away, neither of those is true. Absent is the honest one of
+ * the two, because it is what a comment that never had any looks like.
+ *
+ * `title` through `opt`, so a mis-spelled key is a compile error rather than a
+ * field that silently stops crossing. src/public/dto.ts § the idiom.
+ */
+function publicCitations(citations: Citation[] | undefined): { citations?: Citation[] } {
+  if (citations === undefined) return {};
+  const kept = citations.flatMap((citation): Citation[] => {
+    const url = publicCitationUrl(citation.url);
+    return url === null ? [] : [{ url, ...opt(citation, "title") }];
+  });
+  return kept.length === 0 ? {} : { citations: kept };
+}
+
 /** The ideas, rebuilt idea by idea and occurrence by occurrence. */
 function publicIdeas(ideas: Ideas): PublicIdeas {
   return {
@@ -484,6 +542,7 @@ export function publicArticle(row: {
   quotes: Quotes | null;
   tweets: TweetThread | null;
   timeline: Timeline | null;
+  comments: readonly Comment[];
 }): PublicArticle {
   return {
     meta: publicMeta(row),
@@ -512,6 +571,10 @@ export function publicArticle(row: {
     ...(row.quotes !== null ? { quotes: publicQuotes(row.quotes) } : {}),
     ...(row.tweets !== null ? { tweets: publicTweets(row.tweets) } : {}),
     ...(row.timeline !== null ? { timeline: publicTimeline(row.timeline) } : {}),
+    /* **A required key, so leaving this line out is a type error** — unlike the
+       artefacts above it, where an absent key is the meaning. An article with
+       no comments crosses as `[]`. See PublicArticle.comments. */
+    comments: publicComments(row.comments),
   };
 }
 

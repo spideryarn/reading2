@@ -173,7 +173,7 @@ export function PublicMetadataPage({
           <p className="tw:m-0 tw:text-sm tw:text-ink-faint">{SHARED_LINK_CARRIES}</p>
         </section>
       </main>
-      <VisitorDock slug={slug} view="metadata" available={available} signedIn={signedIn} />
+      <VisitorDock slug={slug} view="metadata" available={available} />
     </>
   );
 }
@@ -274,7 +274,7 @@ export function VisitorPage({
           <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} />
         </div>
       </main>
-      <VisitorDock slug={slug} view={view} available={available} signedIn={signedIn} />
+      <VisitorDock slug={slug} view={view} available={available} />
     </>
   );
 }
@@ -354,7 +354,7 @@ export function VisitorTweetsPage({
           <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} />
         </div>
       </main>
-      <VisitorDock slug={slug} view="tweets" available={available} signedIn={signedIn} />
+      <VisitorDock slug={slug} view="tweets" available={available} />
     </>
   );
 }
@@ -383,12 +383,10 @@ function VisitorDock({
   slug,
   view,
   available,
-  signedIn,
 }: {
   slug: string;
   view: ArticleView;
   available: PublicArtefacts;
-  signedIn: boolean;
 }) {
   /* **The switch, for a reader who almost certainly does not have one.** A
      signed-out visitor is forcibly off and the store issues no request for
@@ -403,7 +401,6 @@ function VisitorDock({
       view={view}
       experimental={experimental}
       marked={markedModes(available)}
-      signedIn={signedIn}
       /* These pages mount no drawer, so the bar cannot infer footing from its
          shape — and inferring from its absence is what left them calling
          somebody else's comments "Your comments". Dock.tsx § visitor. */
