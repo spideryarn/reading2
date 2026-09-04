@@ -43,8 +43,32 @@
  * underneath them, and a test that is supposed to make no model call could make
  * a real one. That is a bad way to find out about a precedence change.
  *
+ * ## The one thing `INHERITED` cannot do: survive a process boundary
+ *
+ * The rule above is *"a value this process set for itself wins"*, and it is
+ * decided by comparing against a snapshot taken at **this** process's module
+ * load. A child process takes its own snapshot, and by then the parent's
+ * deliberate assignment is already in the environment it inherited — so the
+ * child reads it as *"the shell said so"* and `.env.local` beats it. The
+ * intent is real and the evidence for it does not cross `spawn`.
+ *
+ * That is fine for a key and fatal for a database. The unit test lane poisons
+ * `DATABASE_URL` and `SUPABASE_URL` on purpose, so that a suite which was never
+ * meant to have a database or a bucket cannot quietly borrow the shared ones;
+ * a `tsx` child spawned from such a test had `.env.local` hand both of them
+ * straight back, silently — `NODE_ENV=test` suppresses even the warning below.
+ * Reproduced by GPT Sol reviewing stage T-D, 2026-09-04.
+ *
+ * `PINNED` is the fix, and it is deliberately the smallest one: an environment
+ * variable naming the variables `.env.local` may not touch, which **is**
+ * inherited, because it is a string in the environment rather than a comparison
+ * against a snapshot. See `pinnedNames` below.
+ *
  * **In production there is no `.env.local`**, so `process.env` is the only
- * source and none of this applies. See docs/project/setup-dev.md.
+ * source, `loadEnvLocal` returns at its `readFileSync` and none of this — the
+ * precedence rule or the pin — has any effect at all. Nothing outside the test
+ * lanes sets `PINNED`, and setting it would only ever *narrow* what a file that
+ * is not there could do. See docs/project/setup-dev.md.
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -293,8 +317,13 @@ export function applyEnvFile(
   inherited: Readonly<Record<string, string | undefined>>,
 ): string[] {
   const shadowed: string[] = [];
+  const pinned = pinnedNames(env);
 
   for (const [name, value] of Object.entries(parseEnvFile(text))) {
+    /* Pinned by the process that started this one — and unlike the snapshot
+       comparison below, that statement survives `spawn`. See the header. */
+    if (pinned.has(name)) continue;
+
     const current = env[name];
     // Set by this process since startup: leave it alone. See the header.
     if (current !== undefined && current !== inherited[name]) continue;
@@ -304,6 +333,37 @@ export function applyEnvFile(
   }
 
   return shadowed;
+}
+
+/**
+ * The variable that makes a deliberate assignment survive `spawn`, and the
+ * names it is currently protecting.
+ *
+ * Set it to a comma-separated list of variable names — `tests/setup/*` is the
+ * only thing that does — and `.env.local` will not write any of them, in this
+ * process or in any child that inherits it. Nothing else about `loadEnvLocal`
+ * changes: an unpinned name follows the ordinary rule, and with no `.env.local`
+ * (which is every deployment) there is nothing for the pin to stop.
+ *
+ * A **list of names rather than a boolean**, because the two lanes pin
+ * different things and a child that legitimately tests the override — see
+ * `tests/stage2c-raw-bytes.test.ts`, which manufactures a disagreement on
+ * `SUPABASE_URL` — can narrow the list rather than having to delete it.
+ *
+ * Read from the passed environment, not `process.env`, so `applyEnvFile` stays
+ * the pure seam `tests/env.test.ts` drives.
+ */
+export const PINNED = "SPIDERYARN_ENV_PINNED";
+
+export function pinnedNames(env: Readonly<Record<string, string | undefined>>): Set<string> {
+  const raw = env[PINNED];
+  if (!raw) return new Set();
+  return new Set(
+    raw
+      .split(",")
+      .map((n) => n.trim())
+      .filter(Boolean),
+  );
 }
 
 /**

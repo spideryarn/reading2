@@ -1231,9 +1231,20 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* ---- private-postgres: everything else that touches a database --------- */
 
   "tests/a-claim-that-lost-its-draft.test.ts": "private-postgres",
+  /* Storage, not Postgres — see `an-upload-is-queued-…` below. Found by the
+     Storage poison on its first full run, which is what a semantic backstop is
+     for: Sol read four out of the lane map and running it found two more. */
+  "tests/acquire-extract-blocks-end-to-end.test.ts": "private-postgres",
   "tests/admin-feedback-store.test.ts": "private-postgres",
   "tests/ai-calls-spend-pg.test.ts": "private-postgres",
   "tests/all-skipped-publication-refusal.test.ts": "private-postgres",
+  /* **Storage, not Postgres — and a lane all the same.** GPT Sol found four
+     files in the unit lane reaching the real shared Supabase bucket over HTTP
+     (2026-09-04). This one PUTs a staging object and has the route HEAD it
+     back. `private-postgres` is the only lane that both leaves `SUPABASE_URL`
+     alone and serialises, so two of these files cannot collide inside one run.
+     `LANES_BEYOND_THE_SCAN` below carries the per-file reason. */
+  "tests/an-upload-is-queued-only-once-its-bytes-arrive.test.ts": "private-postgres",
   "tests/article-rows-snapshot.test.ts": "private-postgres",
   "tests/billing-admission.test.ts": "private-postgres",
   "tests/billing-checkout.test.ts": "private-postgres",
@@ -1262,10 +1273,28 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/find-article.test.ts": "private-postgres",
   "tests/glossary-delete-then-rebuild.test.ts": "private-postgres",
   "tests/glossary-ideas-baseline.test.ts": "private-postgres",
+  /* **The scan could not see this one, and T-D's poisoned `DATABASE_URL` found
+     it on its first full run** — 4 failures, `the migration ledger could not be
+     read`. It called no `pgReady(` and built no pool: it drives the health
+     handler, which reads the ledger through the application's own `getDb()`,
+     and its own comment admitted the dependency (*"with a full environment and
+     a populated shelf there is nothing left to complain about"*).
+
+     **It is an ordinary scanned file again since 2026-09-04**, and the
+     exemption it used to carry in `LANES_BEYOND_THE_SCAN` is gone. Giving it a
+     lane fixed which database it uses; it did not make the no-database case
+     skip, and Sol found it *failing* four ways with the stack off, against the
+     stage's own promise. The gate it now has is a real `pgReady(` on the
+     migration ledger — which the scan does see, so the exemption went stale the
+     moment the fix landed and the guard said so before anybody had to. */
+  "tests/health.test.ts": "private-postgres",
   "tests/helpers-load-article.test.ts": "private-postgres",
   "tests/helpers-seed-reader-state.test.ts": "private-postgres",
+  /* Storage, not Postgres — see `an-upload-is-queued-…` above. */
   "tests/illustrated-pg.test.ts": "private-postgres",
   "tests/illustrated-route.test.ts": "private-postgres",
+  /* Storage, not Postgres — see `an-upload-is-queued-…` above. */
+  "tests/job-failure.test.ts": "private-postgres",
   "tests/load-article-serialisation.test.ts": "private-postgres",
   "tests/lock-lifecycle.test.ts": "private-postgres",
   "tests/migration-reconciliations.test.ts": "private-postgres",
@@ -1276,6 +1305,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/pipeline-slug-claim.test.ts": "private-postgres",
   "tests/plans-match-tiers.test.ts": "private-postgres",
   "tests/public-visibility-pg.test.ts": "private-postgres",
+  /* Storage, not Postgres — see `an-upload-is-queued-…` above. This is the
+     worst of the four: it removes and re-plants **one deterministic canonical
+     key** with deliberately corrupt bytes, so two concurrent runs can destroy
+     each other's oracle. */
+  "tests/raw-source-store.test.ts": "private-postgres",
   "tests/referee-criteria-store.test.ts": "private-postgres",
   "tests/referee-routes-postgres.test.ts": "private-postgres",
   "tests/remember-route.test.ts": "private-postgres",
@@ -1319,6 +1353,71 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/store-transaction-isolation.test.ts": "private-postgres",
   "tests/store-uploads-parity.test.ts": "private-postgres",
   "tests/store-writes-land-in-postgres.test.ts": "private-postgres",
+  /* Storage, not Postgres — see `an-upload-is-queued-…` above. */
+  "tests/upload-acquire.test.ts": "private-postgres",
+  "tests/uploads-api.test.ts": "private-postgres",
+};
+
+/**
+ * **Lanes the scan could not have worked out, and how each was found.**
+ *
+ * `TEST_LANES` is otherwise exactly the set of files the static scan finds, and
+ * the guard checks that in **both** directions — an entry the scan does not see
+ * is normally a rename or a deletion, and going red about it is the point.
+ *
+ * These are the exception, and they exist because the scan is syntactic and the
+ * poison is not. A file here reaches Postgres through application code —
+ * `getDb()` three modules down — with none of the syntax `opensAConnection`
+ * looks for, so nothing but *running it* can find it. What runs it is stage
+ * T-D's unit project, which poisons `DATABASE_URL`: an escapee that used to
+ * borrow the shared database silently now fails, names itself, and is moved
+ * here.
+ *
+ * **The guard covers the exemptions too**, or this would be a hole rather than
+ * a door: every entry must name a file that exists, must have a lane in
+ * `TEST_LANES`, must still be invisible to the scan — an entry that becomes
+ * visible is a stale exemption and has to go — and must carry a reason long
+ * enough to be one.
+ *
+ * Keep it short. A long list here means the scan has stopped being a useful
+ * approximation, and the answer then is a better predicate, not more entries.
+ */
+export const LANES_BEYOND_THE_SCAN: Readonly<Record<string, string>> = {
+  /* ---- Storage, which no DATABASE_URL poison could ever have found ------ */
+
+  "tests/an-upload-is-queued-only-once-its-bytes-arrive.test.ts":
+    "Reaches Supabase Storage, not Postgres, so no DATABASE_URL poison could ever " +
+    "have found it: it PUTs a staging object with blobStore() and has POST /api/jobs " +
+    "HEAD it back. Found by GPT Sol reading the lane map against src/store/blobs.ts, " +
+    "2026-09-04, and confirmed by running it. Its own header already said so - `the " +
+    "blob store here is the Supabase one, against the local stack`.",
+  "tests/raw-source-store.test.ts":
+    "Reaches Supabase Storage, not Postgres. The dangerous one of the four: it " +
+    "removes and re-plants ONE deterministic canonical key with deliberately corrupt " +
+    "bytes, so two concurrent runs on this box can destroy each other's oracle. GPT " +
+    "Sol, 2026-09-04. Serialising it inside a run is what this lane buys; two " +
+    "separate `npm test` invocations still share the bucket - see " +
+    "docs/project/testing.md.",
+  "tests/upload-acquire.test.ts":
+    "Reaches Supabase Storage, not Postgres. It derives canonical keys from fixed " +
+    "fixture bytes and writes them, which is the same shared-name collision as " +
+    "raw-source-store.test.ts, one step milder. GPT Sol, 2026-09-04.",
+  "tests/uploads-api.test.ts":
+    "Reaches Supabase Storage, not Postgres. It writes staging objects through " +
+    "blobStore() so that the readiness gate has something to find, and removes them " +
+    "afterwards. GPT Sol, 2026-09-04.",
+
+  /* ---- and the two the poison found the moment it covered Storage ------- */
+
+  "tests/acquire-extract-blocks-end-to-end.test.ts":
+    "Reaches Supabase Storage transitively, through the pipeline's own acquire step - " +
+    "it names no store at all, which is why neither the scan nor a reading of the lane " +
+    "map found it. The Storage poison did, on its first full run, 2026-09-04: five " +
+    "failures, `TypeError: fetch failed / connect ECONNREFUSED 127.0.0.1:2`.",
+  "tests/job-failure.test.ts":
+    "Reaches Supabase Storage through storeRawSource(), planting a damaged source " +
+    "document so the pipeline can refuse it. Found the same way and on the same run as " +
+    "acquire-extract-blocks-end-to-end.test.ts, 2026-09-04 - three failures.",
 };
 
 /**

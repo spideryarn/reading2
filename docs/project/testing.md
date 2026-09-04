@@ -32,10 +32,182 @@ them out of the stages it checks. They are not unchecked, though: they have a pr
 [`tests/tsconfig.json`](../../tests/tsconfig.json), because vitest strips their types without
 looking at them — see [typechecking.md](typechecking.md).
 
+## Three lanes, and which one your test is in
+
+`npm test` runs **three disjoint vitest projects**. You do not choose; the lane is a property of the
+file, and it comes from `TEST_LANES` in
+[`tests/store-migration-registry.ts`](../../tests/store-migration-registry.ts) — one manifest,
+consumed by `vitest.config.ts` rather than copied into it.
+
+| lane | who is in it | where it runs |
+|---|---|---|
+| `private-postgres` | every test file that reaches a database or the Storage bucket, bar the four below — most of them by opening a Postgres connection of their own, a handful (`LANES_BEYOND_THE_SCAN`) through application code or over HTTP | a database minted for **this run alone**, migrated, seeded, and dropped at the end. The bucket is **not** minted — see below |
+| `shared-services` | four files bound to the stack's own `postgres`: GoTrue over HTTP for `auth-user-seeding`, `seed-admin-signin` and `admin-store`, and `db-test-create` by contract, since its job is to clone that database | the stack's own `postgres`, exactly as before |
+| `unit` | everything else | nowhere. `DATABASE_URL` **and** `SUPABASE_URL` are poisoned to refused ports, so neither Postgres nor Storage is reachable |
+
+```bash
+npm test                                             # all three
+npx vitest run --project private-postgres            # one lane
+npx vitest run --project unit tests/arc.test.ts      # one file, in its lane
+npx vitest run tests/store-comments.test.ts          # the lane is picked for you
+```
+
+**Why:** `claim` takes one global singleton row with `NOWAIT` and refuses the instant anybody else
+holds it, and on this box ten worktrees each run a dev server. Two runs of an unchanged tree failed
+6 and 31 files, in **disjoint** sets. The measurements, the root cause and the isolation boundary
+proved rather than argued are in
+[260903e](../plans/260903e-a-private-test-database-so-the-suite-stops-racing-dev-servers.md); the
+build is § T of
+[260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md).
+
+**Adding a test that touches Postgres** means adding it to `TEST_LANES` — the guard in
+`tests/store-migration-registry.test.ts` re-derives the universe by scanning every test file and goes
+red until you do. Nearly always `private-postgres`.
+
+That scan is **syntactic**: it looks for `pgReady(`, `new Pool(`/`new Client(` and the connecting
+helpers, so it cannot see a test that reaches a database through application code — an aliased
+constructor, a dynamic import, a transitive `getDb()` — and it does not look for Storage at all.
+Those turn up the other way round, and then get a lane plus a declared entry in
+`LANES_BEYOND_THE_SCAN` saying how each was found. There are six, all of them Storage: they talk to
+the bucket over HTTP and never touch Postgres, so no `DATABASE_URL` poison could have caught them.
+GPT Sol found four by reading the map against `src/store/blobs.ts`; poisoning `SUPABASE_URL` found
+the other two on its first full run — including one that names no store at all and reaches the
+bucket through the pipeline's own acquire step, which nothing but running it could have caught. Six
+is a working door; a page of them would mean the scan needs a better predicate.
+
+`tests/health.test.ts` was the fifth and is not one any more: it reached Postgres through the health
+handler's own `getDb()` until it was given a real `pgReady(` gate, which the scan sees — so the
+exemption went stale the moment the fix landed, and the guard said so before anybody had to.
+
+### A private database is not a bare clone
+
+It is a schema-only clone of `postgres` plus every migration, and then
+[`seed-local-accounts.ts`](../../tests/helpers/seed-local-accounts.ts) puts back the `auth.users`
+rows a local database is *expected* to have — the development owner, the eval owner, the local
+administrator, and whatever `SPIDERYARN_OWNER_ID` names. Without them, 47 of 54 failures measured on
+2026-09-03 were one foreign key: roughly fifty suites write rows owned by `currentOwnerId()` without
+ever naming it. It also fills in a placeholder Stripe price on each active billing tier, which
+`scripts/stripe-setup.ts` writes on a real database and a migration never can.
+
+The cost, stated rather than discovered: **no suite can use the private lane to prove "this works
+with no accounts at all"**. Nothing needs that today; something that does should mint its own
+database with [`scripts/db-test-create.ts`](../../scripts/db-test-create.ts).
+
+**Residue within one run is not isolated either.** One database serves the whole invocation, so a row
+an earlier file leaves behind is visible to a later one. Per-run isolation removes dev servers, peers
+and the leavings of killed runs — not the run's own.
+
+### Storage is **not** isolated
+
+The private lane clones the SQL. **The bucket does not move, and this stage does not move it:**
+`blobStore` talks to the Storage service over HTTP and that service is bound to `postgres`, so two
+runs share one bucket and `storage.objects` in a clone is permanently empty. Say it plainly — the
+private lane gives you an isolated *database* and a *shared* bucket, and nothing here is per-run
+about the second half.
+
+Mostly acceptable, because every key this repo writes is content-addressed: two runs writing the
+same bytes write the same object. What is **not** safe is a test that asserts on what the bucket
+contains, on it being empty, or that removes and re-plants a key — and
+[`tests/raw-source-store.test.ts`](../../tests/raw-source-store.test.ts) does exactly the last of
+those, repeatedly, with deliberately corrupt bytes at one deterministic canonical name. Two
+concurrent runs of it can destroy each other's oracle.
+
+Six files reach Storage: `raw-source-store`, `upload-acquire`, `uploads-api`,
+`an-upload-is-queued-only-once-its-bytes-arrive`, `job-failure` and
+`acquire-extract-blocks-end-to-end`. They are all in `private-postgres` — the only lane that both
+leaves `SUPABASE_URL` alone and runs serially — so they cannot collide **inside one run**. Two
+separate `npm test` invocations still share the bucket. `LANES_BEYOND_THE_SCAN` in
+`tests/store-migration-registry.ts` carries the per-file reason.
+
+They were in the `unit` lane until 2026-09-04, reaching the real shared bucket while that lane's
+documentation said it had no database; the poison covered `DATABASE_URL` and Storage is chosen from
+`SUPABASE_URL` plus `SUPABASE_SERVICE_ROLE_KEY`. GPT Sol found four of them reviewing T-D and the
+new poison found two more the first time it ran, which is the argument for a semantic backstop in
+one sentence.
+
+### The lease, and the database left behind by a killed run
+
+The run holds one dedicated connection to its own database for the whole run — a lease — so
+"somebody is inside it" is continuously true rather than sampled, and another run's scavenger
+(plain `DROP DATABASE`, never `WITH (FORCE)`) is refused by Postgres itself. A run that is killed
+leaves its database behind; the next run's scavenger takes it once it is six hours old with nobody
+inside. To see what is lying around, or to clear one by hand:
+
+```bash
+npx tsx scripts/db-test-create.ts --scavenge --dry-run
+npx tsx scripts/db-test-create.ts --drop spideryarn_test_<stamp>_<uuid>
+```
+
+### The ordering trap, which is why each lane asserts where it landed
+
+`.env.local` beats the shell, so `DATABASE_URL=… npx vitest` **cannot** redirect a test run: the
+value is already in `process.env` when [`src/env.ts`](../../src/env.ts) takes its snapshot, so it
+reads as inherited and `.env.local` wins. The redirect has to happen after that module has loaded —
+which a plain `import` at the top of a setup file guarantees. Measured three ways on 2026-09-04;
+`tests/setup/unit-no-database.ts` has the table.
+
+Get it backwards and **nothing says so**: `src/env.ts`'s shadowing warning is suppressed when
+`NODE_ENV === "test"`, which vitest sets. So each lane's setup file asserts the outcome rather than
+trusting the assignment — `current_database()` over `process.env.DATABASE_URL` in
+[`private-db.ts`](../../tests/setup/private-db.ts), the same against `postgres` in
+[`shared-db.ts`](../../tests/setup/shared-db.ts), and a failed connection attempt in
+[`tests/unit-lane-has-no-database.test.ts`](../../tests/unit-lane-has-no-database.test.ts).
+
+**`postgres` is a name, not an identity**, so the shared lane checks a second thing: that
+`DATABASE_URL` and `SUPABASE_URL` name the same stack, through `projectMismatch`
+([`src/store/blobs.ts`](../../src/store/blobs.ts)), which locally comes down to the port. Every
+Supabase stack has a database called `postgres` and Greg runs two on this box, so without it
+`DATABASE_URL` could point at the *other* stack's `postgres` while `SUPABASE_URL` pointed at this
+one's GoTrue and the control would agree. Measured 2026-09-04: pointed at the other stack, the
+`current_database()` check reported `postgres` and was satisfied.
+
+**And an assignment does not cross `spawn`.** A child inherits the poisoned value before it loads
+`src/env.ts`, so the poison becomes part of the *child's* snapshot and `.env.local` puts the real URL
+back — silently, for the same `NODE_ENV=test` reason. Several unit tests spawn `tsx` children. The
+fix is a variable rather than an assignment: `SPIDERYARN_ENV_PINNED` (`PINNED` in
+[`src/env.ts`](../../src/env.ts)) is a comma-separated list of names `.env.local` may not write, and
+being in the environment it *is* inherited. The unit lane sets it to `DATABASE_URL,SUPABASE_URL`.
+Nothing outside the test lanes sets it, and in production there is no `.env.local` for it to
+restrain.
+
+It is also the only way to point a run at another database from the command line:
+`SPIDERYARN_ENV_PINNED=DATABASE_URL DATABASE_URL=… npx vitest …` works where `DATABASE_URL=… npx
+vitest` does not.
+
+### With Docker off, `npm test` is red — and was before the lanes existed
+
+Worth writing down because two documents claimed otherwise. Files that go through `pgReady` skip
+loudly; a dozen private-lane files do not, because their fixtures reach the database outside any
+gate. Measured 2026-09-04 with `DATABASE_URL` pointed at a dead port: **12 files failing** under the
+three-lane config, and **9 of the same 10 sampled** under the single-project config from before the
+lanes, for identical reasons. The lanes did not cause it. `tests/health.test.ts` was the one file
+the lanes could have been blamed for, and it now has a gate.
+
+Only "the stack is not running" turns into a skip, and it has to say so itself: the factory raises
+`StackUnreachable` from the three places that can mean nothing else, and
+[`private-db-global.ts`](../../tests/setup/private-db-global.ts) skips on that class alone. Until
+2026-09-04 it skipped on *any* error, so a failed dump, a failed restore, a cluster mismatch or a
+failed migration all printed "no private database" and skipped ninety suites.
+
+### `TEST DATABASE CONTENDED`
+
+If a job suite fails with that banner, the run is **not a product verdict**: something outside the
+suite held the queue singleton. It should be rare now — that is what the private lane is for — and it
+still fires for the four `shared-services` files and for anything running against `postgres` by hand.
+No retry, ever: a retried contended run is a green that conceals a real queue regression.
+[`tests/helpers/expect-claimed.ts`](../../tests/helpers/expect-claimed.ts) names the four reasons.
+
 ## What we test, and what we don't
 
-Everything here is **deterministic**: no network, no LLM calls, no clock, no unseeded randomness.
-`mintId` takes its random source as an argument precisely so a test can pin it.
+Everything here is **deterministic**: no LLM calls, no clock, no unseeded randomness. `mintId`
+takes its random source as an argument precisely so a test can pin it. A model call is refused
+outright — [`tests/setup/no-provider-calls.ts`](../../tests/setup/no-provider-calls.ts) wraps
+`fetch` and fails the request before it is sent.
+
+"No network" used to be part of that sentence and it was never true: the `shared-services` files
+talk to GoTrue over HTTP, the four Storage files talk to the bucket, and the whole
+`private-postgres` lane talks to Postgres. What is true is that nothing here reaches the public
+internet, and the `unit` lane reaches nothing at all.
 
 | File | What it pins |
 |---|---|
@@ -586,7 +758,10 @@ good reasons ([`src/env.ts`](../../src/env.ts) has them), so
 `DATABASE_URL=postgresql://…@127.0.0.1:1/postgres npm test` quietly runs against the live database
 and proves nothing — measured 2026-08-31, before it was believed. To exercise the unreachable branch
 you need either a machine where the database really is down, or a vitest `setupFiles` that sets the
-variable *after* `src/env.ts` has taken its snapshot of the environment.
+variable *after* `src/env.ts` has taken its snapshot of the environment. Three of those now exist —
+§ *The ordering trap*, above — and
+[`tests/setup/unit-no-database.ts`](../../tests/setup/unit-no-database.ts) is the shortest one to
+copy.
 
 ## One database, many suites: the three shared resources
 
@@ -594,6 +769,13 @@ Vitest runs test *files* concurrently in separate forks, and there is **one loca
 `npm test` beside yours is another claimant again. Three things in that database are shared, and a
 suite that ignores any of them fails in a way that looks like a product bug — which is the expensive
 part, because the failure lands in whichever file lost the race rather than in the one that caused it.
+
+**Much of what follows is now history rather than daily life**, and it is kept because the
+measurements are the evidence for the design. Since 2026-09-04 the Postgres suites run in a
+`private-postgres` lane — their own database, one run at a time (§ *Three lanes*) — so a peer's
+`npm test`, a dev server mid-ingest and the unscoped expiry sweep are all outside it. What that lane
+does **not** remove is the run's own residue, and the cooperation below is still what a new suite
+should copy: the private database is per *run*, not per file.
 
 | resource | what enforces it | how a suite cooperates |
 |---|---|---|

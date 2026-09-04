@@ -33,6 +33,8 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { pgReady } from "./helpers/pg-ready.js";
+
 /** What `listArticles` was asked, and how often. The whole point of the cache. */
 const listArticles = vi.fn(async () => [] as unknown[]);
 
@@ -142,6 +144,36 @@ beforeEach(() => {
   clock += 10 * 60_000;
   vi.useFakeTimers();
   vi.setSystemTime(clock);
+});
+
+/**
+ * **This file needs a database, and until 2026-09-04 nothing here said so.**
+ *
+ * It calls no `pgReady(`, builds no pool and imports no `pg`; it reaches
+ * Postgres through the health handler's own `getDb()`, reading the migration
+ * ledger. So the lane scan could not see it, and it spent its life quietly
+ * using whatever database the box happened to have — found by T-D's poisoned
+ * `DATABASE_URL`, four failures, *"the migration ledger could not be read"*.
+ *
+ * Giving it the private lane fixed *which* database it uses and not the case
+ * where there is none: with the stack off, `npm test` is supposed to skip the
+ * Postgres suites, and this file **failed** instead, four ways. GPT Sol found
+ * that reviewing T-D, and it was right — the stage promised not to change what
+ * Docker-off does.
+ *
+ * The gate is here rather than around the whole file because 24 of the 28 cases
+ * do not care: they assert that a *specific* warning is present, and an extra
+ * one about the ledger does not disturb them. The four below assert the warning
+ * list is **empty**, which is a claim about the machine as much as about the
+ * environment under test, and it is false on a laptop with no Postgres.
+ *
+ * The table named is the one the handler actually reads. `pgReady` is also what
+ * makes `REQUIRE_POSTGRES=1` turn this skip into a failure, so `npm run check`
+ * still cannot go green having not run these.
+ */
+const { reachable: ledgerReadable } = await pgReady({
+  suite: "the health endpoint's four 'nothing left to warn about' cases",
+  tables: ["spideryarn_migrations.__drizzle_migrations"],
 });
 
 describe("what an anonymous caller can make the server do", () => {
@@ -440,7 +472,7 @@ describe("the environment a deployment needs", () => {
 
   /* The other half. A warning list that fires on things nobody has to set is
      a list that gets ignored, and then the real one is skimmed past too. */
-  it("stays quiet about one that is merely nice to have", async () => {
+  it.skipIf(!ledgerReadable)("stays quiet about one that is merely nice to have", async () => {
     completeEnv();
     vi.stubEnv("LOG_LEVEL", "");
 
@@ -460,7 +492,7 @@ describe("the environment a deployment needs", () => {
      demanded `SUPABASE_ANON_KEY` by name, which would have 503'd a deployment
      whose sign-in works — src/auth.ts takes the publishable key first and only
      falls back to the anon key. A required *need* is not a required *name*. */
-  it("takes either key sign-in accepts, rather than one by name", async () => {
+  it.skipIf(!ledgerReadable)("takes either key sign-in accepts, rather than one by name", async () => {
     completeEnv();
     vi.stubEnv("SUPABASE_ANON_KEY", "");
     vi.stubEnv("SUPABASE_PUBLISHABLE_KEY", "publishable-test");
@@ -507,7 +539,7 @@ describe("the environment a deployment needs", () => {
     expect(said).toMatch(/bodies/i);
   });
 
-  it("says nothing about a platform flag on a machine that is not the platform", async () => {
+  it.skipIf(!ledgerReadable)("says nothing about a platform flag on a machine that is not the platform", async () => {
     completeEnv();
     vi.stubEnv("VERCEL", "");
     vi.stubEnv("NODEJS_HELPERS", "");
@@ -541,7 +573,7 @@ describe("the environment a deployment needs", () => {
    * `valid` does the work, which is why `checkEnv` checks `valid` even when
    * there is no `breaks`.
    */
-  it("stays quiet about a deployment that simply has no payments", async () => {
+  it.skipIf(!ledgerReadable)("stays quiet about a deployment that simply has no payments", async () => {
     completeEnv();
     vi.stubEnv("STRIPE_SECRET_KEY", "");
 

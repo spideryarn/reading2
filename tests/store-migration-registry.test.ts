@@ -51,7 +51,12 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { OWNER_AUDIT, STORE_MIGRATION, TEST_LANES } from "./store-migration-registry.js";
+import {
+  LANES_BEYOND_THE_SCAN,
+  OWNER_AUDIT,
+  STORE_MIGRATION,
+  TEST_LANES,
+} from "./store-migration-registry.js";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -525,12 +530,13 @@ describe("the test-lane map", () => {
        an `include` glob matching nothing. */
     const scanned = new Set(postgres);
     const stale = Object.keys(TEST_LANES)
-      .filter((f) => !scanned.has(f))
+      .filter((f) => !scanned.has(f) && !(f in LANES_BEYOND_THE_SCAN))
       .sort();
     expect(
       stale,
       "TEST_LANES entries the scan does not find — the file was renamed, deleted, or no longer " +
-        "opens a database connection",
+        "opens a database connection. If it really does reach Postgres in a way the scan cannot " +
+        "see, declare it in LANES_BEYOND_THE_SCAN with the evidence",
     ).toEqual([]);
 
     /* **A file cannot be in two lanes, and no assertion here could check it.**
@@ -540,6 +546,39 @@ describe("the test-lane map", () => {
        that somebody looking for the "or in two" half finds out where it went
        instead of concluding it was forgotten. */
     expect(Object.keys(TEST_LANES).length).toBe(new Set(Object.keys(TEST_LANES)).size);
+  });
+
+  it("keeps the exemptions to the scan honest, since they are the one hole in it", () => {
+    /* `LANES_BEYOND_THE_SCAN` is the door in the completeness argument above, so
+       it needs its own four checks — the shape of exemption that goes wrong is
+       one nobody revisits, and every one of these is a way it stops being true
+       without anybody editing it.
+
+       No floor on the size, deliberately: **empty is the good state here**, and
+       a control that demanded entries would be arguing for the hole. What the
+       cases below cannot go vacuous on is each individual entry. */
+    const { postgres } = laneScan();
+    const seen = new Set(postgres);
+
+    for (const [file, why] of Object.entries(LANES_BEYOND_THE_SCAN)) {
+      expect(existsSync(path.join(REPO, file)), `${file} is exempted and does not exist`).toBe(
+        true,
+      );
+      expect(
+        TEST_LANES[file],
+        `${file} is exempted from the scan and has no lane — the exemption is only meaningful ` +
+          "beside the verdict it excuses",
+      ).toBeDefined();
+      expect(
+        seen.has(file),
+        `${file} is declared beyond the scan, and the scan now finds it — delete the exemption, ` +
+          "the ordinary completeness check covers it",
+      ).toBe(false);
+      /* `.trim()`, because `why.length` alone accepts forty-one spaces — a
+         reason-shaped string that says nothing, which is exactly the way a
+         "must carry a reason" control goes vacuous. GPT Sol, 2026-09-04. */
+      expect(why.trim().length, `the reason recorded for ${file}`).toBeGreaterThan(40);
+    }
   });
 
   it("keeps at least one suite in each lane, so neither project is a no-op", () => {
