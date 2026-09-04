@@ -17,7 +17,7 @@ step along. This plan is about the step it moved to.
 
 **Done enough to stop here.** The thing this plan exists for is achieved: Kuhn's paper uploads and
 becomes a readable article, unattended, in 19 min 41 s — watched end to end at
-[§ It worked](#it-worked--2026-09-04-16192-1639-utc). Everything below is on `dev` and none of it is
+[§ It worked](#it-worked-2026-09-04-16191639-utc). Everything below is on `dev` and none of it is
 on production.
 
 | stage | state |
@@ -962,6 +962,164 @@ each wave's ranges *before* the next call, and tells its caller to hand the fina
 report because "there is nothing left for it to mend". The snap is now something left to mend.
 Nothing wires that module into the pipeline or the evals today, so it is a note for whoever does.
 
+### Stage 9 — a hundred chunks at once, and a gate that takes it back ⟨2026-09-04⟩
+
+Greg's ask, after reading the debrief: *"I would love to increase the max PDF transcription
+parallelism to 100, say, (with a bit of jitter), and add some kind of robustness to automatically
+throttle back and retry if things fail because of 429s etc? Try running a spike and proceed based on
+the results."*
+
+The spike came first, and it moved the design twice.
+
+**What the spike measured.** Four probes under `scripts/spike-pdf-*.ts`, all against `PDF_READER_MODEL` on the live
+wire with `allow_fallbacks: false`, all on 2026-09-04:
+
+| probe | what | result |
+|---|---|---|
+| `spike-pdf-quota.ts` | the account's own limits | `rate_limit.requests: -1` (deprecated, no cap); `limit_remaining` $48.68 |
+| `spike-pdf-width.ts 100` | 100 single pages at once | **100/100 answered**, dispatched inside 304 ms, $0.35 |
+| `spike-pdf-chunks.ts 100` | all 69 real chunks at once, twice | **69.7 s and 68.7 s**, 69/69, nothing refused, peak RSS 608/632 MB |
+| `spike-pdf-overload.ts 150 250 400` | how far it goes before pushback | **150, 250 and 400 all answered 200. No 429 at any width.** |
+
+The chunk probe had a bug worth recording, found only when the scripts moved out of a scratch folder
+into `scripts/` and `npm run typecheck` finally saw them: it passed `{ sizes }` where `planChunks`
+takes `pageBytes`, so `MAX_CHUNK_BYTES` never applied and it planned a 6.05 MB chunk that production
+would have split. `tsx` does not typecheck, so it ran perfectly and reported a plausible number. The
+chunk count is the same either way and the end-to-end run below is the authoritative measurement, so
+nothing above moves — but *"the probe ran, therefore the probe was right"* is exactly the shape
+[silent-success.md](../reusable/silent-success.md) is about, and it nearly reached a table in a plan.
+
+Two findings, and the second is the one that shaped the code.
+
+- **Width 100 is not near anything.** 400 concurrent requests came back clean, so 100 has four times
+  the demonstrated headroom.
+- **The reason is configuration, not capability.** The width-100 probe moved `byok_usage_daily` by
+  $0.35 and left `limit_remaining` untouched: this model is served **BYOK**, so the ceiling is Greg's
+  own tier at the provider rather than a pool shared with every OpenRouter customer. That can change
+  without telling us, and it says nothing about two readers uploading long papers at once. **So the
+  width is governed rather than merely raised** — which is exactly what Greg asked for, and the spike
+  turned it from belt-and-braces into the load-bearing half.
+
+**What was built.** `WidthGate` in [`src/concurrency.ts`](../../src/concurrency.ts) — additive
+increase, multiplicative decrease over requests in flight to one upstream, threaded into
+`withTransportRetries` so it wraps each **attempt** rather than each chunk. A refused chunk therefore
+waits out its backoff with its slot given back, and the gate sees every 429 rather than only the
+verdict after the retries have run.
+
+Three design points, each with a test:
+
+- **One halving per epoch.** A hundred chunks meeting one overload report a hundred 429s; halving per
+  refusal takes the width 100 → 4 on a single piece of news. A ticket carries the epoch it was
+  admitted under and a superseded refusal is counted but ignored.
+- **The pause is global, the backoff per-request.** Shrinking the width does nothing for requests
+  already admitted, so a refusal also parks new admissions for up to 10 s.
+- **Growth is paid for.** One slot per `width` successes.
+
+**Three things the tests and the review caught, all mine, all real:**
+
+1. **The jitter was flat and hit a two-chunk PDF as hard as a hundred-chunk one.**
+   `tests/a-429-is-asked-again.test.ts` went red on three cases at once. The draw is now scaled by
+   `inFlight / max`, so the first request of a wave waits nothing and a lone chunk never waits.
+2. **The global cool-off re-synchronised the herd it existed to prevent.** Everybody held at the
+   pause was released on one instant — undoing `RATE_LIMIT_SPREAD_MS`. Caught by the one test that
+   asserts on the *spread* rather than on any delay. The wait out of the pause is now jittered too.
+3. **An aborted waiter could deadlock the gate.** The first draft left dead wakers in the queue,
+   reasoning that waking a settled promise is a no-op. With one slot, one task in flight and a dead
+   waiter at the head, that task's `leave` spends the only wake-up there will ever be on nobody.
+   Fixed by marking waiters dead and skipping them; `tests/width-gate.test.ts` §
+   *"gives a freed slot to a waiter that is still waiting"* was **checked red against the old code**
+   before the fix went in.
+
+**And the headline number was wrong in the first draft of the comment.** The wire does 69 chunks in
+69 s, so "394 s → 69 s, 5.7x" was the tempting sentence. The real step, measured end to end with
+`npm run pdf` on the same document:
+
+| width | fan-out | calls | asked twice | spend | quality notes |
+|---|---|---|---|---|---|
+| 16 | 394 s | 83 | 21 | $0.6324 | 12 |
+| 100 | **248 s** | 79 | 10 | $0.4899 | 9 |
+
+**Roughly 2x, not 5.7x** — and the gap is the finding. At 16 the step was *wave*-bound and width was
+the lever. At 100 it is **tail-bound**: one chunk asked twice, serially, while ninety-eight slots sit
+empty. `pass0`, the page measure and the cutting are another ~20 s that no width touches. So this
+lever is now spent, and the next one is the check-failure rate — which is the transcription-gaps item
+below, arriving from a second direction.
+
+**A second run after the rework, and it corrects the row above.** 142 s, $0.6212 over 83 calls, 14
+chunks asked twice, **17** quality notes, mean recall 0.964 — against the first run's 248 s, $0.4899,
+9 notes, 0.980. On one sample width 100 looked cheaper *and* cleaner and it was tempting to write
+that down; the repeat came back at width 16's price with twice the notes. **Spend and transcription
+quality are dominated by how many chunks happen to fail their check, which is model variance and has
+nothing to do with the width.** Width buys latency and only latency. Both runs logged
+`gateRefusals: 0, gateNarrowed: false`.
+
+**It still hands back before `hierarchy`**, and always will: 248 s leaves ~450 s against a 700 s
+budget, and `hierarchy` measured 658–778 s. What this buys is the first window ending sooner, not one
+window instead of two.
+
+**The gate has never fired, and that is recorded rather than assumed.** The end-to-end run logged
+`gateWidth: 100, gateNarrowest: 100, gateRefusals: 0`. Since no probe could provoke a 429 at any
+width, every refusal in the tests is injected, and the log line exists so that the day the number
+changes is a number rather than a failed ingest — 260904c's *instrument the quantity, not the
+failure*, applied to the thing it warns about.
+
+### The review that said no, and was right ⟨GPT Sol, 2026-09-04⟩
+
+*"I would not merge this as the safety belt for width 100 yet. Two high-severity paths bypass or
+defeat the intended control."* It found three highs, reproduced two of them, and **every finding
+stood up when checked**. Recorded at length because two of them were invisible to tests I had written
+specifically to cover that behaviour.
+
+1. **A 429 arriving inside an HTTP 200 defeated both safety nets.** OpenRouter documents that a
+   non-streaming generation failure can keep the 200 and put the provider's error in the body,
+   `code: 429` and all. `openRouterReader` checked `json.error` *after* `pdfCall` returned — so the
+   refusal never reached `withTransportRetries` (never retried) and never reached the gate, which
+   scored the call a success and **awarded a growth credit for a call that failed**. One of these
+   cancels the whole document, because `allOrStop` drops every sibling on the first rejection. At
+   width 100 into one upstream that is the single likeliest failure there is. Now raised as a
+   `ProviderRefused` inside the gated call, so every rule already written for an HTTP 429 applies.
+2. **The epoch was stamped after the dispatch jitter instead of at admission**, which quietly
+   destroyed the one property the class exists for. A call admitted under epoch 0 and still sleeping
+   when the first refusal landed woke stamped epoch 1, so its refusal halved the *new* width too: one
+   burst of 64 walked 64 → 32 → 16 → 8 → 4 instead of halving once. **My own epoch test could not
+   have caught this, because it pinned `Math.random` to zero** — no jitter, nothing to be stamped
+   after. A test that agreed with the code by construction, which is
+   [silent-success.md](../reusable/silent-success.md) exactly. Reproduced before fixing.
+3. **The floor of 4 could make a recoverable overload permanently fatal.** Sol's case: a provider
+   that accepts two concurrent calls and refuses the rest. Floored at four, the gate keeps two
+   refused requests in permanent circulation; they burn `TRANSPORT_ATTEMPTS` in ~6 s, well before
+   either accepted call returns, and cancel the document — where width two would simply finish. A
+   floor does not make a deadline reachable, it only guarantees sending above what the provider
+   takes. Now 1, and clamped to `max`, because `new WidthGate(1)` refused once became width **4**.
+4. **The 10 s cool-off reopened the gate inside a window the provider had declared closed.** A
+   `Retry-After: 60` was honoured in full by the chunk that got it and truncated to a sixth for
+   everyone else, so fresh chunks walked into the same closed window, were refused, and — being new
+   epochs — halved again. The gate walked to the floor on repeated observations of one fact. The cap
+   is now 60 s, matching `MAX_RETRY_AFTER_MS`, so a new epoch is a genuine probe *after* the window.
+5. **The freed gate slot reached nobody**, because a chunk waiting out its backoff still held its
+   **p-queue** slot. With 150 chunks and 100 refused, the gate sat at zero in flight while chunks
+   101–150 could not start for a minute. `runPdfExtract`'s queue is now as wide as the chunk list;
+   the gate is the only limiter and p-queue is kept for its settle-on-abort contract.
+6. **The instrumentation vanished on the one failure it existed to explain.** The log sat after the
+   fan-out, so a run that died of exhausted 429 retries never printed its `gateRefusals`. It is in a
+   `finally` now — and reports *this run's* refusals, since the singleton's counters accumulate and
+   were otherwise replaying an earlier job's pushback as though it were this one's.
+7. **The `Math.random` spy was never restored between tests**, so the case documenting *"jitter is
+   left on here"* ran with no jitter at all. `afterEach(vi.restoreAllMocks())`, and the two cases that
+   need a positive draw now force one.
+
+Sol's verdict on the number itself: *"Width 100 is defensible as the ceiling after the high-severity
+fixes… BYOK does not argue for a lower number; it argues that the measurement is
+configuration-specific and that the fallback must actually work."* That is the whole case for this
+stage in one sentence.
+
+**Done when:** `CHUNK_CONCURRENCY` is 100 with the measurements above; `WidthGate` shipped with tests
+covering the epoch rule at positive jitter, the floor and its clamp, the growth rate, the non-429
+case, the cool-off, the waiter deadlock and the mid-dispatch slot leak; body-level 429s routed
+through the retry and the gate; the stale width-16 reasoning corrected in `src/pdf-read.ts`,
+`src/jobs.ts` and `content-extraction.md`; every Sol finding fixed or argued against in writing;
+`npm test` and `npm run typecheck` green. ✅
+
 ## It worked — 2026-09-04, 16:19–16:39 UTC
 
 A real upload of the real document, through the real picker, on the merged code, watched end to end.
@@ -1008,9 +1166,11 @@ the transcription at about $0.66.
   render at its zoom level and it can only ship `provisional` — a publication seam that is not built.
 - **Splitting `extract` into several steps.** `StepName` is a closed union with a `never`
   exhaustiveness check and `Record<StepName, …>` tables closing over it.
-- **Raising `CHUNK_CONCURRENCY` now.** Extract fits its window. Width is the last lever, and it raises
-  the one failure the pause does not cover — a rate limit into a single upstream routed
-  `allow_fallbacks: false`.
+- ~~**Raising `CHUNK_CONCURRENCY` now.** Extract fits its window. Width is the last lever, and it
+  raises the one failure the pause does not cover — a rate limit into a single upstream routed
+  `allow_fallbacks: false`.~~ **Reversed the same day, at Greg's ask** — and the reasoning above was
+  half wrong. "Extract fits its window" was true and irrelevant: extract was still a third of the
+  wall clock, and it was what forced the hand-back before `hierarchy`. See stage 9.
 - **Chasing the genuine transcription gaps.** Fifteen chunks failed their final attempt and three
   verified missing runs are real dropped prose. That is a quality problem in its own right, it
   predates this document, and folding it in here would swallow the plan.

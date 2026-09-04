@@ -78,14 +78,24 @@ The differences that matter to a reader:
   generic retryable one, which is a button that could never work
   ([copy.md](copy.md#the-four-rules), rule 2). Stage 1's page counter deliberately lets such a file
   through — a cost gate is not a validity gate — so this is where it lands.
-- **Sixteen chunks at a time, and the width buys latency rather than money.** `CHUNK_CONCURRENCY`
-  went 8 → 16 on 2026-09-04, measured against the step's 740-second deadline
-  ([`src/pdf-read.ts`](../../src/pdf-read.ts) has the table and the binding constraint). Cost is
-  unchanged by width — the system prompt is sent per chunk and nothing on this path is cached — so
-  what widening changes is memory and the request rate into one upstream. Both of those made the
-  429 the thing to fix: it used to be fatal at the first one, and now the chunk waits and asks
-  again, honouring the provider's own `Retry-After` in full up to `MAX_RETRY_AFTER_MS` (60 s) and
-  failing this attempt rather than truncating a wait the provider actually asked for.
+- **A hundred chunks at a time, and the width buys latency rather than money.** `CHUNK_CONCURRENCY`
+  went 8 → 16 → 100 on 2026-09-04, the last step measured on the live wire rather than argued from
+  the 740-second deadline: all 69 chunks of a 142-page paper fired at once came back in **69 s**,
+  twice, with nothing refused. End to end the step went **394 s → 248 s and 142 s** over two runs,
+  not 394 → 69, because it is now bounded by its slowest chunk asked twice rather than by how many
+  waves it needs — so further width buys nothing ([`src/pdf-read.ts`](../../src/pdf-read.ts) has the
+  table). **Cost and transcription quality are unchanged by width**, and the two runs prove it in
+  opposite directions: $0.49/9 notes and $0.62/17 notes against $0.63/12 at width 16. What varies is
+  how many chunks fail their check, which is model variance. Width buys latency and nothing else.
+- **The width is governed, not just raised.** A probe could not provoke a rate limit at 150, 250 or
+  even 400 concurrent requests, which says the ceiling is this account's own tier at the provider
+  rather than a shared pool — a fact about configuration that can change without telling us. So
+  `WidthGate` ([`src/concurrency.ts`](../../src/concurrency.ts)) halves the width on the first 429 of
+  an epoch, holds new requests briefly while that takes effect, and earns the width back one slot per
+  successful call. A hundred chunks meeting one overload therefore halve it once rather than a
+  hundred times. Underneath it the per-chunk retry is unchanged: the chunk waits and asks again,
+  honouring the provider's own `Retry-After` in full up to `MAX_RETRY_AFTER_MS` (60 s) and failing
+  this attempt rather than truncating a wait the provider actually asked for.
 - **A long PDF is expected to need two lease windows, and that is what the checkpoints are for.**
   Measured in a browser on 2026-09-04: a 144-page paper spent nearly all of the first window in
   `extract`, and `hierarchy` was cut off. The second window is a press of Retry rather than an
