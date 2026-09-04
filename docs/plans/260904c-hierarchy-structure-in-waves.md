@@ -1,6 +1,23 @@
 # The hierarchy structure pass, in waves
 
-**Status: planning, reviewed, not yet built.** Started 2026-09-04. Worktree `hierarchy-waves`.
+**Status: paused after stage 1b, with the prerequisites landed and the ceiling still there.**
+Started 2026-09-04. The `hierarchy-waves` worktree was removed on 2026-09-04; everything below is on
+`dev`, and a successor needs a fresh one.
+
+**Landed:** stages 0, 0b, 0c (three production fixes on the incumbent path, each independently
+worth having) and 1a, 1b (the eval's wall-clock measurement, and the cascade's deterministic core in
+`src/hierarchy-cascade.ts` — pure, 38 tests, reviewed twice, and **called by nothing**).
+
+**Not built:** the rest of stage 1 (the shared request seam and the paid experiment), stage 2 (the
+production cascade core) and stage 3 (integration). **So the headline problem is untouched**: an
+article past 1,976 blocks still throws `TooLongForOnePass`, the wait is still 163–320s, and the tree
+is still exactly three internal levels. What did change is that three articles that used to lose
+their hierarchy outright now build one, and stage 4 got 17–45% cheaper and ~25% faster.
+
+**Fixtures.** `2701-h` (2,569 blocks) and `1228-h` (1,326) are stage 3's acceptance test. Their
+`blocks.json` was not kept — it is deterministic and free to rebuild — but the extracted HTML is, at
+`output/2701-h.html` and `output/1228-h.html` in the primary checkout. Both are gitignored, so that
+is the only copy; the rebuild commands are in [the fixture section](#the-fixture-that-proves-the-ceiling-built-before-the-fix).
 
 Stage 4's structure call is one whole-document model call. It is **163–320 seconds and about 88% of
 the ingest wait**, it **refuses any article past 1,976 blocks** outright, and it pins **exactly three
