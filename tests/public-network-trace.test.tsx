@@ -2121,8 +2121,15 @@ describe("when the reader's own session cannot be confirmed", () => {
     /* **Not `View only`**, which is the `ViewOnlyChip` in the *reading view's*
        controls bar and is drawn on none of these three (PublicChrome.tsx). What
        carries the same fact here is `SharedNotice`'s first sentence, so that is
-       what is asserted. */
-    expect(host.textContent).toContain("shared this article with you");
+       what is asserted.
+
+       **The wording changed on 2026-09-04**: it was *"Somebody shared this
+       article with you"*, which stopped being true the day a public article
+       could be found through the public listing rather than through a link
+       somebody sent. What is asserted now is the clause that survives either
+       way — the article is public — rather than a phrase about how the reader
+       got here. src/messages.ts § SHARED_WITH_YOU. */
+    expect(host.textContent).toContain("This article was shared publicly");
     /* The two halves of C3: the fact, and the one action that gets the reader
        off this footing. Neither may depend on which view they wandered to. */
     expect(host.textContent).toContain("couldn't confirm that you're signed in");
