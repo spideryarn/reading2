@@ -529,13 +529,62 @@ the design already written for the day something changes. What would change it i
 work; it is chat, which is much the largest of the three and is deferred for an unrelated reason.
 Whoever builds chat re-runs this measurement first.
 
+### GPT Sol's review of the built code, and what it found
+
+Run after the commit rather than before it, which is the wrong way round and is recorded as such.
+Three findings, all verified against the source before acting.
+
+**Two were mine and are fixed:**
+
+- **The stale copy named a button a visitor does not have.** The row's tooltip and `StaleNote` both
+  ended *"↺ puts the question back in the box so you can ask it again"*. The empty state got this
+  treatment and these two did not — the same shape, missed twice in one file. Fixed, and there is
+  now a case with a stale run on a visitor's screen; the fixture's run is fresh, which is why the
+  review found this by reading and the suite could not have.
+- **And it asserted a cause nobody knows.** `isStale` answers `true` in two states — the hashes
+  differ, and *we cannot tell* (a run imported before fingerprints, or an article whose blocks could
+  not be read). The copy said *"The text was re-fetched or re-extracted afterwards"*, which in the
+  second state is an assertion about something we have no information about. It says *"may have
+  been"* now, which is true in both and loses nothing in the common one. **This was already wrong
+  for owners**; publishing saved searches is what made it worth fixing rather than noting.
+
+**The third is not mine, is pre-existing, and is written down rather than fixed** —
+`src/store/pg-searches.ts` carries the same note at the line it is about:
+
+> `begin()` takes the article lock, fingerprints the current revision and commits. `search` in
+> `src/routes.ts` then calls `loadArticle(slug)` **after** that transaction. A re-extraction landing
+> in the gap gives the model R2's blocks and leaves the row holding R1's hash, so the run is
+> reported **stale when it is exactly current**.
+
+The comment beside the lock used to imply it closed that window; it never did, and it says so now.
+The failure is the harmless direction — a false *older version* on a fresh answer, self-correcting
+on the next run — and the fix is to fingerprint the blocks the model was actually shown, in
+`finishRun` rather than in `begin`. That is a change to the search store's **write** path, which is
+not this stage, so it goes to whoever owns searches.
+
+**One blind spot Sol named is closed:** every search case opened the mode and read the page, so a
+write attached to the tick, the row, select-all or the sort control would have escaped all of them.
+There is now a case that presses every control a visitor is given and re-asserts zero writes and
+zero requests outside `/api/public/`.
+
+**And what it cleared**, which is worth recording as much as the findings: the public SQL selects
+only its six columns and trusts no earlier article id; the public fingerprint matches `sourceHashFor`
+exactly for a fixed revision — same rows, same order, same four fields, same null handling; no public
+write or spend path; every DTO key named and `opt()` used where the field is genuinely optional;
+`status = 'done'` sufficient for every state the store produces, since finishing clears both attempt
+fields atomically and leases apply only to `pending`. And `SHARED_NOTE` is true of the code, and
+different in kind from the note it replaced: *"a permanent behavioural invariant, supported jointly
+by the closed server import graph and client trace — not a hand-maintained list of contents."*
+
 ### Still open
 
 - ~~**The payload measurement**~~ — **done, 2026-09-04, and it does not overturn the design.** See
   below.
-- **`SHARED_WITH_YOU`** says *"Somebody shared this article with you"* on every public article,
-  which the peer session's public listing makes false for anybody arriving through the listing
-  rather than through a link. It is their consequence and they offered to take it; left to them.
+- ~~**`SHARED_WITH_YOU`**~~ — taken by the listing session and landed: *"This article was shared
+  publicly."* Three assertions in `tests/public-network-trace.test.tsx` followed it.
+- **The stale fingerprint race** in `pg-searches.ts` § the lock, above. Not this stage's to fix.
+- **`security-map.md` is still wrong about diagram**, and now needs a line about search too. Both
+  are entry-point edits and go to Greg as one approved set.
 - **`security-map.md` is wrong about diagram**, which says the mode is owners-only "unconditionally".
   It is an entry-point doc, so the correction goes to Greg as its own approved edit rather than
   riding along here.

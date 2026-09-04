@@ -1540,6 +1540,84 @@ describe("a signed-out browser on a shared document", () => {
   });
 
   /**
+   * **The stale warning, without the button it used to name.**
+   *
+   * The fixture's run is fresh, so nothing in the case above reaches this copy
+   * at all — which is exactly why GPT Sol found it by reading and not by
+   * running: the row's tooltip and the banner both ended *"↺ puts the question
+   * back in the box so you can ask it again"*, naming a control a visitor does
+   * not have and a box that is not on the screen.
+   *
+   * The warning itself stays, because it is just as true for them: the marks in
+   * their prose may be sitting on words that have moved. What goes is the
+   * instruction. Same shape as the empty state — docs/project/copy.md.
+   */
+  it("warns a visitor a search is out of date, and does not tell them to redo it", async () => {
+    served = {
+      ...ARTICLE,
+      searches: (ARTICLE.searches ?? []).map((run) => ({ ...run, stale: true })),
+    };
+    await open("?mode=search");
+
+    /* Tick it on, or the banner is about nothing on screen. */
+    const box = host.querySelector<HTMLInputElement>('.srch-saved-tick input[type="checkbox"]');
+    expect(box, "the tick").not.toBeNull();
+    await act(async () => box?.click());
+
+    expect(host.textContent, "the warning").toContain("older version of the article");
+    expect(host.textContent, "the instruction").not.toContain("puts its question back in the box");
+    const titles = [...host.querySelectorAll("span, button")].map(
+      (e) => e.getAttribute("title") ?? "",
+    );
+    expect(titles.join(" | "), "the row's tooltip").not.toContain("so you can ask it again");
+    /* And it does not assert a cause nobody knows: `stale` is also true when a
+       run never recorded what it was answered against. */
+    expect(host.textContent, "an unsupported claim").not.toContain("The text was re-fetched");
+
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+    expect(outsidePublic()).toEqual([]);
+  });
+
+  /**
+   * **And the controls a visitor *does* get are pressed**, which the case above
+   * and its neighbours do not do.
+   *
+   * GPT Sol named this as the remaining blind spot in the trace, 2026-09-04:
+   * every search case opens the mode and reads the page, so a write attached to
+   * the tick, the row, select-all or the sort control would escape all of them.
+   * The whole point of leaving those controls on a visitor's screen is that they
+   * are free — this is what says so.
+   */
+  it("lets a visitor press everything they are given, and still buys nothing", async () => {
+    await open("?mode=search");
+
+    /* Tick it on first, and check the marks land — otherwise everything below
+       is clicking around a page with nothing on it, which is the shape of a
+       pass that means nothing. */
+    const box = host.querySelector<HTMLInputElement>('.srch-saved-tick input[type="checkbox"]');
+    expect(box, "the tick").not.toBeNull();
+    await act(async () => box?.click());
+    expect(host.querySelectorAll("mark.hit").length, "marks in the prose").toBeGreaterThan(0);
+
+    /* Then the row itself (which solos it), then every remaining button and
+       every remaining input the band renders — select-all, the two sort
+       buttons, the threshold slider. Some of these turn the marks back off,
+       which is fine: what is being asserted is that none of them writes. */
+    const row = host.querySelector<HTMLButtonElement>(".srch-saved-body");
+    expect(row, "the row").not.toBeNull();
+    await act(async () => row?.click());
+    for (const b of [...host.querySelectorAll("button")]) {
+      await act(async () => b.click());
+    }
+    for (const input of [...host.querySelectorAll<HTMLInputElement>("input")]) {
+      await act(async () => input.click());
+    }
+
+    expect(trace.filter((r) => r.method !== "GET"), "a write").toEqual([]);
+    expect(outsidePublic(), "a request outside the closed room").toEqual([]);
+  });
+
+  /**
    * **A pasted `?match=words` does not put a visitor in front of a box that is
    * not there.**
    *
@@ -1574,6 +1652,13 @@ describe("a signed-out browser on a shared document", () => {
     expect(host.textContent).toContain("hasn't searched it");
     expect(host.textContent, "the owner's instruction").not.toContain("Describe what you are after");
     expect(host.querySelector(".srch-box"), "the composer").toBeNull();
+    /* **And it says it once.** Found in the browser pass, 2026-09-04: the
+       sentence above was followed by "Nothing matched. The model found nothing
+       in this article that matches" — two empty states stacked, saying
+       different things about the same article, the second of them a claim about
+       a search nobody ran. Pre-existing for owners too; the visitor's screen is
+       where it was seen. */
+    expect(host.textContent, "a second empty state").not.toContain("Nothing matched");
     expect(outsidePublic()).toEqual([]);
   });
 
