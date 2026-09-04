@@ -369,7 +369,20 @@ function PlansForAReader() {
         billing.error && (
           <p className="tw:mt-4 tw:m-0 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-highlight">
             <TriangleAlert size={12} /> Couldn't read your plan — {billing.error}{" "}
-            <button type="button" className="linky" onClick={billing.reload}>
+            {/* **Not `className="linky"`, which styles nothing here.** That class
+                is scoped in styles.css to `.controls`, `.cmt-dialog` and
+                `.chat-dialog` ancestors, and this page is in none of them, so the
+                button arrived as bare text with nothing to mark it pressable —
+                which is worse here than anywhere, because this sentence is the
+                only way back from a failed billing read. Copied from
+                `BillingSection.tsx`'s identical fix rather than re-derived; the
+                sentence is the same sentence and `tests/linky-is-scoped.test.ts`
+                is what caught this one, on the merge that brought that test in. */}
+            <button
+              type="button"
+              className="tw:p-0 tw:underline tw:underline-offset-2"
+              onClick={billing.reload}
+            >
               Try again
             </button>
           </p>
