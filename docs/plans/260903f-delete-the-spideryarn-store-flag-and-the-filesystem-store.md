@@ -13,7 +13,7 @@ three later stages consume it**:
 
 ```
 A (store inventory) ✅ → B0 ✅ (already done) → T-B (factory) ✅ → T-C (lanes) ✅
-  → T-D (activation) → T-E (pollution)
+  → T-D (activation) ✅ → T-E (pollution)
   → C → B → D → E → F (hinge) → G → H → I
 ```
 
@@ -25,10 +25,19 @@ A (store inventory) ✅ → B0 ✅ (already done) → T-B (factory) ✅ → T-C 
 | **B0** | **Nothing** — it had been done on 2026-09-01 and a stale docstring said otherwise. |
 | **T-B** | [`scripts/db-test-create.ts`](../../scripts/db-test-create.ts) — a private, migrated database per run, ~4.6s. Reviewed; three blocking findings folded in. |
 | **T-C** | `TEST_LANES`, `OWNER_AUDIT`, and `seedLocalAccounts`. Reviewed; the owner guard rebuilt per `(file, owner)` pair. |
+| **T-D** | **`npm test` is three projects now** — see below. The first stage of the six that is visible to anybody else. |
 | **D′1** | Landed earlier; since **extended by another worktree**, and its "unforgeable" claim is measured false — see D′1b. |
 
-**Nothing yet changes the default `npm test`.** That is deliberate and it is T-D's job. The factory
-and its integration tests are behind `SPIDERYARN_TEST_DB_FACTORY=1`.
+**This paragraph used to say "nothing yet changes the default `npm test`", and T-D is where that
+stopped being true** — left here as the marker rather than quietly overwritten, because a status
+block that survives the change it describes is the failure this plan keeps finding in other people's
+files. `npm test` now runs `unit`, `private-postgres` and `shared-services`, membership derived from
+`TEST_LANES` rather than written out a second time. **It costs 267s → 466s**, all of it the
+serialised private lane; a filtered run pays nothing and mints no database.
+
+**What that bought:** the same 626 files run, set-compared before and after with an empty difference
+both ways, against a baseline that was *nondeterministically* red — two runs of an unchanged tree
+failing 6 and 31 files, in disjoint sets.
 
 **The `pdf` spike is done** and moved stage E — see § `pdf`. **All of D′ is off the list: D′1 is
 landed, D′2 was scheduled twice, D′3 is cancelled.**
@@ -784,7 +793,7 @@ What landed:
   suite [`tests/seed-local-accounts.test.ts`](../../tests/seed-local-accounts.test.ts) — the one fix
   that removes 49 of the 54 reds, described below.
 - One test fixed: `tests/admin-feedback-store.test.ts`, for a reason worth reading.
-- The 260903e spike setup [`tests/setup/spike-db.ts`](../../tests/setup/spike-db.ts) gained a real
+- The 260903e spike setup `tests/setup/spike-db.ts` (deleted in T-D) gained a real
   positive control (`current_database()`, not the name in the URL it wrote) and calls the seeder.
   **T-D promotes both halves into the private lane's own setup.**
 
@@ -1159,6 +1168,273 @@ wrong answers, because the shape of the mistake is the useful part.
   earlier file leaves behind is visible to a later one. Per-run isolation removes dev servers,
   peers, and residue from killed runs — not the run's own. Nothing in the 93 currently depends on
   it, and 260903e's Stage G (per-worker) is where that changes if it starts to.
+
+#### T-D is built — three lanes, a lease and a poison, and `npm test` moved, 2026-09-04
+
+**This is the first stage anybody else can see.** Everything before it was opt-in; this one changes
+what `npm test` does in every worktree, so the numbers below are the deliverable rather than the
+decoration.
+
+What landed, in one change:
+
+- **[`vitest.config.ts`](../../vitest.config.ts)** — three disjoint projects, their file lists
+  **derived from `TEST_LANES`** rather than restated. `unit` includes everything and subtracts the
+  two database lanes; `private-postgres` and `shared-services` include exactly their keys. A floor
+  (`< 50` private, `< 3` shared) refuses to build a config out of an import that returned nothing.
+- **[`tests/setup/private-db-global.ts`](../../tests/setup/private-db-global.ts)** — one database
+  per run: scavenge, mint, **lease**, seed, `provide`; drop on teardown.
+- **[`tests/setup/private-db.ts`](../../tests/setup/private-db.ts)** — per file: redirect, then
+  assert `current_database()` **and** the lease.
+- **[`tests/setup/shared-db.ts`](../../tests/setup/shared-db.ts)** — per file: assert `postgres`.
+- **[`tests/setup/unit-no-database.ts`](../../tests/setup/unit-no-database.ts)** plus
+  [`tests/helpers/unit-lane-poison.ts`](../../tests/helpers/unit-lane-poison.ts) and
+  [`tests/unit-lane-has-no-database.test.ts`](../../tests/unit-lane-has-no-database.test.ts) — the
+  poison, its value, and the in-tree control that proves the poison is applied.
+- **[`tests/helpers/seed-private-billing-prices.ts`](../../tests/helpers/seed-private-billing-prices.ts)**
+  — the `billing_tiers.stripe_price_id` family T-C left, with Sol's fence: privateness is *proved*,
+  never inferred from nullness, and every active tier is filled rather than `reader`.
+- **`LANES_BEYOND_THE_SCAN`** in the registry, with four controls — see *health.test.ts* below.
+- `docs/project/testing.md` § *Three lanes, and which one your test is in*.
+
+##### The acceptance, both arms, one hold
+
+260903e § Stage D, re-run rather than inherited. `scripts/spike-hold-singleton.ts` held the
+**shared** database's `queue_state` singleton for 200s, and `tests/store-jobs-parity.test.ts` ran
+once against each database inside that window:
+
+| arm | database | result |
+| --- | --- | --- |
+| **A** | the run's private clone | **99 passed, 1 skipped, 0 failed** |
+| **B** | the shared `postgres` | **43 failed**, 56 passed, 1 skipped — **32 `TEST DATABASE CONTENDED` banners** |
+
+Same file, same minute, same contention; only the database differs. Arm B is also the positive
+control for arm A: had the redirect silently not happened, A would have looked like B.
+
+##### What it costs, measured, and it is not free
+
+All on the Hetzner box, same tree, load average 10–25 throughout (it is shared, and this is not a
+laboratory — if anything the baseline had the *busier* box):
+
+| | files | result | wall clock |
+| --- | --- | --- | --- |
+| before — one project, `git show HEAD:vitest.config.ts` | 626 | 5 failed / 620 passed / 1 skipped | **267s** |
+| after, run 1 — three lanes | 626 | 8 failed / 617 passed / 1 skipped | 436s |
+| after, run 2 — after the health lane and the billing backfill | 626 | 6 failed / 619 passed / 1 skipped | 465s |
+| after, run 3 — after `livemode`, and the two doc links the deletions broke | 626 | **4 failed** / 621 passed / 1 skipped | 471s |
+
+**`npm test` is roughly 170–200 seconds slower — call it 1.6–1.8×** — and the whole of it is the
+serialised private lane: the unit and shared lanes finish in ~130s, and the 90 private files then run
+one at a time for ~305–340s. Creating the database is 4.2–5.0s of that; the rest is 90 sequential
+forks, each paying its own import cost where sixteen workers used to share it. A *filtered* run pays
+nothing at all: `npx vitest run tests/arc.test.ts` is 1.2s and creates no database.
+
+The four still red in run 3 are the four that were already red before the stage — see below.
+
+**That is the price 260903e chose** — *"Serialise the private lane for v1. Slower is acceptable;
+reproducible is the point."* It is worth knowing that the cheaper setting is one line
+(`fileParallelism: false` → a small `maxWorkers`), and that a *parallel* private lane would still be
+strictly more isolated than what we had this morning, since the dev servers and the peers are
+outside it either way. Left serial, because that is the decision on the page and this is not the
+stage to revisit it. **Greg's call if five minutes turns out to be the wrong trade.**
+
+##### Every guard was watched failing, and one of them was wrong when it passed
+
+| guard | how it was broken | what it said |
+| --- | --- | --- |
+| the private lane's redirect | the assignment moved above `src/env.ts`'s module load (a dynamic `import()` underneath it) | `this setup wrote spideryarn_test_260904055918_… and the suite reached postgres` |
+| the lease | `await lease.end()` immediately before the `provide` | `no lease connection is inside spideryarn_test_…: nothing in pg_stat_activity is called spideryarn-test-lease-199448` |
+| the shared lane's identity | a temporary config gave `auth-user-seeding` the *private* setup as well | `this file is in the shared-services lane and must run against postgres, and it reached spideryarn_test_…` |
+| the unit lane's poison | the assignment moved above `src/env.ts`'s module load | `expected 'postgresql://postgres:…@127.0.0.1:54362/postgres' to be 'postgresql://unit-lane:none@127.0.0.1:1/…'` — **and the connection case then connected to the shared database**, which is the whole failure in one line |
+| … its self-exclusion from `TEST_LANES` | `SELF` pointed at a file that is in the map | `expected [ 'tests/admin-store.test.ts', …(93) ] to not include 'tests/store-comments.test.ts'` |
+| `LANES_BEYOND_THE_SCAN`, four ways | a missing file; an exempted file with no lane; an exemption the scan *does* find; a nine-character reason | each named itself; the third is the one that matters — `declared beyond the scan, and the scan now finds it — delete the exemption` |
+| the stale-entry direction, unchanged by the new clause | `tests/arc.test.ts` given a lane and no exemption | `TEST_LANES entries the scan does not find …: [ 'tests/arc.test.ts' ]` |
+| the private setup running with no `globalSetup` behind it | a config listing `private-db.ts` and no global setup | `the private lane's setup ran without its globalSetup — nothing provided privateDatabase` |
+
+**And the first version of the private lane's control could not have failed.** It opened its
+`Client` on `db.url` — the string the setup had just been handed — and asked *that* connection what
+its name was, which is a question with one possible answer. The redirect mutation above passed
+against it. It now connects on `process.env.DATABASE_URL`, the way the suite will.
+**`tests/setup/spike-db.ts` had the same shape**, so 260903e's *"positive control"* — the one its
+own § Stage B insisted on — could not in fact have caught the ordering trap it was written for.
+That is two files in one day where the control shared its input with the thing it was checking.
+
+##### The ordering trap is real and the plan's wording is loose about it
+
+Both plans say the redirect must come *"after `.env.local` has loaded"*. Measured three ways, the
+boundary is **`src/env.ts`'s module load** — where `INHERITED` is snapshotted — and not the
+`loadEnvLocal()` call:
+
+| where the assignment goes | poison survives? |
+| --- | --- |
+| after the static `import`, after `loadEnvLocal()` | yes |
+| after the static `import`, **before** `loadEnvLocal()` | yes |
+| **before** `src/env.ts` is loaded (dynamic `import()` underneath it) | **no** — `.env.local` wins, silently |
+
+A plain `import` at the top of a setup file therefore makes the ordering safe by construction, and
+`DATABASE_URL=… npx vitest` is the third row and cannot be made to work. The silence is the
+dangerous part: `src/env.ts`'s shadowing warning is gated on `NODE_ENV !== "test"`, and vitest sets
+`NODE_ENV=test`.
+
+##### The poison found an escapee on its first run, and it is `tests/health.test.ts`
+
+The point of the backstop, arriving on schedule. `tests/health.test.ts` calls no `pgReady(`, builds
+no pool and imports no `pg` — the lane scan cannot see it — and it reaches Postgres through the
+health handler's own `getDb()`, reading the migration ledger. It had been quietly using whatever
+database the box happened to have; under the poison it failed four times with *"the migration ledger
+could not be read"*. Its own comment had admitted the dependency all along: *"with a full
+environment **and a populated shelf** there is nothing left to complain about"*.
+
+It is **28/28 in the private lane, unchanged**. Giving it that lane needed a door in the
+completeness guard, because `TEST_LANES` was defined as *exactly* the scan's universe in both
+directions — so `LANES_BEYOND_THE_SCAN` is a per-file declaration, with a reason, that the guard
+itself polices: the file must exist, must have a lane, must **still** be invisible to the scan (an
+exemption that goes stale is deleted, not kept), and must carry a real reason. Four controls, all
+watched.
+
+**That door is the shape to watch.** One entry is evidence the design works; a page of them would
+mean the syntactic scan had stopped being a useful approximation, and the answer then is a better
+predicate rather than more entries.
+
+##### The lease, in both directions
+
+Sol's blocking finding on T-B was that "old enough *and* nobody inside it" samples an instant, and a
+live run between two lazily-opened pools has zero sessions. Measured on 2026-09-04, with
+`scavengeTestDatabases({ only, olderThanMs: 0 })` — the age fence deliberately defeated, so the only
+thing left is somebody being inside it:
+
+| | `pg_stat_activity` | the scavenger |
+| --- | --- | --- |
+| a run in progress, mid-file, no test connected | **1 session** — the lease, and nothing else | `spared … 1 session(s) are still inside it` |
+| a database minted by the CLI with no lease | 0 sessions | **dropped** |
+
+The first row is exactly Sol's sequence, and the lease is the only reason it is a 1.
+
+##### Two other things a clean database wanted
+
+- **The Stripe price family**, which T-C catalogued and left. Three suites went red on the first
+  full run (`billing-checkout` ×16, `billing-usage-route` ×8, `plans-match-tiers` ×1) and are green
+  with the backfill. The fence is Sol's: `current_database()` must equal the name the factory
+  minted **and** satisfy `assertMintedName` before a row is written, so nullness chooses *which*
+  rows and never *whether*; and every active tier is filled, not `reader` alone.
+  **And it is two columns, not one** — `resolveSellableTier` refuses on
+  `!tier.stripePriceId || tier.livemode === null` and answers the same 503 either way, so the first
+  version of the backfill turned sixteen failures about a missing price into sixteen about a missing
+  Stripe key. `livemode = false`, because a placeholder is a test-mode price. Both columns are
+  written with `coalesce`, so a row that already has one keeps it.
+- **Nothing else.** T-C's seeder covered the rest, which is the retrospective argument for having
+  done it in one place.
+
+##### What `npm run check` needed: nothing
+
+Its `test` gate is `npm run test` under `REQUIRE_POSTGRES=1`, so the lanes arrive through it
+unchanged. Under that flag an unreachable stack now fails the run in `globalSetup` rather than
+skipping 90 suites, which is the direction § *Making the database required* is going; without it the
+lane provides `null`, the per-file setup poisons `DATABASE_URL`, and the suites that go through
+`pgReady` skip and say so. **The ones that do not, do not** — see *What Sol's review changed* below;
+a dozen private-lane files fail with the stack off, and did so before the lanes existed too.
+**Stage T-E — pollution as its own verdict in `scripts/check.ts` — is still to do.**
+
+##### Deleted, and what was kept
+
+`tests/setup/spike-db.ts` and `vitest.spike.config.ts` (replaced by the private lane; the tsconfig
+entry that named the second one went with it), and `scripts/spike-migrate-to.ts` (replaced by
+`migrateInto` inside the factory). Nothing outside `docs/plans/` referenced any of them.
+
+**`scripts/spike-hold-singleton.ts` and `scripts/spike-contended-claim.ts` were kept**, and that is
+a decision rather than an oversight: neither has a replacement, and they are the instruments that
+produce the A/B table above and Stage A's contention evidence. A stage that deletes the only way to
+re-run its own acceptance is not tidy.
+
+##### Four things about the shape of the run, which 260903e could not have known
+
+1. **A project's `globalSetup` does not run when the filter excludes every one of its files.**
+   Measured: `npx vitest run --project unit tests/arc.test.ts` and `npx vitest run
+   tests/doc-links.test.ts` create no database. The edit/test loop on a unit test pays nothing.
+2. **Vitest 4 hands `globalSetup` the `TestProject`**, not the `GlobalSetupContext` every 2.x-era
+   example shows, and `inject()` works in a `setupFiles` file — which is what makes one database per
+   run reachable from 90 workers without an environment variable.
+3. **The projects do not interleave.** The unit and shared lanes ran to completion first and the
+   private lane followed, so the wall clock is a sum rather than a maximum. That is where the 169
+   seconds are.
+4. **`vitest.witness.config.ts` had a guard on `vitest.config.ts`'s exact text** (`setupFiles:
+   ["./tests/setup/no-provider-calls.ts"]`) which the three projects broke. Narrowed to the path,
+   and the file now says out loud that it reproduces no lanes — a Postgres suite run through it is
+   on the shared database.
+
+##### What is still red, and it is not this stage
+
+Four files fail identically before and after, on this tree: `tests/client-imports.test.ts`
+(a client module reaching out of `src/web`), `tests/cold-start-lazy-imports.test.ts` (`jsdom` at
+module scope again), `tests/fixture-ids.test.ts` (two uuids in two files) and
+`tests/paid-cli-ledger.test.ts` (`unscoped` spend declarations diverged from `ADMITTED` — note the
+untracked `scripts/stage.ts` in this worktree). They are not database failures, none of them moved
+across the four runs above, and they are what run 3's `4 failed` is.
+
+**And two of the reds along the way were this stage's own**, worth recording because both were
+invisible until a full run: deleting `tests/setup/spike-db.ts` and `scripts/spike-migrate-to.ts` left
+a dangling link in each of 260903e and this file, which `tests/doc-links.test.ts` caught; and the
+first `billing_tiers` backfill filled one of the two columns the route needs. A deletion is not
+finished until the link checker has run.
+
+##### What Sol's review changed, 2026-09-04
+
+Sol's verdict on the built stage was *"I would not activate T-D unchanged"*, with three P1s. All six
+findings are answered; the review is
+[260903f-test-lane-activation-review-sol.md](260903f-test-lane-activation-review-sol.md).
+
+| # | finding | what was done |
+| --- | --- | --- |
+| P1-1 | **the `unit` lane reached the real shared Storage.** The poison covered `DATABASE_URL`; `blobStore()` chooses Supabase Storage from `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`, which this box has. Four files were using it, one of them re-planting a single canonical key with corrupt bytes | the unit lane poisons `SUPABASE_URL` too, and **six** files get `private-postgres` plus a `LANES_BEYOND_THE_SCAN` entry each — Sol's four, and two the new poison found on its first full run |
+| P1-2 | **a child process lost the poison.** It becomes part of the child's own `INHERITED` snapshot, so `.env.local` beats it — silently, under `NODE_ENV=test` | `PINNED` in [`src/env.ts`](../../src/env.ts): a variable naming what `.env.local` may not write. A variable is inherited; an assignment is not |
+| P1-3 | **every factory error was reported as "Docker is off"**, and `health.test.ts` failed rather than skipping | `StackUnreachable`, raised only by the three places that can mean nothing else; and a real `pgReady` gate on the four health cases that assert the warning list is empty |
+| P2-4 | **the shared lane's identity control accepted any database named `postgres`** | plus `projectMismatch(DATABASE_URL, SUPABASE_URL)` — the repo's existing same-stack check, which locally is the port |
+| P2-5 | a post-`CREATE` failure leaked a database outside the cleanup fence | creation moved inside the `try` |
+| P3-6 | `why.length` accepted forty-one spaces | `why.trim().length` |
+
+**Every one of those was watched failing.** The two worth quoting:
+
+```
+AssertionError: the child's DATABASE_URL:
+  expected 'postgresql://postgres@127.0.0.1:54362/postgres' to contain
+  'this_test_is_in_the_unit_lane_and_may_not_use_a_database'
+```
+
+— the subprocess control, with the `PINNED` line deleted: a unit test's child on the shared database.
+And, pointed at the *other* local Supabase stack's `postgres`, the shared lane's original control
+printed `the first control reached postgres` and was satisfied, while the new one said
+`DATABASE_URL is on port 54322, not 54362`.
+
+**Three corrections to the review, none of which changes what was built.**
+
+- **`assertSameCluster` is the wrong machinery for P2-4**, though it does the `system_identifier`
+  comparison the finding asks for. It locates its container *by the port in `DATABASE_URL`*
+  (`findPostgresContainer`), so pointed at the other stack it finds the other stack's container and
+  agrees with itself. Reused there, it would have been a tautology — the thing the review was
+  checking for.
+- **`unset SUPABASE_URL` would have been the wrong fix**, and worse than the bug: `blobStore()` falls
+  back to the filesystem adapter when either credential is missing, so the lane would have got a
+  *working* store writing under `data/_blobs/` — a test meant to exercise Storage passing having
+  exercised the store this plan exists to delete. The poison is a URL for that reason, and the
+  control asserts the adapter's identity as well as the failure.
+- **T-D did not make Docker-off red; it already was.** Measured with `DATABASE_URL` on a dead port:
+  **12 private-lane files fail** rather than skip, and **9 of the same 10 sampled fail identically
+  under `HEAD`'s single-project config**, which is the world before the lanes. `health.test.ts` was
+  4-failed under that config too. So the sentence in `private-db-global.ts` promising a clean skip
+  was false when it was written, rather than falsified by this stage — the same *prose outliving its
+  subject* class as B0 below. It is now corrected there and in
+  [testing.md](../project/testing.md), rather than re-promised.
+
+**The poison earned its keep on the day it was widened.** Sol found four Storage files by reading
+the lane map against `src/store/blobs.ts`; running with `SUPABASE_URL` poisoned found
+`tests/job-failure.test.ts` and `tests/acquire-extract-blocks-end-to-end.test.ts` as well, and the
+second of those **names no store at all** — it reaches the bucket through the pipeline's acquire
+step, three modules down. No reading of the map could have found it, which is the argument for a
+semantic backstop restated with a fresh example.
+
+**Not fixed, and Greg's call.** Those dozen files reach the database from fixtures outside any
+`pgReady` gate, and the four Storage files have no readiness gate at all — with Docker off they fail
+on `ECONNREFUSED` from `fetch`. Making Docker-off genuinely green is a change to a dozen files with
+no bearing on the store flag, and § *Making the database required* is heading the other way anyway.
 
 ### B0 — take `RUN_LOCK` off the seed window — **already done, and this plan was wrong about it**
 

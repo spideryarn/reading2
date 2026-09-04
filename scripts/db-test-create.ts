@@ -300,6 +300,53 @@ export function assertMintedName(name: string, verb: string): void {
   }
 }
 
+/**
+ * **There is no local stack at all** — as distinct from every other way this
+ * file can fail.
+ *
+ * The one caller that cares is the private lane's `globalSetup`
+ * (`tests/setup/private-db-global.ts`), which turns "Docker is off" into a
+ * skip so that `npm test` on a laptop with no container is not a wall of red.
+ * Until 2026-09-04 it made that decision on `catch (err)` — *any* error — so a
+ * failed dump, a failed restore, a cluster-identity mismatch and a failed
+ * migration were all silently reported as "Docker is off" and every Postgres
+ * suite skipped. That is a silent-success generator of exactly the kind
+ * docs/reusable/silent-success.md is about: the suite goes green having tested
+ * nothing, and the one line of output says something that is not true. GPT Sol
+ * found it reviewing T-D.
+ *
+ * So the skip is now **positively classified**: only the three places that can
+ * mean nothing but "the stack is not running" raise this, and everything else
+ * stays an ordinary `Error` and is fatal.
+ *
+ * - `baseUrl()` — no `DATABASE_URL` at all (a fresh clone; `pgReady` treats it
+ *   the same way). *Not* the non-local refusal beside it, which is a
+ *   misconfiguration and must be loud.
+ * - `findPostgresContainer()` — Docker will not answer, or nothing is
+ *   publishing the stack's port.
+ * - `assertSameCluster()` — the first TCP connection is refused. Only at the
+ *   socket level: an authentication failure means the server is there and
+ *   something else is wrong.
+ */
+export class StackUnreachable extends Error {
+  override name = "StackUnreachable";
+}
+
+/**
+ * Socket-level failure codes, which mean *nothing answered*.
+ *
+ * Deliberately not a catch-all. `pg` puts the SQLSTATE in `code` too, so
+ * `28P01` (bad password) and `3D000` (no such database) arrive through the same
+ * field and must stay fatal — the server answered, and it said no.
+ */
+const NOT_LISTENING = new Set(["ECONNREFUSED", "ENOTFOUND", "EHOSTUNREACH", "ENETUNREACH"]);
+
+/** Was this thrown by a socket that never reached a server? */
+export function isNotListening(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === "string" && NOT_LISTENING.has(code);
+}
+
 /* ------------------------------------------------------- where we connect */
 
 let memoisedBase: string | undefined;
@@ -315,7 +362,7 @@ export function baseUrl(): string {
   if (memoisedBase !== undefined) return memoisedBase;
   const url = resolveTargetUrl({ shellWins: true });
   if (!url) {
-    throw new Error(
+    throw new StackUnreachable(
       "DATABASE_URL is not set, so there is no local stack to make a test database on.\n" +
         "  Run: npm run db:start   (docs/project/supabase-local.md)",
     );
@@ -365,7 +412,7 @@ export async function findPostgresContainer(base: string = baseUrl()): Promise<s
   try {
     ({ stdout: out } = await run("docker", ["ps", "--format", "{{.Names}}\t{{.Ports}}"]));
   } catch (err) {
-    throw new Error(
+    throw new StackUnreachable(
       `could not ask Docker which container serves port ${port}: ${(err as Error).message}\n` +
         "  This box has no psql/pg_dump on the host, so the Supabase container is the only\n" +
         "  place those binaries exist. See this file's header.",
@@ -376,7 +423,11 @@ export async function findPostgresContainer(base: string = baseUrl()): Promise<s
     .filter((l) => l.includes(`:${port}->5432/tcp`))
     .map((l) => l.split("\t")[0] ?? "");
   if (hits.length !== 1 || !hits[0]) {
-    throw new Error(
+    /* **`StackUnreachable` even when it found several.** Zero is the stack
+       being off, which is the case this classification exists for; more than
+       one is two stacks publishing the same port, which cannot happen on one
+       host. Either way nothing here can proceed and neither is a broken clone. */
+    throw new StackUnreachable(
       `expected exactly one Docker container publishing port ${port} to 5432, found ${hits.length}.\n` +
         lines.map((l) => `    ${l}`).join("\n"),
     );
@@ -460,6 +511,17 @@ export async function assertSameCluster(container: string, base: string = baseUr
       "select system_identifier::text as id from pg_control_system()",
     );
     overTcp = r.rows[0]?.id ?? "";
+  } catch (err) {
+    /* **The first connection this file opens**, so a refusal here is the stack
+       being off rather than anything about the clone. Socket codes only —
+       `isNotListening` says why an authentication failure must stay fatal. */
+    if (isNotListening(err)) {
+      throw new StackUnreachable(
+        `nothing answered at the local stack's Postgres: ${(err as Error).message}\n` +
+          "  Run: npm run db:start   (docs/project/supabase-local.md)",
+      );
+    }
+    throw err;
   } finally {
     await pool.end();
   }
@@ -798,11 +860,23 @@ export async function createTestDatabase(options: CreateOptions = {}): Promise<T
   say(`container ${container}`);
 
   const name = testDatabaseName();
-  await createEmptyDatabase(name, base);
-  say(`created ${name}`);
-
-  const url = urlForDatabase(name, base);
+  /**
+   * **Inside the fence, not before it.** `createEmptyDatabase` can fail *after*
+   * its `CREATE DATABASE` has committed — the pool's `end()` in its own
+   * `finally` is the shortest example, and a server that goes away between the
+   * two is the realistic one. Outside this `try` that leaves a database nobody
+   * holds and nobody drops, surviving until the six-hour scavenger; inside it,
+   * the `catch` drops it like every other failure. GPT Sol, 2026-09-04.
+   *
+   * `dropTestDatabase` on a name that was never created is a no-op wrapped in
+   * `.catch(() => {})`, so moving the *whole* creation in is safe rather than
+   * only the half after the statement.
+   */
+  let url = "";
   try {
+    url = await createEmptyDatabase(name, base);
+    say(`created ${name}`);
+
     let dump = await dumpSharedSchema(container);
     if (options.dumpOverride) dump = await options.dumpOverride(dump);
 

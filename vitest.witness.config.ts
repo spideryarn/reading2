@@ -76,8 +76,22 @@ function witnessPlugin(): Plugin {
   };
 }
 
+/**
+ * The base config's shape is checked rather than assumed, because this file
+ * copies half of it. **It changed on 2026-09-04**: `vitest.config.ts` now
+ * declares three projects (unit / private-postgres / shared-services) and the
+ * provider guard is one entry in each project's `setupFiles`, so the old
+ * whole-line needle stopped matching. The needle is now the path, which is the
+ * part this file actually depends on.
+ *
+ * **What this config does NOT reproduce is the lanes**: it runs every test file
+ * in one project against whatever `DATABASE_URL` says, which is what `npm test`
+ * did before T-D. That is fine for an instrumented one-off measuring which
+ * modules a run touches, and wrong for anything you would call a verdict — a
+ * Postgres suite run this way is on the shared database, racing the box.
+ */
 const base = readFileSync(path.join(ROOT, "vitest.config.ts"), "utf8");
-if (!base.includes('setupFiles: ["./tests/setup/no-provider-calls.ts"]')) {
+if (!base.includes('"./tests/setup/no-provider-calls.ts"')) {
   throw new Error("vitest.config.ts changed shape; re-derive the witness config");
 }
 

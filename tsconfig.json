@@ -28,12 +28,14 @@
     /* The API build. Same reasoning as vite.config.ts: it runs as node ESM in
        this project, so it is checked by this project. */
     "vite.api.config.ts",
+    /* Which now also pulls in tests/store-migration-registry.ts, because the
+       three vitest projects derive their file lists from `TEST_LANES` rather
+       than restating them — one manifest, one verdict per file. The tests
+       project checks that file too; a file in two projects is fine. */
     "vitest.config.ts",
-    /* Throwaway, and deleted in Stage D of
-       docs/plans/260903e-a-private-test-database-so-the-suite-stops-racing-dev-servers.md
-       once the real factory replaces it. Listed so `npm run check` covers it
-       rather than reporting it as a file no project checks. */
-    "vitest.spike.config.ts",
+    /* `vitest.spike.config.ts` was here, and was deleted with stage T-D on
+       2026-09-04 along with tests/setup/spike-db.ts: the private-postgres
+       project and tests/setup/private-db*.ts are what replaced them. */
     /* Stage A's witness 2 in
        docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md:
        the instrumented run that produced tests/store-migration-witness.json.

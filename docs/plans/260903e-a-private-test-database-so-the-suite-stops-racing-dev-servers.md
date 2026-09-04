@@ -244,7 +244,7 @@ wrong here without making the tree red for anybody else.
   - [ ] Assert the resulting baseline rather than assuming it: the app schemas absent, `auth.users`
         and the extensions present. Sol's list of what `-s` carries and omits is in the review;
         event triggers are the speculative part and want inspecting in the archive list.
-  - [ ] Then the real migrator. [`scripts/spike-migrate-to.ts`](../../scripts/spike-migrate-to.ts)
+  - [ ] Then the real migrator. `scripts/spike-migrate-to.ts` (deleted with stage T-D, once `migrateInto` in the factory replaced it)
         is the working prototype of this half and explains the assign-before-import ordering.
 - [ ] **Per-run naming, decided** — not per-worktree. Two `npm test` invocations inside one worktree
       would share rows and migrations, and `fileParallelism: false` serialises files within one
