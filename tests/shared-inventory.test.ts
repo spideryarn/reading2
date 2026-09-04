@@ -144,7 +144,7 @@ describe("the sweep over the modes", () => {
      been generated. Written out rather than derived, deliberately: this is the
      test asserting the policy, and a test that derives its expectation from the
      code under test asserts nothing. */
-  const OWNERS_ONLY: Mode[] = ["chat", "search", "remember", "referee", "diagram"];
+  const OWNERS_ONLY: Mode[] = ["chat", "search", "remember", "referee"];
   it.each(OWNERS_ONLY)("keeps %s with the owner whatever exists", (mode) => {
     expect(keys(sharedInventory(NOTHING).withheld)).toContain(mode);
     expect(keys(sharedInventory(EVERYTHING).withheld)).toContain(mode);

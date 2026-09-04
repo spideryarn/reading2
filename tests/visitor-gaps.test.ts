@@ -147,7 +147,7 @@ describe("what a visitor is told, mode by mode", () => {
    * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1.
    */
   it("names the modes that spend as the owner's, whatever the flags say", () => {
-    for (const mode of ["chat", "search", "remember", "diagram", "referee"] as const) {
+    for (const mode of ["chat", "search", "remember", "referee"] as const) {
       for (const flags of [NOTHING_BUILT, EVERYTHING_BUILT]) {
         expect(visitorGap(mode, flags)).toEqual({
           kind: "owners-only",
@@ -242,7 +242,14 @@ describe("what a visitor is told, mode by mode", () => {
        artefact *and* renders no band — it is the article and nothing else, so
        there is nothing a visitor could be short of.
        docs/plans/plain-mode-and-the-way-out.md. */
-    const ALWAYS_FREE: Mode[] = ["plain", "hierarchy", "outline", "summary"];
+    /* **Five since 2026-09-04.** `diagram` joined the four that cost nothing
+       whatever has been built: its picture is drawn from the tree in the
+       payload every reader already holds, which is the same bargain `outline`
+       and `summary` make. It is unlike them in needing a component to enforce
+       it — DiagramPanel.tsx § DiagramAccess — because the panel *can* buy, and
+       the visitor arm is what stops it.
+       docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */
+    const ALWAYS_FREE: Mode[] = ["plain", "hierarchy", "outline", "summary", "diagram"];
     expect([...markedModes(NOTHING_BUILT).keys()].sort()).toEqual(
       MODES.filter((m: Mode) => !ALWAYS_FREE.includes(m))
         .slice()
@@ -263,7 +270,7 @@ describe("what a visitor is told, mode by mode", () => {
        `POLICY` record now, and there is no fall-through left to reach.
        docs/plans/260831an-referee-mode-for-peer-reviewers.md. */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
-      ["chat", "diagram", "referee", "remember", "search"].sort(),
+      ["chat", "referee", "remember", "search"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. */
     for (const built of ["glossary", "ideas", "quotes", "timeline"] as const) {
@@ -282,7 +289,11 @@ describe("what a visitor is told, mode by mode", () => {
         mode === "summary" ||
         mode === "ideas" ||
         mode === "quotes" ||
-        mode === "timeline"
+        mode === "timeline" ||
+        /* Free since 2026-09-04: the picture is drawn from the tree in the
+           payload, and the panel's visitor arm buys nothing.
+           docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */
+        mode === "diagram"
       ) {
         expect(gap, mode).toBeNull();
       } else {
