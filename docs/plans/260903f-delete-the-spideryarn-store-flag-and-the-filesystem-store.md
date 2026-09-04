@@ -1,13 +1,9 @@
 # Delete `SPIDERYARN_STORE` and the filesystem store
 
-**Status, 2026-09-03. Fourth draft, and the build has started.** GPT Sol returned *not ready* on the
-first draft and *ready with changes* on the second; those changes are in. The three pre-build spikes
-the second review asked for have all run, and each of them moved the plan — the sections below carry
-what they found.
-
-**Landed in the working tree:** D′1a (`guardDbStore` is idempotent) and stage A's witness 1
-([`scripts/store-migration-candidates.ts`](../../scripts/store-migration-candidates.ts)).
-**Prototyped, not landed:** stage E's `scripts/stage.ts`.
+**Status, 2026-09-04. Fourth draft; five of thirteen stages are on `dev`.** GPT Sol returned *not
+ready* on the first draft and *ready with changes* on the second; those changes are in. The three
+pre-build spikes the second review asked for have all run, and each of them moved the plan — the
+sections below carry what they found.
 
 **This plan absorbed [260903e](260903e-a-private-test-database-so-the-suite-stops-racing-dev-servers.md)
 on Greg's decision** — see stage T. That is the largest change to its shape since it was written.
@@ -16,17 +12,40 @@ on Greg's decision** — see stage T. That is the largest change to its shape si
 three later stages consume it**:
 
 ```
-A (store inventory) ✅ → B0 ✅ (already landed) → T-B (factory) → T-C (lanes) → T-D (activation) → T-E (pollution)
+A (store inventory) ✅ → B0 ✅ (already done) → T-B (factory) ✅ → T-C (lanes) ✅
+  → T-D (activation) → T-E (pollution)
   → C → B → D → E → F (hinge) → G → H → I
 ```
 
-**Stage A is done.** Both witnesses are built, the registry is checked in with 93 classified entries,
-and its guard has been watched failing four different ways. **B0 turned out to be already done** —
-it landed on 2026-09-01 and the docstring that said otherwise was stale; see stage B0. **T-B is
-built; T-C is next.**
+## What is on `dev`, 2026-09-04
 
-The `pdf` spike **is done** (2026-09-03) and moved stage E — see § `pdf`.
-**All of D′ is off the list: D′1 is landed, D′2 was scheduled twice, D′3 is cancelled.**
+| stage | what landed |
+|---|---|
+| **A** | Both witnesses, the store inventory, and a guard watched failing four ways. |
+| **B0** | **Nothing** — it had been done on 2026-09-01 and a stale docstring said otherwise. |
+| **T-B** | [`scripts/db-test-create.ts`](../../scripts/db-test-create.ts) — a private, migrated database per run, ~4.6s. Reviewed; three blocking findings folded in. |
+| **T-C** | `TEST_LANES`, `OWNER_AUDIT`, and `seedLocalAccounts`. Reviewed; the owner guard rebuilt per `(file, owner)` pair. |
+| **D′1** | Landed earlier; since **extended by another worktree**, and its "unforgeable" claim is measured false — see D′1b. |
+
+**Nothing yet changes the default `npm test`.** That is deliberate and it is T-D's job. The factory
+and its integration tests are behind `SPIDERYARN_TEST_DB_FACTORY=1`.
+
+**The `pdf` spike is done** and moved stage E — see § `pdf`. **All of D′ is off the list: D′1 is
+landed, D′2 was scheduled twice, D′3 is cancelled.**
+
+## What this day cost, and what it bought
+
+Two stages of the thirteen turned out to be **already done or wrong about the tree**, and four
+separate counts in this document drifted inside a single day. That is not incidental to the job; it
+is the job. The flag exists because the repo has two stores, and the reason it is still here is that
+*nobody could tell what depended on which* — the same fog that made B0 a phantom stage and made
+`store-guarded.test.ts` say "eighteen" over an array of twenty-one.
+
+**The single most valuable thing found so far is not in the flag at all.** Running the Postgres
+suites against a clean database showed **fifty of them writing rows under an ambient owner none of
+them names**, which passes today only because somebody seeded it into the shared database weeks ago.
+See stage T-C.
+
 
 **Three corrections to our own draft of this order, two from review and one from the tree moving:**
 
