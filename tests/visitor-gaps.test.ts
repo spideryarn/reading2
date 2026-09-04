@@ -69,6 +69,7 @@ const NOTHING_BUILT: PublicArtefacts = {
   ideas: false,
   quotes: false,
   timeline: false,
+  sketch: false,
 };
 const EVERYTHING_BUILT: PublicArtefacts = {
   arc: true,
@@ -77,6 +78,7 @@ const EVERYTHING_BUILT: PublicArtefacts = {
   ideas: true,
   quotes: true,
   timeline: true,
+  sketch: true,
 };
 
 /**
@@ -106,6 +108,7 @@ function only(built: keyof PublicArtefacts): PublicArtefacts {
     glossary: built === "glossary",
     ideas: built === "ideas",
     timeline: built === "timeline",
+    sketch: built === "sketch",
   };
 }
 
@@ -393,6 +396,7 @@ describe("what the payload says it has", () => {
       ideas: false,
       quotes: false,
       timeline: false,
+      sketch: false,
     });
     expect(
       artefactsIn({

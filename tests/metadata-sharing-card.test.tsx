@@ -193,6 +193,7 @@ const ALL_BUILT = {
   ideas: true,
   quotes: true,
   timeline: true,
+  sketch: true,
 };
 
 describe("the sharing card, on the page that owns it", () => {
@@ -258,6 +259,7 @@ describe("the sharing card, on the page that owns it", () => {
         ideas: false,
         quotes: false,
         timeline: false,
+        sketch: false,
       },
     };
 
@@ -444,6 +446,7 @@ describe("the sharing card, on the page that owns it", () => {
         ideas: false,
         quotes: false,
         timeline: false,
+        sketch: false,
       },
     };
 

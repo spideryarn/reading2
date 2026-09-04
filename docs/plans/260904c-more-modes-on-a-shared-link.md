@@ -379,6 +379,7 @@ Docs, and the two things a stage cannot check about itself.
 | **1 — Timeline** | Built, `6212c75b`. The nine-step artefact path, plus `VisitorTimelineBand` and an `access` union on `TimelinePanel` |
 | **2 — Diagram** | Built, `6212c75b`. `DiagramAccess`; the visitor arm pins `kind` to `force`, disables three fetching hooks and renders no picker |
 | **3 — Comments** | Built. The projection, the dedicated query, the two SQL row filters, `CommentAccess`, the drawer, and the copy in `messages.ts` and `PrivacyPage.tsx` |
+| **3a — Sketch** | Built, and **not in the original plan**. Greg changed the visitor's picture from Force to Sketch on 2026-09-04, after stage 2 had landed |
 
 ### What the build changed about the plan
 
@@ -408,7 +409,36 @@ Not one of these was believed on a green run alone —
 | The diagram pin | removed `owns ? … : "force"` | `?diagram=sketch` and `?diagram=illustrated` |
 | The citation policy | replaced `publicCitationUrl` with the raw url | both citation cases, naming the credential and the private host |
 | The read-only dialog | mounted the owner's arm for a visitor | the first verb, *Delete* |
+| The Sketch gate | handed every reader `{ kind: "owner", slug }` | eleven tests, and the output shows a visitor being offered *$0.20* and *Draw the argument* |
 | The table tripwire | — | fired on its own when `comments` entered the public graph, before it was widened on purpose |
+
+### The stage the plan did not have
+
+**Stage 2 shipped Force to visitors, and Greg changed his mind the same day**:
+
+> We're now going to share the Diagrams, though only Sketch will be visible to those without
+> Experimental Features. I think another agent is working on that change.
+>
+> — Greg, 2026-09-04
+
+Another agent *was*, and did the half about the switch — Diagram into every reader's bar, only
+Sketch chipped without the switch, and an assertion that an owner arriving at `?mode=diagram` posts
+no job (`c39cd71b`). **The visitor half was not done and could not have been**: a visitor's panel was
+still pinned to Force, and no sketch crossed in the payload, so there was nothing for them to be
+shown. That is what 3a is.
+
+The question worth having asked, because it decided the shape: *does "share the Diagrams" mean a
+visitor can draw one?* **No — an already-drawn Sketch only.** So `article_revisions.sketch` becomes
+a seventh public artefact, and `useSketch` — which carries the auto-runner, and is therefore the
+purchase decision rather than a read — is mounted in exactly one component that a visitor never
+reaches. `SketchView` was split into `OwnerSketch` and a presentational `SketchBody` to make that
+true structurally rather than by a flag.
+
+**The consequence to know:** `sketch` is not in `DEFAULT_INGEST_STEPS`, so most articles have never
+had one drawn. The commonest thing a visitor now meets in Diagram is *"Nobody has drawn this one
+yet."* — where before 3a they got a Force graph for free. That is what the decision means, it was
+put to Greg in those terms, and the fallback (Sketch when there is one, Force otherwise) was not
+asked for.
 
 ### Still open
 

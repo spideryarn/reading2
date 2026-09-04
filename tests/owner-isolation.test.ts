@@ -657,7 +657,13 @@ describe("the one query that lists articles for nobody in particular", () => {
       const uses = await usesOf(file);
       expect(uses.length, `${file} names the articles table nowhere`).toBeGreaterThan(0);
       const stray = uses
-        .filter((u) => u.fn === undefined || !fns.includes(u.fn))
+        /* `fn` is `string | null` — null is a use at the top level of the
+           module, outside any function at all. That is a stray by definition:
+           the rule is that every query sits in a function somebody named on
+           purpose, and a top-level one names none. Written as an explicit
+           `null` arm rather than left to `includes(null)` being false, which
+           was the same answer reached by accident and typed wrong. */
+        .filter((u) => u.fn === null || !fns.includes(u.fn))
         .map((u) => `line ${u.line} in ${u.fn ?? "no function"} (${u.how}) ${u.text}`);
       expect(
         stray,

@@ -13,6 +13,40 @@ Continuation of [260903k](260903k-pdf-page-cap-refused-with-no-reason-given.md),
 *refusal* and the *message*. That work deployed at 09:11 UTC on 2026-09-04 and moved the failure one
 step along. This plan is about the step it moved to.
 
+## Status — 2026-09-04, end of day
+
+**Done enough to stop here.** The thing this plan exists for is achieved: Kuhn's paper uploads and
+becomes a readable article, unattended, in 19 min 41 s — watched end to end at
+[§ It worked](#it-worked--2026-09-04-16192-1639-utc). Everything below is on `dev` and none of it is
+on production.
+
+| stage | state |
+|---|---|
+| 1 — measure | **done** |
+| 2 — structure answer checkpointed | **done** (written; the read-back path has never fired in anger) |
+| 3 — a claimant pauses, keeping its draft | **done** |
+| 4 — the estimator counts nodes the prompt can produce | **done** |
+| 5 — extract's waste and its tail | **done** |
+| 6 — sectioning | **not needed** — stage 1 showed one pass fits with 45% of the budget spare |
+| 7 — deploy | **not done, and it is Greg's call** |
+| 8a — the heading snap | **done**, `droppedHeadings` 59 → 9 |
+| 8b — the prompt re-scope | **not done**, deliberately behind the deploy |
+
+**What it costs to stop here:** the work is invisible to Greg, because production still refuses the
+document. Stage 7 is the only thing between the two.
+
+**Three things known and not fixed**, each written up where it belongs rather than left implicit:
+
+- **`repairedBlocks` over-counts** when a boundary is both misplaced and one block late — 86 reported
+  against an interval-union audit's 64. Documented at `src/hierarchy.ts` § `repairedBlockCount` with
+  the warning that matters: **fix it before fitting any threshold to it**, which is what a future
+  re-ask trigger would do.
+- **The 241-block section survives**, and 8a made it marginally worse (241 → 242). It is 8b's problem
+  and 260826h § J's.
+- **Genuine transcription gaps.** 12 quality notes on the successful run; the reader is told plainly
+  that 140 of 142 pages were checked. Some dropped prose is real. Predates this work, ranked above
+  everything else on correctness, and deliberately out of scope here.
+
 ## Where it actually fails now
 
 **The page cap is no longer the blocker and the lease is not either.** Two production ingests on

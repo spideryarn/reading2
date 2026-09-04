@@ -130,7 +130,7 @@ afterEach(() => {
    land on different microtasks. */
 async function mount() {
   await act(async () => {
-    root.render(<SketchView slug="s" blocks={BLOCKS} atRow={0} onJump={() => {}} />);
+    root.render(<SketchView access={{ kind: "owner", slug: "s" }} blocks={BLOCKS} atRow={0} onJump={() => {}} />);
     await new Promise((r) => setTimeout(r, 0));
   });
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
@@ -375,7 +375,7 @@ describe("the real drawing, whose doors are all inferred", () => {
 
   async function mountReal() {
     await act(async () => {
-      root.render(<SketchView slug="s" blocks={realBlocks} atRow={0} onJump={() => {}} />);
+      root.render(<SketchView access={{ kind: "owner", slug: "s" }} blocks={realBlocks} atRow={0} onJump={() => {}} />);
       await new Promise((r) => setTimeout(r, 0));
     });
     await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
@@ -761,7 +761,7 @@ describe("the paths a passing test was not reaching", () => {
         window.dispatchEvent(new Event("focus"));
         await new Promise((res) => setTimeout(res, 0));
       });
-      root.render(<SketchView slug="other" blocks={BLOCKS} atRow={0} onJump={() => {}} />);
+      root.render(<SketchView access={{ kind: "owner", slug: "other" }} blocks={BLOCKS} atRow={0} onJump={() => {}} />);
       await act(async () => { await new Promise((res) => setTimeout(res, 0)); });
       await act(async () => { await new Promise((res) => setTimeout(res, 0)); });
       expect(cancels, "the entrance was left running over a new drawing").toBeGreaterThan(0);
