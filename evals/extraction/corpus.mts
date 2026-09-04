@@ -144,6 +144,30 @@ export const CORPUS: { name: string; file: string; url: string; slot: string }[]
 export const EXTRA_FIXTURES: { name: string; file: string; url: string; slot: string }[] = [
   { name: "acx-footnotes", file: "acx_footnotes.html", slot: "—",
     url: "https://www.astralcodexten.com/p/your-book-review-the-pale-king" },
+  /* **Nine added 2026-09-04**, from the trawl behind
+     docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md — the
+     same reasoning as acx-footnotes above: captured for a different
+     investigation than the readability-repair-pass table, so they extend this
+     list rather than CORPUS. See fixtures/README.md, "The nine added
+     2026-09-04" for what gap each one fills. */
+  { name: "python-docs-itertools", file: "python_docs_itertools.html", slot: "—",
+    url: "https://docs.python.org/3/library/itertools.html" },
+  { name: "rfc8259-json", file: "rfc8259_json.html", slot: "—",
+    url: "https://www.rfc-editor.org/rfc/rfc8259" },
+  { name: "wiki-gdp-table", file: "wiki_gdp_table.html", slot: "—",
+    url: "https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)" },
+  { name: "plos-biology", file: "plos_biology.html", slot: "—",
+    url: "https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.1002165" },
+  { name: "medium-about", file: "medium_about.html", slot: "—",
+    url: "https://blog.medium.com/medium-a-new-place-on-the-internet-for-sharing-ideas-and-their-connections-2e04efc80d1a" },
+  { name: "pmc-article", file: "pmc_article.html", slot: "—",
+    url: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7280519/" },
+  { name: "distill-momentum", file: "distill_momentum.html", slot: "—",
+    url: "https://distill.pub/2017/momentum/" },
+  { name: "wiki-ar-ai", file: "wiki_ar_ai.html", slot: "—",
+    url: "https://ar.wikipedia.org/wiki/%D8%B0%D9%83%D8%A7%D8%A1_%D8%A7%D8%B5%D8%B7%D9%86%D8%A7%D8%B9%D9%8A" },
+  { name: "eurlex-regulation", file: "eurlex_regulation.html", slot: "—",
+    url: "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:52022XC0504(01)" },
 ];
 
 /** Every committed fixture, for an eval whose denominator is not `CORPUS`'s. */
