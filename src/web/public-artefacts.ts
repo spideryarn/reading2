@@ -44,6 +44,7 @@
  */
 import type { Comment } from "../types.js";
 import type { PublicArtefactSet, PublicArtefacts, PublicArticle } from "../public-types.js";
+import type { SavedSearch } from "./useSearch.js";
 
 /**
  * The four artefacts, lifted off the payload into an object that holds nothing
@@ -115,4 +116,30 @@ export function visitorComments(article: PublicArticle): Comment[] {
       status: comment.answer === undefined ? "none" : "done",
     }),
   );
+}
+
+/**
+ * **The owner's saved searches, as the search panel's own components want
+ * them.**
+ *
+ * The twin of `visitorComments` above, and it supplies the same missing field
+ * for the same reason: a `PublicSearchRun` carries no `status`, because the
+ * public read takes finished runs only in SQL (`PUBLIC_SEARCHES_WHERE`), so the
+ * field would be a constant on the wire as well as a fact about our machine.
+ * `SearchRun` requires one, and the panel branches on it in four places.
+ *
+ * **There is one answer here rather than two**, which is the difference from
+ * comments: `done` is the only status that crosses. `pending` and `error` are
+ * unreachable, and if they ever became reachable this line would be quietly
+ * wrong — which is why the guarantee is named rather than assumed.
+ *
+ * `stale` needs no derivation at all: the server has already compared this run
+ * against the fingerprint of the blocks in the same payload, using the same
+ * `isStale` the owner's hook calls. src/public-types.ts, PublicSearchRun.stale.
+ *
+ * **The import of `SavedSearch` is a type import**, so this module stays what
+ * its header says it is: a derivation over a payload, reaching no hook.
+ */
+export function visitorSearches(article: PublicArticle): SavedSearch[] {
+  return article.searches.map((run): SavedSearch => ({ ...run, status: "done" }));
 }

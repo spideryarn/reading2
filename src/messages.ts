@@ -2764,6 +2764,34 @@ export const SHARING_MARK_NAME_PRIVATE = "Private — change who can read this";
  * sentence still named only the article and its tree — true, and true by
  * omission of the four things an owner would most want to have been told.
  *
+ * **And the last clause was a live falsehood for a day.** It ended *"It never
+ * carries the comments, conversations, searches or notes of whoever added
+ * it."* Comments started crossing on 2026-09-04 and searches a few hours later
+ * (docs/plans/260904c-more-modes-on-a-shared-link.md), so this page told the
+ * visitor that the comments in the drawer beside it had not been shared. Found
+ * by GPT Sol reviewing the other half of the same day's work, and handed over
+ * by the session that got the review.
+ *
+ * The lesson is the one this file keeps relearning and is worth stating on the
+ * constant it bit: **a sentence that enumerates what does *not* cross is a
+ * promise with no test behind it**, and it goes stale in the one direction that
+ * matters. `tests/shared-inventory.test.ts` holds the owner's list to the
+ * projection; there is nothing equivalent for prose, so the clause left here is
+ * the shortest one that is still worth saying — conversations, which are
+ * deferred by decision rather than by accident (chat-tools.md).
+ *
+ * **And the positive half is prose here for one reason only: its audience has
+ * no list.** *"the marks, notes and searches of whoever added it"* is three
+ * items enumerated beside a derived inventory of the same facts, which is
+ * exactly the shape that killed `NOT_SHARED_NOTE` the same evening — so the
+ * difference has to be said rather than assumed. The owner has
+ * [shared-inventory.ts](web/shared-inventory.ts), swept from the modes, and
+ * gets no sentence. A visitor has nothing to read but this. **It is not a
+ * summary to be kept in step with that list**, and whoever next adds something
+ * to a shared link should ask whether this sentence has become false rather
+ * than whether it has become incomplete. GPT Sol, 2026-09-04, unprompted, on
+ * this very rewrite.
+ *
  * ## It used to be drawn on the owner's card as well, and both problems with
  * ## that had one cause: it was written for two audiences and fitted neither
  *
@@ -2802,8 +2830,9 @@ export const SHARING_MARK_NAME_PRIVATE = "Private — change who can read this";
  */
 export const SHARED_LINK_CARRIES =
   "A shared link carries the article, its table of contents, every zoom level, and the reading " +
-  "aids written for it — the summaries, the glossary, the ideas, the quotes. It never carries the " +
-  "comments, conversations, searches or notes of whoever added it.";
+  "aids written for it — the summaries, the glossary, the ideas, the quotes. It also carries the " +
+  "marks, notes and searches of whoever added it. Their conversations with the model are not " +
+  "part of it.";
 
 /**
  * **The honest limit, and we are the only ones saying it.**
@@ -3060,12 +3089,48 @@ export const SHARING_INVENTORY_UNKNOWN =
  * with the page rather than about how much of it anybody gets through.
  */
 export const SHARED_HEADING = "Anyone who opens it gets these";
+/**
+ * **And none of it can spend your money** — the sentence that came back on
+ * 2026-09-04, having been dropped on 2026-09-02.
+ *
+ * The note above `NOT_SHARED_HEADING` used to carry *"nothing they do costs a
+ * model call"* and it went with the rest of that paragraph, recorded at the
+ * time as *"worth a line back if an owner ever asks whether a link can spend
+ * their money."* Diagram and Search moved into this column two days later, and
+ * both are things that cost the owner real money to make — so an owner reading
+ * *Search* here would reasonably wonder whether a stranger can ask one.
+ *
+ * **It is the one prose claim on this card with a test behind it.**
+ * `tests/public-network-trace.test.tsx` pins a signed-out reader at zero
+ * requests outside `/api/public/` and zero requests that are not `GET`, through
+ * every mode. So this is not a promise about intent, it is a statement of what
+ * the suite refuses to let change — which is exactly what the deleted note was
+ * not.
+ *
+ * **It reads doubly true now that the article is listed rather than only
+ * linked** (`SHARING_ON`, above): the reader who finds this piece was never
+ * sent anything by anybody, and they still cannot spend a penny of the owner's.
+ */
+export const SHARED_NOTE =
+  "Reading any of this is free: nothing a visitor does can spend a model call, and nothing they " +
+  "do adds to it.";
 export const SHARED_IF_BUILT_HEADING = "Not built yet — and these would go out too";
 export const SHARED_IF_BUILT_NOTE =
   "Building one later, while the article is still shared, publishes it. Nothing asks you again.";
 export const NOT_SHARED_HEADING = "These stay with you";
-export const NOT_SHARED_NOTE =
-  "A shared link carries the piece and what the model wrote about it, never your own work on it.";
+/* **`NOT_SHARED_NOTE` was deleted on 2026-09-04**, and the deletion is the fix
+   rather than a tidy-up. It said *"A shared link carries the piece and what the
+   model wrote about it, never your own work on it"* — a hand-written summary of
+   a **derived** list, sitting under the third column of a card whose first
+   column, that same day, began listing *Your comments and notes*. So the card
+   said both things at once.
+
+   GPT Sol found it and recommended deletion over rewording, and the reason
+   generalises: the two notes that remain are about *this column* (`SHARED_IF_BUILT_NOTE`
+   says what happens if you build one later) and cannot be contradicted by the
+   sweep, while a note summarising the whole card can, and did. The heading
+   above already says what the column is. `SHARED_HEADING`'s column has no note
+   for the same reason and never needed one. */
 
 /* There is deliberately **no per-row "nobody has built one" sentence**, and
    there was for one draft. It replaced the row's own description, so the
@@ -3265,9 +3330,19 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   ideas: "The propositions the model says the piece assumes or argues for.",
   quotes: "The lines the model picked out, in the article's own words.",
   timeline: "When the piece says things happened, in the order it says they happened.",
-  diagram: "The pictures of the argument — the tree, the neighbours, the projection.",
+  /* **Not "the tree, the neighbours, the projection"**, which this said until
+     2026-09-04 and which named one picture that was cut on 2026-08-30 and two
+     that are behind the experimental switch. What a reader without that switch
+     gets is the Sketch and only the Sketch (docs/project/diagram.md). */
+  diagram: "The drawing of the argument, and the caption written under it.",
   chat: "Your conversations with the article, and where in it each one is anchored.",
-  search: "What you have searched this piece for, and what came back.",
+  /* Both halves, because the second is the one an owner would not predict from
+     the label: the questions are **in their own words**, which is the one field
+     of a saved run that is disclosure rather than article prose
+     (src/public-types.ts § PublicSearchRun). Whether a visitor can ask a *new*
+     one is not said on the row — it is said once, for the whole column, in
+     `SHARED_NOTE` below. */
+  search: "The questions you have put to this piece, in your words, and the passages they found.",
   remember: "What you said you took from the piece, and the quizzes on it.",
   referee: "Your peer-review pass over the piece: your criteria, and what it found against them.",
 };

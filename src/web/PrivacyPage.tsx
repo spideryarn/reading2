@@ -345,9 +345,12 @@ export function PrivacyPage() {
           that is what the setting is for. They get the article, its outline,
           its arc, the glossary, the ideas, the quotes, the timeline and the thread, some of which
           the model wrote knowing what your profile says about you, even though the profile itself
-          is not shared. <strong className="tw:text-foreground">They also get your comments</strong>
-          {" "}— the passages you marked, what you wrote about them, and what the model answered when
-          you asked. Your chat conversations are not shared, and neither is your profile. The
+          is not shared.{" "}
+          <strong className="tw:text-foreground">They also get your comments and your searches</strong>
+          {" "}— the passages you marked, what you wrote about them, what the model answered when you
+          asked, and the questions you put to the piece along with the passages they found. They can
+          read all of that and add none of it. Your chat conversations are not shared, and neither
+          is your profile. The
           sharing card lists exactly what will go out before you turn it on. And{" "}
           <strong className="tw:text-foreground">we can see what is in the app</strong>: there is an
           administrator’s view across all accounts, and we may read your articles and what you have

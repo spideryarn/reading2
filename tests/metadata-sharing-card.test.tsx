@@ -303,7 +303,14 @@ describe("the sharing card, on the page that owns it", () => {
       expect.arrayContaining(["Ideas", "Quotes", "The arc"]),
     );
     expect(under("Anyone who opens it gets these")).not.toContain("The arc");
-    expect(under("These stay with you")).toEqual(expect.arrayContaining(["Chat", "Search"]));
+    /* **`Search` moved out of this column on 2026-09-04**, so `Chat` and
+       `Remember` are what is left of the modes that cost a model call. The
+       assertion is kept at two names rather than one for the reason it had two
+       to begin with: a single label could be satisfied by a column drawing one
+       chip and losing the rest.
+       docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
+    expect(under("These stay with you")).toEqual(expect.arrayContaining(["Chat", "Remember"]));
+    expect(under("Anyone who opens it gets these")).toContain("Search");
   });
 
   /**

@@ -556,7 +556,16 @@ describe("the one query that lists articles for nobody in particular", () => {
   const PERMITTED = [
     {
       file: "src/store/public-reader.ts",
-      fns: ["publicCurrentRevisionQuery", "publicCommentsQuery"],
+      fns: [
+        "publicCurrentRevisionQuery",
+        "publicCommentsQuery",
+        /* Added 2026-09-04, and for the identical reason as the line above it:
+           the join back to `articles` exists so that `publicSlug` is re-applied
+           to a `search_runs` read rather than an article id being trusted from
+           an earlier statement.
+           docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
+        "publicSearchesQuery",
+      ],
     },
     { file: LISTING.file, fns: [LISTING.fn] },
   ];

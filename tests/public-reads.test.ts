@@ -21,7 +21,12 @@
 import { QueryBuilder } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import { publicBlocksQuery, publicCurrentRevisionQuery } from "../src/store/public-reader.js";
+import {
+  publicBlocksQuery,
+  publicCommentsQuery,
+  publicCurrentRevisionQuery,
+  publicSearchesQuery,
+} from "../src/store/public-reader.js";
 import { lockedArticleQuery } from "../src/store/pg-visibility.js";
 
 const articleQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", "article").toSQL();
@@ -29,6 +34,8 @@ const headQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slu
 const article = articleQuery.sql;
 const headSql = headQuery.sql;
 const blocks = publicBlocksQuery(new QueryBuilder() as never, "rev-1").toSQL().sql;
+const commentsQuery = publicCommentsQuery(new QueryBuilder() as never, "a-slug").toSQL();
+const searchesQuery = publicSearchesQuery(new QueryBuilder() as never, "a-slug").toSQL();
 
 describe("the public revision read", () => {
   /**
@@ -312,6 +319,105 @@ describe("the public blocks read", () => {
  * outside. A timing test that has to be lucky is not the only evidence this
  * should rest on.
  */
+/**
+ * **The two reads of the owner's own work**, added on 2026-09-04 when a shared
+ * link began carrying comments and then saved searches.
+ *
+ * These are the queries `tests/public-imports.test.ts` widened its table
+ * allowlist for, and the case it made for each of them was about *this SQL*:
+ * named columns, a join back to `articles`, and `publicSlug` repeated in the
+ * query's own `where`. That last is the whole argument — a naked `article_id`
+ * from an earlier statement is not authority — and it is only visible in the
+ * statement, which is why it is asserted here rather than by reading the
+ * projection object.
+ *
+ * **The row filters are read too.** Both queries refuse rows in SQL rather than
+ * in a `map`, and a filter that has moved into a projection is a filter one
+ * satisfied typechecker away from being widened. Deleting either predicate is
+ * red here.
+ */
+describe("the public reads of the owner's own work", () => {
+  it("re-asks the visibility question in each query's own where", () => {
+    for (const [name, q] of [
+      ["comments", commentsQuery],
+      ["searches", searchesQuery],
+    ] as const) {
+      expect(q.sql, name).toMatch(
+        /"articles"\."slug" = \$1 and "spideryarn"\."articles"\."visibility" = \$2/,
+      );
+      expect(q.params[0], name).toBe("a-slug");
+      expect(q.params[1], name).toBe("public");
+    }
+  });
+
+  /** Ownerless, exactly as the article read is. */
+  it("mentions owner_id in neither", () => {
+    expect(commentsQuery.sql).not.toContain("owner_id");
+    expect(searchesQuery.sql).not.toContain("owner_id");
+  });
+
+  /**
+   * **A referee's note and an unfinished model call, refused in the statement.**
+   *
+   * `criterion_id is null` is the one that would be easiest to lose: dropping
+   * `criterionId` and `valence` from the DTO does not make the *body* of a peer
+   * review anything other than a peer review, so the row has to go rather than
+   * be projected thin. GPT Sol found it; the plan carries it as a blocking
+   * finding.
+   */
+  it("takes only finished, non-referee comments", () => {
+    expect(commentsQuery.sql).toMatch(/"criterion_id" is null/);
+    expect(commentsQuery.sql).toMatch(/"status" in \('none','done'\)/);
+  });
+
+  /** And finished runs only, for the reason the comments filter gives. */
+  it("takes only finished search runs", () => {
+    expect(searchesQuery.sql).toMatch(/"status" = 'done'/);
+  });
+
+  /**
+   * **The columns each one does not ask for.**
+   *
+   * Asserted as absences from the statement rather than as keys missing from a
+   * projection object, because it is the `select` that decides what leaves
+   * Postgres. `source_hash` is the interesting one and it is on the *other*
+   * list: the searches read does fetch it, deliberately, and it stops at the
+   * mapping — see the positive case below.
+   */
+  it("leaves the operational columns out of the select", () => {
+    for (const column of ['"model"', '"error"', '"attempt_id"', '"attempt_started_at"']) {
+      expect(searchesQuery.sql, column).not.toContain(column);
+    }
+    for (const column of ['"model"', '"error"', '"lease_expires_at"', '"thread_id"', '"valence"']) {
+      expect(commentsQuery.sql, column).not.toContain(column);
+    }
+  });
+
+  /**
+   * **`source_hash` is fetched on purpose**, and this is the assertion that
+   * says so out loud.
+   *
+   * It is the one column in the public surface whose presence in a `select` is
+   * not a promise about the wire: `isStale` turns it into a boolean in
+   * `loadArticle` and the DTO never sees it. Pinned here so that somebody
+   * reading the absences above does not "tidy" it away and leave every saved
+   * search reporting itself stale — a failure with no symptom except a warning
+   * on every row. `tests/public-dto.test.ts` is the other half, and asserts the
+   * hash does not cross.
+   */
+  it("does fetch the fingerprint it derives staleness from", () => {
+    expect(searchesQuery.sql).toContain('"source_hash"');
+  });
+
+  /** And they really do read the prose, or every absence above proves nothing. */
+  it("asks for what a reader is here for", () => {
+    expect(commentsQuery.sql).toContain('"quote"');
+    expect(commentsQuery.sql).toContain('"answer"');
+    expect(searchesQuery.sql).toContain('"criterion"');
+    expect(searchesQuery.sql).toContain('"hits"');
+  });
+});
+
 describe("the visibility switch's locked read", () => {
   const q = lockedArticleQuery(new QueryBuilder() as never, "a-slug").toSQL();
 

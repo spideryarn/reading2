@@ -240,6 +240,14 @@ const SKETCH: PublicSketch = {
 const PUBLIC_NOTE = "The bit I keep coming back to.";
 const PUBLIC_ANSWER = "Because the example is doing the arguing.";
 
+/**
+ * The owner's saved question, in their own words — the one field of a search
+ * run that is disclosure rather than article prose (src/public-types.ts
+ * § PublicSearchRun). Distinctive enough that finding it on screen means the
+ * payload's list was drawn rather than an empty state.
+ */
+const PUBLIC_CRITERION = "anywhere the argument turns on a number";
+
 const ARTICLE: PublicArticle = {
   meta: { slug: SLUG, title: "A piece", byline: "Somebody" },
   sketch: SKETCH,
@@ -256,6 +264,27 @@ const ARTICLE: PublicArticle = {
       createdAt: "2026-09-01T09:00:00.000Z",
       body: PUBLIC_NOTE,
       answer: PUBLIC_ANSWER,
+    },
+  ],
+  /* **A real one too, and for the same reason.** A visitor's search band with
+     an empty list draws the *"whoever added this article hasn't searched it"*
+     state, which passes every assertion about not fetching while proving
+     nothing about what the reader is shown.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
+  searches: [
+    {
+      id: "spya-run23z",
+      criterion: PUBLIC_CRITERION,
+      createdAt: "2026-09-02T09:00:00.000Z",
+      stale: false,
+      hits: [
+        {
+          blockId: "spya-bbbbbb",
+          quote: "The first paragraph of the piece.",
+          confidence: 90,
+          reasoning: "It says the thing.",
+        },
+      ],
     },
   ],
   /* Absent: this fixture has never been through the `assets` step, so the
@@ -782,7 +811,12 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
   diagram: { where: ".mode-band.diag", says: PUBLIC_SKETCH_TITLE },
   /* The four that spend, each named by `MODE_LABEL[mode]` — the policy in
      src/web/visitor.ts carries no string of its own. */
-  search: { where: VISITOR_BAND, says: "Search is for whoever added this article" },
+  /* **Free since 2026-09-04**, and the string is the owner's own criterion off
+     the payload — so this row fails if the saved list stops being drawn.
+     Asserting the band's *"Search"* heading would pass over an empty `<aside>`,
+     which is the trap the two facts in this map exist to close.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
+  search: { where: ".mode-band.srch", says: PUBLIC_CRITERION },
   chat: { where: VISITOR_BAND, says: "Chat is for whoever added this article" },
   remember: { where: VISITOR_BAND, says: "Remember is for whoever added this article" },
   /* Referee reached the fall-through until 2026-09-02 and was announced by its
@@ -1463,6 +1497,173 @@ describe("a signed-out browser on a shared document", () => {
   });
 
   /**
+   * **The owner's saved searches, read and only read.**
+   *
+   * Greg drew the line at *making* one — *"Only owner can create new searches.
+   * Everyone else can see the ones they have already created."* — so the four
+   * verbs and the composer are what must not be on this screen, and the list
+   * and its marks are what must.
+   *
+   * **`/api/search/:slug` never being asked is the assertion behind the whole
+   * design.** `useSearch` fetches on mount, so it is mounted in `SearchBand`
+   * alone; if somebody ever gave `VisitorSearchBand` a slug and a hook, this is
+   * the line that goes red rather than a code review.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
+   */
+  it("shows the owner's saved searches, and offers no way to add one", async () => {
+    await open("?mode=search");
+
+    /* The reader's own question, drawn from the payload. */
+    expect(host.textContent).toContain(PUBLIC_CRITERION);
+    /* And no composer: the box is one input over both matchers, so its absence
+       is the whole of "no new searches, and no words matcher either". */
+    expect(host.querySelector(".srch-box"), "the composer").toBeNull();
+    expect(
+      [...host.querySelectorAll("input")].filter((i) => i.type !== "checkbox"),
+      "any text input at all",
+    ).toEqual([]);
+
+    /* The three per-row controls, **by their titles**: all three are the same
+       `.srch-icon` button, so a class would not tell them apart, and the title
+       is what the reader is offered. A control whose only difference from its
+       neighbour is a tooltip has to be asserted by the tooltip. */
+    const titles = [...host.querySelectorAll("button")].map((b) => b.getAttribute("title") ?? "");
+    expect(titles, "delete").not.toContain("Delete this search");
+    expect(titles, "reuse").not.toContain("Put this question back in the box");
+    expect(titles, "the colour picker").not.toContain("Change this search's colour");
+    /* And the row itself is there, or all three absences are absences of
+       everything — the row's own button carries the criterion in its title. */
+    expect(titles.some((t) => t.includes(PUBLIC_CRITERION)), "the row").toBe(true);
+
+    expect(trace.filter((r) => r.url.includes("/api/search/")), "no search read").toEqual([]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+    expect(outsidePublic()).toEqual([]);
+  });
+
+  /**
+   * **The stale warning, without the button it used to name.**
+   *
+   * The fixture's run is fresh, so nothing in the case above reaches this copy
+   * at all — which is exactly why GPT Sol found it by reading and not by
+   * running: the row's tooltip and the banner both ended *"↺ puts the question
+   * back in the box so you can ask it again"*, naming a control a visitor does
+   * not have and a box that is not on the screen.
+   *
+   * The warning itself stays, because it is just as true for them: the marks in
+   * their prose may be sitting on words that have moved. What goes is the
+   * instruction. Same shape as the empty state — docs/project/copy.md.
+   */
+  it("warns a visitor a search is out of date, and does not tell them to redo it", async () => {
+    served = {
+      ...ARTICLE,
+      searches: (ARTICLE.searches ?? []).map((run) => ({ ...run, stale: true })),
+    };
+    await open("?mode=search");
+
+    /* Tick it on, or the banner is about nothing on screen. */
+    const box = host.querySelector<HTMLInputElement>('.srch-saved-tick input[type="checkbox"]');
+    expect(box, "the tick").not.toBeNull();
+    await act(async () => box?.click());
+
+    expect(host.textContent, "the warning").toContain("older version of the article");
+    expect(host.textContent, "the instruction").not.toContain("puts its question back in the box");
+    const titles = [...host.querySelectorAll("span, button")].map(
+      (e) => e.getAttribute("title") ?? "",
+    );
+    expect(titles.join(" | "), "the row's tooltip").not.toContain("so you can ask it again");
+    /* And it does not assert a cause nobody knows: `stale` is also true when a
+       run never recorded what it was answered against. */
+    expect(host.textContent, "an unsupported claim").not.toContain("The text was re-fetched");
+
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+    expect(outsidePublic()).toEqual([]);
+  });
+
+  /**
+   * **And the controls a visitor *does* get are pressed**, which the case above
+   * and its neighbours do not do.
+   *
+   * GPT Sol named this as the remaining blind spot in the trace, 2026-09-04:
+   * every search case opens the mode and reads the page, so a write attached to
+   * the tick, the row, select-all or the sort control would escape all of them.
+   * The whole point of leaving those controls on a visitor's screen is that they
+   * are free — this is what says so.
+   */
+  it("lets a visitor press everything they are given, and still buys nothing", async () => {
+    await open("?mode=search");
+
+    /* Tick it on first, and check the marks land — otherwise everything below
+       is clicking around a page with nothing on it, which is the shape of a
+       pass that means nothing. */
+    const box = host.querySelector<HTMLInputElement>('.srch-saved-tick input[type="checkbox"]');
+    expect(box, "the tick").not.toBeNull();
+    await act(async () => box?.click());
+    expect(host.querySelectorAll("mark.hit").length, "marks in the prose").toBeGreaterThan(0);
+
+    /* Then the row itself (which solos it), then every remaining button and
+       every remaining input the band renders — select-all, the two sort
+       buttons, the threshold slider. Some of these turn the marks back off,
+       which is fine: what is being asserted is that none of them writes. */
+    const row = host.querySelector<HTMLButtonElement>(".srch-saved-body");
+    expect(row, "the row").not.toBeNull();
+    await act(async () => row?.click());
+    for (const b of [...host.querySelectorAll("button")]) {
+      await act(async () => b.click());
+    }
+    for (const input of [...host.querySelectorAll<HTMLInputElement>("input")]) {
+      await act(async () => input.click());
+    }
+
+    expect(trace.filter((r) => r.method !== "GET"), "a write").toEqual([]);
+    expect(outsidePublic(), "a request outside the closed room").toEqual([]);
+  });
+
+  /**
+   * **A pasted `?match=words` does not put a visitor in front of a box that is
+   * not there.**
+   *
+   * `?match=` is ordinary query state, so hiding the toggle would not have been
+   * enough — the same reason the diagram panel pins `?diagram=` rather than
+   * filtering its chip row. Without the pin this reader gets the words
+   * matcher's empty state, *"Type to find words in the article"*, over a panel
+   * with nothing to type into.
+   */
+  it("pins a visitor to the saved searches, whatever ?match= says", async () => {
+    await open("?mode=search&match=words&find=prose");
+
+    expect(host.textContent).toContain(PUBLIC_CRITERION);
+    expect(host.textContent, "the words matcher's instruction").not.toContain(
+      "Type to find words in the article",
+    );
+    expect(outsidePublic()).toEqual([]);
+  });
+
+  /**
+   * **And an article nobody has searched says so without inviting anything.**
+   *
+   * The owner's empty state is an instruction — *"Describe what you are
+   * after"* — and a visitor cannot follow it. The same shape the comments
+   * drawer settled on one stage earlier: a visitor is told what the absence
+   * means and nothing else. docs/project/copy.md.
+   */
+  it("tells a visitor an unsearched article is unsearched, and asks nothing of them", async () => {
+    served = { ...ARTICLE, searches: [] };
+    await open("?mode=search");
+
+    expect(host.textContent).toContain("hasn't searched it");
+    expect(host.textContent, "the owner's instruction").not.toContain("Describe what you are after");
+    expect(host.querySelector(".srch-box"), "the composer").toBeNull();
+    /* **And it says it once.** Found in the browser pass, 2026-09-04: the
+       sentence above was followed by "Nothing matched. The model found nothing
+       in this article that matches" — two empty states stacked, saying
+       different things about the same article, the second of them a claim about
+       a search nobody ran. Pre-existing for owners too; the visitor's screen is
+       where it was seen. */
+    expect(host.textContent, "a second empty state").not.toContain("Nothing matched");
+    expect(outsidePublic()).toEqual([]);
+  });
+
+  /**
    * **And the drawing itself comes from the payload**, with no request for it.
    *
    * The negative twin of the case above: with a sketch on the article a visitor
@@ -2006,14 +2207,19 @@ describe("when the reader's own session cannot be confirmed", () => {
     /* **Not `View only`**, which is the `ViewOnlyChip` in the *reading view's*
        controls bar and is drawn on none of these three (PublicChrome.tsx). What
        carries the same fact here is `SharedNotice`'s first sentence, so that is
-       what is asserted. */
-    /* The constant rather than a literal. This asserted the fragment
-       "shared this article with you", which was a substring of
-       `SHARED_WITH_YOU` until 2026-09-04 and is a substring of nothing
-       now: the sentence had to stop saying somebody sent this reader a
-       link, because the public shelf brings readers nobody sent
-       anything. A grep for the whole old sentence does not find a
-       fragment of it, which is how this went red on `dev`. */
+       what is asserted.
+
+       **The wording changed on 2026-09-04**: it was *"Somebody shared this
+       article with you"*, which stopped being true the day a public article
+       could be found through the public listing rather than through a link
+       somebody sent. src/messages.ts § SHARED_WITH_YOU.
+
+       **Asserted as the constant, not as a surviving phrase of it.** This held
+       the fragment "shared this article with you", which was a substring of the
+       old sentence and is a substring of nothing now — so it went red on `dev`,
+       and a grep for the whole old sentence could never have found it. A
+       fragment of a shared constant is an assertion that goes red for a
+       rewording and green for a rename, which is backwards. */
     expect(host.textContent).toContain(SHARED_WITH_YOU);
     /* The two halves of C3: the fact, and the one action that gets the reader
        off this footing. Neither may depend on which view they wandered to. */
