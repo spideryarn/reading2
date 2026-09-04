@@ -114,6 +114,24 @@ file it touched. "They happened to know" is a finding, and so is a pair of files
 together commit after commit yet never import each other. Fix it with the cheapest of the four
 answers above; a signpost is the fallback, not the first choice.
 
+**Replay the commit bodies too, and the agents' own memory.** Those are the two places knowledge goes
+when "update the docs as you go" fails to fire, and it fails the same two ways every time. An author
+who has just written twenty lines of *why* into a commit message has documented the decision and
+feels it — but a body is found by `git log --grep` and a doc by reading, and whoever opens that file
+next month does not know to grep. And a trap that bit mid-task goes into the agent's own memory
+directory as a reflex, where one agent on one machine reads it. Nominate from both: commits since the
+last sweep with a long body whose diff touched no doc, and every file under the memory directory.
+Most nominees are fixes whose reasoning belongs in the commit and nowhere else — move the ones naming
+a **decision**, a **rejected option**, or a **contract two places must keep**, one sentence each with
+the SHA, into the doc that owns the area. A memory whose trap has an owner in the docs moves there
+and leaves a pointer; which credential a machine lacks stays a memory.
+
+**Proving a doc gap needs the same discipline as proving a bug.** Grepping for phrasing you invented
+finds identifiers and misses prose, which says the same thing in different words across a line break
+— five of six false gaps in one trawl died that way, each already documented under a heading nobody
+would have guessed. Read the owning doc's table of contents before believing it is silent, and
+search wherever else the project keeps prose, not only the docs directory.
+
 ### Size is a symptom, not the disease
 
 Measure — run whatever static analysis the project has, count lines and complexity — but hold the

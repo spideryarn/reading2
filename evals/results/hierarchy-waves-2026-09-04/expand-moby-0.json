@@ -1,0 +1,27 @@
+{
+  "section": {
+    "title": "The Whale's Head and Whiteness",
+    "blocks": 382,
+    "words": 34884
+  },
+  "elapsed": 22,
+  "usage": {
+    "input_tokens": 76558,
+    "output_tokens": 1938,
+    "output_tokens_details": {
+      "thinking_tokens": 388
+    },
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "server_tool_use": null,
+    "service_tier": "standard",
+    "speed": "standard"
+  },
+  "stop": "end_turn",
+  "raw": "{\"children\": [\n{\"start\": \"spya-qarmqe\", \"title\": \"The Cabin-Table\", \"gist\": \"Ahab's silent, ritualized dinner hierarchy reveals the crew's fear-bound deference aboard the Pequod.\", \"sourceHeading\": \"CHAPTER 34. The Cabin-Table.\", \"needsDeeper\": false, \"why\": \"Single sustained description of one custom.\"},\n{\"start\": \"spya-xggrr9\", \"title\": \"The Mast-Head\", \"gist\": \"Ishmael describes mast-head watch duty and confesses his own dreamy, pantheistic negligence aloft.\", \"sourceHeading\": \"CHAPTER 35. The Mast-Head\", \"needsDeeper\": false, \"why\": \"One continuous reflective essay.\"},\n{\"start\": \"spya-fc3t6e\", \"title\": \"Quarter-Deck, Sunset, Dusk\", \"gist\": \"Ahab dramatically nails the gold doubloon to the mast, swears the crew to hunt Moby Dick, and Starbuck privately despairs at being bound to a madman.\", \"sourceHeading\": \"CHAPTER 36. The Quarter-Deck\", \"needsDeeper\": true, \"why\": \"Three distinct scenes: oath, Ahab's soliloquy, Starbuck's reaction.\"},\n{\"start\": \"spya-ea6tpn\", \"title\": \"Night-Watch and Forecastle Revelry\", \"gist\": \"Stubb jokes off his unease while the diverse crew sings, dances, and quarrels before a storm breaks, foreshadowing doom.\", \"sourceHeading\": \"CHAPTER 39. First Night-Watch\", \"needsDeeper\": true, \"why\": \"Two distinct scenes: Stubb's soliloquy and the forecastle drama.\"},\n{\"start\": \"spya-mpgpt3\", \"title\": \"Moby Dick and His Whiteness\", \"gist\": \"Ishmael recounts the legend and terror of Moby Dick, then meditates at length on why the whale's whiteness itself inspires deepest dread.\", \"sourceHeading\": \"CHAPTER 41. Moby Dick.\", \"needsDeeper\": true, \"why\": \"Two distinct essays: the whale's history and the whiteness meditation.\"},\n{\"start\": \"spya-b05bnq\", \"title\": \"Rumors, Charts, and Surmises\", \"gist\": \"Strange noises below deck, Ahab's obsessive chart-plotting of the whale's migrations, and his calculated management of the crew's loyalty all advance the hunt's planning.\", \"sourceHeading\": \"CHAPTER 43. Hark!\", \"needsDeeper\": true, \"why\": \"Three separate chapters with distinct concerns: noise, charts, psychology.\"},\n{\"start\": \"spya-mqq8fj\", \"title\": \"Surmises and the Affidavit\", \"gist\": \"Ahab calculates how to keep his crew's mundane motives intact while Ishmael marshals real-world testimony that whales can deliberately destroy ships.\", \"sourceHeading\": \"CHAPTER 46. Surmises\", \"needsDeeper\": false, \"why\": \"One sustained argument about motive and evidence.\"},\n{\"start\": \"spya-dgwn92\", \"title\": \"The Mat-Maker and First Lowering\", \"gist\": \"A meditative weaving scene gives way to the ship's first chaotic, near-fatal chase after whales, including the shocking appearance of Fedallah's phantom boat crew.\", \"sourceHeading\": \"CHAPTER 47. The Mat-Maker.\", \"needsDeeper\": true, \"why\": \"Multiple distinct episodes: weaving, lowering, storm, near-drowning.\"},\n{\"start\": \"spya-r95wvw\", \"title\": \"The Hyena and Ahab's Crew\", \"gist\": \"Ishmael's gallows humor after near-death leads to reflection on Ahab's secretive extra boat crew led by the mysterious Fedallah.\", \"sourceHeading\": \"CHAPTER 49. The Hyena.\", \"needsDeeper\": false, \"why\": \"One continuous reflective thread on Fedallah's mystery.\"},\n{\"start\": \"spya-td0rbx\", \"title\": \"Spirit-Spout, Albatross, and Gam\", \"gist\": \"An eerie recurring phantom jet, a failed hail with the ghostly ship Albatross, and an explanation of the whalers' social 'gam' custom round out the voyage's mounting omens.\", \"sourceHeading\": \"CHAPTER 51. The Spirit-Spout.\", \"needsDeeper\": true, \"why\": \"Three distinct episodes: omen, ship encounter, and cultural digression.\"}\n]}"
+}

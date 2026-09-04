@@ -518,17 +518,37 @@ Three things to know before touching any of it:
 The plan, the review that found three of these, and the install path they exist for:
 [docs/plans/260828av-mobile-screen-real-estate.md](../plans/260828av-mobile-screen-real-estate.md).
 
+## The stacking order, which is real even though it is not a scale
+
+**Do not read a number off this list and reuse it.** The values are not a scale and were not
+designed; what is load-bearing is the *order*, and only in a few places where one thing has to clear
+another. Those places, with the reason:
+
+- **The tooltip is frontmost, at 100.** A tooltip is always about the thing you are pointing at, so
+  anything in front of it is a hover that appears to do nothing. It has to clear the spine and both
+  sticky bars.
+- **The dock and its drawer sit above the mode band and the spine** (96/95, scrim 92), because the
+  drawer is a surface you open *over* the reading view. The offline strip is 97, above the dock,
+  since a strip the dock covers cannot tell you the thing it exists to tell you.
+- **The spine is 45 and the mode band 44**, both above the reading column's own sticky furniture.
+- Dialogs — comment, chat, annotate — share 70.
+
+Two things that deliberately escape all of this: the figure **lightbox** and the **feedback dialog**
+are native modal `<dialog>` elements in the browser's top layer, which is above every z-index on the
+page by definition. That is the cheapest answer available for anything that must cover *everything*,
+and it is worth reaching for again rather than minting a bigger number.
+
+The full inventory is 28 declarations from 0 to 100, counted on 2026-09-04 with
+`grep -nE '^\s*z-index:' src/web/styles.css` — a dated example rather than a fact to maintain here.
+Run it before assuming a gap is free.
+
 ## What is not written down yet
 
 The honest list. Each of these currently lives only as values in `styles.css`, and someone will
 eventually have to decide whether they are a system or an accident:
 
-- **The z-index budget.** Nine values between 1 and 80, and their ordering is real — the spine is
-  45, the tooltip 80 *because* it must clear the spine and both sticky bars. Written as a comment
-  on one line of `styles.css`, nowhere else. This is the most likely thing to break next. The one
-  thing that had to cover *everything* — the figure lightbox — sidesteps it entirely by being a
-  native modal `<dialog>` in the top layer, which is the cheapest answer available and is worth
-  reaching for again.
+- **The z-index budget.** Still not a system, but no longer unwritten — see
+  [the stacking order](#the-stacking-order-which-is-real-even-though-it-is-not-a-scale) below.
 - **Spacing.** No scale. `rem` values chosen per rule. Control *heights* on a list page are
   settled — see [Controls](#controls-one-height-one-radius-one-hover) above — but that is one row
   of one page agreeing with itself, not a scale, and it should not be read as one.

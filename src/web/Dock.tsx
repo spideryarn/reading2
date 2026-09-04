@@ -468,7 +468,7 @@ interface ModeUi {
 }
 
 /* `satisfies` and deliberately **not** `as const satisfies`, which is what
-   `STEP_ORDER` in src/pipeline.ts uses for the same check. `satisfies` alone
+   `STEP_ORDER` in src/step-order.ts uses for the same check. `satisfies` alone
    already keeps each row's `mode` as its literal — that is the only field
    `ModesMissingFromDock` reads — while `as const` would additionally make the
    element type a union of thirteen distinct shapes, twelve of which have no

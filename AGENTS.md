@@ -31,7 +31,9 @@ listed here; the names under each are files in `docs/project/`.
 - **[architecture.md](docs/project/architecture.md)** — the pipeline stage by stage, what a block
   is, who owns which stage, where the data lives.
   <br>↳ `block-ids.md` · `fetching.md` (stage 1) · `content-extraction.md` (stage 2, and there are
-  two) · `hierarchy.md` · `ingest-queue.md` (paste a URL, get an article) ·
+  two) · `hierarchy.md` ·
+  `article-images.md` (stage 4.5 — the figures the piece came with, hosted by us) ·
+  `ingest-queue.md` (paste a URL, get an article) ·
   `ai-gateway.md` (every paid call goes through OpenRouter, bar one declared exception) ·
   `prompt-caching.md` · `database.md` ·
   `sql.md` (columns over JSON, keys over good intentions) ·
@@ -321,7 +323,11 @@ nothing else has a copy of.
 - **Ask another model while you are still thinking, not only when you are reviewing.** GPT Sol
   ([codex-cli-as-subagent.md](docs/reusable/codex-cli-as-subagent.md)) for design calls and tricky
   bugs, and **Fable** — a subagent with `model: "fable"` — especially when the requirements are
-  unclear or you need someone to arbitrate between two options that both look fine.
+  unclear or you need someone to arbitrate between two options that both look fine. Fable is a
+  different **model**, not a different **family**, so it is never the cross-family check; only Sol
+  is that. And no subagent is read-only by construction — an `Explore` lacks `Edit` and `Write` but
+  keeps an unrestricted `Bash`, so "don't edit" is a brief you write, not a boundary you get
+  ([engineering-manager.md § Delegate](docs/reusable/engineering-manager.md#delegate)).
 - **When you rename anything, hunt down everything that names it.** A rename is never one edit. Send
   a cheap subagent to sweep the whole repo — code, docs, plans, tests, fixtures, scripts,
   `package.json` — and grep for fragments as well as the whole name, since a `camelCase` rename and

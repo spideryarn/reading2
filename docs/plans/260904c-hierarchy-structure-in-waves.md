@@ -1,8 +1,16 @@
 # The hierarchy structure pass, in waves
 
-**Status: paused after stage 1b, with the prerequisites landed and the ceiling still there.**
-Started 2026-09-04. The `hierarchy-waves` worktree was removed on 2026-09-04; everything below is on
-`dev`, and a successor needs a fresh one.
+**Status: superseded on 2026-09-04 by
+[260904d-deepen-fat-sections.md](260904d-deepen-fat-sections.md), which is the same cascade with a
+better argument and a per-child self-assessment. Read that one; this is here for its stage-0 history
+and its measurements.** Paused after stage 1b, with the prerequisites landed. The `hierarchy-waves`
+worktree was removed on 2026-09-04; everything below is on `dev`.
+
+**Two of this plan's headline numbers did not survive later measurement**, and 260904d has the
+corrections. The 1,976-block ceiling moved to 2,889 when `estimateHierarchyTokens` was re-rated, and
+the 163–320 s wait is not a length effect: a 2,569-block book answers in **102 seconds**. The
+argument that replaced them is reliability — a whole-document call asked for a denser tree on a book
+failed four times out of four, on invented ids and reversed ranges, while scoped calls did not.
 
 **Landed:** stages 0, 0b, 0c (three production fixes on the incumbent path, each independently
 worth having) and 1a, 1b (the eval's wall-clock measurement, and the cascade's deterministic core in
