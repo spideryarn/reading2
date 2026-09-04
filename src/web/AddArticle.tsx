@@ -381,10 +381,10 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
           </p>
 
           {/* **The reason, and something to press.** A quota refusal gets a link to
-              `/profile` beside it — the sentence has been naming an Upgrade button
-              since the wall went up, and this is the first version of this box where
-              that button exists. Everything else renders as it always did.
-              QuotaNotice.tsx. */}
+              `/pricing` beside it — the sentence has been naming somewhere to
+              subscribe since the wall went up, and this is the first version of this
+              box where that somewhere exists. Everything else renders as it always
+              did. QuotaNotice.tsx. */}
           <QuotaNotice
             message={queue.error}
             className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-destructive"

@@ -32,7 +32,6 @@ import { Composer } from "./ChatPanel.js";
    (docs/reusable/silent-success.md). Caught by the browser pass it was built
    for, which read `document.styleSheets` rather than trusting the picture.
    Both, and in this order, matching `preview-profile.tsx`. */
-import "./styles.css";
 import "./tailwind.css";
 import type { LiveApi, LivePhase } from "./live/useLiveConversation.js";
 
