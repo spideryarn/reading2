@@ -1276,6 +1276,14 @@ export const QUIZ_NOTHING_ANCHORED: ReaderFacingFailure = {
  * kind is doing its other job, which is telling `kindOfMessage` what a stored
  * sentence meant.
  *
+ * **`GLOSSARY_TERM_NOT_QUOTED` says what was searched for, not why it was not
+ * found.** A draft said the article *"names the idea rather than quoting it"*,
+ * which is the usual cause and not the only one — a hallucinated entry and a
+ * set of aliases too narrow to match are both live possibilities that
+ * `buildGlossary` allows for (glossary.ts § `findOccurrences`). All the scan
+ * establishes is that no name the glossary holds appears in the piece, so that
+ * is what the sentence claims. ⟨Sol⟩
+ *
  * **They carry codes, which docs/project/copy.md's *a refusal that is an answer
  * gets no code* rule would not have given them.** The rule is right about
  * `ARTICLE_IS_BUSY`, where a code would have invited a bug report about the
@@ -1288,10 +1296,10 @@ export const QUIZ_NOTHING_ANCHORED: ReaderFacingFailure = {
 export const GLOSSARY_TERM_NOT_QUOTED: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "This entry is here, but the article never puts these exact words on the page — it names the " +
-    "idea rather than quoting it — and a check on the web is anchored to a passage of the piece. " +
-    "There is no passage to anchor this one to, so pressing the button again will not help. " +
-    "[gl-not-quoted]",
+    "This entry is here, but none of the words the glossary has for it — the term or its other " +
+    "names — appear anywhere in the article, and a check on the web is anchored to a passage of " +
+    "the piece. There is no passage to anchor this one to, so pressing the button again will not " +
+    "help. [gl-not-quoted]",
 };
 
 /**
@@ -1307,17 +1315,20 @@ export const GLOSSARY_TERM_NOT_QUOTED: ReaderFacingFailure = {
  * a job is in flight; the banner is the one that is certainly on screen at the
  * moment this sentence arrives. ⟨Sol⟩
  *
- * **It does not say the passage has gone**, which an earlier draft did. Two
- * shapes reach here — the block is missing, or the block is there and the words
- * are not — and only one of them is a missing passage. The honest common ground
- * is that the article no longer uses the term where the list says it does.
+ * **It makes no claim about where the term is used**, and two drafts did before
+ * settling here. *"The passage it points at is no longer there"* is false when
+ * the block survived and the words did not; *"no longer uses this one where the
+ * list says it does"* is false when the list says nowhere, which is exactly the
+ * carried-and-empty entry this branch most often meets. A stale list cannot say
+ * where — or whether — the piece uses the term, and that is the whole of what is
+ * known. ⟨Sol, twice⟩
  */
 export const GLOSSARY_OUT_OF_DATE: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "This list of terms was written for an earlier version of the article, and the article no " +
-    "longer uses this one where the list says it does. Checking it will not help until the terms " +
-    "are found again — the banner at the top of the panel has the button. [gl-stale]",
+    "This list of terms was written for an earlier version of the article, so it cannot say " +
+    "where — or whether — the piece uses this one. Checking it will not help until the terms are " +
+    "found again: the banner at the top of the panel has the button. [gl-stale]",
 };
 
 /* ---------------------------------------------------------- placing passages -- */
