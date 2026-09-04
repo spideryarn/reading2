@@ -293,6 +293,35 @@ product.
   and a currency switcher (hosted Checkout picks the currency from the customer's location — which
   is why each Stripe price carries all three, [billing.md](../project/billing.md)).
 
+## Where this stands, 2026-09-04 evening
+
+**Important work left.** Three of six stages are on `dev` and the tree is green; what remains
+includes a promise the code has already broken.
+
+| Stage | State |
+|---|---|
+| 1 — buying from `/pricing` | **on `dev`** (`275a6230`, `fd081a15`) |
+| 2 — the pricing page rebuilt | **on `dev`** (`07412b79`) |
+| 3a — the listing's data and API | **on `dev`** (`80573d0c`, `1ef8ba6b`) |
+| 3b — `/read/public` itself | not started; two lines flip the 404s, plus the page |
+| 4 — showcase links, takedown route, byline | not started |
+| 5 — a public article counts half | not started; needs a migration |
+
+**The one thing that is worse than not-yet-built.** Stage 3a shipped the listing's API while
+`src/messages.ts` was fenced by a neighbouring session, so `SHARING_ON` still tells an owner *"Anyone
+with the link can read this"* when the code now makes public articles enumerable. Nothing is exposed
+that Greg did not agree to expose — he is the only account holder — but **the app is saying something
+untrue**, and `PrivacyPage` now promises *"The sharing card lists exactly what will go out before you
+turn it on"* on top of it. This is the next thing to do, and it is small: the constants are agreed to
+be ours, and the wording is drafted in §1 above.
+
+**What each remaining stage costs, honestly.** 3b is the cheapest — the route parses, both sides
+answer 404 deliberately, and it needs a page reusing the shelf's card with the owner verbs off.
+Stage 5 is the expensive one and the only one touching money: a migration adding `article_id` to
+`ingest_events`, a weighted `SUM` replacing a `COUNT`, and a warning at the unshare moment that is a
+gate rather than a nicety, because the free tier's window is lifetime and there is no next month to
+rescue anybody who unshares themselves over the wall.
+
 ## Stages
 
 ### Stage 1 — you can pay from the page that shows the prices
