@@ -230,6 +230,16 @@ export function worthRetrying(message: string | null | undefined): boolean {
  * itself. A lease that has expired does not prove the old claimant has stopped
  * — only that it stopped saying so — and two runners writing one article is
  * worse than one click. docs/plans/260827h-durable-queue-and-uploads.md § 2.
+ *
+ * **Two situations, one sentence, and the second one is the commoner.** A lapsed
+ * lease is a claimant that really has gone; a claimant that reaches its own
+ * deadline mid-step and hands the job back is *choosing* to stop, which "did not
+ * come back" describes a little generously. It is the same thing from the
+ * reader's side — something was running their article and is not any more,
+ * nobody did it to them, and pressing the button resumes — so it stays one
+ * sentence rather than two. It is now also what the **step** says in that case,
+ * not just the job: src/jobs.ts § `DeadlineReached`, and `STEP_STOPPED` below
+ * for the accusation that fixed.
  */
 /**
  * **The stable half of `INTERRUPTED`**, and the only half anything may classify
@@ -301,6 +311,38 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      job resumes from its artefacts, the same reason `jb-gone` is. See
      `STEP_STOPPED`. */
   "jb-stopped": "retry",
+  /* **The seven steps that know why they stopped**, and six of them are
+     `blocked` — see § the steps that know why they stopped below for what that
+     narrows and why. They are `jb-` rather than `ai-` because none of them is a
+     model call: four are a document that is not there, is not what it claims, or
+     has no words in it, and three are a Sketch that has to be drawn before the
+     painting can be.
+
+     `jb-source-damaged` is the one `bug` of the seven: a stored object that does
+     not hash to its own name is an invariant of ours that broke, and it is the
+     only one of the seven the reader has no move against. */
+  "jb-source-gone": "blocked",
+  "jb-source-damaged": "bug",
+  "jb-no-article": "blocked",
+  "jb-no-text": "blocked",
+  "jb-no-sketch": "blocked",
+  "jb-sketch-stale": "blocked",
+  "jb-sketch-profile": "blocked",
+  /* Reading a PDF. The split of prefix is the rule in docs/project/copy.md read
+     both ways: `pdf-` for the two refusals that are arithmetic over bytes we
+     already hold, `ai-pdf-` for the two that are an answer the service came
+     back with. `ai-pdf-cut-off` is the one `bug` of the four, matching
+     `ai-over-room` — it is our own room for the answer set too low. */
+  "pdf-pages": "blocked",
+  "pdf-chunk-big": "blocked",
+  /* The two files pdf.js will not open. `blocked` and not `retry`, which is the
+     whole of the finding they were added for: nothing declared reads as *nobody
+     said*, and nobody said means offer another go — so a password-protected
+     PDF had a Retry button that could not ever work. See `PDF_LOCKED`. */
+  "pdf-locked": "blocked",
+  "pdf-damaged": "blocked",
+  "ai-pdf-cut-off": "bug",
+  "ai-pdf-filtered": "blocked",
   /* The two token-budget failures, split from their own diagnostics on
      2026-09-03. `ai-too-long` is arithmetic done before the call and
      `ai-over-room` is the call coming back cut off; both withhold the button,
@@ -326,12 +368,20 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "rd-recheck": "retry",
   /* Uploading a file. `up-` for the same reason `db-` is not `ai-`: a reader
      quoting four characters should not have to explain which part of the app
-     they were in. Two are `blocked` and two are `retry`, and the split is the
-     whole reason these are registered rather than left to fall through — an
-     unknown code means *offer another go*, so "that file isn't a PDF" would
-     have come with a Retry button that cannot work. */
+     they were in. **Their kinds are not uniform**, which is the whole reason
+     they are registered rather than left to fall through: an unknown code means
+     *offer another go*, so "that file isn't a PDF" would have come with a Retry
+     button that cannot work. (This carried a tally — "two are blocked and two
+     are retry" — until 2026-09-04, by which time it had been wrong through three
+     separate additions, this stage's included. A count written in prose beside
+     the list it counts goes stale on the next line added, and no test can see
+     it, so there is no count here now.) */
   "up-big": "blocked",
   "up-pdf": "blocked",
+  /* The page cap, as the *upload record* states it. The job card gets
+     `pdf-pages` instead, which names the count — see `UPLOAD_TOO_MANY_PAGES`
+     for why one refusal needs two sentences. */
+  "up-pages": "blocked",
   /* Signing in, `auth-`. Only one of the four is not `retry`, and that one is
      the reason they are registered at all: a provider switched off on the
      project is `ours`, so no interface offers a Retry that would do exactly the
@@ -348,6 +398,13 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "up-off": "ours",
   "up-sum": "blocked",
   "up-gone": "blocked",
+  /* **`retry`, and it is the only upload code that is.** Every other one
+     describes a file that will never be readable — the wrong bytes, too many
+     bytes, too many pages, nothing there at all — while this one describes one
+     that is not there *yet*, which is an ordinary state now that the reader gets
+     the ingest's address before the bytes have finished moving. Another go is
+     exactly what helps. See `UPLOAD_STILL_ARRIVING`. */
+  "up-wait": "retry",
   /* These two were missing until 2026-08-26, so `kindOfMessage` returned null
      for `NO_RESPONSE` and `TOOL_CALL_LOST` and the interface was guessing on
      both. It guessed right — both are `retry`, and null means offer the retry —
@@ -783,6 +840,13 @@ export function stepGaveUp(kind: FailureKind, step: string): ReaderFacingFailure
  * is *nobody came back*, and telling somebody who pressed Stop that something
  * went wrong is the app not listening (src/job-state.ts § the eight states).
  *
+ * **And the same distinction runs the other way, which cost a reader a false
+ * accusation for a day.** The claimant's 740 s deadline aborts the *same*
+ * controller Stop does, so until 2026-09-04 an overrun was shown this sentence
+ * — *"You stopped this before it finished"* — to somebody who had pressed
+ * nothing. That case takes `INTERRUPTED` now, decided on the abort's typed
+ * reason rather than on the fact of it: src/jobs.ts § `DeadlineReached`.
+ *
  * The step is not named here, unlike `stepGaveUp`: the shelf card draws this
  * directly under `step.label`, and the band does not draw it at all.
  */
@@ -792,6 +856,271 @@ export const STEP_STOPPED: ReaderFacingFailure = {
     "You stopped this before it finished. Whatever had already been done is kept, so starting it " +
     "again picks up from there rather than beginning over. [jb-stopped]",
 };
+
+/* --------------------------------------- the steps that know why they stopped -- */
+
+/**
+ * **The seven pipeline refusals that had a sentence and could not deliver it.**
+ *
+ * Each of these was already written out at its throw site, in prose meant for a
+ * reader, and each went through `stageFailure(kind, detail)` — the form that
+ * says only what *kind* of failure it is and treats the sentence as a log-only
+ * diagnostic. **That form no longer exists**: since 2026-09-04 it is spelled
+ * `stageFailure(kind, { generic: detail })`, so a throw site has to say which
+ * audience it meant and a ninth of these cannot be written by accident
+ * (src/job-failure.ts § `{ generic }`). So the reader got `stepGaveUp`'s generic copy for `blocked`,
+ * which names the step and nothing else, and most of them withheld the Retry
+ * button as well: a dead end and no explanation.
+ * docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md.
+ *
+ * They are here rather than at the throw sites for the reason everything else
+ * in this file is: a sentence a reader can see is copy, it follows
+ * docs/project/copy.md, and it needs a registered code so `kindOfMessage` and
+ * `monitoring-scrub.ts` can both read it.
+ *
+ * **Six are `blocked`, and three of those narrow an earlier `ours`.** The
+ * illustrate refusals were tagged `ours` on the argument that a retry would
+ * find the identical Sketch and fail identically — right about the *button*,
+ * which both kinds withhold, and wrong about the kind. `ours` means *this app
+ * is misconfigured, stop and tell somebody* (docs/project/copy.md § the four
+ * rules), and none of those is: nothing is broken, and the reader has a real
+ * move — draw the Sketch, add the article again, try a different page. That is
+ * `blocked`'s definition, and `blocked` is the one non-retryable kind that
+ * admits a way out.
+ *
+ * **The seventh is `SOURCE_DOCUMENT_DAMAGED`, and it is a `bug`**, because it
+ * is the one where the reader has no move at all. See it below.
+ */
+export const SOURCE_DOCUMENT_GONE: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "The copy of this document that this app kept is not where it should be, so there is nothing " +
+    "left to build the article from. Running this again would look in the same place; adding the " +
+    "article again, from its address or by uploading the file, is what fixes it. [jb-source-gone]",
+};
+
+/**
+ * **The copy is there and is the wrong bytes**, which is not the same failure as
+ * it being absent and does not have the same way out.
+ *
+ * This sentence used to be `SOURCE_DOCUMENT_GONE`'s: one message covered all
+ * three of `RawDocumentUnavailable`'s reasons, and it told the reader that
+ * adding the article again is what fixes it. For `corrupt` that is **false**, and
+ * the errors themselves say so — *"Nothing here will overwrite it … so it needs
+ * clearing by hand"* (`readRawBytes` and `overlongObject`, src/fetch.ts). The
+ * object is content-addressed: re-fetching the same document computes the same
+ * hash, finds an object already at that name, and leaves the bad one exactly
+ * where it was. So the old sentence sent a reader round a loop that cannot
+ * terminate — the expensive mistake docs/project/copy.md § rule 2 names.
+ * GPT Sol, reviewing the built stage 1, finding 4.
+ *
+ * **`bug`, not `blocked` and not `ours`.** All three withhold the button, so the
+ * choice is only about what the reader is told, and `blocked` is *"ask for less,
+ * or accept the no"* — a way out this reader has not got. Between the other two:
+ * `ours` is an account or a configuration, and this is neither. That an object
+ * at a content-addressed name hashes to that name is an invariant this app keeps
+ * and has failed to keep, which is `bug`'s definition, and it is the kind that
+ * says *it has been recorded and it needs fixing here*.
+ *
+ * The diagnostic beside it carries the key and both hashes, which is what
+ * somebody clearing the object needs and nothing the reader can use.
+ */
+export const SOURCE_DOCUMENT_DAMAGED: ReaderFacingFailure = {
+  kind: "bug",
+  message:
+    "The copy of this document that this app kept is damaged — what is stored under its name is " +
+    "not the file that name promises, so there is nothing to build the article from. Adding the " +
+    "article again will not replace it: that copy is filed under a fingerprint of its own " +
+    "contents, and nothing here overwrites one. It has been recorded, and it needs fixing here " +
+    "rather than by you. [jb-source-damaged]",
+};
+
+export const PAGE_HAS_NO_ARTICLE: ReaderFacingFailure = {
+  kind: "blocked",
+  /* **It does not say "Readability"**, which is the name of a library the
+     reader has never heard of and the whole reason this sentence exists — the
+     diagnostic keeps that word, for the log. And it names the three usual
+     causes rather than guessing between them: they call for the same move. */
+  message:
+    "There was no article to find on the page that was fetched. That is usually a login wall, an " +
+    "error page, or a page whose words only appear once its own scripts have run — and this step " +
+    "would be handed the same page again, so it is the address it came from that needs looking " +
+    "at. [jb-no-article]",
+};
+
+export const ARTICLE_HAD_NO_TEXT: ReaderFacingFailure = {
+  kind: "blocked",
+  /* The next failure along from `PAGE_HAS_NO_ARTICLE` and deliberately its own
+     sentence: there the page gave up no article at all, here one was extracted
+     and had no text in it. The reader's move is the same, but a shared sentence
+     would need a shared code, and a code names a branch. */
+  message:
+    "The page was read, and there was no article text in it to build from. A paywall, an error " +
+    "page, or a page whose words only appear once its own scripts have run all end this way, and " +
+    "this step would read the same extracted page again — so it is the address the article came " +
+    "from that needs looking at. [jb-no-text]",
+};
+
+/**
+ * **The three ways painting the argument refuses**, one sentence each.
+ *
+ * They were one helper taking a free string until 2026-09-03, which is two
+ * faults in one: three different situations answered to one code, and any text
+ * at all could be minted into a *coded* `ReaderFacingFailure` — the provenance
+ * `monitoring-scrub.ts` is told to trust. `ILLUSTRATE_REFUSAL` in
+ * src/pipeline.ts is the closed union that replaced it. ⟨Sol, 2026-09-03⟩
+ *
+ * **They name the chip and not the step**, which is the wording their throw
+ * site already insisted on: this is read by somebody looking at a band of
+ * chips, not at a pipeline. src/web/DiagramPanel.tsx puts Illustrated
+ * immediately right of Sketch, and tests/illustrated-view.test.tsx pins that
+ * order precisely because "the chip one to the left" would otherwise go quietly
+ * wrong.
+ */
+export const ILLUSTRATE_NO_SKETCH: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "There is no sketch of this article yet, and the painting is made from the sketch rather than " +
+    "from the article. Draw the Sketch first — it is the chip one to the left — and then press " +
+    "this one again. Until there is one, this will come back the same way. [jb-no-sketch]",
+};
+
+export const ILLUSTRATE_SKETCH_STALE: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "The sketch of this article is out of date — the article has moved underneath it, so painting " +
+    "it would give you a picture of an argument that is no longer there. Draw the Sketch again — " +
+    "it is the chip one to the left — and then press this one. Until it is redrawn, this will " +
+    "come back the same way. [jb-sketch-stale]",
+};
+
+export const ILLUSTRATE_SKETCH_PROFILE: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "The sketch of this article was drawn for a different reader profile, so the painting would " +
+    "be made for somebody else's reading of it. Draw the Sketch again — it is the chip one to " +
+    "the left — and then press this one. Until it is redrawn, this will come back the same " +
+    "way. [jb-sketch-profile]",
+};
+
+/* ------------------------------------------------------------- reading a PDF -- */
+
+/**
+ * **The two refusals that happen before a PDF is sent anywhere**, and so are
+ * arithmetic rather than anything a model said.
+ *
+ * `pdf-` rather than `ai-`, which docs/project/copy.md reserves for a model
+ * call: no call is made on either of these paths and no money is spent finding
+ * out. The two below them keep `ai-` for the same rule read the other way —
+ * those are answers that came back from the service.
+ *
+ * Both `blocked`, and both mean it. The page count and the encoded size are
+ * facts about bytes stage 1 has already cached, and Retry never re-runs the
+ * step that produced them, so a second attempt counts the same pages and
+ * encodes the same megabytes.
+ */
+export function pdfTooManyPages(pages: number, limit: number): ReaderFacingFailure {
+  return {
+    kind: "blocked",
+    message:
+      `This PDF has ${pages} pages, and this app reads at most ${limit} of them in one go. That ` +
+      `is a limit on what reading a document is allowed to cost rather than a technical one, so ` +
+      `the same file will be refused the same way — a shorter document, or the part of this one ` +
+      `you actually want, will go through. [pdf-pages]`,
+  };
+}
+
+/**
+ * **The two ways a PDF never gets read at all**, because pdf.js will not open
+ * it — and until 2026-09-04 neither of them had a sentence.
+ *
+ * `runPdfExtract` translated its page-cap refusal out of `pass0` and rethrew
+ * everything else bare, so a locked or damaged file arrived at
+ * `readerFailureOf` with nothing declared. Nothing declared reads as *nobody
+ * said*, and nobody said means `retry` — so **the reader was handed a Retry
+ * button for a file that will never open**, which is the one copy mistake
+ * docs/project/copy.md calls expensive: they press it, four or five times, and
+ * conclude the app is broken. Found by GPT Sol reviewing stages 4 and 5 of
+ * docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md, in the input
+ * class stage 1 of that plan had not audited.
+ *
+ * `pdf-` rather than `ai-`, like the two refusals above: no call is made and no
+ * money is spent finding out. Both `blocked` rather than `bug` — nothing here is
+ * broken and nothing is misconfigured, the file simply cannot be read — and
+ * `blocked` is the one non-retryable kind where the reader still has a move,
+ * which both of these have: **another copy of the file**. That is why they say
+ * so, and why they are two sentences rather than one. "This PDF could not be
+ * opened" would be true of both and would leave somebody with a locked file
+ * hunting for damage that is not there.
+ */
+export const PDF_LOCKED: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "This PDF is locked with a password, so there is no way in to read it. Opening it again " +
+    "would meet the same lock — a copy saved or exported without the password is what would go " +
+    "through. [pdf-locked]",
+};
+
+export const PDF_DAMAGED: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "This file could not be opened as a PDF at all: it is damaged, or it is not really a PDF. " +
+    "The bytes are the same every time they are read, so this will come back the same way — " +
+    "downloading or exporting the document again, and adding that copy, is what would " +
+    "help. [pdf-damaged]",
+};
+
+export function pdfChunkTooBig(megabytes: number, limit: number): ReaderFacingFailure {
+  return {
+    kind: "blocked",
+    message:
+      `Part of this PDF is too large to send to the AI service in one piece — ${megabytes} MB, ` +
+      `where ${limit} MB is the most a single request can carry. The file is the same size every ` +
+      `time, so this will come back the same way; a PDF with fewer or smaller images in it will ` +
+      `go through. [pdf-chunk-big]`,
+  };
+}
+
+/**
+ * **The two ways a chunk of a PDF comes back unusable**, named by their pages.
+ *
+ * The pages are the point. Both were bare `throw new Error` until 2026-09-03,
+ * so the reader was told only that the step did not finish — and for a
+ * hundred-page document, *which* pages is the difference between a fault they
+ * can see and one they cannot.
+ *
+ * **The kinds differ, and the difference is whose limit was reached.** A
+ * truncated answer is this app's `max_tokens` set too low for those pages,
+ * which is `bug` — the same diagnosis and the same wording as
+ * `ANSWER_RAN_PAST_ITS_ROOM` above. A safety filter is the service refusing, and
+ * refusing the same pages again, which is `blocked`.
+ */
+export function pdfPagesCutOff(pages: readonly number[]): ReaderFacingFailure {
+  return {
+    kind: "bug",
+    message:
+      `The AI service was given less room than pages ${pages.join(", ")} of this document needed, ` +
+      `so its reading of them came back cut off and could not be used. That is a limit set ` +
+      `wrongly in this app rather than anything about the document or about you: it has been ` +
+      `recorded, it needs fixing here, and another go is unlikely to help until it ` +
+      `is. [ai-pdf-cut-off]`,
+  };
+}
+
+export function pdfPagesFiltered(pages: readonly number[]): ReaderFacingFailure {
+  return {
+    kind: "blocked",
+    /* **Not a word of what the service said**, which is rule 4 — its own name
+       for the refusal (`RECITATION` and the like) stays in the log. And no
+       remedy, because the one the diagnostic offers is *"a smaller chunk
+       sometimes gets through"* and the reader cannot choose the chunk size. */
+    message:
+      `The AI service's safety filter stopped it reading pages ${pages.join(", ")} of this ` +
+      `document, so there is no transcription of them to build the article from. It decides that ` +
+      `on the words it is shown rather than on anything you did, and shown the same pages it will ` +
+      `most likely answer the same way. [ai-pdf-filtered]`,
+  };
+}
 
 /* ----------------------------------------------------- more than one response -- */
 
@@ -1125,12 +1454,103 @@ export const UPLOAD_CHECKSUM: ReaderFacingFailure = {
  * duration tells the reader nothing about whether they were slow or we were
  * broken.
  */
+/**
+ * **The bytes are still on their way.**
+ *
+ * The readiness gate's refusal: `POST /api/jobs {uploadId}` asks Storage
+ * whether the staging object is there, and answers this when it is not. Nothing
+ * is claimed, nothing is queued, and no quota slot is spent — so unlike every
+ * other refusal on that route, this one costs the reader nothing and is
+ * expected to be temporary.
+ *
+ * It exists because the reader now reaches `/add/upload/<id>` at byte zero
+ * rather than at the last byte (docs/plans/260903j-background-pdf-upload-so-add-does-not-wait.md).
+ * Reloading that page, or opening it in a second tab, used to be impossible
+ * before the file had landed and is now the ordinary thing to do — and without
+ * this the job was queued over an object that was not there, which
+ * `acquireUpload` answers with `UPLOAD_MISSING`, terminally. A reader's own
+ * reload destroyed their upload.
+ *
+ * **`retry`, where no other `up-` code is.** Another go is precisely what helps,
+ * and the page does it for them: it waits, and posts again when
+ * `GET /api/uploads/:id` says the object has arrived. (It said "the other three"
+ * until 2026-09-04, when there were six; see the tally note in `CODE_KINDS`.)
+ *
+ * **It names another go even though the page takes it for the reader**, because
+ * `tests/messages.test.ts` requires every `retry` sentence to say what would
+ * help — and the requirement is right here rather than merely satisfied: this
+ * message reaches a person only when the automatic wait is not running, which
+ * is exactly when pressing the button is the thing to do.
+ */
+export const UPLOAD_STILL_ARRIVING: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "That file is still on its way — nothing has been lost. Trying again in a moment will " +
+    "work, and this page does that for you as long as a Spideryarn tab stays open. [up-wait]",
+};
+
 export const UPLOAD_MISSING: ReaderFacingFailure = {
   kind: "blocked",
   message:
     "That file never finished arriving. An upload has two hours to complete, so a very slow " +
     "connection or an interrupted one will do this. Running this again will not help — there is " +
     "nothing there to read. Choose the file again. [up-gone]",
+};
+
+/**
+ * **The page cap, as the upload record states it** — and, as it stands, **a
+ * sentence no reader ever sees.** Read this before editing it.
+ *
+ * `RejectReason` maps an enum to a *static* failure (src/source.ts), so nothing
+ * on that side can say "142 pages"; the number is only known where the counting
+ * happened. So the record takes this, and the job — the thing the reader is
+ * actually looking at — takes `pdfTooManyPages`, which names the count and the
+ * limit. Splitting them is what lets the state machine record *why* an upload
+ * was refused without either half inventing a number it does not have.
+ *
+ * **The limit is not in this sentence, and that is the cost of it being
+ * static.** `MAX_PAGES` lives in src/pdf-read.ts, which pulls in pdf.js and
+ * p-queue; this module is imported by the browser. `pdfTooManyPages` takes the
+ * limit as an argument for exactly that reason.
+ *
+ * `blocked` for the same reason as the ones above it: the file has the same
+ * number of pages every time it is counted.
+ *
+ * ## Unreachable, deliberately, and kept anyway ⟨GPT Sol, 2026-09-04⟩
+ *
+ * Both queue origins persist and render `pdfTooManyPages(count, limit)` — the
+ * browser run confirmed the reader sees `[pdf-pages]` — and the upload endpoint
+ * exposes only the raw `RejectReason` enum, which nothing renders through
+ * `rejectionMessage`. `refuseAnOverlongPdf` (src/pipeline.ts) does not even go
+ * through `acquireUpload`'s `refuse`: it writes the reason onto the row itself,
+ * precisely so the *job* can carry the better sentence. So this paragraph is
+ * live copy with no live reader.
+ *
+ * **Deleting it costs more than keeping it, which is the whole argument.**
+ * `REJECTIONS` is `Record<RejectReason, ReaderFacingFailure>` — total by type —
+ * and `REJECT_REASONS` is derived from it, so removing this entry means either
+ * making the map partial or hand-writing a second list. That totality is a real
+ * safety property: it is what makes a *new* reject reason with no sentence, no
+ * code and no kind fail the compiler, which is the failure
+ * docs/postmortems/260826a-toc-max-tokens.md is about and the one
+ * `too-many-pages` itself nearly repeated. Trading a constraint for a deleted
+ * paragraph is the wrong way round.
+ *
+ * **So it stays, and the risk is named rather than removed:** the risk is
+ * *drift* — this sentence and `pdfTooManyPages` describing the same refusal
+ * differently, with nothing to notice, because the invariants in
+ * tests/messages.test.ts and tests/source.test.ts check its code and its kind and
+ * cannot check whether it still agrees with its twin. **Edit the two together.**
+ * If the upload endpoint ever renders a rejection reason, this is the sentence
+ * it renders, and the drift stops being theoretical.
+ */
+export const UPLOAD_TOO_MANY_PAGES: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "That PDF has more pages than this app reads in one go. That is a limit on what reading a " +
+    "document is allowed to cost rather than a technical one, so the same file will come back " +
+    "the same way — a shorter document, or the part of this one you actually want, will go " +
+    "through. [up-pages]",
 };
 
 /**

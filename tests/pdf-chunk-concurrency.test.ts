@@ -44,6 +44,12 @@ const EASY = new URL("../evals/pdf/easy/source.pdf", import.meta.url);
  * 12 pages, because what `pass0` counts is what the text layer yields and not
  * what `drawText` was handed. The words are made unique per page so nothing
  * trips the twenty-word repeat dedup.
+ *
+ * **The page count is derived from `CHUNK_CONCURRENCY` rather than written
+ * down**, since 2026-09-04, when the width went from 8 to 16 and a literal 24
+ * stopped clearing it: two of these tests failed on their own guard, which is
+ * the guard doing exactly its job and the number sitting in the wrong place.
+ * `ENOUGH_PAGES` below is what both callers use.
  */
 async function manyChunkPdf(pages: number): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
@@ -56,6 +62,13 @@ async function manyChunkPdf(pages: number): Promise<Uint8Array> {
   }
   return doc.save();
 }
+
+/**
+ * Enough pages to plan comfortably more chunks than the queue is wide — about
+ * two pages a chunk (see above), plus a margin, so a small change in how `pass0`
+ * counts words cannot quietly drop the total back to the bound.
+ */
+const ENOUGH_PAGES = (CHUNK_CONCURRENCY + 4) * 2;
 
 /** The pages an instruction asks to be emitted, ignoring any context page. */
 function askedPages(instruction: string): number[] {
@@ -140,7 +153,7 @@ async function runWith(reader: PdfReader, bytes: Uint8Array) {
 
 describe("PDF chunks are read concurrently", () => {
   it("reads at exactly the configured width, no narrower and no wider", async () => {
-    const bytes = await manyChunkPdf(24);
+    const bytes = await manyChunkPdf(ENOUGH_PAGES);
     const pass = await pass0(bytes);
     const total = planChunks(pass).length;
     /* The whole point of the synthetic PDF. If this is ever not true the test
@@ -304,13 +317,13 @@ describe("PDF chunks are read concurrently", () => {
    *
    * On the 2-chunk `easy` fixture there is nothing queued behind the failure,
    * so `queue.clear()` could be deleted and the test would still pass — it was
-   * only ever exercising `fatal.abort()`. With twelve chunks and a width of
-   * eight, the two halves of the stop are separately observable: four chunks
-   * are waiting in the queue and must never start, and seven are in the air and
-   * must be signalled.
+   * only ever exercising `fatal.abort()`. With `ENOUGH_PAGES` there are more
+   * chunks than the queue is wide, so the two halves of the stop are separately
+   * observable: some chunks are waiting in the queue and must never start, and
+   * the rest are in the air and must be signalled.
    */
   it("neither starts nor pays for the chunks behind a failure", async () => {
-    const bytes = await manyChunkPdf(24);
+    const bytes = await manyChunkPdf(ENOUGH_PAGES);
     const pass = await pass0(bytes);
     const chunks = planChunks(pass);
     expect(chunks.length).toBeGreaterThan(CHUNK_CONCURRENCY);

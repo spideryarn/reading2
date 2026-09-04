@@ -18,6 +18,7 @@ import {
   isStagingKey,
   looksLikePdf,
   MAX_UPLOAD_BYTES,
+  REJECT_REASONS,
   rejectionMessage,
   type RejectReason,
   stagingKey,
@@ -225,7 +226,12 @@ describe("a filename is a stranger's string", () => {
 });
 
 describe("the words a refused upload gets", () => {
-  const reasons: RejectReason[] = ["too-big", "not-a-pdf", "checksum-mismatch", "missing"];
+  /* **`REJECT_REASONS`, not a fifth hand-typed copy.** This list was written
+     out here and went on agreeing with itself when `too-many-pages` was added
+     on 2026-09-04 — a new reason with no code, no kind and no check, and every
+     assertion below green. It is derived from `REJECTIONS` now, for the reason
+     `UPLOAD_STATUSES` is (src/source.ts). */
+  const reasons: RejectReason[] = REJECT_REASONS;
 
   /* docs/project/copy.md: every message ends in a bracketed code, so a reader
      can quote four characters and a test can stop pinning prose. */

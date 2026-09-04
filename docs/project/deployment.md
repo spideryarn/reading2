@@ -849,6 +849,11 @@ whether production had drifted was told it had not, while production had been re
 upload with a 415 since 2026-08-29 —
 [260903f](../postmortems/260903f-the-bucket-allowlist-drifted-again-on-production.md).
 
+And on a machine whose `.env.local` or shell holds *remote* credentials, that same command used to
+be a **write** to whatever project they named, `--apply` and all. Since 2026-09-03 the flagless mode
+verifies it is talking to the container on this machine and refuses anything else by name —
+`whyNotLocalStorage` in [`scripts/storage-buckets.ts`](../../scripts/storage-buckets.ts).
+
 **`--apply` repairs it**, printing the bucket before and after and reading it back. Read-only is
 still the default: this file used to say repair was absent because widening an allowlist is a
 security decision rather than a side effect of running a check, which is still true — and a flag

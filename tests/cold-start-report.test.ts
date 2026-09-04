@@ -74,8 +74,14 @@ describe("the cold-start instrument", () => {
     expect(written).toContain("moduleImport");
     expect(lines(written, "moduleImport")).toHaveLength(1);
     expect(written).toContain("2610");
-    /* The warm readings must not be in the log at all — not merely outnumbered. */
-    expect(written).not.toContain("0.4");
+    /* The warm readings must not be in the log at all — not merely outnumbered.
+       **On the field, not on a substring of the whole line**, which is the form
+       the sibling test below already uses: `not.toContain("0.4")` matched
+       pino's own `time` whenever the stamp fell on a second ending in `0` and a
+       millisecond starting with `4` — `…:10.453Z` — so it failed about one run
+       in a hundred, saying nothing about the number under test. */
+    expect(lines(written, '"ms":0.4')).toHaveLength(0);
+    expect(lines(written, '"ms":0.3')).toHaveLength(0);
   });
 
   it("writes the first invocation's end-to-end time once, not per request", async () => {

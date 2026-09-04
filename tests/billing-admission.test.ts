@@ -66,6 +66,8 @@ import { loadEnvLocal } from "../src/env.js";
 import type { OwnerId } from "../src/owner.js";
 import { forgetCachedTiers } from "../src/store/pg-tiers.js";
 import { mintUpload } from "../src/upload-records.js";
+import { blobStore, CONTENT_TYPE } from "../src/store/blobs.js";
+import { stagingKey } from "../src/source.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
@@ -165,8 +167,19 @@ afterAll(async () => {
   await pool.end();
 });
 
+/**
+ * Staging objects written by `anUploadReadyToQueue`, removed with the rows.
+ *
+ * A list of this file's own keys rather than a prefix scan of the bucket:
+ * vitest runs test files in parallel against one Storage, and "everything under
+ * `staging/`" would take another suite's object out from under it mid-run —
+ * the trap `tests/uploads-api.test.ts` documents for upload records.
+ */
+const staged: string[] = [];
+
 /** Jobs before ingest events: `jobs_ingest_event_fk` points that way. */
 async function sweep(): Promise<void> {
+  for (const key of staged.splice(0)) await blobStore().remove(key);
   if (!pool) return;
   await pool.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
   await pool.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
@@ -288,20 +301,23 @@ async function subscribed(fields: {
   periodStart: Date;
   periodEnd: Date;
   priceId?: string;
+  /** What a Portal cancellation writes, leaving `cancel_at_period_end` false. */
+  cancelAt?: Date | null;
 }): Promise<void> {
   if (!pool) return;
   await pool.query(
     `insert into spideryarn.billing_accounts
        (owner_id, stripe_customer_id, stripe_subscription_id, price_id, status,
-        current_period_start, current_period_end)
-     values ($1, $2, $3, $7, $4, $5, $6)
+        current_period_start, current_period_end, cancel_at)
+     values ($1, $2, $3, $7, $4, $5, $6, $8)
      on conflict (owner_id) do update set
        stripe_customer_id = excluded.stripe_customer_id,
        stripe_subscription_id = excluded.stripe_subscription_id,
        price_id = excluded.price_id,
        status = excluded.status,
        current_period_start = excluded.current_period_start,
-       current_period_end = excluded.current_period_end`,
+       current_period_end = excluded.current_period_end,
+       cancel_at = excluded.cancel_at`,
     [
       OWNER,
       `cus_${OWNER}`,
@@ -310,6 +326,7 @@ async function subscribed(fields: {
       fields.periodStart,
       fields.periodEnd,
       fields.priceId ?? "price_no_tier_sells",
+      fields.cancelAt ?? null,
     ],
   );
 }
@@ -389,23 +406,93 @@ describe("adding an article spends a slot", () => {
   });
 
   dbIt("reserves for an upload, which is the other kind of new ingest", async () => {
-    /* `mintUpload` takes its grant issuer as an argument, so this needs no blob
-       storage — only the record `POST /api/jobs {uploadId}` reads. */
-    const minted = await mintUpload(
-      { filename: "test-admission-paper.pdf", bytes: 1024, sha256: "a".repeat(64), owner: OWNER },
-      async () => ({
-        url: "https://storage.invalid/staging",
-        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-      }),
-      (id) => `staging/${id}`,
-    );
+    const uploadId = await anUploadReadyToQueue("test-admission-paper.pdf");
 
-    const reply = await post("/api/jobs", { uploadId: minted.record.id });
+    const reply = await post("/api/jobs", { uploadId });
     expect(reply.status, JSON.stringify(reply.body)).toBe(202);
     expect(await slotOf(reply.body.id as string)).not.toBeNull();
     expect(await ledger()).toEqual({ taken: 1, inFlight: 1 });
   });
+
+  /**
+   * **A reload of `/add/upload/<id>` must not be told it has run out.**
+   *
+   * `withIngestSlot` wraps `queueAnUpload`, and `admitIngest` throws 402
+   * **before** the callback runs. So until 2026-09-03 the second request for an
+   * upload that already had a job asked for a slot it was never going to spend —
+   * and a reader on their last one was refused for having no allowance, when the
+   * true answer was the ingest their first request had already made. The refusal
+   * was about a slot nobody needed. GPT Sol, reviewing the plan for the
+   * background upload (finding 2).
+   *
+   * It matters far more now than it did: the reader reaches that address at byte
+   * zero, so reloading it, and opening it in a second tab, are ordinary.
+   *
+   * **The count is the assertion**, not the status. A route that resolved the
+   * repeat correctly and still reserved would answer 202 here and look perfect,
+   * while quietly taking a slot per reload out of a lifetime allowance of three.
+   * `ledger()` is the only thing that can see it.
+   *
+   * Watched red 2026-09-03 by deleting `resolveExistingUpload` from the route,
+   * so the repeat falls through to `withIngestSlot` as it used to: *"the reload
+   * spent a slot of its own: expected { taken: 2, inFlight: 1 } to deeply equal
+   * { taken: 1, inFlight: 1 }"*. Note `inFlight` **1**, not 2 — the second
+   * reservation is released, because `releaseReservation` finds no job holding
+   * it. That is precisely why `taken` is the number to assert on: the release
+   * makes the leak invisible to every count but the lifetime one, which is the
+   * count a free reader has three of.
+   */
+  dbIt("resolves a repeat claim without taking a second slot", async () => {
+    const uploadId = await anUploadReadyToQueue("test-admission-reloaded.pdf");
+
+    const first = await post("/api/jobs", { uploadId });
+    expect(first.status, JSON.stringify(first.body)).toBe(202);
+    expect(await ledger()).toEqual({ taken: 1, inFlight: 1 });
+
+    const again = await post("/api/jobs", { uploadId });
+    expect(again.status, JSON.stringify(again.body)).toBe(202);
+    expect(again.body.id, "the reload was handed a different job").toBe(first.body.id);
+    expect(await ledger(), "the reload spent a slot of its own").toEqual({
+      taken: 1,
+      inFlight: 1,
+    });
+  });
 });
+
+/**
+ * An upload whose bytes have landed, which is the only kind that may be queued.
+ *
+ * Two halves, and the second is new on 2026-09-03: `mintUpload` writes the
+ * record, and then the staging object has to be **there**, because
+ * `POST /api/jobs { uploadId }` HEADs it before it claims anything. Without the
+ * object the route answers 409 *still arriving* and reserves nothing, so every
+ * count below would be zero and the suite would report a wall that was never
+ * reached. See `tests/an-upload-is-queued-only-once-its-bytes-arrive.test.ts`
+ * for what that gate is for.
+ *
+ * The grant issuer is a stub — nothing here PUTs through a signed URL — but the
+ * object is real, written with the service key at the key the route will look
+ * under. `stagingKey` on both sides rather than a literal, so the two cannot
+ * drift.
+ */
+async function anUploadReadyToQueue(filename: string): Promise<string> {
+  const minted = await mintUpload(
+    { filename, bytes: 1024, sha256: "a".repeat(64), owner: OWNER },
+    async () => ({
+      url: "https://storage.invalid/staging",
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+    }),
+    stagingKey,
+  );
+  const key = stagingKey(minted.record.id);
+  await blobStore().putIfAbsent(
+    key,
+    new TextEncoder().encode("%PDF-1.4\ntrailer\n<<>>\n%%EOF\n"),
+    CONTENT_TYPE.pdf,
+  );
+  staged.push(key);
+  return minted.record.id;
+}
 
 describe("retry is the second front door", () => {
   /**
@@ -453,6 +540,101 @@ describe("retry is the second front door", () => {
     const again = await post(`/api/jobs/${first.body.id}/retry`, {});
     expect(again.status).toBe(402);
     expect(again.body.error).toContain("[pay-free]");
+  });
+});
+
+/**
+ * **The pin.** A cancellation is a fact about the *future*; entitlement is a
+ * fact about now, and the two must not be confused.
+ *
+ * `cancel_at` landed on `billing_accounts` on 2026-09-03 so that `/profile`
+ * could finally say *your plan ends on the 3rd* — a real cancellation had gone
+ * untold (docs/project/billing.md § *The first live sale*). The whole risk of
+ * that change is in this direction: a version that treated a scheduled ending
+ * as an ending would take a paid-up reader's allowance away weeks early, and it
+ * would do it to somebody who has paid us. `entitlementFromRow` reads the
+ * status and the period and nothing else, and this is what says so from the
+ * outside — through the wall, not through the function.
+ */
+describe("a cancellation that has not happened yet takes nothing away", () => {
+  /* Past the free three, so a fall back to the free tier would refuse and this
+     case cannot pass on the free allowance by accident. */
+  const SPENT = FREE_LIMIT + 1;
+
+  /** Subscribed, paid up, and scheduled to end when the period does. */
+  async function cancelledButPaidUp(fields: {
+    cancelAt?: Date | null;
+    cancelAtPeriodEnd?: boolean;
+  }): Promise<Date> {
+    await sellATier();
+    const end = new Date(Date.now() + 25 * 86_400_000);
+    await subscribed({
+      status: "active",
+      priceId: TIER_PRICE,
+      periodStart: new Date(Date.now() - 5 * 86_400_000),
+      periodEnd: end,
+      cancelAt: fields.cancelAt ?? null,
+    });
+    if (fields.cancelAtPeriodEnd && pool) {
+      await pool.query(
+        "update spideryarn.billing_accounts set cancel_at_period_end = true where owner_id = $1",
+        [OWNER],
+      );
+    }
+    return end;
+  }
+
+  dbIt("still admits a reader who cancelled through the Portal", async () => {
+    /* The live shape exactly: a `cancel_at` timestamp with the boolean false. */
+    const end = await cancelledButPaidUp({ cancelAt: new Date(Date.now() + 25 * 86_400_000) });
+    expect(end.getTime()).toBeGreaterThan(Date.now());
+    const spent = await alreadySpent(SPENT);
+    try {
+      const reply = await add("cancelled-but-paid-up");
+      expect(reply.status, JSON.stringify(reply.body)).toBe(202);
+      /* And it really took a paid slot rather than slipping past unmetered. */
+      expect(await slotOf(reply.body.id as string)).not.toBeNull();
+    } finally {
+      await forgetSpend(spent);
+    }
+  });
+
+  dbIt("still admits a reader who cancelled through the API", async () => {
+    /* The other shape, so neither field can be the one that ends somebody
+       early. */
+    await cancelledButPaidUp({ cancelAtPeriodEnd: true });
+    const spent = await alreadySpent(SPENT);
+    try {
+      const reply = await add("cancelled-via-api");
+      expect(reply.status, JSON.stringify(reply.body)).toBe(202);
+    } finally {
+      await forgetSpend(spent);
+    }
+  });
+
+  /**
+   * The mirror, so the two above cannot pass by admitting everybody: once the
+   * period really is over, a `canceled` subscription is lapsed and refused.
+   * That is the boundary the pin is protecting — it moves at the period end and
+   * not a day before.
+   */
+  dbIt("refuses once the period it was paid for is actually over", async () => {
+    await sellATier();
+    await subscribed({
+      status: "canceled",
+      priceId: TIER_PRICE,
+      periodStart: new Date(Date.now() - 60 * 86_400_000),
+      periodEnd: new Date(Date.now() - 30 * 86_400_000),
+      cancelAt: new Date(Date.now() - 30 * 86_400_000),
+    });
+    const spent = await alreadySpent(SPENT);
+    try {
+      const refused = await add("cancelled-and-over");
+      expect(refused.status).toBe(402);
+      expect(refused.body.error).toContain("[pay-lapsed]");
+    } finally {
+      await forgetSpend(spent);
+    }
   });
 });
 

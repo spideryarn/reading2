@@ -188,10 +188,10 @@ file_size_limit = "50MiB"
 # document that runs script when navigated to, so it is deliberately absent.
 # See docs/plans/hosting-the-articles-images.md.
 #
-# **Keep this on one line.** `declaredBuckets` in scripts/deploy-checks.ts parses
-# a list only when it is on the same line as its key, and a multi-line list
-# throws rather than being read as empty — loudly, which is why this comment is
-# short and not a postmortem.
+# This used to have to be on one line: `declaredBuckets` in
+# scripts/deploy-checks.ts hand-parsed the file and read a list only beside its
+# key. It parses with smol-toml since 2026-09-03, so a multi-line list is fine
+# now — the constraint was ours, never TOML's.
 allowed_mime_types = ["application/pdf", "text/html", "image/png", "image/jpeg", "image/gif"]
 
 # Allow connections via S3 compatible clients

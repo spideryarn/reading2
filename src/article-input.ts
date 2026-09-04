@@ -52,11 +52,18 @@ export interface Article {
  * `"ours"` rather than a model or a fetch failure: nothing was refused by
  * anybody outside, we simply cannot find the artefacts this stage is defined
  * against.
+ *
+ * The sentence is a diagnostic and `{ generic }` says so: "run the hierarchy
+ * step first" is addressed to whoever is running steps by hand, and a reader
+ * gets `stepGaveUp`'s `ours` copy, which is the true thing to tell them —
+ * src/job-failure.ts § `{ generic }`.
  */
 export async function readArticle(slug: string, store: ArtifactReads): Promise<Article> {
   const article = await tryReadArticle(slug, store);
   if (!article) {
-    throw stageFailure("ours", `No blocks or tree for "${slug}" — run the hierarchy step first.`);
+    throw stageFailure("ours", {
+      generic: `No blocks or tree for "${slug}" — run the hierarchy step first.`,
+    });
   }
   return article;
 }

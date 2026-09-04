@@ -71,12 +71,17 @@ export const fsUploadStore: UploadStore = {
     await put(record);
   },
 
-  async claim(id: string, options: { owner?: string; now?: Date } = {}): Promise<ClaimResult> {
+  async claim(
+    id: string,
+    options: { owner?: string; now?: Date; arrived?: boolean } = {},
+  ): Promise<ClaimResult> {
     const now = options.now ?? new Date();
     const existing = await read(id, options.owner);
     if (!existing) return { ok: false, why: "unknown" };
     if (existing.status !== "pending") return { ok: false, why: "taken" };
-    if (grantIsOver(existing, now)) return { ok: false, why: "expired" };
+    /* `arrived` is *the bytes are in Storage*, established by a `head` in the
+       route. It suppresses this and nothing else — see `UploadStore.claim`. */
+    if (!options.arrived && grantIsOver(existing, now)) return { ok: false, why: "expired" };
 
     await mkdir(DIR, { recursive: true });
     try {

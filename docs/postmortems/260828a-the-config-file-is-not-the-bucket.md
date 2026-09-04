@@ -193,6 +193,14 @@ about a file it never saw, which is this bug with an extra step. Its fixture is 
 test parses the real `supabase/config.toml`, so a change to the file's shape fails a test rather than
 silently emptying the check.
 
+> **Superseded, 2026-09-03.** It was the wrong call after all, for a reason this paragraph did not
+> see: the hand-written parser skipped any assignment its regex missed and then supplied the
+> defaults, so a bucket block of `public =` / `file_size_limit =` / `allowed_mime_types =` parsed as
+> private, unlimited, any MIME and compared equal — "no drift" about a file it could not read, which
+> is exactly what the paragraph above says must not happen. `smol-toml` has been a direct dependency
+> since 2026-09-02, so the objection had already expired. Found by GPT Sol reviewing stage 1 of
+> docs/plans/260903j-illustrated-415-and-one-click-paint.md.
+
 The declaration is worth keeping honest even though our own uploads should never depend on it: the
 allowlist is a real guard on the browser's signed-grant path, and a bucket that silently disagrees
 with the file describing it is a security control nobody can read off the repo.

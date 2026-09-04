@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { LucideProvider } from "lucide-react";
 import { App } from "./App.js";
-import { CALLBACK_HREF, settleAddress } from "./router.js";
+import { CALLBACK_HREF, settleAddress, watchHistoryWrites } from "./router.js";
 import { startPerf } from "./perf.js";
 import { watchConnection } from "./offline.js";
 import { watchUncaughtErrors } from "./log-buffer.js";
@@ -76,6 +76,21 @@ startPerf();
  * which a history write is invisible. Patching is idempotent per adapter.
  */
 enableHistorySync();
+
+/**
+ * And let *us* see them too, which is a different question.
+ *
+ * `enableHistorySync` above tells nuqs about our writes. This tells the app
+ * about nuqs's: `useAddressSearch` needs to hear every change to the query
+ * string, and nuqs's own subscriptions are key-isolated, so nothing else does.
+ * router.ts § `watchHistoryWrites` has the whole of why — the short version is
+ * that 551 block permalinks are built from the query string inside a memoised
+ * subtree, and without this they would quietly stop being refreshed.
+ *
+ * After `enableHistorySync`, so nuqs's wrapper is the inner one and ours sees
+ * every call either way. Both run; the order only decides which is outermost.
+ */
+watchHistoryWrites();
 
 /**
  * `/add/<a whole URL>` and `/?add=<a whole URL>` become `/add/<encoded>`.

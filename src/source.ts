@@ -58,6 +58,7 @@ import {
   UPLOAD_MISSING,
   UPLOAD_NOT_A_PDF,
   UPLOAD_TOO_BIG,
+  UPLOAD_TOO_MANY_PAGES,
 } from "./messages.js";
 import { MAX_UPLOAD_BYTES } from "./uploads.js";
 
@@ -345,20 +346,55 @@ export function cleanFilename(raw: string): string | null {
  * the kind it was declared with, and a message defined out here is a message
  * that check never sees.
  *
- * It nearly mattered. These four codes were not in `CODE_KINDS`, and an
- * unrecognised code means *offer another go* — so "that file isn't a PDF" would
- * have arrived with a Retry button that could not possibly work, which is the
- * failure docs/postmortems/260826a-toc-max-tokens.md exists about. Found by the
- * cross-family review.
+ * It nearly mattered. **On 2026-08-26, when there were four of these**, none of
+ * their codes was in `CODE_KINDS`, and an unrecognised code means *offer another
+ * go* — so "that file isn't a PDF" would have arrived with a Retry button that
+ * could not possibly work, which is the failure
+ * docs/postmortems/260826a-toc-max-tokens.md exists about. Found by the
+ * cross-family review. (The count is dated rather than dropped because it is
+ * about that day; `REJECT_REASONS` below is the live one.)
  */
-export type RejectReason = "too-big" | "not-a-pdf" | "checksum-mismatch" | "missing";
+export type RejectReason =
+  | "too-big"
+  | "not-a-pdf"
+  | "checksum-mismatch"
+  | "missing"
+  | "too-many-pages";
 
 const REJECTIONS: Record<RejectReason, ReaderFacingFailure> = {
   "too-big": UPLOAD_TOO_BIG,
   "not-a-pdf": UPLOAD_NOT_A_PDF,
   "checksum-mismatch": UPLOAD_CHECKSUM,
   missing: UPLOAD_MISSING,
+  /**
+   * **The one reason whose sentence the reader never sees**, and it is here for
+   * the state machine rather than for the copy.
+   *
+   * The page count is only known where it was counted, and this map is static
+   * (see the header above), so the *job* carries `pdfTooManyPages(count, limit)`
+   * and this carries the reason the record has to record. `rejected` needs a
+   * reason or the `uploads_rejected_has_reason` check refuses the row — which is
+   * the whole point of writing one down.
+   *
+   * "Not normally" until 2026-09-04, when it was checked: the refusal is written
+   * onto the row by `refuseAnOverlongPdf` rather than through `refuse`, so this
+   * failure is never handed to a reader by any path there is. It is kept because
+   * this map's **totality** is what makes a new reason without a sentence a
+   * compiler error, and that is worth more than a deleted paragraph — the
+   * argument in full is at `UPLOAD_TOO_MANY_PAGES` in src/messages.ts, along with
+   * the drift it costs.
+   */
+  "too-many-pages": UPLOAD_TOO_MANY_PAGES,
 };
+
+/**
+ * Every reason there is — **derived, never written out again**, for the reason
+ * `UPLOAD_STATUSES` above is: `tests/source.test.ts` walks these asserting that
+ * each has its own bracketed code and reads back to the kind it was declared
+ * with, and a second hand-typed list is a list that goes on agreeing with
+ * itself while missing whatever was added last.
+ */
+export const REJECT_REASONS = Object.keys(REJECTIONS) as RejectReason[];
 
 /** The whole failure — the sentence and whether another go is worth offering. */
 export function rejectionFailure(reason: RejectReason): ReaderFacingFailure {

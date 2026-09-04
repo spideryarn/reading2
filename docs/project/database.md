@@ -1233,10 +1233,11 @@ to `PipelineStep.run` — and never builds one for itself.
 
 **This was a directory until 2026-09-01, and it was not a tidiness problem.** The files went to
 `data/<slug>/`, which on Vercel is job-scoped `/tmp`; a retry is a new job id by design and lands on
-a different machine anyway, so **every attempt at a long PDF started from zero**. `MAX_PAGES` is 100
-and a hundred dense chunks can miss the 740s step deadline, so an accepted document could fail for
-ever without ever accumulating enough finished work to get under it — a liveness failure rather than
-a bill. GPT Sol revised its own earlier judgement to say so:
+a different machine anyway, so **every attempt at a long PDF started from zero**. A document dense
+enough to plan a chunk per page can miss the 740s step deadline ([`src/pdf-read.ts`](../../src/pdf-read.ts)
+§ `CHUNK_CONCURRENCY` has the arithmetic, against `MAX_PAGES`), so an accepted document could fail
+for ever without ever accumulating enough finished work to get under it — a liveness failure rather
+than a bill. GPT Sol revised its own earlier judgement to say so:
 [260901d-simpler-finish-sol.md § 4](../plans/260901d-simpler-finish-sol.md). The seam had existed
 since 2026-08-29 with no caller, for one reason: **a stage was never handed the stable `articleId`**,
 which is the only thing a checkpoint may be keyed on.

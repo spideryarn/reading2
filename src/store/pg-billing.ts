@@ -70,7 +70,14 @@
 
 import { eq, sql } from "drizzle-orm";
 
-import { FREE, entitlementForTier, isEntitledStatus, tierForPrice } from "../billing/tiers.js";
+import { limitForPeriod } from "../billing/quota-adjustment.js";
+import {
+  FREE,
+  entitlementForTier,
+  isEntitledStatus,
+  quotaRules,
+  tierForPrice,
+} from "../billing/tiers.js";
 import type { Entitlement, TierRow } from "../billing/tiers.js";
 import { getDb } from "../db/client.js";
 import { billingAccounts, ingestEvents } from "../db/schema.js";
@@ -156,6 +163,14 @@ export interface BillingRow {
   readonly currentPeriodEnd: Date | null;
   readonly stripeSubscriptionId: string | null;
   readonly stripeCustomerId: string | null;
+  /**
+   * What a mid-period plan change left this account allowed, and which period
+   * that number belongs to. Null in the ordinary case, which means *ask the
+   * tier* — src/billing/quota-adjustment.ts, and `billing_accounts` in
+   * ../db/schema.ts.
+   */
+  readonly quotaLimitDelta: number | null;
+  readonly quotaPeriodStart: Date | null;
 }
 
 /**
@@ -195,7 +210,19 @@ export function entitlementFromRow(
       customerId: row.stripeCustomerId,
     };
   }
-  return entitlementForTier(tier, { start, end });
+  /* **The one place a stored override is read.** A plan change mid-period leaves
+     a number here that is neither tier's, because Stripe prorated the price and
+     the allowance follows it — src/billing/quota-adjustment.ts. It applies only to
+     the period it was computed for, so this is a comparison and not arithmetic:
+     admission reads an integer. */
+  const { maxAllowance } = quotaRules(tiers);
+  const limit = limitForPeriod(
+    tier.ingestsPerPeriod,
+    start,
+    { delta: row.quotaLimitDelta, periodStart: row.quotaPeriodStart },
+    maxAllowance,
+  );
+  return { ...entitlementForTier(tier, { start, end }), limit };
 }
 
 /**
@@ -281,6 +308,8 @@ const BILLING_COLUMNS = {
   currentPeriodEnd: billingAccounts.currentPeriodEnd,
   stripeSubscriptionId: billingAccounts.stripeSubscriptionId,
   stripeCustomerId: billingAccounts.stripeCustomerId,
+  quotaLimitDelta: billingAccounts.quotaLimitDelta,
+  quotaPeriodStart: billingAccounts.quotaPeriodStart,
 } as const;
 
 /**
@@ -378,14 +407,21 @@ export async function ingestEligibility(
  * The billing row as a page needs it: the entitlement columns, plus the one
  * fact entitlement does not care about.
  *
- * `cancelAtPeriodEnd` is not part of `BillingRow` because entitlement is not
- * decided by it — a cancelled-at-period-end subscription is still `active` and
- * still entitled until the period runs out. It matters to the *reader*, who is
- * owed the difference between "starts again on the 3rd" and "runs out on the
- * 3rd", so it travels beside the row rather than inside it.
+ * `cancelAtPeriodEnd` and `cancelAt` are not part of `BillingRow` because
+ * entitlement is not decided by either — a subscription scheduled to end is
+ * still `active` and still entitled until the period runs out. They matter to
+ * the *reader*, who is owed the difference between "starts again on the 3rd"
+ * and "runs out on the 3rd", so they travel beside the row rather than inside
+ * it.
+ *
+ * **Two fields, one answer.** They are two raw Stripe facts and neither implies
+ * the other (src/billing/subscription.ts). Nothing downstream may interpret
+ * them separately: `planEndsAt` in src/billing-plan.ts is the single place the
+ * pair becomes a date, and it is that date the browser is given.
  */
 export interface AccountSnapshot extends BillingRow {
   readonly cancelAtPeriodEnd: boolean;
+  readonly cancelAt: Date | null;
 }
 
 /**
@@ -398,7 +434,11 @@ export interface AccountSnapshot extends BillingRow {
  */
 export async function accountSnapshot(ownerId: string): Promise<AccountSnapshot | undefined> {
   const [row] = await getDb()
-    .select({ ...BILLING_COLUMNS, cancelAtPeriodEnd: billingAccounts.cancelAtPeriodEnd })
+    .select({
+      ...BILLING_COLUMNS,
+      cancelAtPeriodEnd: billingAccounts.cancelAtPeriodEnd,
+      cancelAt: billingAccounts.cancelAt,
+    })
     .from(billingAccounts)
     .where(eq(billingAccounts.ownerId, ownerId))
     .limit(1);
@@ -419,6 +459,7 @@ export async function allAccountSnapshots(): Promise<Map<string, AccountSnapshot
       ownerId: billingAccounts.ownerId,
       ...BILLING_COLUMNS,
       cancelAtPeriodEnd: billingAccounts.cancelAtPeriodEnd,
+      cancelAt: billingAccounts.cancelAt,
     })
     .from(billingAccounts);
   return new Map(rows.map(({ ownerId, ...row }) => [ownerId, row]));

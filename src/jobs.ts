@@ -69,6 +69,7 @@ import {
   DraftGoneError,
   mintAttempt,
   StaleAttemptError,
+  type ExpirySettlement,
   type JobEnding,
   type JobStore,
 } from "./store/jobs.js";
@@ -166,14 +167,20 @@ const aborts = processSingleton<Map<string, AbortController>>(
  * step. `tests/jobs-lease-budget.test.ts` pins the invariant rather than the
  * numbers, so the next person to raise one cannot forget the other.
  *
- * **Why 420s.** Measured per-article step totals from `data/_ai-calls.jsonl`:
- * `hierarchy` 324.0s over three calls, `summarise` 240.3s over ten. Both exceed the
- * 220s deadline these constants used to give, so a long step could not complete
- * through the job path **on any machine** — it only ever succeeded via the CLI,
- * which takes no lease. The deadline is bounded above too: the route loop must
- * reserve a whole deadline before starting a step, so too large a value refuses
- * the last short step of an article that would have fitted. Half the invocation
- * budget is the ceiling, and 400s is that.
+ * **Why the deadline is minutes and not seconds.** Measured per-article step
+ * wall times from `data/_ai-calls.jsonl`: `hierarchy` **320.4s in a single
+ * call**, which is the longest step this project has ever measured and the
+ * number everything here is sized around. It exceeds the 220s deadline these
+ * constants used to give, so a long step could not complete through the job path
+ * **on any machine** — it only ever succeeded via the CLI, which takes no lease.
+ * (This paragraph was headed *"Why 420s"* and argued for a number two revisions
+ * out of date; the reasoning was still right, so what is corrected is the claim
+ * it was attached to. `hierarchy` also read "324.0s over three calls", which was
+ * three unrelated runs collapsed by a null slug —
+ * tests/jobs-lease-budget.test.ts § the longest step.)
+ *
+ * The deadline is bounded above too, and the ceiling is the invariant above: it
+ * must fire before the platform's kill, with enough margin to unwind.
  *
  * That ordering is the whole point and it is why there is no heartbeat. A lease
  * that can be renewed means an expired lease says *probably dead*; a lease
@@ -195,11 +202,28 @@ const aborts = processSingleton<Map<string, AbortController>>(
  * cost it carries meanwhile is a dead claimant unreclaimable for ~12.5 minutes
  * instead of ~7. Do not leave that lying around after its cause has gone.
  *
- * The arithmetic it has to satisfy, measured rather than assumed —
- * `tests/jobs-lease-budget.test.ts` pins it:
+ * The arithmetic it has to satisfy, measured rather than assumed and **for an
+ * ordinary web page** — `tests/jobs-lease-budget.test.ts` pins it:
  *
- *     fetch ~10s + extract ~5s + blocks ~5s + hierarchy 320.4s + assets ≤180s ≈ 520s
- *     520s  <  740s self-abort  <  800s platform kill
+ *     fetch ≤110s + extract ~10s + blocks ~5s + hierarchy 320.4s + assets ≤185s = 630.4s
+ *     630.4s  <  740s self-abort  <  800s platform kill
+ *
+ * **Re-measured 2026-09-04, and the old line said 520s.** It quoted `fetch ~10s`
+ * and `extract ~5s`, both of which this same file falsified in the same change
+ * that raised `MAX_PAGES` ⟨GPT Sol⟩: `fetch` is bounded by src/fetch.ts's three
+ * 30s attempts rather than by a single request, and `extract`'s 10s is the *HTML*
+ * branch. `assets` is its own cap, which moved from 180s to 185s to include the
+ * unwinding.
+ *
+ * **And a PDF does not fit, has never claimed to, and that is not a hole.** The
+ * PDF branch of `extract` is a fan-out of model calls whose ceiling is
+ * `STEP_BUDGET_MS.extract` — 700s, most of one whole window on its own. Measured
+ * in a browser on 2026-09-04: a 144-page paper spent nearly all of the first
+ * window in `extract` and had `hierarchy` cut off by the deadline, so it took
+ * **two claims**. What makes that cheap rather than ruinous is the per-chunk
+ * checkpoints and a retry that lands on the same article
+ * (src/pdf-read.ts § `CHUNK_CONCURRENCY`, `slugForRetry`) — and what the sum
+ * above is really pinning is that the *ordinary* article still fits one.
  *
  * 420s was right for the one-step-per-request shape this replaces, where every
  * step got a fresh deadline. Under a claim that walks the whole job it is a
@@ -209,6 +233,117 @@ const aborts = processSingleton<Map<string, AbortController>>(
  */
 export const LEASE_MS = 760_000;
 export const DEADLINE_MARGIN_MS = 20_000;
+
+/**
+ * **The claimant's own deadline, as the reason it aborts with** — so that
+ * "nobody came back" and "the reader pressed Stop" can be told apart by anyone
+ * holding the signal.
+ *
+ * They could not be, until 2026-09-04. Stop and the deadline abort the *same*
+ * `AbortController` — deliberately, because a step listening for one is
+ * listening for both — and `runStep`'s catch decided with a bare
+ * `controller.signal.aborted`. So a job killed by its own 740 s deadline took
+ * the branch written for a reader who chose to stop, and the card said **"You
+ * stopped this before it finished."** to somebody who had pressed nothing.
+ * Found in a browser run on a 144-page PDF, at 742.8 s; raising `MAX_PAGES` to
+ * 250 is what turns that from rare into routine.
+ *
+ * **A class rather than the message string**, which was the other way to tell
+ * them apart and was available: the deadline already aborted with
+ * `new Error(INTERRUPTED.message)`, so `reason.message === INTERRUPTED.message`
+ * would work today and would silently stop working the day somebody reworded a
+ * sentence — docs/project/copy.md says copy stays freely rewritable, and pinning
+ * one here would make that false without saying so. The type carries the fact
+ * the code needs and the message goes on carrying the one the reader needs.
+ *
+ * It keeps `INTERRUPTED`'s wording and `Error`'s `name`, so nothing downstream
+ * that reads either sees a change: this is a *narrowing* of what was already
+ * thrown, not a new thing to handle.
+ */
+class DeadlineReached extends Error {
+  constructor() {
+    super(INTERRUPTED.message);
+  }
+}
+
+/**
+ * **How many times a job may be given back to the queue after its claimant
+ * stopped answering, before it is ended instead.** Two — so **three** lease
+ * windows in all, counting the one the job was claimed under to begin with.
+ *
+ * Read that sentence twice, because the constant and its justification meant
+ * two different things for a day. It was three, and the paragraph beside it
+ * counted *attempts* — so the code bought four lease windows while the reasoning
+ * argued for three. Two is the number that makes them agree, and the reasoning
+ * is the half that was right. GPT Sol, reviewing the built stage 3, finding 2.
+ *
+ * `settleExpired` used to end every lapsed claim outright, so a deploy landing
+ * mid-ingest cost the reader their job and left them a Retry button. It now puts
+ * the job back to `queued` on the same row, which is what the filesystem store's
+ * `sweepStopped` has always done at restart, and which keeps the slug, the
+ * article and the article's checkpoints. The contract is src/store/jobs.ts §
+ * `settleExpired`; enforcing the number is the store's, deciding it is ours, the
+ * same division `LEASE_MS` and `jobConcurrency` already have.
+ *
+ * **A lapsed lease and a step that overran are not the same event, and this
+ * paragraph used to name the second as an example of the first.** A lapse is
+ * *nobody came back* — the claimant was frozen, killed or deployed over, and
+ * stopped saying anything. A claimant that reaches its own deadline is still
+ * here: it aborts its step, and `walkClaim` ends the job as a **retryable
+ * error** rather than handing it back, so the reader presses Retry and this
+ * budget is not involved at all. Watched on 2026-09-04, on the 144-page paper
+ * this work is about: `ms: 740033`, ended, no requeue. An automatic second
+ * window for the cooperative case is listed as *recommended, not built* in
+ * docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md.
+ *
+ * **Why there is a number at all:** without one, a job that overruns every lease
+ * requeues for ever, buying model calls nobody is waiting for. That is the
+ * failure mode this whole area is about, wearing a different hat.
+ *
+ * **Why three windows.** A resumption is worth having when the *next* attempt
+ * can finish, and each one starts with every checkpointed chunk already banked,
+ * so the work left shrinks every time. Measured on 2026-09-03 against the
+ * document that prompted this: a 144-page paper plans 48 chunks and finishes
+ * inside one 740s deadline at the mean call duration, and needs a second attempt
+ * only on a bad tail. One window is therefore the ordinary case, two covers the
+ * tail, and three covers a deploy landing during the second. A job still
+ * unfinished after three is not making progress, and looping past that is
+ * re-buying whatever is not checkpointed for a reader who is no longer watching.
+ *
+ * **And nothing here requires progress before granting a window**, which is what
+ * makes the number the whole of the protection. The requeue is decided by
+ * `settleExpired` from the lease alone — it has no view of what the attempt got
+ * done — so a step whose paid call is *not* checkpointed can be bought once per
+ * window. Three windows is three of those. A progress test (say, "requeue only
+ * if a checkpoint landed") would be the tighter rule and is not built: the two
+ * expensive fan-outs are checkpointed already, so what it would save is the
+ * `assets` outline call and little else, at the price of a second concept in the
+ * sweep. Worth revisiting if a third un-checkpointed paid step ever appears.
+ *
+ * **And the budget is per job, not per article, which is deliberate.** Pressing
+ * Retry makes a *new* job with a fresh two — so the reader is the outer loop.
+ * That is the same shape Stop has: the machine gives up before the person does.
+ *
+ * **The filesystem store counts this in memory, which is weaker parity and is
+ * accepted.** `src/store/jobs-fs.ts` keeps the counter in a `Map` that a restart
+ * empties, so a job that has spent its budget gets a fresh one after a
+ * dev-server restart. The argument in that file is that a restart there *is*
+ * `sweepStopped`, which requeues everything running with no budget at all — but
+ * it does mean the cap is not durable locally, and locally is where paid
+ * development happens. Not built on: there is no articles table under that store
+ * to hang a durable count on, and Postgres is what ships
+ * (docs/project/database.md). GPT Sol, reviewing the built stage 3, finding 2.
+ *
+ * The ending when it is used up is `INTERRUPTED`, which is what a lapsed claim
+ * has always written and is honest here: *"This stopped part-way through … the
+ * steps that finished are kept, so trying again picks up where it left off."*
+ * Since 2026-09-03 that last clause is true rather than aspirational — a retry
+ * lands on the same article, so it really does pick up (`slugForRetry`). A
+ * sentence that also said *how many times we tried* would be better and needs a
+ * new `ReaderFacingFailure`; it is not written here because src/messages.ts is
+ * being edited elsewhere.
+ */
+export const REQUEUE_BUDGET = 2;
 
 /** What `SPIDERYARN_JOB_CONCURRENCY` is called, in one place so it cannot be misspelt twice. */
 export const CONCURRENCY_ENV = "SPIDERYARN_JOB_CONCURRENCY";
@@ -281,11 +416,69 @@ export function jobConcurrency(): number {
  * prevent. So round up.
  */
 export const STEP_BUDGET_MS: Record<StepName, number> = {
-  /* GUESS, generous. Network only, no model call. Never measured. */
-  fetch: 10_000,
-  /* GUESS, generous. Readability over HTML; a long PDF is slower and this
-     number does not cover it. */
-  extract: 5_000,
+  /* **MEASURED** 2026-09-04, and the measurement is the smaller half of the
+     number.
+
+     `fetchDocument` took 107–893 ms over five real addresses off this box
+     (paulgraham, gwern, a 1.3 MB Wikipedia article, slatestarcodex, a 5.6 MB
+     arXiv PDF). What bounds the step is not that: it is `DEFAULTS` in
+     src/fetch.ts, **three attempts of 30 s each** with a backoff capped at 10 s
+     between them, so a hanging retryable origin costs about **110 s**. An
+     earlier draft of this comment said 30 s, having read `timeoutMs` and not the
+     retry loop it sits inside ⟨Sol, 2026-09-04⟩ — which is the same mistake in
+     miniature that the whole table's header is about.
+
+     On top of that sits the page count added on 2026-09-04
+     (`refuseAnOverlongPdf`, src/pipeline.ts): 1.5–1.8 s on the first PDF a
+     process sees, because that is when pdf.js loads, and 17–33 ms after —
+     measured on four files from 8 to 144 pages and 0.1 MB to 11 MB, with no
+     trend against either. The storage put is the one part still unmeasured, and
+     it is the reason for the rounding rather than a gap.
+
+     It read *"GUESS, generous. Network only, no model call. Never measured"*
+     until then, and 10 s was under a single one of its own three timeouts. */
+  fetch: 150_000,
+  /* **A CEILING, and the two branches of this step are two different steps.**
+     ⟨measured 2026-09-04⟩
+
+     *HTML* is Readability: 0.95 s, 1.2 s, 2.8 s and **5.2 s** over the four real
+     pages above, the worst being Wikipedia's 1.3 MB *Consciousness*. So the 5 s
+     that stood here was already under the worst ordinary web page, never mind
+     the note beside it admitting it did not cover a PDF.
+
+     *PDF* is `runPdfExtract`, and **no number can bound it**, which is why this
+     is a ceiling and not a measurement. 250 pages plans ~84 chunks; at
+     `CHUNK_CONCURRENCY` 16 that is 270 s at the 45 s mean call and 588 s if
+     every wave hits the 98 s tail — and on top of *that* sit two retry layers
+     this file cannot see, `ATTEMPTS` for a chunk that fails its check and
+     `TRANSPORT_ATTEMPTS` with backoff for one that never answered
+     (src/pdf-read.ts). A first draft of this row said 600 s and read as though
+     588 + 12 were a budget; it was arithmetic pretending to be a bound ⟨Sol,
+     2026-09-04⟩.
+
+     So the question is not "how long does a PDF extract take" but "is there
+     enough of this claim left to be worth starting one at all", and the answer
+     is as much of the window as can be reserved without the step becoming
+     unstartable. The deadline is `LEASE_MS - DEADLINE_MARGIN_MS` = 740 s; a
+     budget at or over that never fits and the job would sit `queued` for ever.
+     **700 s** leaves the 40 s a preceding `fetch` needs to have run and still
+     admit — and when it does not, the claim is handed back and the next one
+     runs `extract` first, which this table never gates: the walk checks the
+     budget *between* steps, so the first step of any claim always starts
+     (`advanceJobWith`'s loop, below). That is what makes a number this large
+     safe rather than a way to wedge a job — and it is also the limit of what it
+     buys. A claim that *begins* at `extract` gets whatever is left of its
+     deadline, however little; this row protects the ordinary
+     `fetch → extract` walk and nothing else.
+
+     Being over-large costs an HTML article one extra request, which is the cheap
+     direction this table's header says to round in. Being under-large is what
+     shipped: a PDF extract admitted with 100 s left, self-aborting at 100 s.
+     That is survivable now rather than ruinous, because the per-chunk
+     checkpoints are keyed on the article and a retry keeps it (`slugForRetry`),
+     so the paid chunks are banked — but a wasted lease window is still a wasted
+     lease window, and `REQUEUE_BUDGET` above allows two of them. */
+  extract: 700_000,
   /* GUESS, generous. Deterministic, no model call. */
   blocks: 5_000,
   /* MEASURED 2026-08-30, the worst in data/_ai-calls.jsonl: one call, so its
@@ -733,9 +926,21 @@ async function runStep(
        in a body, and rule 3 in src/log.ts is that `redact` cannot reach
        anything inside `msg`. The full error goes in the object, where it can. */
     const stopped = controller.signal.aborted;
+    /* **Whose abort was it.** The deadline and Stop share one controller, so
+       the *reason* is the only thing that separates them — see
+       `DeadlineReached`, which is also where the argument for a type rather
+       than a message match lives. */
+    const ranOutOfTime = controller.signal.reason instanceof DeadlineReached;
     if (stopped) {
       jlog.debug(
-        { step: step.name, ms: since(stepStarted), ...spendFields(spend) },
+        {
+          step: step.name,
+          ms: since(stepStarted),
+          /* Which of the two aborts this was, because the log line reads the
+             same for both and they are not the same event. */
+          why: ranOutOfTime ? "deadline" : "stop",
+          ...spendFields(spend),
+        },
         `step cancelled: ${step.name} — ${job.slug}`,
       );
     } else {
@@ -776,8 +981,21 @@ async function runStep(
      * a step of a job that `recordFailureKind` was about to make retryable. The
      * reader is not owed a failure's account of a thing they chose. GPT Sol,
      * stage 2 review.
+     *
+     * **And "a cancel" is two things, which cost a reader a false accusation
+     * for a day.** An abort here is either the reader's Stop or this claimant's
+     * own deadline, and until 2026-09-04 both got `STEP_STOPPED` — *"You stopped
+     * this before it finished"* — because the branch asked whether the signal
+     * had fired and not who fired it. The card said that about a 144-page PDF
+     * whose hierarchy step ran out of time at 742.8 s, in a browser run no test
+     * had covered. `INTERRUPTED` is what the *job* has always ended with in that
+     * case (`interruptedEnding`, below), so this is the shelf card agreeing with
+     * the band rather than a new sentence: *"whatever was running it did not come
+     * back"* — which is what a claimant handing back at its own deadline is,
+     * from the reader's side.
      */
-    const reader = stopped ? STEP_STOPPED : readerFailureOf(err, step.label);
+    const stopping = ranOutOfTime ? INTERRUPTED : STEP_STOPPED;
+    const reader = stopped ? stopping : readerFailureOf(err, step.label);
     step.status = "error";
     /* **The reader's sentence on both fields, and it has to be both.** The band
        renders `job.error` and the shelf card renders `step.error`
@@ -1531,6 +1749,26 @@ function endingSentence(job: Job, opening: string): string {
   return opening + (jobWorthRetrying(job) ? RETRY_IS_SAFE : RETRY_WILL_NOT_HELP);
 }
 
+/**
+ * What a sweep did, in a sentence, for the two doors that log one.
+ *
+ * **Because a sweep no longer only ends things.** Since `REQUEUE_BUDGET`, a
+ * lapsed claim with budget left goes back to `queued` on its own row — so the
+ * old wording, *settled N job(s) whose claimant stopped answering*, would call a
+ * resumption a settlement, in the one line that is the only account there is of
+ * a claimant that went away and logged nothing on its way out. The ids and their
+ * endings are in the object beside this either way; this is the half a human
+ * reads first, so it says which of the two happened.
+ */
+function sweepLine(swept: readonly ExpirySettlement[]): string {
+  const back = swept.filter((one) => one.status === "queued").length;
+  const over = swept.length - back;
+  const parts: string[] = [];
+  if (back > 0) parts.push(`put ${back} back in the queue`);
+  if (over > 0) parts.push(`settled ${over}`);
+  return `${parts.join(" and ")} — job(s) whose claimant stopped answering`;
+}
+
 const PRODUCTION: AdvanceParts = { session: claimSession, steps: STEPS };
 
 /**
@@ -1561,9 +1799,15 @@ export async function advanceJobWith(
    * slot, so a sweep that never runs is a sweep nobody needed. And it is one
    * indexed `UPDATE` over rows that are almost always none.
    *
-   * It settles the job rather than taking it over — see the header — so the
-   * reader sees a job that stopped and a Retry button, not a job that silently
-   * restarted somewhere else.
+   * **What it does to a lapsed claim depends on the budget**, and this said
+   * *"it settles the job rather than taking it over … so the reader sees a job
+   * that stopped and a Retry button"* until 2026-09-03, when it stopped being
+   * true. With `REQUEUE_BUDGET` windows left the row goes back to `queued` on
+   * the same id and the very next claimant may take it — the reader sees a card
+   * that carries on, not a failure. It is only once the budget is spent that the
+   * job is settled and offered a button. Either way the sweep never *takes over*
+   * the work in this request: it moves the row and returns, and something else
+   * claims it. GPT Sol, reviewing the built stage 3, finding 6.
    *
    * **And it is deliberately not scoped to `owner`, which is in scope on the
    * line above and would look like a free improvement.** `settleExpired` takes
@@ -1595,7 +1839,7 @@ export async function advanceJobWith(
      comes back `cancelled` rather than `error`, so a line saying *failed* would
      be untrue of exactly the jobs a reader chose to stop — and the statuses are
      in the object beside the ids, so the log can say which was which. */
-  const swept = await store.settleExpired();
+  const swept = await store.settleExpired(undefined, undefined, REQUEUE_BUDGET);
   if (swept.length > 0) {
     log("jobs").warn(
       /* `where`, because since stage 3 there are two doors into this same
@@ -1603,7 +1847,7 @@ export async function advanceJobWith(
          indistinguishable in the log, and the interesting question about a
          settlement is which of them found it. */
       { count: swept.length, settled: swept, where: "advance" },
-      `settled ${swept.length} job(s) whose claimant stopped answering`,
+      sweepLine(swept),
     );
   }
 
@@ -1779,17 +2023,37 @@ async function walkClaim(
    * heartbeat — after which an expired lease means *probably dead* rather than
    * *definitely over its own deadline*, and `settleExpired` stops being safe.
    * GPT Sol, docs/plans/260830k-v1-stages01-review-sol.md § 3. What bounds a *step* is
-   * `STEP_BUDGET_MS`, checked before the step starts rather than while it runs.
+   * `STEP_BUDGET_MS` — checked between steps, deciding whether the **next** one
+   * is worth starting, and never while one runs.
+   *
+   * **Not before every step**, which this line claimed until 2026-09-04 ⟨Sol⟩:
+   * the walk below runs its first runnable step unconditionally, so a claim
+   * that begins at `extract` — a mode job, a forced re-run, a resumed ingest —
+   * starts it whatever is left. `tests/claim-session-postgres.test.ts` runs one
+   * on a two-second deadline and depends on that. So the table is a *hand-back*
+   * rule rather than an admission guarantee, and a step still has to survive
+   * being started with less than its budget; what makes that survivable for the
+   * expensive one is the per-chunk checkpoints, not this.
    */
   const controller = new AbortController();
   aborts.set(job.id, controller);
-  let overran = false;
   /** When this claimant stops, on the clock `Date.now()` reads. */
   const deadlineAt = claimedMs + (parts.leaseMs ?? LEASE_MS) - DEADLINE_MARGIN_MS;
   const deadline = setTimeout(() => {
-    overran = true;
-    controller.abort(new Error(INTERRUPTED.message));
+    controller.abort(new DeadlineReached());
   }, deadlineAt - Date.now());
+  /**
+   * **Was that our deadline, or was it the reader?** — read off the abort
+   * itself, so there is one answer and everybody reads the same one.
+   *
+   * This was a `let overran = false` set beside the `abort` above, and the
+   * second copy is what went wrong: `runStep` cannot see a local of this
+   * function, so its `catch` asked the only question it *could* ask —
+   * `controller.signal.aborted` — and answered the reader's-Stop branch for a
+   * job nobody had touched (see `DeadlineReached`). A boolean that only one of
+   * two readers can reach is a fact with two versions.
+   */
+  const overran = (): boolean => controller.signal.reason instanceof DeadlineReached;
   /**
    * Put the timer and the abort entry down.
    *
@@ -1908,7 +2172,7 @@ async function walkClaim(
          mislabelling; the deadline had a branch on the failure path and none on
          the success path. */
       if (controller.signal.aborted) {
-        const ending = overran
+        const ending = overran()
           ? interruptedEnding(job)
           : (markCancelled(job, "Cancelled"), endingFrom(job, "cancelled"));
         return { kind: "end", jobId: job.id, attempt, ending };
@@ -1980,7 +2244,7 @@ async function walkClaim(
            step was interrupted by its own claimant — so it ends as an error
            the reader may retry, with `INTERRUPTED`'s wording rather than
            whatever the abort happened to say. */
-        const ending = overran
+        const ending = overran()
           ? interruptedEnding(job)
           : endingFrom(job, ran.outcome === "cancelled" ? "cancelled" : "error");
         const after = await endJob(job, attempt, ending, jlog, startedMs, session);
@@ -1996,7 +2260,7 @@ async function walkClaim(
       const settlement = ran.settlement as JobSettlement;
 
       if (settlement.kind === "ended") {
-        if (overran) {
+        if (overran()) {
           jlog.warn(
             { step: step.name },
             `step ${step.name} ran past its deadline and ignored the signal — ${job.slug}`,
@@ -2259,6 +2523,26 @@ export interface EnqueueRequest {
    * from a re-run.
    */
   ingestEventId?: string;
+  /**
+   * **The id of the failed attempt this request repeats** — set by `retryJob`
+   * and by nothing else.
+   *
+   * It is here for one reason: it changes what a *mint* is called. See
+   * `slugForRetry`, which is the whole of what this field does.
+   *
+   * **Why the fact has to be on the request rather than inferred.** Allocation
+   * cannot tell a retry from a fresh request by looking at one: a retry of an
+   * upload and a second upload of the same file arrive with the same shape, and
+   * the difference between them is a decision — *two uploads of one file are two
+   * documents* (below), and *a retry is the continuation of one named prior
+   * attempt*. `retryJob` is the only caller that holds the old job, so it is the
+   * only caller that can say which of the two this is.
+   *
+   * The id rather than a bare boolean, because it is the *name of the attempt*
+   * that makes the claim true, and because it is worth having in the log line
+   * that says a job was queued.
+   */
+  retryOf?: string;
 }
 
 /**
@@ -2345,12 +2629,19 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
    *
    * It is a `let` because two of `enqueueOrGet`'s four answers move it — see
    * the loop.
+   *
+   * **A retry allocates through `slugForRetry` instead**, which is the same
+   * three branches with one word changed: a mint keeps the failed attempt's own
+   * name rather than generating a new one. Nothing else about a retry is
+   * special, and in particular whether it *reserves* is unchanged.
    */
-  let allocation: SlugAllocation = request.url
-    ? await freeSlug(request.slug, request.url)
-    : request.upload
-      ? { kind: "minted", slug: slugWithShortId(request.slug) }
-      : { kind: "adopted", slug: request.slug };
+  let allocation: SlugAllocation = request.retryOf
+    ? await slugForRetry(request)
+    : request.url
+      ? await freeSlug(request.slug, request.url)
+      : request.upload
+        ? { kind: "minted", slug: slugWithShortId(request.slug) }
+        : { kind: "adopted", slug: request.slug };
 
   /* **`request.url`, not the URL read off disk below**, for the reason
      `workKey` gives: it has to be a property of the *request*. Uploads have
@@ -2493,7 +2784,11 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
        * other branch is unreachable, and it adopts rather than throwing because
        * an unreachable branch that stops the reader is worse than one that
        * queues them behind the holder.
+       *
+       * **A retry inserts nothing at all: it is handed the holder.** See
+       * `handBackToARetry` for why a retry cannot take the repair above.
        */
+      if (request.retryOf) return handBackToARetry(outcome.job, owner);
       allocation = request.url
         ? await freeSlug(request.slug, request.url)
         : { kind: "adopted", slug: outcome.job.slug };
@@ -2517,7 +2812,15 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
        * Every path out of here changes something: a mint is a fresh random id,
        * and an adoption stops reserving. So the loop cannot ask the same
        * question twice, and `tries` is a fault budget rather than a ladder.
+       *
+       * **A retry inserts nothing at all: it is handed the holder**, for the
+       * same reason as `sourceTaken` above and one more of its own. A retry's
+       * mint is not a random name it can generate a fresh one of — it is *this
+       * article's* name — so re-asking would return the same answer for ever and
+       * spend the whole budget on a 409 about there being too many articles
+       * called something there is exactly one of. See `handBackToARetry`.
        */
+      if (request.retryOf) return handBackToARetry(outcome.job, owner);
       allocation = request.url
         ? await freeSlug(request.slug, request.url)
         : { kind: "minted", slug: slugWithShortId(request.slug) };
@@ -2531,13 +2834,112 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
        and nowhere else. Not the URL: `slug` already identifies the article, and
        the log is a reading history either way — see the note in src/log.ts. */
     log("jobs").info(
-      { jobId: job.id, slug, steps: names, forced: [...forced] },
+      {
+        jobId: job.id,
+        slug,
+        steps: names,
+        forced: [...forced],
+        /* Which attempt this repeats, when it repeats one. Two job ids and one
+           slug in the log is the only account there is of a reader pressing
+           Retry — and it is now the thing to look at when asking whether the
+           second attempt really landed on the first one's article. */
+        ...(request.retryOf !== undefined && { retryOf: request.retryOf }),
+      },
       `job queued: ${slug} — ${names.join(", ")}${forced.size ? ` (forced: ${[...forced].join(", ")})` : ""}`,
     );
 
     pump(job.id, owner);
     return job;
   }
+}
+
+/**
+ * **A retry that was refused hands back the job that refused it, and inserts
+ * nothing.**
+ *
+ * ## The invariant this exists to keep
+ *
+ * *At most one active article per (owner, address), and the thing that
+ * guarantees it is an index rather than a lookup.* The index is
+ * `jobs_active_source` (src/db/schema.ts), and it is partial on `reserves_name`
+ * — deliberately, so that the several jobs merely *naming* an article can queue
+ * behind one another. So a row that carries an address without reserving it is
+ * outside the guarantee, and is safe only for as long as some *other* active row
+ * is reserving that address on its behalf. Liveness is not a guarantee.
+ *
+ * ## What went wrong when a retry repaired itself by adopting
+ *
+ * Both repairs used to rewrite the allocation to an adoption and insert anyway,
+ * and GPT Sol reproduced two active articles for one address through each of
+ * them:
+ *
+ * ```text
+ * sourceTaken: active = ["holder-spya-111111", "blind-spya-222222"]
+ * nameTaken:   active = ["old-spya-000000",    "blind-spya-222222"]
+ * ```
+ *
+ * The interleaving is the same both times, and it is the gap between the
+ * repair's *lookup* and the insert it then makes: the holder we adopted from
+ * goes terminal inside that gap, our non-reserving row lands, nothing is
+ * reserving the address any more, and a paste whose own lookup came back empty
+ * mints a second article and reserves it. The `sourceTaken` repair at least
+ * re-asked; the `nameTaken` one adopted the holder's name with no revalidation
+ * at all. `tests/one-article-for-one-address.test.ts` § *and a retry's two*.
+ *
+ * The defence written down at the time was that a fresh paste would find the
+ * queued retry through `inFlightSlugForUrlKey`. **That is a scan, not an index**,
+ * and it cannot close its own lookup-to-insert gap.
+ *
+ * ## Why handing the holder back is the answer rather than a cleverer repair
+ *
+ * There is no second row, so there is no hole. And it is what the reader asked
+ * for: they pressed Retry on an address while another ingest of that same
+ * address — or another attempt on that same article — is live, so the live one
+ * is the answer. `enqueueOrGet` already has this shape for `sameWork`, down to
+ * the pump.
+ *
+ * It also makes the loop provably terminating for a retry, which the adopting
+ * version was not obviously: a retry now inserts on its first pass or returns.
+ *
+ * **The alternative was to make `slugForRetry` adopt more carefully**, and it
+ * cannot work: whatever it learns about a live holder is stale by the time the
+ * insert runs, which is the whole bug. The other alternative — widening
+ * `jobs_active_source` to cover non-reserving rows — breaks the per-article
+ * queue, which is the thing that index is partial *for*.
+ *
+ * **Not fixed here, and the same class:** `freeSlug` adopts from a live job for
+ * a *fresh* paste too, so the same interleaving can orphan that row's address.
+ * It predates this work, its window is one round-trip rather than two, and
+ * closing it the same way would turn a second URL request for one unpublished
+ * article into a dedup rather than a queued job. Written down rather than
+ * changed; the durable fix for the class is a table that claims an address.
+ *
+ * ## The owner check
+ *
+ * `sourceTaken` is owner-scoped in both adapters, but `jobs_reserved_slug` is
+ * global on the slug — *"two owners can build toward one name"* — so a
+ * `nameTaken` holder is not necessarily this reader's, and handing back somebody
+ * else's job would put their slug, URL and title on the wire. It cannot happen
+ * while every slug ends in a random short id, which is exactly why it is a
+ * refusal rather than a fallback: an unreachable branch that stops is better
+ * than an unreachable branch that leaks.
+ */
+function handBackToARetry(holder: Job, owner: OwnerId): Job {
+  if (holder.ownerId !== owner) {
+    /* Made of words we chose and a slug, which src/log.ts permits. */
+    throw Object.assign(
+      new Error(`Another article is already being made under the name "${holder.slug}".`),
+      { status: 409 },
+    );
+  }
+  log("jobs").info(
+    { jobId: holder.id, slug: holder.slug },
+    `retry handed back the active job on ${holder.slug}`,
+  );
+  /* The same pump `sameWork` gives, and for the same reason: the job we are
+     handing back may have nobody driving it. */
+  pump(holder.id, owner);
+  return holder;
 }
 
 /**
@@ -2744,6 +3146,114 @@ export async function freeSlug(
 }
 
 /**
+ * **The slug a retry should use**, which is `freeSlug`'s three branches with
+ * exactly one word changed: where a fresh request *mints* a new random name,
+ * a retry mints the name the attempt it repeats already had.
+ *
+ * ## What it is repairing
+ *
+ * Chunk checkpoints (landed 2026-09-01) are addressed by the **article** and
+ * nothing else — `CheckpointArticleRef`, and `src/store/pg-session.ts` builds
+ * every stage's store from the claim's own draft. The article is a pure function
+ * of the job's slug (`openOrBeginJobDraft` → `lockOrCreateArticle`). So a retry
+ * that lands on a different slug lands on a different article and cannot see a
+ * single chunk the failed attempt paid for. On a long PDF that is not a wasted
+ * penny but a **liveness cliff**: every attempt starts from zero, so a document
+ * that cannot finish inside one lease can never finish at all.
+ *
+ * Both of `enqueue`'s allocating branches did that. An upload minted
+ * unconditionally; a URL went through `freeSlug`, which adopts only from the
+ * shelf or from a *live* job, and a failed first ingest is neither.
+ *
+ * ## This reverses a decision, and says so
+ *
+ * `tests/pipeline-slug-claim-files.test.ts` records that returning an upload's
+ * slug on retry was **deliberately deleted** with the short-id change on
+ * 2026-08-31, "so a retry mints a fresh name". Nobody was wrong then: slugs had
+ * just stopped being derivable from the address, `freeUploadSlug` and its
+ * `-2`…`-99` counter went with that, and there was nothing yet that depended on
+ * two attempts sharing an article. What changed is that the checkpoints landed
+ * four days later and depend on precisely the opposite, and the second change
+ * did not go looking for what the first had decided.
+ *
+ * ## Why this is not a loosening of `freeSlug`
+ *
+ * Minting for a fresh upload is deliberate — *"two uploads of one file are two
+ * documents"* — and `freeSlug`'s refusal to adopt from a *failed* job protects
+ * the invariants the queue's partial unique indexes are built on. Neither
+ * changes. This is a different question, and only `retryJob` can ask it, because
+ * only `retryJob` has the prior attempt in hand: a retry is by definition the
+ * continuation of one named attempt, where a second upload of one file is not.
+ *
+ * ## The trap, and the answer — which is the shelf, and nothing else
+ *
+ * An `adopted` allocation *reserves nothing*, so it sits outside
+ * `jobs_active_source` — and a fresh paste of the same URL in the same instant
+ * would then mint, giving two articles for one address, which is the race that
+ * index exists to stop.
+ *
+ * So a retry adopts **only what the shelf holds**, and mints — and therefore
+ * reserves — for everything else. The shelf is a *durable* fact: an article with
+ * a published revision for this address is found by every later lookup too, so
+ * nothing can come along and mint a second article for it. A **live job** is not
+ * a durable fact, and adopting from one was the hole GPT Sol reproduced: the
+ * holder goes terminal between the lookup and the insert, and the retry's row
+ * lands reserving nothing. So this asks `slugForUrlKey` rather than
+ * `slugAlreadyHolding`, and a retry that finds a live holder is told so by the
+ * *index* instead — `sourceTaken`, whose repair hands the holder back and
+ * inserts nothing at all. See `handBackToARetry` for the whole argument.
+ *
+ * Which leaves a retry's allocation with three shapes and no fourth: a mint that
+ * reserves, an adoption of a durably published address, or an adoption with no
+ * address at all. None of them can be the last active row for an address it is
+ * not reserving.
+ *
+ * Nothing on `jobs_reserved_slug` can object to re-taking the name, because all
+ * four of the queue's partial indexes are over `queued`/`running` only
+ * (src/db/schema.ts § `jobs`) and the attempt being retried is terminal —
+ * `retryJob` refuses a job that is not.
+ *
+ * And one thing falls out for free: `jobs_active_work` now turns a double-press
+ * of Retry into a `sameWork` dedup, where before it made two articles and paid
+ * for both.
+ *
+ * ## The stacking this also ends
+ *
+ * `retryJob` passes `slug: old.slug`, and `slugWithShortId` **appends** an id
+ * rather than replacing one — so three retries used to give
+ * `…-spya-aaa-spya-bbb-spya-ccc`, three articles, three invoices. It was the
+ * bug's own visible fingerprint and nobody read it. No path can stack now: this
+ * is the only allocation a retry ever gets, and neither refusal reallocates —
+ * both hand back the job that refused.
+ *
+ * The lookup is an argument for the same reason `freeSlug`'s is:
+ * [`tests/jobs.test.ts`](../tests/jobs.test.ts) can then decide every branch
+ * without a database.
+ */
+export async function slugForRetry(
+  request: Pick<EnqueueRequest, "slug" | "url" | "upload">,
+  onTheShelf: (urlKey: string) => Promise<string | undefined> = slugForUrlKey,
+): Promise<SlugAllocation> {
+  if (request.url !== undefined) {
+    const shelved = await onTheShelf(urlKey(request.url));
+    /* A published article already holds this address, so it is by definition the
+       article this address is, and the one the checkpoints are under. Durable,
+       which is what makes adopting it safe — see the header. */
+    if (shelved !== undefined) return { kind: "adopted", slug: shelved };
+    return { kind: "minted", slug: request.slug };
+  }
+  /* An upload has no address, so there is nothing to ask and nothing that could
+     have come to hold this name. A fresh upload mints; so does its retry. */
+  if (request.upload !== undefined) return { kind: "minted", slug: request.slug };
+  /* Neither: a late-stage re-run on an article already on the shelf, which is
+     *naming* an article rather than claiming a name. `enqueue` adopts for that
+     shape already and always landed on the right article — this branch exists so
+     that a retry has one allocation rather than two, not because anything about
+     it changes. */
+  return { kind: "adopted", slug: request.slug };
+}
+
+/**
  * Which of this reader's slugs already holds this URL — the shelf first, then
  * the queue.
  *
@@ -2848,7 +3358,7 @@ export async function listJobs(): Promise<Job[]> {
    */
   if (!listed.some((job) => job.status === "running")) return listed;
 
-  const settled = await store.settleExpired(undefined, owner);
+  const settled = await store.settleExpired(undefined, owner, REQUEUE_BUDGET);
   /* **Not quite "nothing settled means the answer did not change"**, which is
      what this said and is too strong. The advance door sweeps globally, so it
      can settle this very job between the list above and the statement above,
@@ -2867,10 +3377,7 @@ export async function listJobs(): Promise<Job[]> {
      job(s)" can be joined to nothing — and because since 2026-09-01 a row
      carrying `cancelling` comes back `cancelled`, so a line saying *failed*
      would be untrue of exactly the jobs a reader chose to stop. */
-  log("jobs").warn(
-    { count: settled.length, settled, where: "list" },
-    `settled ${settled.length} job(s) whose claimant stopped answering`,
-  );
+  log("jobs").warn({ count: settled.length, settled, where: "list" }, sweepLine(settled));
   /* Re-read rather than patched, so the reader sees the settlement on the poll
      they are looking at rather than the next one — and re-read rather than
      mended in place, because the store is the thing that decides what a settled
@@ -3005,7 +3512,13 @@ export async function retryJob(
   }
 
   return await enqueue({
+    /* **The name, and the fact that it is a retry, travel together.** `slug`
+       alone was here and it was not enough: allocation cannot tell this from a
+       fresh request, so it minted a *new* name from it and the second attempt
+       landed on a second article, out of reach of every chunk the first had paid
+       for. `slugForRetry` is where that is repaired and why. */
     slug: old.slug,
+    retryOf: old.id,
     ...(old.url ? { url: old.url } : {}),
     ...(old.upload ? { upload: old.upload } : {}),
     steps: old.steps.map((s) => s.name),

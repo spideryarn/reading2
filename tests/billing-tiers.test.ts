@@ -24,10 +24,12 @@ import {
   ENTITLED_STATUSES,
   FREE,
   FREE_LIFETIME_INGESTS,
+  choiceRules,
   currenciesOffered,
   entitlementForTier,
   isEntitledStatus,
   offerableTiers,
+  quotaRules,
   tierForPrice,
 } from "../src/billing/tiers.js";
 import type { TierRow } from "../src/billing/tiers.js";
@@ -141,6 +143,92 @@ describe("entitlementForTier", () => {
   it("gives the free tier no period at all, rather than an empty one", () => {
     expect(FREE).toEqual({ tier: "free", limit: FREE_LIFETIME_INGESTS });
     expect(Object.keys(FREE)).not.toContain("periodStart");
+  });
+});
+
+/**
+ * **The value that crosses the seam.** `chooseSubscription` ranks on whatever
+ * number `allowanceFor` hands it, and it cannot tell which column that came
+ * from: wired to `sortOrder` it would still rank, still be deterministic, and
+ * still pass every test in tests/billing-subscription.test.ts — while metering a
+ * double-subscribed reader on a display-ordering number. The fixture's tier has
+ * `ingestsPerPeriod: 20` and `sortOrder: 10` precisely so the two can be told
+ * apart here.
+ */
+describe("what the tier table answers when a subscription is chosen", () => {
+  const NOW = new Date("2026-09-15T00:00:00Z");
+  const TIERS = [
+    tier(),
+    tier({
+      id: "researcher",
+      stripePriceId: "price_researcher",
+      ingestsPerPeriod: 150,
+      sortOrder: 20,
+    }),
+  ];
+
+  it("ranks on the allowance the reader bought, not on the display order", () => {
+    const rules = choiceRules(TIERS, NOW);
+    expect(rules.allowanceFor("price_reader")).toBe(20);
+    expect(rules.allowanceFor("price_researcher")).toBe(150);
+  });
+
+  it("says null for a price no tier sells, which is what makes it a recognition test too", () => {
+    expect(choiceRules(TIERS, NOW).allowanceFor("price_handmade")).toBeNull();
+  });
+
+  /* Both allowlists come from this file, so the choice and the checkout gate
+     cannot drift apart about what "still collectable" means. */
+  it("hands over this file's own status allowlists, and the instant it was given", () => {
+    const rules = choiceRules(TIERS, NOW);
+    expect([rules.entitled("past_due"), rules.entitled("unpaid")]).toEqual([true, false]);
+    expect([rules.terminal("canceled"), rules.terminal("unpaid")]).toEqual([true, false]);
+    expect(rules.now).toBe(NOW);
+  });
+
+  /**
+   * **The same seam, for the same reason, on the other rules object.**
+   * `nextQuotaAdjustment` (src/billing/quota-adjustment.ts) measures a mid-period
+   * plan change in whatever numbers `allowanceFor` hands it. Wired to
+   * `sortOrder` the arithmetic would still run, still telescope and still clamp
+   * — and would move a reader's allowance by the difference between two display
+   * positions. `20` and `150` against `10` and `20` are what tell them apart.
+   */
+  it("prorates on the allowance the reader bought, not on the display order", () => {
+    const rules = quotaRules(TIERS);
+    expect(rules.allowanceFor("price_reader")).toBe(20);
+    expect(rules.allowanceFor("price_researcher")).toBe(150);
+    expect(rules.allowanceFor("price_handmade")).toBeNull();
+  });
+
+  /**
+   * The ceiling nothing may exceed, derived from the rows rather than named —
+   * so it stays true the day somebody adds a third tier, and so it is not the
+   * display order either.
+   */
+  it("takes its ceiling from the largest allowance any tier sells", () => {
+    expect(quotaRules(TIERS).maxAllowance).toBe(150);
+    expect(
+      quotaRules([
+        ...TIERS,
+        tier({ id: "archive", stripePriceId: "price_archive", ingestsPerPeriod: 400 }),
+      ]).maxAllowance,
+    ).toBe(400);
+  });
+
+  /**
+   * **A tier with no Stripe price cannot be the ceiling**, because no
+   * subscription can name a price that does not exist — so a draft row somebody
+   * is costing out in `billing_tiers` must not quietly raise the clamp on
+   * everybody. A retired *priced* tier still counts: `tierForPrice` matches one,
+   * so somebody can still be holding it. GPT Sol, 2026-09-03.
+   */
+  it("does not let an unpriced draft tier raise the ceiling", () => {
+    const withDraft = [...TIERS, tier({ id: "draft", stripePriceId: null, ingestsPerPeriod: 9000 })];
+    expect(quotaRules(withDraft).maxAllowance).toBe(150);
+
+    const retired = [...TIERS, tier({ id: "old", stripePriceId: "price_old", ingestsPerPeriod: 200, active: false })];
+    expect(quotaRules(retired).maxAllowance).toBe(200);
   });
 });
 

@@ -38,7 +38,7 @@ import {
   splitIntoBlocks,
 } from "./blocks.js";
 import { ASSETS_VERSION, collectAssets } from "./collect-assets.js";
-import { runExtract } from "./extract.js";
+import { ReadabilityRefused, runExtract } from "./extract.js";
 import {
   fetchDocument,
   type RawManifest,
@@ -89,12 +89,24 @@ import {
   inputFingerprint as sketchFingerprint,
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
 } from "./sketch.js";
-import { runPdfExtract } from "./pdf-read.js";
+import { MAX_PAGES, runPdfExtract } from "./pdf-read.js";
+import { countPdfPages, pdfIsUnreadable, refuseTooManyPages, TooManyPages } from "./pdf.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
 import { log } from "./log.js";
 import { ARTICLE_RENDERER, type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
 import { articleFingerprint, hashBlocks } from "./source-hash.js";
 import { hashProfile, profileIsStale } from "./profile.js";
+import {
+  ARTICLE_HAD_NO_TEXT,
+  ILLUSTRATE_NO_SKETCH,
+  ILLUSTRATE_SKETCH_PROFILE,
+  ILLUSTRATE_SKETCH_STALE,
+  PAGE_HAS_NO_ARTICLE,
+  pdfTooManyPages,
+  type ReaderFacingFailure,
+  SOURCE_DOCUMENT_DAMAGED,
+  SOURCE_DOCUMENT_GONE,
+} from "./messages.js";
 import { type RejectReason, looksLikePdf, MAX_UPLOAD_BYTES, rejectionFailure, stagingKey } from "./source.js";
 import { readUpload, rejectUpload, settleUpload } from "./upload-records.js";
 import { fsLocations } from "./store/artifacts-fs.js";
@@ -245,6 +257,50 @@ export const STEP_ORDER = [
 export type StepsMissingFromOrder<
   T extends never = Exclude<StepName, (typeof STEP_ORDER)[number]>,
 > = T;
+
+/**
+ * **Every step the array above runs before `S`**, as a union. `never` for
+ * `fetch`, which nothing precedes.
+ *
+ * Read off `STEP_ORDER` itself rather than written out, so there is one
+ * ordering here and not two: move a name in the array and this answers
+ * differently on the next compile.
+ *
+ * **What it is for**: `StepRun.precededBy` in src/web/useStepJob.ts, where a
+ * caller names the steps that have to run before its own inside one job. The
+ * server does not honour that word — `orderSteps` (src/jobs.ts) sorts whatever
+ * arrives by `STEP_ORDER` and nothing else — so `precededBy: ["assets"]` on
+ * `hierarchy` would come back as `["hierarchy", "assets"]`, a "preceding" step
+ * that runs afterwards, with nothing anywhere saying so. GPT Sol reproduced
+ * exactly that on 2026-09-03; the one caller in the tree is safe, so what this
+ * closes is the next caller rather than a live bug.
+ *
+ * The check has to be a type rather than a `STEP_ORDER.indexOf` comparison at
+ * the call site, because the call site is in the browser and **nothing under
+ * `src/web/` imports `src/pipeline.ts`**: this is a server module, and the
+ * client's answer to needing part of it has twice been a shape rather than a
+ * copy (src/web/feedback-diagnostics.ts § `WORD`, *"why a third copy of
+ * `STEP_ORDER` would be worse than a shape"*). A `import type` costs the bundle
+ * nothing — it is erased, and `verbatimModuleSyntax` makes that a rule rather
+ * than an optimisation — so the ordering can be checked in the browser's code
+ * without any of the ordering's module reaching the browser. **Keep the import
+ * in `useStepJob.ts` a type-only one**; making it a value import is what would
+ * pull the pipeline into the client bundle.
+ *
+ * `[S] extends [Head]` rather than `S extends Head`, so a union `S` — which is
+ * what the defaulted `StepJob<StepName>` supplies — fails every branch and
+ * widens to the whole list instead of distributing into nonsense. That is the
+ * one hole: a caller who passes a `StepName`-typed variable rather than a
+ * literal gets no check. All nine callers pass literals.
+ */
+export type StepBefore<
+  S extends StepName,
+  T extends readonly StepName[] = typeof STEP_ORDER,
+> = T extends readonly [infer Head extends StepName, ...infer Rest extends readonly StepName[]]
+  ? [S] extends [Head]
+    ? never
+    : Head | StepBefore<S, Rest>
+  : never;
 
 /**
  * What "add this URL" runs: every step that makes the article readable.
@@ -1278,12 +1334,122 @@ export function contextPaths(slug: string): { dir: string; htmlFile: string } {
  */
 function requireUrl(ctx: StepContext): string {
   if (!ctx.url) {
-    throw stageFailure(
-      "ours",
-      `No source URL for "${ctx.slug}". Its meta.json has none, and none was given.`,
-    );
+    throw stageFailure("ours", {
+      generic: `No source URL for "${ctx.slug}". Its meta.json has none, and none was given.`,
+    });
   }
   return ctx.url;
+}
+
+/**
+ * **The page cap, enforced in stage 1** — one policy, called from the two places
+ * the queue's acquisition step has PDF bytes for the first time.
+ *
+ * *The queue's*, and the qualifier is load-bearing ⟨Sol, 2026-09-04⟩. The stage
+ * CLIs do not come through here: `npm run fetch` hands a fetched PDF straight to
+ * `writeRaw`, and `npm run pdf` keeps the original before `runPdfExtract` counts
+ * anything. Both are deliberate — a CLI is somebody at a keyboard spending their
+ * own attention, and neither can reach a reader's job — but "no PDF reaches
+ * storage uncounted" is a statement about the queue and not about the repo.
+ *
+ * Greg asked for the refusal to arrive in seconds rather than after a job card
+ * has been running (docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md
+ * § Stage 4). It used to happen in stage 2, inside `pass0`.
+ *
+ * **Why two call sites rather than one shared seam after acquisition.** By the
+ * time `acquireUpload` returns it has stored the canonical bytes and settled the
+ * upload `verified` — and `verified` is terminal (src/source.ts § `NEXT`), so a
+ * refusal on the far side of that line cannot mark the record `rejected` and the
+ * reason is lost. That is the race `acquireUpload`'s own `refuse` comment
+ * describes. And a fetched `.pdf` address never goes through `acquireUpload` at
+ * all, so the upload half alone enforces nothing for half the origins. What is
+ * duplicated is one call; the policy is here.
+ *
+ * **Not `pass0`.** That walks every page calling `getTextContent` — stage 2's
+ * work, and 3.7–6.9 s of it on a real 144-page paper. `countPdfPages` reads the
+ * page tree and walks away in tens of milliseconds, and shares its comparison
+ * with `pass0`'s own guard so the two limits cannot drift
+ * (src/pdf.ts § `refuseTooManyPages`).
+ *
+ * **A file pdf.js says it cannot read is not refused here — and only that.** The
+ * cap is a cost gate, not a validity one: a malformed or password-protected PDF
+ * fails in `pass0`, in the step whose sentence is about extracting, and forcing
+ * it into the step whose sentence is about fetching would tell the reader
+ * something untrue about where their document went. `pdfIsUnreadable`
+ * (src/pdf.ts) is the whole of that judgement, and its comment carries the one
+ * file shape it deliberately does not cover.
+ *
+ * **Everything else rethrows**, and the first draft of this did not. ⟨Sol,
+ * 2026-09-04⟩ A bare `catch {}` around the counter also swallows a failed
+ * dynamic import, a worker that would not start, a pdf.js regression and a
+ * programmer error — and every one of those would leave the cap silently not
+ * gating while the document went to storage. A gate that quietly stops gating
+ * is docs/reusable/silent-success.md in its purest form, and the narrow catch is
+ * the difference between "this file is not readable" and "the counter is
+ * broken".
+ *
+ * `mark` is how the upload half records the refusal on its own row before the
+ * throw unwinds the step. The fetched half has no record to mark.
+ *
+ * **The whole context rather than the slug**, since 2026-09-04, and the reason
+ * is `ctx.signal`: this opens a stranger's file in our own process, and the
+ * claimant's self-abort at 740 s is the only bound on how long that may take.
+ * The first version took a slug and passed no signal, so the deadline could not
+ * reach pdf.js at all ⟨GPT Sol⟩ — see `countPdfPages`.
+ */
+async function refuseAnOverlongPdf(
+  ctx: StepContext,
+  bytes: Uint8Array,
+  mark?: () => Promise<boolean>,
+): Promise<void> {
+  const slug = ctx.slug;
+  let pages: number;
+  try {
+    pages = await countPdfPages(bytes, ctx.signal);
+  } catch (err) {
+    if (!pdfIsUnreadable(err)) throw err;
+    /* `warn`, not `debug`: production runs at `info`, so a debug line here would
+       be exactly the reassuring comment that reports nothing. The class name and
+       nothing else — no message, because that is a stranger's file talking
+       (docs/project/logging.md). */
+    plog.warn(
+      { slug, step: "fetch", why: (err as Error).name },
+      `page count: ${slug} would not open`,
+    );
+    return;
+  }
+  try {
+    refuseTooManyPages(pages, MAX_PAGES);
+    return;
+  } catch (err) {
+    if (!(err instanceof TooManyPages)) throw err;
+    /* **Awaited before the throw**, for the reason `acquireUpload`'s `refuse`
+       gives at length: a fire-and-forget mark races the unwind, and the state
+       machine never reaches the terminal state that stops a pointless re-run.
+
+       **And its answer is read.** `rejectUpload` returns `false` rather than
+       throwing when the row will not move, and the one way that happens here is
+       a record already `verified` — a first count that failed transiently,
+       followed by one that did not. The job still fails with the right sentence;
+       what is left behind is a `verified` upload for a document we refuse to
+       read, and it is worth being able to find that rather than inferring it.
+       ⟨Sol, 2026-09-04⟩ */
+    if (mark && !(await mark())) {
+      plog.warn(
+        { slug, step: "fetch", pages: err.pages },
+        `page count: ${slug} is over the cap but its upload record would not move`,
+      );
+    }
+    /* `{ authored }`: `pages` is `doc.numPages` off pdf.js's page tree and the
+       limit is our own constant. Two numbers, and the rest is fixed prose. The
+       reader's sentence is `pdfTooManyPages`; this one is for the log, and says
+       where to go if you are here to tune the cap. */
+    throw stageFailure(pdfTooManyPages(err.pages, err.limit), {
+      authored:
+        `This PDF has ${err.pages} pages and the limit is ${err.limit}. That is a cost cap, ` +
+        `not a technical one — see docs/plans/260826c-pdf-ingestion.md.`,
+    });
+  }
 }
 
 /**
@@ -1335,7 +1501,7 @@ async function acquireUpload(
     /* `ours`: the bytes may well be sitting in Storage perfectly intact, and
        there is nothing the reader can do about our having lost the note saying
        they are theirs. */
-    throw stageFailure("ours", `No record of upload ${upload.id}.`);
+    throw stageFailure("ours", { generic: `No record of upload ${upload.id}.` });
   }
 
   /* **Awaited, not fired and forgotten.** The first version was `void
@@ -1373,6 +1539,13 @@ async function acquireUpload(
   if (!looksLikePdf(got)) await refuse("not-a-pdf");
   const sha256 = createHash("sha256").update(got).digest("hex");
   if (sha256 !== record.claimedSha256) await refuse("checksum-mismatch");
+
+  /* **After the hash, before the promotion**, and the position is the whole of
+     it: three lines further down the record is `verified` and nothing can move
+     it again. Not through `refuse` above, because that throws the *static*
+     sentence for the reason and the reader wants the page count — the record
+     takes the reason, the job takes the number. See `refuseAnOverlongPdf`. */
+  await refuseAnOverlongPdf(ctx, got, () => rejectUpload(upload.id, "too-many-pages"));
 
   /* Promoted to a name that is a statement about its contents, and create-only.
      `already-there` is the dedup hit — two readers with the same paper — and it
@@ -1459,25 +1632,44 @@ async function acquireUpload(
 }
 
 /**
- * What stage 2 says when Readability finds no article in the page.
+ * **The three reasons painting the argument refuses**, as a closed union.
  *
- * **Matched on its sentence, which is the one place here that does that, and it
- * is worth saying why.** Every other permanent failure in the pipeline is
- * tagged where it is thrown (`stageFailure`, src/job-failure.ts). This one is
- * thrown in src/extract.ts, which belongs to stage 2, so the tag is applied at
- * the seam instead — and a sentence is all the seam has to go on.
+ * It was `refuse(why: string)` until 2026-09-03 — one helper that took a
+ * sentence and appended *"Draw the Sketch first…"* — and that shape was wrong
+ * twice over. Its three callers mean three different things, so they want three
+ * sentences and three codes rather than one; and a free-string factory would
+ * let arbitrary text be minted into a **coded** `ReaderFacingFailure`, which is
+ * precisely the provenance `authored` in src/monitoring-scrub.ts is told to
+ * trust. ⟨Sol, 2026-09-03⟩
  *
- * A match on prose is exactly the kind of thing that rots quietly, so it does
- * not rest on care: tests/job-failure.test.ts runs the real extractor over a
- * page Readability refuses and asserts the classification, which goes red the
- * day that sentence changes.
+ * The map is total over the union, so a fourth reason cannot be added without
+ * coming here and writing its sentence — the discipline `RETRYABLE` and
+ * `STEP_GAVE_UP` in src/messages.ts already keep.
  *
- * The claim itself is about a **retry** rather than a re-run, and it holds
- * because Retry never re-runs a step that finished: `forceForRetry` forces from
- * the first unfinished step, which is this one, so `fetch` stays done and stage
- * 2 re-reads byte-for-byte the page it has already refused.
+ * **No `detail`, on purpose.** `stageFailure` then makes `Error.message` the
+ * reader's own coded sentence, which is a stronger claim than `{ authored }`
+ * rather than a weaker one: the string is a registered message out of
+ * src/messages.ts, so Sentry forwards it and the log line says which of the
+ * three fired. There is nothing further a diagnostic could add — the slug is
+ * already a Sentry tag and a log field.
  */
-const READABILITY_REFUSED = /^Readability could not parse this page\./;
+type IllustrateRefusal = "no-sketch" | "stale-sketch" | "wrong-profile";
+
+const ILLUSTRATE_REFUSAL: Record<IllustrateRefusal, ReaderFacingFailure> = {
+  "no-sketch": ILLUSTRATE_NO_SKETCH,
+  "stale-sketch": ILLUSTRATE_SKETCH_STALE,
+  "wrong-profile": ILLUSTRATE_SKETCH_PROFILE,
+};
+
+/**
+ * A function declaration rather than a `const`, so that TypeScript narrows
+ * after a call to it: `if (!usableSketch(sketch)) refuseToIllustrate(…)` leaves
+ * `sketch` usable below, where the arrow it replaced needed a
+ * `throw new Error("unreachable")` underneath it to say the same thing.
+ */
+function refuseToIllustrate(reason: IllustrateRefusal): never {
+  throw stageFailure(ILLUSTRATE_REFUSAL[reason]);
+}
 
 /**
  * The pipeline.
@@ -1529,6 +1721,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const host = new URL(url).hostname;
       ctx.report(host);
       const doc = await fetchDocument(url, { signal: ctx.signal });
+      /* **Before `writeRaw`**, so a document we will not read does not end up
+         in the content-addressed bucket under its own hash. The branch is on
+         what stage 1 decided the bytes *are*, never on the address — a `.pdf`
+         URL that served a Cloudflare challenge is HTML (docs/project/fetching.md).
+         No upload record here, so nothing to mark. */
+      if (doc.kind === "pdf") await refuseAnOverlongPdf(ctx, doc.bytes);
       /* **No directory.** `writeRaw` puts the bytes in the content-addressed
          `sources` bucket and hands back the manifest that names them; where the
          manifest itself goes is this caller's business, and for the queue that
@@ -1577,22 +1775,53 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          anything else is a split brain by construction. */
       const manifest = await store.read(ctx.slug, "fetch", "raw");
       if (manifest === null) {
-        throw stageFailure("ours", `No fetched document for "${ctx.slug}" — run the fetch step first.`);
+        throw stageFailure("ours", {
+          generic: `No fetched document for "${ctx.slug}" — run the fetch step first.`,
+        });
       }
       let bytes: Uint8Array;
       try {
         bytes = await readRawBytes(manifest, { slug: ctx.slug });
       } catch (err) {
-        /* **`blocked`, not an unclassified failure, and the distinction is
-           about what the Retry button can do.** All three reasons —
-           `no-object`, `missing`, `corrupt` — mean the document behind this
-           manifest is not there or is not what it claims. Retry never re-runs a
-           step that finished, and `fetch` finished, so a retry would arrive
-           here and read the same absent object again. The fix is a re-fetch,
-           and `blocked` is how the reader is told that rather than offered a
-           button that cannot work. */
+        /* **Not one message for all three reasons, and the difference is
+           whether the reader can do anything.** Retry never re-runs a step that
+           finished, and `fetch` finished, so no reason here is served by the
+           button — but that is a fact about the *button*, and the sentence has
+           to be about the reader.
+
+           `no-object` and `missing` mean the bytes are not where the manifest
+           says. Adding the article again really does fix that: the fetch runs
+           afresh and stores them. `SOURCE_DOCUMENT_GONE`, `blocked`.
+
+           `corrupt` — from either constructor — means the bytes *are* there and
+           are not the ones the name promises, and **adding the article again
+           does not fix it**. The object is content-addressed, so a re-fetch of
+           the same document lands on the same name, finds something already
+           there, and leaves the bad object alone; both throw sites say so in as
+           many words (src/fetch.ts). Telling the reader to try the thing that
+           cannot work is the expensive mistake docs/project/copy.md § rule 2
+           names, so this is `SOURCE_DOCUMENT_DAMAGED`, `bug`, and the object
+           needs clearing here. GPT Sol, reviewing the built stage 1, finding 4.
+
+           **The kind was all the reader got until 2026-09-03**, so they were
+           told a step had refused and never what had happened. The diagnostic
+           keeps the object key, the hashes and the credential reading either
+           way, which is what somebody looking at the store needs and nothing a
+           reader can use.
+
+           `{ authored }` around an `err.message`, which src/job-failure.ts
+           warns against in general and which is safe here because the class is
+           narrowed by `instanceof` and every one of its four constructors is in
+           src/fetch.ts: fixed prose around a slug, a content-addressed key,
+           byte counts, a local digest, and `credentialsSeen()`, which reports
+           only whether two environment variables are *set*. Nothing on that
+           list arrived over a wire. `RawDocumentUnavailable`'s own header
+           carries the constraint that keeps it true. */
         if (err instanceof RawDocumentUnavailable) {
-          throw stageFailure("blocked", err.message);
+          throw stageFailure(
+            err.reason === "corrupt" ? SOURCE_DOCUMENT_DAMAGED : SOURCE_DOCUMENT_GONE,
+            { authored: err.message },
+          );
         }
         throw err;
       }
@@ -1617,11 +1846,29 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
             detail: result.meta.title,
           };
         } catch (err) {
-          /* Only the one sentence. Everything else this can throw — a full
-             disk, a directory that vanished — is ordinary bad luck, and hiding
-             a Retry that would have worked is the costlier way to be wrong. */
-          if (READABILITY_REFUSED.test((err as Error).message)) {
-            throw stageFailure("blocked", (err as Error).message);
+          /* **Only this one, and by type since 2026-09-03.** Everything else
+             `runExtract` can throw — a full disk, a directory that vanished —
+             is ordinary bad luck, and hiding a Retry that would have worked is
+             the costlier way to be wrong.
+
+             It was a regex over `err.message` until the day this comment was
+             written, which is the shape `blocks` below had already moved off:
+             a prose match rots when somebody rewords the sentence, and being
+             prefix-only it could not prove that a message it matched was ours
+             all the way to the end. `ReadabilityRefused` (src/extract.ts) says
+             the same thing in the type system and says it exactly.
+
+             **The diagnostic is fixed here and is deliberately not
+             `{ authored }`.** The claim is *I wrote every character of this
+             string*, and the string worth logging is the error's own, which
+             stage 2 owns and this seam does not — so what travels to Sentry is
+             the reader's coded sentence, and the log keeps the library's name.
+             ⟨Sol, 2026-09-03⟩ */
+          if (err instanceof ReadabilityRefused) {
+            throw stageFailure(
+              PAGE_HAS_NO_ARTICLE,
+              "Readability found no article in the fetched page.",
+            );
           }
           throw err;
         }
@@ -1739,10 +1986,21 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const extracted = await store.read(ctx.slug, "extract", BLOCKS_INPUT_HTML);
       if (extracted === null) {
         /* `ours`, not `blocked`: nobody refused us anything, we simply cannot
-           find the document stage 2 was supposed to leave. A Retry that re-ran
-           `extract` would fix it, which is exactly what this sentence tells the
-           reader to do. */
-        throw stageFailure("ours", `No extracted HTML for "${ctx.slug}" — run the extract step first.`);
+           find the document stage 2 was supposed to leave.
+
+           **The reader never sees this sentence**, and the last clause of this
+           comment said they did — written 2026-08-31, before the seam split
+           gave a step two audiences (src/job-failure.ts § Two strings, not
+           one). "Run the extract step first" is addressed to whoever is running
+           steps by hand, so `{ generic }`: the reader gets `stepGaveUp`'s
+           `ours` copy. What that copy withholds is the Retry button, which sits
+           oddly beside the claim this comment used to make — that re-running
+           `extract` would fix it. If that claim is right the *kind* is wrong,
+           and that is a question about the button rather than about the
+           sentence, so it is left as it stands rather than changed in passing. */
+        throw stageFailure("ours", {
+          generic: `No extracted HTML for "${ctx.slug}" — run the extract step first.`,
+        });
       }
 
       let run: BlocksRun;
@@ -1762,8 +2020,23 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            `IdsNotCarried` is deliberately not here: it is thrown against a
            baseline, so it is the *article* that changed under us, and whether a
            retry can come out differently depends on why. It has never been
-           classified and this is not the change that decides it. */
-        if (err instanceof NoBlocksProduced) throw stageFailure("blocked", err.message);
+           classified and this is not the change that decides it.
+
+           **"which is what the error's own last sentence tells the reader" was
+           not true**, and was written in good faith on the day the two
+           audiences were split apart. `NoBlocksProduced`'s message goes to the
+           log; what a reader saw was `stepGaveUp`'s generic `blocked` copy.
+           `ARTICLE_HAD_NO_TEXT` is now what they get, and it keeps the one
+           useful thing that message had to say — the usual causes, and that it
+           is the fetch rather than this step that needs looking at.
+
+           `{ authored }`: `NoBlocksProduced` (src/blocks.ts) is fixed prose
+           around `slug`, which docs/project/logging.md permits by name and
+           `captureFailure` already sends to Sentry as a tag. Its header carries
+           the constraint that keeps that true. */
+        if (err instanceof NoBlocksProduced) {
+          throw stageFailure(ARTICLE_HAD_NO_TEXT, { authored: err.message });
+        }
         throw err;
       }
       const previousBlocks = run.previousBlocks;
@@ -1894,7 +2167,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          produced. */
       const file = await store.read(ctx.slug, "blocks", "blocks");
       if (!file?.blocks) {
-        throw stageFailure("ours", `No blocks for "${ctx.slug}" — run the blocks step first.`);
+        throw stageFailure("ours", {
+          generic: `No blocks for "${ctx.slug}" — run the blocks step first.`,
+        });
       }
       const run = await generateHierarchy({
         blocks: file.blocks,
@@ -2043,7 +2318,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       if (!file?.blocks) {
         /* `ours` rather than a fetch failure: nothing was refused, we simply
            cannot find the blocks this step is defined against. */
-        throw stageFailure("ours", `No blocks for "${ctx.slug}" — run the hierarchy step first.`);
+        throw stageFailure("ours", {
+          generic: `No blocks for "${ctx.slug}" — run the hierarchy step first.`,
+        });
       }
       const run = await collectAssets({
         blocks: file.blocks,
@@ -2915,14 +3192,28 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    * absent, stale, or drawn for a different profile would either crash or —
    * worse — quietly paint an argument the reader is not looking at.
    *
-   * So `run` throws a sentence naming the Sketch chip, with `stageFailure`'s
-   * `"ours"`: a retry skips the steps that finished and would find the identical
-   * missing Sketch, so offering the button would be a lie.
+   * So `run` refuses, through `refuseToIllustrate` above — one of three
+   * sentences naming the Sketch chip, all `blocked`. A retry skips the steps
+   * that finished and would find the identical missing Sketch, so offering the
+   * button would be a lie; `blocked` rather than the `ours` it carried until
+   * 2026-09-03 because nothing here is misconfigured and the reader's way out
+   * is a press away. See § the steps that know why they stopped in
+   * src/messages.ts.
    *
-   * **Not `enqueue(["sketch", "illustrated"])`**, which is the tempting version
-   * and is worse. It turns one press into a hidden $0.20 charge and a
-   * three-minute wait that nothing warned about, and Sketch's own empty state
-   * exists precisely to name that price before the press.
+   * **The client may name both steps, and since 2026-09-03 it does.** This
+   * paragraph used to say *"not `enqueue(["sketch", "illustrated"])`, which is
+   * the tempting version and is worse — it turns one press into a hidden $0.20
+   * charge and a three-minute wait that nothing warned about"*. Greg asked for
+   * the one press anyway, and the objection was to the **hiding** rather than to
+   * the chain: `IllustratedView`'s refusal branches now offer it with both
+   * prices and both waits on the button before it is pressed
+   * (docs/project/diagram.md § Illustrated).
+   *
+   * **Nothing changes on this side of the seam.** The step still refuses rather
+   * than pulling its own prerequisite in; what makes the chain safe is that
+   * `STEP_ORDER` sequences one job and `stepIsDone` decides whether the Sketch
+   * half runs at all — so a stale Sketch is re-drawn and a current one is
+   * adopted, without this step knowing who asked.
    *
    * ## 2. Its fingerprint is the Sketch, not the article
    *
@@ -2973,18 +3264,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     },
     async run(ctx, store) {
       const sketch = await store.read(ctx.slug, "sketch", "sketch");
-      /* **`ours` on every one of these, and the sentence names the chip rather
-         than the step**, because it is read by somebody looking at a band and
-         not at a pipeline. `ours` rather than `retry`: a retry skips the steps
-         that finished, so it would find the identical Sketch and fail
-         identically — offering the button would be a lie. */
-      const refuse = (why: string): never => {
-        throw stageFailure("ours", `${why} Draw the Sketch first — it is the chip one to the left — and then press this one again.`);
-      };
-      if (!usableSketch(sketch)) {
-        refuse(`There is no sketch of "${ctx.slug}" to illustrate.`);
-        throw new Error("unreachable");
-      }
+      if (!usableSketch(sketch)) refuseToIllustrate("no-sketch");
 
       const article = await readArticle(ctx.slug, store);
       /* **A stale Sketch is refused rather than painted, and the reason is the
@@ -3001,7 +3281,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          re-runs on its own and this sentence only ever appears when somebody
          actually asked. Both stores agree, because `stamp` is untouched. */
       if (sketchIsStale(sketch, article.blocks, article.tree, article.meta ?? null)) {
-        refuse("The sketch of this article is out of date — the article has moved underneath it.");
+        refuseToIllustrate("stale-sketch");
       }
       /* **And a Sketch drawn for somebody else's profile.** Without this the
          panel loops: the picture inherits the Sketch's `profileHash`, the route
@@ -3012,7 +3292,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          (src/profile.ts): an artefact written deliberately without a profile,
          and a reader who has since cleared theirs, are both *not* a mismatch. */
       if (profileIsStale(sketch.profileHash, ctx.profile ? hashProfile(ctx.profile) : null)) {
-        refuse("The sketch of this article was drawn for a different reader profile.");
+        refuseToIllustrate("wrong-profile");
       }
 
       const run = await generateIllustrated({

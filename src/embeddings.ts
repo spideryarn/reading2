@@ -106,8 +106,13 @@ const TOTAL_TIMEOUT_MS = 240_000;
 function backoffMs(retryAfterMs: number | null, attempt: number): number {
   /* The provider's own `Retry-After`, already parsed to a number by
      `ProviderRefused` — a header, not a body, so nothing it carries came from
-     us. */
-  if (retryAfterMs !== null) return retryAfterMs;
+     us.
+
+     **Clamped here since 2026-09-04**, and it is the same clamp: it used to live
+     in `retryAfterMs` (src/ai-call.ts), where it also hid a long wait from the
+     one caller that wanted to decide about one. This behaviour is unchanged —
+     what moved is who owns the number, which is whoever has the deadline. */
+  if (retryAfterMs !== null) return Math.min(retryAfterMs, 30_000);
   const base = 2000 * 2 ** (attempt - 1);
   return Math.min(30_000, base) * (0.75 + Math.random() * 0.5);
 }

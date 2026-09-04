@@ -28,6 +28,9 @@
  * subscription statuses, and for the same reason.
  */
 
+import type { QuotaRules } from "./quota-adjustment.js";
+import type { ChoiceRules } from "./subscription.js";
+
 /** A tier's id, as typed by whoever wrote the row. `free` is not one of these. */
 export type TierId = string;
 
@@ -146,6 +149,75 @@ export function tierForPrice(
 ): TierRow | null {
   if (!priceId) return null;
   return tiers.find((t) => t.stripePriceId === priceId) ?? null;
+}
+
+/**
+ * The answers `chooseSubscription` (./subscription.ts) needs about the tiers.
+ *
+ * **The bridge lives on the side that knows the data.** `subscription.ts` is
+ * deliberately free of the tier table, so it asks its questions through
+ * callbacks; this is where those callbacks are filled in, once, rather than at
+ * each call site — and it is the piece that decides that the ranking key is the
+ * **allowance** rather than, say, `sortOrder`, which is a display column that
+ * nothing constrains to ascend with what a tier actually sells. The reasoning
+ * for that choice is in the header of ./subscription.ts.
+ *
+ * `now` is a parameter because the caller is what knows when it is asking.
+ */
+export function choiceRules(tiers: readonly TierRow[], now: Date): ChoiceRules {
+  return {
+    entitled: isEntitledStatus,
+    terminal: isTerminalStatus,
+    allowanceFor: allowanceForPrice(tiers),
+    now,
+  };
+}
+
+/**
+ * **How many ingests a period this price sells** — the one wiring of a price to
+ * an allowance, shared by the two rules objects below and above it.
+ *
+ * One function because both of them ask the same question and a second spelling
+ * would be a second answer: `chooseSubscription` ranks two subscriptions by it,
+ * and `nextQuotaAdjustment` measures a plan change by it, and those two must agree
+ * about what a price is worth or an upgrade could change which subscription
+ * wins *and* how much it is worth by different amounts.
+ *
+ * `tierForPrice` matches retired tiers too, which is the whole point of retiring
+ * being a flag rather than a delete.
+ */
+function allowanceForPrice(tiers: readonly TierRow[]): (priceId: string | null) => number | null {
+  return (priceId) => tierForPrice(priceId, tiers)?.ingestsPerPeriod ?? null;
+}
+
+/**
+ * The answers `nextQuotaAdjustment` (./quota-adjustment.ts) needs about the tiers.
+ *
+ * The same bridge as `choiceRules`, for the same reason: the arithmetic that
+ * prorates an allowance across a mid-period plan change is a decision about
+ * money and should be testable without a database, so the tier table reaches it
+ * as two callbacks rather than as rows.
+ *
+ * **The ceiling is the largest allowance any tier can actually be on**, which is
+ * the priced ones. Retired tiers count — `tierForPrice` still matches them, so
+ * somebody can still hold one — and a tier with no `stripe_price_id` does not,
+ * because no subscription can name a price that does not exist. Deriving it
+ * rather than naming a tier is what keeps it true the day somebody adds a third.
+ *
+ * **The filter is the whole point of the clamp.** Without it a draft row typed
+ * into `billing_tiers` — a tier somebody is costing out, with a big allowance
+ * and no Stripe price yet — silently raises the ceiling on everybody, and the
+ * defensive clamp stops matching the sentence that describes it. GPT Sol,
+ * 2026-09-03.
+ */
+export function quotaRules(tiers: readonly TierRow[]): QuotaRules {
+  return {
+    allowanceFor: allowanceForPrice(tiers),
+    maxAllowance: tiers.reduce(
+      (most, tier) => (tier.stripePriceId === null ? most : Math.max(most, tier.ingestsPerPeriod)),
+      0,
+    ),
+  };
 }
 
 /** What that tier allows over the period Stripe says the subscription is in. */

@@ -29,7 +29,8 @@
  *   an assertion, never a source of truth — anyone who can forge a request can
  *   put any owner id in it, and the only reason they cannot is the signature.
  * - **The event type is allowlisted.** Stripe can send ~250 event shapes and we
- *   act on four.
+ *   act on the handful in `HANDLED_EVENTS` — which is also where the reasoning
+ *   for each inclusion and each deliberate omission lives.
  * - **A body larger than the cap stops being accumulated.** Not "is refused
  *   before it is read into memory" — the current chunk has already been
  *   materialised by Node before this code sees it, and pretending otherwise
@@ -59,10 +60,10 @@ const logger = log("http");
 export const WEBHOOK_PATH = "/api/webhooks/stripe";
 
 /**
- * The four events that mean "this customer's subscription state may have
- * changed", and nothing else.
+ * The events that mean "this customer's subscription state may have changed",
+ * and nothing else.
  *
- * All four do the same thing — resync from Stripe — because the payload is
+ * All of them do the same thing — resync from Stripe — because the payload is
  * never trusted for state. That is the whole point of the pattern: events can
  * arrive out of order, and a handler that applies each payload's contents
  * builds a picture that no single event ever described.
@@ -72,12 +73,34 @@ export const WEBHOOK_PATH = "/api/webhooks/stripe";
  * on `customer.subscription.updated` anyway — so handling the invoice event
  * would be a second path to the same conclusion, free to disagree with the
  * first.
+ *
+ * **`invoice.finalization_failed` is here for the opposite reason: nothing else
+ * says it.** A subscription whose invoice cannot be *finalised* is never
+ * collected and never enters dunning — it stays `active`, because `past_due` is
+ * defined against the latest *finalized* invoice. Stripe puts it plainly:
+ * *"Subscriptions remain active if invoices can't be finalized, which means that
+ * users may still be able to access your product while you're not able to
+ * collect payments"*
+ * (https://docs.stripe.com/billing/subscriptions/webhooks, read 2026-09-04).
+ * So there is no subscription event to wait for, and the resync changes no
+ * entitlement — **the log line below is the whole mechanism**, and
+ * `stripe:check`'s uncollected-invoice sweep is the belt to its braces.
+ *
+ * **Do not add `invoice.created` here.** Stripe delays finalising *every*
+ * automatic-collection invoice on the account for up to 72 hours if an endpoint
+ * fails to return 2xx to it, so one outage of this function would stall every
+ * renewal we have. `invoice.finalization_failed` carries no such penalty.
+ *
+ * Adding a name to this list does nothing on its own: the live endpoint has its
+ * own `enabled_events`, and an event we handle but never receive looks exactly
+ * like one that never fires. See docs/project/billing.md.
  */
 export const HANDLED_EVENTS: readonly string[] = [
   "checkout.session.completed",
   "customer.subscription.created",
   "customer.subscription.updated",
   "customer.subscription.deleted",
+  "invoice.finalization_failed",
 ];
 
 /**
@@ -281,7 +304,40 @@ export async function serveStripeWebhook(
     return;
   }
 
+  if (event.type === "invoice.finalization_failed") {
+    /* **`error`, because nothing downstream will say this again.** The resync
+       below cannot fix it and will not change entitlement: the subscription is
+       still `active`, so the reader keeps their allowance while we collect
+       nothing. Somebody has to look, and this line is how they find out. The
+       invoice id and the reason Stripe gave are both on the payload — the one
+       place we read the payload for anything but the customer, and only to
+       describe it, never to decide with. */
+    const invoice = event.data.object as {
+      id?: string;
+      last_finalization_error?: { code?: string; message?: string } | null;
+      automatic_tax?: { status?: string | null } | null;
+    };
+    logger.error(
+      {
+        type: event.type,
+        event: event.id,
+        customerId: customer,
+        invoiceId: invoice.id,
+        reason: invoice.last_finalization_error?.code,
+        automaticTax: invoice.automatic_tax?.status,
+      },
+      "a Stripe invoice could not be finalised — the subscription stays active and uncollected",
+    );
+  }
+
   try {
+    /* **The event is a doorbell, not a fact.** Only the customer id is taken
+       from it; everything else is fetched. `event.created` was briefly passed
+       here so the quota arithmetic could prorate against the moment of the
+       change, and it was wrong: this handler serves four event types and then
+       fetches *current* state, so the event that rings is not necessarily the
+       one that caused what the sync finds. ./quota-adjustment.ts § *Why `f` is
+       taken at the sync*. */
     const result = await sync(customer);
     if (result.kind === "unmapped") {
       /* `error`, not `warn`: the mapping is written before a Checkout Session

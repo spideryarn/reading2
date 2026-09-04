@@ -34,14 +34,14 @@
  *
  * ## Who uses it
  *
- * **Eight, and this line said four until 2026-09-01** — it named `useGlossary`,
- * `useIdeas`, `useSummaries` and `src/web/Tweets.tsx`, and `useSummaries` no
- * longer exists. The list now is `useArc`, `useGlossary`, `useIdeas`,
- * `useQuotes`, `useQuiz`, `useSketch`, `useTimeline` and `src/web/Tweets.tsx`.
- * Called out rather than quietly corrected, because it is the same species of
- * stale comment that cost a day in 2026-08-27's CPU work: a quantity a file
- * asserts and nothing measures is a perfectly good reason to believe something
- * false.
+ * **Nine, and this line said four until 2026-09-01 and eight until 2026-09-03**
+ * — it named `useGlossary`, `useIdeas`, `useSummaries` and `src/web/Tweets.tsx`,
+ * and `useSummaries` no longer exists. The list now is `useArc`, `useGlossary`,
+ * `useIdeas`, `useIllustrated`, `useQuotes`, `useQuiz`, `useSketch`,
+ * `useTimeline` and `src/web/Tweets.tsx`. Called out rather than quietly
+ * corrected, twice now, because it is the same species of stale comment that
+ * cost a day in 2026-08-27's CPU work: a quantity a file asserts and nothing
+ * measures is a perfectly good reason to believe something false.
  *
  * The thread page came last, a day after the other three, because it had a
  * hundred lines of another session's uncommitted work in it on the day this was
@@ -59,6 +59,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { jobWorthRetrying } from "../job-failure.js";
 import { driverStalled } from "../job-state.js";
 import { worthRetrying } from "../messages.js";
+/* **Type-only, and it has to stay that way.** `src/pipeline.ts` is a server
+   module and nothing else under `src/web/` imports it; `import type` is erased
+   (`verbatimModuleSyntax`), so this buys the ordering check below without any of
+   the pipeline reaching the browser. Turn it into a value import and the client
+   bundle grows the whole pipeline. src/pipeline.ts § `StepBefore`. */
+import type { StepBefore } from "../pipeline.js";
 import type { Job, StepName } from "../types.js";
 import { useJobs } from "./useJobs.js";
 
@@ -69,16 +75,19 @@ import { useJobs } from "./useJobs.js";
  * §1.5 was a whole item about five near-identical types exported out of these
  * same five files with nothing importing them.
  */
-interface StepRun {
+interface StepRun<S extends StepName> {
   /**
    * Run it even though the step thinks its artefact is current.
    *
    * Turned into `force: [step]` — the step **named** — and never a positional
-   * or blanket force. All four of the steps this hook is used for
-   * (`glossary`, `summary`, `ideas`, `tweets`) are in `FORCE_ONLY_WHEN_NAMED`
-   * (src/pipeline.ts), which means the force-cascade is not allowed to speak
-   * for them: unnamed is unforced, silently, and the reader would watch a job
-   * start, run and change nothing.
+   * or blanket force. **Every one of the nine steps this hook is used for is in
+   * `FORCE_ONLY_WHEN_NAMED`** (src/pipeline.ts); the two lists are the same nine
+   * names, checked on 2026-09-03, and it is not a coincidence — a step a reading
+   * surface offers a button for is a step that knows whether it is current.
+   * Being in that set means the force-cascade is not allowed to speak for them:
+   * unnamed is unforced, silently, and the reader would watch a job start, run
+   * and change nothing. (This said *"all four … `glossary`, `summary`, `ideas`,
+   * `tweets`"* until 2026-09-03, naming a step that no longer exists.)
    *
    * The naming matters in the other direction too. **Forcing a step forces
    * every step after it** — `cascadeForce` in src/jobs.ts — so a force that
@@ -101,6 +110,55 @@ interface StepRun {
    * visit reads the reader's choice off the file instead of remembering it.
    */
   useProfile?: boolean;
+  /**
+   * **Steps this one needs run first, in the same job.**
+   *
+   * One job holding many steps is what the queue is already for: `orderSteps`
+   * (src/jobs.ts) puts the names through a `Set` and sorts them by `STEP_ORDER`,
+   * so the server decides what runs before what and the browser cannot get it
+   * wrong. The alternative — two POSTs sequenced by the client — puts the
+   * ordering in a tab that can be closed halfway through.
+   *
+   * **Named, not positional**, for the same reason `force` is: a caller says
+   * which steps, and nothing here infers a prefix of `STEP_ORDER`. The only
+   * caller today is Illustrated asking for `["sketch"]` — the one step in this
+   * app whose input is another step's artefact (src/pipeline.ts § illustrated).
+   *
+   * **`StepBefore<S>` is what makes the name true, and it is a fix rather than
+   * decoration.** `orderSteps` sorts by `STEP_ORDER` and by nothing else, so a
+   * caller naming a *later* step here would get it back **after** their own:
+   * `precededBy: ["assets"]` on `hierarchy` comes out as `["hierarchy",
+   * "assets"]`, a "preceding" step that runs afterwards, with nothing anywhere
+   * saying so. GPT Sol reproduced exactly that on 2026-09-03. No caller does it,
+   * so this was a trap for the next one rather than a live bug — and the choice
+   * was between making the name true and dropping the name. `StepBefore` is
+   * `STEP_ORDER` read as a type (src/pipeline.ts), so the compiler refuses the
+   * wrong name at the call site and lists the ones it would take, which is
+   * earlier and louder than anything a test could do.
+   *
+   * The one hole: `S` is inferred from the `step` argument, so a caller who
+   * passes a `StepName`-typed **variable** rather than a literal widens it and
+   * the check quietly becomes no check. All nine callers pass literals.
+   *
+   * **Each of them is a paid step in its own right**, so a surface that passes
+   * this owes the reader the price of all of them *before* the press, not after.
+   * That is the whole of what the refusal it replaces was protecting:
+   * *"not `enqueue(["sketch", "illustrated"])`, which turns one press into a
+   * hidden $0.20 charge and a three-minute wait that nothing warned about"* —
+   * the objection was to the hiding, not to the chain.
+   *
+   * **`force` still names only this hook's own step**, never these — `force:
+   * [step]` in `start` below, and nothing widens it.
+   *
+   * This said *"forcing an earlier step would cascade over everything after
+   * it"* until 2026-09-03, and that is not the reason: a force from here cannot
+   * reach a preceding step at all. `cascadeForce` (src/jobs.ts) starts at the
+   * **first** forced name and looks only at what follows it, and a preceding
+   * step is by definition before it. The reason is the plain one underneath —
+   * a preceding step is wanted only if it is not already current, and
+   * `stepIsDone` is the thing that gets to decide that.
+   */
+  precededBy?: readonly StepBefore<S>[];
 }
 
 /**
@@ -151,7 +209,13 @@ export interface StepFailure {
   retry: (() => void) | null;
 }
 
-export interface StepJob {
+/**
+ * @typeParam S the step this hook was made for — inferred from the `step`
+ *   argument, and what `StepRun.precededBy` is checked against. Defaults to the
+ *   whole union, which is what a bare `StepJob` annotation gets: the precedence
+ *   check widens away with it, so annotate `StepJob<"sketch">` if you write one.
+ */
+export interface StepJob<S extends StepName = StepName> {
   /**
    * The job writing this article's artefact, if one is. Null otherwise.
    *
@@ -214,7 +278,7 @@ export interface StepJob {
    */
   starting: boolean;
   /** Ask for a run. Resolves once the POST has been answered, not when the job has. */
-  start(run?: StepRun): Promise<void>;
+  start(run?: StepRun<S>): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -246,7 +310,11 @@ function writesStep(job: Job, step: StepName): boolean {
  *   again — src/web/jobEngine.ts § When it polls — and never stops a job that
  *   is actually running.
  */
-export function useStepJob(slug: string, step: StepName, onFinished: () => void): StepJob {
+export function useStepJob<S extends StepName>(
+  slug: string,
+  step: S,
+  onFinished: () => void,
+): StepJob<S> {
   /**
    * Ids this mount has already announced through `onFinished`.
    *
@@ -445,14 +513,19 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
   }, [queue.jobs, watchedId]);
 
   const start = useCallback(
-    async ({ force = false, useProfile = true }: StepRun = {}) => {
+    async ({ force = false, useProfile = true, precededBy }: StepRun<S> = {}) => {
       setWatchedId(null);
       /* Before the `await`, so the button is gone for the whole of the round
          trip rather than from whenever it comes back. */
       setStarting(true);
       const started = await queue.run({
         slug,
-        steps: [step],
+        /* Sent in reading order because that is what the request means, not
+           because the order is load-bearing: `orderSteps` sorts by `STEP_ORDER`
+           on arrival, so a client that named them backwards would get the same
+           run. `precededBy` defaults to nothing, so the ordinary request is
+           still the same two-field body it has always been. */
+        steps: [...(precededBy ?? []), step],
         /* The step named, never a positional force — see `force` on `StepRun`
            for both halves of why. */
         ...(force ? { force: [step] } : {}),

@@ -1802,6 +1802,36 @@ export const jobs = spideryarn.table(
     reservesName: boolean("reserves_name").notNull().default(false),
 
     /**
+     * **How many times this job has been given back to the queue after its
+     * claimant stopped answering.** The budget's counter, and nothing else reads
+     * it.
+     *
+     * `settleExpired` (src/store/pg-jobs.ts) used to end every lapsed claim
+     * `error`, so a deploy landing during an ingest — or a step that overran its
+     * lease — cost the reader their job and sent them to the Retry button. It
+     * now puts the job back to `queued` on **this same row** instead, which is
+     * what the filesystem store's `sweepStopped` has always done on restart, and
+     * what keeps the slug, the article and therefore the article's checkpoints.
+     *
+     * **A counter rather than a flag, because without one it never stops.** A
+     * job that overruns every lease would requeue for ever, buying model calls
+     * nobody is waiting for. The budget is the caller's — `REQUEUE_BUDGET` in
+     * src/jobs.ts, beside `LEASE_MS` — and enforcing it is the store's, the same
+     * division `leaseMs` and `maxRunning` already have.
+     *
+     * **On the row, not in memory**, because the claimant that overran and the
+     * process that sweeps it are routinely different machines. Nothing resets
+     * it: a job is one attempt-with-resumptions, and pressing Retry makes a
+     * *new* job with a fresh budget — so the reader is the outer loop, which is
+     * deliberate.
+     *
+     * Defaulted `0` so that every row written before this column existed has a
+     * full budget, which is the harmless direction: it can only offer a resume
+     * that would not otherwise have happened.
+     */
+    requeues: integer("requeues").notNull().default(0),
+
+    /**
      * **`urlKey(url)`** (src/ingest.ts), persisted so that `jobs_active_source`
      * can be an index rather than a comparison in TypeScript.
      *
@@ -3886,6 +3916,64 @@ export const billingAccounts = spideryarn.table(
     /** Cancelled, but paid up until the period ends — still entitled until then. */
     cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
     /**
+     * When Stripe will end the subscription, when an ending is scheduled.
+     *
+     * **Beside the boolean rather than instead of it**, because they are two
+     * raw Stripe facts and neither implies the other: a cancellation through
+     * the hosted Customer Portal sets this and leaves `cancel_at_period_end`
+     * at `false`, which is how a real cancellation went untold on 2026-09-03
+     * (docs/project/billing.md § *The first live sale*). Dropping the boolean
+     * would buy nothing and lose the record of what Stripe actually said.
+     *
+     * A timestamp rather than a second boolean because *when* is the thing the
+     * reader is owed — docs/project/sql.md. Entitlement never reads it: a
+     * subscription scheduled to end is `active` and entitled until it does.
+     * `planEndsAt` (src/billing-plan.ts) turns it and the boolean into the one
+     * date `/profile` shows.
+     */
+    cancelAt: timestamp("cancel_at", { withTimezone: true }),
+    /**
+     * **How far a mid-period plan change moved this account's allowance**, in
+     * ingests, away from what its tier sells.
+     *
+     * Null is the ordinary state and means *ask the tier and nothing else*.
+     * Negative for an upgrade — a Reader who upgraded with three days left is
+     * 117 short of a whole Researcher month — and positive for a downgrade.
+     * `entitlementFromRow` (../store/pg-billing.ts) adds it to
+     * `billing_tiers.ingests_per_period`, so admission still reads stored
+     * integers and does no arithmetic about time under the row lock.
+     *
+     * **A delta and not a limit, which is the whole of the difference between a
+     * tier table that still governs and one that has been opted out of.**
+     * Raising a quota is one `UPDATE` and no deploy (docs/project/billing.md);
+     * an account carrying an absolute 33 would have sat at 33 through every
+     * future raise, for ever. What the change was *worth* does not go stale when
+     * the tier moves. GPT Sol, 2026-09-04.
+     *
+     * It exists because **Stripe prorates the price and we handed over the
+     * allowance whole**. Upgrading with an hour left of the period costs a few
+     * pence and used to buy the full 150 ingests — Researcher volume at the
+     * Reader price, monthly, from a script. Written only by
+     * `syncSubscriptionFromStripe` (../billing/sync.ts), in the same locked
+     * write as `price_id`, `stripe_subscription_id` and the period, all of which
+     * the arithmetic reads. There is deliberately **no range CHECK**: the bound
+     * a delta needs is a function of `billing_tiers`, which a row constraint
+     * cannot see, so the clamp lives at the read in ../billing/quota-adjustment.ts
+     * where the tier is known.
+     */
+    quotaLimitDelta: integer("quota_limit_delta"),
+    /**
+     * Which period the delta above belongs to.
+     *
+     * **Two columns rather than one**, because without this a period *roll* and
+     * a mid-period *switch* are the same event seen from the row: both arrive as
+     * a sync carrying a period, and only the stored start says which. It is also
+     * what makes a stale delta inert — the read side applies one only when this
+     * equals `current_period_start`, so a sync that forgot to clear one still
+     * cannot meter anybody on last month's number.
+     */
+    quotaPeriodStart: timestamp("quota_period_start", { withTimezone: true }),
+    /**
      * Which side of Stripe's test/live divide this row came from.
      *
      * Stored rather than inferred so that a row written by a misconfigured
@@ -3913,6 +4001,23 @@ export const billingAccounts = spideryarn.table(
     check(
       "billing_accounts_subscription_needs_customer",
       sql`${t.stripeSubscriptionId} is null or ${t.stripeCustomerId} is not null`,
+    ),
+    /* A delta without a period cannot be applied and a period without a delta
+       says nothing, so one of the two alone is a bug rather than a state.
+       `num_nonnulls` rather than a pair of disjunctions because it says the rule
+       instead of encoding it — the same idiom as `ingest_events_settled_once`
+       below.
+
+       **There is no companion range check, and that is deliberate.** The
+       previous column held an absolute limit and carried a `>= 0`; a delta is
+       legitimately negative, and the bound it would actually need — that
+       `ingests_per_period + delta` lands inside `[0, the largest tier]` — is a
+       function of another table, which a row constraint cannot see. The clamp
+       therefore lives at the read, in ../billing/quota-adjustment.ts, where the
+       tier is in hand. */
+    check(
+      "billing_accounts_quota_delta_is_dated",
+      sql`num_nonnulls(${t.quotaLimitDelta}, ${t.quotaPeriodStart}) <> 1`,
     ),
   ],
 );

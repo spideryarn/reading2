@@ -68,10 +68,17 @@ export type EnvProd = { file: string; values: Record<string, string> } | null;
  * @returns the target, or `null` when nothing is configured at all — which is a
  *   legitimate laptop and not an error, but must be reported loudly by the
  *   caller rather than passed over.
- * @throws when `--prod` was asked for and cannot be honoured. **Refusing is the
- *   whole job.** A `--prod` that quietly fell back to `.env.local` would print a
- *   verdict about the Docker container in the shape of a verdict about
- *   production — and with `--apply`, would write to it.
+ * @throws when `--prod` was asked for and cannot be honoured, **and when it was
+ *   not asked for and the environment names something other than the local
+ *   stack**. **Refusing is the whole job.** A `--prod` that quietly fell back to
+ *   `.env.local` would print a verdict about the Docker container in the shape
+ *   of a verdict about production — and with `--apply`, would write to it. The
+ *   other direction is the same accident mirrored, and it was reachable here
+ *   until 2026-09-03: this function took `SUPABASE_URL` on trust, so a shell or
+ *   a `.env.local` holding remote credentials made the default, "safe",
+ *   unflagged mode a **write to a hosted project**. GPT Sol reproduced it with
+ *   `https://wrongproject.supabase.co`. Every hosted target now needs `--prod`,
+ *   and the local one has to prove itself — see {@link whyNotLocalStorage}.
  */
 export function chooseStorage(opts: {
   prod: boolean;
@@ -82,6 +89,19 @@ export function chooseStorage(opts: {
   const url = opts.env.SUPABASE_URL?.trim();
   const key = opts.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!url || !key) return null;
+
+  const notLocal = whyNotLocalStorage(url);
+  if (notLocal) {
+    /* Thrown rather than returned as `null`: `null` means "there is no Storage
+       project here", which the caller reports and then exits 0 on. Pointing at
+       somebody else's project is not that — it is a command about to do the
+       wrong thing, and the only useful outcome is a stop. */
+    throw new Error(
+      `SUPABASE_URL is not the local Supabase stack — ${notLocal}. Without --prod this command ` +
+        "only ever talks to the container on this machine, because --apply writes. To reach the " +
+        "hosted project, pass --prod, which reads .env.prod rather than the environment.",
+    );
+  }
   return { url, key, from: ".env.local or the shell environment" };
 }
 
@@ -138,8 +158,72 @@ export function whyNotProductionStorage(url: string): string | null {
     return "it is not a parsable URL";
   }
   if (parsed.protocol !== "https:") return `it is ${parsed.protocol}//, not https://`;
-  if (!/^[a-z0-9]+\.supabase\.co$/.test(parsed.hostname)) {
-    return `its host is ${parsed.hostname}, and a production project is <ref>.supabase.co`;
+  if (!PROJECT_REF_HOST.test(parsed.hostname)) {
+    return (
+      `its host is ${parsed.hostname}, and a production project is <ref>.supabase.co, where ` +
+      "<ref> is twenty lowercase letters or digits"
+    );
+  }
+  return null;
+}
+
+/**
+ * A Supabase project's API host: a twenty-character ref, and nothing else.
+ *
+ * `[a-z0-9]+\.supabase\.co` until 2026-09-03, which admits every label Supabase
+ * itself serves — `api.supabase.co`, `x.supabase.co`, anything a typo in
+ * `.env.prod` produces — and each of those is a `--prod --apply` writing
+ * somewhere that is not production while printing a `Target:` line that looks
+ * right. GPT Sol, 2026-09-03.
+ *
+ * Twenty because that is the length of every project ref this repo has ever
+ * held (`alschkahzfagtppxspfq`, and the fixtures in tests/). If Supabase ever
+ * issues another shape this refuses it — **loudly, naming the shape it wanted**,
+ * which is a message somebody fixes in a minute. The other polarity is a write
+ * to a stranger's project, so this is the direction to be wrong in.
+ */
+const PROJECT_REF_HOST = /^[a-z0-9]{20}\.supabase\.co$/;
+
+/**
+ * Why this is not the local Supabase stack, or `null`.
+ *
+ * The mirror of {@link whyNotProductionStorage}, and positive for the same
+ * reason: the safe mode is the one that writes without a flag, so it is the one
+ * that has to prove where it is pointing. A guard that listed hosted spellings
+ * to refuse would accept every one it had not heard of, which is how
+ * `scripts/stripe-target.ts` § `whyNotProduction` got it wrong the first time.
+ *
+ * **Not `isLocalDatabaseUrl` (src/db/ssl.ts), deliberately.** That function
+ * answers "would `pg` dial the throwaway container", and it earns its answer by
+ * consulting `pg`'s parsing rules — libpq's `?host=` override, the last-`@`
+ * split. Storage is reached by `fetch`, which parses with WHATWG `URL`, the
+ * same parser `new URL` here is. Reusing the database helper would tie what
+ * this command considers local to a *different* library's URL semantics, and
+ * the day `pg` changed one, this would change with it for no reason anybody
+ * could see. The two live side by side, like the two `whyNotProduction`s do.
+ *
+ * Strict, like `isLocalDatabaseUrl`: the question is "is this the throwaway
+ * container", not "where do the packets end up", so a hostname that merely
+ * resolves to loopback is not local for this purpose. `http://2130706433` is,
+ * because WHATWG normalises it to `127.0.0.1` and `fetch` then dials loopback —
+ * accepting it is not a hole, it is the same answer `fetch` gives.
+ */
+export function whyNotLocalStorage(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return "it is not a parsable URL";
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return `it is ${parsed.protocol}//, and Storage is an http(s) API`;
+  }
+  const host = parsed.hostname;
+  if (host !== "127.0.0.1" && host !== "localhost" && host !== "[::1]") {
+    return (
+      `it would reach ${host || "(no host at all)"}, and the local stack is 127.0.0.1, ` +
+      "localhost or [::1]"
+    );
   }
   return null;
 }

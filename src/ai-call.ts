@@ -648,7 +648,23 @@ export class ProviderRefused extends Error {
   }
 }
 
-/** `Retry-After` as a number of milliseconds. Seconds or an HTTP date; both are legal. */
+/**
+ * `Retry-After` as a number of milliseconds. Seconds or an HTTP date; both are
+ * legal.
+ *
+ * **What the provider actually said, not what a caller can afford.** This
+ * clamped to 30 s until 2026-09-04, which meant a header saying *ten minutes*
+ * and one saying *thirty seconds* arrived here indistinguishable — so the only
+ * caller that wanted to *decide* about a long wait could not tell there had been
+ * one, and asked again well inside a window the provider had just told it was
+ * closed. Truncating an instruction and then obeying the truncation is the
+ * dishonest shape ⟨GPT Sol, 2026-09-04⟩; how long a wait is affordable is a
+ * property of the caller's deadline, and the callers have one each
+ * (src/pdf-read.ts § `MAX_RETRY_AFTER_MS`, src/embeddings.ts § `backoffMs`).
+ *
+ * Still a parsed number and never a string: nothing a provider wrote leaves
+ * this function — see `ProviderRefused`.
+ */
 function retryAfterMs(headers: Headers): number | null {
   const header = headers.get("retry-after");
   if (!header) return null;
@@ -656,7 +672,7 @@ function retryAfterMs(headers: Headers): number | null {
   const ms = Number.isFinite(seconds)
     ? seconds * 1000
     : Date.parse(header) - Date.now();
-  return Number.isFinite(ms) && ms > 0 ? Math.min(ms, 30_000) : null;
+  return Number.isFinite(ms) && ms > 0 ? ms : null;
 }
 
 /* ---------------------------------------------------------------- the meter -- */

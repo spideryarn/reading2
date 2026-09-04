@@ -161,3 +161,187 @@ it("does not adopt the slug of a holder that has since gone", async () => {
     "the loser is outside jobs_active_source, so a later request for this address mints a second article",
   ).toBe("sourceTaken");
 });
+
+/* ------------------------------------------------------- and a retry's two -- */
+
+/**
+ * **The two repairs a *retry* takes, and the hole a holder's death opened in
+ * both.** GPT Sol, reviewing the built stage 3, finding 1.
+ *
+ * `tests/retry-keeps-the-checkpoints.test.ts` § *the queued retry reserves its
+ * address* proves the steady state: a retry that **minted** its old name is
+ * inside `jobs_active_source`, so a blind paste is refused. It cannot see
+ * either failure below, because in both of them the retry ends up **adopted**
+ * — outside that index — and the row that was reserving on its behalf is gone
+ * by the time the insert lands.
+ *
+ * ## Why `enqueue({ retryOf })` rather than `retryJob`
+ *
+ * `retryOf` is the whole of what a retry is to allocation (`src/jobs.ts` §
+ * `EnqueueRequest.retryOf`): `retryJob` reads the failed job, refuses what is
+ * not retryable, and then calls `enqueue` with the old job's slug, url and this
+ * field. Everything under test is downstream of that call, so building the
+ * request directly tests the same code with no queue fixture in the way — and
+ * the id it repeats is never looked up.
+ *
+ * ## The interleaving, and why it needs a spy
+ *
+ * Both failures live in the gap between the repair's *lookup* and the insert it
+ * then makes, which no amount of racing real requests can be relied on to hit.
+ * So the first `enqueueOrGet` is answered by hand — the refusal a racing paste
+ * would have produced — and the holder is settled terminal on the way into the
+ * second, which is the real store.
+ */
+
+/** A queued, reserving job in the store, exactly as a racing paste would leave one. */
+async function aLiveHolder(slug: string, url?: string): Promise<Job> {
+  const id = mintId();
+  made.push(id);
+  const holder: Job = {
+    id,
+    ownerId: currentOwnerId(),
+    slug,
+    ...(url ? { url } : {}),
+    steps: [{ name: "fetch", label: "Fetching the page", status: "pending" }],
+    status: "queued",
+    createdAt: new Date().toISOString(),
+  };
+  const outcome = await fsJobStore.enqueueOrGet(holder, {
+    workKey: `holder-${id}`,
+    reservesName: true,
+    ...(url ? { urlKey: urlKey(url) } : {}),
+  });
+  if (outcome.kind !== "created") throw new Error(`the holder fixture was refused: ${outcome.kind}`);
+  return outcome.job;
+}
+
+/**
+ * A paste whose own lookup came back empty — the one thing no lookup can rule
+ * out — handed straight to the store. `sourceTaken` is the only safe answer.
+ */
+async function aBlindPaste(url: string): Promise<string> {
+  const id = mintId();
+  made.push(id);
+  const outcome = await fsJobStore.enqueueOrGet(
+    {
+      id,
+      ownerId: currentOwnerId(),
+      slug: `blind-${id}`,
+      url,
+      steps: [{ name: "fetch", label: "Fetching the page", status: "pending" }],
+      status: "queued",
+      createdAt: new Date().toISOString(),
+    },
+    { workKey: `blind-${id}`, reservesName: true, urlKey: urlKey(url) },
+  );
+  return outcome.kind;
+}
+
+/** Every slug this owner has an active job on for `url`. One, or the bug. */
+async function activeSlugsFor(url: string): Promise<string[]> {
+  const jobs = await fsJobStore.list(currentOwnerId());
+  return [
+    ...new Set(
+      jobs
+        .filter(
+          (j) =>
+            (j.status === "queued" || j.status === "running") &&
+            j.url !== undefined &&
+            urlKey(j.url) === urlKey(url),
+        )
+        .map((j) => j.slug),
+    ),
+  ].sort();
+}
+
+/**
+ * **`sourceTaken`: the retry adopts a holder that dies before the insert.**
+ *
+ * 1. the retry mints its old name and reserves the address;
+ * 2. a fresh paste gets there first and reserves it — `sourceTaken`;
+ * 3. the retry re-asks `slugForRetry`, sees the holder, and **adopts** it;
+ * 4. the holder ends before the retry's insert lands;
+ * 5. the retry's row goes in reserving nothing, and a blind paste mints a
+ *    second article for the same address.
+ */
+it("a retry told sourceTaken does not leave the address unreserved", async () => {
+  const url = anAddress();
+  const holder = await runAsOwner(DEV_OWNER_ID, () => aLiveHolder(`holder-${mintId()}`, url));
+
+  const real = fsJobStore.enqueueOrGet.bind(fsJobStore);
+  let calls = 0;
+  vi.spyOn(fsJobStore, "enqueueOrGet").mockImplementation(async (job, ticket) => {
+    calls += 1;
+    /* Call 1 is the retry's minted insert: refuse it the way `jobs_active_source`
+       would, naming the holder that is really there. */
+    if (calls === 1) return { kind: "sourceTaken", job: holder };
+    /* Call 2 is the retry's *repaired* insert. The holder ends here — the reader
+       stopped it, or it failed — which is the gap no lookup can close. */
+    if (calls === 2) await fsJobStore.requestCancel(holder.id, DEV_OWNER_ID);
+    return real(job, ticket);
+  });
+
+  const retry = await runAsOwner(DEV_OWNER_ID, () =>
+    enqueue({ slug: `old-${mintId()}`, url, steps: ["fetch"], retryOf: mintId() }),
+  );
+  made.push(retry.id);
+  vi.restoreAllMocks();
+
+  await runAsOwner(DEV_OWNER_ID, async () => {
+    const blind = await aBlindPaste(url);
+    /* The slugs first, because that is the invariant in the plainest form the
+       failure output can carry: one address, one active article. */
+    expect(await activeSlugsFor(url), "one address, two active articles").toHaveLength(1);
+    /* And here — where the holder is the address's own live ingest — the retry
+       inserted nothing and the holder is still reserving, so the blind paste is
+       refused by the index rather than by anybody's lookup. */
+    expect(
+      blind,
+      "nothing is reserving the address, so a paste that cannot see it mints a second article",
+    ).toBe("sourceTaken");
+  });
+  expect(retry.id, "the retry inserted a second row instead of taking the holder").toBe(holder.id);
+});
+
+/**
+ * **`nameTaken`: the same hole, through the repair that did not revalidate at
+ * all.**
+ *
+ * The name-holder reserves the retry's own slug without reserving its address —
+ * it has to, since a holder reserving *both* would have been answered
+ * `sourceTaken`, which both adapters ask first. An upload's retry racing a URL
+ * retry on one article is the shape of it. So the retry used to adopt its own
+ * name with nothing checked at all, the holder ended, and the address was left
+ * with an active job and no reservation.
+ *
+ * **The blind paste is not asserted here**, and the difference is the point: the
+ * repair now inserts no row, so there is no active job for this address at all
+ * and a paste is *right* to mint one. What has to hold either way is the count
+ * below.
+ */
+it("a retry told nameTaken does not leave the address unreserved", async () => {
+  const url = anAddress();
+  const slug = `old-${mintId()}`;
+  const holder = await runAsOwner(DEV_OWNER_ID, () => aLiveHolder(slug));
+
+  const real = fsJobStore.enqueueOrGet.bind(fsJobStore);
+  let calls = 0;
+  vi.spyOn(fsJobStore, "enqueueOrGet").mockImplementation(async (job, ticket) => {
+    calls += 1;
+    if (calls === 1) return { kind: "nameTaken", job: holder };
+    if (calls === 2) await fsJobStore.requestCancel(holder.id, DEV_OWNER_ID);
+    return real(job, ticket);
+  });
+
+  const retry = await runAsOwner(DEV_OWNER_ID, () =>
+    enqueue({ slug, url, steps: ["fetch"], retryOf: mintId() }),
+  );
+  made.push(retry.id);
+  vi.restoreAllMocks();
+
+  await runAsOwner(DEV_OWNER_ID, async () => {
+    await aBlindPaste(url);
+    expect(await activeSlugsFor(url), "one address, two active articles").toHaveLength(1);
+  });
+  expect(retry.id, "the retry inserted a second row instead of taking the holder").toBe(holder.id);
+});

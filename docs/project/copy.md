@@ -198,17 +198,24 @@ the code orphans every support conversation that quoted it.
 ## Writing a new one
 
 Add it to `src/messages.ts`, give it a `kind`, give it a code, and then **two
-steps that are not optional**, because each has a failure with no symptom:
+steps that are not optional**. The first has a failure with no symptom; the
+second had one until 2026-09-04 and is now a red compile:
 
 1. **Register the code in `CODE_KINDS`.** Miss it and `kindOfMessage` returns
    null, `worthRetrying` says yes, and a permanent failure quietly grows a Retry
    button.
 2. **If it is a *factory* — a function that takes an argument — add it to
    `FROM_FACTORIES` in [`tests/messages.test.ts`](../../tests/messages.test.ts),
-   with arguments that reach each branch.** Miss it and your message skips every
-   invariant in that file. An exported `const` needs nothing: those are collected
-   out of the module by `Object.values`, which is the half of this that used to
-   be hand-maintained and is not any more.
+   with arguments that reach each branch.** Miss the entry and `npm run
+   typecheck` goes red: `FROM_FACTORIES` is keyed by `FactoryName`, a mapped
+   type over the module's own exports, so a forgotten factory is a missing key
+   rather than — as until 2026-09-04, when `placingFailed` had never been
+   through a single invariant — a message that quietly skips every invariant in
+   that file. What no type can check is the **arguments**: too few and a branch
+   goes untested with nothing to say so, which is why each entry's comment names
+   the branches it reaches. An exported `const` needs nothing: those are
+   collected out of the module by `Object.values`, which is the half of this
+   that used to be hand-maintained and is not any more.
 
 Those two lists check each other — the test asserts the table's keys are exactly
 the codes the messages carry — so doing one and forgetting the other is a red
@@ -291,6 +298,19 @@ sites — and there the split costs nothing. It is one word so that grepping
 `authored:` returns every claim ever made; what it must never wrap is an
 interpolation of anything from outside.
 
+**The kind-only form makes the mirror-image claim**, and for the mirror-image
+reason. `stageFailure(kind, { generic: "…" })` is a throw site saying *I know
+the reader gets `stepGaveUp`'s copy here, and that is correct* — CLI misuse, a
+broken invariant, a step run out of order, nothing true and useful to tell a
+reader. It replaced a bare second string on 2026-09-04, after **eight throw
+sites wrote a reader a real sentence and used the form that keeps only the
+kind** — a 142-page PDF refused for its length among them
+([260903k](../plans/260903k-pdf-page-cap-refused-with-no-reason-given.md)). The
+compiler now refuses the bare string, so whoever writes the throw has to say
+which audience they meant. It narrows the class rather than closing it: a bare
+`throw new Error("…")` written for a reader still arrives as the generic
+sentence, and no type can tell that string from a diagnostic.
+
 That code is not only about Sentry. `tests/stop-details.test.ts` reads it off
 the **log** line, because absence proves nothing on its own: a stage that died
 before it ever reached a model contains no sentinel either, and the code is what
@@ -301,6 +321,17 @@ fields — the band and the card deliberately render different ones — reads th
 back off the file the queue wrote rather than off an in-memory clone, and covers
 the two writers of `job.error` that are not the step catch: a refused
 publication, and a run the reader stopped.
+
+**A run the reader stopped and a run that ran out of time are two of those, not
+one**, and telling them apart is the same rule as rule 2 — say whose it is. Stop
+and the claimant's own 740 s deadline abort the *same* signal, so until
+2026-09-04 an overrun was shown *"You stopped this before it finished"* to
+somebody who had pressed nothing, watched happening on a 144-page PDF. The
+deadline case says `INTERRUPTED` (`[jb-gone]`) now, on both fields; the
+distinguishing fact is a typed abort reason rather than a matched sentence,
+because copy stays freely rewritable and a message match would quietly stop
+working when somebody rewrote one — [`src/jobs.ts`](../../src/jobs.ts) §
+`DeadlineReached`.
 
 ## What this does not cover yet
 

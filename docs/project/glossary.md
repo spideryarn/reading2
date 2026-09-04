@@ -355,14 +355,21 @@ Three details worth knowing before changing it:
   none` so a spine tooltip can never land under the pointer and keep itself open. This card carries a
   link and a button, so it has `interactive` — and therefore a close delay long enough to cross the
   gap between the words and the card.
-- **Touch has its own path, and it is not hover.** A tap fires `pointerover` and never fires the
-  leaving event, so letting the hover machine see a finger would open a card that stays until
-  something else is tapped. Since 2026-08-27 a finger gets the spine's rule instead: **the first tap
-  opens the card and the second goes to glossary mode**, decided from `pointerdown`/`pointerup`
-  rather than from a click, with the compatibility events that follow swallowed so a term inside a
-  link does not navigate. A card a finger opened closes on a scroll; one a pointer opened follows
-  the words as it always did. [touch.md](touch.md) and
+- **Touch has its own path, and it is not hover.** A tap fires the hover events — `pointerover` on
+  the way in, and `pointerout`/`pointerleave` the instant the finger lifts, because a touch pointer
+  cannot hover and the spec destroys it there. Letting the hover machine see a finger would therefore
+  open a card and immediately take it away again. So since 2026-08-27 a finger gets the spine's rule
+  instead: **the first tap opens the card and the second goes to glossary mode**, decided from
+  `pointerdown`/`pointerup` rather than from a click, with the compatibility events that follow
+  swallowed so a term inside a link does not navigate. A card a finger opened closes on a scroll; one
+  a pointer opened follows the words as it always did. [touch.md](touch.md) and
   [260827ak-touch-glossary-card.md](../plans/260827ak-touch-glossary-card.md).
+
+  **This paragraph said the opposite until 2026-09-03** — *"a tap … never fires the leaving event"* —
+  and so did the comment on the handler. It is the false belief itself, written down in two places,
+  and it is what made a second document-level listener look safe to leave unguarded: `pointerleave`
+  closed the card 220ms after every tap, for a week, on every touch device.
+  [260903g](../postmortems/260903g-the-touch-card-closed-itself-on-every-tap.md).
 - **The mouse click stays inert.** Pressing a mark with a pointer does what pressing prose has
   always done, which is select it. The way to the full entry is the button in the card's foot, which
   opens the band on that term — and on a finger, tapping the words again.

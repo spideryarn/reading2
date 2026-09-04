@@ -456,6 +456,20 @@
       "when": 1788425000000,
       "tag": "20260903090000_tier_descriptions_stop_restating_the_allowance",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1788455980840,
+      "tag": "20260903171940_jobs_requeues",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1788505820903,
+      "tag": "20260904071020_billing_cancel_at_and_quota_delta",
+      "breakpoints": true
     }
   ]
 }
