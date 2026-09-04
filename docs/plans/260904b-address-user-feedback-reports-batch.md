@@ -407,6 +407,36 @@ plate answerable rather than decorative.
 - **The Illustrated steering box** (-12's other half) — deferred with its reason in *Stages*, above.
 - **Persistent glossary additions** (-Y's other half) — deferred, and it needs a table.
 
+## Waiting on Greg — decisions taken so the run could finish
+
+Each of these was decided in order to keep going, not because it was settled. All are cheap to
+reverse; the note for each report carries the detail.
+
+1. **-13: the chip row is a single chip when the switch is off.** Kept, because pressing it is the
+   gesture that draws a Sketch. But `DiagramPanel`'s own visitor comment argues a one-option
+   radiogroup is furniture, so hiding the row entirely is defensible. *One line.*
+2. **-13: `sketch` is the default picture even when the switch is ON.** One default rather than two,
+   so a pasted link and a fresh arrival agree — but it costs the experimental audience the Force
+   picture that used to draw instantly. *One line to revert to `force`-when-on.*
+3. **-12: illustrated articles now cost $0.40–$0.65, up from $0.27–$0.40**, and plates are ~1.9 MB
+   PNGs rather than ~150 KB JPEGs (~7.6 MB an article). Both were accepted to get legible captions.
+   `ILLUSTRATED_PRICE` is updated, because that number is in front of the reader's press.
+4. **-X: a term the article never quotes still cannot be web-checked** — arguably the case that most
+   wants it. It needs its own prompt rather than `explain` with an invented passage.
+5. **-X: two refusals carry codes, against `copy.md`'s rule** that "a refusal that is an answer gets
+   no code". Done deliberately, with this bug as the evidence, and recorded in `copy.md` for a
+   ruling.
+6. **-X: a shared visitor now sees no explanation** on entries with no occurrences, because their
+   payload carries no freshness. *One boolean.*
+7. **-Y: paid calls on the new `ask` endpoint are unbounded** — an owner can drive `explain` as fast
+   as they can post. GPT Sol would block a public ship on this. No limiter was invented because
+   **this is the shape of every paid request in `routes.ts`**, the sibling `lookup` POST included —
+   so it is one decision about the file, not about this endpoint. `inTurnOrder` is the cheapest
+   existing machinery and is per-process, which is why it is not enough.
+
+Item 7 is the one worth looking at first: it is the only one that is a property of the codebase
+rather than of this batch.
+
 ## Questions, decisions and assumptions
 
 For Greg to overrule later; nothing here blocks the run. Numbered so a note can cite one.
