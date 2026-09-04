@@ -555,6 +555,16 @@ card would be decoration, and it would cost the shared one the only thing it has
 carries `visibility` only when it is `"public"` for the same reason — and because the filesystem
 store has no visibility column to answer with at all ([database.md](database.md)).
 
+**And a third marker, at the top of the article itself** —
+[`SharingMark`](../../src/web/Masthead.tsx), since 2026-09-04. A globe or a **lock** beside the
+title, with a tooltip, linking to that article's metadata page where the switch is. It breaks the
+no-private-twin rule above on purpose: one mark on one article is not a chip on every card, and the
+question an owner asks there — *would the link I am about to paste work?* — is asked exactly as
+often about a private article. Answering it by absence would be indistinguishable from a mark that
+had not loaded. It reads `Article.visibility`, which the Postgres store fills and the filesystem
+store cannot, and it draws **nothing** when nobody could say.
+[260904b-sharing-mark-on-the-article-masthead.md](../plans/260904b-sharing-mark-on-the-article-masthead.md).
+
 **A badge, not a filter.** There is deliberately no way to sort or narrow the shelf by this until
 there is enough shared material for it to be worth anything — Greg's decision on
 [260902j-public-read-only-access-audit-and-improvements.md](../plans/260902j-public-read-only-access-audit-and-improvements.md).

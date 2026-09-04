@@ -3551,9 +3551,16 @@ export async function retryJob(
  * **Greg's decision 8: a failed refresh starts over.** The alternative — keeping
  * the failed draft so a retry can adopt its completed work — is written up in
  * that plan's § *Appendix: someday maybe*. The cost of this answer is stated
- * rather than hidden: a refresh that dies at `hierarchy` pays for a PDF transcription
- * a second time, and the per-chunk checkpoints that would prevent it are written
- * to a job-scoped `/tmp` no later job can see (landing D2).
+ * rather than hidden — and it is **smaller than it was**, which is the half of
+ * this paragraph that had gone stale. A refresh that dies at `hierarchy` re-runs
+ * `extract`, but it no longer re-buys the transcription: the per-chunk
+ * checkpoints stopped being a job-scoped `/tmp` on 2026-09-01 and became rows
+ * keyed on the article (landing D2, `src/store/checkpoints.ts`), and a refresh
+ * is of an article already on the shelf, so its retry adopts that article and
+ * finds them. Whether a *failed first ingest* could was a separate bug, fixed on
+ * 2026-09-03 in `slugForRetry` above. What decision 8 still costs is the
+ * deterministic work of the steps that had finished, plus any paid call that is
+ * not checkpointed.
  *
  * The whole forced set rather than only its first member, because `cascadeForce`
  * cannot always reconstruct the rest: it refuses to sweep in a step in

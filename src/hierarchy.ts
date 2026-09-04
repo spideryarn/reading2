@@ -43,7 +43,7 @@ import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { blocksArtefact } from "./blocks.js";
 import { isBodyEvidence, isStructural } from "./block-policy.js";
-import { isSpideryarnId } from "./ids.js";
+import { isSpideryarnId, nameValue } from "./ids.js";
 import { COVERAGE_FLOOR, generateLabels, mergeLabels, type LabelsFile } from "./labels.js";
 import { hashBlocks } from "./source-hash.js";
 import { nullCheckpointStore, type CheckpointStore } from "./store/checkpoints.js";
@@ -61,7 +61,8 @@ const PROMPT_VERSION = "toc/3";
 /**
  * How hard the model thinks before it starts writing.
  *
- * **`"medium"`, and this setting has now been wrong in both directions twice.**
+ * **`"low"` since 2026-09-04, and this setting has now been wrong in both
+ * directions twice before that.**
  *
  * The history, because it is the argument. It was `"high"` originally, by
  * default rather than by decision. The max_tokens postmortem forced it down to
@@ -82,24 +83,49 @@ const PROMPT_VERSION = "toc/3";
  * a better answer estimate: both make the room bigger and the thinking takes
  * the room. Greg's call, the same day.
  *
- * **What this costs, said plainly, because a quality setting is being lowered.**
- * The reasoning this stage needs — finding topic shifts, balancing the levels —
- * is exactly the part worth thinking about, and nobody has measured `high`
- * against `medium` *for this stage*. That comparison exists for arc, thread and
- * glossary and was never run for the tree. So this is a decision taken on a
- * failure mode rather than on a quality measurement, and the measurement is
- * still owed.
+ * **The measurement that was owed has now been taken, and it says `"low"`.**
+ * 2026-09-04. The three paragraphs above said this setting had never been
+ * measured for quality, only chosen off a failure mode. That is no longer true,
+ * and the evidence points one way in three independent runs:
  *
- * **If you run that comparison, read `repairedBlocks` and `largestRepair`
- * alongside the score.** Since `0062f74` a tree that does not tile is snapped
- * shut and repaired rather than thrown away, so an arm can score `ok` having
- * been repaired into shape — and a boundary one paragraph out and a section
- * handed forty of its neighbour's blocks would otherwise look identical.
- * `evals/hierarchy-structure/run.ts` records both.
+ * - **Blind judging, eight of eight.** Two evals, two judge families (GPT Sol
+ *   and Fable), two draw sets — `low` preferred over `medium` every time, with
+ *   the free heading tree placing second. evals/results/hierarchy-effort-2026-09-03.md
+ *   and evals/results/hierarchy-cheap-models-2026-09-03.md.
+ * - **The same reliability, not worse.** Pooled across three articles both
+ *   efforts produced a tree 6 times in 7, and the one article that beat them
+ *   beat *both*. The earlier "low failed 1 in 8 where medium failed 0 in 10"
+ *   reading came from one document.
+ * - **Cheaper and faster, on the long articles that matter.** 2026-09-04, on
+ *   the 360-block constitution: $0.264 against $0.293 and 150s against 172s,
+ *   for the same seven depth-1 parts. On the 184-block gwern essay: $0.135
+ *   against $0.234 — 42% less — and **eight parts against six**.
  *
- * See docs/plans/260826h-toc-scaling.md and docs/postmortems/260826a-toc-max-tokens.md.
+ * **The failure modes are not commensurable, and that is the argument.**
+ * `medium`'s named fault is *welding*: it fuses two of the author's own
+ * sections under one title. That is valid, silent, shipped, and paid by every
+ * reader of that article — nothing in the pipeline can detect it, and the
+ * six-versus-eight parts above is it happening again. `low`'s fault is a tiling
+ * violation, which `buildTree` throws on, the job card reports, and a Retry
+ * recovers. A loud failure that costs one retry is a better trade than a quiet
+ * one that costs every reader a worse map.
+ *
+ * **What is still not measured**: `high` against either, for this stage. It has
+ * never been run and is unlikely to be worth the money now, given that the
+ * argument for lowering was a failure mode and the argument for lowering
+ * further is a quality result.
+ *
+ * **If you run any of these comparisons, read `repairedBlocks` and
+ * `largestRepair` alongside the score.** Since `0062f74` a tree that does not
+ * tile is snapped shut and repaired rather than thrown away, so an arm can
+ * score `ok` having been repaired into shape — and a boundary one paragraph out
+ * and a section handed forty of its neighbour's blocks would otherwise look
+ * identical. `evals/hierarchy-structure/run.ts` records both.
+ *
+ * See docs/plans/260904c-hierarchy-structure-in-waves.md § Product decisions,
+ * docs/plans/260826h-toc-scaling.md and docs/postmortems/260826a-toc-max-tokens.md.
  */
-const EFFORT = "medium" as const;
+const EFFORT = "low" as const;
 
 /**
  * **What production actually thinks at, for anything that needs to say so.**
@@ -112,6 +138,10 @@ const EFFORT = "medium" as const;
  * `effort` — was quietly answering high-vs-low instead of the medium-vs-low
  * question production has. GPT Sol found it by reading both files at once,
  * which is the only way a restated constant is ever found.
+ *
+ * *(That arm is `smart-medium` since 2026-09-04: production moved to `low`, so
+ * the arm isolating effort had to move the other way or become a second copy of
+ * the incumbent. The name in the paragraph above is the one it had at the time.)*
  *
  * `structureRequest` below already hands this out to callers who have blocks;
  * `evals/cost` reads it that way and stayed correct throughout. This export is
@@ -296,38 +326,11 @@ export function structureRequest(body: Block[]): {
  */
 export { COVERAGE_FLOOR };
 
-/**
- * How to name a value from the model in an error message — and when not to.
- *
- * **An error thrown in this file is a value that travels.** A step that throws
- * is logged by src/jobs.ts through `errorFields`, and src/log.ts's serialiser
- * keeps the error's `message` *and* its `stack`, which contains the message
- * again. So anything interpolated here is written into the log twice, from a
- * file that never calls the logger at all, and `redact` matches paths in the
- * object rather than text in a string, so it reaches neither copy. See
- * docs/project/logging.md § An error is not a safe thing to log whole.
- *
- * What makes stage 4 the awkward case is that its inputs are `JSON.parse` of
- * the model's response with a TypeScript cast in front of them, and **the cast
- * proves nothing at runtime**. Nothing stops the model writing
- * `"range": ["Feeling is metabolic, not computational", "spya-k3m9qt"]`, and
- * that is precisely the input that reaches the branches below — a sentence of
- * the article is never in `blocks.json`, so the lookup misses and we throw. The
- * message would then carry the article's own prose into the log exactly when
- * the model misbehaves.
- *
- * The one value that is safe to quote is one that has passed `isSpideryarnId`:
- * `spya-` plus six characters drawn from a fixed 32-character alphabet
- * (src/ids.ts, docs/project/block-ids.md), which cannot spell a word of
- * anybody's article. Everything else is described by its shape and withheld —
- * a length and a type are enough to tell a truncated id from a paragraph.
- */
-function nameValue(value: unknown): string {
-  if (typeof value === "string" && isSpideryarnId(value)) return `"${value}"`;
-  if (value === null) return "not a block id (null)";
-  if (typeof value !== "string") return `not a block id (a ${typeof value})`;
-  return `not a block id (a ${value.length}-character string, withheld)`;
-}
+/* `nameValue` — what is safe to quote from a model's answer in a message that
+   reaches the log — moved to src/ids.ts on 2026-09-04. It is a statement about
+   ids, and src/hierarchy-cascade.ts needs the same rule; importing it from here
+   would make that pure module load the whole of this one, and would be a real
+   import cycle the moment `generateHierarchy` wires the cascade in. ⟨GPT Sol⟩ */
 
 /**
  * Did the answer actually cover the article?
@@ -781,7 +784,29 @@ function planChildRanges(
   repairs: PartitionRepair[],
   droppedChildren: string[],
 ): ChildPlan[] | null {
-  /** A child's range as block indices, or null if it is not a resolvable, forward pair. */
+  /**
+   * A child's range as block indices, or null if either endpoint is not a block
+   * id at all.
+   *
+   * **A pair that runs backwards is resolved, not rejected** — 2026-09-04. It
+   * used to return `null` here, which took the whole sibling set down and cost
+   * the reader the article. That was a decision rather than an oversight, and
+   * its premise was too broad: this function's whole design is that **a start is
+   * believed and every end is computed**, so a child's own end is a redundant
+   * second statement of a boundary the derivation already discards. A backwards
+   * pair is those two statements disagreeing, and disagreement in the redundant
+   * field is what the rest of this function exists to absorb. It is not evidence
+   * that the node's title and gist describe the wrong prose — the model wrote
+   * those from the whole article, not from its own range — and the repairs here
+   * already keep a title and gist while moving a boundary by many blocks.
+   * ⟨GPT Sol, 2026-09-04⟩ Measured: `smart-low` lost `gwern-scaling-long` to
+   * exactly this, one block backwards
+   * (evals/results/hierarchy-waves-real-corpus-2026-09-04.md).
+   *
+   * An **invented id** still returns null and still refuses. That is the model
+   * naming something that does not exist, and the message that names it is more
+   * use than a tree built as though the child had never been proposed.
+   */
   const spanOf = (mn: ModelNode): [number, number] | null => {
     const raw: unknown = mn.range;
     if (!Array.isArray(raw) || raw.length !== 2) return null;
@@ -789,15 +814,15 @@ function planChildRanges(
     if (typeof a !== "string" || typeof b !== "string") return null;
     const lo = index.get(a);
     const hi = index.get(b);
-    return lo === undefined || hi === undefined || lo > hi ? null : [lo, hi];
+    return lo === undefined || hi === undefined ? null : [lo, hi];
   };
 
   const spans: ([number, number] | null)[] = children.map(spanOf);
-  /* One unresolvable child and the whole node is left alone. Not because the
-     others cannot be planned around it, but because the message that names the
-     invented id is more use than a tree built as though the child had never
-     been proposed — and `visit` and `assertChildrenPartition` produce it. */
+  /* One unresolvable child and the whole node is left alone — see `spanOf`. */
   if (spans.some((s) => s === null)) return null;
+
+  /** Did this child state its own extent backwards? Its end is then unusable. */
+  const backwards = spans.map((s) => s![0] > s![1]);
 
   const [p0, p1] = parent;
 
@@ -839,9 +864,18 @@ function planChildRanges(
       continue;
     }
     const claimed = clamp(span![0]);
-    const start =
-      claimed > previous.start ? claimed : clamp(spans[previous.childIndex]![1] + 1);
-    if (start <= previous.start) {
+    /* **A backwards end is ineligible for the fallback**, and that is the one
+       thing keeping a backwards child costs. The fallback exists for the case
+       where a start carries no information and the previous child's *end* is
+       the only claim left; borrowing an end we have just called wrong would
+       invent a split point from a bad number and attach BOTH neighbours to the
+       wrong prose. So when there is no usable fallback either, the child is
+       dropped exactly as it always was when neither claim stood up. ⟨GPT Sol⟩ */
+    const fallback = backwards[previous.childIndex]
+      ? undefined
+      : clamp(spans[previous.childIndex]![1] + 1);
+    const start = claimed > previous.start ? claimed : fallback;
+    if (start === undefined || start <= previous.start) {
       droppedChildren.push(`${where} > child ${i + 1}`);
       continue;
     }
@@ -1129,7 +1163,7 @@ export function buildTree(
          which is why the first version of this fix was only half of one: both
          ends are model output behind a cast, and an end that is a phrase of the
          article is exactly what lands here, since a phrase is never a key in
-         `index`. `nameValue` is where the rule lives. */
+         `index`. `nameValue` (src/ids.ts) is where the rule lives. */
       const bad = [
         ...(lo === undefined ? [`start ${nameValue(range[0])}`] : []),
         ...(hi === undefined ? [`end ${nameValue(range[1])}`] : []),
@@ -1159,7 +1193,56 @@ export function buildTree(
     return id;
   };
 
-  const rootId = visit(root, null, 0, "root");
+  /**
+   * **The root's range is derived like everybody else's, and it was not.**
+   *
+   * Every other node's range is *computed*: `planChildRanges` believes a child's
+   * start and works out its end from the next start, so the first child begins
+   * where its parent begins and the last one ends where its parent ends. A
+   * section that stopped short was stretched and counted. The root has no
+   * parent, so its range came straight out of the answer — and then met the
+   * hard equality guard below. It was the one node in the tree where the
+   * ordinary fault was fatal, and the repair machinery's own documentation read
+   * as though it covered the whole tree.
+   *
+   * **It is not a corner case.** `openai-huggingface` ends on an empty
+   * paragraph, a stranded footnote this prompt renders as
+   * `NOT-GISTABLE: (withheld)`, and a blog footer whose entire text is
+   * "No posts". Ending the article before those three is what a careful reader
+   * would do, and three independent arms — Sonnet at `medium`, Sonnet at `low`,
+   * and glm-5.3-flash — each did exactly that and each lost the article to the
+   * same sentence. evals/results/hierarchy-cheap-models-2026-09-03.md,
+   * recommendation 3.
+   *
+   * **Widen, never shrink.** The other way to make the two claims agree is to
+   * believe the model and drop the blocks it left out, and that is much worse:
+   * every block gets exactly one leaf, so an uncovered block has no row
+   * anywhere and no resolver in the reading view can find it.
+   *
+   * **Counted, at the boundary that moved** — a repair nobody is told about is
+   * the same shape as the bug it repaired (docs/reusable/silent-success.md). At
+   * the closing end the coordinate is `blocks.length`, which is the same
+   * boundary the last child's own stretch names, so `repairedBlockCount` folds
+   * the two into one rather than charging the article twice for one slip.
+   *
+   * Only when both endpoints resolve and run forwards. An invented id and a
+   * backwards range are faults in what the model *said*, and `visit` still
+   * refuses them with messages of their own — clamping first would turn the
+   * first of those into a silent acceptance.
+   */
+  const rootLo = index.get(root.range?.[0] as string);
+  const rootHi = index.get(root.range?.[1] as string);
+  const last = blocks.length - 1;
+  let rootRange: readonly [string, string] | undefined;
+  if (rootLo !== undefined && rootHi !== undefined && rootLo <= rootHi && blocks.length > 0) {
+    if (rootLo > 0) repairs.push({ where: "root", kind: "gap", at: 0, size: rootLo });
+    if (rootHi < last) {
+      repairs.push({ where: "root", kind: "short", at: blocks.length, size: last - rootHi });
+    }
+    if (rootLo > 0 || rootHi < last) rootRange = [blocks[0]!.id, blocks[last]!.id] as const;
+  }
+
+  const rootId = visit(root, null, 0, "root", rootRange);
 
   /* The root has to span the whole article, and nothing else checks it.
      `assertChildrenPartition` verifies that a node's children tile *it*, which
@@ -1856,11 +1939,19 @@ async function main(): Promise<void> {
   console.log(
     `\nNodes:     ${Object.keys(run.parts.tree.nodes).length} (${run.internal} internal)`,
   );
+  /* **Said even when it is zero**, which on this command line it always is —
+     the stage commands have no `articleId` to key on and pass
+     `nullCheckpointStore()` (src/store/checkpoints.ts). That is the point: this
+     is the number `generateHierarchy`'s own docstring promises will tell a
+     caller that meant to checkpoint and did not, and a number printed only when
+     it is interesting cannot say the uninteresting thing. It was suppressed at
+     zero until 2026-09-04, and the sibling suppression at the other end left
+     the chunk checkpoints inert for the whole life of the feature
+     (recommendation 2 of
+     docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md). */
   console.log(
-    `Labelled:  ${run.labelled} / ${run.structural} blocks, in ${run.labelCalls} call(s)` +
-      (run.labelsResumed > 0
-        ? ` (${run.labelsResumed} of ${run.labelBatches} batches resumed from a checkpoint)`
-        : ""),
+    `Labelled:  ${run.labelled} / ${run.structural} blocks, in ${run.labelCalls} call(s) ` +
+      `(${run.labelsResumed} of ${run.labelBatches} batches resumed from a checkpoint)`,
   );
   /* Only when it happened, unlike the two lines below — the ratio above already
      says it every run, and this line is the *reason* for a ratio under one. A

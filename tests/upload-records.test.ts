@@ -13,11 +13,39 @@
  *    step really can run twice and a state-machine error there would replace
  *    "that file isn't a PDF" with something about state machines.
  *
- * These write into the real `data/_uploads/`, the way the queue's own tests
- * write into `data/_jobs/`, and clean up after themselves by id.
+ * These used to write into the real `data/_uploads/`, the way the queue's own
+ * tests wrote into `data/_jobs/`. They now write `spideryarn.uploads` rows —
+ * stage B of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * — and the three claims above are the better for it, because each of them is a
+ * *different implementation* on this side: the exactly-once claim is a
+ * conditional `UPDATE` and its `rowCount` where the filesystem had a create-only
+ * marker, and the expiry is a `timestamptz` comparison where it had a JSON
+ * field. `tests/store-uploads-parity.test.ts` is where the two adapters are held
+ * to one contract; this file is the seam above them, on the store that is
+ * staying. They still clean up after themselves by id.
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+
+/**
+ * `SPIDERYARN_STORE=postgres` before **any** import.
+ *
+ * `src/upload-records.ts` picks its adapter **once, at module load** — `const
+ * store: UploadStore = STORE === "postgres" ? pgUploadStore : fsUploadStore` —
+ * and imports are hoisted above every statement in a module, so a plain
+ * assignment here would leave every case below on the filesystem records with
+ * nothing saying so.
+ */
+const HOISTED = vi.hoisted(() => {
+  const previousStore = process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
+  return { previousStore };
+});
+
+import { closeDb, getDb } from "../src/db/client.js";
+import { loadEnvLocal } from "../src/env.js";
 import { GRANT_TTL_MS, stagingKey } from "../src/source.js";
+import { STORE } from "../src/store/live.js";
 import {
   asOf,
   claimUpload,
@@ -28,10 +56,40 @@ import {
   rejectUpload,
   settleUpload,
 } from "../src/upload-records.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
+
+/* Put the flag back straight after the imports: vitest reuses a worker across
+   files and does not reset `process.env` between them. */
+if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
+
+loadEnvLocal();
+
+const { reachable } = await pgReady({
+  suite: "tests/upload-records.test.ts",
+  tables: ["spideryarn.uploads"],
+});
+
+const when = reachable ? describe : describe.skip;
+
+describe("the store these tests are actually talking to", () => {
+  it("is the Postgres one", () => {
+    /* Not gated on `reachable`: a control that vanishes when the database is
+       missing vanishes exactly when it matters. The filesystem records answer
+       every call below perfectly happily, and every claim this file makes would
+       then be a claim about the adapter being deleted. */
+    expect(STORE).toBe("postgres");
+  });
+});
 
 const made: string[] = [];
 afterEach(async () => {
   for (const id of made.splice(0)) await forgetUpload(id);
+});
+
+afterAll(async () => {
+  if (reachable) await closeDb();
 });
 
 /** A stand-in issuer. The real one is Supabase; nothing here is about Supabase. */
@@ -42,8 +100,29 @@ function issuer(ttlMs = GRANT_TTL_MS) {
   });
 }
 
+/**
+ * **The reader whose uploads these are**, and a real `auth.users` row since the
+ * move: `uploads.owner_id` carries a foreign key, so a made-up uuid fails the
+ * *insert* rather than anything under test, and every case here would then fail
+ * the same way and prove nothing.
+ *
+ * `SOMEBODY_ELSE` is deliberately **not** seeded. It is only ever a *reader* —
+ * the two cases below ask for and try to claim an upload as him — so it never
+ * reaches the writing side of a foreign key, exactly as `STRANGER` does in
+ * tests/store-uploads-parity.test.ts. `tests/store-migration-registry.ts` §
+ * `OWNER_AUDIT` carries the verdict for both.
+ */
 const READER = "11111111-1111-4111-8111-111111111111";
 const SOMEBODY_ELSE = "22222222-2222-4222-8222-222222222222";
+
+beforeAll(async () => {
+  if (!reachable) return;
+  await seedAuthUser(getDb(), {
+    id: READER,
+    email: "upload-records-reader@spideryarn.local",
+    onConflictDoNothing: true,
+  });
+});
 
 async function mint(filename = "paper.pdf", ttlMs = GRANT_TTL_MS) {
   const minted = await mintUpload(
@@ -55,7 +134,7 @@ async function mint(filename = "paper.pdf", ttlMs = GRANT_TTL_MS) {
   return minted;
 }
 
-describe("minting an upload", () => {
+when("minting an upload", () => {
   it("gives it an id of ours and a grant for a key derived from that id", async () => {
     const minted = await mint();
     expect(isUploadId(minted.record.id)).toBe(true);
@@ -93,11 +172,14 @@ describe("minting an upload", () => {
   });
 });
 
-describe("claiming", () => {
+when("claiming", () => {
   /**
    * The one that costs money if it is wrong. Two callers, no awaits between
-   * them, and exactly one may win — which is why the decision is a create-only
-   * file rather than a read of the record followed by a write of it.
+   * them, and exactly one may win — which is why the decision is a single
+   * conditional `UPDATE` and its `rowCount`, rather than a read of the record
+   * followed by a write of it. (On the filesystem records it was a create-only
+   * marker, atomic at the kernel; same guarantee, no shared code, which is what
+   * tests/store-uploads-parity.test.ts exists to keep honest.)
    */
   it("lets exactly one of two simultaneous callers through", async () => {
     const { record } = await mint();
@@ -150,7 +232,7 @@ describe("claiming", () => {
   });
 });
 
-describe("what a reader is told about an upload", () => {
+when("what a reader is told about an upload", () => {
   /**
    * A record nobody has touched is still `pending` on disk long after its token
    * stopped working. `asOf` answers about the *grant* — and writes nothing, so
@@ -168,7 +250,7 @@ describe("what a reader is told about an upload", () => {
   });
 });
 
-describe("settling", () => {
+when("settling", () => {
   it("refuses a transition the state machine does not allow", async () => {
     const { record } = await mint();
     await expect(settleUpload(record.id, "verified")).rejects.toThrow(/cannot go from pending/);

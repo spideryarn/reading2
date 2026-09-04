@@ -49,6 +49,7 @@ import {
   type FetchedDocument,
   type RawManifest,
 } from "../src/fetch.js";
+import { PINNED } from "../src/env.js";
 import { keepTheOriginal } from "../src/pdf-read.js";
 import { STEPS, UNCONVERTED_STEPS } from "../src/pipeline.js";
 import { canonicalKey } from "../src/source.js";
@@ -771,6 +772,24 @@ describe("`npm run fetch` selects its blob store from the same environment the s
          the file's, so the file overriding it is an observable event rather
          than a no-op. */
       env[target.name] = `${target.value}.not-what-the-file-says`;
+      /**
+       * **The one place that has to opt out of the unit lane's pin**, and it is
+       * the one whose subject is the thing being pinned.
+       *
+       * `tests/setup/unit-no-database.ts` sets `SPIDERYARN_ENV_PINNED` to
+       * `DATABASE_URL,SUPABASE_URL` so a child cannot have `.env.local` hand
+       * back the poisoned values (`PINNED` in src/env.ts). This test's whole
+       * claim is that `.env.local` *does* override the shell, and `shadowable()`
+       * above picks `SUPABASE_URL` to prove it with — so with the pin inherited
+       * there is nothing to observe and the assertion below goes red naming the
+       * override that did not happen. That is the right failure: it is loud, and
+       * it points here.
+       *
+       * Narrowed rather than deleted, so the child still cannot reach the shared
+       * **database** — `src/fetch.ts` with no arguments never opens one, and a
+       * pin left in place for free is worth more than the argument about it.
+       */
+      env[PINNED] = "DATABASE_URL";
 
       const child = spawnSync(TSX, [CLI], { env, encoding: "utf8" });
 

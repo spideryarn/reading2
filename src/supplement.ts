@@ -116,9 +116,21 @@ export function splitBlocks(blocks: readonly Block[]): BlockSplit {
 
   let start = blocks.length;
   while (start > 0 && !isBody(blocks[start - 1]!)) start--;
-  if (start === blocks.length) return none; // no apparatus at the end
 
+  /* **Counted before the early return, not after it** — 2026-09-04.
+     `stranded` was computed only on the path where a trailing run exists, so an
+     article whose apparatus sits mid-body and whose *last* block is ordinary
+     prose fell out here reporting zero. That is the commonest shape of the
+     fault, not a corner: `openai-huggingface` has a footnote at index 93 and a
+     blog footer reading "No posts" after it. Nothing was built, nothing was
+     grouped, `HierarchyRun.strandedSupplement` said zero, and the CLI printed
+     its usual "0 nodes over 0 blocks" — the fault and a clean article are the
+     same sentence (docs/reusable/silent-success.md).
+     `body` and `groups` are unaffected on either path; this only makes the run
+     say what happened. */
   const stranded = blocks.slice(0, start).filter((b) => !isBody(b)).length;
+  if (start === blocks.length) return { ...none, stranded }; // no apparatus at the end
+
   /* An article that is entirely apparatus has no body to build a tree from, so
      there is nothing to append a supplement to. Treated as stranded rather than
      as a special case: both are "this article is not the shape this stage

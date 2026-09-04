@@ -18,7 +18,7 @@
  * period that could not be read. Failing the other way hands out a paid
  * allowance for something nobody costed, and does it silently.
  */
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 import {
   ENTITLED_STATUSES,
@@ -33,11 +33,20 @@ import {
   tierForPrice,
 } from "../src/billing/tiers.js";
 import type { TierRow } from "../src/billing/tiers.js";
+import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import { readTiers } from "../src/store/pg-tiers.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
+
+/**
+ * `readTiers` opens the app's pool, so this file closes it —
+ * docs/project/testing.md § *The last file's pool is not pollution*.
+ */
+afterAll(async () => {
+  await closeDb();
+});
 
 const PERIOD = { start: new Date("2026-09-01T00:00:00Z"), end: new Date("2026-10-01T00:00:00Z") };
 

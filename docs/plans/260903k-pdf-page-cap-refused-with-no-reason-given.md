@@ -561,6 +561,48 @@ still is not, with a test for each; `MAX_PAGES` at 250 is checked against 16 rat
 - [content-extraction.md](../project/content-extraction.md),
   [ingest-queue.md](../project/ingest-queue.md), [copy.md](../project/copy.md). A substantive rule
   change to `copy.md` goes through the before/after approval process ⟨Sol⟩; a signpost edit does not.
+
+**Landed 2026-09-04.** The second postmortem is
+[260904b](../postmortems/260904b-a-sentence-written-for-the-reader-was-thrown-away-at-the-seam.md),
+which names the class **the old spelling kept compiling, and changed audience** — the deciding
+question at a split being not which side is the better default but which side inherits the existing
+syntax, since whichever does silently reassigns every call site while the compiler stays as happy as
+before. The two things it found that this plan had not: the introducing commit landed at **08:19** and
+the Sentry event is at **15:56 the same day**, seven and a half hours; and **the default went to the
+discarding side**, which is what made every observation point stay healthy — the reader saw a
+grammatical sentence, the log kept the whole diagnostic, Sentry had a stack, and the loss was
+visible only to the one seat that five of the eight also denied a Retry button.
+
+`260904a`'s recommendation 2 is built: `{ asked, found }` at `info` on **every** checkpoint read, in
+both namespaces (`storedChunks` in [`src/pdf-read.ts`](../../src/pdf-read.ts), the label read in
+[`src/labels.ts`](../../src/labels.ts)), plus `labelBatches`/`labelsResumed` on the pipeline's
+hierarchy line and the two stage command lines printing their resumed count at zero.
+[`tests/checkpoint-hit-rate-is-logged.test.ts`](../../tests/checkpoint-hit-rate-is-logged.test.ts)
+was watched red before the change and again under the mutation that matters — putting the line back
+behind `if (found > 0)` fails the two `found: 0` cases and leaves the `found: N` one green.
+
+**Worth recording, because it changes what the second half of that recommendation is worth:** the
+`labelsResumed` print the postmortem named is in `npm run hierarchy`, and the stage command lines
+have no article to key on, so they pass `nullCheckpointStore()` and that number can only ever be
+zero. Printing it unconditionally is right — it is the signal `generateHierarchy`'s own docstring
+promises — but it answers nothing about production. The server-side answer is the two log lines and
+the pipeline's own fields.
+
+Five comments were falsified by these six stages beyond `forceForRetry`'s and are corrected:
+`tests/checkpoints-durable-resume.test.ts`'s header (arithmetic against 100 pages and width 8),
+`src/store/checkpoints.ts`'s retention bound (`MAX_PAGES = 100`) and its *"landing D2 … is still
+unbuilt"* (it landed three days earlier), `src/pipeline.ts`'s *"a hundred-page PDF"* at the very call
+site whose ceiling stage 4 raised, and `tests/store-migration-registry.ts`'s claim that the page-cap
+test refuses 142 pages — 142 is now the *accepted* case there.
+
+**One doc change judged a rule change and not made.** `ingest-queue.md` § the concurrency cap says
+*"What the number rations is spend and provider rate limits, not CPU, memory or connections"* — the
+recorded answer to Greg's *"Is it worries about CPU/RAM/database connections?"* (2026-08-30),
+answered *"a policy, not a resource"*. Stage 5 measured 866 MB peak RSS holding sixteen chunks and
+sized 16 for **one** co-located second ingest, against `DEFAULT_JOB_CONCURRENCY = 3`; `src/jobs.ts`'s
+own version of the sentence already says *"not CPU or connections"* and pointedly omits memory. So
+the word *memory* is now the doc claiming more than the code, and striking it reopens Greg's answer
+and puts `DEFAULT_JOB_CONCURRENCY = 3` back in question against a 2 GB function. **Greg's call.**
 - **Drive it in a browser**, in a subagent, on the real 144-page arXiv paper already parked in the
   scratchpad: upload, watch the card, read the sentence. Tests going green is not evidence a reader
   can see it.

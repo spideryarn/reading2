@@ -7,13 +7,16 @@
  * live in away, so they need a home that is not a path. This is the interface,
  * and there is one implementation of it — [checkpoints-pg.ts](checkpoints-pg.ts).
  *
- * ## Still nothing calls it, and that has now cost something
+ * ## For three days nothing called it, and that cost something
  *
- * Written 2026-08-29 with two adapters. **Neither ever got a caller**, while the
- * two stages that really do checkpoint went on hand-rolling theirs to disk:
- * `src/labels.ts` writes `labels-progress.json` and `src/pdf-read.ts` writes
- * `pdf-chunks/`, both straight into `data/<slug>/`. Putting them on this seam is
- * **landing D2** (docs/plans/260827aa-delete-the-importer.md), and it is still unbuilt.
+ * Written 2026-08-29 with two adapters. **Neither got a caller until
+ * 2026-09-01**, while the two stages that really do checkpoint went on
+ * hand-rolling theirs to disk: `src/labels.ts` wrote `labels-progress.json` and
+ * `src/pdf-read.ts` wrote `pdf-chunks/`, both straight into `data/<slug>/`.
+ * Putting them on this seam was **landing D2**
+ * (docs/plans/260827aa-delete-the-importer.md); it landed, and both go through
+ * `read`/`write` here now. This paragraph said *"and it is still unbuilt"* for
+ * three days after it was.
  *
  * On 2026-09-01 the filesystem adapter was deleted with the rest of the
  * filesystem store (docs/plans/260831b-finish-the-database-move.md § Stage 4). It had
@@ -382,9 +385,13 @@ export function checkpointJson(value: unknown): string {
  *
  * **Nothing schedules this yet, and that is safe** for a reason worth writing
  * down: every row costs a paid model call to create, so the table cannot grow
- * faster than the bill. The measured sizes are ~20 KB a PDF chunk with
- * `MAX_PAGES = 100` bounding one article to the low hundreds of KB, and 47.8 KB
- * for the largest labels file. Deleting an article takes its rows with it
+ * faster than the bill. The measured sizes are ~20 KB a PDF chunk and 47.8 KB
+ * for the largest labels file; `MAX_PAGES` bounds the chunk count, so the
+ * worst case for one article moved with it — the low hundreds of KB at 100
+ * pages, and single-digit MB now that it is 250 (src/pdf-read.ts, 2026-09-04).
+ * That is 2.5× a number the argument had a lot of room over, so the conclusion
+ * is unchanged; it is written out because the *next* raise is the one to check
+ * it against. Deleting an article takes its rows with it
  * (`on delete cascade`), which is the only removal with a deadline, and it is
  * automatic. So the sweep is housekeeping, and housekeeping that nobody runs is
  * a growing table rather than a broken one. Run it with
@@ -447,11 +454,16 @@ export function checkpointCutoff(days: number, now: Date = new Date()): Date {
  * left. The alternative was to resurrect `checkpoints-fs.ts`, deleted on
  * 2026-09-01 having never written a byte, to serve a path that is going away.
  *
- * **It is not silent about it.** Both callers report what they resumed —
- * `LabelRun.resumed` and, for chunks, `PdfExtractResult.usage` being non-zero on
- * a second run — so a *Postgres* run that came back with this store by mistake
- * shows up as a run that resumed nothing rather than as nothing at all.
- * docs/reusable/silent-success.md.
+ * **It is not silent about it**, though for two days it was: this paragraph
+ * used to rest on `LabelRun.resumed` and on `PdfExtractResult.usage` being
+ * non-zero on a second run, and both are things a reader of the log would have
+ * had to *infer*, from figures that were suppressed at zero. Since 2026-09-04
+ * both callers log `{ asked, found }` at `info` on every read
+ * (src/pdf-read.ts § `storedChunks`, src/labels.ts), so a *Postgres* run that
+ * came back with this store by mistake is a line saying it asked for forty and
+ * found none, rather than an absence somebody has to notice.
+ * docs/reusable/silent-success.md,
+ * docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md.
  *
  * **And it still refuses what the real store refuses.** A namespace that is not
  * declared, or a key the CHECK would reject, throws here exactly as it would in

@@ -22,7 +22,7 @@
  *     is not evidence a field was honoured.
  */
 import { act, createElement } from "react";
-import type { ArticleSharing, PublicArtefacts } from "../src/types.js";
+import type { ArticleSharing, PublicArtefacts, Visibility } from "../src/types.js";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -43,6 +43,16 @@ const SLUG = "a-piece";
 
 /** Every request the card made. */
 const calls: { url: string; method: string; body: unknown }[] = [];
+/**
+ * Every `onVisibility` the card reported upwards.
+ *
+ * The masthead one click away draws this same fact off the article payload, and
+ * that payload is fetched once for all of an article's views and never
+ * refetched between them — so what is recorded here is what stops a lock
+ * sitting over a document anyone with the link can read.
+ * src/web/App.tsx § `OwnedArticle`.
+ */
+const reported: (Visibility | null)[] = [];
 /** How the `PUT` is answered. */
 let put: () => Response;
 /**
@@ -99,6 +109,7 @@ let root: Root;
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   calls.length = 0;
+  reported.length = 0;
   put = () => json({ visibility: "public", publicAt: "2026-08-28T11:00:00.000Z" });
   held = [];
   hold = false;
@@ -137,7 +148,19 @@ afterEach(async () => {
  */
 async function mount(sharing: ArticleSharing | undefined): Promise<void> {
   await act(async () => {
-    root.render(createElement(AccessSharing, { slug: SLUG, title: "A piece", sharing }));
+    root.render(
+      createElement(AccessSharing, {
+        slug: SLUG,
+        title: "A piece",
+        sharing,
+        onVisibility: (forSlug: string, visibility: Visibility | null) => {
+          /* The slug is asserted rather than ignored: the callback resolves
+             after the reader may have moved on, and the receiver keys on it. */
+          expect(forSlug).toBe(SLUG);
+          reported.push(visibility);
+        },
+      }),
+    );
   });
   for (let i = 0; i < 4; i++) {
     await act(async () => {
@@ -540,6 +563,174 @@ describe("when a write does not come back cleanly", () => {
     expect(host.textContent).not.toContain("Only you can read this");
   });
 });
+
+/**
+ * **The other view of this fact, and why it cannot be left to go stale.**
+ *
+ * The reading view's masthead draws public-or-private off `Article.visibility`
+ * (src/web/Masthead.tsx § `SharingMark`), and `ArticlePage` fetches that payload
+ * **once for all three of an article's views** and does not refetch when the
+ * view changes — deliberately, so stepping out here and back is free. So this
+ * card is the only thing that can tell the masthead the answer just changed.
+ * Without it, publishing an article and pressing Back left a lock over a
+ * document anyone with the link could read: the payload correct, the card
+ * correct, and the two disagreeing with nothing to notice.
+ *
+ * Asserted here rather than through a mounted `OwnedArticle`, because what can
+ * actually go wrong is at this seam — reporting the value we *asked for*, or
+ * reporting one at all when the write left us unable to say.
+ * docs/plans/260904b-sharing-mark-on-the-article-masthead.md.
+ */
+describe("telling the rest of the page what changed", () => {
+  /**
+   * **`reported` is asserted whole, as a sequence.**
+   *
+   * Every case here has at least two entries and the order is the point: the
+   * card says *I no longer know* when the write goes out and the answer only
+   * afterwards. Asserting the last entry alone would pass on a card that never
+   * said the first, which is the bug GPT Sol found (finding 1).
+   *
+   * The leading entry is the page's own fetch — see
+   * `reports what the page's own fetch said`.
+   */
+  it("reports what the page's own fetch said, without being pressed", async () => {
+    await mount(SHARED);
+
+    expect(reported).toEqual(["public"]);
+    /* And still no request of its own — the whole point of the card reading a
+       field the page already has. */
+    expect(calls).toEqual([]);
+  });
+
+  it("reports nothing at all from a store that could not say", async () => {
+    await mount(undefined);
+
+    /* The absence is not a value, and handing `null` up here would be
+       indistinguishable from a write that went missing. The masthead draws
+       nothing either way, but the parent's overlay must stay empty so the
+       payload's own answer — which on Postgres is a real one — still stands. */
+    expect(reported).toEqual([]);
+  });
+
+  it("reports the server's answer, not the value it sent", async () => {
+    /* The same disagreement `draws what the server said` above uses: asking for
+       a state the article is already in returns the current representation and
+       changes nothing. */
+    put = () => json({ visibility: "private", publicAt: null });
+    await mount(PRIVATE);
+    press("Share with anyone");
+    tickTheBox();
+    press("Share it");
+    await settle();
+
+    expect(reported).toEqual(["private", null, "private"]);
+  });
+
+  it("reports the publish when it lands", async () => {
+    put = () => json({ visibility: "public", publicAt: "2026-08-28T11:00:00.000Z" });
+    await mount(PRIVATE);
+    press("Share with anyone");
+    tickTheBox();
+    press("Share it");
+    await settle();
+
+    expect(reported).toEqual(["private", null, "public"]);
+  });
+
+  /**
+   * **`null`, not silence, and not the state from before the write.**
+   *
+   * A failed request is not proof nothing was written — the route writes and
+   * then reads back, so every failure after the write leaves the write
+   * standing. Reporting nothing would leave the masthead drawing whatever the
+   * payload said when the page loaded, which is precisely the answer that has
+   * just stopped being trustworthy. An absent `Article.visibility` draws no
+   * mark at all, which is the true sentence.
+   */
+  it("says it no longer knows when the write fails", async () => {
+    put = () => json({ error: "the connection went away" }, 500);
+    await mount(PRIVATE);
+    press("Share with anyone");
+    tickTheBox();
+    press("Share it");
+    await settle();
+
+    expect(reported).toEqual(["private", null, null]);
+  });
+
+  it("says it no longer knows when the answer cannot be parsed", async () => {
+    put = () => new Response(null, { status: 204 });
+    await mount(PRIVATE);
+    press("Share with anyone");
+    tickTheBox();
+    press("Share it");
+    await settle();
+
+    expect(reported).toEqual(["private", null, null]);
+  });
+
+  /**
+   * **The press is when the old answer stops being true, not when the new one
+   * lands.**
+   *
+   * Between the two the server may have committed already, and a masthead still
+   * drawing the state from before the press is a lock over a document that may
+   * by now be public. The owner can be looking at it: pressing Share and going
+   * back to the article is an ordinary thing to do, and it does not wait for
+   * the request. GPT Sol, finding 1, 2026-09-04.
+   */
+  it("stops claiming to know the moment the write goes out", async () => {
+    hold = true;
+    await mount(PRIVATE);
+    press("Share with anyone");
+    tickTheBox();
+    press("Share it");
+    await settle();
+
+    /* **While the request is still out.** `hold` is what makes this
+       observable — with an instant reply the pending state is real and
+       unobservable, which is how the gap went unnoticed in the first place.
+       docs/reusable/silent-success.md. */
+    expect(reported).toEqual(["private", null]);
+
+    release();
+    await settle();
+    expect(reported).toEqual(["private", null, "public"]);
+  });
+
+  /**
+   * **A card that has left the page says nothing**, and does not need to.
+   *
+   * Publish, leave, come back, unpublish: if the first request is slow enough
+   * its `public` lands *after* the second's `private`, and last-writer-wins puts
+   * a globe over a private article. The dead card is silent instead — and the
+   * live one has already said `null`, so nothing anywhere is drawing a stale
+   * claim in the meantime. GPT Sol, finding 2, 2026-09-04.
+   */
+  it("says nothing once it has left the page, however late the answer is", async () => {
+    hold = true;
+    await mount(PRIVATE);
+    press("Share with anyone");
+    tickTheBox();
+    press("Share it");
+    await settle();
+    expect(reported).toEqual(["private", null]);
+
+    /* The owner goes back to the article. `Metadata` unmounts, and with it this
+       card — while its `PUT` is still in the air. */
+    await act(async () => root.unmount());
+    root = createRoot(host);
+
+    release();
+    await settle();
+
+    /* Still just the two from before. The answer arrived into a tree that is
+       gone, and reporting it would have been a claim nobody could order against
+       the next one. */
+    expect(reported).toEqual(["private", null]);
+  });
+});
+
 
 describe("turning it off", () => {
   it("sends no rightsConfirmed at all", async () => {

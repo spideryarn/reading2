@@ -1118,6 +1118,24 @@ const ADMITTED: Readonly<Record<string, string>> = {
     "paid call through transcribeWith (src/transcribe.ts) → openRouterJson, two modules " +
     "from any seam import, so no rule above can see it. It opens no ledger, by decision " +
     "and with a reason on the declaration.",
+  /* Its two siblings, which arrived on `dev` on 2026-09-04 with their
+     `unscoped` declarations written and this map not told — so the gate was red
+     tree-wide for a day. They reach a paid call by the same route as the entry
+     above, through the same function, and the declaration that says so already
+     names the plan. The three are one family and 260903i's own comment on the
+     declarations says they want doing as one job under the `eval` kind, at
+     which point all three of these entries go together. */
+  "dictation-gate-models":
+    "npm run eval:dictation-gate — evals/dictation/gate-models.ts asks which candidate " +
+    "models can serve the production request at all, before the bake-off spends an hour " +
+    "finding out. Same route as its sibling above: transcribeWith (src/transcribe.ts) → " +
+    "openRouterJson, two modules from any seam import. It opens no ledger, by decision " +
+    "and with a reason on the declaration.",
+  "dictation-bench-models":
+    "npm run eval:dictation-models — evals/dictation/bench-models.ts is the bake-off that " +
+    "kept gemini-3.1-flash-lite, holding the vocabulary fixed and varying transcribeWith's " +
+    "`model` option. Same route as its siblings above, and likewise two modules from any " +
+    "seam import. It opens no ledger, by decision and with a reason on the declaration.",
 };
 
 describe("the listed stage CLIs open the ledger", () => {

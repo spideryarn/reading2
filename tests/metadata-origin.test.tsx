@@ -135,7 +135,12 @@ const hrefs = () => [...host.querySelectorAll("a[href]")].map((a) => a.getAttrib
 async function owner(meta: Partial<Meta>) {
   await act(async () => {
     root.render(
-      createElement(Metadata, { slug: SLUG, article: article(meta), onRenamed: () => {} }),
+      createElement(Metadata, {
+        slug: SLUG,
+        article: article(meta),
+        onRenamed: () => {},
+        onVisibility: () => {},
+      }),
     );
   });
 }

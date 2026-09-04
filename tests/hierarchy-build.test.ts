@@ -198,10 +198,16 @@ describe("buildTree", () => {
       exactlyOneLeafEach(buildTree(short, NAV, BLOCKS, "test"));
     });
 
-    it("refuses a range that runs backwards instead of silently covering nothing", () => {
-      // Both ends are real ids, so every lookup succeeds. The leaf loop just
-      // runs zero times: the node becomes a childless internal node and the
-      // blocks it was supposed to hold exist in no leaf anywhere.
+    it("derives a child whose range runs backwards, rather than covering nothing", () => {
+      // Both ends are real ids, so every lookup succeeds, and until 2026-09-04
+      // this threw. It now derives from the start like every other child — a
+      // backwards pair is the model's two claims about one boundary
+      // disagreeing, in the field the derivation discards anyway. See
+      // tests/hierarchy-repairs.test.ts § "a child whose range runs backwards".
+      //
+      // What must NOT happen is the original hazard this test was written for:
+      // the leaf loop running zero times, leaving a childless internal node
+      // whose blocks exist in no leaf anywhere. `exactlyOneLeafEach` is that.
       const backwards: ModelNode = {
         ...ROOT,
         children: [
@@ -209,15 +215,29 @@ describe("buildTree", () => {
           { title: "Rest", range: ["spya-cccccc", "spya-dddddd"] },
         ],
       };
-      expect(() => buildTree(backwards, NAV, BLOCKS, "test")).toThrow(/runs backwards/);
+      exactlyOneLeafEach(buildTree(backwards, NAV, BLOCKS, "test"));
     });
 
-    it("refuses a root that does not span the whole article", () => {
+    it("still refuses a range that runs backwards on the root itself", () => {
+      // The root has no parent to be derived from, so the hazard above is real
+      // there and nothing can mend it. This is what keeps the change narrow.
+      const backwardsRoot: ModelNode = { ...ROOT, range: ["spya-dddddd", "spya-aaaaaa"] };
+      expect(() => buildTree(backwardsRoot, NAV, BLOCKS, "test")).toThrow(/runs backwards/);
+    });
+
+    it("stretches a root that does not span the whole article", () => {
       // Nothing else catches this. assertChildrenPartition checks that a node's
       // children tile *it*, which says nothing about the root's own extent; and
       // checkCoverage counts only gistable blocks, so a root that drops a
       // leading image or a trailing rule passes both while leaving those blocks
       // with no leaf and no resolvable id.
+      //
+      // It was refused until 2026-09-04 and is now widened, because the root
+      // was the one node whose range was believed rather than derived — see
+      // buildTree § "The root's range is derived like everybody else's" and
+      // tests/hierarchy-repairs.test.ts for the three arms that lost an article
+      // to it. The guard behind the clamp still exists and still says this
+      // sentence; nothing short of a bug in the clamp can reach it.
       const short: ModelNode = {
         ...ROOT,
         range: ["spya-aaaaaa", "spya-cccccc"],
@@ -226,7 +246,12 @@ describe("buildTree", () => {
           { title: "Second", range: ["spya-cccccc", "spya-cccccc"] },
         ],
       };
-      expect(() => buildTree(short, NAV, BLOCKS, "test")).toThrow(/does not cover the whole article/);
+      const tree = buildTree(short, NAV, BLOCKS, "test");
+      expect(tree.nodes[tree.rootId]!.range).toEqual([BLOCKS[0]!.id, BLOCKS.at(-1)!.id]);
+      // Every block still gets exactly one leaf, which is the contract the
+      // refusal was protecting.
+      const leaves = Object.values(tree.nodes).filter((n) => n.children.length === 0);
+      expect(leaves.map((l) => l.range[0]).sort()).toEqual(BLOCKS.map((b) => b.id).sort());
     });
 
     it("names an invented range on an internal node, which used to slip through", () => {

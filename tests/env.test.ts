@@ -23,7 +23,7 @@
  * `applyEnvFile` is exported from src/env.ts and used by both.
  */
 import { describe, expect, it } from "vitest";
-import { applyEnvFile, chooseTargetUrl, parseEnvFile } from "../src/env.js";
+import { applyEnvFile, chooseTargetUrl, parseEnvFile, PINNED } from "../src/env.js";
 
 const FILE = `
 # a comment
@@ -45,6 +45,57 @@ describe("where a variable's value comes from", () => {
     expect(env.OPENROUTER_API_KEY).toBe("from-the-file");
     // And it says so, by name — never by value, because these are secrets.
     expect(shadowed).toEqual(["OPENROUTER_API_KEY"]);
+  });
+
+  /**
+   * **The rule above cannot cross `spawn`, and this is what does.**
+   *
+   * "This process set it for itself" is decided against a snapshot taken at
+   * *this* process's module load. A child takes its own snapshot, by which time
+   * the parent's deliberate assignment is already in the inherited environment
+   * — so the child reads it as "the shell said so" and `.env.local` wins. The
+   * unit test lane poisons `DATABASE_URL` and `SUPABASE_URL`, and a `tsx` child
+   * of a unit test was getting the real ones back, silently. GPT Sol, T-D
+   * review, 2026-09-04.
+   *
+   * `PINNED` is a variable rather than a comparison, so it *is* inherited. The
+   * outcome half — a real child, on the real loader — is
+   * `tests/unit-lane-has-no-database.test.ts`; this is the rule.
+   */
+  it("refuses to write a name the process before it pinned", () => {
+    const env: Record<string, string | undefined> = {
+      [PINNED]: "DATABASE_URL",
+      DATABASE_URL: "the-poison",
+      OPENROUTER_API_KEY: "from-the-shell",
+    };
+    /* Identical to `env`, which is the point: to this process the poison looks
+       exactly like something the shell exported, and without the pin the file
+       would win. */
+    const inherited = { ...env };
+
+    const shadowed = applyEnvFile(FILE, env, inherited);
+
+    expect(env.DATABASE_URL, "pinned").toBe("the-poison");
+    /* And it is a *narrowing*, not a switch: everything unpinned still follows
+       the ordinary rule, or a pin would be a way to turn `.env.local` off. */
+    expect(env.OPENROUTER_API_KEY, "not pinned").toBe("from-the-file");
+    /* Not reported as shadowed either — nothing was overridden. */
+    expect(shadowed).toEqual(["OPENROUTER_API_KEY"]);
+  });
+
+  it("takes a list, and ignores the spaces somebody will put in it", () => {
+    const env: Record<string, string | undefined> = {
+      [PINNED]: " DATABASE_URL , OPENROUTER_API_KEY ,, ",
+      DATABASE_URL: "the-poison",
+      OPENROUTER_API_KEY: "the-other-poison",
+    };
+    const inherited = { ...env };
+
+    expect(applyEnvFile(FILE, env, inherited)).toEqual([]);
+    expect(env.DATABASE_URL).toBe("the-poison");
+    expect(env.OPENROUTER_API_KEY).toBe("the-other-poison");
+    /* A name the file sets that nobody pinned still arrives. */
+    expect(env.UNSET_ANYWHERE_ELSE).toBe("fresh");
   });
 
   it("leaves alone a value this process set for itself", () => {

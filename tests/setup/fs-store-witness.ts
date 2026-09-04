@@ -1,6 +1,8 @@
 /**
- * TEMPORARY SCAFFOLDING — witness 2 of docs/plans/260903f, stage A.
- * Delete this file (and fs-store-witness-setup.ts) before anything is committed.
+ * The recorder behind witness 2 of docs/plans/260903f. Driven by
+ * [scripts/store-migration-witness.ts](../../scripts/store-migration-witness.ts)
+ * through `vitest.witness.config.ts`; `npm test` never loads either. It dies
+ * with the filesystem store in stage G.
  *
  * Records, per test file, which of the condemned filesystem-store modules were
  * actually *executed* (not merely imported). Wrapping is applied by a Vite

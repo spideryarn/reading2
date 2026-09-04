@@ -36,7 +36,7 @@
 import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { Plans } from "./Plans.js";
+import { WebsitePlans } from "./PlanCards.js";
 import { SHOTS } from "./shots.js";
 import { SiteFooter } from "./SiteFooter.js";
 import {
@@ -259,10 +259,10 @@ export function FeaturesPage() {
         </div>
 
         {/* [tissue]; "reading is never gated" is Greg, 2026-09-02, and the
-            rule Plans.tsx states in full. */}
+            rule PlanCards.tsx states in full. */}
         <H2 eyebrow="Plans">Simple, and reading is never gated.</H2>
         <div className="site-reveal">
-          <Plans />
+          <WebsitePlans />
         </div>
 
         <p className="tw:mt-14 tw:text-sm">

@@ -2100,15 +2100,32 @@ export async function generateLabels(opts: {
    *
    * **A read that throws is a miss, not a failure.** The alternative to
    * resuming is a run that works and costs money; a checkpoint layer that could
-   * fail the whole label pass would be a saving that had become an outage. It
-   * is logged, because a store that answered nothing for ever would look
-   * exactly like a store nobody had wired up.
+   * fail the whole label pass would be a saving that had become an outage.
+   *
+   * **And `{ asked, found }` goes out on every read**, not only when one throws.
+   * The old note here said the throw was logged *"because a store that answered
+   * nothing for ever would look exactly like a store nobody had wired up"* —
+   * which named the hazard and then instrumented the one case that is not it.
+   * The sibling read in src/pdf-read.ts § `storedChunks` had the same shape and
+   * was inert for the whole life of the feature; the argument is written out in
+   * full there and in
+   * docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md.
+   * `info`, because that is the production level.
    * docs/reusable/silent-success.md.
    */
   const fingerprints = batches.map((batch) => batchFingerprint(batch, opts.blocks, outline));
   let stored: Map<string, unknown>;
   try {
     stored = await opts.checkpoints.read<unknown>(opts.slug, "hierarchy-labels", fingerprints);
+    log("pipeline").info(
+      {
+        slug: opts.slug,
+        namespace: "hierarchy-labels",
+        asked: fingerprints.length,
+        found: stored.size,
+      },
+      "read the label checkpoints",
+    );
   } catch (err) {
     log("pipeline").warn(
       { slug: opts.slug, batches: fingerprints.length, err },
@@ -2519,7 +2536,11 @@ async function main(): Promise<void> {
   await writeAtomic(path.join(dir, "labels.json"), run.file);
   await writeAtomic(path.join(dir, "tree.json"), merged);
 
-  console.log(`\n\nBatches:   ${run.batches}${run.resumed > 0 ? ` (${run.resumed} resumed)` : ""}`);
+  /* The resumed count is said at zero too — same reason as the sibling line in
+     src/hierarchy.ts, and this command line is in the same position: it has no
+     article to key on, so it passes `nullCheckpointStore()` and the honest
+     answer here is always "0 resumed". */
+  console.log(`\n\nBatches:   ${run.batches} (${run.resumed} resumed)`);
   if (run.oversized > 0) {
     console.log(
       `Warning:   ${run.oversized} section(s) are bigger than one call should be. The batches ` +

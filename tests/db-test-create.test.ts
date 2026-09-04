@@ -755,8 +755,13 @@ live("the scavenger", () => {
       await late.connect();
       try {
         const outcome = await dropStaleTestDatabase(db.name);
-        expect(outcome.dropped).toBe(false);
-        expect(outcome.why).toMatch(/somebody connected to it before the drop landed/);
+        /* `in-use` rather than `failed`, and that distinction is the whole
+           point: only `in-use` licenses a caller to reason about who was
+           inside. `scripts/db-test-create.ts` § `DropOutcome`. */
+        expect(outcome.kind).toBe("in-use");
+        expect(outcome.kind === "in-use" && outcome.why).toMatch(
+          /somebody connected to it before the drop landed/,
+        );
         /* And it is genuinely still there — the report is not the evidence. */
         expect((await scavengeCandidates()).map((c) => c.name)).toContain(db.name);
         /* The connection survived it, which is the thing FORCE would have taken. */
@@ -774,7 +779,7 @@ live("the scavenger", () => {
     async () => {
       const db = await build({ migrate: false });
       const outcome = await dropStaleTestDatabase(db.name);
-      expect(outcome).toEqual({ dropped: true });
+      expect(outcome).toEqual({ kind: "dropped" });
       expect((await scavengeCandidates()).map((c) => c.name)).not.toContain(db.name);
       made.delete(db.name);
     },
