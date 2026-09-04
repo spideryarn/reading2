@@ -66,6 +66,12 @@ A subagent starts with nothing but your prompt. Name the files, say what the sta
 as what it is for, say what done looks like, and ask for the conclusion rather than the material.
 Run them in parallel only when their file sets don't overlap.
 
+**Parallel subagents share one scratchpad.** The directory is per *session*, and subagents inherit
+the parent's path, so "session-specific, isolated" is true of the session and false of the agents
+inside it — one overwrote another's helper script mid-task, which looks exactly like the script
+being wrong. Give each a unique file prefix. Where two must edit one file, say "small targeted
+edits, re-read immediately before editing, never rewrite".
+
 Subagents all reading the same code can agree confidently without anyone having touched real
 evidence. Send one to run the thing, read the logs, or reproduce it.
 

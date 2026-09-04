@@ -87,6 +87,11 @@ that returned nothing looks exactly like a review that found nothing. This is
 [silent-success.md](silent-success.md) with a subprocess in it; the several ways it happens are under
 [Gotchas](#gotchas). `retrying with CODEX_API_KEY` on stdout is the fallback working, not a failure.
 
+**Assume intermittent, not down.** The commonest way a run returns nothing is an `HTTP 404` from the
+responses endpoint, and it comes and goes: on 2026-09-03 it failed twice five minutes apart and then
+worked later the same day. So retry before concluding the reviewer is unavailable — and if it really
+is, say plainly that the review could not run rather than committing as though it had found nothing.
+
 ## Setup (once per machine)
 
 ```bash
