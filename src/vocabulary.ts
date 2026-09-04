@@ -275,7 +275,7 @@ export function proseOf(blocks: readonly { kind?: string; text?: string }[]): st
  * sentence, or a payload — and it stops it before the priority order gets a
  * chance to be irrelevant.
  */
-const MAX_TERM = 80;
+export const MAX_TERM = 80;
 
 /**
  * Strip the two characters that could close the fence around the list.

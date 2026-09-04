@@ -463,9 +463,10 @@ describe("the plates", () => {
 
   it("records the failure on the plate rather than throwing the run away", async () => {
     /* **The orphan case, from the other side.** Both plates are drawn and paid
-       for; the second cannot be stored because the bytes are not a JPEG. The
-       run must keep the first. */
-    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+       for; the second cannot be stored because it is neither of the two formats
+       a plate may be — a GIF, since 2026-09-04, when PNG stopped being the
+       refusable case and became the ordinary one. The run must keep the first. */
+    const gif = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00]);
     const good = PLATE;
     let nth = 0;
     const call = await import("../src/ai-call.js");
@@ -473,8 +474,8 @@ describe("the plates", () => {
       plateCalls++;
       nth += 1;
       return Promise.resolve({
-        image: nth === 1 ? good : png,
-        mediaType: nth === 1 ? "image/jpeg" : "image/png",
+        image: nth === 1 ? good : gif,
+        mediaType: nth === 1 ? "image/jpeg" : "image/gif",
       } as Awaited<ReturnType<typeof call.openRouterImage>>);
     });
     try {
@@ -483,7 +484,41 @@ describe("the plates", () => {
       const plates = (result.parts?.illustrated as Illustrated | undefined)?.plates ?? [];
       expect(plates[0]?.image?.sha256).toMatch(/^[0-9a-f]{64}$/);
       expect(plates[1]?.image).toBeUndefined();
-      expect(plates[1]?.failed).toMatch(/must be image\/jpeg/);
+      expect(plates[1]?.failed).toMatch(/must be image\/jpeg or image\/png/);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  /**
+   * **A PNG plate goes all the way through the step**, which is the whole of
+   * report -12's storage half seen from the pipeline: the illustrator we
+   * switched to on 2026-09-04 returns PNG whatever `output_format` asks for, so
+   * if any link in this chain still assumed JPEG the feature would come back
+   * with two failure sentences and no pictures.
+   */
+  it("stores a PNG plate end to end and records it as one", async () => {
+    const png = new Uint8Array(24);
+    png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    new DataView(png.buffer).setUint32(16, 848);
+    new DataView(png.buffer).setUint32(20, 1264);
+    const call = await import("../src/ai-call.js");
+    const spy = vi.spyOn(call, "openRouterImage").mockImplementation(() => {
+      plateCalls++;
+      return Promise.resolve({ image: png, mediaType: "image/png" } as Awaited<
+        ReturnType<typeof call.openRouterImage>
+      >);
+    });
+    try {
+      await script();
+      const result = await STEPS.illustrated.run(ctxFor(), store, nullCheckpointStore());
+      const plates = (result.parts?.illustrated as Illustrated | undefined)?.plates ?? [];
+      expect(plates.length).toBeGreaterThan(0);
+      for (const plate of plates) {
+        expect(plate.failed, plate.sceneId).toBeUndefined();
+        expect(plate.image?.ext, plate.sceneId).toBe("png");
+        expect(plate.image?.width, plate.sceneId).toBe(848);
+      }
     } finally {
       spy.mockRestore();
     }

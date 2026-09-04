@@ -134,7 +134,7 @@ export type AutoRunTarget = Extract<
  * every reader into a ~$0.20, two-minute job. The Sketch chip inside the mode
  * arms `sketch` itself, because it is the chip that is the gesture — and the
  * Illustrated chip beside it arms `illustrated` for the same reason and a
- * dearer one: $0.27–$0.40 a press.
+ * dearer one: $0.40–$0.65 a press.
  *
  * Everything else in `MODES` is either free (Plain, Hierarchy, Outline,
  * Summary — they read the tree that is already there) or stores nothing at all
