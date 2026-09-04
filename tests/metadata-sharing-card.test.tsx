@@ -454,7 +454,14 @@ describe("the sharing card, on the page that owns it", () => {
         quotes: false,
         timeline: false,
         sketch: false,
-      },
+        /* Annotated like `ALL_BUILT` above and for the same reason: an untyped
+           literal here goes a field short the day another artefact is added,
+           the parser rejects it, and the card silently draws "we could not work
+           out what a shared link would carry" — so this test would go on
+           asserting a box round a *failure* state. That is what happened on
+           2026-09-04 when `sketch` arrived. GPT Sol found this one still
+           untyped after the other two were fixed. */
+      } satisfies PublicArtefacts,
     };
 
     await open();

@@ -58,7 +58,7 @@
  * when `billing_tiers` disagrees with it.
  *
  * `/profile` hands in cards built from the **rows** instead
- * (`summary.offers`), which is the property BillingSection.tsx argued for at
+ * (`summary.purchase.tiers`), which is the property BillingSection.tsx argued for at
  * length and this change had no reason to take away: raising a quota there is
  * one `UPDATE` and that page follows without a deploy. One component, two
  * callers, each saying out loud where its numbers came from.
@@ -91,7 +91,7 @@ import { Tooltip } from "./Tooltip.js";
  * it is `billing_tiers.id`, which is the **only** thing a checkout POST carries
  * (useBilling.ts § *Only a tier id crosses the wire*), so a typo here is a
  * button that silently never appears rather than one that buys the wrong thing:
- * every caller checks the id against `summary.offers` before offering an action.
+ * every caller checks the id against `summary.purchase` before offering an action.
  * `tests/plans-match-tiers.test.ts` asserts the ids in this file are ids the
  * database actually sells, because "silently never appears" is precisely the
  * failure nobody notices.
@@ -421,7 +421,9 @@ function FinePrint({ tip, children }: { tip: ReactNode; children: ReactNode }) {
  * The plans themselves, and nothing around them.
  *
  * @param plans in the order they should be read — cheapest first, the same
- * order `summary.offers` arrives in.
+ * order `summary.purchase.tiers` arrives in. **Nothing here reorders them**, so
+ * a caller that filters the offers per tier (BillingSection.tsx, since the gate
+ * became tier-aware) is the last thing that can get the ladder right.
  * @param action what may be done with each plan, or omitted entirely on a page
  * where nothing may be done.
  * @param recommended the tier id to raise out of the row, or omitted for a row
@@ -430,12 +432,14 @@ function FinePrint({ tip, children }: { tip: ReactNode; children: ReactNode }) {
  * **The question it answers is whether this reader is choosing, and it was
  * attached to the route instead for a day.** `WebsitePlans` passed the tier
  * unconditionally, so a signed-in Researcher reading `/pricing` saw *Reader* —
- * a downgrade they cannot buy, `canCheckout` being false while a subscription
- * is live — labelled Recommended; while `/profile` declined it, although its
- * cards render only when `canCheckout` is true, which is exactly the moment
- * somebody is choosing. Both halves are one mistake: a recommendation belongs
- * where there is a choice to make, and the page is the only thing that knows.
- * GPT Sol, stage 2 code review, finding 3.
+ * a plan they cannot buy — labelled Recommended; while `/profile` declined it,
+ * although its cards render exactly when somebody is choosing. Both halves are
+ * one mistake: a recommendation belongs where there is a choice to make, and the
+ * page is the only thing that knows. GPT Sol, stage 2 code review, finding 3.
+ *
+ * Since the gate became tier-aware both callers ask the same question of
+ * `summary.purchase`: a *switch* is a subscriber being shown what is above them
+ * rather than a choice between plans, so nothing is recommended there.
  */
 export function PlanCards({
   plans,

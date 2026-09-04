@@ -303,8 +303,9 @@ includes a promise the code has already broken.
 | 1 — buying from `/pricing` | **on `dev`** (`275a6230`, `fd081a15`) |
 | 2 — the pricing page rebuilt | **on `dev`** (`07412b79`) |
 | 3a — the listing's data and API | **on `dev`** (`80573d0c`, `1ef8ba6b`) |
-| 3b — `/read/public` itself | not started; two lines flip the 404s, plus the page |
+| 3b — `/read/public` itself | **built**, uncommitted — see the log |
 | 4 — showcase links, takedown route, byline | not started |
+| 4b — the upgrade path | **built**, uncommitted — see the log |
 | 5 — a public article counts half | not started; needs a migration |
 
 **The one thing that is worse than not-yet-built.** Stage 3a shipped the listing's API while
@@ -695,6 +696,102 @@ ever, silently. Legacy rows rule out a `NOT NULL` constraint, so the type is the
 - No rate limit beyond what the namespace has. Cluster C and S4 of that plan are still open.
 
 ## Log
+
+- **2026-09-04, stage 4b built** — the gate is tier-aware, and a paying Reader is offered
+  Researcher on both pages. Seven things worth knowing:
+  - **`canCheckout` did not change meaning and did not gain a sibling; it and `offers` were
+    replaced by one field.** The question was put as a binary and the third answer is better than
+    either: `summary.purchase` is a discriminated union — `checkout` | `switch` over a **non-empty**
+    tuple of tiers, `top`, `none` — so the list a page draws and the fact that it may draw one are
+    the same fact. The state the live account was actually in, `canCheckout: false` beside an
+    `offers` array of both tiers, is now unbuildable; and deleting both names is what made the
+    compiler walk every call site, which a rename would not have.
+  - **Higher is `ingests_per_period`.** Not `sort_order`, which `choiceRules` already says out loud
+    is a display column nothing constrains to ascend with what a tier sells; not price, because a
+    tier carries three currencies and nothing makes them agree about which of two is dearer. The
+    allowance is what `nextQuotaAdjustment` measures a plan change by and what
+    `tests/billing-tiers.test.ts` pins as ascending with price. **A tie is not higher** — an equal
+    allowance is a button that takes money and changes nothing — and the reader's own tier is
+    excluded by name as well, which is redundant against a strict `>` and cheap.
+  - **The trap in it is `Entitlement.limit`, and the type is the guard.** That number carries the
+    prorated override a mid-period switch leaves behind, so a Researcher who moved up on day 27 is
+    entitled to 33 against a tier that sells 150 — rank *that* and they are offered Researcher.
+    `Standing` therefore takes a `TierRow` rather than a number, and a `@ts-expect-error` in the
+    tests goes red at `npm run typecheck` if the parameter is ever widened.
+  - **The button says what the press does.** *Switch to Researcher* on `/pricing`, *Switch plan*
+    (with an accessible name carrying the tier) on `/profile`, over one shared sentence,
+    `SWITCHING_PLAN`: the press opens the hosted Portal, the plan is chosen and confirmed there,
+    Stripe invoices the difference at once, the renewal date does not move, and the allowance is
+    added *for the part of the month that is left*. Every clause is a field `stripe:check` verifies
+    on every run, and the last one exists because `nextQuotaAdjustment` prorates — *"the larger
+    allowance starts now"* would have been false.
+  - **A Researcher gets a sentence rather than a gap** (`noHigherPlan`), which is why `top` is its
+    own arm and not `none`: a page that draws no button should say why, and *"nothing on sale"* and
+    *"you are already at the top"* are different answers.
+  - **`stripe:check` would catch the Portal being shut again, and no check was added.** Verified by
+    reading rather than by running: `checkPortal` calls `portalDrift` → `planSwitchDrift`, which
+    fails blocking on `subscription_update.enabled === false`, on `default_allowed_updates` not
+    being exactly `[price]`, and on the anchor, proration, trial behaviour and product list. The
+    one path where `enabled: false` is *not* reported is a catalogue that is not `complete()` — and
+    that run still exits non-zero, because `checkPortal` emits a blocking `✗` per unpriced tier
+    first. The live-day failure (a complete catalogue, switching off, a clean run) cannot recur.
+  - **Red first, each one, by mutating the mechanism and putting the text back.** The filter
+    removed → the pure cases and the route's Reader/Researcher cases went red (`['reader',
+    'researcher']` where `['researcher']` was wanted, `switch` where `top` was); the door forced to
+    `checkout` → the switch case red; the `top` sentence removed from `/pricing` → the Researcher
+    case red; both verbs forced back to *Get*/*Upgrade* → both label cases red; `PlanCards` handed a
+    reversed list → the ordering case red. The client tests do **not** go red for the filter, and
+    that is honest rather than a gap: they feed a summary straight in, so the filter is the route
+    suite's and the pure suite's to hold.
+  - **Left alone deliberately:** `startCheckout`'s Portal branch, every `QuotaNotice` destination,
+    and `ingestQuotaReached`'s `pay-limit` sentence — which could now name the larger plan, and is
+    Greg's to decide with stage 5's offer.
+
+- **2026-09-04, stage 3b built** — the page, and both 404s flipped. Six things worth knowing:
+  - **The card is its own component, and the rejected option is written at the top of the file it
+    was rejected for.** `ShelfCard` takes the whole `useShelf` hook — rename, archive, undo,
+    `apiFetch` — so making its owner verbs optional capabilities would have meant a union entry type
+    and six optional branches in one component, of which a stranger exercises one arm and the owner
+    the other. It would also have put an owner-scoped hook in the import graph of a page mounted for
+    people with no account. `PublicCard` is forty lines. What is genuinely shared is shared for
+    real: `readHref`, so the two shelves cannot disagree about where an article lives.
+  - **`SiteNav` yes, `SiteFooter` no**, and the second half looks like an inconsistency and is
+    Greg's own rule. `PublicChrome` was the other candidate for the chrome and does not fit at
+    all — it is *article* chrome, a chip in the reading view's controls bar and a notice under a
+    masthead, and there is no document here. The footer is out because *"NOT on any `/read/*`
+    pages"* is about the path, which is the reading `SiteFooter.tsx` already records having been
+    talked out of once and called rationalising for it.
+  - **The bar's *Sign in* was choosing its destination by naming the pages that lack a panel**, so
+    a fourth page joining it would have drawn a bare `#sign-in` naming nothing. It names the two
+    that *have* one now (`/` and `/pricing`), and `tests/site-nav-sign-in.test.tsx` grew the
+    `/read/public` case — watched failing on exactly that, then green.
+  - **The page-level test is an inventory rather than an absence, and that is the whole design of
+    it.** `tests/owner-isolation.test.ts` already proves the query cannot return a private article,
+    seven mutations deep; repeating that against the DOM would be a test that went green the day
+    somebody swapped the loader for `useShelf`, provided the fixture happened to hold nothing
+    private. So `tests/public-shelf-page.test.tsx` records the page's whole conversation with the
+    server — one request, `/api/public/library`, `credentials: "omit"`, no header, no call into the
+    auth module, and the same request signed in as signed out — because **a page can leak a private
+    article in exactly one way, by asking for one.**
+  - **A retry driven by a counter is a dependency the effect never reads**, and biome offers an
+    unsafe autofix that removes it — leaving a retry button that silently stops retrying. It is one
+    stable function called by both the mount effect and the button instead, with the two limits that
+    buys (a response after unmount; two presses racing) written down rather than engineered away.
+  - **The lede claimed something the `where` clause does not guarantee**, caught re-reading the copy
+    against the query rather than against the intent. It ended *"an article that is not listed here
+    is one nobody has shared"* — false three ways, because a shared article that is archived, or
+    whose current revision has no readable blocks, or that falls past the row cap, is shared and
+    absent. The rule it produced, written at the section head: **a sentence about what this list
+    contains cannot be falsified by the `where` clause; one about what its absences mean can be.**
+    It now says nobody's private reading is on the page and that nothing was chosen by us.
+  - **Browser-checked signed out at 1440 and 390**, one viewport at a time, against the five public
+    articles seeded locally by `scripts/share-local-articles.ts`: five cards, every one opening its
+    article readable and signed out, no horizontal scroll at 390, zero console errors, and the only
+    request in a 305-line network log touching our API was `/api/public/library`.
+  - Docs: `docs/project/public-shelf.md` is new and owned by `reading-view-overview.md`;
+    `library.md` § The Shared badge reconciles *a badge, not a filter* against a page that filters
+    (they are two shelves, and the owner's did not change); `security-map.md` gains the page as a
+    public surface, with the argument for the inventory-shaped guard.
 
 - **2026-09-04, GPT Sol reviewed stage 3a's code and all four findings are fixed.** The review is
   [260904b-stage3a-code-review-sol.md](260904b-stage3a-code-review-sol.md); it found **no

@@ -82,12 +82,19 @@ const READER_OFFER = {
   amounts: { usd: 1000, gbp: 800, eur: 900 },
 };
 
+const RESEARCHER_OFFER = {
+  id: "researcher",
+  name: "Spideryarn Researcher",
+  description: "150 articles a month.",
+  ingestsPerPeriod: 150,
+  amounts: { usd: 5000, gbp: 4000, eur: 4500 },
+};
+
 /** A free account that may check out, with Reader on sale. */
 const FREE: BillingSummary = {
   plan: { kind: "free", limit: 3, used: 1 },
-  offers: [READER_OFFER],
   manageable: false,
-  canCheckout: true,
+  purchase: { kind: "checkout", tiers: [READER_OFFER] },
 };
 
 const jsonOk = (body: unknown) =>
@@ -238,13 +245,21 @@ describe("finishing a purchase that a sign-in interrupted", () => {
     expect(host.textContent).toContain("Researcher");
   });
 
-  it("ignores a tier on sale when the account may not check out", async () => {
+  it("ignores a marker for a tier this account may not buy", async () => {
     rememberBuyIntent("reader");
-    /* A subscriber: `canCheckout` is the server's answer to *may this account
-       start a Checkout Session*, and it is a shorter list than "is unentitled".
-       Asking the plan instead is the bug BillingSection.tsx carries a comment
-       about. */
-    await show({ ...FREE, canCheckout: false });
+    /* A Reader who pressed *Get Reader* before signing in, and turns out to be
+       on Reader already. `purchase` is the server's answer to *what may this
+       account buy*, and since 2026-09-04 it is tier-aware: Researcher is on the
+       list and Reader is not, so the marker buys nothing. Asking the plan
+       instead is the bug BillingSection.tsx carries a comment about. */
+    await show({ ...FREE, purchase: { kind: "switch", tiers: [RESEARCHER_OFFER] } });
+
+    expect(checkouts()).toEqual([]);
+  });
+
+  it("ignores a marker entirely when there is nothing this account may buy", async () => {
+    rememberBuyIntent("reader");
+    await show({ ...FREE, purchase: { kind: "top" } });
 
     expect(checkouts()).toEqual([]);
   });
