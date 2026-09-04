@@ -380,7 +380,7 @@ export function App() {
     /* The fourth, since 2026-09-03, for the same reason as the third: the
        landing page's "everything it does" link has to land somewhere a
        stranger can read. */
-    if (route.kind === "features") return <FeaturesPage />;
+    if (route.kind === "features") return <FeaturesPage signedIn={false} />;
     /* The fifth, and the least arguable of them: a price somebody has to sign
        up to read is the thing people complain about, and this is the page one
        person sends another. */
@@ -495,7 +495,13 @@ function SignedIn({
     return (
       <>
         <HomeLogo />
-        <FeaturesPage />
+        {/* **`signedIn` is what keeps the top bar honest here.** Without it the
+            nav drew *Sign in* → `/#sign-in`, and `/` is the shelf for this
+            reader, which has no such panel: a link that visibly does nothing.
+            GPT Sol, stage 2 code review of
+            docs/plans/260904b-pricing-page-and-public-showcase.md, finding 1 —
+            this half of it predates that stage. SiteBits.tsx § `signedIn`. */}
+        <FeaturesPage signedIn />
       </>
     );
   if (route.kind === "pricing")

@@ -13432,14 +13432,20 @@ table.only-prose thead { display: none; }
    behind. */
 
 /* =========================================================== § the site ==
-   The signed-out marketing pages — LandingPage.tsx and FeaturesPage.tsx — and
-   nothing else in the app. Everything here is prefixed `.site-`.
+   The marketing pages — LandingPage.tsx, FeaturesPage.tsx and, since
+   2026-09-04, PricingPage.tsx. Everything here is prefixed `.site-`.
+
+   **One piece of it travels off those pages, and exactly one**: `.plan-cards`
+   carries the ladder as well, because the price cards are drawn on `/profile`
+   too. The ladder rule below says why, and **do not widen that list further** —
+   docs/project/marketing-pages.md § The visual language.
 
    **Why these are classes and not utilities.** Every one of them is used on
-   both pages, which is what makes them a system rather than a nudge, and
+   more than one page, which is what makes them a system rather than a nudge, and
    docs/project/design-css-overview.md § Which mechanism owns what puts a system
    in this file. The `tw:` utilities stay for per-element adjustments; the
-   visual language lives here so the two pages cannot drift into two languages.
+   visual language lives here so the three pages cannot drift into three
+   languages.
 
    **The posture is Greg's, 2026-09-03, and it was chosen against advice.**
    Offered "tidy it", "restructure it" and "go full modern-SaaS", he picked the
@@ -13460,8 +13466,19 @@ table.only-prose thead { display: none; }
 
    How to shoot the pictures these rules frame: docs/project/marketing-pages.md. */
 
-/* ---- the ladder: surfaces and hairlines, over a near-black page ---- */
-.site {
+/* ---- the ladder: surfaces and hairlines, over a near-black page ----
+
+   **`.plan-cards` carries the ladder too, and that is not a stray selector.**
+   The price cards (PlanCards.tsx) are the one piece of this language rendered
+   OUTSIDE a `.site` page: `/profile` draws them from the billing rows. Without
+   these four values there, `.site-panel` is a transparent border over no fill
+   and `.site-cta-ghost` loses its outline — which reads as a class somebody
+   forgot to define rather than as a bug, so nobody reports it. Declaring them
+   on the component's own wrapper is what makes the cards portable; the
+   alternative, giving `/profile` a `.site` ancestor, would hand a panel inside
+   the app the marketing page's background as well. */
+.site,
+.plan-cards {
   --site-hairline: rgb(255 255 255 / 0.10);
   --site-hairline-strong: rgb(255 255 255 / 0.16);
   --site-surface: rgb(255 255 255 / 0.028);
@@ -13471,6 +13488,11 @@ table.only-prose thead { display: none; }
      under the bottom edge; the top-edge inset highlight in .site-frame is what
      actually separates the object from the page. */
   --site-lift: 0 24px 60px -18px rgb(0 0 0 / 0.75), 0 2px 8px rgb(0 0 0 / 0.4);
+}
+
+/* Split out of the rule above when `.plan-cards` joined it: the tokens travel,
+   the page background does not. */
+.site {
   background: var(--background);
 }
 
@@ -13790,8 +13812,13 @@ table.only-prose thead { display: none; }
    than the numbers say. Scoped to `.site` rather than global, because twenty
    components in this file were built looking at the UA default underneath them.
 
-   `:where()` keeps it at zero specificity, so every `tw:mt-*` above still wins. */
-.site :where(h1, h2, h3, h4, p, figure, ul, ol) {
+   `:where()` keeps it at zero specificity, so every `tw:mt-*` above still wins.
+
+   `.plan-cards` for the same reason the ladder above names it: the cards are
+   drawn on `/profile` too, and a card whose heading and paragraphs carry the
+   UA's margins is a differently-spaced card on that page alone. */
+.site :where(h1, h2, h3, h4, p, figure, ul, ol),
+.plan-cards :where(h1, h2, h3, h4, p, figure, ul, ol) {
   margin: 0;
 }
 
@@ -13837,7 +13864,7 @@ table.only-prose thead { display: none; }
   color: var(--spideryarn-orange);
 }
 
-/* ---- a section heading, one size, on both pages ---- */
+/* ---- a section heading, one size, on all three pages ---- */
 .site-h2 {
   font-family: var(--font-reading);
   font-size: clamp(1.7rem, 3.2vw, 2.35rem);
