@@ -151,10 +151,16 @@ getComputedStyle(document.documentElement).getPropertyValue("--rule-strong");  /
 getComputedStyle(el).display;                      // "block" where the CSS says flex
 ```
 
-`src/web/main.tsx` imports `./tailwind.css` alone and says why — it pulls `styles.css` in inside
-`@layer app`, and importing the two side by side leaves `styles.css` unlayered where it silently
-outranks every Tailwind utility. The preview pages import **both**, in that order, matching
-`preview-profile.tsx`. Copy an existing preview entry rather than writing a new one from scratch.
+**Import `./tailwind.css` alone, exactly as `src/web/main.tsx` does**, and read its comment for
+why: `tailwind.css` pulls `styles.css` in inside `@layer app`, and importing the two side by side
+leaves the second copy unlayered, where it silently outranks every Tailwind utility.
+
+This paragraph told you to import **both** until 2026-09-04, one line after quoting the comment that
+says both does not work — and `preview-profile.tsx` and `preview-composer.tsx` still do. It is not
+theoretical: `preview-sharing.tsx` was written from that advice, and with the pair its chips came out
+in a different face at a different size, and a row wrapped where production does not. The screenshots
+were wrong about the one thing a screenshot is for. **So copy `preview-sharing.tsx`**, not the other
+two, until somebody fixes them.
 
 ### A hidden tab does not animate, and half this app is animated
 
