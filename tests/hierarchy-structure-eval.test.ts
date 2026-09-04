@@ -366,12 +366,38 @@ describe("parseStructureResponse", () => {
        went; then two independent slips until 2026-08-31, when the count bound
        went with it. Nothing about the *tiling* refuses an answer now
        (src/hierarchy.ts § `planChildRanges`) — the partition is derived rather than
-       checked. What is left is a fault in what the model said, and a range
-       running backwards is the plainest of them. */
+       checked. What is left is a fault in what the model said.
+
+       **Walked back a third time on 2026-09-04**, and by the same argument: a
+       child whose range runs *backwards* is now derived from too, because the
+       derivation never believed an end in the first place
+       (tests/hierarchy-repairs.test.ts § "a child whose range runs backwards").
+       So the fixture moves to the plainest fault that is left — a block id the
+       article does not contain, which is the model naming something that does
+       not exist rather than misstating a boundary. */
     const blocks = Array.from({ length: 6 }, () => block());
-    expect(() =>
-      parseStructureResponse(answer(blocks, [[0, 2], [5, 3]]), blocks, "backwards"),
-    ).toThrow(/backwards/);
+    const invented = JSON.stringify({
+      root: {
+        title: "The whole thing",
+        gist: "One sentence about the argument.",
+        range: [blocks[0]!.id, blocks.at(-1)!.id],
+        children: [
+          {
+            title: "Part 1",
+            gist: "Part 1 makes its own distinct claim here.",
+            range: [blocks[0]!.id, blocks[2]!.id],
+          },
+          {
+            title: "Part 2",
+            gist: "Part 2 makes its own distinct claim here.",
+            range: ["spya-zzzzzz", blocks[5]!.id],
+          },
+        ],
+      },
+    });
+    expect(() => parseStructureResponse(invented, blocks, "invented")).toThrow(
+      /not in blocks\.json/,
+    );
   });
 });
 

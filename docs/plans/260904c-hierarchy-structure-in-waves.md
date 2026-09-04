@@ -491,6 +491,33 @@ because stage 0 just made that article publishable.
 with a control proving zero is still reachable; the real article now reports its one stranded note.
 The effort evidence is written into `EFFORT`'s own comment, where the previous two flips are argued.
 
+**Stage 0c — a backwards child range is derived from, not refused. Landed 2026-09-04.**
+The `low` flip's one genuine failure in four draws was `smart-low` losing `gwern-scaling-long` to
+*"root > child 7 > child 1 has a range that runs backwards"*. The obvious pairing was the automatic
+retry the eval asked for on 2026-09-03 — and it **does not fit the job lease**: the arithmetic
+`fetch ≤110 + extract 10 + blocks 5 + hierarchy 320.4 + assets ≤185 = 630.4s < 740s` leaves 109.6s,
+and a second structure call needs more than that. Lowering `STEP_BUDGET_MS.hierarchy` on four `low`
+draws is not available either — it is an admission estimate, not an enforced timeout, and two ~150s
+calls are not a worst-case bound.
+
+So the failure is removed instead of retried, at no latency cost. `planChildRanges` believes a start
+and computes every end, so **a child's own end is a redundant second statement of a boundary the
+derivation already discards**; a backwards pair whose ids both resolve is those two statements
+disagreeing, which is what the repairs absorb everywhere else. It is not evidence the node's title
+and gist describe the wrong prose — the model wrote those from the whole article, not from its range.
+The one thing it costs: a backwards end is **ineligible for the duplicate-start fallback**, because
+borrowing an end we have just called wrong would invent a split point and attach *both* neighbours to
+the wrong prose; a following child with no claim left is dropped, as it always was. The root still
+throws, having no parent to derive from.
+
+**A decision reversed on evidence, and the third fixture to be walked back for the same reason** —
+the size bound went 2026-08-30, the count bound 2026-08-31, and now this. Three tests that pinned the
+refusal move to the plainest fault that is left, an invented block id.
+**Done:** three new tests seen red, including a control that an invented id still throws and one that
+a backwards *root* still throws; the recorded failing shape now builds `gwern-scaling-long` into 7
+parts with no dropped children and clean invariants. If the automatic retry is still wanted later,
+GPT Sol's shape is deadline-aware, at `low`, gated on ≥505.4s of claim remaining.
+
 **Stage 1 — the shared request seam, and the paid experiment. No production behaviour change.**
 Build the request builder (returning a complete transport body, not four fragments), the pure batch
 planner, the immediate normaliser, and a minimal cascade executor; give the eval's `waves` arm a

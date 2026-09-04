@@ -198,10 +198,16 @@ describe("buildTree", () => {
       exactlyOneLeafEach(buildTree(short, NAV, BLOCKS, "test"));
     });
 
-    it("refuses a range that runs backwards instead of silently covering nothing", () => {
-      // Both ends are real ids, so every lookup succeeds. The leaf loop just
-      // runs zero times: the node becomes a childless internal node and the
-      // blocks it was supposed to hold exist in no leaf anywhere.
+    it("derives a child whose range runs backwards, rather than covering nothing", () => {
+      // Both ends are real ids, so every lookup succeeds, and until 2026-09-04
+      // this threw. It now derives from the start like every other child — a
+      // backwards pair is the model's two claims about one boundary
+      // disagreeing, in the field the derivation discards anyway. See
+      // tests/hierarchy-repairs.test.ts § "a child whose range runs backwards".
+      //
+      // What must NOT happen is the original hazard this test was written for:
+      // the leaf loop running zero times, leaving a childless internal node
+      // whose blocks exist in no leaf anywhere. `exactlyOneLeafEach` is that.
       const backwards: ModelNode = {
         ...ROOT,
         children: [
@@ -209,7 +215,14 @@ describe("buildTree", () => {
           { title: "Rest", range: ["spya-cccccc", "spya-dddddd"] },
         ],
       };
-      expect(() => buildTree(backwards, NAV, BLOCKS, "test")).toThrow(/runs backwards/);
+      exactlyOneLeafEach(buildTree(backwards, NAV, BLOCKS, "test"));
+    });
+
+    it("still refuses a range that runs backwards on the root itself", () => {
+      // The root has no parent to be derived from, so the hazard above is real
+      // there and nothing can mend it. This is what keeps the change narrow.
+      const backwardsRoot: ModelNode = { ...ROOT, range: ["spya-dddddd", "spya-aaaaaa"] };
+      expect(() => buildTree(backwardsRoot, NAV, BLOCKS, "test")).toThrow(/runs backwards/);
     });
 
     it("stretches a root that does not span the whole article", () => {

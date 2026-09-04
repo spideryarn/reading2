@@ -811,7 +811,29 @@ function planChildRanges(
   repairs: PartitionRepair[],
   droppedChildren: string[],
 ): ChildPlan[] | null {
-  /** A child's range as block indices, or null if it is not a resolvable, forward pair. */
+  /**
+   * A child's range as block indices, or null if either endpoint is not a block
+   * id at all.
+   *
+   * **A pair that runs backwards is resolved, not rejected** — 2026-09-04. It
+   * used to return `null` here, which took the whole sibling set down and cost
+   * the reader the article. That was a decision rather than an oversight, and
+   * its premise was too broad: this function's whole design is that **a start is
+   * believed and every end is computed**, so a child's own end is a redundant
+   * second statement of a boundary the derivation already discards. A backwards
+   * pair is those two statements disagreeing, and disagreement in the redundant
+   * field is what the rest of this function exists to absorb. It is not evidence
+   * that the node's title and gist describe the wrong prose — the model wrote
+   * those from the whole article, not from its own range — and the repairs here
+   * already keep a title and gist while moving a boundary by many blocks.
+   * ⟨GPT Sol, 2026-09-04⟩ Measured: `smart-low` lost `gwern-scaling-long` to
+   * exactly this, one block backwards
+   * (evals/results/hierarchy-waves-real-corpus-2026-09-04.md).
+   *
+   * An **invented id** still returns null and still refuses. That is the model
+   * naming something that does not exist, and the message that names it is more
+   * use than a tree built as though the child had never been proposed.
+   */
   const spanOf = (mn: ModelNode): [number, number] | null => {
     const raw: unknown = mn.range;
     if (!Array.isArray(raw) || raw.length !== 2) return null;
@@ -819,15 +841,15 @@ function planChildRanges(
     if (typeof a !== "string" || typeof b !== "string") return null;
     const lo = index.get(a);
     const hi = index.get(b);
-    return lo === undefined || hi === undefined || lo > hi ? null : [lo, hi];
+    return lo === undefined || hi === undefined ? null : [lo, hi];
   };
 
   const spans: ([number, number] | null)[] = children.map(spanOf);
-  /* One unresolvable child and the whole node is left alone. Not because the
-     others cannot be planned around it, but because the message that names the
-     invented id is more use than a tree built as though the child had never
-     been proposed — and `visit` and `assertChildrenPartition` produce it. */
+  /* One unresolvable child and the whole node is left alone — see `spanOf`. */
   if (spans.some((s) => s === null)) return null;
+
+  /** Did this child state its own extent backwards? Its end is then unusable. */
+  const backwards = spans.map((s) => s![0] > s![1]);
 
   const [p0, p1] = parent;
 
@@ -869,9 +891,18 @@ function planChildRanges(
       continue;
     }
     const claimed = clamp(span![0]);
-    const start =
-      claimed > previous.start ? claimed : clamp(spans[previous.childIndex]![1] + 1);
-    if (start <= previous.start) {
+    /* **A backwards end is ineligible for the fallback**, and that is the one
+       thing keeping a backwards child costs. The fallback exists for the case
+       where a start carries no information and the previous child's *end* is
+       the only claim left; borrowing an end we have just called wrong would
+       invent a split point from a bad number and attach BOTH neighbours to the
+       wrong prose. So when there is no usable fallback either, the child is
+       dropped exactly as it always was when neither claim stood up. ⟨GPT Sol⟩ */
+    const fallback = backwards[previous.childIndex]
+      ? undefined
+      : clamp(spans[previous.childIndex]![1] + 1);
+    const start = claimed > previous.start ? claimed : fallback;
+    if (start === undefined || start <= previous.start) {
       droppedChildren.push(`${where} > child ${i + 1}`);
       continue;
     }

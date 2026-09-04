@@ -585,7 +585,15 @@ describe("a fault in what the model said is still refused", () => {
     expect(() => buildTree(invented, {}, BLOCKS, "test", report())).toThrow(/not in blocks\.json/);
   });
 
-  it("refuses a child whose range runs backwards", () => {
+  /**
+   * **This refused until 2026-09-04 and now derives.** A backwards pair whose
+   * ids both resolve is the model's two claims about one boundary disagreeing,
+   * in the field the derivation discards anyway — see "a child whose range runs
+   * backwards" below for the reversal and its evidence. What still throws is a
+   * backwards range on the **root**, which has no parent to be derived from, and
+   * an endpoint that is not a block id, both of which are tested here.
+   */
+  it("derives a child whose range runs backwards rather than refusing it", () => {
     const backwards: ModelNode = {
       ...gapped,
       children: [
@@ -593,7 +601,26 @@ describe("a fault in what the model said is still refused", () => {
         { title: "Second", gist: "It closes.", range: ["spya-ffffff", "spya-dddddd"] },
       ],
     };
-    expect(() => buildTree(backwards, {}, BLOCKS, "test", report())).toThrow(
+    const r = report();
+    const tree = buildTree(backwards, {}, BLOCKS, "test", r);
+    expect(checkTree(BLOCKS, tree).problems).toEqual([]);
+    // Both sections survive; the second is derived from its start to the end.
+    const parts = Object.values(tree.nodes).filter((n) => n.depth === 1);
+    expect(parts.map((n) => n.title)).toEqual(["First", "Second"]);
+    expect(parts[1]!.range).toEqual(["spya-ffffff", "spya-ffffff"]);
+    expect(r.droppedChildren).toEqual([]);
+  });
+
+  it("still refuses a range that runs backwards on the root itself", () => {
+    /* The root has no parent to derive a range from, so there is nothing to
+       fall back on and the clamp deliberately does not fire on a pair that does
+       not run forwards. This is the assertion that keeps the reversal above
+       narrow. */
+    const backwardsRoot: ModelNode = {
+      ...gapped,
+      range: ["spya-ffffff", "spya-aaaaaa"],
+    };
+    expect(() => buildTree(backwardsRoot, {}, BLOCKS, "test", report())).toThrow(
       /range that runs backwards/,
     );
   });
@@ -904,6 +931,111 @@ describe("any proposal whose ranges resolve comes back as a valid tree", () => {
     // Two leaves for block 1, none for block 2 — exactly what a bad tiling does.
     leaf!.range = [blocks[1]!.id, blocks[1]!.id];
     expect(checkTree(blocks, tree).problems.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * **A child whose range runs backwards is derived from, not refused.**
+ *
+ * `planChildRanges` believes a start and computes every end, so a child's own
+ * end is a redundant second statement of a boundary the derivation already
+ * discards. A pair that runs backwards is the two statements disagreeing — and
+ * until 2026-09-04 that took the whole sibling set down, and with it the
+ * article.
+ *
+ * **Reversed on evidence, not on tidiness.** The refusal was explicit and
+ * tested, so it was a decision rather than an oversight; what was too broad was
+ * its premise. A backwards pair whose *ids both resolve* is a disagreement in
+ * the redundant field, and it is not evidence that the node's title and gist
+ * describe the wrong prose — the model wrote those from the whole article, not
+ * from its own range. The existing repairs already keep a title and gist while
+ * moving that node's boundary by many blocks. ⟨GPT Sol, 2026-09-04⟩
+ *
+ * Measured: `smart-low` lost `gwern-scaling-long` to exactly this, one block
+ * backwards, in the run that moved production to `low`
+ * (evals/results/hierarchy-waves-real-corpus-2026-09-04.md).
+ *
+ * **What is NOT kept is the backwards end as a fallback split point.** When two
+ * children claim the same start, `planChildRanges` falls back to the previous
+ * child's end — and a known-invalid end there would invent a boundary from a
+ * number we have just called wrong, attaching *both* neighbours to the wrong
+ * prose. So a backwards end is ineligible for that, and a following child with
+ * nowhere else to start is dropped, as it always was when neither claim stood
+ * up. The raw end is still read for measurement, which changes nothing.
+ */
+describe("a child whose range runs backwards", () => {
+  const someBlocks = (n: number): Block[] =>
+    Array.from({ length: n }, (_, i) => block(`spya-${String(i).padStart(6, "0")}`, `Block ${i}`));
+
+  it("keeps the child, derives its extent, and counts the boundary", () => {
+    const blocks = someBlocks(8);
+    const backwards: ModelNode = {
+      title: "t",
+      gist: "A sentence about the whole.",
+      range: [blocks[0]!.id, blocks[7]!.id],
+      children: [
+        { title: "a", gist: "A sentence.", range: [blocks[0]!.id, blocks[3]!.id] },
+        // Backwards by one, which is the shape every observed instance has had.
+        { title: "b", gist: "A sentence.", range: [blocks[4]!.id, blocks[3]!.id] },
+        { title: "c", gist: "A sentence.", range: [blocks[6]!.id, blocks[7]!.id] },
+      ],
+    };
+    const r = report();
+    const tree = buildTree(backwards, {}, blocks, "backwards", r);
+
+    expect(checkTree(blocks, tree).problems).toEqual([]);
+    // All three sections survive — the whole point.
+    const internal = Object.values(tree.nodes).filter((n) => n.depth === 1);
+    expect(internal.map((n) => n.title)).toEqual(["a", "b", "c"]);
+    // And `b` is derived from its start, ending one before `c` begins.
+    expect(internal[1]!.range).toEqual([blocks[4]!.id, blocks[5]!.id]);
+    expect(r.droppedChildren).toEqual([]);
+  });
+
+  it("refuses to use a backwards end as a fallback split point", () => {
+    const blocks = someBlocks(8);
+    const collision: ModelNode = {
+      title: "t",
+      gist: "A sentence about the whole.",
+      range: [blocks[0]!.id, blocks[7]!.id],
+      children: [
+        { title: "a", gist: "A sentence.", range: [blocks[0]!.id, blocks[1]!.id] },
+        // Backwards, so its end is not a boundary anybody may borrow...
+        { title: "b", gist: "A sentence.", range: [blocks[4]!.id, blocks[2]!.id] },
+        // ...and this one's start does not advance past b's, so it has no claim
+        // of its own left either. Dropped, as it always was.
+        { title: "c", gist: "A sentence.", range: [blocks[4]!.id, blocks[7]!.id] },
+      ],
+    };
+    const r = report();
+    const tree = buildTree(collision, {}, blocks, "collision", r);
+
+    expect(checkTree(blocks, tree).problems).toEqual([]);
+    expect(Object.values(tree.nodes).filter((n) => n.depth === 1).map((n) => n.title)).toEqual([
+      "a",
+      "b",
+    ]);
+    expect(r.droppedChildren).toEqual(["root > child 3"]);
+  });
+
+  it("still refuses a child whose endpoint is not a block id", () => {
+    /* The control, and the line the reversal must not cross. A backwards pair
+       is a disagreement between two resolvable claims; an invented id is the
+       model naming something that does not exist, and that still throws with
+       the message that names it. */
+    const blocks = someBlocks(6);
+    const invented: ModelNode = {
+      title: "t",
+      gist: "A sentence.",
+      range: [blocks[0]!.id, blocks[5]!.id],
+      children: [
+        { title: "a", gist: "A sentence.", range: [blocks[0]!.id, blocks[2]!.id] },
+        { title: "b", gist: "A sentence.", range: ["spya-zzzzzz", blocks[5]!.id] },
+      ],
+    };
+    expect(() => buildTree(invented, {}, blocks, "invented", report())).toThrow(
+      /not in blocks\.json/,
+    );
   });
 });
 
