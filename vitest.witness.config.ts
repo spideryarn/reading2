@@ -1,17 +1,46 @@
 /**
- * TEMPORARY — witness 2 of docs/plans/260903f stage A. Throwaway vitest config
- * used with `--config`; the committed vitest.config.ts is untouched.
+ * The instrument behind witness 2 of docs/plans/260903f — `tests/store-migration-witness.json`.
+ *
+ * A vitest config used only with `--config`; the committed `vitest.config.ts`
+ * is untouched and `npm test` never loads this. It swaps each condemned
+ * filesystem-store module for a generated wrapper whose exports record every
+ * **call** (see `tests/setup/fs-store-witness.ts`), and adds a setup file that
+ * writes one JSON line per test file.
+ *
+ * **Do not run this by hand** — [`scripts/store-migration-witness.ts`](scripts/store-migration-witness.ts)
+ * drives it, aggregates the lines, keeps "did not report" apart from "did not
+ * touch", and can prove the instrument still hooks anything before you believe
+ * its output. That script is the entry point; this file is its engine.
+ *
+ * ## It reproduces the lanes, since 2026-09-04
+ *
+ * The first version ran every test file in **one** project against whatever
+ * `DATABASE_URL` said, which is what `npm test` did before 260903e's three
+ * projects landed. That was defensible for a one-off measurement taken while
+ * the lanes were new, and it is wrong for a re-run taken *after* stage B
+ * converts suites to Postgres: those suites are exactly the ones a laneless run
+ * would put on the shared database, racing every dev server on the box, and a
+ * suite that dies in its setup writes no record at all and is scored
+ * `unresolved`. So the projects, their `include` lists, their `globalSetup` and
+ * their setup files are now **derived from `vitest.config.ts`** rather than
+ * restated, and the witness setup file is appended to each. One manifest, and
+ * the instrumented run is the real run with a recorder in it.
  */
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vitest/config";
 import type { Plugin } from "vite";
+import { readFileSync } from "node:fs";
+import { type ViteUserConfig, defineConfig } from "vitest/config";
+import baseConfig from "./vitest.config.js";
 
-const ROOT = "/home/greg/code/spideryarn2/.claude/worktrees/delete-store-flag";
+const ROOT = fileURLToPath(new URL(".", import.meta.url)).replace(/\/$/, "");
 const WITNESS = path.join(ROOT, "tests/setup/fs-store-witness.ts");
+const WITNESS_SETUP = "./tests/setup/fs-store-witness-setup.ts";
 
-/** The condemned filesystem-store modules. NOT blobs-fs.ts — out of scope. */
+/** The condemned filesystem-store modules. NOT blobs-fs.ts — out of scope,
+ *  because it is selected by credentials rather than by `SPIDERYARN_STORE`.
+ *  Kept in step with `TARGETS` in scripts/store-migration-candidates.ts and
+ *  `INSTRUMENTED` in scripts/store-migration-witness.ts, which asserts it. */
 const CONDEMNED = [
   "fs",
   "artifacts-fs",
@@ -22,13 +51,16 @@ const CONDEMNED = [
   "copy-artefacts",
   "data-root",
 ];
-const CONDEMNED_PATHS = new Set(
-  CONDEMNED.map((n) => path.join(ROOT, "src/store", `${n}.ts`)),
-);
+const CONDEMNED_PATHS = new Set(CONDEMNED.map((n) => path.join(ROOT, "src/store", `${n}.ts`)));
 const BASENAME_RE = new RegExp(`(?:^|/)(${CONDEMNED.join("|")})\\.(?:js|ts)$`);
 
 const PREFIX = "\0fsw:";
 
+/** Every export of a condemned module, so the wrapper can re-export all of
+ *  them. All eight declare their exports (`export const …`, `export function
+ *  …`), checked 2026-09-04; an `export { … }` list would be **missed and the
+ *  wrapper would fail loudly** at the importing test's first named import,
+ *  which is the right way round for this to break. */
 function exportNames(source: string): string[] {
   const names = new Set<string>();
   const re =
@@ -67,8 +99,7 @@ function witnessPlugin(): Plugin {
         `import * as __orig from ${JSON.stringify(real)};`,
         `import { wrap as __wrap } from ${JSON.stringify(WITNESS)};`,
         ...names.map(
-          (n) =>
-            `export const ${n} = __wrap(${JSON.stringify(mod)}, ${JSON.stringify(n)}, __orig.${n});`,
+          (n) => `export const ${n} = __wrap(${JSON.stringify(mod)}, ${JSON.stringify(n)}, __orig.${n});`,
         ),
       ];
       return lines.join("\n");
@@ -76,40 +107,55 @@ function witnessPlugin(): Plugin {
   };
 }
 
+type ProjectEntry = NonNullable<NonNullable<ViteUserConfig["test"]>["projects"]>[number];
+/** The only shape this file can instrument: an inline project object. A glob
+ *  string or a promise means `vitest.config.ts` changed shape and the derivation
+ *  below needs re-deriving rather than guessing. */
+type ProjectConfig = Extract<ProjectEntry, { test?: unknown }>;
+
+function inlineProject(project: ProjectEntry): ProjectConfig {
+  if (typeof project === "string" || typeof project === "function" || project instanceof Promise) {
+    throw new Error("vitest.config.ts now declares a project as a glob, a function or a promise; re-derive the witness config.");
+  }
+  return project as ProjectConfig;
+}
+
 /**
- * The base config's shape is checked rather than assumed, because this file
- * copies half of it. **It changed on 2026-09-04**: `vitest.config.ts` now
- * declares three projects (unit / private-postgres / shared-services) and the
- * provider guard is one entry in each project's `setupFiles`, so the old
- * whole-line needle stopped matching. The needle is now the path, which is the
- * part this file actually depends on.
+ * The base config's projects, each with the recorder plugged in.
  *
- * **What this config does NOT reproduce is the lanes**: it runs every test file
- * in one project against whatever `DATABASE_URL` says, which is what `npm test`
- * did before T-D. That is fine for an instrumented one-off measuring which
- * modules a run touches, and wrong for anything you would call a verdict — a
- * Postgres suite run this way is on the shared database, racing the box.
+ * Nothing here restates a file list, a lane or a setup file: the only edits are
+ * **add the plugin** and **append the witness setup**, so a project this file
+ * runs differs from the one `npm test` runs in exactly those two ways. The
+ * shape is checked rather than assumed — a base config that stopped declaring
+ * projects, or a project without the provider guard, means somebody changed the
+ * suite's shape and this file needs re-deriving rather than quietly measuring
+ * something else.
  */
-const base = readFileSync(path.join(ROOT, "vitest.config.ts"), "utf8");
-if (!base.includes('"./tests/setup/no-provider-calls.ts"')) {
-  throw new Error("vitest.config.ts changed shape; re-derive the witness config");
+function instrumentedProjects(): ProjectConfig[] {
+  const projects = baseConfig.test?.projects;
+  if (!Array.isArray(projects) || projects.length < 3) {
+    throw new Error(
+      `vitest.config.ts declares ${Array.isArray(projects) ? projects.length : 0} projects; expected the three lanes. Re-derive the witness config.`,
+    );
+  }
+  return projects.map((entry) => {
+    const project = inlineProject(entry);
+    const test = project.test;
+    const setupFiles = test?.setupFiles;
+    if (!Array.isArray(setupFiles) || !setupFiles.includes("./tests/setup/no-provider-calls.ts")) {
+      throw new Error(
+        `project ${String(test?.name)} has no ./tests/setup/no-provider-calls.ts in setupFiles; re-derive the witness config.`,
+      );
+    }
+    return {
+      ...project,
+      plugins: [...(project.plugins ?? []), witnessPlugin()],
+      test: { ...test, setupFiles: [...setupFiles, WITNESS_SETUP] },
+    } as ProjectConfig;
+  });
 }
 
 export default defineConfig({
-  root: ROOT,
-  plugins: [witnessPlugin()],
-  resolve: {
-    alias: { "@": fileURLToPath(new URL("./src/web", `file://${ROOT}/`)) },
-  },
-  test: {
-    environment: "node",
-    isolate: true,
-    testTimeout: 30_000,
-    hookTimeout: 30_000,
-    setupFiles: [
-      "./tests/setup/no-provider-calls.ts",
-      "./tests/setup/fs-store-witness-setup.ts",
-    ],
-    include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
-  },
+  ...baseConfig,
+  test: { ...baseConfig.test, projects: instrumentedProjects() },
 });
