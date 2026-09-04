@@ -14,7 +14,7 @@ three later stages consume it**:
 ```
 A (store inventory) ✅ → B0 ✅ (already done) → T-B (factory) ✅ → T-C (lanes) ✅
   → T-D (activation) ✅ → T-E (pollution) ✅
-  → B (12 of 26 done) → C → D → E → F (hinge) → G → H → I
+  → B (12 of 26 done) → B2 (`routes.test.ts`) → C → D → E → F (hinge) → G → H → I
 ```
 
 **`C → B` became `B → C` on 2026-09-04**, and this line is the only place the order lives, so
@@ -2020,6 +2020,101 @@ merely reading the wrong store, it is **reaching past the selection into the con
 is the reach stage A's witness was built to count. This predicts which of the remaining 24 will hit
 it: the three chat route suites, both referee route suites, and anything reading a shelf or a
 profile.
+
+#### The tail was measured, and it is 16.75 hours, not 7 — 2026-09-04
+
+The twelve done average 30-40 minutes, so the obvious extrapolation says the remaining fourteen are
+about seven hours. **They are about seventeen.** Measured by reading all fourteen — every filesystem
+site classified as *has a database equivalent* / *asserts something only the filesystem has* /
+*incidental scaffolding* — rather than by extrapolating, which is this document's own rule about
+perishable counts applied to an estimate for once instead of a count.
+
+It is not spread. Eleven of the fourteen cluster at 25-70 minutes, exactly as the pilot predicted.
+Three carry the difference:
+
+| file | minutes | why |
+| --- | --- | --- |
+| `routes.test.ts` | **240** | 1,598 lines, ~95 tests, ~40 filesystem sites, and two design decisions of its own |
+| `jobs.test.ts` | 140 | 1,515 lines, and six of its tests are about the filesystem adapter rather than the queue |
+| `referee-scan-route.test.ts` | 80 | needs four correctly sha256-hashed raw-document manifests |
+
+**`referee-scan-route` is the one to be afraid of, and it is not the expensive one.** A silently wrong
+hash makes the prompt-injection scan a no-op **while the test stays green** — the exact shape of
+[silent-success.md](../reusable/silent-success.md), inside the stage built to remove it. Its brief
+says to prove the hash two ways, or to plant a known injection and watch the scan find it, rather
+than accepting a green.
+
+**And none of the fourteen is a filesystem-adapter test in disguise.** The registry's
+`database-integration` calls all held up under a close read. That is the first independent check
+stage A's map has had, and it passed.
+
+#### `routes.test.ts` becomes its own stage, B2, and the split was passed over
+
+The build order gains a stage: **B (13 files) → B2 (`routes.test.ts`) → C**. B2 must land before the
+hinge; it does not block C.
+
+Put to Fable as three options — convert it as an ordinary item, lift it into its own stage, or let it
+happen inside the hinge — and the third was the one to kill, on a premise this plan had not checked.
+The argument for it was that ~9 of its tests assert *"501 because filesystem"*, behaviour F deletes,
+so converting them in B writes assertions F rewrites. **That premise is false.** The moment the file
+is pinned to Postgres those assertions are already unreachable, and what they become — administrator
+gets 200 and a list, anonymous 401, stranger 403, malformed 400 — is behaviour **the hinge does not
+touch**, because F deletes the `files` path and not the Postgres one. The work is done once whichever
+stage does it. So C had only its cost: a 1,600-line rewrite inside the commit two reviews have spent
+their time shrinking, and the largest route suite left on the undeployed store for the whole of C, D,
+D′ and E.
+
+**The simpler option passed over: splitting `routes.test.ts` into sibling files** — `reader-routes`,
+`admin-gate`, `search-routes` and so on, one per `describe` block, each with its own lane entry and
+its own mutation. Recommended, and the reasoning behind it is right: **the mutation rule's unit is the
+file, and one mutation over 95 tests is about 1% of what the file claims.** It is the same finding as
+`second-job-queues` staying green, pointed at a file instead of a predicate.
+
+It was passed over anyway, and the reason is scope rather than disagreement. The file is named from
+seven docs under `docs/project/` and about 133 lines across the repo; splitting it is a
+test-organisation refactor with a rename sweep, landing in a tree five other agents are working in,
+on top of a store migration. **The benefit is obtainable without the refactor: change the rule's
+unit, not the file.** B2 converts `routes.test.ts` one `describe` block at a time, with **one mutation
+per block** and each block a stopping point — four or five pieces of mutation evidence instead of one,
+which is what the recommendation was actually for, and no references move.
+
+If B2 turns out to want the split anyway once it is inside the file, that is a finding for this
+section and not a decision to take quietly.
+
+**The two design decisions B2's brief has to carry, settled now so they are not settled mid-flow:**
+
+1. **Reader-profile isolation.** `pg-reader.ts` keys every row on `currentOwnerId()`, so the answer is
+   a seeded owner per run under `asTestOwner` — the shape `OWNER_AUDIT` already audits — not a scratch
+   root, for which there is no equivalent. Assert the row is gone in `afterAll`, per stage G's
+   teardown rule.
+2. **The nine 501 tests.** Rewrite them to real admin behaviour; **do not** split them into a
+   `routes-postgres` sibling. The `referee-routes-postgres` split exists *because* the flag existed —
+   one process is one store — and a store-pinned sibling is the pattern this plan is deleting.
+   `tests/seed-admin-signin.test.ts` already drives `/api/admin/users` against Postgres and is the
+   thing to cite. Keep *"says nothing about users in three refusals"*, with its third arm becoming
+   200-with-`users`: its comment that a page saying *no accounts* and a page that *could not answer*
+   look identical is still exactly the point.
+
+#### Two smaller calls, and both go against building the fixture
+
+**`jobs.test.ts` splits before it converts.** Six of its tests have the filesystem adapter as their
+subject — five asserting `STEPS[name].outputs(ctx)` returns on-disk paths, one asserting no
+`<id>.json.<pid>.<n>.tmp` files survive `writeOnce`'s rename. They move to
+`tests/jobs-fs-adapter.test.ts`, categorised `filesystem-adapter-behaviour`, and stage G deletes that
+file beside `src/store/jobs-fs.ts`. The registry classifies files, and `jobs.test.ts` currently
+deserves two verdicts at once, which the map cannot express. Leaving them in forces one of two bad
+outcomes: a conversion that keeps the file able to reach the filesystem adapter, or six tests quietly
+deleted during B — **the uncovered interval G's "same commit as its subject" rule exists to
+prevent**. The new file's header says the `outputs(ctx)` block is really about `StepContext.dir` and
+`htmlFile`, so whoever removes those fields is the one who deletes it, rather than it being orphaned.
+
+**`term-lookup`'s `example` assertion is dropped, not rebuilt.** It passes only because the filesystem
+reader hard-codes a special-cased `example` slug to fall through to a committed fixture. Postgres has
+no such directory and no such fall-through, so building a row to keep the guard testable would be
+manufacturing state so that condemned code can go on being exercised — a green test proving nothing
+about deployed code, which is worse than not converting. The 404-for-unknown-slug arm stays; it is
+real under Postgres and it is the half that matters. Recorded in the file header and the registry
+`reason` so G's *"enumerate every surviving assertion"* pass can see the drop was deliberate.
 
 ### C — ledger isolation, its own reviewed stage
 
