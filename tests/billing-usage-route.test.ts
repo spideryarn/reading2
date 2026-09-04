@@ -161,13 +161,15 @@ async function givenAccount(fields: {
   periodStart?: Date | null;
   periodEnd?: Date | null;
   cancelAtPeriodEnd?: boolean;
+  /** The timestamp a Portal cancellation writes, leaving the boolean false. */
+  cancelAt?: Date | null;
 }): Promise<void> {
   if (!pool) return;
   await pool.query(
     `insert into spideryarn.billing_accounts
        (owner_id, stripe_customer_id, stripe_subscription_id, status, price_id,
-        current_period_start, current_period_end, cancel_at_period_end)
-     values ($1, $2, $3, $4, $5, $6, $7, $8)
+        current_period_start, current_period_end, cancel_at_period_end, cancel_at)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      on conflict (owner_id) do update set
        stripe_customer_id = excluded.stripe_customer_id,
        stripe_subscription_id = excluded.stripe_subscription_id,
@@ -175,7 +177,8 @@ async function givenAccount(fields: {
        price_id = excluded.price_id,
        current_period_start = excluded.current_period_start,
        current_period_end = excluded.current_period_end,
-       cancel_at_period_end = excluded.cancel_at_period_end`,
+       cancel_at_period_end = excluded.cancel_at_period_end,
+       cancel_at = excluded.cancel_at`,
     [
       OWNER,
       fields.customer ?? null,
@@ -185,6 +188,7 @@ async function givenAccount(fields: {
       fields.periodStart ?? null,
       fields.periodEnd ?? null,
       fields.cancelAtPeriodEnd ?? false,
+      fields.cancelAt ?? null,
     ],
   );
 }
@@ -299,7 +303,7 @@ describe("GET /api/billing/usage", () => {
       limit: tier.limit,
       used: 2,
       periodEnd: period.end.toISOString(),
-      cancelling: false,
+      endsAt: null,
     });
     expect(reply.body.manageable).toBe(true);
   });
@@ -353,7 +357,8 @@ describe("GET /api/billing/usage", () => {
     expect(reply.body.canCheckout).toBe(false);
   });
 
-  dbIt("says a cancelled subscription is cancelled, so the page cannot say it renews", async () => {
+  dbIt("says when a cancelled subscription ends, so the page cannot say it renews", async () => {
+    /* The old boolean, which is what an API cancellation writes. */
     const tier = await readerTier();
     const period = livePeriod();
     await givenAccount({
@@ -366,7 +371,51 @@ describe("GET /api/billing/usage", () => {
       cancelAtPeriodEnd: true,
     });
     const reply = await get("/api/billing/usage", OWNER);
-    expect(reply.body.plan).toMatchObject({ kind: "paid", cancelling: true });
+    expect(reply.body.plan).toMatchObject({
+      kind: "paid",
+      endsAt: period.end.toISOString(),
+    });
+  });
+
+  /**
+   * **The live bug, end to end through the route.** Greg cancelled the first
+   * real subscription through the hosted Portal on 2026-09-03 and Stripe set
+   * `cancel_at` while leaving `cancel_at_period_end` at `false`. Every fixture
+   * in this file had been written from the same assumption the code was made
+   * on, so the suite stayed green while production said nothing — the row above
+   * is the shape of the *other* kind of cancellation, and it was the only one
+   * anybody had tested. docs/project/billing.md § *The first live sale*.
+   */
+  dbIt("tells a reader who cancelled through the Portal, where the boolean is false", async () => {
+    const tier = await readerTier();
+    const period = livePeriod();
+    /* Not the period end, so the assertion cannot pass by reading the wrong
+       column: Stripe permits an ending scheduled for any future moment. */
+    const ending = new Date(period.end.getTime() + 5 * 86_400_000);
+    await givenAccount({
+      customer: "cus_usage_portal_cancel",
+      subscription: "sub_usage_portal_cancel",
+      status: "active",
+      priceId: tier.priceId,
+      periodStart: period.start,
+      periodEnd: period.end,
+      cancelAtPeriodEnd: false,
+      cancelAt: ending,
+    });
+    const reply = await get("/api/billing/usage", OWNER);
+    expect(reply.body.plan).toMatchObject({
+      kind: "paid",
+      endsAt: ending.toISOString(),
+      /* And `periodEnd` still says when the allowance rolls over. They are
+         different dates and the page needs both to stay different. */
+      periodEnd: period.end.toISOString(),
+    });
+
+    /* **Entitlement did not move.** `active` until the period ends is exactly
+       what we grant, so the plan is still `paid` on the tier's own limit — this
+       stage may not take an allowance away early. The wall's own version of
+       this pin is in tests/billing-admission.test.ts. */
+    expect(reply.body.plan).toMatchObject({ tierId: "reader", limit: tier.limit });
   });
 
   dbIt("gives a lapsed subscriber no `used` field at all", async () => {

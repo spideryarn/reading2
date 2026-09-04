@@ -1237,6 +1237,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/article-rows-snapshot.test.ts": "private-postgres",
   "tests/billing-admission.test.ts": "private-postgres",
   "tests/billing-checkout.test.ts": "private-postgres",
+  /* Stage 3b's, arriving from this worktree rather than from `dev`, and caught
+     by the same guard for the same reason. It calls `pgReady`, seeds its own
+     owner and its own two tiers, and its oracle is rows it writes itself — so
+     the private lane is right and nothing in it needs the shared stack. */
+  "tests/billing-quota-adjustment.test.ts": "private-postgres",
   "tests/billing-quota-race.test.ts": "private-postgres",
   "tests/billing-settlement.test.ts": "private-postgres",
   "tests/billing-tiers.test.ts": "private-postgres",
@@ -1393,6 +1398,13 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   "tests/ai-calls-spend-pg.test.ts": {
     "00000000-0000-4000-8000-00000000ad01": { kind: "seeded" },
     "00000000-0000-4000-8000-00000000ad02": { kind: "seeded" },
+  },
+  /* Stage 3b's own reader. `seedAuthUser` in `beforeAll`, and every row it
+     writes — the billing account, the ingest events — hangs off the
+     `auth.users` foreign key, so there is nothing here that would work without
+     the row. */
+  "tests/billing-quota-adjustment.test.ts": {
+    "0b1113b0-0000-4000-8000-00000000e3b0": { kind: "seeded" },
   },
   "tests/billing-quota-race.test.ts": {
     "0b111a99-0000-4000-8000-00000000c0da": { kind: "seeded" },

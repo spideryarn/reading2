@@ -78,16 +78,21 @@ const FREE: BillingSummary = {
  * chose, because that is what `describePlan` prints and the assertion below is
  * that the page prints *its* sentence rather than one of its own.
  */
+/* `satisfies` rather than an annotation, so the constant keeps its narrow
+   `kind: "paid"` type and `CANCELLING` below can spread it. Annotating it as the
+   whole union is what forced the old cast. */
+const PAID_PLAN = {
+  kind: "paid",
+  tierId: "reader",
+  tierName: "Spideryarn Reader",
+  limit: 20,
+  used: 4,
+  periodEnd: "2026-10-03T11:37:00.000Z",
+  endsAt: null,
+} satisfies BillingSummary["plan"];
+
 const PAID: BillingSummary = {
-  plan: {
-    kind: "paid",
-    tierId: "reader",
-    tierName: "Spideryarn Reader",
-    limit: 20,
-    used: 4,
-    periodEnd: "2026-10-03T11:37:00.000Z",
-    cancelling: false,
-  },
+  plan: PAID_PLAN,
   offers: [],
   manageable: true,
   canCheckout: false,
@@ -100,9 +105,14 @@ const PAID: BillingSummary = {
  * headline tells a reader whose plan stops in four weeks exactly what it tells
  * one whose plan renews. The date is in `detail` and nowhere else.
  */
+/* No `as BillingSummary["plan"]` cast here any more. It used to be needed to
+   force a boolean into the union, and a cast in a fixture is precisely how the
+   cancellation bug survived a green suite — a hand-built object cast into a type
+   carries exactly the fields its author had in mind.
+   docs/postmortems/260904a-four-billing-faults-and-the-witnesses-that-agreed-with-the-code.md */
 const CANCELLING: BillingSummary = {
   ...PAID,
-  plan: { ...PAID.plan, cancelling: true } as BillingSummary["plan"],
+  plan: { ...PAID_PLAN, endsAt: "2026-10-03T11:37:09.000Z" },
 };
 
 /**
@@ -200,8 +210,14 @@ function planLine(page: HTMLElement): HTMLElement | null {
   return link?.closest("p") ?? null;
 }
 
-const ALICE = "aaaaaaaa-1111-4000-8000-000000000001";
-const BOB = "bbbbbbbb-1111-4000-8000-000000000002";
+/* **Distinct from `admin-page.test.tsx`'s pair**, which this file collided with
+   when the two arrived from different branches on the same day — both authors
+   reached for the same obvious placeholder. Nothing here inserts a row (the page
+   is mounted against a stubbed `fetch`), so the collision could not have bitten
+   at runtime; `tests/fixture-ids.test.ts` refuses it anyway, because "nothing
+   inserts under this id today" is not a property that stays true on its own. */
+const ALICE = "aaaaaaaa-2222-4000-8000-000000000001";
+const BOB = "bbbbbbbb-2222-4000-8000-000000000002";
 
 describe("the pricing page's current-plan line", () => {
   it("tells a signed-in free reader what they are on, in describePlan's words", async () => {
@@ -249,8 +265,15 @@ describe("the pricing page's current-plan line", () => {
     /* Identical headline to the renewing case above, which is exactly why the
        detail is not optional here. */
     expect(line).toContain("Spideryarn Reader — 4 of 20 articles this month");
-    expect(line).toContain("Cancelled");
+    /* This asserted the word "Cancelled" until 2026-09-04, when the cancellation
+       fix rewrote `describePlan`'s detail to say what happens rather than name a
+       state. The assertion follows the meaning the test is named for — the plan
+       stops, and the date — rather than the vocabulary, which is what changed. */
+    expect(line).toContain("Your plan ends on");
     expect(line).toContain("3 October 2026");
+    /* And it still says what they go back to, which is the same thing the lapsed
+       case above exists to protect: a date alone does not say what happens. */
+    expect(line).toContain("free allowance");
   });
 
   /* --------------------------------------------- the two silences, and why -- */

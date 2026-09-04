@@ -204,21 +204,33 @@ describe("reading the raw body", () => {
 });
 
 describe("which events are acted on", () => {
-  it("handles the four state-changing subscription events and nothing else", () => {
+  it("handles the state-changing subscription events, plus one invoice event", () => {
     expect([...HANDLED_EVENTS].sort()).toEqual([
       "checkout.session.completed",
       "customer.subscription.created",
       "customer.subscription.deleted",
       "customer.subscription.updated",
+      "invoice.finalization_failed",
     ]);
   });
 
-  /* Deliberately absent: `past_due` is entitled, and the transitions into and
-     out of it arrive on `subscription.updated`. A second path to the same
-     conclusion is a second path that can disagree. */
-  it("does not act on invoice events", () => {
+  /* Still deliberately absent, and for the original reason: `past_due` is
+     entitled, and the transitions into and out of it arrive on
+     `subscription.updated`. A second path to the same conclusion is a second
+     path that can disagree.
+
+     **`invoice.finalization_failed` is the exception, and it is not one of
+     these.** It is handled precisely because *no* subscription event describes
+     it — an unfinalisable invoice leaves the subscription `active` and never
+     reaches `past_due`, so there is no second path for it to disagree with.
+     src/billing/webhook.ts § `HANDLED_EVENTS`. */
+  it("does not act on the invoice events a subscription event already covers", () => {
     expect(isHandled("invoice.payment_failed")).toBe(false);
     expect(isHandled("invoice.paid")).toBe(false);
+    /* And never this one: an endpoint that fails to 2xx `invoice.created` delays
+       finalising every automatic-collection invoice on the account for up to 72
+       hours. */
+    expect(isHandled("invoice.created")).toBe(false);
   });
 
   it("ignores the other two hundred event types", () => {

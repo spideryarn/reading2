@@ -173,6 +173,24 @@ describe("what Stripe is told, which decides whether it retries", () => {
     expect(reply.status).toBe(200);
   });
 
+  /**
+   * **Only the customer id crosses from the event into the sync**, and this pins
+   * it rather than leaving it to a reader of the handler.
+   *
+   * `event.created` was briefly passed as well, so a mid-period plan change
+   * could be prorated against the moment it was made. It was wrong: this handler
+   * serves four event types and then fetches *current* state, so an older event
+   * can discover a newer transition and scale it by the wrong instant. GPT Sol
+   * reproduced it at 76 where the answer was 63.
+   * src/billing/quota-adjustment.ts § *Why `f` is taken at the sync*.
+   */
+  it("passes the sync the customer and nothing else from the event", async () => {
+    const sync = vi.fn(async () => synced);
+    const created = Math.floor((Date.now() - 2 * 24 * 60 * 60 * 1000) / 1000);
+    await serve(eventBody({ created }), sync);
+    expect(sync.mock.calls).toEqual([["cus_1"]]);
+  });
+
   it("200 without syncing for an event type we deliberately ignore", async () => {
     const sync = vi.fn(async () => synced);
     const payload = eventBody({ type: "invoice.payment_failed" });
@@ -182,6 +200,49 @@ describe("what Stripe is told, which decides whether it retries", () => {
        path to the same conclusion. Retrying it would be pure cost. */
     expect(sync).not.toHaveBeenCalled();
     expect(reply.status).toBe(200);
+    expect(reply.body.handled).toBe(false);
+  });
+
+  /**
+   * **The one event whose whole purpose is the log line.** A subscription whose
+   * invoice cannot be finalised is never collected and never reaches `past_due`
+   * — `past_due` is defined against the latest *finalized* invoice — so no
+   * subscription event will ever mention it. The resync changes no entitlement
+   * and is not supposed to; it is handled so that somebody finds out.
+   */
+  it("syncs and returns 200 for an invoice that could not be finalised", async () => {
+    const sync = vi.fn(async () => synced);
+    const reply = await serve(
+      eventBody({
+        type: "invoice.finalization_failed",
+        data: {
+          object: {
+            id: "in_1",
+            object: "invoice",
+            customer: "cus_1",
+            last_finalization_error: { code: "customer_tax_location_invalid" },
+          },
+        },
+      }),
+      sync,
+    );
+    expect(sync).toHaveBeenCalledWith("cus_1");
+    expect(reply.status).toBe(200);
+    expect(reply.body.handled).toBe(true);
+  });
+
+  /**
+   * **`invoice.created` must never be handled**, and this is the guard rather
+   * than the comment that asks for it. Stripe delays finalising *every*
+   * automatic-collection invoice on the account for up to 72 hours if an
+   * endpoint fails to 2xx that event, so subscribing to it would let one outage
+   * of this function stall every renewal we have. The next person's instinct on
+   * reading the finalisation handler above will be to add its sibling.
+   */
+  it("still ignores invoice.created, which would let one outage stall every renewal", async () => {
+    const sync = vi.fn(async () => synced);
+    const reply = await serve(eventBody({ type: "invoice.created" }), sync);
+    expect(sync).not.toHaveBeenCalled();
     expect(reply.body.handled).toBe(false);
   });
 
