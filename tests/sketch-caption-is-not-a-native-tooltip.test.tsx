@@ -243,7 +243,7 @@ describe("the caption is not a tooltip over the whole picture", () => {
     const { root: tree, blocks } = article();
     await act(async () => {
       root.render(
-        <DiagramPanel slug="s" kind={kind} root={tree} onKind={() => {}} atRow={0} onJump={() => {}}
+        <DiagramPanel access={{ kind: "owner" }} slug="s" kind={kind} root={tree} onKind={() => {}} atRow={0} onJump={() => {}}
           blocks={blocks} axis="spread" onAxis={() => {}} hue="section" onHue={() => {}} />,
       );
     });

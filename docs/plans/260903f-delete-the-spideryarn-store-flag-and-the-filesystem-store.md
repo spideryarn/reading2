@@ -14,7 +14,7 @@ three later stages consume it**:
 ```
 A (store inventory) ✅ → B0 ✅ (already done) → T-B (factory) ✅ → T-C (lanes) ✅
   → T-D (activation) ✅ → T-E (pollution) ✅
-  → B (25 of 26 done) → B2 (`routes.test.ts`) → C → D → E → F (hinge) → G → H → I
+  → B ✅ → B2 ✅ → C → D → E → F (hinge) → G → H → I
 ```
 
 **`C → B` became `B → C` on 2026-09-04**, and this line is the only place the order lives, so
@@ -2195,6 +2195,144 @@ above is reasoned rather than reproduced, and the review **says so itself, unpro
 verdict** rather than letting a retained log stand in for a run it did not do. That is the behaviour
 the instruction to hand it evidence is meant to produce, and it is worth recording that it worked —
 but it means the follow-ups were verified here, in this tree, and not there.
+
+### B2 is done — `routes.test.ts`, and stage B's 26 of 26
+
+2026-09-04, ~150 minutes against an estimate of 240. **127 tests, green, in the private lane**, which
+now runs 126 files and 1966 tests. Converted one `describe` at a time, as the stage said, and **not**
+split into siblings.
+
+**Thirteen mutation runs across the 17 blocks, ten of them recorded: seven red, three green.** Every
+one is written beside the assertion it bears on with its `**Blind to.**`. Five blocks were judged to
+need none, and each says so in its own header — the two stream-refusal blocks and the two PATCH-body
+tables validate above any store, and the tweets route's every plausible break also answers *"nothing
+here"*, which is not a mutation, it is an ambiguity.
+
+##### Three findings, and the first should stop somebody deleting a check
+
+- **The slug guard is triply redundant and no single mutation can move it.** `require-slug`,
+  `routes.ts` § `slugPart` and `api.ts` each refuse independently; the block proves *some* guard
+  refuses and cannot say which. Only turning off all three moved it — and then a traversal is a
+  **404, not an escape**, because it is the filesystem store that made the class reachable at all.
+  Worth having before somebody deletes a "redundant" check on the strength of a green suite.
+- **`PATCH /api/reader` answers from its own input, not from the row.** `writeProfile` returns its
+  argument, so a write that did nothing still replies with what it was told. Only the `GET`-backed
+  assertions can see a broken write, which is a general shape worth looking for: **a route that
+  echoes cannot witness its own persistence.**
+- **Nothing in the file could tell *this run* from *these runs*** for saved searches — `remove` and
+  `recolour` could each lose their id predicate silently. One assertion closed `recolour`; `remove`
+  has no two-run case at all, and that green is kept and recorded rather than papered over.
+
+##### What changed meaning, and the one case that had to be added
+
+The reader-profile block's `SPIDERYARN_READER_FILE` isolation has no Postgres equivalent, so it is a
+seeded owner under `asTestOwner` with the row **asserted gone** in `afterAll` — the decision this plan
+recorded before B2 began. The three admin cases now assert 200-and-a-list, 200-and-a-page, and
+`[401, 403, 200]`; *"says nothing about users in three refusals"* keeps its name and gains force,
+because the third arm is what proves an empty `users` really would be indistinguishable from a
+refusal.
+
+And **an orphaned `pending` comment turns out to be one whose lease has expired**, which needed a new
+case — *leaves a live attempt alone*. It is the only case the sweep mutation can reach: **all three
+inherited cases would have watched that mutation go green.** Nothing was dropped; two cases gained
+assertions.
+
+##### A trap this plan states, which is false
+
+Trap 5 above says `scratchArticleInPg`'s `mutate` rewrites the article URL to
+`spideryarn-test.invalid`. **It does not.** The string is defined locally in two test files
+(`jobs.test.ts` and `retry-is-only-for-a-failed-job.test.ts`), each with its own `urlFor`. The trap
+was written into B2's brief by generalising one agent's local fix into a claim about the shared
+helper, without opening the helper. Harmless in B2, where nothing pumps — but it is the fourth thing
+today asserted from a report rather than from the code, and the correction belongs next to the claim.
+
+**Promoting it to the helper is the right fix and is not done**, because it changes a fixture every
+suite in the lane uses and stage B is closing. It is a candidate for stage C or D: one place, distinct
+per slug, so `freeSlug` cannot adopt one fixture for another.
+
+#### The guard is built, and marking the 25 found four files whose evidence was not evidence
+
+`convertedInB` on the `STORE_MIGRATION` entry, and
+[store-migration-registry.test.ts](../../tests/store-migration-registry.test.ts) §
+*"makes every converted file show its working"*, which requires `**Mutation.**` and `**Blind to.**`
+in every file carrying it — with the same three checks the registry already applies to `reason`: a
+length floor, and no text repeated word for word **between** files. Watched failing on all 25 before
+the marking began, and watched failing again afterwards on a deliberately broken marker.
+
+**The exercise was meant to be transcription and was not.** Marking a claim forces somebody to read
+it, and four of the twenty-five did not survive that:
+
+- **`chat-anchor-route` — a *pilot* — had no evidence in it at all.** Its mutation lived only in this
+  document's own table. It is now in the file, attributed as *recorded, not re-watched*, which is the
+  honest label.
+- **`owner-jobs` cited this plan for its evidence** — *"the mutation recorded in § B is exactly that
+  line"*. That is precisely the failure the guard exists to close: a file whose proof is a pointer to
+  prose somewhere else. Re-run, and it now points at the case above `is not in Bob's list`.
+- **`list-reconciles-expired`'s four "watched red" notes are all *call-site* mutations** — replacing
+  `store.list(owner)`, dropping the owner argument at the call. **Not one of them reaches a line of
+  SQL**, so the conversion had no Postgres-reaching evidence at all, while reading as the
+  best-evidenced file in the batch. It was cited as such in this document. Re-run against
+  `settleExpired`'s owner predicate: `1 failed | 8 passed`.
+- **`jobs-walk`'s seven mutations were all on the filesystem queue.** A `claimIn` that had lost its
+  `where` entirely would have left every one of them green.
+
+**And the pilot's own account here needed correcting.** § *Two of the 26 are converted* says
+`anchorQuote: quoteOf(…) → null` is a mutation the filesystem store could not have caught, which is
+true, and adds that it is *"sharper than intended"* because it trips the `chat_threads_anchor_both`
+CHECK. What it does not say is the consequence: **because the route 500s, its four reds do not
+separate *the quote was written* from *the row was written at all*.** A sharper mutation is not
+automatically a better one.
+
+##### The guard had two bugs of its own, and the second was the instructive one
+
+The first stopped a marker's body at the next `**`. These files bold mid-sentence constantly, so
+`**Mutation.** Deleting **the owner term** from …` captured `"Deleting"` — eight characters — and
+would have been failed as too short, **teaching authors to strip emphasis out of good prose to satisfy
+a guard**. Caught before dispatch by running the regex against realistic prose rather than reading it.
+
+The second looked 900 characters ahead for the next marker or `*/`. A marker further than that from
+its terminator matched nothing, and because the file passed on its *other* marker, it was **silently
+not counted** — a guard under-reporting while green, which is the shape this whole plan is about.
+Caught by the agent using it, and only because it was using it. Rewritten as a scan with no window and
+therefore no cliff.
+
+#### The inventory that sized the tail was wrong in both directions
+
+The 16.75-hour figure above came from reading all fourteen remaining files and classifying every
+filesystem site. Three of its numbers have since been checked against the files, and none survived:
+
+| | inventory said | actually |
+| --- | --- | --- |
+| `jobs.test.ts` tests | ~35 | **71** |
+| `jobs-walk.test.ts` tests | 9 | **10** |
+| `routes.test.ts` filesystem sites | ~40 | **46** — and the inventory was right; see below |
+| `routes.test.ts` "501 because filesystem" tests | ~9 | **4 assertions** across 3 tests |
+
+**It is not that the inventory was careless — it is that a site count is the wrong instrument.** The
+queue round's own verdict was that *"the byte assertions were the easy part — they are rows"*, and
+that the real cost was `claimSession` needing a draft and the Postgres store shape-checking products,
+neither of which any count of `readFile` calls can see. So `step-failure-seam` was called an outlier
+and took forty minutes, while `jobs-walk` was called ordinary and took ninety.
+
+**And the row about `routes.test.ts`'s sites is a correction of a correction.** This section first
+said the inventory had over-counted by more than tenfold — *"3 functions, `cp`, `rm`, `writeFile`,
+over a handful of fixture slugs"* — from a grep for `readFile|writeFile|mkdir|rm\(|existsSync|dataRoot`.
+B2 counted properly: **16 call sites of those functions, 28 calls into filesystem-only readers and
+writers** (`loadComments` ×13, `loadRuns` ×7, `loadShelf` ×5, `createComment` ×2, `deleteRun` ×2,
+`patchComment`, `beginAnswer`, `beginRun`) and 2 `SPIDERYARN_READER_FILE` sites. **46, so the
+inventory's ~40 was right and the correction was wrong.**
+
+The grep missed the 28 because **it looked for filesystem verbs, and the filesystem-only readers do
+not have filesystem verbs in their names** — which is the trap this document spends a table and two
+paragraphs on, made by the person who wrote the table. It is the same failure in a third costume: a
+search that did not cover the answer, reported as an absence.
+
+**The 240 minutes was still too high — B2 took ~150** — but not for the reason given here. The
+estimate was wrong because a site count is the wrong instrument, not because the sites were few.
+
+Recorded because § *Counts are perishable here* is this document's rule and this document keeps
+breaking it: **five of the six counts that went stale went stale by being copied**, and these went
+wrong by being derived from the wrong thing, which is the harder failure to notice.
 
 #### The evidence guard: cite it, do not copy it
 

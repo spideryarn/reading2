@@ -45,7 +45,7 @@
  * Stage B asks each converted file for evidence it can still go red, and for
  * what that red does not reach. Two were run here.
  *
- * **1 — the subject of the file, and it went red.** `src/routes.ts` §
+ * **Mutation.** 1 — the subject of the file, and it went red. `src/routes.ts` §
  * `serveApi`: `const path = url.split("?")[0] ?? url;` made `const path = url;`,
  * which is the postmortem's bug put back. **2 failed of 4** — *reaches the
  * summaries branch when it carries ?summary=1* and *ignores a query string
@@ -53,9 +53,10 @@
  * not to match /^No API route for/`. The two that stayed green are the control
  * pair: the no-query-string case, and the `STORE` check.
  *
- * **2 — the Postgres-only half of the sentence above, and it STAYED GREEN.**
- * `src/store/owned-slug.ts` § `ownedSlug`: `return and(eq(articles.slug, slug),
- * eq(articles.ownerId, ownerId ?? currentOwnerId()));` made `return
+ * **Mutation.** 2 — the Postgres-only half of the sentence above, and it
+ * STAYED GREEN. `src/store/owned-slug.ts` § `ownedSlug`: `return
+ * and(eq(articles.slug, slug), eq(articles.ownerId, ownerId ??
+ * currentOwnerId()));` made `return
  * and(eq(articles.slug, slug));` — the owner term deleted from the one
  * sanctioned article lookup. **4 passed of 4.** The reason is the seeding: this
  * file makes exactly one article, owns it as `TEST_OWNER`, and asks for it as
@@ -64,21 +65,23 @@
  * exist only because … the requesting owner line up* is true of the store and
  * **is not tested here**; tests/owner-isolation.test.ts is where it is held.
  *
+ * **Blind to.** Mutation 1 says nothing about the other half of the same split
+ * (`query`, parsed from `url.slice(path.length)`): breaking that makes
+ * `?summary=1` an unreachable *branch* rather than an unreachable *route*,
+ * which this file would catch on the `messages` assertion but for a different
+ * reason than it claims. It says nothing about the three other route families
+ * that read a query string.
+ *
+ * **Blind to.** Mutation 2 reaches only the owner term; `threadsFor`'s own
+ * `articleId` scoping — the predicate that stops one article's conversations
+ * appearing under another — is untouched by both, and with one seeded article
+ * this file could not see it move.
+ *
  * **And the same run corrects the sentence.** `chatStore.load` reaches the
  * article through `articleIdForOwned`, which predicates on `ownedSlug` **alone**
  * — `onTheShelf`, the *has a published revision* rule, is not in this path at
  * all. So "its current revision" above is wrong about which predicate does the
  * work, and nothing here could have told you.
- *
- * **What neither mutation covers.** Mutation 1 says nothing about the other
- * half of the same split (`query`, parsed from `url.slice(path.length)`):
- * breaking that makes `?summary=1` an unreachable *branch* rather than an
- * unreachable *route*, which this file would catch on the `messages` assertion
- * but for a different reason than it claims. It says nothing about the three
- * other route families that read a query string. Mutation 2 reaches only the
- * owner term; `threadsFor`'s own `articleId` scoping — the predicate that stops
- * one article's conversations appearing under another — is untouched by both,
- * and with one seeded article this file could not see it move.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";

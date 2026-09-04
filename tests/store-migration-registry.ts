@@ -156,6 +156,33 @@ interface EntryCommon {
   readonly reason: string;
   /** Omitted means `"dynamic"`, which is the ordinary case. */
   readonly evidence?: Evidence;
+  /**
+   * The date this file was converted onto Postgres in stage B, if it was.
+   *
+   * **This records only *that* the conversion happened.** The evidence for it —
+   * which mutation was run, what the run printed, what it does not cover —
+   * lives in the test file, beside the assertion it bears on, and is
+   * deliberately not copied here: one fact, one home, and the copy in a
+   * registry read by whoever is thinking about categories would drift from the
+   * original read by whoever is thinking about the test.
+   *
+   * What this field buys is that the drift is *checkable*. Without it, "which
+   * files were converted" could only be asked of the prose, and
+   * [store-migration-registry.test.ts](store-migration-registry.test.ts) §
+   * *every converted file shows its working* would be grepping for English —
+   * which is how the evidence went missing from the first ten in the first
+   * place, and how a grep for the word "mutation" then falsely accused five
+   * files that had it and nearly missed three more.
+   *
+   * **A `reason` may cite the mutation in a clause; it may not be where the
+   * record lives.** Two entries were found on 2026-09-04 whose mutation was
+   * written here and nowhere else, which the guard cannot see and a reader of
+   * the test cannot either. The line is between *"mutation watched red:
+   * `failureKind` deleted from `finishIn`"* — a sentence explaining a verdict,
+   * which belongs here — and the run's output and what it does not cover,
+   * which belong beside the assertion.
+   */
+  readonly convertedInB?: string;
 }
 
 /**
@@ -245,6 +272,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "about where the artefacts landed.",
   },
   "tests/all-skipped-publication-log.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04, and the entry stays until the witness is re-run.** " +
@@ -315,6 +343,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "filesystem sites are the seeder's copy step and one ledger row from the stubbed model call.",
   },
   "tests/chat-anchor-route.test.ts": {
+    convertedInB: "2026-09-04",
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
     reason:
@@ -341,6 +370,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "articles in Postgres for exactly this migration; what is left is the seeder's own copy.",
   },
   "tests/chat-live-ticket-route.test.ts": {
+    convertedInB: "2026-09-04",
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
     reason:
@@ -352,6 +382,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "row now. What is left is the seeder's copy step; the model is stubbed, so no ledger row.",
   },
   "tests/chat-live-turn.test.ts": {
+    convertedInB: "2026-09-04",
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
     reason:
@@ -373,6 +404,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "the other converted suites cite for why the flag must be set in `vi.hoisted`.",
   },
   "tests/chat-spoken-route.test.ts": {
+    convertedInB: "2026-09-04",
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
     reason:
@@ -491,6 +523,26 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    * same hour, and the merge conflict between them was prose only. Worth a line
    * because agreement reached separately is the only kind that says anything.
    */
+  /**
+   * **The same story a day later**, and recorded because the hole check catching
+   * a second arrival is the check earning its fourteen seconds twice.
+   *
+   * Landed 2026-09-04 with stage 2 of
+   * docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md, well after
+   * the witness ran, so `static-only` is not a preference — the dynamic evidence
+   * does not exist for it yet and re-running witness 2 is what upgrades it.
+   */
+  "tests/hierarchy-structure-checkpoint.test.ts": {
+    category: "store-agnostic-fake",
+    evidence: "static-only",
+    reason:
+      "Holds the structure call's checkpoint: that its key is a digest of the request the call " +
+      "really makes, and that only an answer which parsed and built is stored. Its checkpoint " +
+      "store is a `Map` written in the file and its model call is mocked, so it constructs no " +
+      "store of any kind and reads no path; it reaches a condemned module only because " +
+      "`src/hierarchy.ts` imports `nullCheckpointStore`. Nothing here changes when the filesystem " +
+      "store goes.",
+  },
   "tests/hierarchy-eval-incumbent-parity.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
@@ -526,6 +578,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "at so it can get far enough to fail; `failureKindOf` never asks where anything was written.",
   },
   "tests/jobs-commit-path.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04.** Pins the path as well as the result: it wraps the " +
@@ -568,6 +621,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "does not have and does not need.",
   },
   "tests/jobs-walk.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04.** *Claim once, keep the same attempt while walking, " +
@@ -584,6 +638,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "product, because `publishRevisionIn` refuses a tree that ran against `unstamped`.",
   },
   "tests/jobs.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**, and it was the largest of them — though less by " +
@@ -622,6 +677,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "precisely the shape a narrow `ArtifactReads` fake wants.",
   },
   "tests/list-reconciles-expired.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04.** `listJobs` must settle expired leases in the same " +
@@ -635,6 +691,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "ledger row are left to name a mechanism for.",
   },
   "tests/live-session-routes.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04, and the entry stays until the witness is re-run.** " +
@@ -669,6 +726,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "it goes when that store goes.",
   },
   "tests/one-article-for-one-address.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04.** The repair branch in `enqueue` after " +
@@ -681,6 +739,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "nothing filesystem is left to name a mechanism for.",
   },
   "tests/owner-jobs.test.ts": {
+    convertedInB: "2026-09-04",
     category: "shared-mechanism-collateral",
     mechanisms: ["step-context-paths"],
     reason:
@@ -725,6 +784,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "guards.",
   },
   "tests/quiz-mark-route.test.ts": {
+    convertedInB: "2026-09-04",
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
     reason:
@@ -753,6 +813,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "stamps will do.",
   },
   "tests/referee-claims-omitted.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**; the category stays `database-integration` because " +
@@ -765,6 +826,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "deleting the `claimsOmitted` spread from `finish` in src/store/pg-referee-claims.ts.",
   },
   "tests/referee-claims-routes.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**; the category stays `database-integration` until " +
@@ -779,6 +841,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "run survives a GET — deleting `lt(created_at, cutoff)`, which had left the file green.",
   },
   "tests/referee-criteria-routes.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**; the category stays `database-integration` until " +
@@ -787,8 +850,8 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "exposure as its Claims sibling. **One assertion was dropped**: `\"sourceHash\" in body === " +
       "false` was true only because the filesystem fixture had no `blocks.json`, and " +
       "`sourceHashFor` answers `undefined` only for a revision with zero `revision_blocks` rows, " +
-      "which the publish guard makes unreachable. Its positive twin stands in its place. Eighteen " +
-      "tests, so one mutation per `describe`: recolour coalescing slot 0 to null, `remove` losing " +
+      "which the publish guard makes unreachable. Its positive twin stands in its place. Enough " +
+      "tests to want one mutation per `describe`: recolour coalescing slot 0 to null, `remove` losing " +
       "its id predicate, and the sweep writing `pending` all went red; dropping `where " +
       "article_id` from `criteriaFor` stayed **green**, because one article in a private database " +
       "cannot tell a scoped read from an unscoped one.",
@@ -802,6 +865,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "while two adapters exist.",
   },
   "tests/referee-mirror-route.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**; the category stays `database-integration` until " +
@@ -824,6 +888,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "existing separately is the thing the hinge makes moot.",
   },
   "tests/referee-scan-route.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**; the category stays `database-integration` until " +
@@ -848,6 +913,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "all that is left.",
   },
   "tests/retry-is-only-for-a-failed-job.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04.** Retry spends money and the client had never been " +
@@ -865,14 +931,29 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "of stage B and stops seeing this file reach a condemned module.",
   },
   "tests/routes.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
-      "The HTTP surface itself, and the broadest reach in the inventory: twenty-three sites across " +
-      "the article reader, comments, searches, shelf, reader profile and library search. It copies " +
-      "`example/` under a throwaway slug and asserts through `loadComments`, `loadShelf` and " +
-      "`loadRuns`, so both the fixture and every read-back move together.",
+      "**Converted in stage B2 on 2026-09-04** — the HTTP surface itself, and the broadest reach " +
+      "in the inventory. The pre-conversion count recorded here was *twenty-three sites*; the " +
+      "derived number is **16 `cp`/`rm`/`writeFile` calls and 28 calls into the filesystem-only " +
+      "readers and writers** (`loadComments`, `loadShelf`, `loadRuns`, `createComment`, " +
+      "`patchComment`, `beginAnswer`, `beginRun`, `deleteRun`), plus `SPIDERYARN_READER_FILE`. " +
+      "Five `scratchArticleInPg` articles replace the `example/` copies and every read-back now " +
+      "goes through `commentStore`, `shelfStore`, `searchStore` or `readerStore`. Three things " +
+      "changed meaning rather than moving: the reader profile is a row keyed on the owner, so the " +
+      "isolation is a seeded owner under `asTestOwner` and a database postcondition in `afterAll`; " +
+      "the three admin cases that asserted **501 because filesystem** now assert 200 and a list, " +
+      "which stage F does not touch; and an orphaned `pending` comment is one whose lease has run " +
+      "out, which brought a case with it. Ten mutations, seven red and three green — the greens " +
+      "are the library's owner predicate, the search store's `remove` id predicate, and the two " +
+      "slug guards that are belt and braces over each other. **Still `database-integration` " +
+      "rather than collateral**, and that is the honest verdict rather than an un-updated one: " +
+      "the entry should simply leave this map when `tests/store-migration-witness.json` is re-run " +
+      "at the end of stage B.",
   },
   "tests/second-job-queues.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04.** Greg's *always append to the per-article queue* — " +
@@ -882,7 +963,15 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "by slug. **Still `database-integration` rather than collateral**, and that is the honest " +
       "verdict rather than an un-updated one: it now needs a database and reaches no condemned " +
       "module at all, since no step runs (`VERCEL` is set, so `pump` returns) and no article is " +
-      "seeded. There is no loader copy and no ledger row left to name a mechanism for.",
+      "seeded. There is no loader copy and no ledger row left to name a mechanism for.\n\n" +
+      "**And this file is thinly covered by design, which this entry used not to say.** Its only " +
+      "store-level mutation — `row.workKey === ticket.workKey` deleted from `tryEnqueue`'s re-read " +
+      "classifier — **stays green**, because that branch runs only on an insert conflict and every " +
+      "case here inserts cleanly. The claim the file exists for, that a second *different* job gets " +
+      "a new id rather than a 409, is enforced by the `jobs_active_work` partial unique index, and " +
+      "**no TypeScript mutation can reach an index**: loosening it is a migration. The one red " +
+      "mutation available goes red as a 500, not on the id assertion. The file's evidence is in the " +
+      "file; what belongs here is the warning that it is thinner than the sentence above sounds.",
   },
   "tests/shelf.test.ts": {
     category: "filesystem-adapter-behaviour",
@@ -918,6 +1007,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "beside it is the replaceable part.",
   },
   "tests/step-failure-seam.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04, and the entry stays until the witness is re-run.** " +
@@ -1101,6 +1191,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "is interchangeable and the assertions are not.",
   },
   "tests/term-lookup.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04, and the entry stays until the witness is re-run.** " +
@@ -1118,6 +1209,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "B, so the reason says the work is done rather than the verdict being re-labelled.",
   },
   "tests/the-query-string-does-not-decide-the-route.test.ts": {
+    convertedInB: "2026-09-04",
     category: "shared-mechanism-collateral",
     mechanisms: ["shared-symbol", "fixture-loader"],
     reason:
@@ -1159,6 +1251,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "flag, so the whole harness lands on Postgres at the hinge.",
   },
   "tests/upload-records.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**, and the flag's death moved it without changing a " +
@@ -1194,6 +1287,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`src/store/blobs.ts` and needs neither changed.",
   },
   "tests/article-cache-call-site.test.ts": {
+    convertedInB: "2026-09-04",
     category: "shared-mechanism-collateral",
     mechanisms: ["step-context-paths", "fixture-loader"],
     evidence: "static-only",
@@ -1282,6 +1376,24 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "reader seam. The two chunk cases pass a fake `PdfReader`, so nothing reaches a provider or " +
       "a ledger, and the same `src/pdf-read.ts` → `cli-ledger.ts` import is the only reach. " +
       "Re-run witness 2 to confirm.",
+  },
+  /**
+   * **A third arrival from the same plan, on the same day.** Stage 5 this time,
+   * so `static-only` for the same reason as its two siblings above: the dynamic
+   * evidence does not exist yet and re-running witness 2 is what upgrades it.
+   */
+  "tests/pdf-source-parsed-once.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Arrived with stage 5 of docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md. " +
+      "Counts `PDFDocument.load` through a `vi.mock` seam to prove the source PDF is parsed once " +
+      "for the whole stage rather than once per chunk. It drives `runPdfExtract` with a stub " +
+      "`PdfReader` over `memoryCheckpoints`, which is a `Map`, so there is no database, no blob " +
+      "store and no path read; its whole static reach is the same `src/pdf-read.ts` → " +
+      "`cli-ledger.ts` import its page-cap siblings have, and no paid call is made so no ledger " +
+      "row is written. Re-run witness 2 to confirm.",
   },
   "tests/store-glossary-delete-pg.test.ts": {
     category: "shared-mechanism-collateral",
@@ -1744,6 +1856,18 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      its oracle is checkpoint rows it writes itself, so the private lane is
      right and nothing about it needs the shared stack. */
   "tests/retry-keeps-the-checkpoints.test.ts": "private-postgres",
+  /* Converted in stage B2, 2026-09-04 — the whole HTTP surface, and the last
+     file of stage B. Five seeded articles under fixed `test-routes-…` slugs,
+     and reader state written on every one of them: comments, saved searches,
+     shelf rows and the owner's single `reader_profiles` row. The private lane
+     is what makes that safe twice over. A second copy of this file in a shared
+     database would meet its own slugs in `articles_slug_unique`; and the
+     reader-profile block writes the row keyed on `TEST_OWNER` — the local
+     administrator — which on the shared database is Greg's own, so `npm test`
+     would have been editing a real profile. It reaches GoTrue for
+     `/api/admin/users`, which is the shared stack's Auth service in every lane
+     and is read-only there. */
+  "tests/routes.test.ts": "private-postgres",
   "tests/run-lock.test.ts": "private-postgres",
   "tests/running-slot.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from the rows it

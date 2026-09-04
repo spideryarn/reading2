@@ -34,6 +34,20 @@
  *
  * It now pins `postgres` before any import, seeds through `scratchArticleInPg`,
  * and reads back through `refereeClaimsStore.load`.
+ *
+ * **Mutation.** The `claimsOmitted` spread deleted from `finish` in
+ * src/store/pg-referee-claims.ts — the single line that names the column, which
+ * is the bug this file is about, put back where the deployed store can have it.
+ * Re-run on 2026-09-04: *1 failed | 1 passed (2)*, `expected undefined to be
+ * 3`. The surviving pass is the store control, which is the point of having it.
+ *
+ * **Blind to.** Everything either side of that one column. `runClaimsStream` is
+ * mocked here and hands `truncated: 3` straight over, so nothing below can tell
+ * a `validateClaims` that miscounts from one that counts correctly, and no
+ * assertion here follows the number as far as the panel that prints it. The
+ * other fields `finish` writes — `status`, `claims`, `model`, `error` — could
+ * each drop the same way and leave this file green; `EVERY_RUN_FIELD` in
+ * tests/store-pg-referee-claims.test.ts is what covers those.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 

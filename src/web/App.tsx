@@ -19,6 +19,7 @@ import type {
   Quote,
   RememberStance,
   ThreadKind,
+  TimelineEvent,
   Visibility,
 } from "../types.js";
 import { Library } from "./Library.js";
@@ -91,7 +92,7 @@ import { buildNoteIndex, type NoteMarker, type NoteReturn } from "./notes-view.j
 import { useArc } from "./useArc.js";
 import { useGlossary, useGlossaryRead, type GlossaryRead } from "./useGlossary.js";
 import { SummaryPanel } from "./SummaryPanel.js";
-import { DiagramPanel } from "./DiagramPanel.js";
+import { DiagramPanel, type DiagramAccess } from "./DiagramPanel.js";
 import { ClaimsBand } from "./ClaimsPanel.js";
 import { CriteriaBand } from "./CriteriaPanel.js";
 import { MirrorBand } from "./MirrorPanel.js";
@@ -211,6 +212,7 @@ import type {
   PublicGlossary,
   PublicQuotes,
   PublicIdeas,
+  PublicTimeline,
 } from "../public-types.js";
 import { artefactsIn, artefactsOf } from "./public-artefacts.js";
 import { NO_COMMENTS, NO_TERMS, NO_THREADS, type ReaderCapability } from "./reader-capability.js";
@@ -273,6 +275,7 @@ const OWNER_HAS_EVERYTHING: PublicArtefacts = {
   glossary: true,
   ideas: true,
   quotes: true,
+  timeline: true,
 };
 
 
@@ -3074,8 +3077,21 @@ function Reader({
         />
       )}
       {mode === "summary" && <SummaryBand article={article} onJump={jumpTo} />}
-      {owner && mode === "diagram" && (
-        <DiagramBand slug={slug} article={article} at={at} onJump={jumpTo} />
+      {/* **Mounted for a visitor too, since 2026-09-04** — one branch rather
+          than the owner/visitor pair the artefact modes have, because there is
+          no artefact to carry and no second component to build: the default
+          picture is drawn from the tree the page already holds. What differs is
+          the `access` prop, which pins the picture to Force and turns off all
+          three of the panel's fetching hooks.
+          docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */}
+      {mode === "diagram" && (
+        <DiagramBand
+          access={{ kind: owner ? "owner" : "visitor" }}
+          slug={slug}
+          article={article}
+          at={at}
+          onJump={jumpTo}
+        />
       )}
       {owner && mode === "ideas" && (
         <IdeasBand
@@ -3108,15 +3124,29 @@ function Reader({
           onFound={setQuoteFound}
         />
       )}
-      {/* **One branch, not the owner/visitor pair the ideas have.** Timeline is
-          owners-only in v1 (src/web/visitor.ts § POLICY), so a visitor never
-          reaches this band at all — the dock marks the button and pressing it
-          renders the boundary instead. There is deliberately no
-          `VisitorTimelineBand` waiting for a payload field that does not
-          exist. */}
+      {/* **The owner/visitor pair the ideas and the quotes have, since
+          2026-09-04.** It was one branch until then, and the comment here said
+          there was deliberately no `VisitorTimelineBand` waiting for a payload
+          field that did not exist. The field exists now.
+          docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1.
+
+          Gated on the artefact itself rather than on `available`, like the
+          glossary above: an absent key means `visitorGap` said `not-built` and
+          the `VisitorBand` is showing instead, so the branch that renders and
+          the flag that decides the sentence cannot disagree. */}
       {owner && mode === "timeline" && (
         <TimelineBand
           slug={slug}
+          blocks={article.blocks}
+          onJump={jumpTo}
+          onFound={setTimelineFound}
+          openKey={openTimelineKey}
+          onOpenKey={setOpenTimelineKey}
+        />
+      )}
+      {!owner && mode === "timeline" && artefacts?.timeline && (
+        <VisitorTimelineBand
+          timeline={artefacts.timeline}
           blocks={article.blocks}
           onJump={jumpTo}
           onFound={setTimelineFound}
@@ -3564,11 +3594,91 @@ export function TimelineBand({
 }) {
   useRenderCount("TimelineBand");
   const timeline = useTimeline(slug);
+  const band = useTimelineMode({
+    events: timeline.timeline?.events ?? NO_EVENTS,
+    blocks,
+    onJump,
+    onFound,
+    openKey,
+    onOpenKey,
+  });
+  return <TimelinePanel access={{ kind: "owner", owner: timeline }} {...band} />;
+}
+
+/**
+ * A module constant rather than a fresh `[]`, for the reason `NO_QUOTES` and
+ * `NO_TERMS` are: the memo below keys on it by identity, and a new empty array
+ * each render would re-resolve every occurrence while the read is still in
+ * flight.
+ */
+const NO_EVENTS: TimelineEvent[] = [];
+
+/**
+ * **The same panel, for somebody who does not own the article.**
+ *
+ * No `useTimeline` and therefore no job, no `ensure`, no `regenerate`: the
+ * events came in the page's own payload. See `VisitorGlossaryBand` for why this
+ * is a second band rather than a second panel — a hook cannot be called
+ * conditionally, so the owner/visitor seam has to be a component boundary.
+ * src/web/reader-capability.ts.
+ */
+function VisitorTimelineBand({
+  timeline,
+  blocks,
+  onJump,
+  onFound,
+  openKey,
+  onOpenKey,
+}: {
+  timeline: PublicTimeline;
+  blocks: Block[];
+  onJump(id: BlockId): void;
+  onFound(found: Found[]): void;
+  openKey: string | null;
+  onOpenKey(key: string | null): void;
+}) {
+  useRenderCount("VisitorTimelineBand");
+  const band = useTimelineMode({
+    events: timeline.events,
+    blocks,
+    onJump,
+    onFound,
+    openKey,
+    onOpenKey,
+  });
+  return <TimelinePanel access={{ kind: "visitor", timeline }} {...band} />;
+}
+
+/**
+ * **Everything the timeline band does that is not a fetch** — `?event=`, the
+ * resolved occurrences it pushes up, and the four passage-mode rules the
+ * comment above lists.
+ *
+ * Extracted on 2026-09-04 so that the owner's band and the visitor's are one
+ * behaviour rather than two, which is the same split `useQuotesMode` and
+ * `useIdeasMode` already have. The comment above still applies to it: a fix to
+ * one of the three passage modes belongs in all three.
+ */
+function useTimelineMode({
+  events,
+  blocks,
+  onJump,
+  onFound,
+  openKey,
+  onOpenKey,
+}: {
+  events: TimelineEvent[];
+  blocks: Block[];
+  onJump(id: BlockId): void;
+  onFound(found: Found[]): void;
+  openKey: string | null;
+  onOpenKey(key: string | null): void;
+}) {
   const [eventId, setEventId] = useQueryState("event", eventParam);
 
   const selected = useMemo(
-    () => timeline.timeline?.events.find((e) => e.id === eventId) ?? null,
-    [timeline.timeline, eventId],
+    () => events.find((e) => e.id === eventId) ?? null,
+    [events, eventId],
   );
 
   /* Document order, so the stepper's "2 of 3" counts the way the reader moves
@@ -3631,26 +3741,23 @@ export function TimelineBand({
     [onFound, onOpenKey],
   );
 
-  return (
-    <TimelinePanel
-      owner={timeline}
-      eventId={eventId}
-      onEvent={(next) => {
-        void setEventId(next);
-        /* A new event means the old occurrence is meaningless — its key names
-           an event nobody is looking at, so the stepper would read "0 / 2". */
-        onOpenKey(null);
-        /* Only on selecting, never on clearing: pressing the open event again
-           takes the marks away, and throwing the reader down the article as it
-           does would be the opposite of what that gesture means. */
-        wantsJump.current = next !== null;
-      }}
-      found={found}
-      openKey={openKey}
-      onOpenKey={onOpenKey}
-      onJump={onJump}
-    />
-  );
+  return {
+    eventId,
+    onEvent(next: string | null) {
+      void setEventId(next);
+      /* A new event means the old occurrence is meaningless — its key names
+         an event nobody is looking at, so the stepper would read "0 / 2". */
+      onOpenKey(null);
+      /* Only on selecting, never on clearing: pressing the open event again
+         takes the marks away, and throwing the reader down the article as it
+         does would be the opposite of what that gesture means. */
+      wantsJump.current = next !== null;
+    },
+    found,
+    openKey,
+    onOpenKey,
+    onJump,
+  };
 }
 
 /**
@@ -4894,11 +5001,14 @@ function useSummaryMode(article: Article) {
  * docs/project/diagram.md.
  */
 function DiagramBand({
+  access,
   slug,
   article,
   at,
   onJump,
 }: {
+  /** Owner or visitor — DiagramPanel.tsx § DiagramAccess is the whole argument. */
+  access: DiagramAccess;
   slug: string;
   article: Article;
   /**
@@ -4945,6 +5055,7 @@ function DiagramBand({
 
   return (
     <DiagramPanel
+      access={access}
       slug={slug}
       root={root}
       kind={kind}

@@ -702,13 +702,37 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      the *present*-quotes renderer; that one could break with this green, and no
      fixture in this file can reach it. */
   quotes: { where: VISITOR_BAND, says: "Nobody has built a set of quotes for this piece yet" },
-  /* The six that spend, each named by `MODE_LABEL[mode]` — the policy in
+  /* No timeline on the payload either, so this is the *nobody built one*
+     sentence rather than the boundary — it moved out of the group below on
+     2026-09-04, when the payload grew a flag to be sure with.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1. */
+  timeline: { where: VISITOR_BAND, says: "Nobody has built a timeline for this piece yet" },
+  /* **Free since 2026-09-04, and it is the only one here that draws a real
+     picture for a visitor.** Force is built from the tree in the payload; the
+     panel's three fetching hooks are off and the picker is hidden. The string
+     is a node title off that tree, so this row fails if the picture stops being
+     drawn — asserting the band's own heading would pass over an empty
+     `<aside>`. § Stage 2. */
+  /* **Free since 2026-09-04, and the only row here that opens a real panel for
+     a visitor rather than a boundary or a list.** Force is built from the tree
+     in the payload; the panel's three fetching hooks are off and the picker is
+     not rendered at all.
+
+     The string is the panel's own instruction rather than a node label off the
+     picture, and that is a limit of this environment rather than a choice:
+     jsdom gives every element zero size, so the d3 layout produces no
+     positioned nodes and the SVG carries no text to assert on. **So this row
+     proves the panel mounted and spent nothing, and not that the picture drew.**
+     The browser pass owns that second half — said here because a green row that
+     looks like it covers the drawing is exactly the reassurance
+     docs/reusable/silent-success.md is about.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */
+  diagram: { where: ".mode-band.diag", says: "Point at anything in the picture" },
+  /* The four that spend, each named by `MODE_LABEL[mode]` — the policy in
      src/web/visitor.ts carries no string of its own. */
   search: { where: VISITOR_BAND, says: "Search is for whoever added this article" },
   chat: { where: VISITOR_BAND, says: "Chat is for whoever added this article" },
   remember: { where: VISITOR_BAND, says: "Remember is for whoever added this article" },
-  diagram: { where: VISITOR_BAND, says: "Diagram is for whoever added this article" },
-  timeline: { where: VISITOR_BAND, says: "Timeline is for whoever added this article" },
   /* Referee reached the fall-through until 2026-09-02 and was announced by its
      raw mode id; the capital R is the assertion that it no longer does.
      docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C2. */
@@ -1303,6 +1327,42 @@ describe("a signed-out browser on a shared document", () => {
     expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
     expect(outsidePublic()).toEqual([]);
   });
+
+  /**
+   * **The hostile deep link, one picture at a time.**
+   *
+   * Hiding the chips is not the gate and never could be: `?diagram=` is
+   * ordinary query state, so a pasted address — or the Back button onto one —
+   * names a picture without pressing anything. Four of the five spend:
+   * `drift` and `trail` POST for a projection, `sketch` and `illustrated`
+   * mount children that auto-run a job, and `force` itself POSTs for
+   * embeddings. `DiagramPanel` pins a visitor's `kind` to `force` and turns
+   * off all three of its fetching hooks, and this is the assertion that the
+   * pin holds from the URL rather than only from the picker.
+   *
+   * **Asserted per kind rather than in one loop over a joined string**, so a
+   * failure names the picture that leaked. GPT Sol asked for exactly this
+   * shape when it reviewed the stage.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2.
+   */
+  it.each(["force", "drift", "trail", "sketch", "illustrated"])(
+    "buys nothing when a visitor arrives at ?diagram=%s",
+    async (kind) => {
+      await open(`?mode=diagram&diagram=${kind}`);
+
+      /* The band is open — a visitor gets the free picture, so this is not the
+         vacuous pass where nothing mounted and therefore nothing fetched. */
+      expect(host.querySelector(".mode-band.diag"), `${kind}: the band`).not.toBeNull();
+      expect(trace.filter((r) => r.method !== "GET"), `${kind}: no POST`).toEqual([]);
+      expect(outsidePublic(), `${kind}: nothing outside /api/public/`).toEqual([]);
+      /* Named individually as well, because `outsidePublic` would also be empty
+         if the whole panel failed to mount. These are the four addresses this
+         stage is about. */
+      for (const paid of ["/api/similar/", "/api/projection/", "/api/sketch/", "/api/illustrated/"]) {
+        expect(trace.filter((r) => r.url.includes(paid)), `${kind}: ${paid}`).toEqual([]);
+      }
+    },
+  );
 
   it("opens the comments drawer without asking for anybody's comments", async () => {
     await open("?panel=questions");

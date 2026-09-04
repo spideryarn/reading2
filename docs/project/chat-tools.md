@@ -320,6 +320,53 @@ anything, or spends money. That is the reason the write tools below are not buil
 that writes turns "an injected page made the answer wrong" into "an injected page changed the
 reader's data".
 
+## A transcript cannot be published by column allowlist, and that is why chat is not shared
+
+**Found 2026-09-04, while planning what else a Public-readable article should carry**
+([260904c](../plans/260904c-more-modes-on-a-shared-link.md)). Greg wanted a visitor to be able to
+read the owner's existing conversations. The answer is no, for now, and the reason is a shape worth
+naming because everything else in this repo's sharing machinery is built for the other shape.
+
+`search_library` and `read_library_passage` range over the reader's **whole shelf**, not over the
+article in front of them. That is the point of them — the seven exist so a conversation about this
+piece can reach the others — and it means a stored answer can quote, summarise or paraphrase an
+article the reader never shared.
+
+**No column allowlist can see that.** [`src/public/dto.ts`](../../src/public/dto.ts) works by
+constructing a response field by field, so a field nobody names cannot cross; that defence is
+complete against *fields*, and the whole of [security-map.md § the
+allowlist](security-map.md) is about keeping it so. Here the disclosure is **in the prose of
+`chat_messages.text`** — the one column you must publish for the feature to exist at all. Stripping
+`tools`, `searches`, `model` and the rest leaves the sentence *"In your other piece on X, the author
+argues…"* untouched, because it is the answer.
+
+So the sharing inventory cannot tell an owner what publishing a conversation would reveal, and
+neither can we: it depends on what the model happened to reach for, in each turn, months ago.
+
+**What would have to be true before chat is shareable**, none of which is built:
+
+- a per-thread record of whether any turn used a library tool, written *at the time* rather than
+  inferred later from `tools` — which is not a public column and should not become one;
+- or library tools disabled for any conversation that might later be published, which means deciding
+  at the wrong end: nobody knows at question time whether they will share the article;
+- or the owner reading each transcript before it goes out, which is the honest fallback and is a
+  product decision rather than a mechanism.
+
+**Two smaller things its own plan must also handle**, both found in the same review and both
+verified against the schema:
+
+- **`chat_threads.kind` is `'chat' | 'remember' | 'candidates'`**
+  ([`schema.ts:2806`](../../src/db/schema.ts)). A public query that does not filter `kind = 'chat'`
+  **in SQL** publishes Remember transcripts and Referee candidate machinery, whatever the visitor's
+  UI chooses to draw. The client filters `candidates` today; a client-side filter is not a boundary.
+- **`ToolRun.label` and `.detail` can name a private article's title or slug**
+  ([`src/types.ts`](../../src/types.ts) § `ToolRun`), so `tools` must not cross wholesale even
+  though it carries no model name and no cost.
+
+Comments and saved meaning-searches have neither problem — a comment body and a saved criterion are
+the reader's own words about *this* article, and their answers are grounded in it — which is why
+those two are shared and this is not.
+
 ## What is logged
 
 Tool names, slugs, block ids, counts, elapsed times, HTTP statuses, and the **host** of a URL. Never
