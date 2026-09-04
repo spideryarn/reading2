@@ -1,6 +1,6 @@
 {
-  "what": "Stage A witness 2 for docs/plans/260903f: which test files ACTUALLY reach the filesystem store when the suite runs, as opposed to which ones import one. A measurement with a date on it, not a fact \u2014 see the plan's 'Counts are perishable'.",
-  "measured": "2026-09-03T09:19:08.691Z",
+  "what": "Witness 2 for docs/plans/260903f: which test files ACTUALLY reach the filesystem store when the suite runs, as opposed to which ones import one. A measurement with a date on it, not a fact — see the plan's 'Counts are perishable'. Regenerate with: npx tsx scripts/store-migration-witness.ts --full --out tests/store-migration-witness.json",
+  "measured": "2026-09-04T20:58:06.663Z",
   "store": "default (SPIDERYARN_STORE unset => files)",
   "instrumentedModules": [
     "src/store/fs.ts",
@@ -13,15 +13,15 @@
     "src/store/data-root.ts"
   ],
   "notInstrumented": [
-    "src/store/blobs-fs.ts \u2014 selected by credentials, out of scope"
+    "src/store/blobs-fs.ts — selected by credentials, out of scope"
   ],
   "unresolved": [
     "tests/gjd-remote-tab-lifecycle.test.ts"
   ],
   "counts": {
-    "testFilesOnDisk": 588,
-    "touchesFilesystemStore": 88,
-    "runsAndTouchesNothing": 498,
+    "testFilesOnDisk": 648,
+    "touchesFilesystemStore": 91,
+    "runsAndTouchesNothing": 555,
     "unresolved": 1
   },
   "touched": {
@@ -30,6 +30,16 @@
       "ai-calls-fs:fsCostStore.read",
       "artifacts-fs:fsLocations",
       "data-root:dataRoot"
+    ],
+    "tests/a-long-pdf-is-refused-before-it-is-stored.test.ts": [
+      "artifacts-fs:fsLocations",
+      "data-root:dataRoot",
+      "uploads-fs:fsUploadStore.claim",
+      "uploads-fs:fsUploadStore.create",
+      "uploads-fs:fsUploadStore.forget",
+      "uploads-fs:fsUploadStore.read",
+      "uploads-fs:fsUploadStore.reject",
+      "uploads-fs:fsUploadStore.settle"
     ],
     "tests/acquire-extract-blocks-end-to-end.test.ts": [
       "artifacts-fs:fsArtifacts.beginStep",
@@ -42,20 +52,27 @@
     "tests/all-skipped-publication-log.test.ts": [
       "ai-calls-fs:fsCostStore.forJob",
       "ai-calls-fs:fsCostStore.read",
+      "artifacts-fs:createFsArtifactStore",
       "artifacts-fs:fsLocations",
-      "data-root:dataRoot",
-      "jobs-fs:fsJobStore.claim",
-      "jobs-fs:fsJobStore.enqueueOrGet",
-      "jobs-fs:fsJobStore.finish",
-      "jobs-fs:fsJobStore.noteProgress",
-      "jobs-fs:fsJobStore.settleExpired",
-      "jobs-fs:fsJobStore.trimFinished"
+      "copy-artefacts:copyArtefacts",
+      "data-root:dataRoot"
     ],
     "tests/all-skipped-publication-refusal.test.ts": [
       "ai-calls-fs:fsCostStore.forJob",
       "ai-calls-fs:fsCostStore.read",
       "artifacts-fs:fsLocations",
       "data-root:dataRoot"
+    ],
+    "tests/an-upload-is-queued-only-once-its-bytes-arrive.test.ts": [
+      "jobs-fs:forgetForTests",
+      "jobs-fs:fsJobStore.enqueueOrGet",
+      "jobs-fs:fsJobStore.list",
+      "uploads-fs:fsUploadStore.claim",
+      "uploads-fs:fsUploadStore.create",
+      "uploads-fs:fsUploadStore.forget",
+      "uploads-fs:fsUploadStore.noteSlug",
+      "uploads-fs:fsUploadStore.read",
+      "uploads-fs:fsUploadStore.settle"
     ],
     "tests/api.test.ts": [
       "artifacts-fs:createFsArtifactStore",
@@ -66,6 +83,14 @@
       "artifacts-fs:createFsArtifactStore",
       "copy-artefacts:copyArtefacts",
       "copy-artefacts:readParts"
+    ],
+    "tests/article-cache-call-site.test.ts": [
+      "ai-calls-fs:fsCostStore.forJob",
+      "ai-calls-fs:fsCostStore.read",
+      "artifacts-fs:createFsArtifactStore",
+      "artifacts-fs:fsLocations",
+      "copy-artefacts:copyArtefacts",
+      "data-root:dataRoot"
     ],
     "tests/billing-settlement.test.ts": [
       "artifacts-fs:fsLocations",
@@ -84,13 +109,8 @@
     ],
     "tests/chat-anchor-route.test.ts": [
       "ai-calls-fs:fsCostStore.record",
-      "fs:fsArticleReader.loadArticle",
-      "fs:fsChatStore.begin",
-      "fs:fsChatStore.finish",
-      "fs:fsChatStore.load",
-      "fs:fsChatStore.remove",
-      "fs:fsReaderStore.readProfile",
-      "fs:fsShelfStore.read"
+      "artifacts-fs:createFsArtifactStore",
+      "copy-artefacts:copyArtefacts"
     ],
     "tests/chat-anchor.test.ts": [
       "artifacts-fs:createFsArtifactStore",
@@ -101,23 +121,13 @@
       "copy-artefacts:copyArtefacts"
     ],
     "tests/chat-live-ticket-route.test.ts": [
-      "fs:fsArticleReader.loadArticle",
-      "fs:fsArticleReader.loadGlossary",
-      "fs:fsChatStore.appendSpoken",
-      "fs:fsChatStore.load",
-      "fs:fsReaderStore.readProfile",
-      "fs:fsShelfStore.read",
-      "realtime-sessions-fs:fsRealtimeSessionStore.issue"
+      "artifacts-fs:createFsArtifactStore",
+      "copy-artefacts:copyArtefacts"
     ],
     "tests/chat-live-turn.test.ts": [
       "ai-calls-fs:fsCostStore.record",
-      "fs:fsArticleReader.loadArticle",
-      "fs:fsChatStore.begin",
-      "fs:fsChatStore.finish",
-      "fs:fsChatStore.load",
-      "fs:fsChatStore.retry",
-      "fs:fsReaderStore.readProfile",
-      "fs:fsShelfStore.read"
+      "artifacts-fs:createFsArtifactStore",
+      "copy-artefacts:copyArtefacts"
     ],
     "tests/chat-route.test.ts": [
       "ai-calls-fs:fsCostStore.record",
@@ -125,8 +135,8 @@
       "copy-artefacts:copyArtefacts"
     ],
     "tests/chat-spoken-route.test.ts": [
-      "fs:fsArticleReader.loadArticle",
-      "fs:fsChatStore.appendSpoken"
+      "artifacts-fs:createFsArtifactStore",
+      "copy-artefacts:copyArtefacts"
     ],
     "tests/claim-session-files.test.ts": [
       "ai-calls-fs:fsCostStore.forJob",
@@ -170,6 +180,12 @@
       "artifacts-fs:createFsArtifactStore",
       "copy-artefacts:copyArtefacts"
     ],
+    "tests/glossary-delete-then-rebuild.test.ts": [
+      "ai-calls-fs:fsCostStore.forJob",
+      "ai-calls-fs:fsCostStore.read",
+      "artifacts-fs:fsLocations",
+      "data-root:dataRoot"
+    ],
     "tests/glossary-ideas-baseline.test.ts": [
       "artifacts-fs:createFsArtifactStore"
     ],
@@ -194,13 +210,17 @@
     "tests/jobs-commit-path.test.ts": [
       "ai-calls-fs:fsCostStore.forJob",
       "ai-calls-fs:fsCostStore.read",
+      "artifacts-fs:createFsArtifactStore",
+      "artifacts-fs:fsLocations",
+      "copy-artefacts:copyArtefacts",
+      "data-root:dataRoot"
+    ],
+    "tests/jobs-fs-adapter.test.ts": [
+      "ai-calls-fs:fsCostStore.forJob",
+      "ai-calls-fs:fsCostStore.read",
       "artifacts-fs:fsArtifacts.beginStep",
-      "artifacts-fs:fsArtifacts.finishStep",
       "artifacts-fs:fsArtifacts.has",
-      "artifacts-fs:fsArtifacts.hasEarlierBlocks",
       "artifacts-fs:fsArtifacts.interrupted",
-      "artifacts-fs:fsArtifacts.read",
-      "artifacts-fs:fsArtifacts.write",
       "artifacts-fs:fsLocations",
       "artifacts-fs:fsLocations@load",
       "data-root:dataRoot",
@@ -208,11 +228,12 @@
       "jobs-fs:fsJobStore.claim",
       "jobs-fs:fsJobStore.enqueueOrGet",
       "jobs-fs:fsJobStore.finish",
+      "jobs-fs:fsJobStore.forget",
       "jobs-fs:fsJobStore.get",
       "jobs-fs:fsJobStore.noteProgress",
       "jobs-fs:fsJobStore.settleExpired",
       "jobs-fs:fsJobStore.trimFinished",
-      "jobs-fs:pauseForTests"
+      "jobs-fs:sweepStopped"
     ],
     "tests/jobs-fs-load.test.ts": [
       "jobs-fs:fsJobStore.enqueueOrGet",
@@ -224,70 +245,27 @@
     "tests/jobs-walk.test.ts": [
       "ai-calls-fs:fsCostStore.forJob",
       "ai-calls-fs:fsCostStore.read",
+      "artifacts-fs:createFsArtifactStore",
       "artifacts-fs:fsLocations",
-      "data-root:dataRoot",
-      "jobs-fs:fsJobStore.claim",
-      "jobs-fs:fsJobStore.enqueueOrGet",
-      "jobs-fs:fsJobStore.finish",
-      "jobs-fs:fsJobStore.get",
-      "jobs-fs:fsJobStore.noteProgress",
-      "jobs-fs:fsJobStore.releaseStep",
-      "jobs-fs:fsJobStore.requestCancel",
-      "jobs-fs:fsJobStore.settleExpired",
-      "jobs-fs:fsJobStore.trimFinished"
+      "copy-artefacts:copyArtefacts",
+      "data-root:dataRoot"
     ],
     "tests/jobs.test.ts": [
       "ai-calls-fs:fsCostStore.forJob",
       "ai-calls-fs:fsCostStore.read",
-      "artifacts-fs:fsArtifacts.beginStep",
-      "artifacts-fs:fsArtifacts.finishStep",
-      "artifacts-fs:fsArtifacts.has",
-      "artifacts-fs:fsArtifacts.interrupted",
-      "artifacts-fs:fsArtifacts.read",
-      "artifacts-fs:fsArtifacts.readBaseline",
-      "artifacts-fs:fsArtifacts.write",
+      "artifacts-fs:createFsArtifactStore",
       "artifacts-fs:fsLocations",
-      "artifacts-fs:fsLocations@load",
-      "data-root:dataRoot",
-      "data-root:dataRoot@load",
-      "jobs-fs:expireLeaseForTests",
-      "jobs-fs:fsJobStore.claim",
-      "jobs-fs:fsJobStore.enqueueOrGet",
-      "jobs-fs:fsJobStore.finish",
-      "jobs-fs:fsJobStore.forget",
-      "jobs-fs:fsJobStore.get",
-      "jobs-fs:fsJobStore.list",
-      "jobs-fs:fsJobStore.noteProgress",
-      "jobs-fs:fsJobStore.settleExpired",
-      "jobs-fs:fsJobStore.trimFinished",
-      "jobs-fs:pauseForTests",
-      "jobs-fs:sweepStopped",
-      "uploads-fs:fsUploadStore.read"
+      "copy-artefacts:copyArtefacts",
+      "data-root:dataRoot"
     ],
     "tests/late-step-on-a-cold-instance.test.ts": [
       "artifacts-fs:createFsArtifactStore"
     ],
-    "tests/list-reconciles-expired.test.ts": [
-      "jobs-fs:expireLeaseForTests",
-      "jobs-fs:forgetForTests",
-      "jobs-fs:fsJobStore.claim",
-      "jobs-fs:fsJobStore.enqueueOrGet",
-      "jobs-fs:fsJobStore.get",
-      "jobs-fs:fsJobStore.list",
-      "jobs-fs:fsJobStore.settleExpired"
-    ],
     "tests/live-session-routes.test.ts": [
       "ai-calls-fs:fsCostStore.read",
       "ai-calls-fs:fsCostStore.record",
-      "fs:fsArticleReader.loadArticle",
-      "fs:fsArticleReader.loadGlossary",
-      "fs:fsChatStore.load",
-      "fs:fsReaderStore.readProfile",
-      "fs:fsShelfStore.read",
-      "realtime-sessions-fs:fsRealtimeSessionStore.close",
-      "realtime-sessions-fs:fsRealtimeSessionStore.find",
-      "realtime-sessions-fs:fsRealtimeSessionStore.issue",
-      "realtime-sessions-fs:fsRealtimeSessionStore.markConnected"
+      "artifacts-fs:createFsArtifactStore",
+      "copy-artefacts:copyArtefacts"
     ],
     "tests/load-article-serialisation.test.ts": [
       "artifacts-fs:createFsArtifactStore",
@@ -298,29 +276,11 @@
       "artifacts-fs:fsLocations",
       "data-root:dataRoot"
     ],
-    "tests/one-article-for-one-address.test.ts": [
-      "data-root:dataRoot",
-      "jobs-fs:forgetForTests",
-      "jobs-fs:fsJobStore.enqueueOrGet",
-      "jobs-fs:fsJobStore.list"
-    ],
     "tests/owner-jobs.test.ts": [
       "ai-calls-fs:fsCostStore.forJob",
       "ai-calls-fs:fsCostStore.read",
-      "artifacts-fs:fsArtifacts.beginStep",
-      "artifacts-fs:fsArtifacts.has",
-      "artifacts-fs:fsArtifacts.interrupted",
       "artifacts-fs:fsLocations",
-      "data-root:dataRoot",
-      "jobs-fs:fsJobStore.claim",
-      "jobs-fs:fsJobStore.enqueueOrGet",
-      "jobs-fs:fsJobStore.finish",
-      "jobs-fs:fsJobStore.forget",
-      "jobs-fs:fsJobStore.get",
-      "jobs-fs:fsJobStore.list",
-      "jobs-fs:fsJobStore.noteProgress",
-      "jobs-fs:fsJobStore.settleExpired",
-      "jobs-fs:fsJobStore.trimFinished"
+      "data-root:dataRoot"
     ],
     "tests/pg-session-exact-base.test.ts": [
       "artifacts-fs:fsLocations",
@@ -328,7 +288,9 @@
     ],
     "tests/pg-session-real-step.test.ts": [
       "ai-calls-fs:fsCostStore.forJob",
-      "ai-calls-fs:fsCostStore.read"
+      "ai-calls-fs:fsCostStore.read",
+      "artifacts-fs:fsLocations",
+      "data-root:dataRoot"
     ],
     "tests/pipeline-artifact-store.test.ts": [
       "artifacts-fs:createFsArtifactStore",
@@ -344,27 +306,23 @@
     ],
     "tests/quiz-mark-route.test.ts": [
       "ai-calls-fs:fsCostStore.record",
-      "fs:fsArticleReader.loadArticle",
-      "fs:fsArticleReader.loadQuiz"
+      "artifacts-fs:createFsArtifactStore",
+      "copy-artefacts:copyArtefacts"
     ],
     "tests/quiz-step-registration.test.ts": [
       "artifacts-fs:createFsArtifactStore"
     ],
     "tests/referee-claims-omitted.test.ts": [
-      "fs:fsArticleReader.loadArticle",
-      "fs:fsRefereeClaimsStore.begin",
-      "fs:fsRefereeClaimsStore.finish"
+      "artifacts-fs:createFsArtifactStore",
+      "copy-artefacts:copyArtefacts"
     ],
     "tests/referee-claims-routes.test.ts": [
-      "fs:fsArticleReader.loadArticle",
-      "fs:fsRefereeClaimsStore.sourceHash",
-      "fs:fsRefereeClaimsStore.sweep"
+      "artifacts-fs:createFsArtifactStore",
+      "copy-artefacts:copyArtefacts"
     ],
     "tests/referee-criteria-routes.test.ts": [
-      "fs:fsRefereeCriteriaStore.recolour",
-      "fs:fsRefereeCriteriaStore.remove",
-      "fs:fsRefereeCriteriaStore.sourceHash",
-      "fs:fsRefereeCriteriaStore.sweepPending"
+      "artifacts-fs:createFsArtifactStore",
+      "copy-artefacts:copyArtefacts"
     ],
     "tests/referee-criteria-store.test.ts": [
       "fs:fsRefereeCriteriaStore.begin",
@@ -375,18 +333,16 @@
       "fs:fsRefereeCriteriaStore.sweepPending"
     ],
     "tests/referee-mirror-route.test.ts": [
-      "fs:fsArticleReader.loadArticle",
-      "fs:fsCommentStore.load",
-      "fs:fsRefereeCriteriaStore.begin",
-      "fs:fsRefereeCriteriaStore.load"
+      "artifacts-fs:createFsArtifactStore",
+      "copy-artefacts:copyArtefacts"
     ],
     "tests/referee-routes-postgres.test.ts": [
       "artifacts-fs:createFsArtifactStore",
       "copy-artefacts:copyArtefacts"
     ],
     "tests/referee-scan-route.test.ts": [
-      "fs:fsArticleReader.loadSource",
-      "fs:fsShelfStore.read"
+      "artifacts-fs:createFsArtifactStore",
+      "copy-artefacts:copyArtefacts"
     ],
     "tests/remember-route.test.ts": [
       "ai-calls-fs:fsCostStore.record",
@@ -396,55 +352,19 @@
     "tests/retry-is-only-for-a-failed-job.test.ts": [
       "ai-calls-fs:fsCostStore.forJob",
       "ai-calls-fs:fsCostStore.read",
-      "artifacts-fs:fsArtifacts.beginStep",
-      "artifacts-fs:fsArtifacts.has",
-      "artifacts-fs:fsArtifacts.interrupted",
+      "artifacts-fs:createFsArtifactStore",
       "artifacts-fs:fsLocations",
-      "data-root:dataRoot",
-      "jobs-fs:fsJobStore.claim",
-      "jobs-fs:fsJobStore.enqueueOrGet",
-      "jobs-fs:fsJobStore.finish",
-      "jobs-fs:fsJobStore.forget",
-      "jobs-fs:fsJobStore.get",
-      "jobs-fs:fsJobStore.noteProgress",
-      "jobs-fs:fsJobStore.requestCancel",
-      "jobs-fs:fsJobStore.settleExpired",
-      "jobs-fs:fsJobStore.trimFinished"
+      "copy-artefacts:copyArtefacts",
+      "data-root:dataRoot"
+    ],
+    "tests/retry-keeps-the-checkpoints.test.ts": [
+      "artifacts-fs:createFsArtifactStore",
+      "copy-artefacts:copyArtefacts"
     ],
     "tests/routes.test.ts": [
       "ai-calls-fs:fsCostStore.record",
       "artifacts-fs:createFsArtifactStore",
-      "artifacts-fs:fsLocations",
-      "data-root:dataRoot",
-      "fs:fsArticleReader.articleMetadata",
-      "fs:fsArticleReader.listArticles",
-      "fs:fsArticleReader.loadArticle",
-      "fs:fsArticleReader.loadTweets",
-      "fs:fsCommentStore.beginAnswer",
-      "fs:fsCommentStore.create",
-      "fs:fsCommentStore.patchBody",
-      "fs:fsCommentStore.sweepPending",
-      "fs:fsLibrarySearch.searchLibrary",
-      "fs:fsReaderStore.readExperimental",
-      "fs:fsReaderStore.readProfile",
-      "fs:fsReaderStore.writeExperimental",
-      "fs:fsReaderStore.writeProfile",
-      "fs:fsSearchStore.begin",
-      "fs:fsSearchStore.finish",
-      "fs:fsSearchStore.recolour",
-      "fs:fsShelfStore.patch",
-      "fs:fsShelfStore.read",
-      "fs:fsShelfStore.recordOpen"
-    ],
-    "tests/second-job-queues.test.ts": [
-      "artifacts-fs:fsArtifacts.interrupted",
-      "artifacts-fs:fsLocations",
-      "data-root:dataRoot",
-      "jobs-fs:forgetForTests",
-      "jobs-fs:fsJobStore.claim",
-      "jobs-fs:fsJobStore.enqueueOrGet",
-      "jobs-fs:fsJobStore.get",
-      "jobs-fs:fsJobStore.settleExpired"
+      "copy-artefacts:copyArtefacts"
     ],
     "tests/shelf.test.ts": [
       "artifacts-fs:createFsArtifactStore",
@@ -464,19 +384,8 @@
     "tests/step-failure-seam.test.ts": [
       "ai-calls-fs:fsCostStore.forJob",
       "ai-calls-fs:fsCostStore.read",
-      "artifacts-fs:fsArtifacts.beginStep",
-      "artifacts-fs:fsArtifacts.has",
-      "artifacts-fs:fsArtifacts.interrupted",
       "artifacts-fs:fsLocations",
-      "data-root:dataRoot",
-      "jobs-fs:fsJobStore.claim",
-      "jobs-fs:fsJobStore.enqueueOrGet",
-      "jobs-fs:fsJobStore.finish",
-      "jobs-fs:fsJobStore.get",
-      "jobs-fs:fsJobStore.noteProgress",
-      "jobs-fs:fsJobStore.requestCancel",
-      "jobs-fs:fsJobStore.settleExpired",
-      "jobs-fs:fsJobStore.trimFinished"
+      "data-root:dataRoot"
     ],
     "tests/store-ai-calls.test.ts": [
       "ai-calls-fs:fsCostStore.describe",
@@ -521,11 +430,13 @@
       "jobs-fs:fsJobStore.get",
       "jobs-fs:fsJobStore.list",
       "jobs-fs:fsJobStore.noteProgress",
+      "jobs-fs:fsJobStore.pauseForDeadline",
       "jobs-fs:fsJobStore.releaseStep",
       "jobs-fs:fsJobStore.requestCancel",
       "jobs-fs:fsJobStore.settleExpired",
       "jobs-fs:fsJobStore.trimFinished",
-      "jobs-fs:reattachAttemptForTests"
+      "jobs-fs:reattachAttemptForTests",
+      "jobs-fs:stampFinishedForTests"
     ],
     "tests/store-parity-referee.test.ts": [
       "fs:fsCommentStore.create",
@@ -603,6 +514,10 @@
       "artifacts-fs:createFsArtifactStore",
       "artifacts-fs:pathFor"
     ],
+    "tests/store-shelf-reads.test.ts": [
+      "artifacts-fs:createFsArtifactStore",
+      "copy-artefacts:copyArtefacts"
+    ],
     "tests/store-uploads-parity.test.ts": [
       "uploads-fs:fsUploadStore.claim",
       "uploads-fs:fsUploadStore.create",
@@ -627,14 +542,12 @@
       "fs:fsShelfStore.read"
     ],
     "tests/term-lookup.test.ts": [
-      "fs:fsArticleReader.loadArticle",
-      "fs:fsArticleReader.loadGlossary",
-      "fs:fsAssertWritableGlossary"
+      "artifacts-fs:createFsArtifactStore",
+      "copy-artefacts:copyArtefacts"
     ],
     "tests/the-query-string-does-not-decide-the-route.test.ts": [
-      "fs:fsChatStore.begin@load",
-      "fs:fsChatStore.load@load",
-      "fs:fsChatStore.sweepPending"
+      "artifacts-fs:createFsArtifactStore",
+      "copy-artefacts:copyArtefacts"
     ],
     "tests/tweets.test.ts": [
       "artifacts-fs:createFsArtifactStore",
@@ -646,14 +559,6 @@
     "tests/upload-acquire.test.ts": [
       "artifacts-fs:fsLocations",
       "data-root:dataRoot",
-      "uploads-fs:fsUploadStore.claim",
-      "uploads-fs:fsUploadStore.create",
-      "uploads-fs:fsUploadStore.forget",
-      "uploads-fs:fsUploadStore.read",
-      "uploads-fs:fsUploadStore.reject",
-      "uploads-fs:fsUploadStore.settle"
-    ],
-    "tests/upload-records.test.ts": [
       "uploads-fs:fsUploadStore.claim",
       "uploads-fs:fsUploadStore.create",
       "uploads-fs:fsUploadStore.forget",
@@ -677,8 +582,11 @@
     ]
   },
   "ranAndTouchedNothing": [
+    "tests/a-429-is-asked-again.test.ts",
     "tests/access-sharing.test.tsx",
     "tests/add-article-history.test.ts",
+    "tests/add-does-not-wait-for-the-upload.test.tsx",
+    "tests/add-page-watches-the-transfer.test.tsx",
     "tests/address-settling.test.ts",
     "tests/admin-accounts.test.ts",
     "tests/admin-feedback-store.test.ts",
@@ -703,6 +611,7 @@
     "tests/arrows-belong-to-the-article.test.tsx",
     "tests/artefact-read-race.test.tsx",
     "tests/article-cache-group.test.ts",
+    "tests/article-parsed-once.test.ts",
     "tests/article-prompt.test.ts",
     "tests/article-rename.test.tsx",
     "tests/article-rows-snapshot.test.ts",
@@ -720,12 +629,16 @@
     "tests/backfill-manifest.test.ts",
     "tests/background-reload-keeps-the-list.test.tsx",
     "tests/bar-visibility.test.ts",
+    "tests/bench-cold-start.test.ts",
+    "tests/billing-account-identity.test.ts",
     "tests/billing-admin-plan.test.ts",
     "tests/billing-admission-files.test.ts",
     "tests/billing-admission.test.ts",
     "tests/billing-checkout.test.ts",
     "tests/billing-plan.test.ts",
+    "tests/billing-portal-check.test.ts",
     "tests/billing-portal-setup.test.ts",
+    "tests/billing-quota-adjustment.test.ts",
     "tests/billing-quota-race.test.ts",
     "tests/billing-quota-sql.test.ts",
     "tests/billing-stripe.test.ts",
@@ -771,9 +684,12 @@
     "tests/chat-web-links.test.ts",
     "tests/chat-write-paths.test.ts",
     "tests/chat.test.ts",
+    "tests/checkpoint-hit-rate-is-logged.test.ts",
     "tests/checkpoints-durable-resume.test.ts",
     "tests/client-imports.test.ts",
     "tests/client-shell.test.ts",
+    "tests/cold-start-lazy-imports.test.ts",
+    "tests/cold-start-report.test.ts",
     "tests/collect-assets.test.ts",
     "tests/collect-citations.test.ts",
     "tests/colour-scales.test.ts",
@@ -791,14 +707,17 @@
     "tests/cost-categories.test.ts",
     "tests/cost-eval.test.ts",
     "tests/cost-report.test.ts",
+    "tests/counting-pages-can-be-given-up.test.ts",
     "tests/css-tokens.test.ts",
     "tests/db-error-scrub.test.ts",
+    "tests/db-export-target.test.ts",
     "tests/db-referee-criteria.test.ts",
     "tests/db-reown-rules.test.ts",
     "tests/db-schema-drift.test.ts",
     "tests/db-schema.test.ts",
     "tests/db-ssl.test.ts",
     "tests/db-step-constraint.test.ts",
+    "tests/db-test-create.test.ts",
     "tests/db-tls.test.ts",
     "tests/db-transaction-errors.test.ts",
     "tests/declared-spend.test.ts",
@@ -816,19 +735,24 @@
     "tests/dictation-recording.test.ts",
     "tests/direct-add-says-the-text-has-gone.test.tsx",
     "tests/doc-links.test.ts",
+    "tests/dock-experimental-modes.test.tsx",
+    "tests/dock-experimental-switch.test.tsx",
     "tests/dock-fit.test.ts",
     "tests/dock-mode-urls.test.ts",
     "tests/dock-questions-loading.test.tsx",
     "tests/embedding-route-failures.test.ts",
     "tests/embeddings.test.ts",
+    "tests/env-prod.test.ts",
     "tests/env.test.ts",
     "tests/expect-claimed.test.ts",
+    "tests/experimental-store.test.tsx",
     "tests/explain.test.ts",
     "tests/export-route.test.ts",
     "tests/extract-console.test.ts",
     "tests/extract-sanitize.test.ts",
     "tests/extract-unhide.test.ts",
     "tests/extraction-inventory.test.ts",
+    "tests/feedback-button-tooltip.test.tsx",
     "tests/feedback-button-visibility.test.tsx",
     "tests/feedback-diagnostics.test.ts",
     "tests/feedback-dialog.test.tsx",
@@ -861,6 +785,7 @@
     "tests/gjd-remote-tab.test.ts",
     "tests/gjd-remote-tmux-script.test.ts",
     "tests/gjd-remote-tmux.test.ts",
+    "tests/gjd-remote-upload.test.ts",
     "tests/glossary-band-selection.test.tsx",
     "tests/glossary-band-wiring.test.ts",
     "tests/glossary-lookups.test.ts",
@@ -872,9 +797,12 @@
     "tests/health-schema.test.ts",
     "tests/health.test.ts",
     "tests/hierarchy-build.test.ts",
+    "tests/hierarchy-cascade.test.ts",
+    "tests/hierarchy-eval-incumbent-parity.test.ts",
     "tests/hierarchy-flatten.test.ts",
     "tests/hierarchy-labels-eval.test.ts",
     "tests/hierarchy-repairs.test.ts",
+    "tests/hierarchy-structure-checkpoint.test.ts",
     "tests/hierarchy-structure-eval.test.ts",
     "tests/hierarchy-structure-request-parity.test.ts",
     "tests/hierarchy-write-guard.test.ts",
@@ -888,6 +816,7 @@
     "tests/illustrated-plate.test.ts",
     "tests/illustrated-route.test.ts",
     "tests/illustrated-run.test.ts",
+    "tests/illustrated-view.test.tsx",
     "tests/ingest.test.ts",
     "tests/injection-scan.test.ts",
     "tests/internal-links.test.ts",
@@ -899,6 +828,7 @@
     "tests/job-engine-drives-with-no-view.test.ts",
     "tests/job-engine-hidden-poke.test.ts",
     "tests/job-engine-session.test.tsx",
+    "tests/job-engine-vanished-job.test.ts",
     "tests/job-files-on-disk.test.ts",
     "tests/job-progress-band.test.tsx",
     "tests/job-session-effect.test.tsx",
@@ -918,6 +848,8 @@
     "tests/library.test.ts",
     "tests/link-facts.test.ts",
     "tests/link-preview.test.ts",
+    "tests/linky-is-scoped.test.ts",
+    "tests/list-reconciles-expired.test.ts",
     "tests/live-exchanges.test.ts",
     "tests/live-meter.test.ts",
     "tests/live-mic-lock.test.tsx",
@@ -933,6 +865,7 @@
     "tests/log.test.ts",
     "tests/mark-sign-in-chrome.test.ts",
     "tests/masthead-origin.test.tsx",
+    "tests/masthead-sharing-mark.test.tsx",
     "tests/masthead-source.test.tsx",
     "tests/messages-stream.test.ts",
     "tests/messages.test.ts",
@@ -958,13 +891,17 @@
     "tests/no-provider-calls-guard.test.ts",
     "tests/no-secrets-in-bundle.test.ts",
     "tests/no-undeclared-spend.test.ts",
+    "tests/not-found-page.test.tsx",
+    "tests/not-found-route.test.tsx",
     "tests/note-arrival.test.ts",
     "tests/note-carry-over.test.ts",
     "tests/note-markers.test.ts",
     "tests/note-preview-card.test.tsx",
     "tests/notes-canonical.test.ts",
+    "tests/nuqs-setter-is-stable.test.tsx",
     "tests/offline-remount.test.tsx",
     "tests/offline-store.test.ts",
+    "tests/one-article-for-one-address.test.ts",
     "tests/openrouter-stream.test.ts",
     "tests/outline-panel.test.tsx",
     "tests/outline.test.ts",
@@ -978,19 +915,29 @@
     "tests/passage-mode-cleanup.test.tsx",
     "tests/pdf-bundle-trace.test.ts",
     "tests/pdf-chunk-concurrency.test.ts",
+    "tests/pdf-page-cap-message.test.ts",
     "tests/pdf-page-cap.test.ts",
+    "tests/pdf-read-failure-sentences.test.ts",
     "tests/pdf-read.test.ts",
     "tests/pdf-score.test.ts",
     "tests/pdf-seam-hyphens.test.ts",
     "tests/pdf-sideways.test.ts",
+    "tests/pdf-source-parsed-once.test.ts",
     "tests/pdf-without-canvas.test.ts",
     "tests/pdf.test.ts",
     "tests/perf-probe.test.ts",
+    "tests/permalinks-follow-the-address.test.tsx",
     "tests/pg-ready.test.ts",
     "tests/pipeline-slug-claim.test.ts",
     "tests/plan-name.test.ts",
+    "tests/plans-match-tiers.test.ts",
+    "tests/preflight-substitute.test.ts",
+    "tests/preview-pages.test.ts",
+    "tests/pricing-buy-intent.test.tsx",
+    "tests/pricing-page-current-plan.test.tsx",
     "tests/pricing.test.ts",
     "tests/privacy-page.test.ts",
+    "tests/private-lane-survives-a-module-reset.test.ts",
     "tests/profile-mic-button.test.tsx",
     "tests/profile-panel.test.tsx",
     "tests/profile-prompts.test.ts",
@@ -998,6 +945,7 @@
     "tests/profile-shelf-failure.test.tsx",
     "tests/profile.test.ts",
     "tests/projection.test.ts",
+    "tests/prose-not-rebuilt.test.tsx",
     "tests/public-client-fetch.test.ts",
     "tests/public-dispatch.test.ts",
     "tests/public-dto.test.ts",
@@ -1075,15 +1023,22 @@
     "tests/search-stream.test.ts",
     "tests/search.test.ts",
     "tests/searches.test.ts",
+    "tests/second-job-queues.test.ts",
     "tests/seed-accounts.test.ts",
     "tests/seed-admin-signin.test.ts",
     "tests/seed-dev-rules.test.ts",
+    "tests/seed-local-accounts.test.ts",
     "tests/selection.test.ts",
     "tests/shared-inventory.test.ts",
     "tests/shared-notice-hides-with-the-masthead.test.tsx",
+    "tests/sharing-controls-are-controls.test.tsx",
+    "tests/shelf-cached-paint.test.tsx",
     "tests/shelf-render-loop.test.tsx",
     "tests/shelf-shared-badge.test.tsx",
     "tests/similar.test.ts",
+    "tests/site-footer.test.tsx",
+    "tests/site-nav-sign-in.test.tsx",
+    "tests/sketch-caption-is-not-a-native-tooltip.test.tsx",
     "tests/sketch-paint.test.ts",
     "tests/sketch-scene.test.ts",
     "tests/sketch-view-drawing.test.tsx",
@@ -1106,7 +1061,9 @@
     "tests/statusline.test.ts",
     "tests/step-job-driver-stalled.test.tsx",
     "tests/step-job-force.test.tsx",
+    "tests/step-job-preceded-by.test.ts",
     "tests/stop-details.test.ts",
+    "tests/storage-buckets.test.ts",
     "tests/store-artefact-manifest.test.ts",
     "tests/store-block-reads.test.ts",
     "tests/store-carried-columns.test.ts",
@@ -1118,10 +1075,12 @@
     "tests/store-export-isolation.test.ts",
     "tests/store-export-referee.test.ts",
     "tests/store-fs-write-chains.test.ts",
+    "tests/store-glossary-delete-pg.test.ts",
     "tests/store-guard-idempotent.test.ts",
     "tests/store-guarded.test.ts",
     "tests/store-job-draft.test.ts",
     "tests/store-lookups-pg.test.ts",
+    "tests/store-migration-registry.test.ts",
     "tests/store-pg-referee-claims.test.ts",
     "tests/store-project-pair.test.ts",
     "tests/store-publish-guards.test.ts",
@@ -1132,11 +1091,11 @@
     "tests/store-searches-pg.test.ts",
     "tests/store-selection.test.ts",
     "tests/store-shelf-pg.test.ts",
-    "tests/store-shelf-reads.test.ts",
     "tests/store-slug-guard.test.ts",
     "tests/store-step-fence.test.ts",
     "tests/store-transaction-isolation.test.ts",
     "tests/store-writes-land-in-postgres.test.ts",
+    "tests/stripe-target.test.ts",
     "tests/summary-expand.test.tsx",
     "tests/supabase-auth-config.test.ts",
     "tests/supplement.test.ts",
@@ -1155,6 +1114,9 @@
     "tests/turn-order-across-reload.test.ts",
     "tests/turn-order.test.ts",
     "tests/tweets-page.test.ts",
+    "tests/unit-lane-has-no-database.test.ts",
+    "tests/upload-engine.test.ts",
+    "tests/upload-records.test.ts",
     "tests/uploads.test.ts",
     "tests/url-state.test.ts",
     "tests/use-chat-recovery.test.ts",
