@@ -230,6 +230,16 @@ export function worthRetrying(message: string | null | undefined): boolean {
  * itself. A lease that has expired does not prove the old claimant has stopped
  * — only that it stopped saying so — and two runners writing one article is
  * worse than one click. docs/plans/260827h-durable-queue-and-uploads.md § 2.
+ *
+ * **Two situations, one sentence, and the second one is the commoner.** A lapsed
+ * lease is a claimant that really has gone; a claimant that reaches its own
+ * deadline mid-step and hands the job back is *choosing* to stop, which "did not
+ * come back" describes a little generously. It is the same thing from the
+ * reader's side — something was running their article and is not any more,
+ * nobody did it to them, and pressing the button resumes — so it stays one
+ * sentence rather than two. It is now also what the **step** says in that case,
+ * not just the job: src/jobs.ts § `DeadlineReached`, and `STEP_STOPPED` below
+ * for the accusation that fixed.
  */
 /**
  * **The stable half of `INTERRUPTED`**, and the only half anything may classify
@@ -325,6 +335,12 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      `ai-over-room` — it is our own room for the answer set too low. */
   "pdf-pages": "blocked",
   "pdf-chunk-big": "blocked",
+  /* The two files pdf.js will not open. `blocked` and not `retry`, which is the
+     whole of the finding they were added for: nothing declared reads as *nobody
+     said*, and nobody said means offer another go — so a password-protected
+     PDF had a Retry button that could not ever work. See `PDF_LOCKED`. */
+  "pdf-locked": "blocked",
+  "pdf-damaged": "blocked",
   "ai-pdf-cut-off": "bug",
   "ai-pdf-filtered": "blocked",
   /* The two token-budget failures, split from their own diagnostics on
@@ -352,12 +368,20 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "rd-recheck": "retry",
   /* Uploading a file. `up-` for the same reason `db-` is not `ai-`: a reader
      quoting four characters should not have to explain which part of the app
-     they were in. Two are `blocked` and two are `retry`, and the split is the
-     whole reason these are registered rather than left to fall through — an
-     unknown code means *offer another go*, so "that file isn't a PDF" would
-     have come with a Retry button that cannot work. */
+     they were in. **Their kinds are not uniform**, which is the whole reason
+     they are registered rather than left to fall through: an unknown code means
+     *offer another go*, so "that file isn't a PDF" would have come with a Retry
+     button that cannot work. (This carried a tally — "two are blocked and two
+     are retry" — until 2026-09-04, by which time it had been wrong through three
+     separate additions, this stage's included. A count written in prose beside
+     the list it counts goes stale on the next line added, and no test can see
+     it, so there is no count here now.) */
   "up-big": "blocked",
   "up-pdf": "blocked",
+  /* The page cap, as the *upload record* states it. The job card gets
+     `pdf-pages` instead, which names the count — see `UPLOAD_TOO_MANY_PAGES`
+     for why one refusal needs two sentences. */
+  "up-pages": "blocked",
   /* Signing in, `auth-`. Only one of the four is not `retry`, and that one is
      the reason they are registered at all: a provider switched off on the
      project is `ours`, so no interface offers a Retry that would do exactly the
@@ -374,10 +398,11 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "up-off": "ours",
   "up-sum": "blocked",
   "up-gone": "blocked",
-  /* **`retry`, and it is the only upload code that is.** The other three
-     describe a file that will never be there; this one describes one that is
-     not there *yet*, which is an ordinary state now that the reader gets the
-     ingest's address before the bytes have finished moving. Another go is
+  /* **`retry`, and it is the only upload code that is.** Every other one
+     describes a file that will never be readable — the wrong bytes, too many
+     bytes, too many pages, nothing there at all — while this one describes one
+     that is not there *yet*, which is an ordinary state now that the reader gets
+     the ingest's address before the bytes have finished moving. Another go is
      exactly what helps. See `UPLOAD_STILL_ARRIVING`. */
   "up-wait": "retry",
   /* These two were missing until 2026-08-26, so `kindOfMessage` returned null
@@ -815,6 +840,13 @@ export function stepGaveUp(kind: FailureKind, step: string): ReaderFacingFailure
  * is *nobody came back*, and telling somebody who pressed Stop that something
  * went wrong is the app not listening (src/job-state.ts § the eight states).
  *
+ * **And the same distinction runs the other way, which cost a reader a false
+ * accusation for a day.** The claimant's 740 s deadline aborts the *same*
+ * controller Stop does, so until 2026-09-04 an overrun was shown this sentence
+ * — *"You stopped this before it finished"* — to somebody who had pressed
+ * nothing. That case takes `INTERRUPTED` now, decided on the abort's typed
+ * reason rather than on the fact of it: src/jobs.ts § `DeadlineReached`.
+ *
  * The step is not named here, unlike `stepGaveUp`: the shelf card draws this
  * directly under `step.label`, and the band does not draw it at all.
  */
@@ -994,6 +1026,46 @@ export function pdfTooManyPages(pages: number, limit: number): ReaderFacingFailu
       `you actually want, will go through. [pdf-pages]`,
   };
 }
+
+/**
+ * **The two ways a PDF never gets read at all**, because pdf.js will not open
+ * it — and until 2026-09-04 neither of them had a sentence.
+ *
+ * `runPdfExtract` translated its page-cap refusal out of `pass0` and rethrew
+ * everything else bare, so a locked or damaged file arrived at
+ * `readerFailureOf` with nothing declared. Nothing declared reads as *nobody
+ * said*, and nobody said means `retry` — so **the reader was handed a Retry
+ * button for a file that will never open**, which is the one copy mistake
+ * docs/project/copy.md calls expensive: they press it, four or five times, and
+ * conclude the app is broken. Found by GPT Sol reviewing stages 4 and 5 of
+ * docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md, in the input
+ * class stage 1 of that plan had not audited.
+ *
+ * `pdf-` rather than `ai-`, like the two refusals above: no call is made and no
+ * money is spent finding out. Both `blocked` rather than `bug` — nothing here is
+ * broken and nothing is misconfigured, the file simply cannot be read — and
+ * `blocked` is the one non-retryable kind where the reader still has a move,
+ * which both of these have: **another copy of the file**. That is why they say
+ * so, and why they are two sentences rather than one. "This PDF could not be
+ * opened" would be true of both and would leave somebody with a locked file
+ * hunting for damage that is not there.
+ */
+export const PDF_LOCKED: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "This PDF is locked with a password, so there is no way in to read it. Opening it again " +
+    "would meet the same lock — a copy saved or exported without the password is what would go " +
+    "through. [pdf-locked]",
+};
+
+export const PDF_DAMAGED: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "This file could not be opened as a PDF at all: it is damaged, or it is not really a PDF. " +
+    "The bytes are the same every time they are read, so this will come back the same way — " +
+    "downloading or exporting the document again, and adding that copy, is what would " +
+    "help. [pdf-damaged]",
+};
 
 export function pdfChunkTooBig(megabytes: number, limit: number): ReaderFacingFailure {
   return {
@@ -1396,9 +1468,10 @@ export const UPLOAD_CHECKSUM: ReaderFacingFailure = {
  * `acquireUpload` answers with `UPLOAD_MISSING`, terminally. A reader's own
  * reload destroyed their upload.
  *
- * **`retry`, where the other three upload codes are not.** Another go is
- * precisely what helps, and the page does it for them: it waits, and posts
- * again when `GET /api/uploads/:id` says the object has arrived.
+ * **`retry`, where no other `up-` code is.** Another go is precisely what helps,
+ * and the page does it for them: it waits, and posts again when
+ * `GET /api/uploads/:id` says the object has arrived. (It said "the other three"
+ * until 2026-09-04, when there were six; see the tally note in `CODE_KINDS`.)
  *
  * **It names another go even though the page takes it for the reader**, because
  * `tests/messages.test.ts` requires every `retry` sentence to say what would
@@ -1419,6 +1492,62 @@ export const UPLOAD_MISSING: ReaderFacingFailure = {
     "That file never finished arriving. An upload has two hours to complete, so a very slow " +
     "connection or an interrupted one will do this. Running this again will not help — there is " +
     "nothing there to read. Choose the file again. [up-gone]",
+};
+
+/**
+ * **The page cap, as the upload record states it** — and, as it stands, **a
+ * sentence no reader ever sees.** Read this before editing it.
+ *
+ * `RejectReason` maps an enum to a *static* failure (src/source.ts), so nothing
+ * on that side can say "142 pages"; the number is only known where the counting
+ * happened. So the record takes this, and the job — the thing the reader is
+ * actually looking at — takes `pdfTooManyPages`, which names the count and the
+ * limit. Splitting them is what lets the state machine record *why* an upload
+ * was refused without either half inventing a number it does not have.
+ *
+ * **The limit is not in this sentence, and that is the cost of it being
+ * static.** `MAX_PAGES` lives in src/pdf-read.ts, which pulls in pdf.js and
+ * p-queue; this module is imported by the browser. `pdfTooManyPages` takes the
+ * limit as an argument for exactly that reason.
+ *
+ * `blocked` for the same reason as the ones above it: the file has the same
+ * number of pages every time it is counted.
+ *
+ * ## Unreachable, deliberately, and kept anyway ⟨GPT Sol, 2026-09-04⟩
+ *
+ * Both queue origins persist and render `pdfTooManyPages(count, limit)` — the
+ * browser run confirmed the reader sees `[pdf-pages]` — and the upload endpoint
+ * exposes only the raw `RejectReason` enum, which nothing renders through
+ * `rejectionMessage`. `refuseAnOverlongPdf` (src/pipeline.ts) does not even go
+ * through `acquireUpload`'s `refuse`: it writes the reason onto the row itself,
+ * precisely so the *job* can carry the better sentence. So this paragraph is
+ * live copy with no live reader.
+ *
+ * **Deleting it costs more than keeping it, which is the whole argument.**
+ * `REJECTIONS` is `Record<RejectReason, ReaderFacingFailure>` — total by type —
+ * and `REJECT_REASONS` is derived from it, so removing this entry means either
+ * making the map partial or hand-writing a second list. That totality is a real
+ * safety property: it is what makes a *new* reject reason with no sentence, no
+ * code and no kind fail the compiler, which is the failure
+ * docs/postmortems/260826a-toc-max-tokens.md is about and the one
+ * `too-many-pages` itself nearly repeated. Trading a constraint for a deleted
+ * paragraph is the wrong way round.
+ *
+ * **So it stays, and the risk is named rather than removed:** the risk is
+ * *drift* — this sentence and `pdfTooManyPages` describing the same refusal
+ * differently, with nothing to notice, because the invariants in
+ * tests/messages.test.ts and tests/source.test.ts check its code and its kind and
+ * cannot check whether it still agrees with its twin. **Edit the two together.**
+ * If the upload endpoint ever renders a rejection reason, this is the sentence
+ * it renders, and the drift stops being theoretical.
+ */
+export const UPLOAD_TOO_MANY_PAGES: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "That PDF has more pages than this app reads in one go. That is a limit on what reading a " +
+    "document is allowed to cost rather than a technical one, so the same file will come back " +
+    "the same way — a shorter document, or the part of this one you actually want, will go " +
+    "through. [up-pages]",
 };
 
 /**

@@ -302,6 +302,17 @@ back off the file the queue wrote rather than off an in-memory clone, and covers
 the two writers of `job.error` that are not the step catch: a refused
 publication, and a run the reader stopped.
 
+**A run the reader stopped and a run that ran out of time are two of those, not
+one**, and telling them apart is the same rule as rule 2 — say whose it is. Stop
+and the claimant's own 740 s deadline abort the *same* signal, so until
+2026-09-04 an overrun was shown *"You stopped this before it finished"* to
+somebody who had pressed nothing, watched happening on a 144-page PDF. The
+deadline case says `INTERRUPTED` (`[jb-gone]`) now, on both fields; the
+distinguishing fact is a typed abort reason rather than a matched sentence,
+because copy stays freely rewritable and a message match would quietly stop
+working when somebody rewrote one — [`src/jobs.ts`](../../src/jobs.ts) §
+`DeadlineReached`.
+
 ## What this does not cover yet
 
 **One near-miss first**, because it is the kind of thing this section exists to

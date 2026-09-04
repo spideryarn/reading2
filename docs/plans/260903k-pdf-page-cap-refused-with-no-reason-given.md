@@ -171,10 +171,14 @@ published revision to copy from — so the draft is empty, `stepIsDone` finds no
 re-runs. Retry's advertised "skipping what succeeded" is void for a failed first ingest. Scope
 arbitrated separately; see stage 3.
 
-**Three comments are now wrong** and are corrected in stage 6: `src/store/pg-session.ts` ~577 and
-`src/pdf-read.ts` ~950 both call `articleId` stable "across every job, every attempt and every draft
-revision" — true of the store, false of the pipeline; and `forceForRetry`'s comment still describes
-the job-scoped `/tmp` that landing D2 replaced.
+**Three comments are wrong, and stage 3 fixed two of them by making them true.** `pg-session.ts` and
+`pdf-read.ts` both call `articleId` stable "across every job, every attempt and every draft
+revision", which was false of the pipeline when written and **is true again now that a retry keeps
+its slug** — so stage 6 must *not* rewrite them as errors, which was this plan's original
+instruction and would be the wrong edit ⟨260904a⟩. They stay, cited in the postmortem as the shape of
+the class: a precondition written down at the borrower rather than at the module that grants it. Only
+`forceForRetry`'s comment is still wrong on its own terms — it describes the job-scoped `/tmp` that
+landing D2 replaced — and stage 6 corrects that one.
 
 ## Greg's decisions, 2026-09-03
 
@@ -480,16 +484,57 @@ still is not, with a test for each; `MAX_PAGES` at 250 is checked against 16 rat
 
   **The introducing change for the second one is already written down**, which makes it a better
   postmortem than most: `tests/pipeline-slug-claim-files.test.ts` ~98 records that returning an
-  upload's slug on retry was *deliberately deleted* with the short-id change on 2026-08-31, "so a
-  retry mints a fresh name". That was four days before the checkpoints arrived and started depending
-  on the opposite. Nobody was wrong at the time; the second change did not go looking for what the
-  first had decided.
+  upload's slug on retry was *deliberately deleted* with the short-id change, "so a retry mints a
+  fresh name". Nobody was wrong at the time; the second change did not go looking for what the first
+  had decided.
+
+  **This paragraph said "on 2026-08-31" and "four days before", and both were wrong** — that is
+  Greg's decision date, not the commit's. The short id landed in `74e29153` at 06:28 and the
+  checkpoints in `2988bcb9` at 16:26, **ten hours apart on 2026-09-01**. Corrected here rather than
+  quietly, because the gap was the point being made and a smaller one makes it sharper.
 
   Write B up not as a fresh recommendation but as **"decision 8 still stands, and matters less after
   this stage than when it was made"** ⟨Fable⟩.
 
+  **Landed 2026-09-04** as
+  [260904a](../postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md),
+  which named the class *a borrowed key* and found two things this plan had not: the bug left a
+  **visible fingerprint** — `slugWithShortId` appends rather than replaces, so three Retries read
+  `…-spya-aaa-spya-bbb-spya-ccc` — and **decision 7, one line above decision 8 in the same list, is
+  the short id**. Decision 8 was affordable *because* of a substitute its own neighbour had just made
+  unreachable. The borrowed key at the level of the decision record.
+
+- **Build 260904a's recommendation 2, because a postmortem's prevention is a stage rather than a
+  filing** ([engineering-manager.md](../reusable/engineering-manager.md) § Bug-mode). Its 1 and 3
+  landed in stage 3 already; 4 is deliberately not built. 2 is not built and is two lines:
+  **log the hit rate, not the exception.** `storedChunks` (`src/pdf-read.ts`) warns only when a
+  checkpoint read *throws*, under a comment citing [silent-success.md](../reusable/silent-success.md)
+  that describes precisely the failure we had — and it never fired, because the read never threw. It
+  succeeded and returned an empty map, every time, for the whole life of the feature.
+  `generateHierarchy`'s `labelsResumed` (`src/hierarchy.ts`) has the same shape at the other end,
+  printed only when it is greater than zero. **Both were pointed at the interesting case being
+  present rather than absent.** So: log `{ asked, found }` on every checkpoint read, and print
+  `labelsResumed` unconditionally, so that *"every retry ever found zero"* is one log query rather
+  than a bill nobody reconciles. Touches `src/pdf-read.ts`, so it waits for stage 5 to let go of it.
+- **A privacy claim that is false on the screen this job just fixed — found in the browser run,
+  2026-09-04, and it is Greg's call rather than mine.** The `/add` page shows *"The article's text
+  has been sent to a third-party model provider for processing."* above the refusal card for a PDF
+  that **never reached a provider**: it was counted locally and refused in stage 1, before any paid
+  call. `textHasGone` ([`src/web/AddPage.tsx`](../../src/web/AddPage.tsx)) is deliberately the
+  predicate *"has an ingest been queued"*, and its own comment names this case as the one it must not
+  get wrong — *"a page that says the text has gone about a file the server would not take is the same
+  lie in the other direction"*. That guard covers a **refused POST**; here the POST succeeded and the
+  pipeline refused a moment later, so it does not fire.
+
+  **Pre-existing, not introduced here** — the old stage-2 refusal said the same thing, because
+  `pass0` is local too — but this job made it visible and this job is about messages being true. The
+  fix is a predicate that also reads false once a job has ended at a step before any model call,
+  which is more than a word. **Not built:** it is a statement about a reader's manuscript and
+  therefore a product call, and [engineering-manager.md](../reusable/engineering-manager.md) says to
+  stop for one rather than guess.
 - **One more thing to file, found on the way and not fixed here:** `sweepAbandonedDrafts`
-  (`src/store/pg-revisions.ts` ~1768) has no callers at all, so failed drafts accumulate unbounded.
+  (`src/store/pg-revisions.ts`) has no callers at all — verified 2026-09-04 by a repo-wide grep for
+  `sweepAbandonedDrafts(`, which finds only the definition — so failed drafts accumulate unbounded.
   Ranked in the postmortem, not built — it is nobody's blocker today and it is not this job.
 - [content-extraction.md](../project/content-extraction.md),
   [ingest-queue.md](../project/ingest-queue.md), [copy.md](../project/copy.md). A substantive rule
@@ -497,6 +542,178 @@ still is not, with a test for each; `MAX_PAGES` at 250 is checked against 16 rat
 - **Drive it in a browser**, in a subagent, on the real 144-page arXiv paper already parked in the
   scratchpad: upload, watch the card, read the sentence. Tests going green is not evidence a reader
   can see it.
+
+## What the browser found that no test did — 2026-09-04
+
+Both runs, against a real dev server on the real UI. **Run A proves the reported bug is fixed**: a
+300-page PDF is refused on *"Checking the file"* — the **first** step, which is the moving of the
+gate made visible — in seconds, with *"This PDF has 300 pages, and this app reads at most 250 of them
+in one go…"* and no Retry button. Screenshot `scratchpad/a2-terminal.png`. **Run B proves the cap
+raise works**: the real 144-page arXiv paper, refused outright under 100, went
+`Checking the file ✓ → Extracting the article ✓ → Splitting into blocks — 1093 blocks ✓`.
+
+Then it found two things a green suite did not.
+
+**G — a job stopped by its own deadline tells the reader *they* stopped it.** Run B's hierarchy step
+hit the 740 s deadline at ~723 s and the card said:
+
+> **You stopped this before it finished.** Whatever had already been done is kept, so starting it
+> again picks up from there rather than beginning over. `[jb-stopped]`
+
+Nobody pressed Stop. `runStep` decides with `const stopped = controller.signal.aborted`
+(`src/jobs.ts`), and **the deadline aborts that same controller** — so an overrun takes the branch
+written for a reader who chose to stop, and gets `STEP_STOPPED`. The outer level gets it right
+(`overran ? interruptedEnding(job) : markCancelled(…)`), but the inner catch never consults `overran`,
+and the step-level sentence is the one the card renders. `messages.ts` states the distinction these
+two codes exist to hold — *"an interruption is nobody came back, and telling somebody who pressed
+Stop that something went wrong is the app not listening"* — and this is that same disrespect
+reversed: telling somebody who did nothing that they did it.
+
+**Cheap to fix, because the information is already there**: the deadline aborts with
+`new Error(INTERRUPTED.message)` as the reason, so `controller.signal.reason` already distinguishes
+the two. **And stage 4 makes it common** — raising the cap to 250 turns a deadline overrun on a long
+PDF from rare into routine, which is why it belongs to this job rather than to a later one.
+
+**Fixed 2026-09-04** with a typed reason rather than that message — see § What was done about the
+third review, G, for why the string was the wrong thing to match on.
+
+**H — a privacy claim that is false**, recorded in stage 6's list above: the `/add` page said *"The
+article's text has been sent to a third-party model provider"* over Run A's refusal card, about a
+document refused locally before any paid call. Pre-existing, and Greg's call.
+
+**Also measured, and worth keeping:** a 144-page PDF now needs **two lease windows** — extract
+consumed most of the first and hierarchy was cut off. That is the designed behaviour and the
+checkpoints make it cheap, but it is the empirical answer to the question Sol's finding D is about,
+and it says the 250-page cap routinely costs two claims rather than one.
+
+## What the third review found — stages 4 and 5, 2026-09-04
+
+GPT Sol returned **DO-NOT-SHIP** on the built stages 4 and 5, after the implementer had already run
+two rounds of its own mid-stage. Its summary: *"The page-cap implementation is basically sound.
+Stage 5 is not."* Six findings, and the ranking below is **mine, not Sol's** — I promoted its
+third finding, because it is this plan's own thesis failing on a different input.
+
+**A — a PDF the parser cannot open still tells the reader to try again, for ever.** ⟨promoted from
+Sol's P2⟩ `runPdfExtract` translates **only** `TooManyPages` out of `pass0` and rethrows everything
+else bare (`src/pdf-read.ts` § `runPdfExtract`). A bare throw has no `readerFailure`, so
+`readerFailureOf` falls through to `stepGaveUp(failureKindOf(err) ?? "retry", …)` — and a
+**password-protected or corrupt PDF is handed a Retry button that cannot ever work**. This is exactly
+the shape stage 1 was written to eliminate, surviving in an input class stage 1 did not audit, and it
+is the thing stage 2's marker exists to make impossible. Sol: *"exactly the expensive copy error
+forbidden by copy.md."* It also dissolves the "encrypted PDF gets a fetch-flavoured sentence" trade
+recorded during stage 4 — there was never a stage-2 sentence for it to lose. **And fixing it brings
+that trade into existence**, narrowed to the file the trade was really about: `pdfIsUnreadable`'s
+comment now says so, and it is the rare `UnknownErrorException` case (an unsupported encryption
+algorithm) rather than every unopenable PDF.
+
+**B — the 429 safety belt built a synchronised herd, and truncates a long `Retry-After`.** ⟨P1⟩
+Sixteen chunks sleep the same duration and retry together: Sol's 16-call probe put every initial
+request inside 59 ms and all sixteen retries inside a **15 ms window**. And `Retry-After: 600` is
+clamped to 30 s twice over — once in `ai-call.ts` § `retryAfterMs`, once by `MAX_BACKOFF_MS` — so the
+one party that knows when the queue drains is overruled, and the new test *asserts* that violation.
+The stage's own brief said "respecting `Retry-After` where the provider sends one". **Doubling the
+fan-out into one upstream while retrying in lockstep is worse than the fatal-429 it replaced**, in
+the one case both are about.
+
+**C — the new stage-1 counter cannot be aborted.** ⟨P1⟩ `countPdfPages` takes no signal and its call
+site passes none, so the job's 740 s self-deadline **cannot reach pdf.js at all** — not swallowed,
+simply unwired. A pathological untrusted PDF holds stage 1 until the platform kills the process. Note
+what this is: the security note added to `security.md` in this very stage says opening a stranger's
+file in-process is where the attack surface is, and the abort that bounds it was never connected.
+
+**D — the recovery story in the concurrency comment is false.** ⟨P2⟩ It says `settleExpired` requeues
+an overrun automatically. A cooperative deadline abort instead **ends the job as a retryable error**
+and the reader must press Retry. Checkpoints do survive, so the work is banked — but "a second
+automatic lease window" is not what happens, and the 250-page cap was argued partly on that comment.
+Sol also confirmed the arithmetic itself is right for prose and named the real worst case: **250
+one-page chunks, sixteen waves, 720 s at the mean** and over 740 s at the tail.
+
+**E — `[up-pages]` is dead copy.** ⟨P3⟩ Both origins persist and render `pdfTooManyPages(count, limit)`;
+the upload endpoint exposes only the raw enum, and nothing renders `UPLOAD_TOO_MANY_PAGES`. Confirmed
+independently by the browser run, where the reader saw `[pdf-pages]`. A registered code with no reader
+is a paragraph free to drift.
+
+**F — the lease commentary now lies about its own arithmetic.** ⟨P3⟩ `src/jobs.ts` still quotes
+`fetch ~10s + extract ~5s + … ≈ 520s`, which this stage made false in the same file it made it false
+in.
+
+**What Sol cleared, which is worth recording too:** there is no third reader origin for the cap
+(finding 1, AGREE); the buffer copy is necessary and the caller's bytes stay hash-identical, with
+`destroy()` leaving no worker handle (finding 3, AGREE, measured on a 30.4 MB synthetic — 2.54 s cold,
+46 ms warm, ~407 MB cold RSS); and `extract: 700_000` does **not** wedge a job, because the budget is
+checked only after a completed step and a fresh claim's first runnable step is ungated (finding 5,
+AGREE — the deadlock I had suspected and checked myself before asking).
+
+## What was done about the third review — 2026-09-04
+
+All seven repaired in the tree before stages 4 and 5 were committed, each behind a test watched red
+first. The three decisions are recorded here because the decision is the part a future reader needs.
+
+**A.** Two new `blocked` failures — `PDF_LOCKED` (`[pdf-locked]`) and `PDF_DAMAGED` (`[pdf-damaged]`)
+— thrown from `runPdfExtract`'s `pass0` catch, classified by `pdfUnreadableReason`
+(`src/pdf.ts`), which `pdfIsUnreadable` is now expressed in terms of so the stage-1 gate and the
+stage-2 sentence cannot drift about what a readable PDF is. Two codes rather than one, because only
+one of them mentions a password. Everything else still rethrows bare: a broken parser is not a broken
+document. Red first, on a hand-built `/Encrypt` PDF (a real `PasswordException`, verified) and on
+damaged bytes — both got `[jb-step-again]` and a Retry button.
+
+**B. `Retry-After` is obeyed in full or refused, never truncated.** The clamp came out of
+`retryAfterMs` (`src/ai-call.ts`), which was hiding the length of a wait from the only caller that
+wanted to decide about one, and moved to the callers that have a deadline — `backoffMs` in
+`src/embeddings.ts` keeps its old behaviour exactly. `MAX_RETRY_AFTER_MS` is **60 s**, and the number
+is arithmetic rather than taste: 250 pages is ~84 chunks, six waves at width 16, and
+`6 × (45 s + 60 s) = 630 s` still lands inside the 740 s deadline where 90 s would not. Beyond it the
+chunk **fails this attempt now** — option (a) of the brief. Sleeping through it was the alternative
+and is worse: it spends the window and ends in the same place, having bought nothing, where failing
+early hands back a claim and every answered chunk is already banked. Jitter is two shapes: full
+jitter for a dropped connection, half-the-ceiling-and-up for a 429 (a draw of nearly zero is wrong
+for the one status that means *stop asking*), and an honoured `Retry-After` gets the whole of it plus
+a spread of up to 1 s. The test that pinned the violation is replaced by two that pin the honest
+behaviour, plus one that runs sixteen chunks into one rate limit and counts distinct wake-up moments
+— **1 before, 16 after**. No shared token bucket, as instructed; the comment saying it belongs in
+`src/ai-call.ts` stays.
+
+**C.** `countPdfPages` takes an `AbortSignal`, checks it before opening anything and again after
+pdf.js loads, destroys the loading task on abort, and replaces pdf.js's "Worker was destroyed" with
+the signal's own reason so a caller classifying the failure is not told something false about the
+file. `refuseAnOverlongPdf` now takes the whole `StepContext` for `ctx.signal`. Two tests: the abort
+itself, against a mocked document that **never opens** — so a version that ignores the signal hangs
+rather than passing — and the wiring at the call site, which was the half that was actually missing.
+Both were watched red (the first as a timeout, the second storing a document for a claimant that had
+already given up). Written down honestly in `security.md` and in the function: the abort lands
+between pdf.js's own `await` points and cannot interrupt a single synchronous parse step.
+
+**D.** The concurrency comment now says what happens — `settleExpired` requeues a **lapsed lease**,
+while a cooperative deadline abort ends the job as a retryable error the reader picks up — with the
+`ms: 740033` observation as the evidence, and Sol's worst case (250 one-page chunks, 16 waves, 720 s
+at the mean) kept. **The same false claim was in `REQUEUE_BUDGET`'s own comment** in `src/jobs.ts`,
+which named "a long PDF that ran past its lease" as an example of a lapse, and in
+`ingest-queue.md`'s Stop section; both corrected.
+
+**E. `UPLOAD_TOO_MANY_PAGES` stays, loudly documented as unreachable.** Deleting it is the option
+with *more* moving parts, not fewer: `REJECTIONS` is `Record<RejectReason, ReaderFacingFailure>` and
+`REJECT_REASONS` is derived from it, so removing the entry means a partial map or a second
+hand-written list — and that totality is what makes a new reject reason with no sentence a compiler
+error, which is the failure `260826a` is about and the one `too-many-pages` itself nearly repeated. A
+constraint is worth more than a deleted paragraph. The risk that remains is named where it lives:
+this sentence and `pdfTooManyPages` can drift, nothing can see it, so they are edited together.
+
+**F.** The lease arithmetic is re-measured for an ordinary web page —
+`fetch ≤110s + extract ~10s + blocks ~5s + hierarchy 320.4s + assets ≤185s = 630.4s` — with the PDF
+branch called out as not fitting one window, never having claimed to, and measured at two claims in
+the browser run. The stale *"Why 420s"* heading argued for a number two revisions out of date and is
+now *"Why the deadline is minutes and not seconds"*, keeping the reasoning and dropping the claim.
+
+**G.** The deadline aborts with a typed `DeadlineReached` rather than a bare `Error`, and `runStep`
+reads `controller.signal.reason instanceof DeadlineReached`. **Typed rather than the message string**
+— matching `INTERRUPTED.message` would work today and would silently stop working the day somebody
+reworded it, which is exactly the freedom `copy.md` promises. The `let overran` at the outer level is
+gone, replaced by a function over the same reason, so there is one answer rather than two copies of
+it — the second copy being unreachable from `runStep` is what caused the bug. The step now says
+`INTERRUPTED`, agreeing with the job's own ending rather than contradicting it: *"whatever was running
+it did not come back"* is a little generous about a claimant that chose to stop, and it is the same
+event from the reader's side, so it stays one sentence and `INTERRUPTED`'s comment says which two
+situations share it.
 
 ## What the second review found, and what was done about it
 

@@ -58,6 +58,8 @@ import type { RawManifest } from "./fetch.js";
 import { stageFailure } from "./job-failure.js";
 import { log } from "./log.js";
 import {
+  PDF_DAMAGED,
+  PDF_LOCKED,
   pdfChunkTooBig,
   pdfPagesCutOff,
   pdfPagesFiltered,
@@ -73,6 +75,7 @@ import {
   type Pass0,
   pass0,
   pageLines,
+  pdfUnreadableReason,
   type PdfRecord,
   RENDERED,
   type RecordType,
@@ -96,8 +99,29 @@ import { ProviderRefused, openRouterJson } from "./ai-call.js";
  */
 export const PROMPT_VERSION = "pdf-v2";
 
-/** A cost cap, not a capability one: about a dollar of transcription. */
-export const MAX_PAGES = 100;
+/**
+ * A cost cap, not a capability one: roughly a dollar per hundred pages of
+ * transcription.
+ *
+ * **250 since 2026-09-04, up from 100.** Greg's call, and the document that
+ * prompted it is the argument: a 142-page journal paper is exactly what this
+ * app is for, and it was refused. Two things had to be true before the number
+ * could move, and both are:
+ *
+ * - **A retry keeps the article**, so the per-chunk checkpoints a first attempt
+ *   paid for are reachable by a second (`slugForRetry` in src/jobs.ts). Without
+ *   that, raising the cap makes a long PDF fail *for ever* rather than fail
+ *   once — every attempt starting from zero and re-buying every chunk.
+ * - **`CHUNK_CONCURRENCY` is wide enough that 250 pages of ordinary prose fit
+ *   the deadline**; see the arithmetic there, which is now written against this
+ *   number — and note that it does *not* claim the pathological case fits.
+ *
+ * **Where it is enforced is not where it is spent.** Stage 1 counts the pages
+ * and refuses before the document is stored (src/pipeline.ts), so the reader
+ * hears it in seconds. `pass0`'s guard stays as the backstop, for an article
+ * ingested before that or re-extracted after this number moves again.
+ */
+export const MAX_PAGES = 250;
 
 /** No chunk larger than this, however sparse its pages. Long calls drift into summarising. */
 const MAX_CHUNK_PAGES = 6;
@@ -127,47 +151,91 @@ const ATTEMPTS = 2;
  * How many chunks are transcribed at once.
  *
  * **This is the number that decides how long a PDF may be.** Chunks used to be
- * read one after another, and the arithmetic that follows from that is why this
- * constant exists. The first PDF through the deployed pipeline took 135s for 9
- * pages in 2 chunks — about 45s a call — and a step is killed by its own
- * deadline at `LEASE_MS - DEADLINE_MARGIN_MS`, 740s (src/jobs.ts). Sequentially
- * that is roughly sixteen calls, so somewhere around fifty to seventy-five
- * pages the stage stopped being able to finish at all, while `MAX_PAGES` went
- * on accepting a hundred. The cap was about double the reachable length, and
- * nothing said so: a long PDF ran for twelve minutes, died, and offered a Retry
- * that would do the same thing again.
+ * read one after another. The first PDF through the deployed pipeline took 135s
+ * for 9 pages in 2 chunks — about **45s a call**, with one observed tail of
+ * **98s** — and a step is killed by its own deadline at
+ * `LEASE_MS - DEADLINE_MARGIN_MS`, 740s (src/jobs.ts). So the whole question is
+ * waves × call duration against 740s, and the width is what sets the waves.
  *
- * **Why a number rather than "all of them".** Unbounded was the ask and it is
- * the wrong shape for three reasons, none of them provider rate limits:
+ * **Sixteen since 2026-09-04, up from eight, and the number is the width at
+ * which the deadline stops being the binding constraint.** `MAX_PAGES` moved to
+ * 250 the same day; the table is against that. Measured inputs: the real
+ * 144-page paper (arXiv 2303.18223) plans **48 chunks of three pages and zero
+ * one-page chunks**, 250 pages of the same prose extrapolates to ~84 chunks, and
+ * the third column is the adversarial case the previous version of this comment
+ * constructed — a hundred pages dense enough that `planChunks` makes a chunk of
+ * each.
  *
- * - **A fatal chunk costs the whole document.** The run stops on the first
- *   truncated or filtered answer, and everything already in the air has been
- *   paid for. Sequentially the loss was one chunk; at full width it is every
- *   chunk. `allOrStop` cancels what it can, but a request that has already been
- *   answered is already billable.
- * - **Memory.** `cutPages` builds a fresh PDF per chunk and a request may carry
- *   up to `MAX_ENCODED_BYTES`. Thirty of those in flight is not a serverless
- *   function's idea of a good time.
+ *     width │ 48 chunks (real) │ 84 chunks (250pp) │ 100 × 1 page
+ *     ──────┼──────────────────┼───────────────────┼──────────────
+ *        8  │  270s /  588s    │  495s / **1078s** │  585s / **1274s**
+ *       12  │  180s /  392s    │  315s /   686s    │  405s / **882s**
+ *     ► 16  │  135s /  294s    │  270s /   588s    │  315s /   686s
+ *       24  │   90s /  196s    │  180s /   392s    │  225s /   490s
+ *       32  │   90s /  196s    │  135s /   294s    │  180s /   392s
+ *
+ * Each cell is `ceil(chunks / width) × 45s` and `× 98s`. **16 is the first width
+ * where all three of these clear 740s even on the bound where every wave hits
+ * the tail.** Past 16 the deadline stops binding *for them*, so further width is
+ * the thing the next paragraph warns against — but read "these three" rather
+ * than "any document": 250 pages dense enough to plan a chunk per page is a
+ * fourth case, it does not fit, and § What is still not guaranteed below is
+ * about it.
+ *
+ * **Cost is unchanged by any of this.** `SYSTEM` is sent per chunk and there is
+ * no prompt caching on this path, so spend is chunk count × prompt whatever the
+ * width. Width buys latency, and nothing else.
+ *
+ * **Why a number rather than "all of them".** Unbounded was the ask, and two of
+ * the three reasons against it survived being measured:
+ *
+ * - **Memory, and not for the reason first written down.** `cutPages` calls
+ *   `PDFDocument.load(source)` and pdf-lib eagerly parses the *whole source
+ *   file* every time, so memory scales with N × the **source**, not N × the
+ *   chunk — encoded chunks are small (median 0.29 MB on the 144-page paper).
+ *   Peak RSS holding N chunks of the dense `evals/pdf/harder` fixture: 749 MB at
+ *   8, **866 MB at 16**, 1105 MB at 24, 1374 MB at 32. The ceiling is almost
+ *   certainly Vercel's 2 GB default (`vercel.json` sets no `memory` and Vercel
+ *   does not allow it there) — **unconfirmed**, because no credential on the box
+ *   this was measured on can read the dashboard. 16 leaves real headroom for the
+ *   rest of the request and for a co-located second ingest; 32 does not.
  * - **Width past the point the deadline is met buys latency nobody is waiting
- *   on**, and costs the two risks above.
+ *   on**, and costs the memory above.
  *
- * **Eight, and it is not a guarantee — an earlier draft of this comment said
- * six made `MAX_PAGES` "comfortably reachable" and that was false.** GPT Sol
- * did the worst case: `planChunks` will make a one-page chunk out of a page
- * dense enough, so a hundred pages can be a hundred chunks, and at six wide
- * that is `ceil(100/6) × 45s = 765s` — already past the 740s deadline before a
- * single retry. Eight gives `ceil(100/8) × 45s = 585s`, which has margin at the
- * *mean* call duration and would still fail at a bad enough p95. Note the
- * arithmetic rather than the number: 45s is one measurement from one paper.
+ * The third reason was **overstated and is corrected here**: *"a fatal chunk
+ * costs the whole document"*. `keepChunk` runs inside each chunk's own task the
+ * moment its call returns and passes its check, before `allOrStop` can reject
+ * and call `stop()`, and it is not wired to the abort signal — so an answered
+ * sibling is durably banked. What a fatal chunk actually costs is the money for
+ * requests still in flight, plus this attempt's assembly.
  *
- * **The real fix is not a bigger number here.** Admission should be decided on
- * the planned chunk count against a measured p95, refusing up front like
- * `TooLongForOnePass` does, instead of accepting a document and discovering at
- * minute twelve that it cannot finish. That is not built. Until it is, a
- * pathologically dense hundred-page PDF can still run out of time — it will now
- * take rather more than a hundred dense pages to do it.
+ * **What is still not guaranteed.** 250 pages dense enough to plan 250 one-page
+ * chunks is 16 waves: **720s at the mean**, and far past 740s at the recorded
+ * tail ⟨confirmed independently by GPT Sol, 2026-09-04⟩. That case is
+ * *survivable* rather than *impossible* now, and the difference is the
+ * checkpoints: they are keyed on the article, and a retry lands on the same
+ * article since 2026-09-03 (`slugForRetry` in src/jobs.ts). So a document that
+ * overruns finishes across attempts instead of starting from zero each time —
+ * which is what makes raising the cap defensible rather than hopeful.
+ *
+ * **What happens next is a Retry, and this comment used to say otherwise.** It
+ * claimed `settleExpired` requeues the overrun automatically, and that is a
+ * different event: `settleExpired` requeues a claim whose **lease lapsed** —
+ * nobody came back — within `REQUEUE_BUDGET`. A step that hits its own deadline
+ * unwinds cooperatively instead, and the walk ends the job as a **retryable
+ * error** (src/jobs.ts § `DeadlineReached`), so the reader presses the button.
+ * Watched happening on 2026-09-04: a 144-page paper's hierarchy step
+ * self-cancelled at `ms: 740033` and nothing requeued it. Nothing is lost when
+ * it does — every answered chunk is banked and the next attempt starts from
+ * them — but "a second lease window arrives on its own" was never true, and the
+ * 250-page cap was argued partly on this paragraph.
+ *
+ * Admission control on the planned chunk count against a measured p95 is still
+ * the tidier answer and is still not built; the reason it is no longer urgent is
+ * that the failure it prevents now costs a lease window and a click rather than
+ * the document.
  */
-export const CHUNK_CONCURRENCY = 8;
+export const CHUNK_CONCURRENCY = 16;
 
 /** Anthropic's own limit is on the whole encoded request; OpenRouter's providers are no kinder. */
 const MAX_ENCODED_BYTES = 30 * 1024 * 1024;
@@ -545,6 +613,7 @@ export function openRouterReader(model: string = PDF_READER_MODEL): PdfReader {
           },
           ...(signal ? [{ signal }] : []),
         ),
+        signal,
       );
       if (call.json === null) {
         throw new Error(
@@ -587,9 +656,9 @@ export function openRouterReader(model: string = PDF_READER_MODEL): PdfReader {
  * different audience, which is why the mapping is here rather than in the
  * transport.
  */
-async function pdfCall<T>(send: () => Promise<T>): Promise<T> {
+async function pdfCall<T>(send: () => Promise<T>, signal?: AbortSignal): Promise<T> {
   try {
-    return await withTransportRetries(send);
+    return await withTransportRetries(send, signal);
   } catch (error) {
     if (error instanceof ProviderRefused) {
       throw new Error(`The transcription service answered ${error.status}.`);
@@ -598,8 +667,157 @@ async function pdfCall<T>(send: () => Promise<T>): Promise<T> {
   }
 }
 
-/** How many times a *transport* failure is retried, before any answer exists to judge. */
+/**
+ * How many times a call is asked again — a *transport* failure, or the one
+ * refusal that means "later". Three goes in total, not three retries.
+ */
 const TRANSPORT_ATTEMPTS = 3;
+
+/**
+ * How long to wait after a rate limit the provider gave no `Retry-After` for,
+ * doubling per attempt. Longer than the transport backoff on purpose: a dropped
+ * connection is bad luck and can be retried immediately, while a 429 is a queue
+ * that needs time to drain, and the whole point of the wait is to stop adding
+ * to it.
+ */
+const RATE_LIMIT_BACKOFF_MS = 2_000;
+
+/**
+ * Never park a chunk longer than this on a backoff **we** invented.
+ *
+ * A step's deadline is 740 s and up to `CHUNK_CONCURRENCY` chunks may be waiting
+ * on one upstream; a guess measured in minutes spends the deadline doing
+ * nothing. The provider's own number is a different question and has its own
+ * ceiling below.
+ */
+const MAX_BACKOFF_MS = 30_000;
+
+/**
+ * **The longest `Retry-After` this step can afford to obey**, past which the
+ * chunk gives up now rather than pretending.
+ *
+ * The arithmetic, at `CHUNK_CONCURRENCY` 16 against the 740 s deadline: 250
+ * pages plan ~84 chunks, which is six waves, and a wave that meets a rate limit
+ * costs its call plus this wait. `6 × (45 s + 60 s) = 630 s` still lands inside
+ * 740 s; at 90 s it is 810 s and does not. So 60 s is the largest wait that
+ * leaves the worst *ordinary* document finishing in one lease window.
+ *
+ * **Longer than this is not truncated, it is refused.** ⟨GPT Sol, 2026-09-04⟩
+ * Until then a `Retry-After: 600` was clamped to 30 s twice over — once where
+ * the header was parsed and once here — and asked again at 30 s and 60 s, both
+ * well inside a window the provider had just said was closed, by every one of
+ * sixteen chunks at once. Truncating an instruction and obeying the truncation
+ * is worse than not obeying it at all: it costs two more requests aimed at the
+ * one thing that has asked us to stop, and it ends in the same failure.
+ *
+ * What giving up costs is **this attempt**, not the document: every answered
+ * chunk is already in the checkpoints, they are keyed on the article, and a
+ * retry lands on the same article (`slugForRetry`, src/jobs.ts). The reader
+ * presses Retry when the provider's window has passed and the run resumes from
+ * what is banked.
+ *
+ * **Sleeping through it instead was the other candidate and is worse**: it holds
+ * the claim past the point where handing it back would have been cheap, and ends
+ * at the deadline having bought nothing.
+ */
+const MAX_RETRY_AFTER_MS = 60_000;
+
+/**
+ * How far apart sixteen chunks waking from one rate limit are spread.
+ *
+ * **A wait is jittered, not fixed, and the reason is a measurement.** Sixteen
+ * chunks that meet the same 429 and sleep the same duration come back as one
+ * request burst: Sol's 16-call probe put every initial request inside 59 ms and
+ * all sixteen retries inside a **15 ms window** — a synchronised herd aimed at
+ * the single upstream that has just said *slow down*, on a path routed with
+ * `allow_fallbacks: false`. Widening `CHUNK_CONCURRENCY` to 16 is what made that
+ * worth fixing in the same stage.
+ *
+ * Two shapes, because the two waits mean different things:
+ *
+ * - **Our own guess** gets *full* jitter — a delay drawn uniformly from zero to
+ *   the ceiling, which is what src/fetch.ts § `retryDelayMs` does and what the
+ *   literature recommends.
+ * - **A `Retry-After`** is a floor rather than a guess: the provider said *not
+ *   before this*, so the wait is the whole of it **plus** a draw from zero to
+ *   this constant. Never less, or we are back to asking inside a window we were
+ *   told about; spread, so the sixteen do not resume in lockstep the moment it
+ *   ends.
+ *
+ * **A shared gate would be better and is deliberately not built here**: sixteen
+ * private clocks are politer than sixteen immediate retries and less polite than
+ * one queue. That wants a token bucket in src/ai-call.ts, where every job on this
+ * wire would benefit, rather than a second private one in this file.
+ */
+const RATE_LIMIT_SPREAD_MS = 1_000;
+
+/**
+ * Wait, unless the step gives up first.
+ *
+ * The `signal` here is `ctx.signal` — the claimant's self-abort at
+ * `LEASE_MS - DEADLINE_MARGIN_MS` (src/jobs.ts). Sleeping through it would hold
+ * the whole run past the moment the claimant meant to hand the job back, so the
+ * deadline outranks the backoff rather than being added to it. The listener is
+ * removed on both exits: at `CHUNK_CONCURRENCY` chunks × `TRANSPORT_ATTEMPTS`
+ * waits, one leaked listener per wait is what makes Node print a warning about
+ * a leak that is not one.
+ */
+function waitOrGiveUp(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(abortError());
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(abortError());
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+/**
+ * **`name: "AbortError"`, because that name is the protocol.** Every layer above
+ * — `withTransportRetries` itself, `allOrStop`, the step wrapper — tells an
+ * abort from a failure by that string rather than by a class, so a plain `Error`
+ * here would be retried as though the connection had merely dropped.
+ */
+function abortError(): Error {
+  const err = new Error("The step gave up while waiting to ask again.");
+  err.name = "AbortError";
+  return err;
+}
+
+/**
+ * **How long this chunk waits before asking again**, and no two chunks the same.
+ *
+ * Three cases, and the shapes differ because the numbers mean different things —
+ * the argument for each is on `RATE_LIMIT_SPREAD_MS`, and the one for refusing a
+ * wait too long to honour is on `MAX_RETRY_AFTER_MS`, which the caller applies
+ * before getting here.
+ *
+ * Its own function so that it can be read as arithmetic rather than picked out
+ * of a `catch`, and because every one of these three lines has a reason that is
+ * longer than the line.
+ */
+function backoffFor(asked: number | null, rateLimited: boolean, attempt: number): number {
+  /* The provider's number is a floor: never less than it, and spread so that
+     sixteen chunks do not all resume the millisecond it ends. */
+  if (asked !== null) return asked + Math.random() * RATE_LIMIT_SPREAD_MS;
+  const ceiling = Math.min(
+    (rateLimited ? RATE_LIMIT_BACKOFF_MS : 1000) * 2 ** (attempt - 1),
+    MAX_BACKOFF_MS,
+  );
+  /* **Full jitter for a dropped connection, half the ceiling and up for a
+     429.** A delay drawn from near zero is right for bad luck — nothing is being
+     protected — and wrong for the one status whose meaning is *stop asking*.
+     What both draws buy is the same thing: a spread. */
+  return rateLimited ? ceiling / 2 + Math.random() * (ceiling / 2) : Math.random() * ceiling;
+}
 
 /**
  * Retry a request that never got an answer at all.
@@ -618,22 +836,50 @@ const TRANSPORT_ATTEMPTS = 3;
  *
  * An abort is not a failure to retry: the reader has gone.
  *
- * **Neither is a refusal.** A `ProviderRefused` means the provider answered —
- * with a 400, a 429, a 402 — and asking twice more changes none of those. This
- * guard exists because the refusal used to be thrown *outside* this wrapper and
- * moving the call inside it would silently have started retrying every bad
- * request three times. The rule the function is named for was already the right
- * one; it just had to be written down once the shape changed.
+ * **A refusal is not either, with one exception — and the exception is the
+ * reason this comment was rewritten on 2026-09-04.** It used to say *"a
+ * `ProviderRefused` means the provider answered — with a 400, a 429, a 402 —
+ * and asking twice more changes none of those"*, and that is true of two of the
+ * three. A **429 is the one status whose entire meaning is *ask again later***,
+ * and treating it as a verdict made a single rate limit fatal to the whole
+ * document: `allOrStop` cancels the siblings on the first rejection, so one 429
+ * threw away every chunk in flight. On a path routed with
+ * `allow_fallbacks: false` every concurrent chunk competes for one upstream, and
+ * `CHUNK_CONCURRENCY` went from 8 to 16 the same day — doubling the rate into
+ * exactly the thing that answers 429. So this is the safety belt for that width
+ * rather than a separate errand.
+ *
+ * A 400 and a 402 stay verdicts: a request this code got wrong, and an account
+ * with no credit. Asking again changes neither, and asking again *sixteen times
+ * over* turns one bad request into forty-eight.
+ *
+ * The wait honours `Retry-After` in full where the provider sent one it can
+ * afford (`MAX_RETRY_AFTER_MS`), gives up rather than truncating one it cannot,
+ * doubles from `RATE_LIMIT_BACKOFF_MS` where there was no header at all, is
+ * jittered in every case so that sixteen chunks do not come back as one
+ * (`RATE_LIMIT_SPREAD_MS`), and is cut short by the step's own deadline
+ * (`waitOrGiveUp`).
+ *
+ * **What this still does not do** is coordinate between chunks — see
+ * `RATE_LIMIT_SPREAD_MS` for why the shared gate belongs in src/ai-call.ts
+ * rather than here.
  */
-async function withTransportRetries<T>(send: () => Promise<T>): Promise<T> {
+async function withTransportRetries<T>(send: () => Promise<T>, signal?: AbortSignal): Promise<T> {
   for (let attempt = 1; ; attempt++) {
     try {
       return await send();
     } catch (error) {
-      if (error instanceof ProviderRefused) throw error;
       if (error instanceof Error && error.name === "AbortError") throw error;
+      const rateLimited = error instanceof ProviderRefused && error.status === 429;
+      if (error instanceof ProviderRefused && !rateLimited) throw error;
       if (attempt >= TRANSPORT_ATTEMPTS) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** (attempt - 1)));
+      const asked = error instanceof ProviderRefused ? error.retryAfterMs : null;
+      /* **A wait we cannot afford is a refusal, not a shorter wait.** The
+         provider is the only party that knows when its queue drains; asking
+         again inside the window it named is not a compromise, it is ignoring it
+         with extra steps. See `MAX_RETRY_AFTER_MS`. */
+      if (asked !== null && asked > MAX_RETRY_AFTER_MS) throw error;
+      await waitOrGiveUp(backoffFor(asked, rateLimited, attempt), signal);
     }
   }
 }
@@ -1021,11 +1267,12 @@ export interface PdfExtractOptions {
    * `<dataDir>/pdf-chunks/` until 2026-09-01, and that was the bug rather than
    * an untidiness — the directory is job-scoped `/tmp` on Vercel, a retry is a
    * new job id by design and lands on a different machine anyway, so **every
-   * attempt at a long PDF started from zero**. `MAX_PAGES` is 100 and
-   * `CHUNK_CONCURRENCY`'s own arithmetic says a hundred dense chunks can miss
-   * the 740s deadline, so an accepted document could fail for ever without
-   * accumulating enough finished chunks to get under it. That is a liveness
-   * failure and not a bill — docs/plans/260901d-simpler-finish-sol.md § 4.
+   * attempt at a long PDF started from zero**. `MAX_PAGES` is 250 and
+   * `CHUNK_CONCURRENCY`'s own arithmetic says a document dense enough to plan a
+   * chunk per page can miss the 740s deadline, so an accepted document could
+   * fail for ever without accumulating enough finished chunks to get under it.
+   * That is a liveness failure and not a bill —
+   * docs/plans/260901d-simpler-finish-sol.md § 4.
    *
    * Keyed on the **article**, which is stable across every job, every attempt
    * and every draft revision. src/store/checkpoints.ts has the contract; a
@@ -1223,6 +1470,41 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
         authored:
           `This PDF has ${err.pages} pages and the limit is ${err.limit}. That is a cost cap, ` +
           `not a technical one — see docs/plans/260826c-pdf-ingestion.md.`,
+      });
+    }
+    /**
+     * **The other reason `pass0` throws: the file will not open**, and until
+     * 2026-09-04 this line was a bare rethrow.
+     *
+     * A bare throw declares no reader sentence, `readerFailureOf` reads that as
+     * nobody having said, and nobody having said means `retry` — so a
+     * password-protected or damaged PDF arrived with a Retry button that could
+     * never work, for ever. That is the exact shape the whole of this plan is
+     * about, surviving in the one input class stage 1 did not audit ⟨GPT Sol,
+     * reviewing the built stages 4 and 5⟩.
+     *
+     * **Narrow, and it stays narrow.** `pdfUnreadableReason` classifies the two
+     * pdf.js exceptions that are statements about the file; everything else —
+     * a failed dynamic import, a worker that would not start, a programmer error
+     * — still rethrows bare, because calling those "your document is damaged" is
+     * how a broken parser goes unnoticed (docs/reusable/silent-success.md), and
+     * it is the same fail-closed line stage 1's counter draws
+     * (src/pipeline.ts § `refuseAnOverlongPdf`).
+     *
+     * `{ authored }`: fixed prose per branch, with nothing interpolated at all.
+     * pdf.js's own message is a stranger's file talking and does not go to the
+     * log either (docs/project/logging.md); what is worth recording is which of
+     * our two branches fired, and the sentence says that.
+     */
+    const why = pdfUnreadableReason(err);
+    if (why === "locked") {
+      throw stageFailure(PDF_LOCKED, {
+        authored: "pdf.js will not open this file without a password (PasswordException).",
+      });
+    }
+    if (why === "damaged") {
+      throw stageFailure(PDF_DAMAGED, {
+        authored: "pdf.js cannot parse this file as a PDF (InvalidPDFException).",
       });
     }
     throw err;

@@ -46,7 +46,14 @@ import path from "node:path";
 import { rm } from "node:fs/promises";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
-import { type AdvanceParts, advanceJobWith, cancelJob, enqueue, getJob } from "../src/jobs.js";
+import {
+  type AdvanceParts,
+  advanceJobWith,
+  cancelJob,
+  DEADLINE_MARGIN_MS,
+  enqueue,
+  getJob,
+} from "../src/jobs.js";
 import { STEPS } from "../src/pipeline.js";
 import { jobWorthRetrying, stageFailure } from "../src/job-failure.js";
 import { ANSWER_OVERFLOWED_FIXED_ASK, MODEL_REFUSED, worthRetrying } from "../src/messages.js";
@@ -69,6 +76,7 @@ const ROOT_DATA = path.resolve(import.meta.dirname, "..", "data");
  */
 const SLUGS = [
   "test-seam-cancelled",
+  "test-seam-overran",
   "test-seam-undeclared",
   "test-seam-declared-blocked",
   "test-seam-declared-retry",
@@ -407,5 +415,79 @@ describe("a run the reader stopped", () => {
     expect(advanced?.job.failureKind).toBeUndefined();
     expect(jobWorthRetrying(advanced?.job as Job)).toBe(true);
     expect(worthRetrying(step?.error ?? null), "the sentence disagrees with the job").toBe(true);
+  });
+});
+
+/**
+ * **And the mirror of it: a run that ran out of time, told the reader *they*
+ * stopped it.**
+ *
+ * Found in a browser run on 2026-09-04, not by any test: a 144-page PDF's
+ * hierarchy step hit the 740 s deadline at 742.8 s and the card said *"You
+ * stopped this before it finished."* Nobody had pressed anything.
+ *
+ * The cause is one line. The claimant's self-deadline **aborts the same
+ * `AbortController` that Stop aborts** (src/jobs.ts), and `runStep` decided with
+ * a bare `controller.signal.aborted` — so an overrun took the branch written for
+ * a reader who chose to stop. The outer level had it right all along
+ * (`overran ? interruptedEnding(job) : …`), which made the contradiction worse
+ * rather than better: the band said *nobody came back* and the shelf card, over
+ * the same job, said *you did this*.
+ *
+ * `messages.ts` states the distinction these two codes exist to hold — *"an
+ * interruption is nobody came back, and telling somebody who pressed Stop that
+ * something went wrong is the app not listening"* — and this is that same
+ * disrespect reversed. **Raising `MAX_PAGES` to 250 is what makes it common**,
+ * because a deadline overrun on a long PDF goes from rare to routine.
+ */
+describe("a run its own deadline stopped", () => {
+  it("does not tell the reader they stopped something they did not", async () => {
+    const slug = "test-seam-overran";
+    const queued: Job = {
+      id: `spya-seamo${Math.random().toString(36).slice(2, 3)}`,
+      ownerId: currentOwnerId(),
+      slug,
+      steps: [{ name: "fetch", label: STEPS.fetch.label, status: "pending" }],
+      status: "queued",
+      createdAt: new Date().toISOString(),
+    };
+    await fsJobStore.enqueueOrGet(queued, { workKey: `seam-${queued.id}`, reservesName: false });
+
+    const advanced = await advanceJobWith(queued.id, {
+      session: async () => fsStoreSession({ artifacts: fsArtifacts, jobs: fsJobStore }),
+      steps: {
+        ...STEPS,
+        fetch: {
+          ...STEPS.fetch,
+          /* A step that honours its signal and never finishes on its own —
+             which is what an overrunning PDF extract is, at a scale a test can
+             wait for. */
+          run: (ctx: { signal: AbortSignal }) =>
+            new Promise<never>((_, reject) => {
+              ctx.signal.addEventListener(
+                "abort",
+                () => reject(new Error("the step honoured the signal")),
+                { once: true },
+              );
+            }),
+        },
+      } as unknown as AdvanceParts["steps"],
+      /* The deadline is `leaseMs - DEADLINE_MARGIN_MS` after the claim, so this
+         is "give up a tenth of a second in". */
+      leaseMs: DEADLINE_MARGIN_MS + 100,
+    });
+
+    const step = advanced?.job.steps[0];
+    expect(step?.status, "the step did not fail, so this proves nothing").toBe("error");
+    expect(step?.error, "told the reader they stopped a job they never touched").not.toMatch(
+      /\[jb-stopped\]|You stopped this/,
+    );
+    /* The two surfaces render different fields (see this file's header), and
+       the whole finding was that they disagreed about who did this. */
+    expect(step?.error).toMatch(/\[jb-gone\]$/);
+    expect(advanced?.job.error).toMatch(/\[jb-gone\]$/);
+    /* Retryable either way — what was wrong was the account of it, not the
+       button. */
+    expect(jobWorthRetrying(advanced?.job as Job)).toBe(true);
   });
 });

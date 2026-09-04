@@ -156,6 +156,16 @@ rather than 202 with a job that no longer exists, and `AddPage` goes straight to
 the job *is* there it is still the answer, whatever status it is in, matched by `upload.id` rather
 than by slug.
 
+**A PDF too long to read is refused here, not three stages later.** Since 2026-09-04 the
+acquisition step counts the pages between verifying the checksum and promoting the bytes, and refuses
+over [`src/pdf-read.ts`](../../src/pdf-read.ts) § `MAX_PAGES` — so nothing is stored, the upload
+record ends `rejected` rather than `verified`, and the job card names the page count and the limit
+within seconds. The position is load-bearing: `verified` is terminal
+([`src/source.ts`](../../src/source.ts)), so a refusal after it cannot record its own reason.
+The record takes a static reason and the job takes the sentence with the number in it —
+[content-extraction.md](content-extraction.md) and
+[260903k](../plans/260903k-pdf-page-cap-refused-with-no-reason-given.md) § Stage 4.
+
 **An upload never adopts an existing article.** `freeSlug` may adopt one, because `urlKey` can
 prove two addresses are one piece. An upload has no address, so there is nothing that could make
 two of them one article — two files called `paper.pdf` get two, per
@@ -1540,6 +1550,15 @@ signal cannot do. An `AbortSignal` is a thing a running function is listening to
 instance has no function to interrupt — so Stop is two halves: the flag, which everybody can see, and
 the local abort, which only helps when the claimant happens to be here. That is why Stop feels
 instant on a laptop and takes until the next step boundary in production.
+
+**Stop and the claimant's own deadline share that one signal, and the reader must not.** A step
+listening for one is listening for both, deliberately — but the *account* the reader is given differs,
+and until 2026-09-04 it did not: an overrun took the branch written for Stop and the card said *"You
+stopped this before it finished"* to somebody who had pressed nothing (seen on a 144-page PDF, at
+742.8 s). The abort now carries a typed reason, `DeadlineReached` in [`src/jobs.ts`](../../src/jobs.ts),
+and an overrun reads `INTERRUPTED` on the step as it always did on the job. **A deadline overrun is
+also not a lapsed lease** and does not go through the requeue budget above: the claimant is still
+here, it unwinds, and `walkClaim` ends the job as a retryable error for the reader to pick up.
 
 **The claimant's timer is armed at the claim, not after the session opens.** Everything above rests
 on the claimant aborting itself *inside* its own lease, and for a while it did not: the timer was

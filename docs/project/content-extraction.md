@@ -56,6 +56,23 @@ The differences that matter to a reader:
 - **It is checked, and it can fail.** The transcription is scored per page against the PDF's own text
   layer ([`src/pdf-score.ts`](../../src/pdf-score.ts)) and the step fails, naming the page, rather
   than writing a half-transcribed article that reads fluently.
+- **A PDF can be too long, and on the queue's path it is refused in stage 1.** The cap is
+  [`src/pdf-read.ts`](../../src/pdf-read.ts) § `MAX_PAGES` — a limit on what reading a document is
+  allowed to cost, not a technical one — and since 2026-09-04 it is enforced where the bytes first
+  arrive rather than here: `refuseAnOverlongPdf` in [`src/pipeline.ts`](../../src/pipeline.ts) counts
+  the pages before an upload is promoted to its canonical name or a fetched document is stored, so
+  the reader hears it in seconds instead of after a job card has been running. `pass0`'s own guard
+  stays as the backstop for anything ingested before that, or re-extracted after the cap moves
+  again — and it is the *only* guard for the stage CLIs, which do not go through the queue's stage 1
+  at all: `npm run fetch` stores whatever it fetched, and `npm run pdf` keeps the original before
+  `runPdfExtract` counts anything. Neither can reach a reader's job.
+- **A PDF that will not open at all is refused here, and says which way.** Locked with a password, or
+  damaged past parsing — two sentences and two codes, `PDF_LOCKED` and `PDF_DAMAGED` in
+  [`src/messages.ts`](../../src/messages.ts), because only one of them mentions a password. Both are
+  `blocked`, so no Retry button: until 2026-09-04 they had no sentence at all and arrived as the
+  generic retryable one, which is a button that could never work
+  ([copy.md](copy.md#the-four-rules), rule 2). Stage 1's page counter deliberately lets such a file
+  through — a cost gate is not a validity gate — so this is where it lands.
 - **A scan cannot be checked at all**, has no text layer to check against, and says so on the page.
 - **A word broken by a page break is mended from the text layer, not by a second model call.** The
   chunks are read in parallel and none of them sees over its own edge, so `dis-` / `patcher` arrives

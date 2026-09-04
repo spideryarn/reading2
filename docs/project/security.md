@@ -676,6 +676,22 @@ Three things bound it, and only the last is new:
   prerequisite of shipping uploads* rather than as a follow-on — Sol's finding, and the reason is
   exactly this section: an upload hands a stranger the parser directly. It is also the only thing
   here that bounds **spend** rather than storage.
+
+  **Since 2026-09-04 it fires a stage earlier still**, in `refuseAnOverlongPdf`
+  ([`src/pipeline.ts`](../../src/pipeline.ts)), which counts the pages before an over-long upload is
+  promoted to a canonical name or a fetched document is stored — so a document we will not read does
+  not take space in the content-addressed bucket. The exposure is unchanged in kind: `countPdfPages`
+  still opens a stranger's file in-process, and opening is where the parser's attack surface is. What
+  changes is that the *page walk* now happens only for a document we have agreed to pay to read.
+
+  **And the time that opening may take is bounded by the claimant's own deadline**, which for the
+  first day of the above it was not: `countPdfPages` took no `AbortSignal` and its call site passed
+  none, so the 740 s self-abort could not reach pdf.js at all and a pathological file held the
+  acquisition step until the platform killed the function (GPT Sol, 2026-09-04 — *the bound on the
+  surface this section is about had been written down and not wired*). The abort now destroys the
+  loading task; what it cannot interrupt is a single synchronous parse step inside the library, so it
+  is a bound on the operation rather than a guarantee about any instant.
+  `tests/counting-pages-can-be-given-up.test.ts` holds it, against a document that never opens.
 - **The bucket's own limits.** 50 MiB per object and a MIME allowlist, enforced by Storage at the
   moment of upload — **including against the service key**, which a comment in `supabase/config.toml`
   denied until 2026-08-28 on the strength of a measurement that never happened

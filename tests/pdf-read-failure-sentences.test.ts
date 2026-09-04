@@ -1,6 +1,10 @@
 /**
- * **The three other places `runPdfExtract` writes a sentence for a reader** —
- * the page cap has its own file, tests/pdf-page-cap-message.test.ts.
+ * **Every place other than the page cap where `runPdfExtract` writes a sentence
+ * for a reader** — the cap has its own file, tests/pdf-page-cap-message.test.ts.
+ *
+ * Three of them when this file was written, and five since 2026-09-04, when the
+ * two ways a PDF never opens at all got sentences of their own — the last
+ * `describe` below, and the one whose absence was doing the most damage.
  *
  * All three arrived at the card as `stepGaveUp`'s generic copy: two were bare
  * `throw new Error(...)`, which `readerFailureOf` reads as *nobody declared
@@ -33,6 +37,8 @@ const HOISTED = vi.hoisted(() => {
 });
 
 import { readerFailureOf } from "../src/job-failure.js";
+import { worthRetrying } from "../src/messages.js";
+import { pdfUnreadableReason } from "../src/pdf.js";
 import {
   knownNativeFinish,
   openRouterReader,
@@ -49,6 +55,9 @@ afterAll(() => {
 });
 
 const LABEL = "Extracting the article";
+
+/** The bracketed code at the end of a sentence, which is what these tests match on. */
+const codeOf = (message: string) => message.match(/\[([a-z0-9-]+)\]$/)?.[1];
 
 /** A real, minimal, valid PDF with the given number of blank pages. */
 async function pdfWithPages(count: number): Promise<Uint8Array> {
@@ -219,5 +228,101 @@ describe("the provider's word for a refusal, on its way to the log", () => {
     );
     expect(logged).toContain(`"nativeFinish":"unrecognised"`);
     expect(logged).not.toContain("quoted back");
+  });
+});
+
+/**
+ * **The file the parser cannot open at all**, which had no sentence of its own
+ * until 2026-09-04 and therefore got the worst one available.
+ *
+ * `runPdfExtract` translated `TooManyPages` out of `pass0` and rethrew
+ * everything else bare, so a password-protected or damaged PDF reached
+ * `readerFailureOf` with nothing declared — which reads as *nobody said*, which
+ * means `retry`. The reader got a Retry button, pressed it, and got the same
+ * refusal for as long as they were willing to keep pressing: the expensive copy
+ * mistake docs/project/copy.md names outright, in the one input class stage 1 of
+ * this plan did not audit. ⟨GPT Sol, reviewing the built stages 4 and 5⟩
+ *
+ * **Real files, real pdf.js exceptions.** The encrypted one is a hand-built PDF
+ * with a standard-security `/Encrypt` dictionary in its trailer — measured
+ * 2026-09-04 to produce a real `PasswordException` — and the damaged one is
+ * bytes that begin `%PDF` and are not a document. A test that constructed the
+ * exceptions itself would prove only that the branch exists.
+ */
+describe("a PDF that will not open", () => {
+  /**
+   * A minimal PDF encrypted with the standard security handler.
+   *
+   * The `/O` and `/U` strings are nonsense on purpose: pdf.js reaches
+   * `PasswordException` as soon as it finds an `/Encrypt` dictionary it has no
+   * password for, and never gets as far as caring whether the hashes are real.
+   */
+  function encryptedPdf(): Uint8Array {
+    const objs = [
+      "<</Type/Catalog/Pages 2 0 R>>",
+      "<</Type/Pages/Kids[3 0 R]/Count 1>>",
+      "<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>",
+      `<</Filter/Standard/V 1/R 2/O<${"ab".repeat(32)}>/U<${"cd".repeat(32)}>/P -1>>`,
+    ];
+    let body = "%PDF-1.4\n";
+    const offsets: number[] = [];
+    objs.forEach((o, i) => {
+      offsets.push(body.length);
+      body += `${i + 1} 0 obj\n${o}\nendobj\n`;
+    });
+    const xrefAt = body.length;
+    let xref = `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`;
+    for (const off of offsets) xref += `${String(off).padStart(10, "0")} 00000 n \n`;
+    const trailer =
+      `trailer\n<</Size ${objs.length + 1}/Root 1 0 R/Encrypt 4 0 R` +
+      `/ID[<${"11".repeat(16)}><${"22".repeat(16)}>]>>\n` +
+      `startxref\n${xrefAt}\n%%EOF\n`;
+    return new TextEncoder().encode(body + xref + trailer);
+  }
+
+  const damagedPdf = () => new TextEncoder().encode("%PDF-1.4\nnot really a document\n%%EOF\n");
+
+  const sentenceFor = async (bytes: Uint8Array) =>
+    readerFailureOf(
+      await threw(() => runPdfExtract({ bytes, slug: "a-pdf", checkpoints: checkpoints() })),
+      LABEL,
+    );
+
+  it("tells a reader with a locked file that a password is what is missing", async () => {
+    const reader = await sentenceFor(encryptedPdf());
+    /* The whole finding in one assertion: a Retry button on a file that will
+       never open is the app lying about the way out. */
+    expect(worthRetrying(reader.message), "offered a Retry that cannot ever work").toBe(false);
+    expect(reader.kind).toBe("blocked");
+    expect(reader.message).toMatch(/password/i);
+    expect(reader.message).not.toContain("[jb-step-again]");
+  });
+
+  it("tells a reader with a damaged file that the file is the problem", async () => {
+    const reader = await sentenceFor(damagedPdf());
+    expect(worthRetrying(reader.message), "offered a Retry that cannot ever work").toBe(false);
+    expect(reader.kind).toBe("blocked");
+    expect(reader.message).not.toContain("[jb-step-again]");
+  });
+
+  /* Two refusals, two codes: "locked" and "damaged" are different things to be
+     told, and a shared code would make the bracket useless for the one job it
+     has. */
+  it("does not say the same thing about a locked file and a damaged one", async () => {
+    const locked = await sentenceFor(encryptedPdf());
+    const damaged = await sentenceFor(damagedPdf());
+    expect(codeOf(damaged.message)).not.toBe(codeOf(locked.message));
+  });
+
+  /**
+   * **And a broken parser is still not a broken document.** A failed dynamic
+   * import or a pdf.js regression must not be dressed up as a statement about
+   * the reader's file — the same fail-closed line stage 1's page counter draws
+   * (src/pipeline.ts § `refuseAnOverlongPdf`). Asserted on the classifier,
+   * because no real file makes pdf.js throw a `TypeError`.
+   */
+  it("does not call a broken parser a broken document", () => {
+    expect(pdfUnreadableReason(new TypeError("loadPdfjs is not a function"))).toBeNull();
+    expect(pdfUnreadableReason("not an error at all")).toBeNull();
   });
 });
