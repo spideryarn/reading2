@@ -14,7 +14,7 @@ three later stages consume it**:
 ```
 A (store inventory) ✅ → B0 ✅ (already done) → T-B (factory) ✅ → T-C (lanes) ✅
   → T-D (activation) ✅ → T-E (pollution) ✅
-  → B ✅ → B2 ✅ → C → D → E → F (hinge) → G → H → I
+  → B ✅ → B2 ✅ → B3 ✅ → C → D → E → F (hinge) → G → H → I
 ```
 
 **`C → B` became `B → C` on 2026-09-04**, and this line is the only place the order lives, so
@@ -1953,6 +1953,72 @@ map **only once the witness is re-run**, and the witness is dated 2026-09-03. So
 > **Re-run the witness at the end of stage B**, and let every file the conversion took out of its
 > reach drop out of `STORE_MIGRATION` entirely.
 
+##### Dropping them out collides with the evidence guard, and the plan did not see it
+
+Written down before the re-run rather than after, because it is the kind of thing that gets decided
+by whatever breaks first.
+
+The instruction above — *let every converted file drop out of `STORE_MIGRATION` entirely* — was
+written before the evidence guard existed. **The guard read `convertedInB` off the registry entry**
+— it no longer does, see B3 below — so deleting the 26 entries would have deleted the guard's
+subject. Its control
+(`expect(converted.length).toBeGreaterThan(20)`) fires, which is the control doing its job, but the
+outcome is that mutation evidence stops being checked **at exactly the moment stages C, D and E start
+producing more of it**.
+
+The two facts have different lifetimes, which is the root of it: a `STORE_MIGRATION` entry says *what
+work this file still needs* and should die when the work is done; the evidence record says *this file
+was converted, and here is where its proof lives* and should outlive the entry by a long way.
+
+**The fork, unresolved here on purpose:**
+
+1. keep the converted entries with a fifth category `converted` — the map stops meaning
+   "work remaining";
+2. move the record out to a separate exported `CONVERTED` (file → date) the guard reads, so the map
+   shrinks and keeps its meaning;
+3. retire the guard at the end of B and trust the markers.
+
+**Resolved as 2 by GPT Sol, 2026-09-04**, on the lifetime argument: `STORE_MIGRATION` describes
+current remediation, and conversion evidence is *historical and monotone*.
+
+**And my stated objection to 2 was wrong.** I wrote that option 1 at least has the witness forcing an
+entry to appear. It does — and it **does not force that entry to be marked converted**, so option 1
+carries the same "conversion quietly unmarked" hole and buys nothing for it. The objection was real
+about 2 and simply false as a comparison.
+
+What actually closes it is a **two-way guard on marker-set equality**, which is the completeness check
+the `> 20` control was standing in for:
+
+- every file in the converted list carries both markers;
+- **every file carrying either marker appears in the list.**
+
+That catches *evidence written, list forgotten* and *list written, evidence forgotten*. It cannot
+catch a conversion where **both** are omitted, and no snapshot guard can — inferring an entirely
+unrecorded event needs an independent oracle. So:
+
+> **Freeze each stage's target cohort before editing anything in it**, and require every member to
+> reach the converted list or an explicit other disposition. B's 26 exist already; C, D and E's must
+> be derived and frozen *before* their conversions start.
+
+**And not by witness delta**, which was the obvious cheap oracle and is a trap: removing a shared
+mechanism can stop a file touching the store without that file having been converted at all.
+
+Four design corrections taken with it:
+
+- **`convertedInB` becomes stage-neutral** — `STORE_CONVERSIONS`, since C, D and E convert too and a
+  field named for one stage will be lied to by the next. Sketched here as `file → { date, stage }`;
+  it landed with five fields, because freezing each file's marker *counts* turned out to be what
+  makes an individual marker load-bearing. B3 below.
+- **The two maps are not required to be disjoint.** A converted suite may still reach the filesystem
+  through collateral machinery, and forcing an either/or would push somebody to delete a true entry.
+- **`STORE_MIGRATION` means *how each current filesystem reach will be eliminated***, not *"work this
+  file needs"* — `shared-mechanism-collateral` already contradicts the stricter reading, so the
+  header's wording is what is wrong, not the category.
+- **`> 20` is demoted to what it always was:** an anti-empty control under the real check, not the
+  check.
+
+
+
 **And that re-run is now a command rather than a reconstruction**, 2026-09-04.
 `vitest.witness.config.ts` and `tests/setup/fs-store-witness*.ts` were kept, but the thing that ran
 them and assembled the JSON was not, so the step above was unrunnable — a number recorded without its
@@ -2251,6 +2317,9 @@ suite in the lane uses and stage B is closing. It is a candidate for stage C or 
 per slug, so `freeSlug` cannot adopt one fixture for another.
 
 #### The guard is built, and marking the 25 found four files whose evidence was not evidence
+
+**Superseded by B3**, which found this version could not see nine of ten markers deleted. Kept as
+written because the four findings below are what the *marking* turned up, and they stand.
 
 `convertedInB` on the `STORE_MIGRATION` entry, and
 [store-migration-registry.test.ts](../../tests/store-migration-registry.test.ts) §
@@ -2816,6 +2885,280 @@ manufacturing state so that condemned code can go on being exercised — a green
 about deployed code, which is worse than not converting. The 404-for-unknown-slug arm stays; it is
 real under Postgres and it is the half that matters. Recorded in the file header and the registry
 `reason` so G's *"enumerate every surviving assertion"* pass can see the drop was deliberate.
+
+### The witness was re-run, and it says stage B did not shrink the store's reach
+
+2026-09-04, 22:0x, on a box carrying six other worktrees at load 36–79. **648 test files, one
+unresolved** (`tests/gjd-remote-tab-lifecycle.test.ts`, re-run alone and still silent — it is
+machine-specific). The instrument's `--self-check` passed first: all eight condemned modules hooked,
+22 method-level sites.
+
+| | 2026-09-03 | 2026-09-04 |
+| --- | --- | --- |
+| touches the filesystem store | 88 | **91** |
+| runs and touches nothing | — | 555 |
+| unresolved | 3 | 1 |
+
+**The number went up, and the plan expected it to fall by 26.** Here is why, and it is not a
+regression:
+
+- **22 of the 26 conversions still touch the store**, every one through the same four entry points —
+  `copy-artefacts:copyArtefacts`, `artifacts-fs:createFsArtifactStore`, `artifacts-fs:fsLocations`,
+  `data-root:dataRoot`. That is `scratchArticleInPg`. **The fixture helper the conversions were built
+  on clones its corpus article through the filesystem store**, so a converted suite asserts against
+  Postgres and seeds off files.
+- **Only 4 left its reach**: `list-reconciles-expired`, `one-article-for-one-address`,
+  `second-job-queues`, `upload-records` — the four that seed no article.
+- **And one file newly touches that did not before**: `tests/store-shelf-reads.test.ts`. Cause known
+  and it is ours — `17d2f00d` gave it `scratchArticleInPg` seeding to fix an order dependency, and
+  that is precisely the filesystem path above. A stage-B fix *added* a filesystem reach to a file
+  that had none.
+
+> **Stage B moved the assertions and left the fixtures.** It did not reduce the filesystem store's
+> reach; it increased it by three. Those 22 leave when **stage D** replaces the fixture loader, and
+> not before.
+
+Worth stating plainly because *"26 files converted"* reads like 26 files removed from the problem,
+and the measurement says otherwise. The conversions are not thereby worthless — each moved a suite's
+oracle onto the store we are keeping, which is what stage B was for — but the store cannot be deleted
+until D lands, and **B was never on that critical path**.
+
+**This settles § *The category question, escalated rather than decided* in the pilot's favour, with
+evidence.** The pilot moved both its files to `shared-mechanism-collateral`; the queue agent left four
+as `database-integration` because after conversion they reach no condemned module. Both were reasoning
+about files; the witness measured them. The mechanism is real, shared, and now named by the
+instrument — and GPT Sol, asked about `STORE_CONVERSIONS` an hour before this run finished and
+without seeing any of it, said *don't require the two maps to be disjoint, a converted suite may still
+touch the filesystem through collateral machinery.* It does.
+
+#### And stage C is much smaller than it was costed
+
+§ *C is not independent of B any more* records a **grep ceiling of 39** unit-lane files that might
+open a ledger, and says the true number "can only come from a run". `src/store/ai-calls-fs.ts` is one
+of the eight instrumented modules and `NODE_ENV === "test"` redirects the cost store to it, so **this
+run counts it** — criterion 1 (*"`pgCostStore.record` genuinely executed, not silently skipped"*) read
+backwards.
+
+| | files |
+| --- | --- |
+| reach `ai-calls-fs` at all | 27 |
+| …of those, **`fsCostStore.record` actually called** | **11** |
+| …the rest reach only `read` / `forJob` | 16 |
+| **`record` callers in the `unit` lane** | **2** |
+
+The two are `tests/cost-store-under-test.test.ts` and `tests/store-wiring.test.ts`, both of which are
+*about* the store selection and which C rewrites by definition. The other nine are already in the
+private lane.
+
+**Temper it before banking it.** This measures today's run, where the redirect is still in place. When
+C flips `selected()`, those nine private-lane files need their owner row in `auth.users` — the spike
+measured **5 of 5 refused** without it. So C's real work is two files plus an owner-seeding sweep,
+not the 23 conversions the ceiling implied. **Half a day was costed against a number that was 10×
+too big**, which is the cost of a ceiling nobody could turn into a count until the instrument existed.
+
+#### A fourth instance of the same personal failure, caught by luck
+
+The first extraction script reported C's tail as **0 files** and I nearly wrote that down. It matched
+witness records against module *paths* (`src/store/ai-calls-fs.ts`) when the records are stored at
+method level (`ai-calls-fs:fsCostStore.record`), so the filter matched nothing and returned a clean,
+confident zero.
+
+It was caught only because the raw touched-lists printed above the total contradicted it on screen.
+**Same class as the inventory grep, the "witness isn't in the repo" claim and the referee-file
+accusation: a search that does not cover the answer, reported as an absence.** Four in two days, all
+mine, and the one thing they have in common is that the empty result was never checked against a case
+known to be positive. A control costs one line.
+
+### B3 — what B2's review found, and the guard that could not see it
+
+Stage B's obligatory end-of-stage review, 2026-09-04, on the landed `f6b5d982`. **Seven findings,
+all seven checked by hand, six confirmed and the seventh a real ambiguity.** Sol could not run the
+private lane — its sandbox refused Docker and the loopback port — so only the first is reproduced
+and the rest are reasoned and then verified here. B is **not** closed until these land.
+
+#### The guard does not do what it was built to do, and this is the third hole in it
+
+**Reproduced.** [store-migration-registry.test.ts](../../tests/store-migration-registry.test.ts) §
+*"makes every converted file show its working"* requires one `**Mutation.**` and one `**Blind to.**`
+**anywhere in the file**. And [routes.test.ts](../../tests/routes.test.ts) line 35 contains
+`**Mutation.**` inside the sentence *"Search for `**Mutation.**`"* — the instruction telling a reader
+where the evidence is. So the file offers eleven markers for ten mutations. Sol renamed **all ten real
+mutation markers and nine of the ten blind-spot markers** in a scratch copy and the guard still
+passed, satisfied by the instruction and one orphaned survivor.
+
+**Three holes now, all the same shape: it under-reports while green.** The
+[silent-success](../reusable/silent-success.md) class, in the guard written to catch that class.
+
+The fix is not a fourth threshold. **The stage's rule is already precise** and the guard was checking
+a proxy for it: *one mutation per store-touching `describe`, and the blocks that need none say why in
+their own headers.* So check that.
+
+- **Anchor the markers at line start** (`^\s*\*?\s*\*\*Mutation\.\*\*`), so prose *about* a
+  marker is not a marker. Kills line 35 without asking anybody to stop writing the instruction.
+- **Every top-level `describe` carries, in its header, either a `**Mutation.**` or an explicit
+  no-mutation judgement** — the five waivers in `routes.test.ts` already write one, so this enforces
+  the existing convention rather than inventing one.
+- **Pair them:** each `**Mutation.**` is followed by a `**Blind to.**` before the next `**Mutation.**`.
+- **Plus the two-way marker-set equality** from § the fork above.
+
+**Watch it fail on Sol's exact mutation before believing it** — rename the ten real markers, keep the
+instructional one — as well as on a deleted `describe` header. Two of this guard's three holes were
+found by somebody *using* it rather than reading it.
+
+#### Two greens that should have been closed rather than recorded
+
+B2 kept three green mutations as findings. Two of them are holes small enough to close in the stage
+that found them, and Sol is right that keeping them is inconsistent with having closed the identical
+`recolour` hole in the same file:
+
+- **`PATCH /api/reader`, the clearing case** — asserts only the two echoed responses, and
+  `writeProfile` returns its argument, so an `onConflictDoNothing` that left the old row untouched
+  passes both. The case is *named* for clearing. Two `GET`-backed assertions close it.
+- **Saved-search `remove` has no two-run case**, so dropping the `runId` predicate from the delete in
+  `src/store/pg-searches.ts` leaves all 127 green. A second run is a few lines.
+
+The third — the triply-redundant slug guard — **stays a finding**, because it is a genuine statement
+about the code rather than a gap in the test, and § *Three findings* explains why.
+
+#### Three evidence notes that say more than the mutation showed
+
+- **The admin mutation is a call-site mutation.** It replaces the whole
+  `await adminStore.listUsersAcrossOwners()` call, so **no SQL executes** and it proves only that the
+  route rejects an empty list. Its `**Blind to.**` names the list's fields and not this. **The same
+  shape this document already recorded for `list-reconciles-expired`, recurring in the very next
+  file** — which says the lesson did not transfer, and is an argument for the guard checking what a
+  mutation *reaches* rather than trusting the prose.
+- **The comment-create note's reasoning is false.** It claims the route's 201 and echoed body are
+  unchanged and *"only the row is wrong"*. But `create` is `INSERT … RETURNING` converted through
+  `toComment`, and `src/routes.ts` returns that result, so the echo changes too and the response
+  assertion fails for a different reason than the one recorded. The mutation is real and
+  SQL-reaching; **the story about what it proved is not.**
+- **The tweets waiver does not hold.** It says every plausible break also answers *"nothing here"*,
+  but only `SLUG` has its `tweets.json` removed by `mutate` — the other four `scratchArticleInPg`
+  articles keep theirs, so a wrong-article or wrong-revision read returns **another article's
+  thread**. Either add the positive read the file already has everything for, or rewrite the
+  judgement.
+
+#### And an arithmetic that an evidence ledger should not have
+
+`tests/store-migration-registry.ts` § `routes.test.ts` says *"Ten mutations, seven red and three
+green"* against **thirteen runs** — three slug runs and two recolour runs collapse differently
+depending on whether you count markers or executions. Immaterial as prose and material as a ledger,
+and it is § *a reason may cite a mutation in a clause; it may not be where the record lives* being
+bent one more time. The number goes, or it becomes exact.
+
+#### B3 is done, and two of my three specifications were wrong
+
+2026-09-04. `tests/routes.test.ts` **129 tests** (was 127; 98 `it`s, was 96 — nothing dropped),
+registry guard **13 tests**, typecheck clean.
+
+**All five evidence items fixed, every mutation watched by the agent rather than reasoned about.**
+The two greens are red: the reader-clearing case gained four `GET`-backed assertions and
+`onConflictDoNothing` now fails **2 of 129** where it failed 1 of 127; saved-search `remove` gained a
+two-run case and dropping `eq(searchRuns.id, runId)` fails **1 of 129**. The comment-create note was
+false exactly as read — the mutation fails at the route's **own echo**, three lines *above* the store
+read-back it was offered as evidence for. The admin block kept its call-site mutation, now labelled
+*"no SQL runs at all"*, **and gained a second one that reaches Postgres** (inverting the shelf
+aggregate's `live` filter), because the block previously had no way to see the store at all. The
+tweets waiver became a real mutation on `loadTweets`, with both 404 cases staying green under it.
+
+**And Sol's finding 6 was right for the wrong reason, which is worth keeping.** It argued the waiver
+failed because the other four articles keep their `tweets.json`, so a wrong-article read could return
+another article's thread. True — but **every `scratchArticleInPg` article is a clone of the same
+corpus article**, so those threads are identical and a cross-article read would have been invisible
+anyway. The waiver was indeed unjustified; the mechanism named for why was not the one that bites.
+The `SLUG`/`SHELF` pair now catches a read that lost the slug badly enough to answer for the article
+that has none. Recorded because *"the reviewer was right"* and *"the reviewer's reason was right"* are
+two claims and this plan keeps conflating them.
+
+##### The per-`describe` rule is B2's convention, not B's, and the numbers say so
+
+I specified it as an equality. Measured across the 26 files: **100 top-level blocks, 24 carrying a
+judgement** — and split by stage it is stark.
+
+| | blocks | carrying a `**Mutation.**` or `**No mutation…**` |
+| --- | --- | --- |
+| `routes.test.ts` (B2) | 18 | **15** |
+| the other 25 (B) | 82 | **9** |
+
+The stage-B suites write their evidence **per file**, usually in the file's own header docstring. As
+an equality the rule would have reddened 25 suites at once, and `routes.test.ts` itself would fail on
+three blocks whose headers argue in prose without the marker.
+
+**Held as a ratchet instead**: `blocksWithoutJudgement` is a per-file *maximum*. A block added to a
+converted file without a judgement fails; writing a judgement lowers the number; **a new conversion
+records 0**, so C, D and E are born under the full rule and B's 76 blocks of debt are named in the
+code rather than hidden. That is the right shape — the alternative was to weaken the rule silently or
+to spend the stage editing 25 files nobody asked me to touch.
+
+**The pairing rule was also wrong as stated.** *Each `**Mutation.**` followed by a `**Blind to.**`
+before the next* is broken **legitimately by 8 of the 26**, which write "Mutation 1 — …; Mutation
+2 — …" and then one blind spot speaking to both — better prose than two notes repeating each other.
+The enforceable residue is that the sequence **opens with a Mutation and closes with a Blind to**,
+documented as weaker than one-to-one with the eight counter-examples named, rather than quietly
+substituted.
+
+**And my anchor regex would have lost a real marker.** `referee-mirror-route.test.ts` writes
+`/* **Mutation.** …` on one line, which `^\s*\*?\s*` does not match — the file would have failed
+with zero mutations. Widened to allow a leading `/*`, and it still excludes line 35, where the marker
+sits mid-sentence after `` Search for ` ``.
+
+##### What makes a marker load-bearing, checked rather than trusted
+
+The counts frozen in `STORE_CONVERSIONS` are what catch Sol's rename — *at least one of each* cannot
+see nine of ten go missing, and a floor against the file's own past can. **Verified independently
+here rather than taken from the report**: every one of the 26 recorded counts equals the file's actual
+anchored-marker count exactly, so there is **no slack anywhere** and losing any single marker is
+red. And `routes.test.ts` carries **13 raw occurrences of the marker text against 12 counted** — the
+instructional one at line 35 is excluded, which is the reproduction closed.
+
+Six negative controls were watched failing, in a symlink mirror of the tree under the scratchpad and
+never in the repo, including Sol's exact reproduction in both its forms.
+
+##### The tally is gone rather than corrected
+
+`routes.test.ts`'s registry `reason` said *"Ten mutations, seven red and three green"* and named the
+search store's `remove` predicate among the greens. B3 falsified every number in that sentence within
+a day: `remove` is now red, the tweets block has a mutation where it had a waiver, and the admin block
+has two. **So the count went rather than becoming exact** — a tally in a `reason` is a copy of a fact
+whose home is the test file, and § *a reason may cite a mutation in a clause; it may not be where the
+record lives* already said so.
+
+Six `evidence: "static-only"` claims the re-run witness disagrees with were reconciled at the same
+time, each saying what changed. They had been hiding behind the four `dynamic` overclaims in the same
+assertion, and only surfaced once those were cleared — **one wrong entry masking another in the same
+check** is worth watching for elsewhere.
+
+#### The guard fires on other people's arrivals, and that is a running cost until G
+
+Found by merging `origin/dev` **immediately after committing B3**. The merge brought thirteen new
+test files from other worktrees, and § *leaves no file that the import graph can reach and nothing
+accounts for* went red on one of them — `tests/feedback-dictation-vocabulary.test.tsx`, which nobody
+here wrote and which has nothing to do with this plan.
+
+The guard was right: the file's import graph reaches a condemned module, and neither the registry nor
+a witness measurement accounted for it. But **in a tree where six agents land test files continuously,
+that makes every unrelated arrival this plan's problem**, and it will keep happening until stage G
+deletes the adapters and the static universe empties.
+
+The three ways out, and what each costs:
+
+| | cost | honest? |
+| --- | --- | --- |
+| re-run `--full` | ~25 min on a loaded box, and more files arrive while it runs | yes, and it re-measures everything the merge changed |
+| `--files <the arrival>` | ~10 seconds | **measures correctly and does not satisfy the guard** — the JSON has no way to take one file |
+| hand-add it to `ranAndTouchedNothing` | seconds | **no.** That file is a dated measurement carrying its own regeneration command; editing one by hand so a guard goes green is the shape of thing this plan exists to delete |
+
+**Taken: the full re-run**, 2026-09-04 23:1x — 661 files (13 more than the run 40 minutes earlier),
+**91 touching, unchanged**, 568 clean, the same single unresolved file. So every one of the merge's
+arrivals touches nothing, which is the answer `--files` had already given for the one that fired.
+
+**Do not "fix" this by loosening the check.** The cheap-looking move — let a file off if the witness
+has never seen it — deletes the guard, because a genuinely new file that *does* touch the store is
+exactly the case it is for. If the re-run cost becomes intolerable before G, the thing to build is a
+way for `--files` to merge one measured file into the JSON with its own timestamp, so a single
+arrival costs ten seconds and still carries provenance. **Not built now** — it is machinery on the
+critical path of a plan whose point is to remove machinery, and the cost so far is one 25-minute run.
 
 ### C — ledger isolation, its own reviewed stage
 
