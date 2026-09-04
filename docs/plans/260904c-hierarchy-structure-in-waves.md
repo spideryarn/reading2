@@ -126,7 +126,20 @@ model calls, so they cost nothing to rebuild):
 | `2701-h` | *Moby-Dick* | **2,569** | 209,219 | 142 | 114,075 | **throws `TooLongForOnePass`** |
 | `1228-h` | *On the Origin of Species* | 1,326 | 155,478 | 24 | 59,650 | fits, at 99,650 of 128,000 |
 
-`2701-h` is the acceptance test for stage 4 and `1228-h` is the contrast case that must not regress.
+`2701-h` is the acceptance test for stage 3 and `1228-h` is the contrast case that must not regress.
+
+**They are gitignored, so write down how to get them back** — this file lost them once already, to a
+`rm -rf data` that restored the fixture invariant `worktree:check` enforces and took these with it.
+Both stages are deterministic and free:
+
+```
+npm run fetch   -- "https://www.gutenberg.org/files/2701/2701-h/2701-h.htm"
+npm run extract -- "https://www.gutenberg.org/files/2701/2701-h/2701-h.htm" output/2701-h.html
+mkdir -p data/2701-h && npm run blocks -- output/2701-h.html data/2701-h/blocks.json
+```
+
+…and `1228/1228-h` for *Origin of Species*. If `output/<slug>.html` still exists, the third line
+alone rebuilds the fixture byte-identically without touching the network.
 
 **And Moby-Dick makes a design point the shorter corpus could not.** Its free heading tree finds
 **137 depth-1 parts** — a chapter list, not a carving. A cascade whose wave 1 merely accepts the
