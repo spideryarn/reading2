@@ -293,8 +293,9 @@ export function PrivacyPage() {
             points at the card. */}
         <p>
           Two exceptions, and both are worth knowing. If you mark an article{" "}
-          <strong className="tw:text-foreground">public</strong>, anyone with the link can read it
-          without signing in — that is what the setting is for. They get the article, its outline,
+          <strong className="tw:text-foreground">public</strong>, anyone can read it without signing
+          in, and it is listed publicly where somebody who was never sent the link can find it —
+          that is what the setting is for. They get the article, its outline,
           its arc, the glossary, the ideas, the quotes, the timeline and the thread, some of which
           the model wrote knowing what your profile says about you, even though the profile itself
           is not shared. <strong className="tw:text-foreground">They also get your comments</strong>
