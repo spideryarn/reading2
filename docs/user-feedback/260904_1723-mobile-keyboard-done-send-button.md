@@ -1,12 +1,13 @@
 # The mobile keyboard should have a Done/Send button
 
 **[SPIDERYARN-READING2-1A](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1A)** · reported
-2026-09-04 17:23 UTC · resolved 2026-09-05 · *shipped, but not the way it was asked for*
+2026-09-04 17:23 UTC · resolved 2026-09-04 23:09 UTC · *shipped, but not the way it was asked for*
 
 > **This note was rewritten after its first fix turned out not to work on the phone the report came
-> from.** The issue was resolved on 2026-09-04, reopened when GPT Sol found the hole, and resolved
-> again on 2026-09-05 — § The first fix was wrong says what changed, and § Honest limit says what
-> nobody has checked yet.
+> from.** The issue was resolved, reopened when GPT Sol found the hole, and resolved again six hours
+> later — § The first fix was wrong says what changed, and § Honest limit says what nobody has
+> checked yet. (Dates here are UTC throughout, which is not the London clock the loop runs on: the
+> second resolve was after midnight locally and is still the 4th.)
 
 ## What the reader said
 
