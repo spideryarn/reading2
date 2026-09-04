@@ -2412,6 +2412,164 @@ export const NOT_FOUND_TO_SHELF = "Go to your shelf";
  */
 export const NOT_FOUND_TO_HOME = "Go to the home page";
 
+/* ── The shelf of public articles ──────────────────────────────────────────── */
+
+/**
+ * **`/read/public` — the other shelf**, and everything on it is written here.
+ *
+ * The owner's shelf and this one are two different lists and must not sound like
+ * one narrowed: that one is *your articles*, this one is *what anybody has
+ * shared*, and nobody's private reading is in it.
+ * docs/project/public-shelf.md, and src/web/PublicLibraryPage.tsx is the page.
+ *
+ * **Every sentence here says the limit of the list out loud**, which is the one
+ * rule this section has that the neighbouring ones do not. A list that answers
+ * *what is there* is read as complete unless it says otherwise, and this one is
+ * not: past a cap the tail is cut (`PUBLIC_SHELF_TRUNCATED`), and the query
+ * silently drops a shared article that is archived or whose revision has no
+ * readable blocks (src/store/public-library.ts § `publicLibraryQuery`).
+ *
+ * **So no sentence here claims the list is complete**, in either direction, and
+ * it took two passes to get there. The first draft of the lede ended *"an
+ * article that is not listed here is one nobody has shared"* — absence implying
+ * unshared, false three ways. The second opened *"Every article somebody using
+ * Spideryarn has made public"* — the same claim from the other end, and GPT Sol
+ * caught that the fix had left it standing. What survives says only what the
+ * page holds and what it does not hold, both of which the `where` clause can
+ * only ever confirm. docs/reusable/silent-success.md.
+ */
+export const PUBLIC_SHELF_HEADING = "Shared articles";
+
+/**
+ * **The line under the heading, and its last clause is the load-bearing one.**
+ *
+ * *"nobody's private reading is on this page"* is there to stop the obvious
+ * wrong reading — that a page called *Shared articles* might be a window onto
+ * somebody's shelf. It is the reader-facing half of the decision in
+ * docs/project/library.md § The Shared badge: this shelf is not the owner's
+ * shelf filtered, and it is not a selection made by us either.
+ *
+ * **It is a claim about the page, not about the world**, and that distinction
+ * cost two rewrites rather than one, which is why it is written out here.
+ *
+ * The first draft ended *"an article that is not listed here is one nobody has
+ * shared"* — absence implying unshared. False: a shared article that has been
+ * archived, or whose current revision has no tree or no blocks, or that falls
+ * past the row cap, is shared and absent
+ * (src/store/public-library.ts § `publicLibraryQuery`).
+ *
+ * The second opened *"Every article somebody using Spideryarn has made
+ * public"*, and **that is the identical claim read from the other end** — it
+ * asserts the list is the whole set, which the same four exclusions falsify. It
+ * survived the first fix because the fix was aimed at the sentence rather than
+ * at the claim; GPT Sol's review of this stage caught it, 2026-09-04.
+ *
+ * So it opens with a bare plural. *"Articles people … have chosen to make
+ * public"* says what is here and quantifies nothing, and the `where` clause has
+ * no way to make it false.
+ *
+ * **"without an account" rather than "for free"**, because the fact worth
+ * stating is that there is nothing to press before reading, and *free* is a
+ * claim about price on a page that has nothing to do with the plans.
+ */
+export const PUBLIC_SHELF_LEDE =
+  "Articles people using Spideryarn have chosen to make public. You can open any of them without " +
+  "an account, and nobody's private reading is on this page.";
+
+/**
+ * **Nobody has shared anything**, which is an answer about the world rather than
+ * a missing page — so the route answers 200 with an empty list and this is what
+ * is drawn over it (src/store/public-library.ts § `scrubbed`).
+ *
+ * The second sentence exists so that an empty page is distinguishable from a
+ * broken one: it says what would have to happen for something to appear, which
+ * is the difference between *there is nothing* and *nothing loaded*.
+ *
+ * **"on this shelf" and not "shared yet"**, for the reason the lede's own note
+ * gives at length: an empty list is a fact about the query's answer, and
+ * *"nothing has been shared yet"* would be a claim about the world that the
+ * readability bar and the archived filter can both falsify.
+ *
+ * The second sentence had the same fault in miniature and lost it the same way.
+ * *"An article appears here when its owner turns sharing on for it"* promises
+ * an implication the query does not honour; *"it fills up as people share"*
+ * says which way the page tends without promising anything about one article.
+ */
+export const PUBLIC_SHELF_EMPTY =
+  "There is nothing on this shelf yet. It fills up as people share the articles they are reading.";
+
+/**
+ * **The cap, said out loud** — `truncated` on the wire
+ * (src/public-library-types.ts), which exists for exactly this sentence.
+ *
+ * **No number in it**, deliberately. The cap is `PUBLIC_LIBRARY_LIMIT` in
+ * src/store/public-library.ts and is a ceiling rather than a page size, so it can
+ * be raised in one edit — and a sentence naming 200 would then be a false one
+ * that nothing would report. Saying *which* end is kept is the useful half
+ * anyway: the list is ordered by when each article was shared, newest first.
+ *
+ * Nothing can reach it today. It is drawn rather than deferred because a cap
+ * reported by nobody is a list that quietly stops being the list.
+ */
+export const PUBLIC_SHELF_TRUNCATED =
+  "There are more shared articles than this page shows. The list is capped, and what it shows " +
+  "is the most recently shared.";
+
+/**
+ * Said only once the wait is worth mentioning — `useSlow` owns the threshold,
+ * and on a warm fetch this never appears. The shelf's own line for the same
+ * moment is *"Reading the shelf…"*; this one names a different list, because a
+ * stranger has no shelf and would not know which was meant.
+ */
+export const PUBLIC_SHELF_SLOW = "Reading the shared articles…";
+
+/**
+ * The read failed — a 500 from the listing, or the request never arrived.
+ *
+ * A plain sentence rather than a `ReaderFacingFailure`, like `NOT_SHARED` and
+ * `NOT_FOUND` above: those carry a code because they are raised by the server
+ * and quoted back to us in a bug report, and this one is the client's own
+ * account of a fetch it watched fail. It says nothing about why, because the
+ * client cannot tell a database fault from a lost connection, and guessing is
+ * how a page ends up telling a reader on a train that our server is down.
+ */
+export const PUBLIC_SHELF_FAILED = "We couldn't read the list of shared articles just now.";
+
+/** The button beside it. Retrying is honest here — nothing was written. */
+export const PUBLIC_SHELF_RETRY = "Try again";
+
+/**
+ * `12,975 words`, on a card.
+ *
+ * **Words rather than minutes**, and that is the wire's decision rather than
+ * this file's: `PublicLibraryEntry` carries `words` and no reading time, because
+ * a card is not worth a second projection to keep in step with the reader's own
+ * (src/store/public-library.ts § `PUBLIC_LIBRARY_CARD`). The owner's card says
+ * both; this one says the fact the server actually sent.
+ *
+ * `toLocaleString`, so a long piece is not a wall of digits.
+ */
+export function publicShelfWords(words: number): string {
+  return `${words.toLocaleString()} words`;
+}
+
+/**
+ * `Shared 3 days ago` — **the field the list is ordered by, on the card that the
+ * order put there.**
+ *
+ * The owner's shelf follows the same rule for the same reason (ShelfEntry.tsx §
+ * `ShelfCard`): a card sorted by something it does not show is a list in an
+ * order the reader cannot check. Here the order is `public_at` descending, so
+ * this is the line that answers *why is this one at the top*.
+ *
+ * `when` is already-formatted — `timeAgo` in src/web/relative-time.ts, which
+ * hands back a date rather than a count past about a month. So this reads
+ * *"Shared 3 days ago"* or *"Shared 12 Aug 2026"*, and both are sentences.
+ */
+export function publicShelfShared(when: string): string {
+  return `Shared ${when}`;
+}
+
 /* ── Sharing a document, for the owner ─────────────────────────────────────── */
 
 /** The switch, off. */

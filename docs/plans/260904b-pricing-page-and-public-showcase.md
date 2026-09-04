@@ -777,13 +777,16 @@ ever, silently. Legacy rows rule out a `NOT NULL` constraint, so the type is the
     unsafe autofix that removes it — leaving a retry button that silently stops retrying. It is one
     stable function called by both the mount effect and the button instead, with the two limits that
     buys (a response after unmount; two presses racing) written down rather than engineered away.
-  - **The lede claimed something the `where` clause does not guarantee**, caught re-reading the copy
-    against the query rather than against the intent. It ended *"an article that is not listed here
-    is one nobody has shared"* — false three ways, because a shared article that is archived, or
-    whose current revision has no readable blocks, or that falls past the row cap, is shared and
-    absent. The rule it produced, written at the section head: **a sentence about what this list
-    contains cannot be falsified by the `where` clause; one about what its absences mean can be.**
-    It now says nobody's private reading is on the page and that nothing was chosen by us.
+  - **The lede claimed something the `where` clause does not guarantee — twice, and the second one
+    is the interesting half.** Caught first by re-reading the copy against the query rather than
+    against the intent: it ended *"an article that is not listed here is one nobody has shared"*,
+    false three ways, because a shared article that is archived, or whose current revision has no
+    readable blocks, or that falls past the row cap, is shared and absent. The fix opened *"Every
+    article somebody using Spideryarn has made public"* — **the identical claim read from the other
+    end**, because the fix had been aimed at the sentence rather than at the claim, and the review
+    below caught it standing. It now opens with a bare plural, which quantifies nothing. The rule
+    that came out of it, written at the section head in `src/messages.ts`: **say what the page
+    holds, never how much of the world it holds.**
   - **Browser-checked signed out at 1440 and 390**, one viewport at a time, against the five public
     articles seeded locally by `scripts/share-local-articles.ts`: five cards, every one opening its
     article readable and signed out, no horizontal scroll at 390, zero console errors, and the only
@@ -792,6 +795,36 @@ ever, silently. Legacy rows rule out a `NOT NULL` constraint, so the type is the
     `library.md` § The Shared badge reconciles *a badge, not a filter* against a page that filters
     (they are two shelves, and the owner's did not change); `security-map.md` gains the page as a
     public surface, with the argument for the inventory-shaped guard.
+
+- **2026-09-04, GPT Sol reviewed stage 3b's code.** **No P0, one P1, three P2s, and its verdict on
+  the question that matters was that it found no path exposing a private article or owner-scoped
+  data to a stranger.** Three of the four are fixed; the P1 is written down rather than built, and
+  the reason is that the thing it asks for does not exist yet.
+  - **P2, and a real bug: the page could show two states at once.** `shelf` and `failed` were
+    independent flags, each set by one branch of one promise and neither clearing the other — so
+    two overlapping reads, one failing and one succeeding, drew the error paragraph above the list
+    of cards. **And that is the production configuration rather than an edge case**: `main.tsx`
+    mounts inside `<StrictMode>`, so in development every effect runs mount → cleanup → mount and
+    this page issues two requests before either answers. Now one discriminated
+    `loading | loaded | failed`, which makes the combination unrepresentable, plus a generation ref
+    so a superseded read cannot land last. **Watched failing in both orderings** before the fix —
+    the test drives `<StrictMode>` and asserts exactly one of the three states is on screen, rather
+    than which one wins, because which read lands last is not something this page promises.
+  - **P2, the copy** — see the bullet above; the second completeness claim was Sol's find.
+  - **P2, an asynchronous failure announced to nobody.** The failure paragraph now carries
+    `role="alert"`, because it arrives a second or two after the page has been read out and nothing
+    else would say it. The half not fixed is written at the element: pressing Retry unmounts the
+    paragraph, so focus falls to the body, and refocusing automatically would yank focus on the
+    *first* failure out of wherever the reader actually was — worse than the thing it fixes.
+  - **P1, and it is a gap in the guard rather than a defect in the page.** The request inventory
+    mounts `PublicLibraryPage`, and production mounts `App`, which initialises a session and starts
+    the job service before it reaches this branch — so the test would stay green if an `App` arm
+    later wrapped this page in something owner-scoped. Sol's remedy was to extend "the existing
+    full-`App` network-trace harness", and **there is no such harness**: nothing in `tests/`
+    renders `<App />` at all, so this is a new suite with a session, a router and a job service to
+    stand up rather than an assertion to add. Not built here. It is a real next guard and belongs
+    with whatever first needs `<App />` mounted; until then the claim in the test and in
+    `security-map.md` is scoped to *the page's* conversation, which is what it says.
 
 - **2026-09-04, GPT Sol reviewed stage 3a's code and all four findings are fixed.** The review is
   [260904b-stage3a-code-review-sol.md](260904b-stage3a-code-review-sol.md); it found **no

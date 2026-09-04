@@ -52,7 +52,8 @@ listed here; the names under each are files in `docs/project/`.
   `remember-mode.md` (say what you took from it, and find out) ·
   `quiz.md` (the other half: the article asks, you answer) ·
   `links.md` (hover cards on the article's own hyperlinks) · `tooltips.md` · `keyboard.md` ·
-  `touch.md` · `url-state.md` · `library.md` (the shelf) · `page-titles.md` ·
+  `touch.md` · `url-state.md` · `library.md` (the shelf) ·
+  `public-shelf.md` (the other one: `/read/public`, for strangers) · `page-titles.md` ·
   `reader-profile.md` · `experimental-features.md` (the switch on /profile) ·
   `dictation.md` (talking into a text box) ·
   `copy.md` (reader-facing failure messages) ·

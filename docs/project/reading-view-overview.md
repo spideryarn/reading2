@@ -132,6 +132,9 @@ That is eleven of the thirteen; `plain` and `hierarchy` are the two that open no
 
 - **[library.md](library.md)** — the shelf: `/read/<slug>`, what a card says, what you can do to
   one, and three sorting rules that look right in a browser and are wrong.
+- **[public-shelf.md](public-shelf.md)** — the *other* shelf: `/read/public`, every article anybody
+  has shared, listed for strangers. Why it is not the owner's shelf narrowed, and what listing it
+  changed about what sharing promises.
 - **[page-titles.md](page-titles.md)** — what the browser tab says. One rule — *what is different
   about this tab goes first* — and why assigning `document.title` announces nothing.
 - **[reader-profile.md](reader-profile.md)** — two boxes and one string telling the model who is
