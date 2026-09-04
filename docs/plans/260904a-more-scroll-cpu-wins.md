@@ -1,8 +1,9 @@
 # A few more scroll wins, and one of them is not React's fault
 
-**Status:** built and measured, 2026-09-04. Reviewed at plan stage by GPT Sol
-([the answer](260904a-more-scroll-cpu-wins-review-sol.md)), which found a real hole in stage 2 before it
-shipped — see there. Awaiting the second, built-code review.
+**Status:** done, 2026-09-04. Two GPT Sol reviews, both of which changed the code: the
+[plan review](260904a-more-scroll-cpu-wins-review-sol.md) found a hole in stage 2 before it shipped,
+and the [built-code review](260904a-more-scroll-cpu-wins-review2-sol.md) found a second one after it
+did. Both are fixed here — see [The two reviews](#the-two-reviews).
 
 Follows [260903l](260903l-prose-innerhtml-rewritten-on-every-scroll-render.md), which took scrolling a
 551-block article from **77% to 49% of one core** by stopping React rewriting every paragraph's
@@ -44,13 +45,16 @@ tasks — [§ The last column is not CPU](../project/performance.md#the-last-col
 The frame probe is the number that matters more than the percentage, and it is the one nobody had
 looked at:
 
-| | median frame | p95 | worst | frames over 32ms |
+| | median frame | p95 | worst | rAF intervals over 32ms |
 |---|---:|---:|---:|---:|
 | live app | 16.7ms | **33.4 / 33.3ms** | **133 / 117ms** | **94 of 1300, 89 of 1325 — about 7%** |
 | static clone | 16.7ms | 16.8ms | 33.4ms | 4 of 1497 — 0.3% |
 
-**The live page drops about one frame in fourteen; the same document with no JavaScript drops one in
-three hundred.** The scroll itself stays smooth because it is compositor-driven — every `wheel`
+**7% of the live page's rAF intervals exceeded 32ms, against 0.3% for the same document with no
+application JavaScript.** Not "one dropped frame in fourteen", which the first draft said and which
+is wrong twice over: a 133ms gap is about seven missed refreshes and counts once here, and the
+denominator is the intervals that *were* delivered rather than the ones that should have been. It is
+a comparative jank signal, not a drop rate. GPT Sol, 2026-09-04. The scroll itself stays smooth because it is compositor-driven — every `wheel`
 listener on the page is passive ([`keynav.ts:402`](../../src/web/keynav.ts),
 [`swipe.ts:329`](../../src/web/swipe.ts), [`scroll.ts:457`](../../src/web/scroll.ts),
 [`follow.ts:172`](../../src/web/follow.ts)) — so what a reader sees lag by up to a tenth of a second
@@ -59,7 +63,7 @@ is the panels, the spine band and the gist columns, not the prose.
 **Whether those long frames *are* the `TableView` renders was an assumption**, and Sol was right to
 say the tables do not demonstrate it — a render count and a long-frame count sitting in the same run
 is not a correlation. Stage 2 turned it into evidence the only way available: remove the renders and
-see whether the long frames go. They did, from 10.8% of frames to 2.6%.
+see whether the long frames go. They did, from 10.8% of rAF intervals over 32ms to 2.6%.
 
 ### The scroll-distance anomaly was the harness, and it biases every comparison
 
@@ -76,19 +80,29 @@ with 8 sends over the step interval against 0.
 
 **The consequence is worth more than the explanation.** A slower page receives fewer wheel events, so
 it is asked to do less work — which means every before/after run on this harness has **understated**
-the improvement, including the 77→49 in 260903l. Fixed in stage 0.
+the improvement, including the 77→49 in 260903l. **"Was biased toward understating"** is the
+defensible wording rather than "understated by X": fewer events clearly favoured the slow side, but
+wheel coalescing makes the size of the effect nonlinear. Fixed in stage 0.
 
 ## Stages
 
-### Stage 0 — make the harness stop flattering the slow side
+### Stage 0 — make the harness stop flattering the slow side — **done**
 
-One change to [`measure-cpu.ts`](../../scripts/measure-cpu.ts): dispatch wheel events on a fixed
-cadence instead of awaiting each ack (or await with a cap), and promote `dispatched` and
-`totalDistance` to printed outputs alongside the CPU line. Without it, "before" and "after" are not
-given the same input, and the bias runs in the flattering direction.
+[`measure-cpu.ts`](../../scripts/measure-cpu.ts) dispatches wheel events on a fixed schedule against
+its own start time and no longer awaits each ack. Both sides of a comparison now get the same number
+of events: every run in this plan reports **417 wheels → 50,040px**, which is `dispatched × 120`
+exactly. Ack latency is still measured (`sendMsTotal`, `sendMsOverStep`) because it is a real signal
+about main-thread load — it is simply no longer allowed to change the input.
 
-Also written into [performance.md](../project/performance.md): **where the pointer is, is a variable
-in every measurement**, and the pointer-position runs below are how that was established.
+Three things it now prints that it did not:
+
+- **`dispatched` and `totalDistance`**, so a comparison can be checked rather than assumed.
+- **The frame distribution** — `p95 frame 16.8ms, worst 133.2ms, 40/1455 rAF intervals over 32ms`.
+  Nothing here had ever measured smoothness, only CPU, and CPU is a budget rather than an
+  experience. It turned out to be the number that moved most.
+- **Where the wheel pointer landed**, with `insideTable`. `--wheel-x` / `--wheel-y` move it. Printed
+  unconditionally, because a "pointer away from the table" run that was secretly still over it looks
+  exactly like a null result.
 
 ### Stage 1 — cache `page(blocks)` — **done**
 
@@ -129,12 +143,15 @@ first one's leftovers.
 
 ### Stage 2 — `memo(TableView)` and `memo(Spine)` — **done**
 
-The big one. `TableView` takes **28 props and 24 were already identity-stable.** The four that were
+The big one. `TableView` takes **29 props and 25 were already identity-stable** — 28 and 24 before
+`linkBase` was added, which is what the first draft counted. The four that were
 not were inline arrows at the call site in [`App.tsx`](../../src/web/App.tsx) — `onOpenChat`,
 `onChatAbout`, `onSelect`, `onOpenComment` — and each closes only over values that are themselves
 stable. Four `useCallback`s and one `memo()`. `Spine` needed nothing but the wrapper.
 
-**Nothing inside `TableView` changed.** And nothing blocked it: `useReadingPosition` returns
+**Almost nothing inside `TableView` changed** — one prop threaded to `BlockGutter` and
+`BlockRange`, and no logic. The first draft said "nothing", which was not true. Nothing blocked it
+either: `useReadingPosition` returns
 `{ at, jumpTo }` and `at` is never passed to `TableView` nor derived into any prop, so the memo was
 not dead on arrival. Sol verified the second dependency level too, and pinned the one claim that
 would have made the whole stage worthless if false — that nuqs's `useQueryState` setter is
@@ -205,8 +222,9 @@ straight back to unconditional `innerHTML` writes, for that one block. That is
 #### What it measured
 
 Both sides on the production build, the **same harness**, and — because of stage 0 — the same input:
-417 wheel events and 50,040px of travel on every run. "Before" is a detached worktree at `HEAD`,
-built and served on its own port.
+417 wheel events and 50,040px of travel on every run. "Before" is a detached worktree at
+**`99941cc2`**, built and served on its own port. (Equal count and distance, note — not identical
+temporal spacing: the deadline pacing can burst after Node misses a deadline.)
 
 | 25s scroll | before | after |
 |---|---:|---:|
@@ -215,12 +233,13 @@ built and served on its own port.
 | `Reader` renders | 87 / 88 | 89 / 88 |
 | **main-thread CPU**, % of one core | 56.1 / 55.1 | **44.1 / 42.1** |
 | **p95 frame** | 66.6 / 50.0ms | **16.8 / 16.8ms** |
-| **frames over 32ms** | 12.1% / 9.5% | **2.8% / 2.4%** |
+| **rAF intervals over 32ms** | 12.1% / 9.5% | **2.8% / 2.4%** |
 | frames drawn in the window | 1163 / 1209 | 1452 / 1453 |
 
-The frame numbers are the ones to quote. **p95 goes from 50–67ms to 16.8ms** — from a tail below
-20fps to a clean 60fps frame — and roughly one dropped frame in nine becomes one in thirty-eight.
-The page also draws about 22% more frames in the same window.
+The frame numbers are the ones to quote. **p95 goes from 50–67ms to 16.8ms**, which is the tail returning to
+one-refresh cadence — though the after runs still contain 117–133ms maxima, so this is not "no jank".
+Long intervals fall from about one in nine to one in thirty-eight, and the page draws about 22% more
+frames in the same window.
 
 `Spine` halving rather than going to zero is right: the rail has its own scroll listener and *should*
 re-render as the reader moves. What went was the half its parent was causing.
@@ -380,10 +399,114 @@ type permits what the cache forbids. Sol's advice, and it is right: do **not** a
 that is a parse to avoid a parse — but move these APIs towards `readonly Block[]` when something
 else is open in there.
 
+## Where the remaining cost is, and it is not script
+
+The first version of this section did the arithmetic against `ThreadTime` and mixed two clocks; GPT
+Sol caught it. The unclassified bucket is `TaskDuration − ScriptDuration − LayoutDuration −
+RecalcStyleDuration`, all four of them wall-clock inside main-thread tasks, and it is:
+
+| % of the 25s window | before 1 | before 2 | after 1 | after 2 |
+|---|---:|---:|---:|---:|
+| `TaskDuration` total | 60.9 | 57.8 | **44.2** | **41.9** |
+| script | 23.5 | 23.1 | **5.9** | **5.8** |
+| layout | 0.8 | 0.8 | 0.9 | 0.9 |
+| style | 1.2 | 1.2 | 1.0 | 1.0 |
+| **unclassified** | **35.4** | **32.7** | **36.4** | **34.2** |
+
+**Every point of the improvement came out of script, and the unclassified bucket did not move at
+all.** About 34% of the window is main-thread task time Chromium does not attribute to script,
+layout or style — before and after, unchanged — and **this plan does not know what it is.** Paint,
+compositing commit, hit-testing and event dispatch all live in there. It is also, now, the whole
+remaining gap over the ~12% floor.
+
+The honest next instruments, neither tried: a Chrome trace, or `SystemInfo.getProcessInfo` on the
+**browser-level** CDP socket, which reports cumulative `cpuTime` per process across all its threads
+and is the way to the whole-renderer figure `ProcessTime` cannot give under headless. Attribution
+there needs an isolated browser or a mapping from renderer processes to targets.
+
+What this does say is that **no obvious single hot JavaScript function remains.** A sampling profile
+of the new build finds 2,647ms of script in 25 seconds, its largest self-time entry the garbage
+collector, then one minified React frame, then `getBoundingClientRect` (4.1%) and `replaceState`
+(3.1%) — the `?at=` machinery, and small. That is one profile of one article, so it is evidence
+against another round of render work rather than proof.
+
+### The listener count: a story I had, and withdrew
+
+The draft claimed 51,822 event listeners fell to a 5,047 "steady state" because reconciliation left
+detached listeners uncollected, and that this was most of the GC pressure. **Sol checked the saved
+runs and it does not hold.** The 51,822 came from the old ack-gated 325-wheel run; the matched runs
+report 11,576 and 4,404 *before* and 4,534 and 2,759 after — one of the before figures already below
+the number I called the after steady state. The counter is plainly GC-sensitive and noisy, and a
+before/after correlation this loose establishes nothing about cause.
+
+Chromium increments it when a listener wrapper is constructed and decrements it when the wrapper is
+destroyed, so delayed collection is *plausible* — but settling it needs a forced GC before both
+readings, or the allocation owners. Left open rather than explained.
+
 ## Loose end, not a stage
 
-The live page reports **51,822 event listeners** (`counts.listeners` in the production run), against
-zero on the static clone — about 94 per block. No application code attaches anything per element;
-React's delegation and its `onclick = noop` trap account for some thousands at most. Five minutes
-with `getEventListeners($0)` on a `tr`, a `td`, a prose `<a>` and `document` would name it. Not a
-scroll cost as far as anything here shows, but 94 per block is not a number to leave unexplained.
+The live page reported **51,822 event listeners** on one old run against zero on the static clone,
+which Fable flagged as worth explaining. It is still not explained — see the withdrawal above. The
+counter swings between 2,759 and 11,576 across four matched runs of the same page, so the first job
+is a reading that holds still: force a GC before each, or capture the listener owners directly.
+
+## The two reviews
+
+Both were worth more than the work they reviewed, which is the argument for the second one being
+obligatory.
+
+### The plan review found the hole that mattered
+
+`blockHref` reads the query string during render, and I was about to memoise the component above it.
+Sol audited all 35 parameters and named the ten that would go stale. Without that, this would have
+shipped as a silent correctness regression on 551 links, in exchange for a performance win — which
+is the worst possible trade and exactly the kind nobody notices.
+
+It also verified the load-bearing dependency claim I had only read once: that nuqs's `useQueryState`
+setter is identity-stable, without which the entire stage is worthless. That is now pinned by
+[`tests/nuqs-setter-is-stable.test.tsx`](../../tests/nuqs-setter-is-stable.test.tsx) rather than by
+my having read `node_modules` on a Thursday — `package.json` allows `^2.10.0`.
+
+### The built-code review found a second hole in my fix for the first
+
+**My fix had the same shape of bug one layer along.** `useAddressSearch` snapshotted
+`location.search`, while `blockHref` also read `location.pathname` — so a write that changed only
+the path left the snapshot equal and the memo holding. `/read/x` and `/read/x/` are the same route
+here, so it is reachable. Sol reproduced it in a focused test before telling me. The hook is now
+`useAddress`, the snapshot is pathname **and** search, and the prop is `linkBase` — a whole address
+rather than a query fragment. [The test](../../tests/permalinks-follow-the-address.test.tsx) covers
+it, and was watched red.
+
+Five more, all fixed:
+
+- **The CDP client treated protocol errors as successes.** It modelled only `{id, result}` and
+  resolved unconditionally, so a command the browser *refused* looked exactly like one it ran. Which
+  made the wheel loop's `failed` counter a lie — it could only ever see a synchronous socket throw,
+  while reporting zero. A check that cannot fail, in a script whose whole purpose is not being
+  fooled. It now rejects on `{id, error}` and on the socket closing with commands outstanding.
+- **"Dropped frames" was not what the probe counted.** It counts rAF *intervals* over 32ms, once
+  each, over the intervals that were delivered — so a 133ms gap is about seven missed refreshes and
+  increments it once, and the denominator is wrong too. "One dropped frame in fourteen" was wrong in
+  both halves. Renamed to `longFramesOver32ms` and reworded everywhere; the p95 was always the
+  sounder number.
+- **The event-listener story was not supported by the runs.** Withdrawn — see above.
+- **`navigate()` fired `NAVIGATED` twice** once the history patch was installed. One line.
+- **The parse-cache test shared a fixture across the very describe block whose comment forbade it**,
+  so its first case passed only because Vitest happens to run cases in declaration order.
+
+And a set of doc corrections: the prop count (29/25, not 28/24), "nothing inside `TableView`
+changed" (one prop was threaded), "the only `memo` in `src/web`" (`Spine` is the other), the
+unclassified-cost arithmetic (`TaskDuration`, not `ThreadTime` — mixing two clocks, one round after
+being told not to), "every earlier comparison understated" (→ *was biased toward* understating,
+since coalescing makes the size nonlinear), "no hot function is left to chase" (→ no *obvious single
+hot JavaScript function* remains, which is what one profile supports), and a `HEAD` that should have
+been the commit id `99941cc2`, since a plan is read later.
+
+Two things it checked and cleared, both of which I would otherwise have been guessing about: the
+double history patch is sound in the order `main.tsx` installs it — nuqs's `"__nuqs__"` marker is
+forwarded unchanged, the native method is called exactly once, `history.length` stays correct — and
+`blockHref`'s textual construction is right for every input `location.search` can actually produce.
+It preferred the patch to its own inventory suggestion, on the self-maintaining argument.
+
+It was explicit about what it took on trust: that the tests I said were watched red were, and the
+browser conditions behind the saved measurements. That is the right thing to have been told.

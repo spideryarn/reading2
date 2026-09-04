@@ -42,8 +42,8 @@ import {
   LIBRARY_HREF,
   navigate,
   type Route,
-  searchWithout,
-  useAddressSearch,
+  addressWithout,
+  useAddress,
   useRoute,
 } from "./router.js";
 import type { User } from "@supabase/supabase-js";
@@ -2302,7 +2302,7 @@ function Reader({
      Lifted out of the JSX, and the only reason is identity.
 
      `TableView` is wrapped in `memo`, so a render of `Reader` that changes none
-     of its 28 props must not produce new ones — and an arrow written inline in
+     of its 29 props must not produce new ones — and an arrow written inline in
      the JSX is a new function on every render, which alone would defeat the
      whole thing. The other 24 props were already stable (memos, `useState`
      setters, primitives); these four were not.
@@ -2387,13 +2387,14 @@ function Reader({
   const openCommentDialog = useCallback((id: BlockId) => void setNote(id), [setNote]);
 
   /**
-   * The whole query string, subscribed to — the input to the block permalinks.
+   * The whole address, subscribed to — the input to the block permalinks.
    *
    * The only subscription in this file that is not a `useQueryState`, and it is
-   * here because those are key-isolated and this needs *all* of them. See the
-   * `carried` prop on `TableView` below.
+   * here because those are key-isolated and this needs *all* of them. Pathname
+   * as well as query, because `blockHref` uses both. See the `linkBase` prop on
+   * `TableView` below.
    */
-  const addressSearch = useAddressSearch();
+  const address = useAddress();
 
   /** Whether the paragraph-level nav labels are riding beside the prose. */
   const leafOn = showText && fit.columns.includes(geometry.leafDepth);
@@ -2676,11 +2677,11 @@ function Reader({
         article={article}
         sections={sections}
         layoutKey={layoutKey}
-        /* The permalink query — every parameter the address has, including the
-           ones added after this line was written, minus the one the link is
-           about to set.
+        /* The permalink base — this page's whole address, including every
+           parameter added after this line was written, minus the one the link
+           is about to set.
 
-           **`useAddressSearch` rather than a bare `location.search`**, and the
+           **`useAddress` rather than a bare read of `location`**, and the
            difference is the whole correctness of this: reading the global here
            would be right only if `Reader` re-rendered on every URL change, and
            it does not. nuqs subscriptions are key-isolated, so ten reading
@@ -2693,8 +2694,8 @@ function Reader({
            No `useMemo`: it is a string, and strings compare by value. A render
            caused only by `?at=` produces an equal one, so `memo(TableView)`
            holds; any other parameter produces a different one and it correctly
-           does not. TableView.tsx § `Props.carried`. */
-        carried={searchWithout(addressSearch, "at")}
+           does not. TableView.tsx § `Props.linkBase`. */
+        linkBase={addressWithout(address, "at")}
         geometry={geometry}
         columns={fit.columns}
         layout={fit}

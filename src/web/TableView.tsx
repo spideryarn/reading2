@@ -203,30 +203,34 @@ interface Props {
   /** Same key as the `?at=` tracker: re-measure when the columns change. */
   layoutKey: string;
   /**
-   * The query pairs a block permalink carries, `at` already dropped and no
-   * leading `?`.
+   * This page's address with `at` dropped — `"/read/x?cols=0,2"`. What the 551
+   * block permalinks in the gutter and the gist cells are built from.
    *
-   * **It is a prop rather than a read of `location.search` because this
-   * component is `memo`ised**, and there are 551 of these links in an article.
-   * `blockHref` used to read the address bar during render, which was sound
-   * only while every URL change re-rendered this tree; a memo retires that.
-   * Being a *string* is what makes it work: a render caused only by `?at=`
-   * produces an equal one, so the memo still holds, and any other parameter
-   * produces a different one and correctly does not.
+   * **It is a prop rather than a read of `location` because this component is
+   * `memo`ised.** `blockHref` used to read the address bar during render,
+   * which was sound only while every URL change re-rendered this tree; a memo
+   * retires that. Being a *string* is what makes it work: a render caused only
+   * by `?at=` produces an equal one, so the memo still holds, and any other
+   * parameter produces a different one and correctly does not.
+   *
+   * **Pathname included, not just the query.** The first version carried only
+   * the query, and `blockHref` still read `location.pathname` — so a write
+   * that changed only the path left every permalink on the old spelling. GPT
+   * Sol reproduced it, 2026-09-04.
    *
    * Self-maintaining, which an audit of the 35 parameters in params.ts would
    * not have been — the thirty-sixth is covered too. BlockRef.tsx § `blockHref`.
    */
-  carried: string;
+  linkBase: string;
 }
 
 /**
- * **Memoised, and it is the only `memo` in `src/web`.**
+ * **Memoised** — one of two in `src/web`; `Spine` is the other.
  *
  * `useReadingPosition` writes `?at=` to the address as sections pass the
  * reading line — a deliberate feature (docs/project/url-state.md) — and that
- * re-renders `Reader` **77–79 times during one scroll** of a 551-block article,
- * measured 2026-09-04. None of this table's 28 props depends on `at`, so every
+ * re-renders `Reader` **87–88 times during one scroll** of a 551-block article,
+ * measured 2026-09-04. None of this table's 29 props depends on `at`, so every
  * one of those renders reconciled 551 rows, ~2,200 cells, `thead`, `colgroup`,
  * `ColumnPanels` and `Lightbox` to produce the same tree.
  *
@@ -239,8 +243,9 @@ interface Props {
  *
  * **What this retires:** `blockHref` read `location.search` during render on the
  * grounds that any URL change re-rendered this whole tree. It no longer does.
- * That is what `carried` is for — see `Props.carried`, and do not reintroduce a
- * render-time read of a global in here without giving it the same treatment.
+ * That is what `linkBase` is for — see `Props.linkBase`, and do not reintroduce
+ * a render-time read of `location`, or of any other global, in this subtree
+ * without giving it the same treatment.
  *
  * Verify with `?perf=1`: `useRenderCount("TableView")` counts *body*
  * executions, so a skipped render is not counted, and `measure-cpu.ts --scroll`
@@ -281,7 +286,7 @@ function TableViewInner({
   hitHues,
   sections,
   layoutKey,
-  carried,
+  linkBase,
 }: Props) {
   useRenderCount("TableView");
   const { blocks } = article;
@@ -983,7 +988,7 @@ function TableViewInner({
                             className="range"
                             range={node.range}
                             onJump={onJump}
-                            carried={carried}
+                            linkBase={linkBase}
                           />
                         </>
                       ) : (
@@ -1078,7 +1083,7 @@ function TableViewInner({
                     is. */}
                 <BlockGutter
                   id={block.id}
-                  carried={carried}
+                  linkBase={linkBase}
                   comments={cmtsByBlock.get(block.id)}
                   chatCount={chatCounts.get(block.id) ?? 0}
                   onOpenComment={onOpenComment}

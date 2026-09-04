@@ -65,6 +65,17 @@ const freshBlocks = (): Block[] =>
     block(`spya-aaaa${i}z`, `<p>Block ${i}: the mind is <em>software</em> on wet hardware.</p>`),
   );
 
+/**
+ * The **one** describe block below that deliberately shares an array, because
+ * its three cases are about a cache surviving between calls and they say so.
+ *
+ * Everything else builds its own. GPT Sol pointed out, 2026-09-04, that this
+ * file preached isolation and then shared a fixture across the first describe,
+ * whose opening "parses every block on the first question" only passes because
+ * Vitest happens to run cases in declaration order and nothing has primed the
+ * cache yet. That is an order dependency, so the first case now takes a fresh
+ * array of its own and this constant is used only where sharing is the point.
+ */
 const BLOCKS: Block[] = freshBlocks();
 
 const run = (hits: SearchHit[]) => [{ id: "spya-run2aa", slot: 0, hits }];
@@ -79,8 +90,11 @@ beforeEach(() => {
 
 describe("the blocks are parsed once per array identity", () => {
   it("parses every block on the first question", () => {
-    resolveHits(BLOCKS, run(HITS));
-    expect(spy.parses).toBe(BLOCKS.length);
+    /* Its own array: shared with the cases below, this would pass or fail on
+       whether one of them had already run. */
+    const fresh = freshBlocks();
+    resolveHits(fresh, run(HITS));
+    expect(spy.parses).toBe(fresh.length);
   });
 
   /**

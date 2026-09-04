@@ -729,7 +729,12 @@ function hasKey(pair: string, name: string): boolean {
 }
 
 /**
- * One parameter dropped, everything else kept **exactly as it was written**.
+ * One parameter dropped, every other pair kept **exactly as it was written**.
+ *
+ * "Every other pair" rather than "everything": `withoutPairs` also drops empty
+ * ones, so a trailing or doubled `&` does not survive. That is what makes
+ * `blockHref` able to append `&at=…` without checking, and it is a difference
+ * from the input, so it is said here rather than implied.
  *
  * The public form of the pair below, for callers who are rebuilding an address
  * around a parameter of their own — `blockHref` in BlockRef.ts, which drops
@@ -843,9 +848,15 @@ export function navigate(href: string, options: { replace?: boolean } = {}): voi
   // nuqs's patched pushState/replaceState notices the new query string and
   // updates every useQueryState from it, so navigation and view state stay in
   // step without us telling it anything.
+  /* `watchHistoryWrites` fires NAVIGATED for us when it is installed, so the
+     explicit dispatch below is skipped then — otherwise every `navigate()`
+     notified every subscriber twice. A string snapshot means the second one
+     commits nothing, but they still all run. It stays for the case where the
+     patch is not installed: a test, or any entry point that is not main.tsx.
+     GPT Sol, 2026-09-04. */
   if (options.replace) history.replaceState(null, "", href);
   else history.pushState(null, "", href);
-  window.dispatchEvent(new Event(NAVIGATED));
+  if (!historyWatched) window.dispatchEvent(new Event(NAVIGATED));
   window.scrollTo({ top: 0 });
 }
 
@@ -918,13 +929,35 @@ export function watchHistoryWrites(): void {
  *
  * Only useful once `watchHistoryWrites` has been called; without it this hook
  * would miss every nuqs write, which is most of them.
+ *
+ * **Pathname and search, not just the search**, and that was a bug for the
+ * first few hours: `blockHref` reads `location.pathname` too, so a write that
+ * changed only the path — `/read/x?cols=1` → `/read/x/`, which router.ts
+ * accepts as the same route — left the snapshot equal, the memo holding, and
+ * 551 permalinks pointing at the old spelling. GPT Sol reproduced it,
+ * 2026-09-04. Anything a memoised subtree derives from `location` has to be
+ * inside this string.
  */
-export function useAddressSearch(): string {
+export function useAddress(): string {
   return useSyncExternalStore(
     subscribe,
-    () => location.search,
+    () => location.pathname + location.search,
     () => "",
   );
+}
+
+/**
+ * That address with one parameter taken out, ready for a link to write its own.
+ *
+ * `"/read/x?cols=0,2&at=spya-old"` → `"/read/x?cols=0,2"`, and
+ * `"/read/x?at=spya-old"` → `"/read/x"`. Text throughout, for the reason
+ * `withoutPairs` gives.
+ */
+export function addressWithout(address: string, name: string): string {
+  const q = address.indexOf("?");
+  if (q === -1) return address;
+  const kept = searchWithout(address.slice(q), name);
+  return kept ? `${address.slice(0, q)}?${kept}` : address.slice(0, q);
 }
 
 /**

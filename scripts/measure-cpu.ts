@@ -345,15 +345,38 @@ function reportProfile(profile: CpuProfile, out: string): void {
 class Cdp {
   private ws: WebSocket;
   private next = 1;
-  private pending = new Map<number, (v: unknown) => void>();
+  private pending = new Map<number, { ok(v: unknown): void; fail(e: Error): void }>();
 
   private constructor(ws: WebSocket) {
     this.ws = ws;
     this.ws.addEventListener("message", (ev: MessageEvent) => {
-      const msg = JSON.parse(String(ev.data)) as { id?: number; result?: unknown };
+      /* **A CDP failure is `{id, error}`, not a rejected socket.** This modelled
+         only `{id, result}` and resolved unconditionally, so a command the
+         browser refused looked exactly like one it ran — and `undefined` then
+         flowed on to whatever read the result. It made the wheel loop's
+         `failed` counter a lie: it could only ever see a synchronous
+         `WebSocket.send` throw, never a command the browser rejected, while
+         reporting zero. GPT Sol, 2026-09-04; the counter is the sort of check
+         docs/reusable/silent-success.md is about, and it was one itself. */
+      const msg = JSON.parse(String(ev.data)) as {
+        id?: number;
+        result?: unknown;
+        error?: { code?: number; message?: string };
+      };
       if (msg.id === undefined) return; // an event; nothing here subscribes
-      this.pending.get(msg.id)?.(msg.result);
+      const waiting = this.pending.get(msg.id);
       this.pending.delete(msg.id);
+      if (!waiting) return;
+      if (msg.error) waiting.fail(new Error(`CDP: ${msg.error.message ?? "unknown error"}`));
+      else waiting.ok(msg.result);
+    });
+    /* A socket that closes with commands outstanding used to leave their
+       promises pending for ever, so the run hung rather than failing. */
+    this.ws.addEventListener("close", () => {
+      for (const waiting of this.pending.values()) {
+        waiting.fail(new Error("CDP: the browser closed the connection"));
+      }
+      this.pending.clear();
     });
   }
 
@@ -370,9 +393,17 @@ class Cdp {
 
   send<T = unknown>(method: string, params: object = {}): Promise<T> {
     const id = this.next++;
-    return new Promise<T>((resolve) => {
-      this.pending.set(id, resolve as (v: unknown) => void);
-      this.ws.send(JSON.stringify({ id, method, params }));
+    return new Promise<T>((resolve, reject) => {
+      this.pending.set(id, {
+        ok: resolve as (v: unknown) => void,
+        fail: (e) => reject(new Error(`${method}: ${e.message}`)),
+      });
+      try {
+        this.ws.send(JSON.stringify({ id, method, params }));
+      } catch (e) {
+        this.pending.delete(id);
+        reject(e instanceof Error ? e : new Error(String(e)));
+      }
     });
   }
 
@@ -630,8 +661,16 @@ interface FrameStats {
   medianMs: number;
   p95Ms: number;
   maxMs: number;
-  /** A missed frame at 60Hz. The headline: this over `frames` is the jank rate. */
-  droppedOver32ms: number;
+  /**
+   * rAF intervals longer than 32ms — **not** a count of missed refreshes.
+   *
+   * A 133ms gap is roughly seven missed 60Hz opportunities and increments this
+   * once, and the denominator is the intervals that were delivered rather than
+   * the ones that should have been. So it is a comparative jank signal and not
+   * a frame-drop rate, and calling it "one dropped frame in fourteen" is wrong
+   * in both the numerator and the denominator. GPT Sol, 2026-09-04.
+   */
+  longFramesOver32ms: number;
   /** Every pixel travelled, up and down. `dispatched x 120` when nothing was lost. */
   totalDistance: number;
   netDistance: number;
@@ -641,7 +680,7 @@ async function stopFrameProbe(cdp: Cdp): Promise<FrameStats> {
   const r = await cdp.send<{ result: { value: FrameStats } }>("Runtime.evaluate", {
     expression: `(() => {
       const p = window.__scrollProbe;
-      if (!p) return { frames: 0, medianMs: 0, p95Ms: 0, maxMs: 0, droppedOver32ms: 0, totalDistance: 0, netDistance: 0 };
+      if (!p) return { frames: 0, medianMs: 0, p95Ms: 0, maxMs: 0, longFramesOver32ms: 0, totalDistance: 0, netDistance: 0 };
       p.running = false;
       const deltas = p.deltas.slice().sort((a, b) => a - b);
       const ys = p.scrollYs;
@@ -653,7 +692,7 @@ async function stopFrameProbe(cdp: Cdp): Promise<FrameStats> {
         medianMs: pct(0.5),
         p95Ms: pct(0.95),
         maxMs: deltas.length ? deltas[deltas.length - 1] : 0,
-        droppedOver32ms: deltas.filter(d => d > 32).length,
+        longFramesOver32ms: deltas.filter(d => d > 32).length,
         totalDistance,
         netDistance: ys.length ? Math.abs(ys[ys.length - 1] - ys[0]) : 0,
       };
@@ -1014,8 +1053,9 @@ async function main(): Promise<void> {
       /* Null unless `--scroll`. `wheel.dispatched` belongs beside every CPU
          figure it sits next to: two runs are only comparable if they were given
          the same input, and until 2026-09-04 the busier one silently got less
-         of it. `frames.droppedOver32ms` is the only number here a reader would
-         recognise. */
+         of it. `frames.longFramesOver32ms` is the closest thing here to what a
+         reader feels — read its own docstring before quoting it, because it is
+         a count of long rAF intervals and not of missed refreshes. */
       wheel: wheelStats,
       frames: frameStats,
     };
@@ -1023,12 +1063,12 @@ async function main(): Promise<void> {
     console.log(JSON.stringify(result, null, 2));
     if (frameStats && wheelStats) {
       const jank = frameStats.frames
-        ? Math.round((frameStats.droppedOver32ms / frameStats.frames) * 1000) / 10
+        ? Math.round((frameStats.longFramesOver32ms / frameStats.frames) * 1000) / 10
         : 0;
       console.log(
         `scroll: ${wheelStats.dispatched} wheels → ${frameStats.totalDistance}px, ` +
           `p95 frame ${frameStats.p95Ms}ms, worst ${frameStats.maxMs}ms, ` +
-          `${frameStats.droppedOver32ms}/${frameStats.frames} frames over 32ms (${jank}%)`,
+          `${frameStats.longFramesOver32ms}/${frameStats.frames} rAF intervals over 32ms (${jank}%)`,
       );
     }
     if (json) {

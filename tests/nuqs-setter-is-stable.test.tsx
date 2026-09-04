@@ -3,9 +3,10 @@
  * A nuqs setter keeps its identity across renders — which is load-bearing, and
  * is somebody else's implementation detail.
  *
- * `memo(TableView)` (TableView.tsx) is worth about twelve points of a core and
- * four fifths of the dropped frames on a long article, and it holds only if
- * every one of its 28 props is identity-stable on a render caused by `?at=`.
+ * `memo(TableView)` (TableView.tsx) is worth about twelve points of a core on a
+ * long article, and takes the p95 frame from 50–67ms back to 16.8ms. It holds
+ * only if every one of its 29 props is identity-stable on a render caused by
+ * `?at=`.
  * One of them, `onJump`, is `jumpTo` — `useCallback(…, [setAt])` in App — and
  * `setAt` comes out of nuqs's `useQueryState`. **If nuqs ever returns a fresh
  * setter per render, the memo silently never matches and the whole change is

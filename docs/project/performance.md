@@ -48,11 +48,11 @@ A `--scroll` run also prints, since 2026-09-04:
 
 ```
 wheel pointer: {"x":400,"y":400,"insideTable":true,"over":"FIGURE"}
-scroll: 417 wheels → 50040px, p95 frame 16.8ms, worst 133.2ms, 40/1452 frames over 32ms (2.8%)
+scroll: 417 wheels → 50040px, p95 frame 16.8ms, worst 133.2ms, 40/1455 rAF intervals over 32ms (2.7%)
 ```
 
 **`417 wheels → 50040px` is the input, and two runs are only comparable if it matches** —
-`totalDistance` should be `dispatched × 120`. **`frames over 32ms` is the closest thing here to what
+`totalDistance` should be `dispatched × 120`. **`rAF intervals over 32ms` is the closest thing here to what
 a reader feels**, and it moves when CPU barely does. `--wheel-x` / `--wheel-y` move the pointer; see
 [2026-09-04](#three-things-this-changed-about-how-to-measure-here).
 
@@ -723,7 +723,7 @@ which is item 1 below, addressed as a side effect.
 The day after, and the same shape one level up: nothing was rebuilding the DOM any more, but
 `TableView` and `Spine` were still being **reconciled 87 and 150 times per scroll** because
 `useReadingPosition` writes `?at=` as sections pass the reading line and that re-renders `Reader`.
-None of `TableView`'s 28 props depends on `at`. Both are now `memo`ised — the first two `memo`s in
+None of `TableView`'s 29 props depends on `at`. Both are now `memo`ised — the first two `memo`s in
 `src/web` — and four inline arrows at the call site in `App.tsx` became `useCallback`s so the memo
 could hold. [260904a](../plans/260904a-more-scroll-cpu-wins.md).
 
@@ -737,12 +737,17 @@ travel, every run. "Before" is a detached worktree at `HEAD`, built and served o
 | `Reader` renders | 87 / 88 | 89 / 88 |
 | **main-thread CPU**, % of one core | 56.1 / 55.1 | **44.1 / 42.1** |
 | **p95 frame** | 66.6 / 50.0ms | **16.8 / 16.8ms** |
-| **frames over 32ms** | 12.1% / 9.5% | **2.8% / 2.4%** |
+| **rAF intervals over 32ms** | 12.1% / 9.5% | **2.8% / 2.4%** |
 
 **The frame numbers are the ones to quote, and they are new.** Until this run nothing here measured
-smoothness at all — only CPU, which is a budget rather than an experience. A page can sit at 49% of
-a core and still miss one frame in nine. `measure-cpu.ts --scroll` now prints
-`p95 frame … , N/M frames over 32ms` on every run.
+smoothness at all — only CPU, which is a budget rather than an experience. `measure-cpu.ts --scroll`
+now prints `p95 frame …, N/M rAF intervals over 32ms` on every run.
+
+**Read that count for what it is.** It counts rAF *intervals* longer than 32ms, once each, over the
+intervals that were delivered. A 133ms gap is roughly seven missed 60Hz opportunities and increments
+it once, so it is a comparative jank signal and **not** a dropped-frame rate — do not write "one
+frame in nine". The p95 is the cleaner number: it went from 50–67ms to 16.8ms, which is the tail back
+at one-refresh cadence, while the worst case is still 117–133ms.
 
 `Reader` not moving is correct: it owns the `?at=` subscription, so it goes on rendering and only its
 memoised children skip. `Spine` halving rather than going to zero is also correct — the rail has its
@@ -754,8 +759,9 @@ own scroll listener and *should* follow the reader.
    `Input.dispatchMouseEvent` before sleeping, so a page whose main thread was busy acknowledged
    more slowly and therefore **received fewer wheel events** — 325 against a static clone's 370, and
    90 against 370 in dev. The slower side of every comparison was asked to do less work, which means
-   every before/after run before 2026-09-04, including the 77→49 above, **understated** the
-   improvement. The loop now runs on a fixed schedule against its own start time and does not await
+   every before/after run before 2026-09-04, including the 77→49 above, was **biased toward
+   understating** the improvement — the direction is clear, the size is not, because wheel
+   coalescing makes it nonlinear. The loop now runs on a fixed schedule against its own start time and does not await
    the ack; `dispatched` and `totalDistance` are printed, and `totalDistance` should be
    `dispatched × 120`.
 2. **Where the pointer is, is a variable.** The synthetic wheel was hardcoded at `400,400`, which is
@@ -774,6 +780,44 @@ own scroll listener and *should* follow the reader.
    too good. `curl -s localhost:PORT | grep -oE 'src="[^"]*"'` on both ports settles it in a second,
    and belongs in the recipe: this page already says believe the `N rows` line rather than the
    percentage, and that is not far enough.
+
+### What is left, and it is not script
+
+The unclassified bucket is `TaskDuration − ScriptDuration − LayoutDuration − RecalcStyleDuration`,
+all four wall-clock inside main-thread tasks. **Do not compute it against `ThreadTime`**, which is
+CPU and a different clock — the first draft of this section did, and the numbers happened to be
+close, which is how that survives.
+
+| % of the 25s window | before 1 | before 2 | after 1 | after 2 |
+|---|---:|---:|---:|---:|
+| `TaskDuration` total | 60.9 | 57.8 | **44.2** | **41.9** |
+| script | 23.5 | 23.1 | **5.9** | **5.8** |
+| layout | 0.8 | 0.8 | 0.9 | 0.9 |
+| style | 1.2 | 1.2 | 1.0 | 1.0 |
+| **unclassified** | **35.4** | **32.7** | **36.4** | **34.2** |
+
+**Every point of the improvement came out of script, and the unclassified bucket did not move.**
+About 34% of the window is main-thread task time Chromium does not attribute to script, layout or
+style — the same before and after — and nobody knows what it is. Paint, compositing commit,
+hit-testing and event dispatch all live there. It is also the whole remaining gap over the ~12%
+floor, so **it is where the next investigation goes.**
+
+The instruments for it, neither tried: a Chrome trace, or `SystemInfo.getProcessInfo` on the
+**browser-level** CDP socket, which reports cumulative `cpuTime` per process across all its threads
+and is the way to the whole-renderer figure `ProcessTime` cannot give under headless. Attribution
+there needs an isolated browser, or a mapping from renderer processes to targets.
+
+**No obvious single hot JavaScript function remains** — which is weaker than "another round of render
+work is not the lever", and is what one sampling profile of one article actually supports. That
+profile finds 2,647ms of script in 25 seconds, its largest self-time entry the garbage collector,
+then one minified React frame, then `getBoundingClientRect` (4.1%) and `replaceState` (3.1%).
+
+**A story about event listeners, withdrawn.** A draft here explained 51,822 listeners falling to a
+5,047 "steady state" as reconciliation churn. It does not hold: 51,822 came from the old ack-gated
+run, and the four matched runs report 11,576 and 4,404 before against 4,534 and 2,759 after — one
+"before" already below the claimed "after". The counter is GC-sensitive and noisy. Settling it needs
+a forced GC before each reading, or the listener owners. Left open. GPT Sol caught this against the
+saved run files, 2026-09-04.
 
 ### The hole a memo opens, which is not about performance
 

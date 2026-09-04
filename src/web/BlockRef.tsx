@@ -44,7 +44,7 @@
 import type { MouseEvent } from "react";
 import { ID_PREFIX } from "../ids.js";
 import type { BlockId } from "../types.js";
-import { navigate, searchWithout } from "./router.js";
+import { addressWithout, navigate } from "./router.js";
 
 /** `spya-k3m9qt` → `k3m9qt`. Anything not ours is shown untouched. */
 export function shortBlockId(id: BlockId): string {
@@ -56,7 +56,7 @@ export function shortBlockId(id: BlockId): string {
  * state (columns, mode, open dialog) carried along, so the link shows the block
  * *as the reader is currently looking at it*. See docs/project/url-state.md.
  *
- * ## `carried`, and why the global read is no longer good enough everywhere
+ * ## `linkBase`, and why the global read is no longer good enough everywhere
  *
  * This read `location.search` during render, with no subscription, and said
  * that was safe "because every parameter in the URL is `useQueryState` in App,
@@ -72,12 +72,19 @@ export function shortBlockId(id: BlockId): string {
  * permanent one — change the diagram's hue, copy a paragraph's link, and send
  * somebody the view you had a minute ago.
  *
- * So the pairs to carry can be **passed in**: the query string with `at`
- * already dropped, no leading `?`. `TableView` takes it as a prop and hands it
- * down, which makes it an ordinary input that the memo compares like any other
- * — and since it is a string, a render caused only by `?at=` produces an equal
- * one and the memo still holds. Every caller outside that subtree omits it and
- * gets the global read, whose premise is untouched.
+ * So the address can be **passed in**: `linkBase`, this page's pathname and
+ * query with `at` already dropped — `"/read/x?cols=0,2"`, or `"/read/x"` when
+ * nothing else is set. `TableView` takes it as a prop and hands it down, which
+ * makes it an ordinary input that the memo compares like any other, and since
+ * it is a string, a render caused only by `?at=` produces an equal one and the
+ * memo still holds. Every caller outside that subtree omits it and gets the
+ * global read, whose premise is untouched.
+ *
+ * **Pathname as well as query, which the first version got wrong.** It carried
+ * only the query and still read `location.pathname` here, so a write that
+ * changed only the path — `/read/x` → `/read/x/`, the same route as far as
+ * router.ts is concerned — left every permalink on the old spelling with the
+ * memo holding. GPT Sol reproduced it, 2026-09-04.
  *
  * Editing the query as **text** rather than through `URLSearchParams` is not
  * incidental either. The old version round-tripped it, which re-encodes
@@ -85,9 +92,16 @@ export function shortBlockId(id: BlockId): string {
  * readable by the person you send the link to. router.ts § `carriedSearch` and
  * params.ts both refuse that round trip for exactly this reason; this one was
  * quietly doing it.
+ *
+ * `id` is encoded even though every id this repo mints is already URL-safe
+ * (`spya-k3m9qt`): `BlockId` is a string alias, not a checked type, so the
+ * safety is a convention rather than a guarantee, and encoding costs nothing.
  */
-export function blockHref(id: BlockId, carried = searchWithout(location.search, "at")): string {
-  return `${location.pathname}?${carried ? `${carried}&` : ""}at=${id}`;
+export function blockHref(
+  id: BlockId,
+  linkBase = addressWithout(location.pathname + location.search, "at"),
+): string {
+  return `${linkBase}${linkBase.includes("?") ? "&" : "?"}at=${encodeURIComponent(id)}`;
 }
 
 /**
@@ -109,17 +123,17 @@ interface RefProps {
   onJump?(id: BlockId): void;
   className?: string;
   /**
-   * The query pairs to carry, `at` already dropped, no leading `?`.
+   * This page's address with `at` dropped — `"/read/x?cols=0,2"`.
    *
    * Only the callers **inside `TableView`** pass this, and only because that
    * subtree is memoised — see `blockHref`. Everywhere else omits it and reads
    * the address bar, which is still correct there.
    */
-  carried?: string;
+  linkBase?: string;
 }
 
-export function BlockRef({ id, onJump, className, carried }: RefProps) {
-  const href = blockHref(id, carried);
+export function BlockRef({ id, onJump, className, linkBase }: RefProps) {
+  const href = blockHref(id, linkBase);
   function handle(event: MouseEvent<HTMLAnchorElement>) {
     // Never let an ancestor's jump handler see this click, whatever we do with
     // it. `stopPropagation` does not touch the browser's own behaviour, so
@@ -149,16 +163,16 @@ interface RangeProps {
   range: readonly [BlockId, BlockId];
   onJump?(id: BlockId): void;
   className?: string;
-  /** Passed straight through to both ends — `RefProps.carried` says why. */
-  carried?: string;
+  /** Passed straight through to both ends — `RefProps.linkBase` says why. */
+  linkBase?: string;
 }
 
 /**
  * The two ends of a node's block range, each its own link. The dash is not
  * inside either of them, so dragging across one id selects that id.
  */
-export function BlockRange({ range, onJump, className, carried }: RangeProps) {
-  const pass = { ...(onJump ? { onJump } : {}), ...(carried === undefined ? {} : { carried }) };
+export function BlockRange({ range, onJump, className, linkBase }: RangeProps) {
+  const pass = { ...(onJump ? { onJump } : {}), ...(linkBase === undefined ? {} : { linkBase }) };
   return (
     <div className={["block-range", className].filter(Boolean).join(" ")}>
       <BlockRef id={range[0]} {...pass} />

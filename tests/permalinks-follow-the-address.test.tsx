@@ -35,7 +35,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { blockHref } from "../src/web/BlockRef.js";
-import { searchWithout, useAddressSearch, watchHistoryWrites } from "../src/web/router.js";
+import { addressWithout, useAddress, watchHistoryWrites } from "../src/web/router.js";
 import type { BlockId } from "../src/types.js";
 
 const ID = "spya-k3m9qt" as BlockId;
@@ -58,9 +58,9 @@ afterEach(() => {
 
 /** The gutter's link, as the reader would see it, for a component that subscribes. */
 function Permalink() {
-  const carried = searchWithout(useAddressSearch(), "at");
+  const linkBase = addressWithout(useAddress(), "at");
   return (
-    <a id="p" href={blockHref(ID, carried)}>
+    <a id="p" href={blockHref(ID, linkBase)}>
       link
     </a>
   );
@@ -94,9 +94,35 @@ describe("a block permalink follows the address bar", () => {
    * would be worthless.
    */
   it("is unchanged by a new ?at=, which is what lets the memo hold", () => {
-    const before = searchWithout(location.search, "at");
+    const before = addressWithout(location.pathname + location.search, "at");
     history.replaceState(null, "", "/read/x?cols=0,2&dhue=identity&at=spya-p7w2dn");
-    expect(searchWithout(location.search, "at")).toBe(before);
+    expect(addressWithout(location.pathname + location.search, "at")).toBe(before);
+  });
+
+  /**
+   * **The pathname counts too**, and the first version of this got it wrong: it
+   * subscribed to `location.search` alone while `blockHref` also read
+   * `location.pathname`, so a write that changed only the path left the
+   * snapshot equal, the memo holding, and 551 links on the old spelling.
+   * `/read/x` and `/read/x/` are the same route as far as router.ts is
+   * concerned, so this is reachable rather than theoretical. GPT Sol
+   * reproduced it before it could ship, 2026-09-04.
+   */
+  it("follows a change to the pathname alone", () => {
+    act(() => root.render(<Permalink />));
+    act(() => {
+      history.replaceState(null, "", "/read/x/?cols=0,2&dhue=identity");
+    });
+    expect(href()).toBe(`/read/x/?cols=0,2&dhue=identity&at=${ID}`);
+  });
+
+  /** No query at all: the link has to open one rather than append to nothing. */
+  it("writes its own ? when the address has no query", () => {
+    act(() => {
+      history.replaceState(null, "", "/read/x");
+      root.render(<Permalink />);
+    });
+    expect(href()).toBe(`/read/x?at=${ID}`);
   });
 
   /**
@@ -106,7 +132,7 @@ describe("a block permalink follows the address bar", () => {
    * one, because `get("at")` returns the first match.
    */
   it("drops a percent-encoded at= as well as a plain one", () => {
-    expect(searchWithout("?%61t=spya-old&cols=1", "at")).toBe("cols=1");
+    expect(addressWithout("/read/x?%61t=spya-old&cols=1", "at")).toBe("/read/x?cols=1");
   });
 
   /**
