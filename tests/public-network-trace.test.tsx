@@ -200,8 +200,27 @@ const PDF_META = {
  */
 const PUBLIC_GIST = "What the piece says.";
 
+/** The owner's own words, on the fixture's one paragraph. */
+const PUBLIC_NOTE = "The bit I keep coming back to.";
+const PUBLIC_ANSWER = "Because the example is doing the arguing.";
+
 const ARTICLE: PublicArticle = {
   meta: { slug: SLUG, title: "A piece", byline: "Somebody" },
+  /* **A real one, not `[]`.** A visitor's drawer showing nothing would pass
+     every assertion about *not fetching* while proving nothing about what they
+     are shown — which is the whole of stage 3.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3. */
+  comments: [
+    {
+      id: "spya-cmt23z",
+      blockId: "spya-bbbbbb",
+      quote: "The first paragraph of the piece.",
+      start: 0,
+      createdAt: "2026-09-01T09:00:00.000Z",
+      body: PUBLIC_NOTE,
+      answer: PUBLIC_ANSWER,
+    },
+  ],
   /* Absent: this fixture has never been through the `assets` step, so the
      reader hot-links exactly as it always did. The third state, and it is
      what the publisher-host assertions below are measured against. */
@@ -702,13 +721,37 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      the *present*-quotes renderer; that one could break with this green, and no
      fixture in this file can reach it. */
   quotes: { where: VISITOR_BAND, says: "Nobody has built a set of quotes for this piece yet" },
-  /* The six that spend, each named by `MODE_LABEL[mode]` — the policy in
+  /* No timeline on the payload either, so this is the *nobody built one*
+     sentence rather than the boundary — it moved out of the group below on
+     2026-09-04, when the payload grew a flag to be sure with.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1. */
+  timeline: { where: VISITOR_BAND, says: "Nobody has built a timeline for this piece yet" },
+  /* **Free since 2026-09-04, and it is the only one here that draws a real
+     picture for a visitor.** Force is built from the tree in the payload; the
+     panel's three fetching hooks are off and the picker is hidden. The string
+     is a node title off that tree, so this row fails if the picture stops being
+     drawn — asserting the band's own heading would pass over an empty
+     `<aside>`. § Stage 2. */
+  /* **Free since 2026-09-04, and the only row here that opens a real panel for
+     a visitor rather than a boundary or a list.** Force is built from the tree
+     in the payload; the panel's three fetching hooks are off and the picker is
+     not rendered at all.
+
+     The string is the panel's own instruction rather than a node label off the
+     picture, and that is a limit of this environment rather than a choice:
+     jsdom gives every element zero size, so the d3 layout produces no
+     positioned nodes and the SVG carries no text to assert on. **So this row
+     proves the panel mounted and spent nothing, and not that the picture drew.**
+     The browser pass owns that second half — said here because a green row that
+     looks like it covers the drawing is exactly the reassurance
+     docs/reusable/silent-success.md is about.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */
+  diagram: { where: ".mode-band.diag", says: "Point at anything in the picture" },
+  /* The four that spend, each named by `MODE_LABEL[mode]` — the policy in
      src/web/visitor.ts carries no string of its own. */
   search: { where: VISITOR_BAND, says: "Search is for whoever added this article" },
   chat: { where: VISITOR_BAND, says: "Chat is for whoever added this article" },
   remember: { where: VISITOR_BAND, says: "Remember is for whoever added this article" },
-  diagram: { where: VISITOR_BAND, says: "Diagram is for whoever added this article" },
-  timeline: { where: VISITOR_BAND, says: "Timeline is for whoever added this article" },
   /* Referee reached the fall-through until 2026-09-02 and was announced by its
      raw mode id; the capital R is the assertion that it no longer does.
      docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C2. */
@@ -1304,12 +1347,84 @@ describe("a signed-out browser on a shared document", () => {
     expect(outsidePublic()).toEqual([]);
   });
 
-  it("opens the comments drawer without asking for anybody's comments", async () => {
+  /**
+   * **The hostile deep link, one picture at a time.**
+   *
+   * Hiding the chips is not the gate and never could be: `?diagram=` is
+   * ordinary query state, so a pasted address — or the Back button onto one —
+   * names a picture without pressing anything. Four of the five spend:
+   * `drift` and `trail` POST for a projection, `sketch` and `illustrated`
+   * mount children that auto-run a job, and `force` itself POSTs for
+   * embeddings. `DiagramPanel` pins a visitor's `kind` to `force` and turns
+   * off all three of its fetching hooks, and this is the assertion that the
+   * pin holds from the URL rather than only from the picker.
+   *
+   * **Asserted per kind rather than in one loop over a joined string**, so a
+   * failure names the picture that leaked. GPT Sol asked for exactly this
+   * shape when it reviewed the stage.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2.
+   */
+  it.each(["force", "drift", "trail", "sketch", "illustrated"])(
+    "buys nothing when a visitor arrives at ?diagram=%s",
+    async (kind) => {
+      await open(`?mode=diagram&diagram=${kind}`);
+
+      /* The band is open — a visitor gets the free picture, so this is not the
+         vacuous pass where nothing mounted and therefore nothing fetched. */
+      expect(host.querySelector(".mode-band.diag"), `${kind}: the band`).not.toBeNull();
+      expect(trace.filter((r) => r.method !== "GET"), `${kind}: no POST`).toEqual([]);
+      expect(outsidePublic(), `${kind}: nothing outside /api/public/`).toEqual([]);
+      /* Named individually as well, because `outsidePublic` would also be empty
+         if the whole panel failed to mount. These are the four addresses this
+         stage is about. */
+      for (const paid of ["/api/similar/", "/api/projection/", "/api/sketch/", "/api/illustrated/"]) {
+        expect(trace.filter((r) => r.url.includes(paid)), `${kind}: ${paid}`).toEqual([]);
+      }
+    },
+  );
+
+  /**
+   * **Rewritten 2026-09-04.** This used to assert the drawer said *comments
+   * belong to whoever added this article* — the sentence a visitor got instead
+   * of the comments. They get the comments now, and still ask for nothing:
+   * they arrived in the article payload.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
+   */
+  it("shows the owner's comments in the drawer, without asking for them", async () => {
     await open("?panel=questions");
+
     expect(outsidePublic()).toEqual([]);
-    /* And it says whose they would be, rather than "nothing asked yet" — which
-       is what an empty owner drawer says, and would be a false claim here. */
-    expect(host.textContent).toContain("belong to whoever added this article");
+    /* The reader's own words, which is what the list previews. */
+    expect(host.textContent).toContain(PUBLIC_NOTE);
+    /* And the sentence that is no longer true is really gone, rather than
+       merely not asserted — the failure mode of a rewritten expectation. */
+    expect(host.textContent).not.toContain("belong to whoever added this article");
+  });
+
+  /**
+   * **Opening one gives the answer and none of the verbs.**
+   *
+   * The dialog is where every owner capability lives — edit, delete, retry,
+   * "search the web", the follow-up composer — and `CommentAccess`'s visitor
+   * arm carries none of them. Asserted by *label*, because that is what a
+   * reader would press; a query on a class name would pass over a button whose
+   * text changed.
+   */
+  it("opens a comment read-only, with no verbs and no composer", async () => {
+    await open("?panel=questions&note=spya-cmt23z");
+
+    expect(host.textContent, "the answer").toContain(PUBLIC_ANSWER);
+    for (const verb of ["Delete", "Try again", "Search the web"]) {
+      const found = [...host.querySelectorAll("button")].some(
+        (b) => (b.textContent ?? "").trim() === verb,
+      );
+      expect(found, verb).toBe(false);
+    }
+    /* The follow-up box is absent rather than disabled — a greyed-out one is an
+       invitation to press it, and the press would spend the owner's money. */
+    expect(host.querySelector(".cmt-followup"), "no composer").toBeNull();
+    expect(outsidePublic()).toEqual([]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
   });
 
   /**

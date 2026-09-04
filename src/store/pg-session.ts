@@ -83,13 +83,15 @@
  * while the release fails separately is the exact fault this file exists to
  * remove. See `JobSettles` in src/store/session.ts.
  *
- * ## Nothing real can run through it yet, and that is correct
+ * ## Every real step runs through it, and once nothing could
  *
- * `checkProduct` is asked with an **empty** unconverted set, so a step that
- * returns no `parts` is refused by name — and all ten steps are still on
- * `LEGACY_UNCONVERTED_STEPS`. A stage that writes its own files during `run`
- * writes them outside this transaction, which is the failure the transaction is
- * for. D3 converts `arc` and it becomes the first real user.
+ * `checkProduct` is asked with the unconverted set, and that set is now
+ * **empty** (`LEGACY_UNCONVERTED_STEPS`, src/pipeline.ts): every step returns
+ * `parts` and this session is what writes them. This paragraph said *"nothing
+ * real can run through it yet, and that is correct"* while all ten steps were
+ * still legacy and a stage that wrote its own files during `run` wrote them
+ * outside this transaction — which was the failure the transaction is for. D3
+ * converted `arc` and the rest followed.
  */
 import { and, eq } from "drizzle-orm";
 
@@ -559,7 +561,10 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
    * through `settleJob`, which is handed a `JobEnding` and knows nothing about
    * steps. Threading the name through `endJob` would put a Postgres-only
    * argument on the filesystem seam as well; a session is already one claim's
-   * worth of state, and one claim runs one step (see `openPgStoreSession`).
+   * worth of state, and a claim runs **one step at a time** — the walk visits
+   * them in order, so at most one is ever open. (It said *"one claim runs one
+   * step"*, which was the shape until 2026-08-30 and is not what makes this
+   * single field sound.)
    *
    * Cleared only once a transaction that finished the row has **committed**.
    * Clearing it inside `commit`'s transaction would be wrong in the one case

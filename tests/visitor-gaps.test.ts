@@ -68,6 +68,7 @@ const NOTHING_BUILT: PublicArtefacts = {
   glossary: false,
   ideas: false,
   quotes: false,
+  timeline: false,
 };
 const EVERYTHING_BUILT: PublicArtefacts = {
   arc: true,
@@ -75,6 +76,7 @@ const EVERYTHING_BUILT: PublicArtefacts = {
   glossary: true,
   ideas: true,
   quotes: true,
+  timeline: true,
 };
 
 /**
@@ -103,6 +105,7 @@ function only(built: keyof PublicArtefacts): PublicArtefacts {
     quotes: built === "quotes",
     glossary: built === "glossary",
     ideas: built === "ideas",
+    timeline: built === "timeline",
   };
 }
 
@@ -128,24 +131,23 @@ describe("what a visitor is told, mode by mode", () => {
   });
 
   /**
-   * **`timeline` is in this list deliberately, not by falling through.**
+   * **`timeline` left this list on 2026-09-04**, and the paragraph that stood
+   * here is worth keeping in outline because it explains what changed.
    *
-   * `visitorGap` used to end in a fail-closed fall-through, so a mode nobody
-   * named was owners-only anyway — which is exactly why naming it mattered:
-   * *private because somebody decided* and *private because somebody forgot*
-   * are indistinguishable in the code, and this is the first. The policy record
-   * is total now, so every row is a decision by construction. Greg, 2026-08-31:
-   * making it public-readable "could be a follow-up", and wants a general
-   * design for every mode rather than a fifth hand-written table.
-   * docs/plans/260831i-timeline-mode.md § Making a mode public-readable.
+   * It was owners-only *deliberately* rather than by falling through, and the
+   * reason given was that there was no `PublicArtefacts` flag for a timeline —
+   * so the honest sentence was *this belongs to whoever added the article*,
+   * never *nobody has built one*, which we could not know from a payload that
+   * carried no timeline either way. Greg had said making it public-readable
+   * "could be a follow-up".
    *
-   * Note it is here rather than under the artefact sweep below: there is no
-   * `PublicArtefacts` flag for a timeline, so the honest sentence is *this
-   * belongs to whoever added the article*, never *nobody built one* — which we
-   * could not know from a payload that carries no timeline either way.
+   * The payload carries it now, so the flag exists and the honest sentence is
+   * the artefact one. Timeline is asserted under the artefact sweep below
+   * instead, with the glossary and the quotes.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1.
    */
   it("names the modes that spend as the owner's, whatever the flags say", () => {
-    for (const mode of ["chat", "search", "remember", "diagram", "timeline", "referee"] as const) {
+    for (const mode of ["chat", "search", "remember", "referee"] as const) {
       for (const flags of [NOTHING_BUILT, EVERYTHING_BUILT]) {
         expect(visitorGap(mode, flags)).toEqual({
           kind: "owners-only",
@@ -240,17 +242,25 @@ describe("what a visitor is told, mode by mode", () => {
        artefact *and* renders no band — it is the article and nothing else, so
        there is nothing a visitor could be short of.
        docs/plans/plain-mode-and-the-way-out.md. */
-    const ALWAYS_FREE: Mode[] = ["plain", "hierarchy", "outline", "summary"];
+    /* **Five since 2026-09-04.** `diagram` joined the four that cost nothing
+       whatever has been built: its picture is drawn from the tree in the
+       payload every reader already holds, which is the same bargain `outline`
+       and `summary` make. It is unlike them in needing a component to enforce
+       it — DiagramPanel.tsx § DiagramAccess — because the panel *can* buy, and
+       the visitor arm is what stops it.
+       docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */
+    const ALWAYS_FREE: Mode[] = ["plain", "hierarchy", "outline", "summary", "diagram"];
     expect([...markedModes(NOTHING_BUILT).keys()].sort()).toEqual(
       MODES.filter((m: Mode) => !ALWAYS_FREE.includes(m))
         .slice()
         .sort(),
     );
     /* Everything built: the artefact modes drop out, and what is left is
-       the six that spend a model call. `timeline` is the fifth since
-       2026-08-31 — it has no `PublicArtefacts` flag to drop out on, so it stays
-       marked however much has been built — and `referee` is the sixth, the same
-       night, for the same reason.
+       the five that spend a model call. `timeline` was among them until
+       2026-09-04 — it had no `PublicArtefacts` flag to drop out on, so it
+       stayed marked however much had been built. It has one now, so it drops
+       out here with the glossary and the quotes, and is asserted one-at-a-time
+       below. docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1.
 
        `referee` reached this list through `visitorGap`'s fail-closed
        fall-through until 2026-09-02, and this comment used to call that the
@@ -260,10 +270,10 @@ describe("what a visitor is told, mode by mode", () => {
        `POLICY` record now, and there is no fall-through left to reach.
        docs/plans/260831an-referee-mode-for-peer-reviewers.md. */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
-      ["chat", "diagram", "referee", "remember", "search", "timeline"].sort(),
+      ["chat", "referee", "remember", "search"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. */
-    for (const built of ["glossary", "ideas", "quotes"] as const) {
+    for (const built of ["glossary", "ideas", "quotes", "timeline"] as const) {
       expect([...markedModes(only(built)).keys()], built).not.toContain(built);
     }
   });
@@ -278,7 +288,12 @@ describe("what a visitor is told, mode by mode", () => {
         mode === "glossary" ||
         mode === "summary" ||
         mode === "ideas" ||
-        mode === "quotes"
+        mode === "quotes" ||
+        mode === "timeline" ||
+        /* Free since 2026-09-04: the picture is drawn from the tree in the
+           payload, and the panel's visitor arm buys nothing.
+           docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */
+        mode === "diagram"
       ) {
         expect(gap, mode).toBeNull();
       } else {
@@ -366,6 +381,7 @@ describe("what the payload says it has", () => {
     /* Absent, and that is the third state: this article has never been through the
        `assets` step, so the reader hot-links exactly as before. src/assets.ts. */
     assets: undefined,
+    comments: [],
     tree: { version: "t", generator: "t", slug: "a-piece", rootId: "n0", nodes: {} },
   };
 
@@ -376,6 +392,7 @@ describe("what the payload says it has", () => {
       glossary: false,
       ideas: false,
       quotes: false,
+      timeline: false,
     });
     expect(
       artefactsIn({

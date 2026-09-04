@@ -131,11 +131,30 @@ was checked against the source rather than taken on trust:
 It also refuses to work at all on the filesystem store — `requirePostgres()` answers 501 — so a
 misconfigured dev server cannot serve a half-implemented public path.
 
-**What is deliberately *not* here:** diagram mode. `src/web/visitor.ts`'s `POLICY` table marks it
-owners-only unconditionally, because all three of its pictures POST for embeddings and spend money —
-two of four did until the free one, Tree, was cut on 2026-08-30;
-the gate is real on the server too, since `/api/similar/:slug` and `/api/projection/:slug` sit
-behind `requireUser`. The client-side gate is a courtesy; the server-side one is the defence.
+**Diagram used to be deliberately *not* here, and since 2026-09-04 it is.** `POLICY` marked it
+owners-only unconditionally, because its pictures POST for embeddings and spend money. What changed
+is not the cost of those pictures but that the panel now takes a `DiagramAccess` union
+([`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx)): a visitor's arm pins `?diagram=` to the free
+picture and disables **three** fetching hooks. The third, `useSketchCaption`, had no `enabled`
+argument at all — for an owner there is no purchase to gate — so it was an unconditional GET to an
+authenticated route on every mount, and an audit of the other two would have missed it.
+[260904c](../plans/260904c-more-modes-on-a-shared-link.md) § Stage 2.
+
+**The server-side gate is unchanged and is still the defence**: `/api/similar/:slug` and
+`/api/projection/:slug` sit behind `requireUser`, and the sketch and illustrated jobs behind it too.
+What has changed is that the **client-side pin is now load-bearing rather than a courtesy** — it is
+what stops a pasted `?diagram=trail` mounting a picture that would buy something, and
+`tests/public-network-trace.test.tsx` asserts once per picture that arriving at each of the five
+spends nothing. Removing the pin turns two of those red, which was checked rather than assumed.
+
+> **Superseded in part, 2026-09-04, and not yet built.** Greg has since decided that *"we're now
+> going to share the Diagrams, though only Sketch will be visible to those without Experimental
+> Features"* — a different picture from the free one this paragraph describes, and one that costs
+> about $0.20 to draw. Whoever builds it inherits the hazard this section is really about: the
+> pin is the only thing standing between a visitor and a paid picture, and Sketch reaches its cost
+> through `useSketch`'s auto-runner and `armActivation` rather than through the two POSTs named
+> above. A published Sketch has to be a **stored artefact in the payload**, never a job a visitor
+> can start.
 
 ### The owner is shown the inventory before they publish
 
@@ -145,9 +164,26 @@ on an already-shared article publishes it and asks nobody. The list is *derived*
 [`src/web/shared-inventory.ts`](../../src/web/shared-inventory.ts) sweeps `MODES` through
 `visitorGap`, the same function the reading view's dimmed buttons come from, so a mode added next
 month appears on the withheld side whether or not its author opens the file. Only the rows that are
-not modes at all are prose — the text, the pictures and the provenance; the owner's comments,
-lookups, profile, rename, uploaded file and the cost of it all; and the **arc and the tweet thread**,
-which cross like an artefact but have no mode to be swept. `tests/shared-inventory.test.ts` holds
+not modes at all are prose — the text, the pictures, the provenance and, since 2026-09-04, **the
+owner's comments**; the lookups, profile, rename, uploaded file and the cost of it all; and the
+**arc and the tweet thread**, which cross like an artefact but have no mode to be swept.
+
+**The comments row moved from the withheld side to the shared side**, and it is the only row that
+ever has ([260904c](../plans/260904c-more-modes-on-a-shared-link.md) § Stage 3). Two kinds of
+comment still never cross, and both are refused **in SQL** — `PUBLIC_COMMENTS_WHERE` in
+[`public-reader.ts`](../../src/store/public-reader.ts) — rather than dropped by the projection,
+because a filter in a `map` is one satisfied typechecker away from being widened:
+
+- a **referee's** note (`criterion_id is null`). Leaving `criterionId` and `valence` out of the DTO
+  does not make the row a reading note; it publishes the body of a peer review with its context
+  stripped off, which is worse than publishing it whole.
+- an **unfinished or failed** model call. Published without its error, its retry and its polling, it
+  is an item a visitor can neither act on nor understand.
+
+The read is `publicCommentsQuery`, which names its columns and **repeats `publicSlug` in its own
+`where`** — a naked `articleId` is not authority. `comments` is the fifth table in
+`tests/public-imports.test.ts`'s allowlist and the first ever added to it; that test's own comment
+says what a sixth would have to prove. `tests/shared-inventory.test.ts` holds
 them to `PublicArticle`'s key set with a total record, so a new field on the wire fails to compile
 until somebody decides which line covers it.
 

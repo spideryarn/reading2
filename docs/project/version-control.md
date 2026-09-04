@@ -95,6 +95,24 @@ necessary, ask Greg.
 
 The remote does not soften this. It holds *commits*; everything dangerous here is uncommitted.
 
+#### `rm` is the hole in this rule, and it was found the same way — 2026-09-04
+
+The list above is all `git`, and a hook enforces part of it. **`rm` is not on it and nothing stops
+it.** An agent finishing a screenshot task was told to keep its files out of the repo root, tidied
+up after itself, and removed three untracked files it had not created — `.tmp-smoke.mts` and two
+`privacy-*.png` — which belonged to somebody else's unfinished work. Copies happened to survive in
+the primary checkout, so nothing was lost, and that was luck rather than care.
+
+Two things follow. **Delete only paths you wrote, by name** — never a glob, never "tidy the repo
+root", because an untracked file in a shared tree is somebody's work by default and gitignored
+artefacts have no second copy anywhere. And **when you brief a subagent, say it**: the brief that
+caused this said *keep your files out of the repo root* and did not say *delete nothing you did not
+write*, which the agent read, reasonably, as permission to clear the space.
+
+Restoring from another tree is not the fix either. A file you cannot confirm is byte-identical is
+worse in a shared tree than an absence somebody notices — say what went missing and let its owner
+decide.
+
 #### It happened, and the way it happened was carelessness rather than reasoning — 2026-08-30
 
 An agent finishing a Sketch change wanted to know whether a failing test was its own, and wrote a

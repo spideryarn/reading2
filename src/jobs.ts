@@ -23,10 +23,14 @@
  *
  * The claim is the whole design and it is three lines of SQL: an attempt token,
  * a lease, and every write fenced on `id = $id and attempt_id = $attempt and
- * status = 'running'`. One claim covers one step and is then released, because
- * a claim held across requests leaves the job `running` with a token nobody
- * holds and the next advance is told `busy` until the lease lapses — the
- * endpoint deadlocking itself on the happy path.
+ * status = 'running'`. One claim covers a whole **job** — `walkClaim` runs
+ * every step on it, because on a serverless host the next request lands on a
+ * different instance — and is then put down, because a claim held past its
+ * claimant leaves the job `running` with a token nobody holds and the next
+ * advance is told `busy` until the lease lapses, the endpoint deadlocking
+ * itself on the happy path. Three doors out: a release between steps, a pause
+ * from inside one, and the finish. (This said *"one claim covers one step"*,
+ * which was the shape until 2026-08-30.)
  *
  * **An expired lease is not a takeover.** The job is failed and Retry is the
  * reader's to press. Guessing that an owner is dead is how two runners end up
@@ -192,21 +196,40 @@ const aborts = processSingleton<Map<string, AbortController>>(
  * **760s is a symptom of ephemeral scratch, not a property of the job model.**
  *
  * It is this large only because one claim has to cover an entire job, and one
- * claim has to cover an entire job only because a handoff would land on a cold
- * instance with an empty `/tmp` and re-run everything. `advanceJobToCompletion`
- * releases "only on intentional handoff or terminal settlement" — the escape
- * valve is already in the shape; it is unusable today for that one reason.
+ * claim had to cover an entire job because a handoff would land on a cold
+ * instance with an empty `/tmp` and re-run everything.
  *
- * **When D3–D5 put artefacts in Postgres a handoff costs nothing, the claim can
- * shrink, and this number becomes wrong rather than merely conservative.** The
- * cost it carries meanwhile is a dead claimant unreclaimable for ~12.5 minutes
- * instead of ~7. Do not leave that lying around after its cause has gone.
+ * **That cause has gone, and this paragraph used to predict its own expiry.** It
+ * said the escape valve "is unusable today for that one reason" and that a
+ * handoff would cost nothing once D3–D5 put artefacts in Postgres. They did: a
+ * claim writes into a draft revision, `stepIsDone` reads the *artefacts* through
+ * the session, and a handoff to a cold instance now costs a claim and a round
+ * trip rather than the work. Two hand-backs already rely on it — the
+ * between-steps release in `walkClaim`, and `pauseForDeadline` from inside a
+ * step (src/store/jobs.ts).
+ *
+ * **So the number is now conservative rather than forced, and it is kept
+ * deliberately.** What it buys is that the one step nobody can afford to repeat
+ * gets a whole window: `hierarchy` at 320.4 s measured, 658–778 s on a
+ * 142-page PDF. What it costs is a claimant that is *actually* dead — killed,
+ * frozen, deployed over — being unreclaimable for ~12.5 minutes rather than ~7,
+ * and that cost is now bounded by the pause: a claimant that is merely slow puts
+ * the job down at 740 s instead of leaving it to lapse. Shrinking the lease is a
+ * separate piece of work and wants the step budgets re-measured first.
  *
  * The arithmetic it has to satisfy, measured rather than assumed and **for an
  * ordinary web page** — `tests/jobs-lease-budget.test.ts` pins it:
  *
  *     fetch ≤110s + extract ~10s + blocks ~5s + hierarchy 320.4s + assets ≤185s = 630.4s
  *     630.4s  <  740s self-abort  <  800s platform kill
+ *
+ * **That sum is elapsed time, and since 2026-09-04 it is no longer the number of
+ * requests.** `STEP_BUDGET_MS.hierarchy` is now 700s, so a walk that has spent
+ * ~125s on `fetch → extract → blocks` hands the claim back rather than starting
+ * the one step it cannot restart cheaply, and the ordinary article takes two.
+ * The arithmetic below still has to hold — a job that cannot fit one invocation
+ * is a job nothing can recover — but "fits one claim" and "takes one request"
+ * are now different claims about it. See `STEP_BUDGET_MS` § `hierarchy`.
  *
  * **Re-measured 2026-09-04, and the old line said 520s.** It quoted `fetch ~10s`
  * and `extract ~5s`, both of which this same file falsified in the same change
@@ -281,20 +304,35 @@ class DeadlineReached extends Error {
  * mid-ingest cost the reader their job and left them a Retry button. It now puts
  * the job back to `queued` on the same row, which is what the filesystem store's
  * `sweepStopped` has always done at restart, and which keeps the slug, the
- * article and the article's checkpoints. The contract is src/store/jobs.ts §
- * `settleExpired`; enforcing the number is the store's, deciding it is ours, the
- * same division `LEASE_MS` and `jobConcurrency` already have.
+ * article, the article's checkpoints **and the draft** — the last of those since
+ * 2026-09-04, because without it the next window re-mints every block id and the
+ * checkpoints, though still there, name an identity that has moved. The contract
+ * is src/store/jobs.ts § `settleExpired`; enforcing the number is the store's,
+ * deciding it is ours, the same division `LEASE_MS` and `jobConcurrency` already
+ * have.
  *
  * **A lapsed lease and a step that overran are not the same event, and this
- * paragraph used to name the second as an example of the first.** A lapse is
- * *nobody came back* — the claimant was frozen, killed or deployed over, and
- * stopped saying anything. A claimant that reaches its own deadline is still
- * here: it aborts its step, and `walkClaim` ends the job as a **retryable
- * error** rather than handing it back, so the reader presses Retry and this
- * budget is not involved at all. Watched on 2026-09-04, on the 144-page paper
- * this work is about: `ms: 740033`, ended, no requeue. An automatic second
- * window for the cooperative case is listed as *recommended, not built* in
- * docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md.
+ * budget covers both.** A lapse is *nobody came back* — the claimant was frozen,
+ * killed or deployed over, and stopped saying anything. A claimant that reaches
+ * its own deadline is still here: it aborts its step, unwinds cleanly, and since
+ * 2026-09-04 hands the job back through `pauseForDeadline`
+ * (src/store/jobs.ts) rather than ending it. That was listed as *recommended,
+ * not built* in
+ * docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md, and was built
+ * by stage 3 of docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md.
+ *
+ * **So "three windows" is three in total, not three of each**, and this is the
+ * sentence to read twice. One counter, two spenders: a lapse followed by one
+ * cooperative pause leaves only the third window. Nothing arbitrates between
+ * them beyond the count, deliberately — a job that has burned three windows any
+ * way at all is a job that is not making progress.
+ *
+ * **And the pause is why there is a cap on this at all now, rather than merely a
+ * good idea.** Every hand-back before it was preceded by a *completed* step
+ * (`transitionAfter`'s `release`), so progress was structurally guaranteed and
+ * no counter could have been needed. A mid-step pause breaks that guarantee: a
+ * step that can never fit in 740 s would pause, re-claim and spend another
+ * window for ever.
  *
  * **Why there is a number at all:** without one, a job that overruns every lease
  * requeues for ever, buying model calls nobody is waiting for. That is the
@@ -481,10 +519,52 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
   extract: 700_000,
   /* GUESS, generous. Deterministic, no model call. */
   blocks: 5_000,
-  /* MEASURED 2026-08-30, the worst in data/_ai-calls.jsonl: one call, so its
-     sum and its wall clock agree and no grouping argument applies. This is the
-     number the whole budget turns on, and `LEASE_MS` is sized around it. */
-  hierarchy: 320_400,
+  /* **A CEILING, and the reasoning is `extract`'s above, for the same reason.**
+     ⟨measured 2026-09-04 on Kuhn, *A Landscape of Consciousness*, 142 pages⟩
+
+     **MEASURED 2026-08-30**, on ordinary articles: the worst `hierarchy` in
+     data/_ai-calls.jsonl is **320.4 s** in a single call, so its sum and its
+     wall clock agree and no grouping argument applies. That number stood here
+     until 2026-09-04 and is still the one `LEASE_MS` is sized around — it is
+     what an ordinary web page costs, and `tests/jobs-lease-budget.test.ts` goes
+     on asserting the whole HTML ingest against it.
+
+     **MEASURED 2026-09-04**, on the 142-page paper this plan is about: the
+     structure call **alone** is 508 s and the whole step is **658–778 s**. The
+     same two production ingests recorded `extract` at 305–347 s, so the walk
+     reached this step with 393–435 s of its deadline left — comfortably over
+     320.4 s, so it started a step that could not reach even its first
+     checkpoint, bought most of a ~$2 structure call, and spent one of the two
+     windows `REQUEUE_BUDGET` allows. ⟨GPT Sol, reviewing the built stage 3⟩
+
+     **No threshold can promise this step fits**, because 778 s is more than the
+     740 s deadline; what a threshold can do is stop it being *started* on a
+     remnant. So this is `extract`'s answer to `extract`'s question — as much of
+     the window as can be reserved without the step becoming unstartable — and
+     the same 700 s, which is not a coincidence: both are "essentially the whole
+     window, minus enough for a step to have preceded it".
+
+     What it means in practice is that `hierarchy` almost always begins a claim
+     rather than continuing one: the walk runs its **first** runnable step
+     ungated (`advanceJobWith`'s loop, below), so a claim that opens on
+     `hierarchy` gets the entire 740 s, and a claim that reaches it after
+     `fetch → extract → blocks` hands back instead. Once inside, an overrun is a
+     cooperative pause that keeps the draft (`pauseForDeadline`,
+     src/store/jobs.ts) and the structure answer is checkpointed
+     (src/hierarchy.ts), so the next window resumes rather than re-buying it.
+
+     **The cost is one extra request for an ordinary article**, which used to
+     finish all five steps in one claim and now hands back before `hierarchy`
+     with ~615 s left. That is the cheap direction this table's header names —
+     the steps already done are skipped from the draft — and the expensive
+     direction is what shipped. A size-sensitive threshold would keep the single
+     request for short articles and is the obvious later refinement; it is not
+     built, because the simple number is what removes the retry click.
+
+     `tests/jobs-lease-budget.test.ts` pins the relationship rather than the
+     number: greater than what the worst measured PDF `extract` leaves behind,
+     and less than the claimant's own deadline. */
+  hierarchy: 700_000,
   /* Its own wall-clock cap rather than a measurement — `ASSETS_BUDGET_MS` in
      src/collect-assets.ts, which the step enforces on itself. Measured cost on
      the corpus's worst article (10 images) is 7.1s; the cap is there for a
@@ -2066,10 +2146,36 @@ async function walkClaim(
    */
   const standDown = (): void => {
     clearTimeout(deadline);
-    // Only ours. `aborts` is keyed by job id and this call put the entry there,
-    // so deleting it here cannot take another claimant's — it has none in this
-    // process, because the claim is what stops two of us being inside one job.
-    aborts.delete(job.id);
+    /**
+     * **Only if the entry is still ours**, and the identity check is the whole
+     * of it — `aborts` is keyed by job id, so a bare `delete` takes whatever is
+     * under that key.
+     *
+     * It used to be bare, on the reasoning that *"the claim is what stops two of
+     * us being inside one job"*. That is true of two claimants **running** at
+     * once and it is not what this has to survive: a claim can be handed back
+     * while its claimant is still unwinding. `transitionAfter`'s `release` has
+     * always done that between steps, and `pauseForDeadline` now does it from
+     * inside one — the row is `queued` the moment the transition commits, so
+     * another advance in this process (a second tab, or the local pump) may
+     * claim it and `aborts.set` its own controller before this line runs, in the
+     * turn this claimant spends returning.
+     *
+     * What that costs is not tidiness. Stop is two halves — the flag on the row,
+     * and the local abort — and deleting the successor's controller removes the
+     * second: `cancelJob` finds nothing to pull, so the new claimant's model
+     * call runs to the next step boundary or to its own deadline, up to 740 s
+     * after the reader pressed a button that appeared to do nothing. ⟨GPT Sol,
+     * reviewing stage 3 of
+     * docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md⟩
+     *
+     * **Not covered by a regression, and that is worth saying.** Forcing the
+     * interleaving needs a seam between the pause's commit and this line, and
+     * there is none — no `await` stands between them — so a test could only race
+     * for it and would be flaky in both directions. The rule is small enough to
+     * read instead.
+     */
+    if (aborts.get(job.id) === controller) aborts.delete(job.id);
   };
 
   let session: StoreSession;
@@ -2238,6 +2344,94 @@ async function walkClaim(
       lastRan = step.name;
 
       if (ran.outcome === "cancelled" || ran.outcome === "failed") {
+        /**
+         * **We ran out of our own time inside a step: put the job down rather
+         * than end it.**
+         *
+         * The mid-step twin of `transitionAfter`'s `release` branch, and the
+         * reason it is a separate transition is that the step did not finish.
+         * Every hand-back before this one was preceded by a *completed* step, so
+         * progress was structurally guaranteed; this one has no such guarantee,
+         * which is why it is capped and the release is not — `REQUEUE_BUDGET`,
+         * shared with the lapsed-lease path, so three windows is three in total.
+         *
+         * A claimant here is alive and has unwound cleanly, so the job goes back
+         * to `queued` **on its own row with its draft intact** and the browser
+         * re-drives the `{done: false, busy: false}` answer immediately, with no
+         * client change (src/web/jobEngine.ts). Until 2026-09-04 it ended
+         * terminal `error` with a Retry button the reader had to press —
+         * measured on a 142-page PDF whose `hierarchy` step needs 658–778 s
+         * against a 740 s deadline, so routine rather than rare.
+         *
+         * **Three of the four answers fall through to the endings below**, and
+         * they must: only the store can tell a spent budget from a Stop, a lease
+         * that lapsed during the unwind, or a claim that moved. See
+         * `PauseOutcome` in src/store/jobs.ts.
+         */
+        if (ran.outcome === "cancelled" && overran()) {
+          /* **The claimant's own copy of the steps is left carrying the failure
+             narrative on purpose**, because the three refusals below fall
+             through to an ending that needs it. What the *store* writes on a
+             pause is its own business and is derived from the record it holds —
+             `settledSteps` on Postgres, `sweepStopped` on the filesystem — so
+             the two stories never have to be reconciled here. That only works
+             because `noteProgress` copies what it is given; it used to alias it,
+             and the alias carried `runStep`'s `error` into the paused record.
+             tests/step-failure-seam.test.ts § a run its own deadline stopped. */
+          const paused = await store.pauseForDeadline(job.id, attempt, REQUEUE_BUDGET);
+          if (paused.kind === "requeued") {
+            /* `info` rather than `debug`, as the between-steps hand-back is:
+               somebody reading the log of a job that took three requests should
+               be able to see that we chose it, and which window this was. */
+            jlog.info(
+              { step: step.name, ms: since(startedMs), window: paused.job.requeues },
+              `handing the claim back mid-${step.name}: out of time, and the draft is kept — ${job.slug}`,
+            );
+            /* The session is left alone deliberately: it holds no open
+               transaction, and the draft it opened is the thing being kept. */
+            return { job: paused.job, ran: step.name, busy: false, done: false };
+          }
+          if (paused.kind === "stale") {
+            /* Nothing this claimant writes can land, an ending included — so
+               reporting one would be a verdict on a job it no longer owns. */
+            return await lostTheClaim(
+              job,
+              owner,
+              jlog,
+              "while handing back at its own deadline",
+              new StaleAttemptError(job.id),
+            );
+          }
+          if (paused.kind === "cancelled") {
+            /* **Cancellation wins.** The reader pressed Stop while the step was
+               running and our deadline fired on top of it; both are true and
+               only one of them is theirs. Falling through to `interruptedEnding`
+               would end their own Stop as an `error` saying nobody came back,
+               because `finishIn` clears `cancelling` and keeps the ending it is
+               handed. GPT Sol, finding 3 on the plan.
+
+               `runStep` wrote `INTERRUPTED` onto the step, having asked which
+               abort fired and got the honest answer for a claimant that had no
+               idea a Stop was also in flight. The card renders `step.error`, so
+               it is corrected here to the sentence the other two Stop paths
+               write — a reader must not be able to tell which side of a step
+               boundary they hit. */
+            step.error = STEP_STOPPED.message;
+            markCancelled(job, "Cancelled");
+            const after = await endJob(
+              job,
+              attempt,
+              endingFrom(job, "cancelled"),
+              jlog,
+              startedMs,
+              session,
+            );
+            return { job: after, ran: step.name, busy: false, done: true };
+          }
+          /* `budget-spent`: out of windows, so it ends exactly as it always did.
+             A new job with a fresh budget is what pressing Retry makes, which is
+             the point of the person being the outer loop. */
+        }
         /* Read off the outcome rather than off `job.status`: `runStep` records
            the story on the record in memory and this is the one write that
            commits it. An overrun is neither a cancel nor a step's fault — the

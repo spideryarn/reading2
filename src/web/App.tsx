@@ -19,6 +19,7 @@ import type {
   Quote,
   RememberStance,
   ThreadKind,
+  TimelineEvent,
   Visibility,
 } from "../types.js";
 import { Library } from "./Library.js";
@@ -91,7 +92,7 @@ import { buildNoteIndex, type NoteMarker, type NoteReturn } from "./notes-view.j
 import { useArc } from "./useArc.js";
 import { useGlossary, useGlossaryRead, type GlossaryRead } from "./useGlossary.js";
 import { SummaryPanel } from "./SummaryPanel.js";
-import { DiagramPanel } from "./DiagramPanel.js";
+import { DiagramPanel, type DiagramAccess } from "./DiagramPanel.js";
 import { ClaimsBand } from "./ClaimsPanel.js";
 import { CriteriaBand } from "./CriteriaPanel.js";
 import { MirrorBand } from "./MirrorPanel.js";
@@ -211,9 +212,10 @@ import type {
   PublicGlossary,
   PublicQuotes,
   PublicIdeas,
+  PublicTimeline,
 } from "../public-types.js";
-import { artefactsIn, artefactsOf } from "./public-artefacts.js";
-import { NO_COMMENTS, NO_TERMS, NO_THREADS, type ReaderCapability } from "./reader-capability.js";
+import { artefactsIn, artefactsOf, visitorComments } from "./public-artefacts.js";
+import { NO_TERMS, NO_THREADS, type ReaderCapability } from "./reader-capability.js";
 import { markedModes, visitorGap } from "./visitor.js";
 import {
   NotSharedPage,
@@ -273,6 +275,7 @@ const OWNER_HAS_EVERYTHING: PublicArtefacts = {
   glossary: true,
   ideas: true,
   quotes: true,
+  timeline: true,
 };
 
 
@@ -380,7 +383,7 @@ export function App() {
     /* The fourth, since 2026-09-03, for the same reason as the third: the
        landing page's "everything it does" link has to land somewhere a
        stranger can read. */
-    if (route.kind === "features") return <FeaturesPage />;
+    if (route.kind === "features") return <FeaturesPage signedIn={false} />;
     /* The fifth, and the least arguable of them: a price somebody has to sign
        up to read is the thing people complain about, and this is the page one
        person sends another. */
@@ -495,7 +498,13 @@ function SignedIn({
     return (
       <>
         <HomeLogo />
-        <FeaturesPage />
+        {/* **`signedIn` is what keeps the top bar honest here.** Without it the
+            nav drew *Sign in* → `/#sign-in`, and `/` is the shelf for this
+            reader, which has no such panel: a link that visibly does nothing.
+            GPT Sol, stage 2 code review of
+            docs/plans/260904b-pricing-page-and-public-showcase.md, finding 1 —
+            this half of it predates that stage. SiteBits.tsx § `signedIn`. */}
+        <FeaturesPage signedIn />
       </>
     );
   if (route.kind === "pricing")
@@ -615,6 +624,14 @@ type ArticleAccess =
   | {
       kind: "public";
       article: Article;
+      /**
+       * **The owner's comments, read-only**, lifted out of the payload here for
+       * the same reason `artefacts` is: the reading view takes an `Article`,
+       * which is the shape the owner's path also produces, and these have no
+       * owner-side equivalent on it to be confused with.
+       * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
+       */
+      comments: Comment[];
       /**
        * **The glossary, the summaries, the ideas and the tweet thread**, as
        * they arrived — inside the same payload as the prose.
@@ -794,6 +811,10 @@ async function resolveAccess(slug: string, signedIn: boolean): Promise<ArticleAc
         article,
         artefacts: artefactsOf(found.article),
         available: artefactsIn(found.article),
+        /* Derived here, once, on the raw payload — `visitorComments` supplies
+           the `status` a `PublicComment` deliberately does not carry, and says
+           why. src/web/public-artefacts.ts. */
+        comments: visitorComments(found.article),
         sessionUnconfirmed: found.sessionUnconfirmed,
       };
 }
@@ -975,6 +996,7 @@ function ArticlePage({
           article={access.article}
           artefacts={access.artefacts}
           available={access.available}
+          comments={access.comments}
           signedIn={signedIn}
           sessionUnconfirmed={access.sessionUnconfirmed}
           view={view}
@@ -1225,15 +1247,18 @@ function VisitorArticle({
   article,
   artefacts,
   available,
+  comments,
   signedIn,
   sessionUnconfirmed,
   view,
 }: {
   slug: string;
   article: Article;
-  /** The four artefacts the payload carried. reader-capability.ts § artefacts. */
+  /** The artefacts the payload carried. reader-capability.ts § artefacts. */
   artefacts: PublicArtefactSet;
   available: PublicArtefacts;
+  /** The owner's comments, read-only. reader-capability.ts § comments. */
+  comments: Comment[];
   /** For the call to action, and nothing else — reader-capability.ts § signedIn. */
   signedIn: boolean;
   /**
@@ -1270,7 +1295,7 @@ function VisitorArticle({
     <Reader
       slug={slug}
       article={article}
-      capability={{ kind: "visitor", artefacts, available, signedIn, sessionUnconfirmed }}
+      capability={{ kind: "visitor", artefacts, available, comments, signedIn, sessionUnconfirmed }}
     />
   );
 }
@@ -1813,7 +1838,15 @@ function Reader({
    * memos below key on it by identity. reader-capability.ts.
    */
   const [note, setNote] = useQueryState("note", noteParam);
-  const comments = owner?.comments.comments ?? NO_COMMENTS;
+  /* **Either arm's comments, and the fallback is no longer `NO_COMMENTS`.**
+     A visitor's come in the page's payload rather than from `useComments`, so
+     this is the one line where the two sources meet — everything downstream
+     (`ordered`, the gutter marks, the dialog's arrows) works on the result and
+     does not know which it got. `NO_COMMENTS` is still what an owner gets
+     before their fetch lands. src/web/reader-capability.ts.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3. */
+  const comments =
+    capability.kind === "owner" ? capability.comments.comments : capability.comments;
   const commentError = owner?.comments.error ?? null;
   /**
    * The floating chat, and the passage it is about.
@@ -2877,41 +2910,59 @@ function Reader({
           onDropped={owner.chatAnchors.drop}
         />
       )}
-      {owner && !overlay && openComment && (
+      {/* **Mounted for a visitor too, since 2026-09-04**, with an `access` of
+          `{ kind: "visitor" }` — which carries none of the eight verbs below,
+          so there is nothing on that arm for a later edit to reach.
+          docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3. */}
+      {!owner && !overlay && openComment && (
         <CommentDialog
           comment={openComment}
+          access={{ kind: "visitor" }}
           position={positionOf(ordered, note)}
           total={ordered.length}
-          pending={othersPending}
           hasPrev={stepComment(ordered, note, -1) !== null}
           hasNext={stepComment(ordered, note, 1) !== null}
           onPrev={() => goToComment(stepComment(ordered, note, -1))}
           onNext={() => goToComment(stepComment(ordered, note, 1))}
           onClose={() => void setNote(null)}
-          onRetry={() => owner.comments.retry(openComment.id)}
-          onDeepen={() => owner.comments.deepen(openComment.id)}
-          onEdit={(body) => void owner.comments.edit(openComment.id, body)}
-          placing={mode === "referee"}
-          onPlace={(mark) => void owner.comments.place(openComment.id, mark)}
-          error={owner.comments.error}
+        />
+      )}
+      {owner && !overlay && openComment && (
+        <CommentDialog
+          comment={openComment}
+          position={positionOf(ordered, note)}
+          total={ordered.length}
+          hasPrev={stepComment(ordered, note, -1) !== null}
+          hasNext={stepComment(ordered, note, 1) !== null}
+          onPrev={() => goToComment(stepComment(ordered, note, -1))}
+          onNext={() => goToComment(stepComment(ordered, note, 1))}
+          onClose={() => void setNote(null)}
+          access={{
+            kind: "owner",
+            pending: othersPending,
+            onRetry: () => owner.comments.retry(openComment.id),
+            onDeepen: () => owner.comments.deepen(openComment.id),
+            onEdit: (body) => void owner.comments.edit(openComment.id, body),
+            placing: mode === "referee",
+            onPlace: (mark) => void owner.comments.place(openComment.id, mark),
+            error: owner.comments.error,
           /* **Offered only when the conversation is really there.** The link on
              a comment is advisory — a reader can delete the chat and keep the
              note — so the summary list, not the stored id, decides whether
              there is anywhere to go. Passing a button that leads to
              "that conversation no longer exists" would be worse than passing
              none. */
-          onOpenThread={
-            openComment.threadId && chatSummaries.some((c) => c.id === openComment.threadId)
-              ? () => {
-                  const id = openComment.threadId;
-                  if (!id) return;
-                  setChatDraft(null);
-                  void setNote(null);
-                  void setThread(id);
-                }
-              : undefined
-          }
-          onDiscuss={(question) => {
+            onOpenThread:
+              openComment.threadId && chatSummaries.some((c) => c.id === openComment.threadId)
+                ? () => {
+                    const id = openComment.threadId;
+                    if (!id) return;
+                    setChatDraft(null);
+                    void setNote(null);
+                    void setThread(id);
+                  }
+                : undefined,
+            onDiscuss: (question) => {
             /* **Into the floating panel, not into chat mode.** The follow-up
                box has always handed the reader to a conversation rather than
                growing a transcript in this dialog — Greg's call, chat-handoff.ts
@@ -2937,15 +2988,16 @@ function Reader({
               opening: openComment.quote,
               question,
             });
-            void setNote(null);
-            void setThread(null);
-          }}
-          onDelete={() => {
-            // Step to the neighbour rather than closing outright: deleting one
-            // of five is a tidy-up, not a reason to lose the panel.
-            const next = stepComment(ordered, note, 1) ?? stepComment(ordered, note, -1);
-            owner.comments.remove(openComment.id);
-            void setNote(next);
+              void setNote(null);
+              void setThread(null);
+            },
+            onDelete: () => {
+              // Step to the neighbour rather than closing outright: deleting one
+              // of five is a tidy-up, not a reason to lose the panel.
+              const next = stepComment(ordered, note, 1) ?? stepComment(ordered, note, -1);
+              owner.comments.remove(openComment.id);
+              void setNote(next);
+            },
           }}
         />
       )}
@@ -3068,8 +3120,21 @@ function Reader({
         />
       )}
       {mode === "summary" && <SummaryBand article={article} onJump={jumpTo} />}
-      {owner && mode === "diagram" && (
-        <DiagramBand slug={slug} article={article} at={at} onJump={jumpTo} />
+      {/* **Mounted for a visitor too, since 2026-09-04** — one branch rather
+          than the owner/visitor pair the artefact modes have, because there is
+          no artefact to carry and no second component to build: the default
+          picture is drawn from the tree the page already holds. What differs is
+          the `access` prop, which pins the picture to Force and turns off all
+          three of the panel's fetching hooks.
+          docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */}
+      {mode === "diagram" && (
+        <DiagramBand
+          access={{ kind: owner ? "owner" : "visitor" }}
+          slug={slug}
+          article={article}
+          at={at}
+          onJump={jumpTo}
+        />
       )}
       {owner && mode === "ideas" && (
         <IdeasBand
@@ -3102,15 +3167,29 @@ function Reader({
           onFound={setQuoteFound}
         />
       )}
-      {/* **One branch, not the owner/visitor pair the ideas have.** Timeline is
-          owners-only in v1 (src/web/visitor.ts § POLICY), so a visitor never
-          reaches this band at all — the dock marks the button and pressing it
-          renders the boundary instead. There is deliberately no
-          `VisitorTimelineBand` waiting for a payload field that does not
-          exist. */}
+      {/* **The owner/visitor pair the ideas and the quotes have, since
+          2026-09-04.** It was one branch until then, and the comment here said
+          there was deliberately no `VisitorTimelineBand` waiting for a payload
+          field that did not exist. The field exists now.
+          docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1.
+
+          Gated on the artefact itself rather than on `available`, like the
+          glossary above: an absent key means `visitorGap` said `not-built` and
+          the `VisitorBand` is showing instead, so the branch that renders and
+          the flag that decides the sentence cannot disagree. */}
       {owner && mode === "timeline" && (
         <TimelineBand
           slug={slug}
+          blocks={article.blocks}
+          onJump={jumpTo}
+          onFound={setTimelineFound}
+          openKey={openTimelineKey}
+          onOpenKey={setOpenTimelineKey}
+        />
+      )}
+      {!owner && mode === "timeline" && artefacts?.timeline && (
+        <VisitorTimelineBand
+          timeline={artefacts.timeline}
           blocks={article.blocks}
           onJump={jumpTo}
           onFound={setTimelineFound}
@@ -3219,7 +3298,6 @@ function Reader({
            added later is marked whether or not whoever adds it remembers.
            visitor.ts § markedModes. */
         marked={marked}
-        signedIn={signedIn}
         drawer={
           owner
             ? {
@@ -3236,12 +3314,25 @@ function Reader({
                   goToComment(id);
                 },
               }
-            : /* The drawer still opens, and what is in it is the sentence about
-                 whose comments these would be. The alternative — no drawer, so
-                 the Comments button becomes a link back to the page it is
-                 already on — is a control that does nothing, which is the thing
-                 the marked-not-hidden rule exists to avoid. */
-              { visitor: true, panel, onPanel: (next) => void setPanel(next) }
+            : /* **The same drawer, with the owner's comments in it**, since
+                 2026-09-04. It used to open onto a sentence about whose
+                 comments these would be; a shared link carries them now.
+                 docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
+
+                 `onOpenComment` is the same closure as the owner's, and that is
+                 the point rather than a shortcut: opening a comment closes the
+                 drawer and brings its passage into view, which is reading, and
+                 reading is the whole of what a visitor may do here. */
+              {
+                visitor: true,
+                comments: ordered,
+                panel,
+                onPanel: (next) => void setPanel(next),
+                onOpenComment: (id) => {
+                  void setPanel(null);
+                  goToComment(id);
+                },
+              }
         }
       />
     </div>
@@ -3558,11 +3649,91 @@ export function TimelineBand({
 }) {
   useRenderCount("TimelineBand");
   const timeline = useTimeline(slug);
+  const band = useTimelineMode({
+    events: timeline.timeline?.events ?? NO_EVENTS,
+    blocks,
+    onJump,
+    onFound,
+    openKey,
+    onOpenKey,
+  });
+  return <TimelinePanel access={{ kind: "owner", owner: timeline }} {...band} />;
+}
+
+/**
+ * A module constant rather than a fresh `[]`, for the reason `NO_QUOTES` and
+ * `NO_TERMS` are: the memo below keys on it by identity, and a new empty array
+ * each render would re-resolve every occurrence while the read is still in
+ * flight.
+ */
+const NO_EVENTS: TimelineEvent[] = [];
+
+/**
+ * **The same panel, for somebody who does not own the article.**
+ *
+ * No `useTimeline` and therefore no job, no `ensure`, no `regenerate`: the
+ * events came in the page's own payload. See `VisitorGlossaryBand` for why this
+ * is a second band rather than a second panel — a hook cannot be called
+ * conditionally, so the owner/visitor seam has to be a component boundary.
+ * src/web/reader-capability.ts.
+ */
+function VisitorTimelineBand({
+  timeline,
+  blocks,
+  onJump,
+  onFound,
+  openKey,
+  onOpenKey,
+}: {
+  timeline: PublicTimeline;
+  blocks: Block[];
+  onJump(id: BlockId): void;
+  onFound(found: Found[]): void;
+  openKey: string | null;
+  onOpenKey(key: string | null): void;
+}) {
+  useRenderCount("VisitorTimelineBand");
+  const band = useTimelineMode({
+    events: timeline.events,
+    blocks,
+    onJump,
+    onFound,
+    openKey,
+    onOpenKey,
+  });
+  return <TimelinePanel access={{ kind: "visitor", timeline }} {...band} />;
+}
+
+/**
+ * **Everything the timeline band does that is not a fetch** — `?event=`, the
+ * resolved occurrences it pushes up, and the four passage-mode rules the
+ * comment above lists.
+ *
+ * Extracted on 2026-09-04 so that the owner's band and the visitor's are one
+ * behaviour rather than two, which is the same split `useQuotesMode` and
+ * `useIdeasMode` already have. The comment above still applies to it: a fix to
+ * one of the three passage modes belongs in all three.
+ */
+function useTimelineMode({
+  events,
+  blocks,
+  onJump,
+  onFound,
+  openKey,
+  onOpenKey,
+}: {
+  events: TimelineEvent[];
+  blocks: Block[];
+  onJump(id: BlockId): void;
+  onFound(found: Found[]): void;
+  openKey: string | null;
+  onOpenKey(key: string | null): void;
+}) {
   const [eventId, setEventId] = useQueryState("event", eventParam);
 
   const selected = useMemo(
-    () => timeline.timeline?.events.find((e) => e.id === eventId) ?? null,
-    [timeline.timeline, eventId],
+    () => events.find((e) => e.id === eventId) ?? null,
+    [events, eventId],
   );
 
   /* Document order, so the stepper's "2 of 3" counts the way the reader moves
@@ -3625,26 +3796,23 @@ export function TimelineBand({
     [onFound, onOpenKey],
   );
 
-  return (
-    <TimelinePanel
-      owner={timeline}
-      eventId={eventId}
-      onEvent={(next) => {
-        void setEventId(next);
-        /* A new event means the old occurrence is meaningless — its key names
-           an event nobody is looking at, so the stepper would read "0 / 2". */
-        onOpenKey(null);
-        /* Only on selecting, never on clearing: pressing the open event again
-           takes the marks away, and throwing the reader down the article as it
-           does would be the opposite of what that gesture means. */
-        wantsJump.current = next !== null;
-      }}
-      found={found}
-      openKey={openKey}
-      onOpenKey={onOpenKey}
-      onJump={onJump}
-    />
-  );
+  return {
+    eventId,
+    onEvent(next: string | null) {
+      void setEventId(next);
+      /* A new event means the old occurrence is meaningless — its key names
+         an event nobody is looking at, so the stepper would read "0 / 2". */
+      onOpenKey(null);
+      /* Only on selecting, never on clearing: pressing the open event again
+         takes the marks away, and throwing the reader down the article as it
+         does would be the opposite of what that gesture means. */
+      wantsJump.current = next !== null;
+    },
+    found,
+    openKey,
+    onOpenKey,
+    onJump,
+  };
 }
 
 /**
@@ -4888,11 +5056,14 @@ function useSummaryMode(article: Article) {
  * docs/project/diagram.md.
  */
 function DiagramBand({
+  access,
   slug,
   article,
   at,
   onJump,
 }: {
+  /** Owner or visitor — DiagramPanel.tsx § DiagramAccess is the whole argument. */
+  access: DiagramAccess;
   slug: string;
   article: Article;
   /**
@@ -4939,6 +5110,7 @@ function DiagramBand({
 
   return (
     <DiagramPanel
+      access={access}
       slug={slug}
       root={root}
       kind={kind}

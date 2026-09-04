@@ -430,6 +430,35 @@ export interface MeteredCall {
  * fail, it just quietly stops hitting the cache. A caller may still pass its
  * own, which is what makes the injection testable.
  */
+/**
+ * **The bytes that actually go on the wire** — a stage's body plus everything
+ * this module injects into it.
+ *
+ * Its own function since 2026-09-04, and the reason is a caller that needs the
+ * request without sending it: `src/hierarchy.ts` fingerprints the structure call
+ * so a later attempt can reuse an answer it has already paid for, and a key that
+ * reconstructs the injected half from knowledge of what this function does is a
+ * key that goes stale the day a third field is injected — silently, because a
+ * mutation test can only enumerate the fields it already has. ⟨GPT Sol, finding
+ * 2 on the code, 2026-09-04.⟩ So there is one assembly and both callers use it.
+ *
+ * **`model` is resolved here, once**, and handed back on the object rather than
+ * recomputed by the caller: `resolveModel` reads the environment at call time,
+ * so two reads are two chances to disagree.
+ */
+export function messagesWireBody(task: Task, body: MessagesBody): Anthropic.MessageStreamParams {
+  /* **After the spread, not before it.** It was before until 2026-08-28, so a
+     body assembled at run time — out of something the type system never saw —
+     could carry its own `provider` and win. Nothing did; the test that proved
+     it possible was written the same hour, and it went red on the old order.
+     `model` was already after, which is why only one of the two was wrong. */
+  return {
+    ...body,
+    provider: MESSAGES_PROVIDER,
+    model: modelFor(task),
+  } as Anthropic.MessageStreamParams;
+}
+
 export function streamMessage(
   task: Task,
   body: MessagesBody,
@@ -437,19 +466,12 @@ export function streamMessage(
 ): MeteredCall {
   const client = messagesClient();
   const startedAt = Date.now();
-  const model = modelFor(task);
+  const wire = messagesWireBody(task, body);
+  const model = wire.model;
   /* Registered before the stream opens, so a call that never comes back leaves a
      trace rather than simply not appearing. See `PendingCall` in ai-spend.ts. */
   const callId = beginSpend(task, model);
-  const stream = client.messages.stream(
-    /* **After the spread, not before it.** It was before until 2026-08-28, so a
-       body assembled at run time — out of something the type system never saw —
-       could carry its own `provider` and win. Nothing did; the test that proved
-       it possible was written the same hour, and it went red on the old order.
-       `model` was already after, which is why only one of the two was wrong. */
-    { ...body, provider: MESSAGES_PROVIDER, model } as Anthropic.MessageStreamParams,
-    options,
-  );
+  const stream = client.messages.stream(wire, options);
   const meter = meterStream(stream);
   /* Off the client rather than out of the environment a second time: the key the
      call actually went out with is the one the reconciliation has to ask about,

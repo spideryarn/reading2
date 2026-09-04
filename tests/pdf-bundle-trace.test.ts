@@ -43,7 +43,7 @@ const MUST_SHIP = [
   "node_modules/@napi-rs/canvas/geometry.js",
   /* The three the API stopped importing at module scope on 2026-09-03, to keep
      them out of the cold start of a request that never uses them
-     (src/jsdom-lazy.ts; the `await import` in `cutPages`, src/pdf-read.ts; and
+     (src/jsdom-lazy.ts; the `await import` in `openPdfCuts`, src/pdf-read.ts; and
      `stripeClient()`, src/billing/stripe.ts). Each one is now reached through a
      specifier this tracer has to read for itself, and each is a production
      outage if it is missed — jsdom takes the public reading page down with it,

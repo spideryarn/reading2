@@ -63,6 +63,21 @@
  * for exactly the reason the mismatch dramatises — extraction throws hidden text
  * away with everything else it does not keep, so a scan of the blocks would
  * report a clean paper about a hostile one.
+ *
+ * **Mutation.** `readRawDocument` in src/store/raw-document.ts, its
+ * `canonicalKey(revision.rawSourceSha256, kind)` handed the digest rotated by
+ * one character — a well-formed hex address naming nothing. Re-run 2026-09-04:
+ * *4 failed | 4 passed (8)*, each failure carrying `MissingRawObject … there is
+ * no such object` behind an `expected 500 to be 200`. A wrong address is loud
+ * rather than an empty scan, which is what points 2 and 3 claim.
+ *
+ * **Blind to.** The four that survived, and they mark the edge of the claim:
+ * the sourceless article, the 404, the store control and the source-order case
+ * never resolve a reference at all. It reaches the *key* and not the digest
+ * that went into the row — a manifest written with a real object's hash that
+ * belongs to somebody else's paper addresses fine, scans fine, and is caught
+ * only by `storeRawBytesFor`'s own comparison. `CorruptRawObject`, which needs
+ * bytes present under the key and hashing to something else, is untouched.
  */
 
 import { createHash } from "node:crypto";

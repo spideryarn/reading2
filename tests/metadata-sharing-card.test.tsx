@@ -186,7 +186,14 @@ async function open(): Promise<void> {
  * different test rather than a shorter fixture. See § the inventory could not be
  * read at the foot of this file.
  */
-const ALL_BUILT = { arc: true, tweets: true, glossary: true, ideas: true, quotes: true };
+const ALL_BUILT = {
+  arc: true,
+  tweets: true,
+  glossary: true,
+  ideas: true,
+  quotes: true,
+  timeline: true,
+};
 
 describe("the sharing card, on the page that owns it", () => {
   it("says when a public article was shared, on a fresh load", async () => {
@@ -244,7 +251,14 @@ describe("the sharing card, on the page that owns it", () => {
       visibility: "private",
       publicAt: null,
       personalised: [],
-      available: { arc: false, tweets: true, glossary: true, ideas: false, quotes: false },
+      available: {
+        arc: false,
+        tweets: true,
+        glossary: true,
+        ideas: false,
+        quotes: false,
+        timeline: false,
+      },
     };
 
     await open();
@@ -423,7 +437,14 @@ describe("the sharing card, on the page that owns it", () => {
       visibility: "private",
       publicAt: null,
       personalised: [],
-      available: { arc: false, tweets: false, glossary: true, ideas: false, quotes: false },
+      available: {
+        arc: false,
+        tweets: false,
+        glossary: true,
+        ideas: false,
+        quotes: false,
+        timeline: false,
+      },
     };
 
     await open();
