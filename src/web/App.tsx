@@ -400,6 +400,15 @@ export function App() {
        Bare, like `PrivacyPage` above: `NotFoundPage` draws its own way home.
        docs/plans/260903j-not-found-page.md. */
     if (route.kind === "not-found") return <NotFoundPage signedIn={false} />;
+    /* **The public shelf, which has no page yet.** `/read/public` is a reserved
+       address (src/web/router.ts § `public-library`) and stage 3b of
+       docs/plans/260904b-pricing-page-and-public-showcase.md builds what goes on
+       it. Until then it is an address with nothing at it, and the 404 page is
+       the honest answer — the same one the edge gives, so the status and the
+       page agree. **Not `LandingPage`**, which is what the fall-through below
+       would give it: a plausible page at an address that means nothing is the
+       exact silence docs/plans/260903j-not-found-page.md exists to break. */
+    if (route.kind === "public-library") return <NotFoundPage signedIn={false} />;
     if (route.kind !== "read") return <LandingPage />;
     return <ArticlePage slug={route.slug} view={route.view} readerId={null} />;
   }
@@ -523,6 +532,16 @@ function SignedIn({
      gets — signed in there *is* a shelf for it to link at, which is the same
      reason the privacy page is bare above and dressed here. NotFoundPage.tsx. */
   if (route.kind === "not-found")
+    return (
+      <>
+        <HomeLogo />
+        <NotFoundPage signedIn />
+      </>
+    );
+  /* The public shelf, signed in. Same reasoning as the signed-out arm above —
+     the page is stage 3b — and dressed the same way every other standalone page
+     is here, because signed in there is a shelf for the logo to link at. */
+  if (route.kind === "public-library")
     return (
       <>
         <HomeLogo />

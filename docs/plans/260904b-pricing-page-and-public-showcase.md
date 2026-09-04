@@ -86,6 +86,52 @@ change the promise.** So two things are load-bearing and neither may slip:
 - **The sharing copy changes.** `SHARING_ON`, the confirmation dialogue (`SHARING_CONFIRM_TITLE` and
   its body) and `SHARING_CANNOT_UNRING` say that a shared article may be listed publicly.
 
+#### What the sharing copy has to sit against, settled 2026-09-04
+
+The neighbouring worktree landed its half first and handed over the exact text, so this is written
+down rather than remembered. Three constraints on the sentences this plan still owes:
+
+- **`PrivacyPage.tsx` § "Who can see your shelf" already says *"The sharing card lists exactly what
+  will go out before you turn it on."*** That is a promise about *our* dialog, made on their page. So
+  the confirm body may keep enumeration to one clause — but the inventory underneath it has to
+  actually be complete, or that sentence is false.
+- **Do not promise conversations either way round.** Their paragraph says *"Your chat conversations
+  are not shared"* deliberately: the old sentence was *"Your notes, your comments and your
+  conversations are not shared"*, two thirds of it stopped being true, and naming the surviving third
+  is what stops a reader guessing which. So our copy must not say notes stay private, and must not
+  imply chat is shared.
+- **One sentence on that page is left for us**, untouched on purpose: the section opens *"Your
+  articles and notes are yours. Another reader signed into Spideryarn cannot see them."* A public
+  index makes that need a caveat, and it is ours to add in the stage that builds the index — not
+  before, because the page must not describe a listing that does not exist.
+
+Also worth knowing when writing the inventory: `comments` is hand-written prose in `ALWAYS_SHARED`
+because it has no mode; timeline and diagram appear automatically through the `MODES` sweep. Saved
+searches are **not** in the inventory yet — that row arrives with the stage that builds them, because
+a row promising them today would be false.
+
+**And that is the argument for the confirm body enumerating nothing at all.** Saved searches *are*
+going to be shared, one stage from now. Any sentence in the dialog that lists what goes out is a
+sentence that becomes wrong the day that row lands, and nobody will think to re-read a confirmation
+dialog when adding an artefact. The inventory is derived and cannot go stale; prose beside it can.
+So the body points at the inventory and the inventory does the listing — which is also what makes
+their page's *"lists exactly what will go out"* stay true without anybody maintaining it.
+
+**Placement, from the same handover:** the caveat belongs *inside* their "anyone with the link can
+read it without signing in" sentence rather than after it. Two sentences — reachable by link, then
+also listed — read as a correction; one reads as a single fact.
+
+**And `SHARING_ON` is not one sentence in one place**, which is the thing to check before editing it.
+It is the sharing card's line, the shelf badge's hover text (`SHARING_BADGE`), and half of the
+masthead's mark (`SHARING_MARK_PUBLIC` is built from it, deliberately, so the three cannot drift into
+near-misses of one sentence — the dock and the band came apart exactly that way). So the new wording
+has to work as a **card line, a badge tooltip and a link label at once**, which rules out anything
+long.
+
+The clause it loses is *"with the link"*, and losing it is the point: reaching the article is no
+longer conditional on having been sent one. Draft, to be checked against the three surfaces rather
+than admired in a plan — *"Anyone can read this without signing in, and it's listed publicly."*
+
 ### And then it stopped being a gate, for a reason about today rather than about the design
 
 The first version of this section made two things load-bearing: that the copy ship *before* the
@@ -407,6 +453,108 @@ preference.
 - No rate limit beyond what the namespace has. Cluster C and S4 of that plan are still open.
 
 ## Log
+
+- **2026-09-04, GPT Sol reviewed stage 3a's code and all four findings are fixed.** The review is
+  [260904b-stage3a-code-review-sol.md](260904b-stage3a-code-review-sol.md); it found **no
+  private-article disclosure path**, so every one of these is hardening. What is worth carrying
+  forward:
+  - **The guard did not cover the whole path a stranger runs, which is the one that mattered.** Its
+    import graph roots at `src/public/routes.ts` and `src/public/page.ts` — but a request executes
+    `serveApi`'s pre-auth dispatch or `serve` in src/vercel.ts *first*, so a query added there would
+    be publicly reachable and invisible. Sol offered extraction-into-a-module or assertions over the
+    transports; **the extraction is worse and the reasoning is written at the test**: the two
+    transports' anonymous regions are different code and not shareable, moving vercel's would either
+    put transport concerns inside `src/public/` or pull `src/owner.ts` into the closed graph
+    `tests/public-imports.test.ts` keeps it out of, and it would leave a residue needing the same
+    assertion anyway. So: the region is cut out of each transport by parsing, and it is the whole
+    dispatcher **minus the hand-off call** rather than the prefix above the gate — the `catch` and
+    `finally` run for a stranger too. What makes it not a second stale list of roots is that the
+    transports are *derived*: `publicEntryImporters()` asks the repo who imports a public entry, and
+    the guard asserts the answer.
+  - **Two more defects in the same guard, both real.** It recognised only `.from(articles)` — an
+    alias, a relational query or raw SQL walked past — so it parses now
+    ([tests/helpers/article-queries.ts](../../tests/helpers/article-queries.ts)), following
+    `tests/fixture-ids.test.ts`'s conclusion the same week: *parse them all*. And its SQL assertion
+    proved only that `visibility` and `"public"` appeared *somewhere*; it now cuts the `where` out of
+    the statement, reads the `$n` the comparison binds, and looks that slot up in the parameters.
+  - **A row cap is not a byte cap.** Nothing bounds a title or an `<h1>` and a fetched document may
+    be 32 MB, so one enormous public heading made an anonymous request allocate and serialise it.
+    Every text column is now `left()`-capped **in the SQL** — truncating in JS is after the bytes
+    have crossed — and a fixture with 5,000-character title, gist, site name and `<h1>` measures it.
+    The seven-column guard had to learn to split on commas at paren depth zero, which its own
+    comment had predicted would be needed the first time an expression held one.
+  - **`limit` bounded rows and not work**, so `articles_public_listing` is a partial index on
+    `(public_at desc nulls last, slug) where visibility = 'public'` —
+    `drizzle/20260904175802_articles_public_listing.sql`, generated from the schema and applied
+    locally (`Target: postgresql://postgres@127.0.0.1:54362/postgres`). `explain` shows the planner
+    reaching for it.
+  - **Two claims had no test and one comment was stronger than its code.** The 200/201 boundary is
+    now a case that fills the shelf to exactly the cap and then adds one — exact because this file
+    runs in the private lane and owns its database. And the listing's `<h1>` fallback is compared
+    against `loadHead` on a fixture with an `<h2>` before the `<h1>` and a second `<h1>` after it,
+    so losing `level = 1` or losing `order by ordinal` makes the two disagree; the docstring that
+    claimed they were checked together is now true.
+  - **And the full suite found a fifth thing, which Sol's review did not.**
+    `tests/store-guarded.test.ts` asks the question from the other end — *every*
+    `export const pgX` under `src/store/` is `guardDbStore`-wrapped or declared as an exception —
+    and `pgPublicLibraryReader` was neither. It is now an exception with the reason
+    `pgPublicReader` gives beside it: the closed room keeps its own `scrubbed` because
+    `guardDbStore` drags `src/chat.ts` into an import graph
+    tests/public-imports.test.ts exists to keep small. Worth noticing that the guard written
+    *for this shape of miss* is what caught it, an adapter it had never heard of.
+  - **Red first, every one.** Watched failing on 2026-09-04: an aliased `.from()` planted in
+    `src/public/routes.ts`; an ownerless `select … from articles` planted in `serveApi`'s
+    public-namespace branch, and again in `serve`'s `catch`; a `pg-admin` import used pre-auth; a
+    third module importing a public entry; the visibility clause moved from the `where` into the
+    projection; `left()` dropped from `root_gist` and from `title`; `level = 1` changed to `2`;
+    `>` changed to `>=`; and `PUBLIC_LIBRARY_LIMIT + 1` changed to `PUBLIC_LIBRARY_LIMIT`. Each was
+    reverted by editing the text back.
+
+- **2026-09-04, stage 3a built** — the data and the API, without the sharing copy (`src/messages.ts`
+  was being held by another session, so §1's copy change is still outstanding and is the one part of
+  the stage that did not land). Eight things worth knowing:
+  - **The listing is `GET /api/public/library`**, a `publicCollection` entry in the inventory, and
+    `PublicRouteName` is now a discriminated union — `{kind:"slug"; path(slug)}` |
+    `{kind:"collection"; path()}`. `pathOf(route, slug)` lives in the leaf so all three sweeps and
+    the client's path test ask the question the same way rather than each writing its own ternary.
+    `servePublicApi` switches on `kind` with a `never` arm, and `requirePostgres()` stays *inside*
+    each arm: hoisting it above the switch would make a malformed slug a 501 on a filesystem
+    machine and a 400 elsewhere.
+  - **`RESERVED` in src/slug.ts really was the wrong gate**, as §3 says — and so, it turned out, was
+    `isSlug`. That function is asked at every *read*, so refusing `public` there would refuse it on
+    the way out too and a row that somehow held the name could never be repaired. The reservation is
+    a second function, `isReservedSlug`, enforced at `lockOrCreateArticle` — the one line in the
+    repo that brings an article address into existence, and the one a client can reach directly
+    through `POST /api/jobs`'s adopted branch. **After the lock attempt, before the insert**, so an
+    article that already holds the name goes on working; what is refused is *taking* it.
+  - **The `/read/public` branch is in both routers and they are tested together.**
+    `tests/reserved-article-address.test.ts` reads `parseRoute`, `decidePublicPage` and
+    `lockOrCreateArticle` against one constant in one run, because the failure this guards is
+    *disagreement* and three assertions in three suites each pass while the trio drifts. Both
+    answer 404 today — there is no page yet — and stage 3b flips both to 200 in two lines.
+  - **The guard's new ownerless-enumeration section was watched failing seven ways** before it was
+    believed: the visibility clause deleted; an owner clause added; an owner column added to the
+    projection; a non-owner column added to the projection; the `limit` and the tiebreak removed;
+    the readability bar removed; the query moved out of its own function; and a second
+    `.from(articles)` added to `src/public/routes.ts`. The behavioural half went red three more
+    ways — no visibility clause, an owner filter that excluded the second account, and no
+    readability bar.
+  - **Two owners, and the second one is the whole point.** With one owner a listing that had
+    acquired `eq(articles.ownerId, currentOwnerId())` would still pass every case, because the only
+    rows in the fixture would be that owner's. `seedAuthUser` makes a real `auth.users` row, and
+    `articles.owner_id` references that table.
+  - **The import-graph walker moved to `tests/helpers/import-graph.ts`**, unchanged, because the new
+    guard needs the same walk `tests/public-imports.test.ts` makes. Two copies would be two sets of
+    rules about what counts as an import — the drift both guards exist to catch, one level up.
+  - **The fixture ids collided with three other files and are minted per run now.**
+    `tests/fixture-ids.test.ts` caught it; its header says why the remedy is `randomUUID()` rather
+    than picking unused constants (a fixed id also collides with itself when one file runs in two
+    processes, which no static guard can see), and why every *unique* column has to be minted, not
+    only the primary key — so the slugs carry the run's suffix and `short_id` is minted too.
+  - **The new suite needed two manifest entries, not one.** `TEST_LANES` for the private Postgres
+    lane, and a `STORE_MIGRATION` entry because the stored witness predates the file — measured with
+    `store-migration-witness.ts --files` (*ran, touched nothing*), recorded as `static-only` because
+    `--files` writes no JSON.
 
 - **2026-09-04, what the neighbouring worktree settled, and what it costs this plan.**
   `260904c-more-modes-on-a-shared-link` is widening a shared link from the other side, and two of its

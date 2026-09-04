@@ -41,8 +41,15 @@
  */
 const SLUG_CHARS = "[\\w.%-]+";
 
-/** One public route's identity: how to recognise it, and how to spell it. */
-export interface PublicRouteName {
+/**
+ * **A route about one article**, named by a slug: `/api/public/<name>/<slug>`.
+ *
+ * Every entry here was this shape until 2026-09-04, which is why `path` used to
+ * take a slug unconditionally — see `PublicRouteName` below for what changed and
+ * why it is a union rather than an optional argument.
+ */
+export interface PublicSlugRouteName {
+  readonly kind: "slug";
   /** The path segment after `/api/public/`. */
   readonly name: string;
   readonly pattern: RegExp;
@@ -50,8 +57,41 @@ export interface PublicRouteName {
   path(slug: string): string;
 }
 
-function publicRoute(name: string): PublicRouteName {
+/**
+ * **A route about no article in particular**, at `/api/public/<name>` — a list.
+ *
+ * The pattern captures nothing, so there is no slug to validate and no
+ * `slugFrom` to run; `routes.ts` switches on `kind` and the compiler makes the
+ * switch exhaustive.
+ */
+export interface PublicCollectionRouteName {
+  readonly kind: "collection";
+  readonly name: string;
+  readonly pattern: RegExp;
+  /** The one path this route has. Takes nothing, for the same reason. */
+  path(): string;
+}
+
+/**
+ * **One public route's identity: how to recognise it, and how to spell it.**
+ *
+ * A **discriminated union**, and it is one rather than `path(slug?: string)`
+ * deliberately. The three sweeps that drive off this inventory ask different
+ * questions of the two kinds — a malformed slug is meaningless for a collection,
+ * and `path()` with a slug it ignores would let a sweep believe it had tested
+ * something it had not. With a union, a sweep that forgets a kind does not
+ * compile, and `servePublicApi`'s `switch` has a `never` arm.
+ *
+ * docs/plans/260904b-pricing-page-and-public-showcase.md § 6 is the argument;
+ * the short version is that generalising the closed room does not weaken it
+ * provided method enforcement, Postgres enforcement, dispatch and `send` stay
+ * shared and the type stops anybody handling one kind and not the other.
+ */
+export type PublicRouteName = PublicSlugRouteName | PublicCollectionRouteName;
+
+function publicRoute(name: string): PublicSlugRouteName {
   return {
+    kind: "slug",
     name,
     /* Both built from the name rather than written out beside it. Two spellings
        of one route is one place for them to disagree, and the disagreement
@@ -59,6 +99,31 @@ function publicRoute(name: string): PublicRouteName {
     pattern: new RegExp(`^/api/public/${name}/(${SLUG_CHARS})$`),
     path: (slug) => `/api/public/${name}/${slug}`,
   };
+}
+
+function publicCollection(name: string): PublicCollectionRouteName {
+  return {
+    kind: "collection",
+    name,
+    /* Anchored at both ends, with nothing after the name — so
+       `/api/public/library/anything` is **not** this route. It falls to the
+       namespace's own 404 rather than being served as the list with a segment
+       nobody read, which is the quiet version of the same mistake. */
+    pattern: new RegExp(`^/api/public/${name}$`),
+    path: () => `/api/public/${name}`,
+  };
+}
+
+/**
+ * **The path a sweep should ask for**, whichever kind of route it is holding.
+ *
+ * Here rather than repeated in each test, because there are three sweeps and the
+ * ternary is the one line every one of them would otherwise write for itself.
+ * It stays in the leaf so the client's path test can use it without importing
+ * the readers — the whole reason this file has no imports.
+ */
+export function pathOf(route: PublicRouteName, slug: string): string {
+  return route.kind === "slug" ? route.path(slug) : route.path();
 }
 
 /**
@@ -71,13 +136,20 @@ function publicRoute(name: string): PublicRouteName {
  * fix, and adding a route to it is now the only way to add a route at all:
  * `routes.ts` refuses to load if a name here has no reader attached.
  *
- * **One entry since 2026-09-02, and that is deliberate rather than unfinished.**
- * `metadata` was deleted with its reader, its DTO and its type: the client had
- * read the artefact booleans off the article payload since 2026-08-28, and the
- * only thing still calling the route was a deployment checker, which now reads
- * `meta.title` off the article instead.
+ * **One entry between 2026-09-02 and 2026-09-04, and that was deliberate rather
+ * than unfinished.** `metadata` was deleted with its reader, its DTO and its
+ * type: the client had read the artefact booleans off the article payload since
+ * 2026-08-28, and the only thing still calling the route was a deployment
+ * checker, which now reads `meta.title` off the article instead.
  * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § Cluster B.
+ *
+ * **`library` is the second, and the first that is not about one article.** It
+ * is the shelf `/read/public` draws — every article whose owner has shared it,
+ * which is a *list* and so is the first thing in this namespace a stranger can
+ * ask for without already knowing a slug.
+ * docs/plans/260904b-pricing-page-and-public-showcase.md § Stage 3a.
  */
 export const PUBLIC_ROUTE_NAMES: readonly PublicRouteName[] = [
   publicRoute("article"),
+  publicCollection("library"),
 ];

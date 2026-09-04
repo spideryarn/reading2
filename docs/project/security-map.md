@@ -94,6 +94,8 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/injection-scan.ts`](../../src/injection-scan.ts) | hidden text in the raw source, found before the model reads it. It reports and decides nothing, and it does not read PDFs |
 | [`src/public/routes.ts`](../../src/public/routes.ts) | **the one namespace with no gate in front of it** — dispatched before `requireUser`, read-methods only, no owner ever set. See below |
 | [`src/public/dto.ts`](../../src/public/dto.ts) | **the allowlist, as code** — every key a stranger receives, constructed rather than filtered. See below |
+| [`src/store/public-slug.ts`](../../src/store/public-slug.ts) | `publicSlug()` — slug **and** `visibility = 'public'`, the one ownerless *lookup* |
+| [`src/store/public-library.ts`](../../src/store/public-library.ts) | `publicLibraryQuery()` — the one ownerless *listing*. See below |
 
 The tests are the specification: `tests/sanitize.test.ts`, `tests/sanitize-client.test.ts`,
 `tests/routes.test.ts`, `tests/slug.test.ts`, `tests/owner-isolation.test.ts`,
@@ -127,6 +129,50 @@ was checked against the source rather than taken on trust:
   `tests/public-imports.test.ts` keeps closed. `tests/public-page-request-scope.test.ts` is the
   page's half.
 - **Hand-built allowlist DTOs**, below.
+
+#### And since 2026-09-04 there is a second ownerless query, which enumerates
+
+`GET /api/public/library` lists every public article, for somebody who has named nothing. That is a
+different risk from `publicSlug`, and the difference is worth stating rather than assuming: a lookup
+hands one article to a caller who already knew its slug — and every slug minted since 2026-08-31
+ends in an unguessable short id — while a listing answers *what is there*. A wrong predicate on the
+lookup leaks the article somebody was already asking for; a wrong predicate on the listing publishes
+the shelf.
+
+`publicLibraryQuery` ([`src/store/public-library.ts`](../../src/store/public-library.ts)) is
+therefore a **closed query rather than a reusable predicate** — there is no exported
+*"visibility is public"* clause for anybody to bolt onto another query — and it carries the same
+readability bar as `loadArticle`/`loadHead` (a tree and at least one block), so a damaged revision
+cannot become a card whose destination 404s. It selects seven named columns, orders totally, and is
+bounded.
+
+**The existing static guard could not have caught a bad one.** `tests/owner-isolation.test.ts` greps
+`src/store/` for `eq(articles.slug, …)`, and a listing has no slug in it. That file now has a second
+section, *ownerless enumeration*, which inventories every query naming the `articles` table
+reachable from the public import graph, permits exactly two, reads the listing's **generated SQL**
+for the public predicate and the absence of `owner_id`, pins its seven columns, and runs it against
+two owners over private, public-readable and public-but-unreadable rows. Each of those was watched
+failing against a deliberately broken query before it was believed.
+
+**And the guard covers the corridor as well as the room, since 2026-09-04.** A GPT Sol review of the
+built code found the hole one level up: a request runs the transport before either public door, so a
+query written into `serveApi`'s pre-auth dispatch or `serve`'s wrapper would be reachable by a
+stranger and invisible to a graph rooted at `src/public/`. So the guard also cuts each transport's
+**anonymous region** — the dispatcher minus the one call that hands off to the authenticated half,
+which keeps the `catch` and the `finally` inside it — and asserts that region names no table and
+imports nothing outside a short pinned list. The list of transports is *derived* by asking which
+modules import a public entry point, so a third one fails the guard rather than escaping it. The
+detector parses ([`tests/helpers/article-queries.ts`](../../tests/helpers/article-queries.ts)) rather
+than matching `.from(articles)`, because a table alias, a relational query and raw SQL all walked
+past the regex it replaced.
+
+**A row bound is not a byte bound**, and the same review said so. Nothing constrains a title or an
+`<h1>`, so the listing's projection caps every text column it returns with `left()` **in the SQL** —
+after the rows are built it is too late, the bytes have crossed. `PUBLIC_CARD_CHARS` in
+[`src/store/public-library.ts`](../../src/store/public-library.ts) holds the numbers, and a fixture
+with a 5,000-character title, gist, site name and `<h1>` measures them. A partial index
+(`articles_public_listing`, `drizzle/20260904175802_*`) covers `visibility = 'public'` in the
+listing's exact order, so `limit` bounds the database's work and not only the reply.
 
 It also refuses to work at all on the filesystem store — `requirePostgres()` answers 501 — so a
 misconfigured dev server cannot serve a half-implemented public path.

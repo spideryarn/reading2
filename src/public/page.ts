@@ -37,6 +37,7 @@
  * |---|---|---|
  * | Public and readable | 200 | Enhanced |
  * | Private, absent, or an unreadable revision | 404 | Unmodified default |
+ * | `/read/public`, the reserved shelf address | 404 until stage 3b | Unmodified default |
  * | Malformed slug | 400 | Unmodified default |
  * | Method other than GET or HEAD | 405 + `Allow: GET, HEAD` | Unmodified default |
  * | **Anything else the reader throws** | **503 + `Retry-After: 30`** | **Unmodified default** |
@@ -88,7 +89,7 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { isSlug } from "../ingest.js";
+import { isSlug, PUBLIC_LIBRARY_SLUG } from "../ingest.js";
 import { errorFields, log } from "../log.js";
 import { captureFailure } from "../monitoring.js";
 import type { PublicHead } from "../store/public-reader.js";
@@ -200,6 +201,29 @@ export function decidePublicPage(
     return { status: 405, headers: { ...headers, Allow: ALLOW }, head: null };
   }
 
+  /**
+   * **`/read/public` is the shelf, not an article — matched before the slug.**
+   *
+   * `public` is a legal slug shape, so without this the address goes to the
+   * reader, misses (no article may be called that — src/ingest.ts §
+   * `isReservedSlug`), and is answered as *this document is not shared*. Same
+   * status, different meaning, and a database round trip for a question with a
+   * constant answer.
+   *
+   * `parseRoute` (src/web/router.ts) matches it before `/read/:slug` too, and
+   * the two have to agree: whatever this returns is the status on a page the
+   * client is simultaneously deciding what to draw.
+   *
+   * **404 today, and 200 the day stage 3b lands.** There is no page behind the
+   * address yet, App.tsx draws the 404 page for it, and an address with nothing
+   * at it should say so — a 200 would put a real head on a page that has nothing
+   * on it, which is the claim this file's `503` argument is about. When
+   * `PublicLibraryPage` exists this becomes a 200 with the default head; it
+   * never gets an article head, because it is not an article.
+   * docs/plans/260904b-pricing-page-and-public-showcase.md § Stage 3b.
+   */
+  if (slug === PUBLIC_LIBRARY_SLUG) return { status: 404, headers, head: null };
+
   /* And the slug before the store, so a malformed address is a 400 whatever
      this deployment is configured with — the same ordering, and the same
      reason, as `servePublicApi` in routes.ts. */
@@ -307,7 +331,11 @@ export async function servePublicReadPage(args: {
   const view = viewFor(url);
   const read = args.read ?? ((s: string) => pgPublicReader.loadHead(s));
 
-  const wanted = READ_METHODS.includes(method) && isSlug(slug);
+  /* **No head read for the reserved address.** `decidePublicPage` answers it
+     from a constant, so loading one would be a database round trip whose answer
+     is thrown away — and it would put a public read of a slug no article may
+     have into the log on every visit. */
+  const wanted = READ_METHODS.includes(method) && slug !== PUBLIC_LIBRARY_SLUG && isSlug(slug);
   const load = wanted ? await loadHead(slug, read) : null;
   const decision = decidePublicPage(method, slug, load, shell.sha256);
 

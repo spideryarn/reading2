@@ -190,6 +190,15 @@ const SHARED = new Set([
      of an allowlist projection is lost if the browser re-declares its own idea
      of what came back. See docs/plans/260827ai-public-read-only-access.md § The payload. */
   "public-types.js",
+  /* The wire shapes of `GET /api/public/library` — the shelf of public
+     articles. On the list for exactly `public-types.js`'s reason and beside it:
+     it imports **nothing at all** and is nothing but `interface` declarations,
+     so it erases entirely at compile time. Separate from that file because it
+     is the contract for the *list* rather than for one article, and the two
+     projections must not be tempted into being one — the header of
+     src/public-library-types.ts has the argument.
+     See docs/plans/260904b-pricing-page-and-public-showcase.md § Stage 3a. */
+  "public-library-types.js",
   /* What we know about the article's own images: which URLs a block would have
      the browser fetch, what a downloaded file turns out to be, and the map a URL
      is looked up in. On the list because it qualifies — it imports **nothing at

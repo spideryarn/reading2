@@ -405,6 +405,61 @@ export function isSlug(value: unknown): value is string {
   return typeof value === "string" && value.length <= MAX && /^[a-z0-9][a-z0-9-]*$/.test(value);
 }
 
+/**
+ * **Names an article may not be given, because `/read/<name>` is already a page.**
+ *
+ * Exactly one entry today: `/read/public` is the shelf of public articles
+ * (docs/plans/260904b-pricing-page-and-public-showcase.md § Stage 3b), and the
+ * two routers that answer that address — `parseRoute` in src/web/router.ts and
+ * `decidePublicPage` in src/public/page.ts — match it **before** `/read/:slug`.
+ * An article called `public` would therefore exist and be unreachable at its own
+ * canonical address, which is a worse failure than refusing the name: nothing
+ * errors, the shelf card links to a page about something else, and the owner has
+ * no way to tell.
+ *
+ * ## This is not `RESERVED` in src/slug.ts, and the difference cost a review
+ *
+ * The first draft of the plan said to add `"public"` to that set. It would have
+ * changed nothing while looking exactly as if it had: `RESERVED` belongs to
+ * `assertSlug`, which guards *reading* a filesystem path, and `isSlug` above —
+ * the function `parseRoute`, the edge and `POST /api/jobs` all ask — has never
+ * consulted it. Verified 2026-09-04.
+ *
+ * ## And it is not folded into `isSlug` either
+ *
+ * `isSlug` answers *may this string be turned into a path*, and it is asked at
+ * every **read** as well as at minting. Refusing `public` there would refuse it
+ * on the way out too, so a row that somehow held the name could never be read
+ * back or repaired. Two questions, two functions — the same split src/slug.ts
+ * argues for at length.
+ *
+ * Enforced at the one seam where an `articles` row is born: `lockOrCreateArticle`
+ * in src/store/pg-revisions.ts. Deliberately **not** enforced when *locking* an
+ * existing row, so that an article that already holds the name on some
+ * deployment goes on working rather than becoming unwritable the day this
+ * shipped.
+ */
+export const PUBLIC_LIBRARY_SLUG = "public";
+
+/**
+ * The whole set, built from the constant above rather than repeating it — two
+ * spellings of one reserved name is one place for the reservation and the route
+ * to come apart.
+ */
+const RESERVED_SLUGS = new Set([PUBLIC_LIBRARY_SLUG]);
+
+/**
+ * Is this a name the app has already spent on a page of its own?
+ *
+ * Lower-cased before the comparison for the reason src/slug.ts gives about its
+ * own reserved set: a case-sensitive reservation is one a different spelling
+ * walks straight past. `isSlug` already refuses uppercase, so today this can
+ * only differ for a string that was never going to be minted anyway — which is
+ * exactly when a guard should still be right.
+ */
+export function isReservedSlug(value: string): boolean {
+  return RESERVED_SLUGS.has(value.toLowerCase());
+}
 
 /**
  * **The short id every new slug ends with**, and the reason it is there.
