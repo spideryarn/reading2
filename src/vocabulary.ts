@@ -48,6 +48,12 @@
  */
 export const SITE_TERMS: readonly string[] = [
   "Spideryarn",
+  /* The author's name, added 2026-09-04 because Greg asked for it from inside
+     the Feedback dialog — *"along with my name, the author of Spideryarn, Greg
+     Detre"*. Ten characters, an unusual surname a transcriber has no reason to
+     guess right, and it is in the app's own copy already. Second because it is
+     the other proper noun a reader talking about this app is likely to say. */
+  "Greg Detre",
   "granularity zoom",
   "gist column",
   "block id",

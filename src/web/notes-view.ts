@@ -89,6 +89,14 @@ export interface NoteBlock {
   role?: string | undefined;
   treatment?: string | undefined;
   noteId?: string | undefined;
+  /**
+   * Only read to decide whether the author already wrote a *Notes* heading
+   * above their notes — `notesRegion` below. Optional because nothing else here
+   * needs it and a caller holding only `id`/`tag`/`html` is still a legal
+   * `NoteBlock`; a missing one simply means we cannot tell, and we draw our own
+   * heading, which is the safe direction.
+   */
+  text?: string | undefined;
 }
 
 export interface Note {
@@ -100,12 +108,49 @@ export interface Note {
   citedBy: BlockId[];
   /** Every marker, which is at least `citedBy.length` — one block can cite twice. */
   markers: number;
+  /**
+   * **The number the reader sees at the note**, and it is the author's own —
+   * the text of the first marker that cites it, in document order: `1`, `[7]`,
+   * `†`.
+   *
+   * Taken from the marker rather than counted here, so that what is printed
+   * beside the note is character-for-character what the reader tapped. Counting
+   * would drift the moment one note of a piece went unrecognised: the sixth
+   * marker would say `6` and the fifth note would say `5`, and neither the
+   * reader nor we would know which was lying.
+   *
+   * `ordinal` is the fallback, and there are two ways to reach it — a note
+   * nothing cites (there is no marker to take a label from) and a label too
+   * long to be a number, which is markup we did not expect rather than a
+   * footnote number. Stage 2 guarantees a non-empty label on every marker it
+   * writes (`src/notes.ts`, `candidate.labels[i] || String(i + 1)`), so in
+   * practice the first case is the live one.
+   */
+  label: string;
+  /** 1-based, by the document order of each note's first marker. */
+  ordinal: number;
 }
 
 export interface NoteIndex {
   byNote: Map<string, Note>;
   /** A note block's id to the note it belongs to. Only note blocks are in it. */
   noteOf: Map<BlockId, string>;
+  /**
+   * The first block of the notes region, or null when the article has none.
+   *
+   * Stage 2 gathers every note into one container at the end of the document
+   * (`src/notes.ts`), so the region really is one contiguous run and the reading
+   * view can draw a rule above it.
+   */
+  first: BlockId | null;
+  /**
+   * Does a heading already say these are the notes?
+   *
+   * Gwern's page ends `## Bibliography` and then nine bare `<li>`s, so the
+   * reader meets the apparatus with nothing to say it is apparatus. Wikipedia
+   * writes its own `References` heading and must not get a second one.
+   */
+  titled: boolean;
 }
 
 /**
@@ -125,11 +170,31 @@ function isNoteBlock(block: NoteBlock): boolean {
   );
 }
 
-/** Every `data-spya-note-ref` in a piece of stored html, in order. */
-function markersIn(html: string): string[] {
+/**
+ * Every `data-spya-note-ref` in a piece of stored html, in order, with the text
+ * the author put in it.
+ *
+ * The label is read out of the same match rather than from a second pass,
+ * because it is only ever the marker's own text node: stage 2 writes it with
+ * `textContent` (`replaceMarker`, src/notes.ts), so there is no markup inside a
+ * marker to trip over and the stamp is the last attribute on the element. A
+ * shape we did not write falls out as an empty label and the note takes its
+ * ordinal instead.
+ */
+function markersIn(html: string): { id: string; label: string }[] {
   if (!html.includes(NOTE_REF_ATTR)) return [];
-  return [...html.matchAll(new RegExp(`${NOTE_REF_ATTR}="([^"]*)"`, "g"))].map((m) => m[1] ?? "");
+  const re = new RegExp(`${NOTE_REF_ATTR}="([^"]*)"[^>]*>([^<]*)`, "g");
+  return [...html.matchAll(re)].map((m) => ({ id: m[1] ?? "", label: (m[2] ?? "").trim() }));
 }
+
+/**
+ * A marker's text, if it is short enough to be a number.
+ *
+ * `1`, `[7]`, `†`, `a` — all of them fine. Anything longer is markup we did not
+ * expect, and printing it in a 2rem margin would push the note's first line
+ * somewhere strange. Six characters is `[123]` with room to spare.
+ */
+const NUMBERISH = 6;
 
 /**
  * The notes of an article, from its blocks alone.
@@ -143,25 +208,44 @@ export function buildNoteIndex(blocks: readonly NoteBlock[]): NoteIndex {
   const byNote = new Map<string, Note>();
   const noteOf = new Map<BlockId, string>();
 
+  let first: BlockId | null = null;
+  let before: NoteBlock | null = null;
+  let previous: NoteBlock | null = null;
   for (const block of blocks) {
-    if (!isNoteBlock(block)) continue;
+    if (!isNoteBlock(block)) {
+      previous = block;
+      continue;
+    }
+    if (first === null) {
+      first = block.id;
+      before = previous;
+    }
     const id = block.noteId as string;
     noteOf.set(block.id, id);
     const note = byNote.get(id);
     if (note) note.blocks.push(block);
-    else byNote.set(id, { id, blocks: [block], citedBy: [], markers: 0 });
+    else byNote.set(id, { id, blocks: [block], citedBy: [], markers: 0, label: "", ordinal: 0 });
   }
 
-  /* Which passages cite each note. Read out of the body's own html rather than
-     out of the DOM, so it is the same answer before the article is rendered and
-     during a re-annotation — and so the count is of the article, not of what
-     happens to be mounted. */
+  /* Which passages cite each note, and what the author numbered it. Read out of
+     the body's own html rather than out of the DOM, so it is the same answer
+     before the article is rendered and during a re-annotation — and so the
+     count is of the article, not of what happens to be mounted. */
+  let numbered = 0;
   for (const block of blocks) {
     let cited: Set<string> | null = null;
-    for (const id of markersIn(block.html)) {
+    for (const { id, label } of markersIn(block.html)) {
       const note = byNote.get(id);
       if (!note) continue;
       note.markers += 1;
+      /* The **first** marker in document order settles both, and neither is
+         revisited: a Wikipedia note cited thirteen times has thirteen markers
+         reading `[5]`, and one cited from a table of contents as well as from
+         the prose would otherwise take its number from whichever came last. */
+      if (note.ordinal === 0) {
+        note.ordinal = ++numbered;
+        note.label = label.length > 0 && label.length <= NUMBERISH ? label : String(note.ordinal);
+      }
       cited ??= new Set<string>();
       if (cited.has(id)) continue;
       cited.add(id);
@@ -169,7 +253,68 @@ export function buildNoteIndex(blocks: readonly NoteBlock[]): NoteIndex {
     }
   }
 
-  return { byNote, noteOf };
+  /* A note nothing cites still needs a number, and it has to be one no cited
+     note is already using — so they carry on from the last marker rather than
+     restarting. Rare: it means stage 2 kept a note whose marker did not survive
+     stage 3. */
+  for (const note of byNote.values()) {
+    if (note.ordinal !== 0) continue;
+    note.ordinal = ++numbered;
+    note.label = String(note.ordinal);
+  }
+
+  return { byNote, noteOf, first, titled: introduces(before) };
+}
+
+/**
+ * Headings that already say "the notes start here".
+ *
+ * `References` is in because it is what Wikipedia calls exactly this section.
+ * **`Bibliography` is deliberately out**: it is the list of works cited, which
+ * is a different thing that often sits directly above the notes — it does on
+ * the gwern page this was reported from — and treating it as a notes heading
+ * would suppress ours precisely where it is most needed.
+ */
+const NOTES_HEADING = /^(foot|end)?\s*notes?$|^references$/i;
+
+/**
+ * Does the block above the notes already introduce them?
+ *
+ * Text, not html, because the question is what the reader can read — a heading
+ * whose words are wrapped in a `<span>` says *Notes* just as plainly. A block
+ * with no `text` answers no, and we draw our own heading: two headings is a
+ * cosmetic wart, and none is the report this exists to answer.
+ */
+function introduces(block: NoteBlock | null): boolean {
+  if (!block || !/^h[1-6]$/i.test(block.tag)) return false;
+  return NOTES_HEADING.test((block.text ?? "").trim());
+}
+
+/** Where a note begins, for the row that begins it. Null for every other block. */
+export interface NoteStart {
+  /** The author's own number for this note — `Note.label`. */
+  label: string;
+  /** Is this the first note of the article, and so the top of the region? */
+  opensRegion: boolean;
+  /** Should we draw the heading the source never wrote? */
+  needsHeading: boolean;
+}
+
+/**
+ * Is this block the start of a note, and if so what should be drawn beside it?
+ *
+ * Called once per row of the reading table, so it is two map lookups and a
+ * comparison. A note is a *range* of blocks (see the header), and only its first
+ * one gets a number — the other seven of gwern's longest are continuations of
+ * the same note and numbering each would claim there were eight.
+ */
+export function noteStartAt(index: NoteIndex, blockId: BlockId): NoteStart | null {
+  const noteId = index.noteOf.get(blockId);
+  if (!noteId) return null;
+  const note = index.byNote.get(noteId);
+  if (!note || note.blocks[0]?.id !== blockId) return null;
+  const opensRegion = index.first === blockId;
+  return { label: note.label, opensRegion, needsHeading: opensRegion && !index.titled };
 }
 
 /** What the pointer found, when what it found is a footnote marker. */
