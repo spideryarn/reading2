@@ -14,7 +14,7 @@ three later stages consume it**:
 ```
 A (store inventory) ✅ → B0 ✅ (already done) → T-B (factory) ✅ → T-C (lanes) ✅
   → T-D (activation) ✅ → T-E (pollution) ✅
-  → B (2 of 26 done) → C → D → E → F (hinge) → G → H → I
+  → B (12 of 26 done) → B2 (`routes.test.ts`) → C → D → E → F (hinge) → G → H → I
 ```
 
 **`C → B` became `B → C` on 2026-09-04**, and this line is the only place the order lives, so
@@ -32,7 +32,7 @@ more*.
 | **T-C** | `TEST_LANES`, `OWNER_AUDIT`, and `seedLocalAccounts`. Reviewed; the owner guard rebuilt per `(file, owner)` pair. |
 | **T-D** | **`npm test` is three projects now** — see below. The first stage of the six that is visible to anybody else. |
 | **T-E** | Four verdicts at the private lane's teardown, `POLLUTED` and `TEARDOWN FAILED` among them; the pool names itself; the shared lane reports its neighbours on failure. Two Sol rounds — the design one refused half the spec, the built one refused the commit. |
-| **B** | **2 of 26.** `chat-anchor-route` and `owner-jobs`, each green first run and each with one mutation the filesystem version could not have caught. |
+| **B** | **12 of 26.** Two in the pilot, then ten more in two parallel halves. All green, each with one mutation watched red and a written note of what that mutation does *not* cover. |
 | **D′1** | Landed earlier; since **extended by another worktree**, and its "unforgeable" claim is measured false — see D′1b. |
 
 **This paragraph used to say "nothing yet changes the default `npm test`", and T-D is where that
@@ -1886,6 +1886,79 @@ Neither is worth re-doing on these two. Both are worth writing into the brief fo
 "one mutation watched going red" is a rule this plan wrote and it does not say *which* mutation,
 which turns out to be most of its value.
 
+#### Ten more, in two parallel halves — 12 of 26, 2026-09-04
+
+Two agents, disjoint file sets, both editing `TEST_LANES` at different alphabetical positions. Five
+route suites (`the-query-string-does-not-decide-the-route`, `chat-spoken-route`,
+`chat-live-ticket-route`, `chat-live-turn`, `quiz-mark-route`) and five queue and article-identity
+suites (`second-job-queues`, `upload-records`, `list-reconciles-expired`,
+`one-article-for-one-address`, `article-cache-call-site`).
+
+All ten green together — `10 passed, 79 tests` in one private database, no `POLLUTED`. **The pilot's
+30–40 minutes a file held for nine of ten.** `quiz-mark-route` took roughly twice that, and for a
+reason worth naming: its fixture is an *artefact it rewrites per test*, not an article it reads, so
+three seeded articles and a real second publication had to stand in for what a directory copy used to
+do.
+
+##### The most valuable result is a mutation that did not bite
+
+Deleting `row.workKey === ticket.workKey` from `tryEnqueue`'s re-read classifier — a
+predicate the Postgres path owns and the filesystem never had, exactly the kind this plan asks for —
+left `second-job-queues` **green**. That re-read only runs when the insert conflicts, and the suite's
+two accepted-job cases insert cleanly. So the file exercises one branch of that classifier and none
+of `sourceTaken`, `nameTaken` or id-collision.
+
+**Nothing in the file, the plan or the review would have revealed that.** It is the argument for the
+rule the plan already has — one mutation watched going red, per file — restated as: the rule's value
+is not the red, it is that a mutation which *stays green* names a hole nobody knew was there. Both
+agents were asked to say what each mutation does **not** cover, and every one of the ten has an
+answer written down.
+
+##### Two more traps, and both are Postgres being stricter than a directory was
+
+3. **A global `fetch` stub that catches model calls also catches the seeder.** `scratchArticleInPg`
+   → `storeRawSource` puts bytes in the Supabase bucket **over HTTP**, so seeding inside a test whose
+   `fetch` is stubbed fails with the stub's own *"no model in tests"* and reads as a route bug. Swap
+   the real `fetch` back for the length of the seed and restore it in a `finally`.
+4. **Postgres validates ids the filesystem store never looked at.** `jobs_id_format` refuses a
+   hand-written mnemonic like `spya-2ndrun` (the body must start with a letter), and `jobs.attempt_id`
+   is a `uuid`, so a string token like `"attempt-2nd"` fails the insert. Any converted queue suite
+   that writes its own ids needs `mintId()` and `mintAttempt()`. **This is the migration finding
+   underneath the trap**: a filesystem store validated nothing, so a decade of hand-written fixture
+   ids were never wrong until now.
+
+And one that is not a trap but a shortcut: **`claimSession` is the answer for any suite driving
+`advanceJobWith`**, is already exported, and already says so in its docstring. `article-cache-call-site`
+converted in 20 minutes using it. That downgrades the fear about `jobs-walk` and `step-failure-seam`
+— their difficulty is the `data/_jobs/` byte assertions, not the walk.
+
+##### The category question, escalated rather than decided, and the answer is to re-run the witness
+
+The two halves disagreed. The pilot moved both its files to `shared-mechanism-collateral`; the queue
+agent moved only one, leaving four as `database-integration` because after conversion they seed no
+article and run no step, so **they reach no condemned module at all** — and
+`shared-mechanism-collateral` requires a non-empty `mechanisms`, which there is nothing to fill.
+
+Read against the definitions at the top of the registry, neither is right. Those categories say **what
+work the file still needs**: `database-integration` is *"move it, or finish moving it"*, which a
+converted file does not need, and `shared-mechanism-collateral` is *"none, to this file"*, which is
+the correct action but claims a mechanism that is gone.
+
+**The resolution is that the map should shrink, and cannot yet.** Membership is one-directional —
+`tests/store-migration-registry.test.ts` demands an entry for every file
+[`tests/store-migration-witness.json`](../../tests/store-migration-witness.json) saw touching the
+filesystem store, and nothing demands a listed file still touch it. So a converted file may leave the
+map **only once the witness is re-run**, and the witness is dated 2026-09-03. So:
+
+> **Re-run the witness at the end of stage B**, and let every file the conversion took out of its
+> reach drop out of `STORE_MIGRATION` entirely.
+
+At that point the category question dissolves rather than being answered, which is the better
+outcome, and the map becomes a measurement of the *current* tree again instead of a September the 3rd
+one. Until then the four entries stay `database-integration` with reasons that say the conversion is
+done — the honest verdict rather than an un-updated one, in the queue agent's words, and it is
+recorded here so that the next reader knows it was a decision.
+
 **Call it 30–40 minutes a file for the twenty-four that are left, plus a day for the three that are
 not this shape.** The editing is nearly all pattern: pin `postgres` in `vi.hoisted`, a `pgReady`
 gate, `scratchArticleInPg` in `beforeAll`, delete rows instead of re-copying a directory in
@@ -1947,6 +2020,200 @@ merely reading the wrong store, it is **reaching past the selection into the con
 is the reach stage A's witness was built to count. This predicts which of the remaining 24 will hit
 it: the three chat route suites, both referee route suites, and anything reading a shelf or a
 profile.
+
+#### The review found the evidence was reported and not retained — 2026-09-04
+
+[260903f-stage-b-ten-conversions-review-sol.md](260903f-stage-b-ten-conversions-review-sol.md).
+Verdict: *land with named follow-ups*, and the approach is right — *"explicit store selection, real
+per-run Postgres, serialized files, non-vacuous readbacks"*. It checked every one of the ten for a
+surviving filesystem-only reader and found none, and it compared each file against its
+pre-conversion self assertion by assertion and found **nothing lost**. The one changed meaning is
+`expect(STORE).toBe("files")` becoming `postgres`.
+
+**The finding that matters is about the process, not the conversions.** The plan requires each
+converted file to *retain* its mutation and what that mutation does not cover. **Eight of the ten
+retain nothing.** The mutations were run — the agents reported them, and this document repeated the
+reports — but the evidence was never written into the artefact, so nothing distinguishes *watched
+red* from *reported green*. Confirmed by grep before acting on it: only `list-reconciles-expired`
+carries a real record (*"Watched red with the final `store.list(owner)` replaced by `return listed`:
+one call, not two"*), and `second-job-queues` carries the green one.
+
+That is this plan's own subject turned on the plan: **a claim of evidence is not evidence**, and the
+orchestrator relayed ten subagent reports without opening the files. The rule *"'Done, all tests
+pass' is a claim, not a result — read the diff"* exists for exactly this and was not followed.
+
+**Re-run, not reconstructed.** Writing a plausible note from reading the code would manufacture the
+evidence rather than retain it, which is worse than having none. The eight go back through the
+mutation, the run and the watch.
+
+**The process fix is a guard, and it is deferred rather than dropped.** A convention that a comment
+should be there is the same instrument that just failed. The evidence wants a typed home — a
+`mutation` field on the `STORE_MIGRATION` entry, carrying what was broken, what the run printed, and
+what it does not cover, with a test requiring it of every converted file. Not done in this batch
+because three agents were editing
+[`tests/store-migration-registry.ts`](../../tests/store-migration-registry.ts) concurrently and a
+type change would have collided. **Do it when the registry is quiet, before stage B closes.**
+
+##### Two registry accounts that disagree with the code, both verified
+
+Both are `mechanisms` lists that under-state what the converted file still reaches. Neither
+invalidates a Postgres assertion; both would leave stage G's account wrong.
+
+1. **`quiz-mark-route` still reaches the filesystem ledger.** Its entry says *"the provider is stubbed
+   to reject, so no ledger row"*, and that is wrong twice. `src/ai-call.ts`'s streaming wrapper
+   records spend through a `finally`, so a rejection and an aborted stream both record — and
+   **[`src/store/ai-calls.ts`](../../src/store/ai-calls.ts) line 74 returns `fsCostStore` whenever
+   `NODE_ENV === "test"`, so the ledger ignores the store flag altogether in tests.** The 2026-09-03
+   witness corroborates it: `ai-calls-fs:fsCostStore.record`. Wants `ledger-redirect` added — and it
+   is a reminder that pinning a file to Postgres does not pin its ledger, which is the whole reason
+   **C** is a stage.
+2. **`the-query-string-does-not-decide-the-route` uses a symbol from the condemned module.** Its GET
+   always calls `sweepChat`, and the *Postgres* sweep writes `CHAT_SWEPT` — declared in
+   [`src/store/fs.ts`](../../src/store/fs.ts) line 390 and imported by
+   [`src/store/pg-chat.ts`](../../src/store/pg-chat.ts) line 81. Not a filesystem read returning an
+   empty answer; a shared symbol living in the half being deleted. Wants `shared-mechanism` naming
+   it, and it is one for stage G's list: **deleting `fs.ts` moves this string, it does not remove
+   it.**
+
+Both edits wait for the registry to be quiet, for the same reason the guard does.
+
+##### And it agreed with the two calls this plan had already made
+
+The green mutation's conclusion was checked against the code and confirmed: `tryEnqueue` returns
+immediately after a clean insert, so the two accepted-job cases never reach the classifier at all,
+and the double-click case reaches `sameWork` with a row that already agrees on owner, slug and work
+key — so removing the work-key predicate *cannot* change that answer. The file exercises `sameWork`
+but not the necessity of its predicate, and none of `sourceTaken`, `nameTaken` or the id-collision
+path.
+
+And on the four entries left as `database-integration`: *"I agree with the plan's resolution: rerun
+the witness and remove these entries rather than inventing a completed/transitional category.
+Shrinking the map is cleaner than recategorising."*
+
+##### The review could not run anything, and said so
+
+The managed sandbox denied the local Postgres connection (`connect EPERM 127.0.0.1:54362`), the
+private setup then installed its poison URL, and collection failed with zero tests. Every finding
+above is reasoned rather than reproduced, and the review **says so itself, unprompted, in its own
+verdict** rather than letting a retained log stand in for a run it did not do. That is the behaviour
+the instruction to hand it evidence is meant to produce, and it is worth recording that it worked —
+but it means the follow-ups were verified here, in this tree, and not there.
+
+#### The witness has no instrument — the step this plan scheduled cannot be run
+
+`STORE_MIGRATION` membership is driven by the **dynamic** witness — which files *executed* a condemned
+function — so a converted file genuinely does stop being witnessed, and the resolution recorded above
+holds. (Had it been witness 1's static import graph it would not: a converted route suite still
+imports the app, which still imports `src/store/index.ts`, which still imports `fs.ts` until stage G.)
+
+**But the script that produced [`tests/store-migration-witness.json`](../../tests/store-migration-witness.json)
+is not in the repo.** The JSON records `what`, `measured`, `store`, the eight `instrumentedModules`,
+`notInstrumented` and two `knownBlindSpots` — everything except the command. So *"re-run the witness at
+the end of stage B"* was scheduled against a tool that does not exist, and it would have been
+discovered at the end of stage B.
+
+It is this document's own § *Counts are perishable here — re-derive, never inherit* failing on the
+one input it cannot re-derive, and the repo's rule that an inventory records **the command**, scope
+and run date. Being rebuilt as `scripts/store-migration-witness.ts`, committed this time, with the
+original's proving discipline made repeatable rather than described: the 2026-09-03 run hit four
+positive controls with method-level detail and four clean negative controls, and an instrument that
+silently stopped hooking would produce an empty `touched` — the shape that passes the registry guard
+while proving nothing.
+
+#### The tail was measured, and it is 16.75 hours, not 7 — 2026-09-04
+
+The twelve done average 30-40 minutes, so the obvious extrapolation says the remaining fourteen are
+about seven hours. **They are about seventeen.** Measured by reading all fourteen — every filesystem
+site classified as *has a database equivalent* / *asserts something only the filesystem has* /
+*incidental scaffolding* — rather than by extrapolating, which is this document's own rule about
+perishable counts applied to an estimate for once instead of a count.
+
+It is not spread. Eleven of the fourteen cluster at 25-70 minutes, exactly as the pilot predicted.
+Three carry the difference:
+
+| file | minutes | why |
+| --- | --- | --- |
+| `routes.test.ts` | **240** | 1,598 lines, ~95 tests, ~40 filesystem sites, and two design decisions of its own |
+| `jobs.test.ts` | 140 | 1,515 lines, and six of its tests are about the filesystem adapter rather than the queue |
+| `referee-scan-route.test.ts` | 80 | needs four correctly sha256-hashed raw-document manifests |
+
+**`referee-scan-route` is the one to be afraid of, and it is not the expensive one.** A silently wrong
+hash makes the prompt-injection scan a no-op **while the test stays green** — the exact shape of
+[silent-success.md](../reusable/silent-success.md), inside the stage built to remove it. Its brief
+says to prove the hash two ways, or to plant a known injection and watch the scan find it, rather
+than accepting a green.
+
+**And none of the fourteen is a filesystem-adapter test in disguise.** The registry's
+`database-integration` calls all held up under a close read. That is the first independent check
+stage A's map has had, and it passed.
+
+#### `routes.test.ts` becomes its own stage, B2, and the split was passed over
+
+The build order gains a stage: **B (13 files) → B2 (`routes.test.ts`) → C**. B2 must land before the
+hinge; it does not block C.
+
+Put to Fable as three options — convert it as an ordinary item, lift it into its own stage, or let it
+happen inside the hinge — and the third was the one to kill, on a premise this plan had not checked.
+The argument for it was that ~9 of its tests assert *"501 because filesystem"*, behaviour F deletes,
+so converting them in B writes assertions F rewrites. **That premise is false.** The moment the file
+is pinned to Postgres those assertions are already unreachable, and what they become — administrator
+gets 200 and a list, anonymous 401, stranger 403, malformed 400 — is behaviour **the hinge does not
+touch**, because F deletes the `files` path and not the Postgres one. The work is done once whichever
+stage does it. So C had only its cost: a 1,600-line rewrite inside the commit two reviews have spent
+their time shrinking, and the largest route suite left on the undeployed store for the whole of C, D,
+D′ and E.
+
+**The simpler option passed over: splitting `routes.test.ts` into sibling files** — `reader-routes`,
+`admin-gate`, `search-routes` and so on, one per `describe` block, each with its own lane entry and
+its own mutation. Recommended, and the reasoning behind it is right: **the mutation rule's unit is the
+file, and one mutation over 95 tests is about 1% of what the file claims.** It is the same finding as
+`second-job-queues` staying green, pointed at a file instead of a predicate.
+
+It was passed over anyway, and the reason is scope rather than disagreement. The file is named from
+seven docs under `docs/project/` and about 133 lines across the repo; splitting it is a
+test-organisation refactor with a rename sweep, landing in a tree five other agents are working in,
+on top of a store migration. **The benefit is obtainable without the refactor: change the rule's
+unit, not the file.** B2 converts `routes.test.ts` one `describe` block at a time, with **one mutation
+per block** and each block a stopping point — four or five pieces of mutation evidence instead of one,
+which is what the recommendation was actually for, and no references move.
+
+If B2 turns out to want the split anyway once it is inside the file, that is a finding for this
+section and not a decision to take quietly.
+
+**The two design decisions B2's brief has to carry, settled now so they are not settled mid-flow:**
+
+1. **Reader-profile isolation.** `pg-reader.ts` keys every row on `currentOwnerId()`, so the answer is
+   a seeded owner per run under `asTestOwner` — the shape `OWNER_AUDIT` already audits — not a scratch
+   root, for which there is no equivalent. Assert the row is gone in `afterAll`, per stage G's
+   teardown rule.
+2. **The nine 501 tests.** Rewrite them to real admin behaviour; **do not** split them into a
+   `routes-postgres` sibling. The `referee-routes-postgres` split exists *because* the flag existed —
+   one process is one store — and a store-pinned sibling is the pattern this plan is deleting.
+   `tests/seed-admin-signin.test.ts` already drives `/api/admin/users` against Postgres and is the
+   thing to cite. Keep *"says nothing about users in three refusals"*, with its third arm becoming
+   200-with-`users`: its comment that a page saying *no accounts* and a page that *could not answer*
+   look identical is still exactly the point.
+
+#### Two smaller calls, and both go against building the fixture
+
+**`jobs.test.ts` splits before it converts.** Six of its tests have the filesystem adapter as their
+subject — five asserting `STEPS[name].outputs(ctx)` returns on-disk paths, one asserting no
+`<id>.json.<pid>.<n>.tmp` files survive `writeOnce`'s rename. They move to
+`tests/jobs-fs-adapter.test.ts`, categorised `filesystem-adapter-behaviour`, and stage G deletes that
+file beside `src/store/jobs-fs.ts`. The registry classifies files, and `jobs.test.ts` currently
+deserves two verdicts at once, which the map cannot express. Leaving them in forces one of two bad
+outcomes: a conversion that keeps the file able to reach the filesystem adapter, or six tests quietly
+deleted during B — **the uncovered interval G's "same commit as its subject" rule exists to
+prevent**. The new file's header says the `outputs(ctx)` block is really about `StepContext.dir` and
+`htmlFile`, so whoever removes those fields is the one who deletes it, rather than it being orphaned.
+
+**`term-lookup`'s `example` assertion is dropped, not rebuilt.** It passes only because the filesystem
+reader hard-codes a special-cased `example` slug to fall through to a committed fixture. Postgres has
+no such directory and no such fall-through, so building a row to keep the guard testable would be
+manufacturing state so that condemned code can go on being exercised — a green test proving nothing
+about deployed code, which is worse than not converting. The 404-for-unknown-slug arm stays; it is
+real under Postgres and it is the half that matters. Recorded in the file header and the registry
+`reason` so G's *"enumerate every surviving assertion"* pass can see the drop was deliberate.
 
 ### C — ledger isolation, its own reviewed stage
 
