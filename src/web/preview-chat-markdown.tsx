@@ -11,7 +11,6 @@ import { createRoot } from "react-dom/client";
 import { CitedMarkdown, CitedText } from "./Cited.js";
 import { MODE_MIN, SPINE_W } from "./layout.js";
 import type { BlockId } from "../types.js";
-import "./styles.css";
 import "./tailwind.css";
 
 /** Two article blocks, so the citations in these answers are real ones. */

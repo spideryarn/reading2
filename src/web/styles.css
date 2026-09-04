@@ -9034,6 +9034,33 @@ line.diag-now {
 }
 .annotate-actions button { font-size: 0.81rem; white-space: nowrap; }
 
+/* **The fourth `.linky`, and it had never been styled.** The class is scoped on
+   purpose — `.controls`, `.cmt-dialog`, `.chat-dialog` — and this panel's root
+   is `.annotate-dialog`, so `AnnotateDialog`'s Cancel matched no rule at all
+   and rendered as bare text beside `.annotate-save`'s bordered box. Found
+   2026-09-04 by sweeping every `className="linky"` for an ancestor that styles
+   it; the sharing card, `BillingSection` and `SettingsSection` had the same bug
+   and are fixed in their own files. `App.tsx`'s is inside `.controls` and was
+   always fine.
+
+   Written out in full here rather than by widening one of the other three,
+   which is the rule this file already states above `.cmt-dialog button.linky`:
+   a shape, not a shared class. This one is `.cmt-dialog`'s, because Cancel in
+   the comment panel and Cancel in this one are the same control in the same
+   position — `font: inherit` included, which is now also in the button reset
+   (tailwind.css) but is cheap to keep beside the rule that depends on it. */
+.annotate-dialog button.linky {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.annotate-dialog button.linky:hover { color: var(--highlight); }
+
 .annotate-save {
   padding: 0.32rem 0.6rem;
   border: 1px solid var(--rule-strong);
@@ -13379,16 +13406,18 @@ table.only-prose thead { display: none; }
 }
 
 /* ---------------------------------------------------------------- metadata --
-   Every <button> on the Metadata page inherits the type around it.
+   **`.metadata-page button { font: inherit }` used to live here, and is gone
+   because the button reset now does it for the whole app** — tailwind.css § the
+   bit of preflight we need, 2026-09-04.
 
-   Greg, 2026-09-03, on that page: *"clean up their display (some of them seem
-   larger than others somehow?)"*. They were, and the cause is one line up in
-   tailwind.css § note 4: **we import preflight nowhere**, deliberately, because
-   it would reset everything inside `.prose` — the one place we render the
-   article author's own HTML and cannot enumerate the tags. So a `<button>` keeps
-   the UA's own `font`, which in Chrome is 13.333px Arial, and no Tailwind class
-   contests it: `tw:text-inherit` is `color`, and `tw:text-sm` sets a size while
-   leaving the family alone.
+   The diagnosis is worth keeping where somebody looking at this page will find
+   it. Greg, 2026-09-03: *"clean up their display (some of them seem larger than
+   others somehow?)"*. They were, and the cause is that **we import preflight
+   nowhere**, deliberately, because it would reset everything inside `.prose` —
+   the one place we render the article author's own HTML and cannot enumerate
+   the tags. So a `<button>` keeps the UA's own `font`, 13.333px Arial in
+   Chrome, and no Tailwind class contests it: `tw:text-inherit` is `color`, and
+   `tw:text-sm` sets a size while leaving the family alone.
 
    The visible result was the collapsible section headings. A shut section's
    heading is a button (Metadata.tsx § Section) carrying the h2's 0.68rem
@@ -13396,16 +13425,11 @@ table.only-prose thead { display: none; }
    the size of every heading beside it, in a different typeface. Everything else
    on the page was subtler: the right size in the wrong face.
 
-   Scoped to this page rather than added globally. A bare `button { font:
-   inherit }` is the part of preflight everybody wants, but twenty components in
-   this file already declare their own (grep `font: inherit`) and were built
-   looking at the UA default underneath them — a global reset is a change to all
-   of them at once, in a tree several agents are working in.
-
-   In `app`, so it is a floor rather than a ceiling: utilities outrank it
-   (tailwind.css § the @layer statement), and `tw:font-mono` on the fingerprint
-   and `tw:text-sm` on Delete still win. */
-.metadata-page button { font: inherit; }
+   That fix was scoped to this page on purpose, and the global one supersedes it
+   rather than contradicting it: `base` sits below `app`, so the forty-odd rules
+   in this file that declare their own `font: inherit` still win, and so does
+   every utility. Two spellings of one rule is the thing worth not leaving
+   behind. */
 
 /* =========================================================== § the site ==
    The signed-out marketing pages — LandingPage.tsx and FeaturesPage.tsx — and

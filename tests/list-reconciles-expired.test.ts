@@ -29,25 +29,42 @@
  *   decisions on the server). With no running job there is no second statement
  *   at all, which is what keeps an idle shelf at one round trip.
  *
- * ## Why the store is the filesystem one
+ * ## Why the store is Postgres, since 2026-09-04
  *
- * `SPIDERYARN_STORE` is left unset, which is the state of every laptop, so this
- * cannot skip itself into a green run (docs/reusable/silent-success.md). The
- * decision under test is `listJobs`'s and is the same under either store;
- * tests/store-jobs-parity.test.ts is where the owner-scoped sweep itself is held
- * to one contract across both adapters.
+ * It used to leave `SPIDERYARN_STORE` unset — the state of every laptop — on
+ * the argument that the decision under test is `listJobs`'s and is the same
+ * under either store. That was true and it is no longer the point: the store it
+ * proved `listJobs` over is the one being deleted. Stage B of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
+ *
+ * **And it is a stronger file for it, in one specific place.** On the
+ * filesystem store `list` handed back references to the live in-memory records
+ * and `settleExpired` mutated those same objects — the trap the *reads the list
+ * again* case below was written around. Under Postgres a list is rows read out
+ * of a database and there is no shared object for a bug to hide behind, so
+ * *settles, and answers with what it settled* is a claim about two real
+ * statements. The sweep those cases spy on is an `UPDATE ... where owner_id =
+ * $1 and lease_expires_at < clock_timestamp()`, which is a predicate the
+ * filesystem store never had at all.
+ *
+ * tests/store-jobs-parity.test.ts is still where the owner-scoped sweep itself
+ * is held to one contract across both adapters.
  */
-import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 /**
- * The log level, before any import — `level()` in src/log.ts reads `LOG_LEVEL`
- * once at that module's load, and vitest's `NODE_ENV=test` otherwise makes the
- * logger `silent`, which writes nothing, which satisfies every assertion below
- * that looks for a string. tests/helpers/log-capture.ts § two things a caller
- * has to do.
+ * Two things before any import, and both for the same reason: the module that
+ * reads each of them reads it **once, at its own load**, and imports are
+ * hoisted above every statement in a module.
  *
- * The store flag is **deleted** rather than set, because unset is the state a
- * fresh clone is in and `storeFromEnv` treats the two the same on purpose.
+ * The log level — `level()` in src/log.ts reads `LOG_LEVEL` once, and vitest's
+ * `NODE_ENV=test` otherwise makes the logger `silent`, which writes nothing,
+ * which satisfies every assertion below that looks for a string.
+ * tests/helpers/log-capture.ts § two things a caller has to do.
+ *
+ * The store — `src/jobs.ts` picks between `pgJobStore` and `fsJobStore` at its
+ * own load, so a plain assignment here would leave the whole file on the
+ * filesystem queue with nothing saying so.
  */
 const HOISTED = vi.hoisted(() => {
   const previousLevel = process.env.LOG_LEVEL;
@@ -55,34 +72,61 @@ const HOISTED = vi.hoisted(() => {
   if (previousLevel === undefined || ["silent", "fatal", "error"].includes(previousLevel)) {
     process.env.LOG_LEVEL = "warn";
   }
-  delete process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
   return { previousLevel, previousStore };
 });
 
+import { eq, inArray, sql } from "drizzle-orm";
+
+import { closeDb, getDb } from "../src/db/client.js";
+import { jobs as jobsTable } from "../src/db/schema.js";
+import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { listJobs, REQUEUE_BUDGET } from "../src/jobs.js";
 import { type OwnerId, runInRequest, setRequestOwner } from "../src/owner.js";
 import { STEPS } from "../src/pipeline.js";
-import { expireLeaseForTests, forgetForTests, fsJobStore } from "../src/store/jobs-fs.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import { STORE } from "../src/store/live.js";
+import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { Job, JobStep } from "../src/types.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 if (HOISTED.previousLevel === undefined) delete process.env.LOG_LEVEL;
 else process.env.LOG_LEVEL = HOISTED.previousLevel;
-if (HOISTED.previousStore !== undefined) process.env.SPIDERYARN_STORE = HOISTED.previousStore;
+/* Put the store flag back straight after the imports: vitest reuses a worker
+   across files and does not reset `process.env` between them. */
+if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
 
-/** Said out loud, because the whole file is about the filesystem store's records. */
-if (STORE !== "files") {
-  throw new Error(`this file needs the filesystem job store, and STORE is ${STORE}`);
-}
+loadEnvLocal();
+
+const { reachable } = await pgReady({
+  suite: "tests/list-reconciles-expired.test.ts",
+  tables: ["spideryarn.jobs"],
+});
+
+const when = reachable ? describe : describe.skip;
+
+describe("the store these tests are actually talking to", () => {
+  it("is the Postgres one", () => {
+    /* Said out loud, and **not** gated on `reachable`: the whole file is about
+       what a reader's poll does to rows in `spideryarn.jobs`, and the
+       filesystem queue would answer every call below happily while consulting
+       none of the predicates the cases are about. A control that disappears
+       when the database is missing disappears exactly when it matters. */
+    expect(STORE).toBe("postgres");
+  });
+});
 
 /**
- * Two readers of this file's own. Neither ever becomes an `auth.users` row —
- * the job store here is the filesystem one — but the ids are still unique to
- * this file, because tests/fixture-ids.test.ts reads literals and cannot know
- * that, and a shared id is one refactor away from being a shared row.
+ * Two readers of this file's own, and **real `auth.users` rows** since the
+ * move: `jobs.owner_id` carries a foreign key, so a made-up uuid would fail
+ * every *insert* rather than the ownership check — and *cannot settle somebody
+ * else's job* would then be passing because neither job existed. Their own ids
+ * rather than a shared pair, because the file's subject is one reader who is
+ * not the other.
  */
 const ALICE = "00000000-0000-4000-8000-00000000c3a1" as OwnerId;
 const BOB = "00000000-0000-4000-8000-00000000c3a2" as OwnerId;
@@ -100,15 +144,46 @@ const LEASE = 60_000;
 
 const made: string[] = [];
 
+/**
+ * Rows out, by id.
+ *
+ * `forgetJob` is the reader's Dismiss and refuses a job that is queued or
+ * running, which is most of what this file makes — and `forgetForTests` was the
+ * filesystem store's way round that. A delete is the Postgres one. No article
+ * delete to order it against: nothing here seeds one, so no job carries a
+ * `draft_revision_id`.
+ */
+async function forgetAll(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await getDb().delete(jobsTable).where(inArray(jobsTable.id, ids));
+}
+
 afterEach(async () => {
   vi.restoreAllMocks();
   const ids = made.splice(0);
-  if (ids.length > 0) await forgetForTests(ids);
+  if (reachable) await forgetAll(ids);
 });
 
 afterAll(async () => {
-  if (made.length > 0) await forgetForTests(made.splice(0));
+  if (!reachable) return;
+  await forgetAll(made.splice(0));
+  await closeDb();
 });
+
+beforeAll(async () => {
+  if (!reachable) return;
+  const db = getDb();
+  await seedAuthUser(db, {
+    id: ALICE,
+    email: "list-reconciles-alice@spideryarn.local",
+    onConflictDoNothing: true,
+  });
+  await seedAuthUser(db, {
+    id: BOB,
+    email: "list-reconciles-bob@spideryarn.local",
+    onConflictDoNothing: true,
+  });
+}, 60_000);
 
 /** Do something as a signed-in reader, exactly as `handleApi` does. */
 function as<T>(who: OwnerId, fn: () => T): T {
@@ -134,19 +209,41 @@ function aJob(owner: OwnerId): Job {
 /** Queued, claimed, and then the claimant walks away and its lease runs out. */
 async function abandoned(owner: OwnerId): Promise<Job> {
   const job = aJob(owner);
-  await fsJobStore.enqueueOrGet(job, { workKey: `k-${job.id}`, reservesName: false });
+  await pgJobStore.enqueueOrGet(job, { workKey: `k-${job.id}`, reservesName: false });
   await abandonAgain(job, owner);
   return job;
 }
 
+/**
+ * The lease, run out.
+ *
+ * **Written straight to the column**, for the reason
+ * tests/store-jobs-parity.test.ts gives about its own Postgres adapter: a lease
+ * short enough to expire during a test is short enough to expire between two of
+ * the assertions that follow. And `clock_timestamp()` rather than
+ * `Date.now()`, because the store creates and compares leases on the database's
+ * clock — a helper reaching for the application's would be testing the two
+ * against each other, green on a laptop where they are the same clock and
+ * quietly wrong exactly where Vercel and Supabase are not.
+ *
+ * This is what `expireLeaseForTests` was, and the difference is the whole
+ * conversion: it used to reach into a process-local `attempts` map.
+ */
+async function expireLease(id: string): Promise<void> {
+  await getDb()
+    .update(jobsTable)
+    .set({ leaseExpiresAt: sql`clock_timestamp() - interval '1 second'` })
+    .where(eq(jobsTable.id, id));
+}
+
 /** The same thing to a job that is already in the queue: claim it, then lapse. */
 async function abandonAgain(job: Job, owner: OwnerId): Promise<void> {
-  const claimed = await fsJobStore.claim(job.id, owner, mintAttempt(), LEASE, CAP);
+  const claimed = await pgJobStore.claim(job.id, owner, mintAttempt(), LEASE, CAP);
   expect(claimed.kind).toBe("claimed");
-  expireLeaseForTests(job.id);
+  await expireLease(job.id);
   /* The row is untouched and still says `running`, which is exactly the state
      the reader's card is frozen on. */
-  expect((await fsJobStore.get(job.id, owner))?.status).toBe("running");
+  expect((await pgJobStore.get(job.id, owner))?.status).toBe("running");
 }
 
 /**
@@ -164,12 +261,12 @@ async function abandonAgain(job: Job, owner: OwnerId): Promise<void> {
 async function spendBudget(job: Job, owner: OwnerId): Promise<void> {
   for (let i = 0; i < REQUEUE_BUDGET; i++) {
     await as(owner, () => listJobs());
-    expect((await fsJobStore.get(job.id, owner))?.status).toBe("queued");
+    expect((await pgJobStore.get(job.id, owner))?.status).toBe("queued");
     await abandonAgain(job, owner);
   }
 }
 
-describe("listing your jobs", () => {
+when("listing your jobs", () => {
   /**
    * **The unfrozen version, on the poll the reader is actually looking at.**
    *
@@ -197,7 +294,7 @@ describe("listing your jobs", () => {
     /* And it really is in the store that way, not merely rewritten on the way
        out. A `listJobs` that patched its own answer would pass the lines above
        and leave the next reader's card exactly as frozen. */
-    expect((await fsJobStore.get(job.id, ALICE))?.status).toBe("queued");
+    expect((await pgJobStore.get(job.id, ALICE))?.status).toBe("queued");
   });
 
   /**
@@ -218,20 +315,27 @@ describe("listing your jobs", () => {
     /* `retry`, so the card offers the button — the whole point of settling it
        rather than leaving it spinning. */
     expect(seen?.failureKind).toBe("retry");
-    expect((await fsJobStore.get(job.id, ALICE))?.status).toBe("error");
+    expect((await pgJobStore.get(job.id, ALICE))?.status).toBe("error");
   });
 
   /**
    * **That the answer is re-read, and not the pre-sweep one handed back.**
    *
-   * Its own test because the case above **cannot** pin this, which GPT Sol
-   * found on 2026-09-01: `fsJobStore.list` returns references to the live
-   * in-memory records, and `settleExpired` mutates those same objects — so the
-   * supposedly pre-sweep array changes underneath the assertion and
-   * `return listed` passes every line of it. That is
+   * Its own test because the case above **could not** pin this, which GPT Sol
+   * found on 2026-09-01: `fsJobStore.list` returned references to the live
+   * in-memory records, and `settleExpired` mutated those same objects — so the
+   * supposedly pre-sweep array changed underneath the assertion and
+   * `return listed` passed every line of it. That is
    * docs/reusable/silent-success.md in a test rather than in code: the check
    * agrees with the implementation because the two share an assumption, and the
-   * assumption is that a list is a copy.
+   * assumption was that a list is a copy.
+   *
+   * Postgres has no such shared object — every `list` is rows read out again —
+   * so the case above would now catch it. **The call count stays anyway**, and
+   * not out of sentiment: it is the only assertion here that distinguishes *the
+   * answer was re-read* from *the answer happened to be right*, and it is the
+   * one that fails when somebody replaces the second read with a patch of the
+   * first for the round trip's sake.
    *
    * So this counts the calls instead, which no amount of shared mutation can
    * fake. Watched red with the final `store.list(owner)` replaced by
@@ -239,7 +343,7 @@ describe("listing your jobs", () => {
    */
   it("reads the list again after settling, rather than handing back the one it swept", async () => {
     await abandoned(ALICE);
-    const reads = vi.spyOn(fsJobStore, "list");
+    const reads = vi.spyOn(pgJobStore, "list");
     try {
       await as(ALICE, () => listJobs());
       expect(reads).toHaveBeenCalledTimes(2);
@@ -254,8 +358,8 @@ describe("listing your jobs", () => {
    */
   it("reads the list once when there was nothing to settle", async () => {
     const quiet = aJob(ALICE);
-    await fsJobStore.enqueueOrGet(quiet, { workKey: `k-${quiet.id}`, reservesName: false });
-    const reads = vi.spyOn(fsJobStore, "list");
+    await pgJobStore.enqueueOrGet(quiet, { workKey: `k-${quiet.id}`, reservesName: false });
+    const reads = vi.spyOn(pgJobStore, "list");
     try {
       await as(ALICE, () => listJobs());
       expect(reads).toHaveBeenCalledTimes(1);
@@ -284,7 +388,7 @@ describe("listing your jobs", () => {
        — what matters here is that Bob's row moved and Alice's did not. */
     expect(listed.find((one) => one.id === his.id)?.status).toBe("queued");
 
-    const untouched = await fsJobStore.get(hers.id, ALICE);
+    const untouched = await pgJobStore.get(hers.id, ALICE);
     expect(untouched?.status).toBe("running");
     expect(untouched?.error).toBeUndefined();
     expect(untouched?.finishedAt).toBeUndefined();
@@ -304,8 +408,8 @@ describe("listing your jobs", () => {
    */
   it("asks the store nothing extra when nothing is running", async () => {
     const idle = aJob(ALICE);
-    await fsJobStore.enqueueOrGet(idle, { workKey: `k-${idle.id}`, reservesName: false });
-    const sweep = vi.spyOn(fsJobStore, "settleExpired");
+    await pgJobStore.enqueueOrGet(idle, { workKey: `k-${idle.id}`, reservesName: false });
+    const sweep = vi.spyOn(pgJobStore, "settleExpired");
 
     const listed = await as(ALICE, () => listJobs());
     expect(listed.map((one) => one.id)).toContain(idle.id);
@@ -319,7 +423,7 @@ describe("listing your jobs", () => {
    */
   it("sweeps, for this reader, when the list it just read has a running job in it", async () => {
     await abandoned(ALICE);
-    const sweep = vi.spyOn(fsJobStore, "settleExpired");
+    const sweep = vi.spyOn(pgJobStore, "settleExpired");
 
     await as(ALICE, () => listJobs());
     expect(sweep).toHaveBeenCalledTimes(1);
