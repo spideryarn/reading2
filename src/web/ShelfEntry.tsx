@@ -12,6 +12,7 @@
  */
 import { useCallback, useState } from "react";
 import {
+  Archive,
   Check,
   Copy,
   ExternalLink,
@@ -20,7 +21,6 @@ import {
   MessageCircle,
   Pencil,
   RefreshCw,
-  Trash2,
 } from "lucide-react";
 import { SHARING_BADGE, SHARING_ON } from "../messages.js";
 import type { LibraryEntry } from "../types.js";
@@ -413,8 +413,16 @@ export function Actions({
       <IconButton label={copied ? "Copied" : "Copy link"} onClick={copy}>
         {copied ? <Check size={14} className="tw:text-highlight" /> : <Copy size={14} />}
       </IconButton>
-      <IconButton label="Delete" onClick={() => void shelf.archive(entry.slug)} destructive>
-        <Trash2 size={14} />
+      {/* **"Archive", and a box rather than a bin.** It said "Delete" with a
+          `Trash2` in it until 2026-09-04, over a handler that has always been
+          `shelf.archive` — and a reader filed a report asking for the archive
+          feature this already was, because nothing on screen said it was
+          reversible. The label, the icon and the red are all the same claim, so
+          all three moved: `destructive` is gone too, because red is this app's
+          word for *this cannot be undone* and undoing it is the whole design
+          (docs/project/library.md § Archive, and Undo is the confirmation). */}
+      <IconButton label="Archive" onClick={() => void shelf.archive(entry.slug)}>
+        <Archive size={14} />
       </IconButton>
     </div>
   );

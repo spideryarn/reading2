@@ -57,6 +57,55 @@ before the deploy and folds them into `body` the same way; sending both shapes a
 has the reasoning, the GPT Sol review that changed five things about it, and the deploy window Greg
 accepted knowingly.
 
+## The keyboard, and the button under it
+
+> The keyboard on mobile devices should have a Done/Send button where
+> appropriate, including this Feedback dialog box.
+>
+> — Greg, 2026-09-04
+
+Filed from an installed iOS app, and the cause is more specific than the words:
+`public/site.webmanifest` is `display: standalone`, so there is **no keyboard
+accessory bar** — the strip that would otherwise carry *Done* — and the dialog's
+only send chord is ⌘/Ctrl+Enter, which a phone has no way to type. So the reader
+was in a box with Send below the keys and no way to reach it.
+
+The fix is three changes and **none of them is the Enter key**, which would
+insert a newline whatever it was labelled
+([touch.md § What the Enter key promises](touch.md#what-the-enter-key-promises)):
+
+- **`.fb-panel` stopped scrolling as a whole.** The header and the buttons are
+  pinned and only `.fb-scroll` between them moves — `.cmt-dialog`'s shape, for
+  `.cmt-dialog`'s reason: when the whole box scrolls, the things a reader aims at
+  are content, and content scrolls away. `tests/feedback-dialog.test.tsx` holds
+  the DOM shape. This is the part that makes a short panel usable at all, and it
+  is engine-independent.
+- **`interactive-widget=resizes-content`** on the viewport meta in
+  [`index.html`](../../index.html), which *asks* for the keyboard to shrink the
+  *layout* viewport so that `dvh` sees the room that is actually left. It is
+  app-wide, and it had been deferred once as a change not worth making blind
+  (the note on `.cmt-dialog`); a reader hitting the consequence is what settled
+  it. **This is a Chromium fix.** WebKit's implementation bug is open
+  ([259770](https://bugs.webkit.org/show_bug.cgi?id=259770)) and iOS pans the
+  visual viewport instead, leaving `dvh` at full height.
+- **The dialogs measure `window.visualViewport` themselves** —
+  [`useVisualViewport.ts`](../../src/web/useVisualViewport.ts), which is the half
+  that does not depend on the browser honouring anything. The Feedback dialog
+  takes its `top` and `height` from the visible strip and `.fb-panel` is `90%` of
+  *that*; the three bottom-anchored panels (`.cmt-dialog`, `.chat-dialog`,
+  `.annotate-dialog`) get a `--kb-inset` that lifts them and shortens them by
+  however much is hidden. `tests/visual-viewport-dialogs.test.tsx` drives it with
+  a fake viewport.
+
+**Nobody has yet watched any of this on a phone.** What *has* been measured, in
+Chrome on 2026-09-04, is the sizing the third change rests on: `.fb-panel` came
+out at 900px in a 1000px window and at 306px once the dialog was given the
+340px-tall strip a keyboard leaves — 90% of each, with the buttons inside the
+strip both times. That proves the box model, not the phone: a desktop window is
+not iOS, where the layout viewport does not shrink at all. Until somebody opens
+the installed app and reports back, this is a fixed Chromium case and a reasoned
+iOS one.
+
 ## Where it came from
 
 Greg asked for it on 2026-08-31:

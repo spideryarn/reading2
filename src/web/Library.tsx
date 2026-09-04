@@ -550,6 +550,17 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
           type="search"
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          /* The shelf filters as you type, so Enter has no search left to run —
+             what it does is put the phone's keyboard away, which is what the
+             reader pressed it for. Without the blur the key would be a promise
+             with nothing behind it. */
+          enterKeyHint="search"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+          }}
           placeholder="Search titles, authors, and the text of every article"
           aria-label="Search the library"
           /* A ring as well as a border colour on focus. A 1px border changing
@@ -763,13 +774,17 @@ function marked(text: string, query: string) {
 /**
  * The other half of the shelf, behind a disclosure.
  *
- * Without this, Delete is **permanent from the interface**: the Undo strip is
+ * Without this, Archive is **permanent from the interface**: the Undo strip is
  * gone after nine seconds and there is no other way back to an archived
  * article. Greg chose "archive, with an Undo" over a real delete precisely so
  * that nothing is destroyed — and an archive nobody can open is destruction
  * with extra steps. The plan deferred this ("a separate 'Show archived' view
  * can come later"); a cross-family review pointed out that "later" left the
  * feature contradicting its own reason for existing.
+ *
+ * **The words here said "deleted" until 2026-09-04**, over an act that has
+ * always archived. docs/project/library.md § Archive, and Undo is the
+ * confirmation has the report that made us change them.
  *
  * Closed by default, and it does not fetch until opened: most sessions never
  * archive anything, and a request per homepage load to say "nothing here" is a
@@ -807,14 +822,14 @@ function Archived({ shelf }: { shelf: ReturnType<typeof useShelf> }) {
           size={13}
           className={`tw:transition-transform ${open ? "tw:rotate-90" : ""}`}
         />
-        {open ? "Hide deleted" : "Show deleted"}
+        {open ? "Hide archived" : "Show archived"}
       </button>
 
       {open && archived === null && (
         <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">Looking…</p>
       )}
       {open && archived?.length === 0 && (
-        <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">Nothing deleted.</p>
+        <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">Nothing archived.</p>
       )}
       {open && !!archived?.length && (
         <ul className="tw:m-0 tw:mt-3 tw:flex tw:list-none tw:flex-col tw:gap-2 tw:p-0">
@@ -848,12 +863,12 @@ function UndoStrip({ title, onUndo }: { title: string; onUndo: () => void }) {
   return (
     <div
       /* `status`, not `alert`: a screen reader should hear this when it gets to
-         it rather than have the current sentence interrupted. Deleting was the
-         reader's own act, so it is a confirmation, not an emergency. */
+         it rather than have the current sentence interrupted. Archiving was
+         the reader's own act, so it is a confirmation, not an emergency. */
       role="status"
       className="tw:mb-3 tw:flex tw:items-center tw:gap-3 tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-4 tw:py-2 tw:text-sm tw:text-foreground"
     >
-      <span className="tw:min-w-0 tw:flex-1 tw:truncate">Deleted “{title}”</span>
+      <span className="tw:min-w-0 tw:flex-1 tw:truncate">Archived “{title}”</span>
       <button
         type="button"
         onClick={onUndo}

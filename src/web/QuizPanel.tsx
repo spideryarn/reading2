@@ -260,12 +260,16 @@ export function QuizPanel({
   };
 
   const submit = () => {
-    /* **Not while a transcript is on its way.** `readOnly` stops typing and
-       nothing else, so this button is still live during the two seconds between
-       the reader stopping and the good words arriving — and marking the
-       recogniser's rough guess is the one outcome the two-pass design must not
-       produce. The same guard chat's composer carries, for the same reason. */
-    if (dictate.readOnly || !question) return;
+    /* **Not while the microphone is involved, and that is two states.**
+       `readOnly` stops typing and nothing else, so this button is still live
+       during the two seconds between the reader stopping and the good words
+       arriving; `armed` is the microphone actually recording, which is the
+       likelier press here of the two — this is the box a reader is *told* to
+       talk into. Marking the recogniser's rough guess is the one outcome the
+       two-pass design must not produce, and it would be marked as the reader's
+       own answer. The same pair chat's composer carries, for the same reason.
+       docs/project/dictation.md § Adding it to a box. */
+    if (dictate.readOnly || dictate.dictation.armed || !question) return;
     const answer = typed.trim();
     if (answer === "" || tooLong || marking || owner.stale) return;
     void owner.mark(question.id, answer);
@@ -357,8 +361,19 @@ export function QuizPanel({
                     /* Disabled on an empty answer, while one is in flight, and on
                        a stale quiz — all three of which the server would refuse
                        anyway (400, one-live-request, 409). Disabling is the
-                       courtesy; the route is the rule. */
-                    disabled={!typed.trim() || tooLong || marking || owner.stale}
+                       courtesy; the route is the rule.
+
+                       And on both microphone states, which nothing else would
+                       refuse: `submit` returns silently there, so a lit button
+                       would be a press that marks nothing and says nothing. */
+                    disabled={
+                      !typed.trim() ||
+                      tooLong ||
+                      marking ||
+                      owner.stale ||
+                      dictate.readOnly ||
+                      dictate.dictation.armed
+                    }
                     onClick={submit}
                   >
                     {/* *Try again* only where trying the same thing again is
