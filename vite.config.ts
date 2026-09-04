@@ -459,6 +459,11 @@ export default defineConfig(() => {
        minified frame while insisting the upload succeeded. */
     define: {
       __SPIDERYARN_BUILD_COMMIT__: JSON.stringify(stamp.commit),
+      /* And when, so /admin can say how old the bundle it is drawn by is
+         without asking the network — the same field `dist/build.json` and
+         `/api/health` carry, from the same `stamp`. Informational only, never
+         asserted against anything: scripts/build-stamp.ts § `builtAt`. */
+      __SPIDERYARN_BUILD_TIME__: JSON.stringify(stamp.builtAt),
     },
     build: {
       /* `"hidden"` rather than `true`: the maps are emitted and uploaded, but

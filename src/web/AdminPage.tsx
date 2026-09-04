@@ -31,11 +31,13 @@ import { throttle, useQueryState } from "nuqs";
 
 import type { AdminUser } from "../admin.js";
 import { ADMIN_CHIP_ORDER, ADMIN_DEFAULT_BY, adminColumns } from "./admin-columns.js";
+import { buildCommit, buildTime, shortCommit } from "./build-stamp.js";
 import { DataTable, naturalDirections, SortChips, useSortedTable } from "./lib/DataTable.js";
 import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { adminByParam, sortDirParam } from "./params.js";
+import { exactly, timeAgo } from "./relative-time.js";
 import { ADMIN_FEEDBACK_HREF, ADMIN_HREF, ADMIN_USERS_HREF, LIBRARY_HREF } from "./router.js";
 import { FeedbackCard } from "./AdminFeedbackList.js";
 import { useAdminFeedback } from "./useAdminFeedback.js";
@@ -123,6 +125,70 @@ function Entry({
 }
 
 /**
+ * **When this went live** — the one question /admin could not answer.
+ *
+ * Greg, 2026-09-04: *"indicate somewhere in /admin exactly when the last deploy
+ * happened"*. Everything needed was already compiled in: `vite.config.ts`
+ * writes the commit and the build time of the bundle into it, from the stamp
+ * `scripts/build-stamp.ts` resolves for the client, the API function and the
+ * Sentry release alike.
+ *
+ * **So this asks nothing over the network**, which is what makes it worth
+ * having: no request to fail, no second opinion to reconcile, and no way for it
+ * to be right about a deployment other than the one drawing the page.
+ * `/api/health` reports the serverless half's own stamp, and `scripts/deploy.ts`
+ * is what compares the two — this line is for a person, not a check.
+ *
+ * **It says "Built", not "Deployed", and the difference is not pedantry.** GPT
+ * Sol, reviewing this, was right that a compile time overclaims in three
+ * ordinary cases, and the wording is the fix for all three: a tab left open
+ * across a deploy goes on reporting the build it loaded with; Vercel compiles
+ * and then promotes, a minute or two later; and an instant rollback restores an
+ * older build carrying its own older stamp, so the moment of the rollback is
+ * nowhere in this line. Fetching `/api/health` instead would fix only the first
+ * of those, at the price of a request that can fail. What the line does answer,
+ * exactly, is **which bundle you are looking at and how old it is** — which is
+ * what "was my change in this?" needs.
+ *
+ * `null` off a build — vitest, and the dev server, which despite Vite's docs
+ * does not apply `define` here: served modules on `npm run dev` still carry the
+ * bare identifiers, checked against this repo's own dev server on 2026-09-04
+ * (Vite 8.2.2, rolldown) by fetching `/src/web/build-stamp.ts` from it. It says
+ * so rather than drawing an em dash: "no stamp" and "stamp unreadable" are
+ * different things to whoever is standing in front of it.
+ */
+function BuildStampLine() {
+  const now = useNow();
+  const commit = buildCommit();
+  const builtAt = buildTime();
+  const ago = timeAgo(builtAt ?? undefined, now);
+
+  if (!commit && !ago) {
+    return (
+      <p className="tw:mt-10 tw:text-xs tw:text-ink-faint">
+        Running unbuilt — nothing compiled this page, so there is no build to name.
+      </p>
+    );
+  }
+
+  return (
+    <p
+      className="tw:mt-10 tw:text-xs tw:text-ink-faint"
+      title={[
+        builtAt ? `Compiled ${exactly(builtAt)}` : "This bundle carries no build time",
+        commit ? `commit ${commit}` : "no commit stamp",
+        "This is the build this tab is running — reload to ask again. Vercel promotes a " +
+          "build a minute or two after compiling it, and a rollback restores an older one " +
+          "carrying its own older stamp.",
+      ].join(" · ")}
+    >
+      Built {ago ?? "at an unknown time"}
+      {commit ? ` · ${shortCommit(commit)}` : ""}
+    </p>
+  );
+}
+
+/**
  * `/admin` — the index.
  *
  * It exists rather than redirecting to `/admin/users` because Greg asked for the
@@ -154,6 +220,7 @@ export function AdminHome() {
           blurb="Bug reports readers filed with the Feedback button, newest first"
         />
       </ul>
+      <BuildStampLine />
     </Shell>
   );
 }

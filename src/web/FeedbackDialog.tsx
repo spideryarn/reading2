@@ -104,13 +104,13 @@ import {
   type FeedbackKind,
 } from "../types.js";
 import type { FeedbackDiagnosticsV1 } from "../feedback-payload.js";
+/** The stamp the release and the source maps went up under, if this is a build. */
+import { buildCommit } from "./build-stamp.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { collectFeedbackDiagnostics } from "./feedback-diagnostics.js";
 import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./feedback-screenshot.js";
 import { apiFetch, failure } from "./lib/api.js";
 import { useDictationField } from "./useDictationField.js";
-
-declare const __SPIDERYARN_BUILD_COMMIT__: string;
 
 /** Where the reader is: the address bar, and the article if there is one. */
 export interface FeedbackWhere {
@@ -259,11 +259,6 @@ function reportBody(input: {
     diagnostics: input.diagnostics,
     screenshot: input.screenshot,
   };
-}
-
-/** The stamp the release and the source maps went up under, if this is a build. */
-function buildCommit(): string | null {
-  return typeof __SPIDERYARN_BUILD_COMMIT__ === "string" ? __SPIDERYARN_BUILD_COMMIT__ : null;
 }
 
 export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
