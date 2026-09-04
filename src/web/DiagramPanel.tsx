@@ -95,11 +95,34 @@ import { useSketchCaption } from "./useSketch.js";
 import { ILLUSTRATED_PRICE, ILLUSTRATED_WAIT, IllustratedView } from "./IllustratedView.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 
+/**
+ * **Who is reading, and therefore what may be bought.**
+ *
+ * A discriminated union rather than an `isOwner: boolean`, and that is not
+ * style. Three hooks in this panel fetch, two of them spend, and a boolean
+ * threaded through a 1700-line component is one `!` away from buying
+ * embeddings on a stranger's behalf. A union makes the visitor arm carry *no
+ * capability at all* — the same reasoning `ReaderCapability` and
+ * `QuotesAccess` are built on (src/web/reader-capability.ts), and GPT Sol's
+ * recommendation when it reviewed this stage.
+ *
+ * **The visitor arm is what pins `kind` to `force`**, and that is the whole
+ * safety property: `force` is the only picture that draws from the tree the
+ * page already holds. `drift` and `trail` need `useProjection`'s POST to draw
+ * anything, and `sketch` and `illustrated` mount children that auto-run a job.
+ * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2.
+ */
+export type DiagramAccess = { kind: "owner" } | { kind: "visitor" };
+
 interface Props {
+  access: DiagramAccess;
   /**
    * Which article. Used for exactly one thing — asking the server for the
    * embedding model's view of it (`useSimilar`), which only the Force picture
    * wants. Everything else this panel draws comes from `root` and `blocks`.
+   *
+   * **A visitor's panel asks for nothing at all**, so for them this is unused —
+   * see `access`.
    */
   slug: string;
   /** The tree, numbered and joined to block ranges. Null if the tree is unusable. */
@@ -500,8 +523,36 @@ function useReaderRow(enabled: boolean): [number | null, (row: number) => void] 
   return [enabled ? row : null, assume];
 }
 
-export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, axis, onAxis, hue, onHue }: Props) {
+export function DiagramPanel({
+  access,
+  slug,
+  root,
+  kind: askedKind,
+  onKind,
+  atRow,
+  onJump,
+  blocks,
+  axis,
+  onAxis,
+  hue,
+  onHue,
+}: Props) {
   useRenderCount("DiagramPanel");
+  const owns = access.kind === "owner";
+  /**
+   * **What a visitor is actually shown, whatever `?diagram=` says.**
+   *
+   * Hiding the paid chips is not enough and was never going to be: `kind` is
+   * ordinary query state, so a pasted `?mode=diagram&diagram=trail` — or the
+   * Back button onto one — walks straight past a filtered chip row. Pinning the
+   * value here is the one place that cannot be got round, and it is the same
+   * *degrade to something real* rule `params.ts` already applies to a kind it
+   * does not recognise.
+   *
+   * `askedKind` is deliberately not read anywhere else in this component.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2.
+   */
+  const kind: DiagramKind = owns ? askedKind : "force";
   /**
    * **Nothing is collapsed, and nothing can be.**
    *
@@ -719,7 +770,14 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
      what it will do. So the gate is narrow on purpose: `force`, which is the
      picture Greg asked to put the dotted lines on, and nothing else. See
      useSimilar.ts. */
-  const similar = useSimilar(slug, drawable && kind === "force");
+  /* **`owns &&` first, and it is the gate rather than a belt.** Force is the
+     default picture, so merely opening `?mode=diagram` fires this POST — it is
+     the one fetch in the reading view a reader can start without pressing
+     anything that says what it will do. A visitor must issue it never. The
+     picture is still drawn: `similar.pairs` stays the shared empty array while
+     the hook is idle, and `buildGraph` takes it as an argument, so what a
+     visitor loses is the dotted semantic layer and nothing else. */
+  const similar = useSimilar(slug, owns && drawable && kind === "force");
   const graph = useMemo(
     () => (root && wantsGraph ? buildGraph(root, blocks, collapsed, similar.pairs) : null),
     // `wantsGraph`, NOT `kind`: there were three graph pictures when this was
@@ -744,7 +802,12 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
      is not wired up — `similar.ts` still embeds the article itself, so a cold
      Force → Drift buys them twice. ⟨Sol⟩, 2026-08-30. See useProjection.ts. */
   const wantsPoints = NEEDS_POINTS.has(kind);
-  const projection = useProjection(slug, drawable && wantsPoints);
+  /* Unreachable for a visitor anyway, because `kind` is pinned to `force`
+     above and `wantsPoints` is false for it — and gated here regardless. Two
+     independent reasons a POST cannot happen is the right number for a request
+     that spends: the pin is a product rule and could be relaxed by somebody who
+     has not read this line. */
+  const projection = useProjection(slug, owns && drawable && wantsPoints);
 
   /* **The Sketch's own caption, for the Sketch chip's card** — one GET, no
      model call, and the only fetch here with no `enabled` argument: there is no
@@ -756,7 +819,15 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
 
      `useSketchCaption`, never a second `useSketch`: that hook carries the
      auto-runner, and a hover card must not be able to start a $0.20 draw. */
-  const sketchCaption = useSketchCaption(slug);
+  /* **The third fetch, and the one an audit of the other two misses.** It has
+     no `enabled` argument of its own — there is no purchase to gate for an
+     owner, so it never needed one — which means it is an unconditional GET to
+     an authenticated route on every mount. For a visitor that is a 401 per
+     diagram open and a request the acceptance test for this feature forbids
+     outright, so the gate is `owns` and the caption is simply absent.
+     Found by mapping the panel's hooks rather than by reading its chips.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */
+  const sketchCaption = useSketchCaption(owns ? slug : null);
 
   /* The picture's second data source, assembled only when a picture wants it.
      `axis` and `hue` are in here because they change where a dot goes and which
@@ -1362,6 +1433,18 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
           before the press rather than after it. `TooltipGroup` makes the
           neighbours open instantly once one is open, so reading along the row
           is one gesture rather than four waits. */}
+      {/* **A visitor gets no picker at all, rather than a hidden one.**
+          Every other chip is a picture they cannot have — three of them spend —
+          and a radiogroup with a single permanently-checked option is furniture
+          that says nothing. Not rendered rather than `hidden`, because
+          `tests/public-network-trace.test.tsx` asks that `[data-diag-kind]` be
+          *absent* for a visitor, and an element that is in the DOM is one a
+          later change can reveal.
+
+          `kind` is pinned to `force` above regardless, so this is the
+          presentation half of a rule enforced elsewhere; the enforcement is not
+          here. docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */}
+      {owns && (
       <div className="diag-kinds" role="radiogroup" aria-label="Which diagram">
         <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
           {DIAGRAMS.map((k) => {
@@ -1447,6 +1530,7 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
           })}
         </TooltipGroup>
       </div>
+      )}
 
       {/* **Sketch and Illustrated each replace everything below the chips,
           rather than adding a branch to each of them.** The three pictures

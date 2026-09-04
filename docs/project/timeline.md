@@ -205,21 +205,35 @@ that is already there. [`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts).
 The reader profile is not in this stage's stamp at all (§ Freshness), so this is the one of the five
 with no profile tickbox to replace and nothing extra to say about an automatic run.
 
-## Owners only, for now
+## A shared link carries it, since 2026-09-04
 
-[`src/web/visitor.ts`](../../src/web/visitor.ts) gives `timeline` an `owners-only` policy — stated
-deliberately rather than left to the fail-closed fall-through it had until 2026-09-02, so that *private because somebody decided* is
+[`src/web/visitor.ts`](../../src/web/visitor.ts) gives `timeline` an **`artefact`** policy, so a
+visitor of a public article reads the timeline the owner built, and is told *nobody has built one*
+when there is none. It was `owners-only` until then — stated deliberately rather than left to the
+fail-closed fall-through it had until 2026-09-02, so that *private because somebody decided* stayed
 distinguishable from *private because somebody forgot*. Greg, 2026-08-31:
 
 > it would be nice to have the option for this to be Public-readable, but that could be a follow-up.
 > Ideally we'd come up with a general, reusable/applicable design for new features such that it's
 > fairly easy for them all to be made Public-readable.
 
-Making one mode visitor-visible currently touches five places, four of them hand-written tables a
-new feature has to be *remembered* into — the same shape as the `revision_step_runs` CHECK
-constraint, which was forgotten three times before a test was written to catch it. So the useful
-question for that follow-up is not "how do we make Timeline public" but **"why is a mode's public
-face not derived from one declaration?"**
+**This is that follow-up, and it did not need the general design.** What made timeline different was
+not the cost — reading `article_revisions.timeline` never cost anything, and only *generating* one
+spends — but that the payload carried no flag, so a visitor could only be told *this belongs to
+whoever added the article*, never which of the two it was. Adding the flag is the same nine-step
+path the glossary, the ideas and the quotes already take, and
+[260904c](../plans/260904c-more-modes-on-a-shared-link.md) walks it.
+
+The question that section used to end on still stands and is still worth asking — **"why is a mode's
+public face not derived from one declaration?"** — but it is now a tidying job rather than a blocker,
+because the five places are five *compile errors*: `PublicArtefacts`, `shareableArtefacts` and
+`POLICY` are total records, so a mode added next month stops the build until somebody decides.
+
+**A signed-out reader still gets no button for it**, and that is the experimental switch rather than
+this policy: Timeline is behind experimental features and a signed-out reader is `experimental:
+false` by decision. They reach it by a shared `?mode=timeline` URL and from the visitor's metadata
+page, which lists it. Greg accepted that on 2026-09-04 rather than inherit it.
+[experimental-features.md](experimental-features.md).
 
 ## See also
 

@@ -748,6 +748,7 @@ describe("the chip in the diagram row", () => {
     await act(async () => {
       root.render(
         <DiagramPanel
+          access={{ kind: "owner" }}
           slug="s" root={tree} kind="force" onKind={() => {}} atRow={0} onJump={() => {}}
           blocks={blocks} axis="spread" onAxis={() => {}} hue="section" onHue={() => {}}
         />,
@@ -778,6 +779,7 @@ describe("the chip in the diagram row", () => {
       await act(async () => {
         root.render(
           <DiagramPanel
+            access={{ kind: "owner" }}
             slug="s" root={tree} kind={kind} onKind={() => {}} atRow={0} onJump={() => {}}
             blocks={blocks} axis="spread" onAxis={() => {}} hue="section" onHue={() => {}}
           />,
@@ -843,6 +845,7 @@ describe("the chip in the diagram row", () => {
     await act(async () => {
       root.render(
         <DiagramPanel
+          access={{ kind: "owner" }}
           slug="s" root={tree} kind="force" onKind={() => {}} atRow={0} onJump={() => {}}
           blocks={blocks} axis="spread" onAxis={() => {}} hue="section" onHue={() => {}}
         />,
@@ -856,6 +859,7 @@ describe("the chip in the diagram row", () => {
     await act(async () => {
       root.render(
         <DiagramPanel
+          access={{ kind: "owner" }}
           slug="s" root={tree} kind="illustrated" onKind={() => {}} atRow={0} onJump={() => {}}
           blocks={blocks} axis="spread" onAxis={() => {}} hue="section" onHue={() => {}}
         />,
@@ -888,6 +892,7 @@ describe("the chip in the diagram row", () => {
     await act(async () => {
       root.render(
         <DiagramPanel
+          access={{ kind: "owner" }}
           slug="s" root={tree} kind="force" onKind={() => {}} atRow={0} onJump={() => {}}
           blocks={blocks} axis="spread" onAxis={() => {}} hue="section" onHue={() => {}}
         />,

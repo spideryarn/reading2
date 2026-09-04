@@ -1719,6 +1719,14 @@ export interface PublicArtefacts {
   glossary: boolean;
   ideas: boolean;
   quotes: boolean;
+  /**
+   * **The sixth, since 2026-09-04.** Timeline was owners-only by decision
+   * rather than by cost — `GET /api/timeline/:slug` is a plain read of one
+   * `jsonb` column and the only paid step is generating it — and Greg asked for
+   * it on a shared link.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md.
+   */
+  timeline: boolean;
 }
 
 export interface ArticleSharing extends VisibilityState {

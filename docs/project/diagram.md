@@ -1917,6 +1917,44 @@ that could still hold a hash — getting that wrong deletes a picture somebody i
 looking at. Named here so the next person knows it was decided rather than
 forgotten.
 
+## A visitor gets Force, and only Force
+
+Since 2026-09-04 a signed-out reader of a Public-readable article can open this mode.
+[260904c](../plans/260904c-more-modes-on-a-shared-link.md) § Stage 2, and
+[`src/web/visitor.ts`](../../src/web/visitor.ts) now gives `diagram` an **`available`** policy where
+it had `owners-only`.
+
+**What made this the one judgement call in that table** was never the band — the default picture is
+drawn from the tree already on the page and costs nothing — but the panel, which mounts hooks that
+POST. Force is the default, so *merely opening* `?mode=diagram` bought embeddings. The carve-out was
+recorded as "real work and not slice 1a's", and it turned out to be a prop:
+[`DiagramPanel`](../../src/web/DiagramPanel.tsx) takes a `DiagramAccess` union, and the visitor arm
+
+- **pins `kind` to `force`**, in the component, whatever `?diagram=` says;
+- **turns off all three fetching hooks** — `useSimilar`, `useProjection` and `useSketchCaption`;
+- **renders no picker at all**, rather than a hidden one.
+
+**The pin is the gate; the missing picker is only presentation.** `?diagram=` is ordinary query
+state, so a pasted `?diagram=trail` — or the Back button onto one — names a picture without pressing
+anything. `tests/public-network-trace.test.tsx` asserts, once per kind, that arriving at each of the
+five buys nothing; removing the pin turns `sketch` and `illustrated` red, which was checked rather
+than assumed.
+
+**`useSketchCaption` is the one an audit of the other two misses**, and it is worth knowing why. It
+had no `enabled` argument at all — for an owner there is no purchase to gate, so it never needed
+one — which made it an unconditional GET to an authenticated route on every mount of this panel. It
+now takes `string | null` and issues no request for `null`, rather than catching the 401, for the
+reason [silent-success.md](../reusable/silent-success.md) gives: catching it is the right answer
+with the wrong reasoning, and stops being the right answer the day the gate moves.
+
+**What a visitor loses** is the dotted semantic layer over Force, which is what `useSimilar` buys.
+`similar.pairs` is a shared empty array while the hook is idle and `buildGraph` takes it as an
+argument, so the hierarchy, sequence, anchor and vocabulary edges all draw as usual.
+
+**And they get no button for it**, because Diagram is behind experimental features and a signed-out
+reader is `experimental: false` by decision — so this is reached by a shared `?mode=diagram` URL.
+[experimental-features.md](experimental-features.md).
+
 ## What is deliberately not here
 
 <a id="not-doing"></a>

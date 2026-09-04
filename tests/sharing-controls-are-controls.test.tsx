@@ -70,6 +70,7 @@ const AVAILABLE: PublicArtefacts = {
   glossary: true,
   ideas: false,
   quotes: true,
+  timeline: true,
 };
 
 const PRIVATE: ArticleSharing = {

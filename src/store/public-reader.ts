@@ -275,6 +275,17 @@ const PUBLIC_PROJECTIONS = {
     ideas: articleRevisions.ideas,
     quotes: articleRevisions.quotes,
     tweets: articleRevisions.tweets,
+    /* **The sixth, and it is on the same row** — `article_revisions.timeline`
+       is a `jsonb` column like the four above it, so a visitor gets the
+       timeline for no extra query either.
+       docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1.
+
+       **Leaving a line out of this list is the one silent failure in the whole
+       public path**: the value arrives `undefined`, the reader hands `null` to
+       the projection, the key is absent, and the article reports itself as
+       never having had a timeline. Nothing goes red anywhere.
+       tests/public-projection-columns.test.ts is what would. */
+    timeline: articleRevisions.timeline,
   },
   /**
    * **Enough to fill in a `<head>`, and deliberately not enough to render.**
@@ -490,6 +501,7 @@ export const pgPublicReader: PublicArticleReader = {
         ideas: found.revision.ideas,
         quotes: found.revision.quotes,
         tweets: found.revision.tweets,
+        timeline: found.revision.timeline,
       });
     });
   },

@@ -38,6 +38,7 @@ const NOTHING: PublicArtefacts = {
   glossary: false,
   ideas: false,
   quotes: false,
+  timeline: false,
 };
 const EVERYTHING: PublicArtefacts = {
   arc: true,
@@ -45,18 +46,23 @@ const EVERYTHING: PublicArtefacts = {
   glossary: true,
   ideas: true,
   quotes: true,
+  timeline: true,
 };
 
 const keys = (items: InventoryItem[]): string[] => items.map((i) => i.key);
 
 /**
- * **The five rows that appear or do not according to a flag**, and which flag
+ * **The six rows that appear or do not according to a flag**, and which flag
  * each one reads.
  *
- * Written out rather than derived from `PublicArtefacts`, because three of them
+ * Written out rather than derived from `PublicArtefacts`, because four of them
  * are mode rows reached through `visitorGap`'s own table and two are hand-added
  * beside it — so this is the mapping under test, not a restatement of it. A
- * sixth artefact reaching the wire wants a line here.
+ * seventh artefact reaching the wire wants a line here.
+ *
+ * `timeline` is the sixth, since 2026-09-04. It was in `OWNERS_ONLY` below
+ * until then, which is the line that moved.
+ * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1.
  */
 const FLAG = {
   glossary: "glossary",
@@ -64,6 +70,7 @@ const FLAG = {
   quotes: "quotes",
   arc: "arc",
   tweets: "tweets",
+  timeline: "timeline",
 } as const satisfies Record<string, keyof PublicArtefacts>;
 const ROWS = Object.keys(FLAG) as (keyof typeof FLAG)[];
 
@@ -137,7 +144,7 @@ describe("the sweep over the modes", () => {
      been generated. Written out rather than derived, deliberately: this is the
      test asserting the policy, and a test that derives its expectation from the
      code under test asserts nothing. */
-  const OWNERS_ONLY: Mode[] = ["chat", "search", "remember", "referee", "diagram", "timeline"];
+  const OWNERS_ONLY: Mode[] = ["chat", "search", "remember", "referee", "diagram"];
   it.each(OWNERS_ONLY)("keeps %s with the owner whatever exists", (mode) => {
     expect(keys(sharedInventory(NOTHING).withheld)).toContain(mode);
     expect(keys(sharedInventory(EVERYTHING).withheld)).toContain(mode);
@@ -218,6 +225,7 @@ const WIRE_ROW = {
   ideas: "ideas",
   quotes: "quotes",
   tweets: "tweets",
+  timeline: "timeline",
 } satisfies Record<keyof PublicArticle, string>;
 
 describe("the list against the wire", () => {
@@ -237,6 +245,7 @@ describe("reading the flags off the wire", () => {
       glossary: true,
       ideas: true,
       quotes: true,
+      timeline: true,
     };
     expect([...ARTEFACT_KEYS].sort()).toEqual(Object.keys(probe).sort());
   });
@@ -310,6 +319,7 @@ describe("what counts as shareable", () => {
     const available = shareableArtefacts({
       arc: null,
       tweets: null,
+      timeline: null,
       glossary: STALE,
       ideas: null,
       quotes: null,
@@ -325,6 +335,7 @@ describe("what counts as shareable", () => {
     const empty = shareableArtefacts({
       arc: null,
       tweets: null,
+      timeline: null,
       glossary: { ...STALE, entries: [] },
       ideas: null,
       quotes: null,
@@ -333,6 +344,7 @@ describe("what counts as shareable", () => {
     const none = shareableArtefacts({
       arc: null,
       tweets: null,
+      timeline: null,
       glossary: null,
       ideas: null,
       quotes: null,

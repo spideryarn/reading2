@@ -173,6 +173,7 @@ function Band({ width, children, label }: { width: number; label: string; childr
 
 const panel = (slug: string, kind: "force" | "drift") => (
   <DiagramPanel
+    access={{ kind: "owner" }}
     slug={slug}
     root={ROOT}
     kind={kind}

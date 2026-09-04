@@ -116,8 +116,16 @@ const NONE: PublicArtefacts = {
   glossary: false,
   ideas: false,
   quotes: false,
+  timeline: false,
 };
-const ALL: PublicArtefacts = { arc: true, tweets: true, glossary: true, ideas: true, quotes: true };
+const ALL: PublicArtefacts = {
+  arc: true,
+  tweets: true,
+  glossary: true,
+  ideas: true,
+  quotes: true,
+  timeline: true,
+};
 
 /* The nouns as the list renders them: `NOUN` is written for the middle of a
    sentence and the page capitalises the first letter. Derived here rather than
