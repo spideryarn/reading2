@@ -1421,6 +1421,30 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`cli-ledger.ts` import its page-cap siblings have, and no paid call is made so no ledger " +
       "row is written. Re-run witness 2 to confirm.",
   },
+  /**
+   * **The mock is the whole answer here**, and it is worth a line because the
+   * static reach looks alarming and is not. The graph walks
+   * `src/transcribe.ts` → `src/vocabulary-sources.ts` → `src/store/index.ts` and
+   * then fans out across the condemned filesystem modules — but this file
+   * `vi.mock`s `src/store/index.js` outright, so the hinge module is never
+   * evaluated and not one of them is ever loaded, let alone called. Witness 1
+   * buckets it `flag-selection-only` with no path that avoids a flag reader,
+   * which is the mildest reach it records.
+   */
+  "tests/feedback-dictation-vocabulary.test.tsx": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with the feedback-reports batch — it answers Greg's " +
+      "report that the Feedback dialog's microphone misspells `Spideryarn`, by pinning the two " +
+      "joins in front of the server: that the dialog hands `useDictation` a `context`, and that " +
+      "the upload puts it in the body. A jsdom React test that stubs `fetch` and mocks " +
+      "`src/store/index.js`, `src/web/lib/api.js` and `useDictation`; no database, no blobs, no " +
+      "path read. Its whole static reach is `src/transcribe.ts` importing " +
+      "`src/vocabulary-sources.ts`, which imports the store hinge this file has already " +
+      "replaced. Re-run witness 2 to confirm.",
+  },
   "tests/store-glossary-delete-pg.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
