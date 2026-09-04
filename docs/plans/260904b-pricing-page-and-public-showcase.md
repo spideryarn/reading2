@@ -362,6 +362,22 @@ rescue anybody who unshares themselves over the wall.
 - **Done:** a private article can never appear in the listing, proven by a two-owner test that was
   red first; the generated-SQL assertion is in place; sharing copy tells the truth.
 
+### Stage 3c — the copy stage 3a owed, paid late
+
+**This runs first, before 3b**, because it is the one item where the app is saying something that is
+not true rather than merely missing a feature. `src/messages.ts` was fenced by a neighbouring session
+when 3a landed, so the listing shipped and the promise did not change with it.
+
+- `SHARING_ON` stops promising reachability-by-link only. Its two dependants
+  (`SHARING_MARK_PUBLIC`, and the shelf badge's hover) inherit whatever it becomes, so length is a
+  constraint and not a preference — check the masthead mark and the badge, not just the card.
+- `sharingConfirmBody` gains the listing, and still enumerates nothing (§1): the inventory does the
+  listing, prose beside it goes stale the day saved searches land.
+- `PrivacyPage.tsx` § *Who can see your shelf* — the caveat goes **inside** the "anyone with the
+  link" sentence, not after it, per the neighbouring worktree's handover.
+- **Done:** no surface tells an owner that sharing is link-only, and the four constants still read as
+  one voice rather than four near-misses.
+
 ### Stage 3b — `/read/public`
 
 - `/read/public` matched before `/read/:slug` in the client **and** the edge (§3), after the
@@ -379,6 +395,13 @@ rescue anybody who unshares themselves over the wall.
   keeps the `article_visibility_changes` rights row honest — a raw SQL flip would not).
 - Showcase links driven by the listing, so an unshared article leaves no dead link.
 - **Pre-deploy gate:** the count of non-Greg public rows in production (§1).
+- **Which articles to flip is a content decision with a technical constraint.** As of `8f752885` a
+  visitor's Diagram shows the **Sketch**, and `sketch` is not in `DEFAULT_INGEST_STEPS` — so most
+  articles have never had one drawn and their Diagram mode tells a stranger *"Nobody has drawn this
+  one yet."* A showcase article whose headline mode is empty is a showcase that argues against us.
+  The flag is on the wire as `PublicArtefacts.sketch`, so this can be checked rather than guessed.
+  The listing card does **not** carry artefact flags and should not start: a card advertising what a
+  piece has is a second projection to keep in step with the reader.
 
 ### Stage 5 — a public article counts half
 
@@ -416,6 +439,76 @@ people to say yes, and stage 3 is simultaneously widening what sharing *means* f
 link" to "listed publicly". Both dials move the same way at once. Fable was asked for a straight
 answer on whether that is a genuine problem; whatever it says goes in the log here, and if it is a
 problem the answer is a product decision for Greg, not a mitigation an agent picks.
+
+#### The banner, added 2026-09-04
+
+Greg, after the mechanics above were worked out:
+
+> Perhaps we could also add a banner for free users who have hit their 3-article quota, e.g. along
+> the lines of *"If you are willing to make some of these articles Public-readable, then they only
+> count as half-an-article towards your 3-article quota"* or something like that, but better-worded
+> and more fully explained. Use your judgment about copy and placement, with input from Fable if
+> needed, then consider it approved.
+
+**It cannot ship before the rule it describes**, so it is part of this stage and not a separate one.
+A banner offering a discount the code does not give is the same class of fault as stage 3c's.
+
+**The shape is already in the tree, and it is not a banner.** `src/web/QuotaNotice.tsx` renders every
+ingest refusal in four places from one component, and already chooses a different remedy per
+refusal code with no `default` arm. So this is a second thing that component can say, not a new
+surface — which also means it inherits the four placements for free rather than three of them
+forgetting it.
+
+**Fable answered on 2026-09-04, and the answer changed the shape of it. It is not a banner.**
+
+`QuotaNotice` stays untouched. The offer is **one conditional sentence inside the server's own
+refusal**, appended by `ingestQuotaReached` — which means all four placements inherit it rather than
+three of them forgetting it, and there is still one link per refusal, which is that component's own
+rule. A standalone banner component is cut.
+
+- **`pay-free` and `pay-limit` get it. `pay-lapsed` does not**, and the reason is arithmetic rather
+  than tone: the lifetime count includes the paid months, so a lapsed reader with forty charged rows
+  is eighty half-units against a budget of six and cannot share their way under the wall. The offer
+  would be false for almost everybody who saw it, and they already have a real remedy.
+- **It is conditional on a number the server computed**, never unconditional. The same usage query
+  can count the charged rows that resolve to a currently-private article, so the sentence appears
+  only when sharing would actually make room — which is what stops it being shown to the reader who
+  has already shared everything, and to the reader whose rows all predate the discount and cannot be
+  cheapened at all. **Copy cannot rescue a false offer; conditionality has to.**
+- **The number is computed, never written into the prose.** No surface says "6 public articles" as a
+  literal.
+
+**And two rules about where money may appear, which are the answer to the ethical question.** Fable's
+verdict is that the worry is real, small, and fixable by placement rather than by delay:
+
+- **Money never appears inside the sharing confirmation.** The rights tick-box is not a rights
+  *check* — it moves responsibility onto the owner, and the platform's actual protection is that plus
+  the takedown route. A discount printed beside it makes the inducement ours and weakens exactly
+  that.
+- **Unsharing is never harder than sharing.** This is the sharper half, and it inverts what the
+  mechanics section assumed: the unshare warning is a *statement of consequence*, not a gate with a
+  tick-box, because a cost attached to taking something down is a cost attached to acting on a
+  complaint. It says the number, says that reading is never limited, and asks for no confirmation
+  beyond the one already there.
+- **Ordering, and it is the order already planned:** the widened meaning of public must be in
+  `SHARING_ON` and the confirmation *before* the discount ships, never after. Stage 3c, then 5.
+
+#### The one question in it that turned out not to need Greg — settled by reading the wall
+
+Fable's first point was that *"6 public articles"* might be false: under a wall of
+`used + cost <= budget`, a free account at five shared articles is refused its sixth, because the new
+article is private at add time and costs 2. Two readings of the wall, two different promises, and it
+looked like a product call.
+
+It is not: the existing rule is `used + inFlight < limit`
+([`pg-billing.ts` § `refusalFor`](../../src/store/pg-billing.ts)), and doubling both sides gives
+`usedHalves + inFlightHalves < limit * 2`. So the half-unit version is the **unchanged** comparison,
+not a new choice — and under it Greg's sentence is literally true: five shared is `5 < 6`, the sixth
+add is admitted, and at six shared `6 < 6` is false. The reader can sit one article over the line
+between adding and sharing, which is the same slack the rule has always had.
+
+Written down because the arithmetic is not obvious from either sentence, and the next person to read
+`refusalFor` will wonder whether the `<` was considered.
 
 **Done looks like:** one authoritative place computes the cost of an article, every surface that
 states a number agrees with it, and a test proves that sharing and unsharing move the count in both
