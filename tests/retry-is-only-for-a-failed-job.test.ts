@@ -372,7 +372,7 @@ describe("retrying a job", () => {
    * **A failure that cannot come out differently is refused too**, which is the
    * server agreeing with the button rather than being more permissive than it.
    *
-   * `stageFailure("ours", …)` is what a stage throws when another attempt asks
+   * `stageFailure("ours", { generic })` is what a stage throws when another attempt asks
    * the same question and gets the same answer — no source URL, a tree that does
    * not fit its blocks. `jobWorthRetrying` is what the card reads, and it is now
    * what this reads.
@@ -382,7 +382,7 @@ describe("retrying a job", () => {
     const failed = await runToTheEnd(slug, ["fetch"], {
       bodies: () => ({
         fetch: () => {
-          throw stageFailure("ours", `No source URL for "${slug}".`);
+          throw stageFailure("ours", { generic: `No source URL for "${slug}".` });
         },
       }),
     });

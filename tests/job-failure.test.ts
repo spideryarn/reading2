@@ -32,6 +32,7 @@ import {
   canRetry,
   MODEL_REFUSED,
   providerHttpFailure,
+  stepGaveUp,
 } from "../src/messages.js";
 import { sanitise } from "../src/monitoring-scrub.js";
 import { STEPS, type StepContext } from "../src/pipeline.js";
@@ -573,15 +574,57 @@ describe("which sentence the reader gets", () => {
   });
 
   it("uses the kind the throw site declared, even with no sentence", () => {
-    /* `stageFailure(kind, detail)` is the older form and most of the pipeline
-       still uses it: no reader sentence, but a real claim about retrying. The
-       generic copy has to follow that claim rather than default to retry, or a
-       reader is told to try again under a failure stored as `ours`. */
-    const err = stageFailure("ours", 'No source URL for "a-slug".');
+    /* `stageFailure(kind, { generic })` is the kind-only form and most of the
+       pipeline uses it: no reader sentence, but a real claim about retrying.
+       The generic copy has to follow that claim rather than default to retry,
+       or a reader is told to try again under a failure stored as `ours`. */
+    const err = stageFailure("ours", { generic: 'No source URL for "a-slug".' });
     const reader = readerFailureOf(err, STEP);
     expect(reader.kind).toBe("ours");
     expect(canRetry(reader.kind)).toBe(false);
     expect(reader.message).not.toContain("a-slug");
+  });
+
+  it("puts a `{ generic }` diagnostic on the log side and the generic copy on the reader's", () => {
+    /* Both halves of what the marker claims, in one test. The diagnostic is on
+       `Error.message`, which is where the log reads it and where it stops; the
+       reader gets `stepGaveUp`'s copy for the kind, with none of the
+       diagnostic's arithmetic or file references in it. */
+    const err = stageFailure("blocked", { generic: "142 pages, limit 100 — src/pdf-read.ts" });
+    expect(err.message).toBe("142 pages, limit 100 — src/pdf-read.ts");
+    const reader = readerFailureOf(err, STEP);
+    expect(reader).toEqual(stepGaveUp("blocked", STEP));
+    expect(reader.message).not.toContain("142");
+    expect(reader.message).not.toContain("src/pdf-read.ts");
+  });
+
+  /**
+   * **The test for the bug that was actually reported**, and it is a compile
+   * error rather than an assertion, because the bug was a *shape* nobody could
+   * see was wrong: `stageFailure(kind, detail)` read exactly like
+   * `stageFailure(failure, detail)`, so eight throw sites wrote a sentence for
+   * a reader and passed it to the form that keeps only the kind. One of them
+   * was the 142-page PDF this file's plan is named after.
+   *
+   * **`npm run typecheck`, not `npm test`, is what checks this.** An
+   * `@ts-expect-error` over a line that has stopped being an error is itself an
+   * error, so if the bare-string overload is ever restored this goes red with:
+   *
+   *     tests/job-failure.test.ts(NNN,5): error TS2578: Unused '@ts-expect-error' directive.
+   *
+   * Seen, by temporarily putting the deleted overload back — 2026-09-04.
+   *
+   * The body runs as well, and pins what happens if somebody writes it anyway
+   * from untyped JavaScript: **the runtime is unchanged** — the string is still
+   * the diagnostic, and it still does not reach the reader. That is the seam
+   * holding, and it is why refusing the spelling took nothing away from the
+   * log.
+   */
+  it("refuses a bare diagnostic where a reader's sentence could have gone", () => {
+    // @ts-expect-error a kind-only failure must mark its diagnostic `{ generic }` — the bare string is the form that swallowed eight reader sentences.
+    const err = stageFailure("blocked", "This PDF has 142 pages and the limit is 100.");
+    expect(err.message, "the log keeps it, as it always did").toContain("142");
+    expect(readerFailureOf(err, STEP).message).not.toContain("142");
   });
 
   it("has its own sentence for each of the four kinds", () => {
@@ -590,7 +633,7 @@ describe("which sentence the reader gets", () => {
        fall-through. What this asserts is the part the types cannot: that all
        four actually say something, and four different things. */
     const said = (["retry", "ours", "bug", "blocked"] as const).map(
-      (kind) => readerFailureOf(stageFailure(kind, "detail"), STEP).message,
+      (kind) => readerFailureOf(stageFailure(kind, { generic: "detail" }), STEP).message,
     );
     expect(new Set(said).size).toBe(4);
     for (const message of said) expect(message).toContain(STEP);

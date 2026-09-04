@@ -1350,15 +1350,14 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/remember-route.test.ts": "private-postgres",
   /* Landed with stage 3 of 260903k on 2026-09-03 and was never given a lane —
      it drives the Postgres queue, and article identity is only expressible
-     there. Filed here on 2026-09-04 by the stage that found the gate red.
-
-     **Two worktrees filed it on the same day, independently**, and the merge
-     kept both until `npm run typecheck` refused the duplicate key. They agreed
-     on the lane and differed only in where they put it, which is the useful
-     part: the guard re-derives its universe from the tree on every run, so it
-     went red in both trees for the same reason rather than staying green in one
-     of them. Its oracle is checkpoint rows it writes itself, so nothing here
-     needs the shared stack. */
+     there. Filed here on 2026-09-04 by the stage that found the gate red, and
+     independently by T-C when it arrived from `dev` and the lane guard refused
+     to stay green — which is the whole point of a guard that re-derives the
+     universe rather than reading a stored answer. Two identical entries were a
+     duplicate key and a red typecheck; this is the surviving one, in the
+     alphabetical run where a reader will look for it. It calls `pgReady` and
+     its oracle is checkpoint rows it writes itself, so the private lane is
+     right and nothing about it needs the shared stack. */
   "tests/retry-keeps-the-checkpoints.test.ts": "private-postgres",
   "tests/run-lock.test.ts": "private-postgres",
   "tests/running-slot.test.ts": "private-postgres",

@@ -1368,10 +1368,12 @@ identically. The whole story is in [260826a-toc-max-tokens.md](../postmortems/26
 are the four in [`src/messages.ts`](../../src/messages.ts) — the same four the reader-facing failure
 sentences already use — and three of them mean another go cannot help.
 
-- A stage says so at the throw site with `stageFailure(kind, detail)` — or with
+- A stage says so at the throw site with `stageFailure(kind, { generic: detail })` — or with
   `stageFailure(failure, detail)`, which says the kind *and* writes the reader's sentence
   ([`src/job-failure.ts`](../../src/job-failure.ts)). Grep for that name to see every claim the
-  pipeline makes.
+  pipeline makes. The `{ generic }` is a second claim, and since 2026-09-04 the compiler insists on
+  it: *I know the reader gets the generic copy for this kind, and that is correct*
+  ([copy.md § The seam between the two audiences](copy.md#the-seam-between-the-two-audiences)).
 - [`src/jobs.ts`](../../src/jobs.ts) copies it onto the job as `failureKind`, beside the message it
   already copies. On the job and not on the step, because Retry is a job-level action and the runner
   can fail with no step having failed.

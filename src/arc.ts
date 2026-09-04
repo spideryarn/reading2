@@ -149,7 +149,9 @@ export function partsOf(tree: Tree): TreeNode[] {
      tree.json and fails in the same line. A tree that names a root it does not
      contain is stage 4 having written something malformed, which is a defect
      here rather than anything the reader can act on. src/job-failure.ts. */
-  if (!root) throw stageFailure("bug", `rootId "${tree.rootId}" is not in nodes`);
+  if (!root) {
+    throw stageFailure("bug", { generic: `rootId "${tree.rootId}" is not in nodes` });
+  }
   return root.children
     .map((id) => tree.nodes[id])
     .filter((n): n is TreeNode => !!n && !isSupplementNode(n));
