@@ -1017,15 +1017,41 @@ function TableViewInner({
                    `kind-callout` is still emitted for revisions extracted in the
                    few hours that kind existed, and the stylesheet answers to
                    both. */
-                /* `has-marks` says this row draws all three gutter slots, and
-                   the stylesheet floors its height so none of them can hang
-                   below the row and take a click meant for the next one.
-                   § the gutter in styles.css has the reasoning. */
+                /* `gutter-pad` says this row's gutter is the full 2 × 2 pad
+                   rather than a single 24px slot, and the stylesheet floors the
+                   row's height to match so nothing can hang below it and take a
+                   click meant for the next row. § the gutter in styles.css has
+                   the reasoning.
+
+                   **The condition is the reader's capability, not what is on
+                   the row.** `onChatAbout` is what BlockGutter renders the chat
+                   button from, and in stage 2 the "?" beneath it, so a reader
+                   who has it is a reader whose gutter is the whole pad — floored
+                   on every row, so their comment-free paragraphs do not jump
+                   when they add a note to one. A visitor has neither, so their
+                   gutter stays one slot tall and the article keeps its old
+                   rhythm.
+
+                   **In stage 1 the reserved row is genuinely empty on most
+                   rows**, and the honest version is worth writing down rather
+                   than dressing up as "what the row can draw": with only three
+                   controls, an uncommented owner row puts both of them in row 1
+                   and the 24px below is preparation for the "?" that stage 2
+                   adds. GPT Sol accepted that as an intermediate branch commit
+                   and named its cost — short owner rows get taller before
+                   anything uses the space. The `cmtsByBlock` half is
+                   belt-and-braces rather than reachable today: App hands a
+                   visitor `NO_COMMENTS`, but a bookmark without a floor is the
+                   overhang this whole rule exists to prevent, so the two facts
+                   are read from the same place BlockGutter reads them.
+
+                   It was `has-marks`, meaning "this block has a comment", until
+                   2026-09-04; the name went with the meaning. */
                 className={`text pin-right kind-${block.kind}${
                   block.context ? ` ctx-${block.context.type}` : ""
                 } ${!block.gistable ? "opaque" : ""}${
                   hitStrength?.has(block.id) ? " has-hit" : ""
-                }${cmtsByBlock.has(block.id) ? " has-marks" : ""}`}
+                }${onChatAbout || cmtsByBlock.has(block.id) ? " gutter-pad" : ""}`}
                 /* The bar down the left of a matched paragraph — Greg's call,
                    2026-08-25, so a match is findable while scrolling past at
                    speed. Its intensity is scaled *harder* than the wash by the

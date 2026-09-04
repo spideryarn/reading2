@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_ROOT_PX,
   fitView,
-  PROSE_ALONE_MAX_REM,
+  proseAloneMaxPx,
   SPINE_W,
   type FitInput,
 } from "../src/web/layout.js";
@@ -268,15 +268,20 @@ describe("the article on its own stops at the measure", () => {
      take the whole window and put a 738px measure in the left of it; on a
      1600px screen that is 850px of empty page down one side. Greg, 2026-09-03:
      "In Plain mode, can you centre the text on the page?" — layout.ts §
-     PROSE_ALONE_MAX_REM, and styles.css § plain, centred for the auto margins that
+     `proseAloneMaxPx`, and styles.css § plain, centred for the auto margins that
      divide what this leaves over. */
   const alone = (windowWidth: number) => fit({ windowWidth, chosen: [] });
 
-  it("caps the lone reading column at PROSE_ALONE_MAX_REM", () => {
+  it("caps the lone reading column at proseAloneMaxPx", () => {
     const f = alone(1600);
     expect(f.columns).toEqual([]);
-    expect(f.widths).toEqual([800]); // 50rem at the 16px default
-    expect(f.tableW).toBe(PROSE_ALONE_MAX_REM * DEFAULT_ROOT_PX);
+    expect(f.widths).toEqual([832]); // 49rem + the gutter's 48px, at the 16px default
+    /* Through the function rather than `PROSE_ALONE_MAX_REM * root`, because the
+       cap stopped being one rem number on 2026-09-04: the gutter's slot is
+       `max(1.5rem, 24px)`, so below a 16px root it stops shrinking and the cell's
+       left padding grows *in rem terms*. The constant is the rem part; the gutter
+       is added as its own term. GPT Sol's stage 1 review. */
+    expect(f.tableW).toBe(proseAloneMaxPx(DEFAULT_ROOT_PX));
     expect(f.alone).toBe(true);
     // And there is room to centre it in: the table no longer fills the window.
     expect(f.minWidth).toBeLessThan(1600);
@@ -290,18 +295,22 @@ describe("the article on its own stops at the measure", () => {
        and both of the cell's pads 25% wider — so a fixed 800 would have clipped
        their measure to about 51ch, which is the one thing this cap must never
        do. Found by GPT Sol reviewing the built code, 2026-09-03. */
-    expect(fit({ windowWidth: 1600, chosen: [], rootFontPx: 20 }).tableW).toBe(1000);
-    expect(fit({ windowWidth: 1600, chosen: [], rootFontPx: 12 }).tableW).toBe(600);
+    expect(fit({ windowWidth: 1600, chosen: [], rootFontPx: 20 }).tableW).toBe(1040);
+    // 624 until 2026-09-04, and 624 was the bug: at a 12px root the gutter's
+    // px floor makes the left pad 4.7rem, not 3.7, and a rem constant could not
+    // follow it. GPT Sol's stage 1 review.
+    expect(fit({ windowWidth: 1600, chosen: [], rootFontPx: 12 }).tableW).toBe(636);
     // And it is still a cap, not a width: a window narrower than it wins.
     expect(fit({ windowWidth: 700, chosen: [], rootFontPx: 20 }).tableW).toBe(688);
   });
 
   it("leaves every narrower window exactly as it was", () => {
-    // 812 = PROSE_ALONE_MAX_REM + the spine, so the cap stops biting one pixel
-    // below it. Under that the column is still the whole window, which is what
-    // every phone gets and what the § gistsThatFit examples above assert.
-    expect(alone(812).tableW).toBe(800);
-    expect(alone(811).tableW).toBe(799);
+    // 844 = `proseAloneMaxPx(16)` plus the spine, so the cap stops
+    // biting one pixel below it. Under that the column is still the whole
+    // window, which is what every phone gets and what the § gistsThatFit
+    // examples above assert.
+    expect(alone(844).tableW).toBe(832);
+    expect(alone(843).tableW).toBe(831);
     expect(alone(390).tableW).toBe(378);
   });
 

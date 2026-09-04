@@ -1,5 +1,7 @@
 /**
- * The narrow column beside every paragraph — see docs/plans/prose-gutter-icons.md.
+ * The reader's own pad beside every paragraph — see docs/plans/prose-gutter-icons.md
+ * for how it began and docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md
+ * for why it is now two columns wide.
  *
  * Greg, 2026-08-31: *"a very narrow vertical gutter alongside the text …
  * instead of showing the block-id, show a permalink icon (with tooltip showing
@@ -17,18 +19,30 @@
  * *state*, on hover it shows *affordances*.** On an article you have never
  * marked it is empty all the way down until the pointer lands on a row.
  *
- * Three slots for the owner, top to bottom:
+ * **A 2 × 2 pad rather than a column**, since 2026-09-04:
  *
- *     1  permalink      every block, on hover
- *     2  comment mark   only when this block has comments
- *     3  chat           every block on hover; always when the block has chats
+ *     permalink   every block, on hover     |  chat   on hover; always with chats
+ *     comment mark  only when commented     |  (empty — the "?" goes here)
+ *
+ * It was a single column of three ~15px slots until Greg asked for targets a
+ * finger can hit: *"they're quite hard to click on on an iPad."* WCAG 2.5.8 asks
+ * for 24 × 24, and four of those stacked come to ~100px against a 39px one-line
+ * paragraph row — so the arrangement had to change, not just the size. The cost
+ * is 1.6rem of horizontal padding and a taller short row; the arithmetic is in
+ * styles.css § the gutter, and the call is Greg's, in
+ * docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md.
+ *
+ * **The fourth cell is empty on purpose.** The "?" that fills it is stage 2 of
+ * that plan; the geometry lands and is measured before anything is added to it.
  *
  * **A visitor's gutter is the permalink and nothing else** — one element in the
- * flex column, not three with two of them blank, because none of these is a
- * placeholder. The third is absent rather than dead: opening a conversation
+ * top-left cell, not four with three of them blank, because none of these is a
+ * placeholder. Their rows keep the article's old height, too: the stylesheet
+ * floors a row at two slots only where the second row can be drawn. The chat
+ * button is absent rather than dead: opening a conversation
  * costs a model call, which is not theirs to spend, so `onChatAbout` is
- * optional and the button exists only where the callback does. The second never
- * draws for them either, for a different reason — the marks in it are the
+ * optional and the button exists only where the callback does. The bookmark
+ * never draws for them either, for a different reason — the marks in it are the
  * reader's own, and a visitor has none. The callback *is* the capability, the
  * way `onRenamed` is on Masthead.tsx — one fact rather than a boolean beside a
  * handler that can disagree with it. It used to render for everybody and the
@@ -36,14 +50,14 @@
  * review of the built code caught this paragraph claiming two.
  * docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C1.
  *
- * **Two of them are fixed and the middle one is not**, which is the honest
- * version of a claim this file used to overstate. The permalink, and the chat
- * button wherever there is one, are rendered on every block whether or not they
- * are visible, so *hovering* never moves anything — which is the property that
- * matters, and it holds for a two-slot gutter as much as a three-slot one.
- * Adding or deleting a comment does move the chat button, between the second
- * slot and the third; that happens when the reader writes something, not when
- * they wave the pointer at a paragraph. GPT Sol, 2026-08-31.
+ * **Every position is fixed, and as of 2026-09-04 that is finally true without
+ * a caveat.** The permalink, and the chat button wherever there is one, are
+ * rendered on every block whether or not they are visible, so *hovering* has
+ * never moved anything. But under the flex column this replaced, adding or
+ * deleting a comment moved the chat button between the second slot and the
+ * third — an honest caveat GPT Sol made this file admit on 2026-08-31, and one
+ * the pad simply deletes: each slot names its own `grid-area`, so the one
+ * conditional child has a cell nothing else can fall into.
  *
  * **This is also where the chat button finally arrives in the gutter.** Until
  * today `.block-chat` had no `position` at all, so it was an in-flow box
@@ -106,12 +120,21 @@ interface Props {
    * Go to this block without a page load, writing `?at=` as it goes — App's
    * own jump, the one every gist cell and arrow key uses.
    *
-   * The gutter needs it for the two paths where this element has to behave like
-   * the link it says it is: keyboard activation, and a copy that failed. A bare
-   * `<a href>` left to the browser would **reload the reading view**, which
-   * re-fetches the article to arrive at the paragraph already on screen; there
-   * is no global anchor interception in this app (router.ts), so nothing else
-   * would stop it.
+   * The gutter needs it for the one path where this element has to behave like
+   * the link it says it is: **keyboard activation**. A bare `<a href>` left to
+   * the browser would **reload the reading view**, which re-fetches the article
+   * to arrive at the paragraph already on screen; there is no global anchor
+   * interception in this app (router.ts), so nothing else would stop it.
+   *
+   * **Two paths until 2026-08-31, and this sentence outlived the second one.**
+   * A failed copy used to jump as well, on the reasoning that `preventDefault`
+   * has already run so the cancelled navigation has to be performed by hand.
+   * GPT Sol's counter-example killed it — a rejection can arrive seconds later,
+   * after the reader has moved on, and a scroll out of nowhere is worse than no
+   * scroll — and `onCopy` below has said so at length ever since while this
+   * comment went on promising the opposite. Found by Sol again in the stage 1
+   * review, 2026-09-04, which is a fair comment on how long a false sentence
+   * survives three feet from the code that contradicts it.
    */
   onJump(id: BlockId): void;
   /**
@@ -310,8 +333,8 @@ export function BlockGutter({
           A `Bookmark` rather than the flag or speech bubble Greg offered,
           because comments.md is explicit that a comment *is* a bookmark — the
           words and the AI answer are both optional — and because a second
-          message-square next to the chat button below would read as a second
-          chat. Its colour is `--highlight`, which is exactly what `mark.cmt`
+          message-square in the cell diagonally under the chat button would read
+          as a second chat. Its colour is `--highlight`, which is exactly what `mark.cmt`
           uses in the prose, so the gutter and the passage read as one thing. */}
       {first && (
         <button
@@ -339,9 +362,16 @@ export function BlockGutter({
         </button>
       )}
 
-      {/* The third slot, and only for a reader who can use it — see the header.
-          Everything else about it is unchanged: same class, same count, same
-          reveal rules. */}
+      {/* Top-right of the pad, and only for a reader who can use it — see the
+          header. Everything else about it is unchanged: same class, same count,
+          same reveal rules; the stylesheet moved it, not this file.
+
+          **Rendered after the bookmark and drawn above it**, which is only not a
+          contradiction because the pad places every slot by `grid-area` rather
+          than by source order. Keeping the order is what keeps the tab order
+          reading down the article's own logic — address, then mark, then
+          conversation — and it is the reason those rules are written against the
+          classes instead of `:nth-child`. */}
       {onChatAbout && (
         <button
           type="button"
