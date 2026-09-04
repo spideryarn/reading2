@@ -71,6 +71,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SHARED_WITH_YOU } from "../src/messages.js";
 import type { Article } from "../src/types.js";
 import type { PublicArticle, PublicSketch, PublicTweets } from "../src/public-types.js";
 /* The vocabulary itself, so the sweeps below cannot fall behind it — src/modes.ts
@@ -2006,7 +2007,14 @@ describe("when the reader's own session cannot be confirmed", () => {
        controls bar and is drawn on none of these three (PublicChrome.tsx). What
        carries the same fact here is `SharedNotice`'s first sentence, so that is
        what is asserted. */
-    expect(host.textContent).toContain("shared this article with you");
+    /* The constant rather than a literal. This asserted the fragment
+       "shared this article with you", which was a substring of
+       `SHARED_WITH_YOU` until 2026-09-04 and is a substring of nothing
+       now: the sentence had to stop saying somebody sent this reader a
+       link, because the public shelf brings readers nobody sent
+       anything. A grep for the whole old sentence does not find a
+       fragment of it, which is how this went red on `dev`. */
+    expect(host.textContent).toContain(SHARED_WITH_YOU);
     /* The two halves of C3: the fact, and the one action that gets the reader
        off this footing. Neither may depend on which view they wandered to. */
     expect(host.textContent).toContain("couldn't confirm that you're signed in");
