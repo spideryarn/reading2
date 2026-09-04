@@ -850,21 +850,31 @@ export const confParam = createParser<number>({
 /**
  * Which picture the Diagram mode is drawing.
  *
- * Three of them, and the toggle is not a skin — see src/web/diagram.ts for what
+ * Five of them, and the toggle is not a skin — see src/web/diagram.ts for what
  * each one is honest about, and for why there were eight until 2026-08-27 and
  * four until 2026-08-30. Short version: `force` is the relationships an outline
- * cannot hold, and `drift` and `trail` are the article as paragraphs placed by
- * meaning. That is a real choice a reader makes, so it belongs in the URL like
+ * cannot hold, `drift` and `trail` are the article as paragraphs placed by
+ * meaning, and `sketch` and `illustrated` are a model's drawing of the
+ * argument. That is a real choice a reader makes, so it belongs in the URL like
  * every other bit of view state (docs/project/url-state.md).
  *
- * **`force` is the default because it is the only one that draws anything
- * before its answer lands.** All three spend a model call now that the free
- * picture — `tree`, the outline — has been cut for overlapping the outline and
- * hierarchy views that already exist. Force's call only adds the dotted lines;
- * the rest of it is arithmetic over prose the browser is already holding, so
- * opening the mode still shows the reader something immediately. Drift and
- * Trail have nothing at all without the projection, and now say so with a
- * spinner rather than borrowing another picture.
+ * **`sketch` is the default since 2026-09-04**, and the reason is not the one
+ * the default used to be chosen on. It is the only picture of the five that is
+ * good enough to put in front of every reader — a reader said so
+ * (SPIDERYARN-READING2-13), the other four went behind the experimental-features
+ * switch, and a default nobody can see would be an odd thing to keep. It is
+ * `sketch` whether that switch is on or off: one default rather than two, so a
+ * link and a fresh arrival land on the same picture and nobody has to reason
+ * about which reader they are.
+ *
+ * **This costs nothing to arrive at.** `sketch` is never drawn until it is
+ * asked for, so an owner opening Diagram with no picture yet meets an
+ * invitation carrying the price and the wait (SketchView.tsx § the empty
+ * state); only a press on the chip or that button spends anything
+ * (src/web/activation.ts). The old default, `force`, was chosen for the
+ * opposite property — it was the only one that drew something real *before* its
+ * model call landed — which was the right rule while it was the picture
+ * everybody saw.
  *
  * `push`, like `?cols=`. Switching picture is a deliberate act on
  * the view and Back should undo it — and unlike stepping between glossary terms,
@@ -879,7 +889,7 @@ export const diagramParam = createParser<DiagramKind>({
   parse: (v) => (DIAGRAMS.includes(v as DiagramKind) ? (v as DiagramKind) : null),
   serialize: (v) => v,
 })
-  .withDefault("force")
+  .withDefault("sketch")
   .withOptions({ history: "push" });
 
 /**

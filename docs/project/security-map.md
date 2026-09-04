@@ -131,11 +131,23 @@ was checked against the source rather than taken on trust:
 It also refuses to work at all on the filesystem store — `requirePostgres()` answers 501 — so a
 misconfigured dev server cannot serve a half-implemented public path.
 
-**What is deliberately *not* here:** diagram mode. `src/web/visitor.ts`'s `POLICY` table marks it
-owners-only unconditionally, because all three of its pictures POST for embeddings and spend money —
-two of four did until the free one, Tree, was cut on 2026-08-30;
-the gate is real on the server too, since `/api/similar/:slug` and `/api/projection/:slug` sit
-behind `requireUser`. The client-side gate is a courtesy; the server-side one is the defence.
+**Diagram is here, and the boundary is inside it rather than at the door.** It was owners-only
+until 2026-09-04, when a visitor started getting the one picture that spends nothing: `POLICY` in
+[`src/web/visitor.ts`](../../src/web/visitor.ts) says `available`, and
+[`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx) takes a `DiagramAccess` union whose visitor arm
+**pins the picture to `force`, renders no picker at all, and disables all three fetching hooks**.
+Force draws from the tree in the payload the visitor already has; the dotted semantic lines are what
+they lose. The pin is the safety property, not the missing picker — `?diagram=` is ordinary query
+state, so a pasted `?diagram=trail` walks past a filtered row and is forced in the component where
+nothing can route round it. And the gate is real on the server too: `/api/similar/:slug` and
+`/api/projection/:slug` sit behind `requireUser`. The client-side pin is a courtesy; the server-side
+one is the defence. `tests/public-network-trace.test.tsx` asserts, per picture, that a visitor
+arriving at each of the five `?diagram=` values POSTs nothing.
+
+**The experimental-features switch is not a gate of any kind**, and must never be relied on as one.
+Since 2026-09-04 it decides how many Diagram picture chips an *owner* is shown
+([experimental-features.md](experimental-features.md)); nothing on the server reads it, and a hidden
+chip's picture is still reachable by URL on purpose. It changes discoverability, not authority.
 
 ### The owner is shown the inventory before they publish
 

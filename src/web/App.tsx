@@ -3087,6 +3087,11 @@ function Reader({
       {mode === "diagram" && (
         <DiagramBand
           access={{ kind: owner ? "owner" : "visitor" }}
+          /* Which of the five picture chips the row draws — the same answer the
+             bar below is given, from the same hook, so the two cannot disagree
+             about what this reader is being shown.
+             DiagramPanel.tsx § `visibleKinds`. */
+          experimental={experimental.on}
           slug={slug}
           article={article}
           at={at}
@@ -4995,13 +5000,20 @@ function useSummaryMode(article: Article) {
  * Force's dotted lines, `useProjection` for the two scatters' dots. `slug` is
  * passed for exactly that.
  *
- * All three pictures spend a model call since the free one — `tree`, the
- * outline — was cut on 2026-08-30. Force is the default because it is the only
- * one that draws something real before its answer lands. See
+ * Every picture here spends a model call, since the free one — `tree`, the
+ * outline — was cut on 2026-08-30. **Sketch is the default since
+ * 2026-09-04**, and it is the one picture here that draws nothing at all until
+ * the reader asks: what an owner arriving here meets is an invitation with the
+ * price and the wait on it (SketchView.tsx § the empty state), and opening the
+ * mode still buys nothing (activation.ts § `MODE_TARGET`). Force held the
+ * default before that, for the opposite reason — it was the only one that drew
+ * something real before its answer landed — and it is now behind the
+ * experimental-features switch with Drift, Trail and Illustrated. See
  * docs/project/diagram.md.
  */
 function DiagramBand({
   access,
+  experimental,
   slug,
   article,
   at,
@@ -5009,6 +5021,13 @@ function DiagramBand({
 }: {
   /** Owner or visitor — DiagramPanel.tsx § DiagramAccess is the whole argument. */
   access: DiagramAccess;
+  /**
+   * The experimental-features switch, as the chip row sees it — passed straight
+   * through. `Reader` reads the hook once and hands the answer to both the bar
+   * and this band, which is what stops them disagreeing.
+   * DiagramPanel.tsx § `experimental`.
+   */
+  experimental: boolean;
   slug: string;
   article: Article;
   /**
@@ -5056,6 +5075,7 @@ function DiagramBand({
   return (
     <DiagramPanel
       access={access}
+      experimental={experimental}
       slug={slug}
       root={root}
       kind={kind}

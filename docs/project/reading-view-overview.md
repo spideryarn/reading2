@@ -56,11 +56,15 @@ of compression, down the page for position and across for detail. Read that firs
 
 ### The modes in the band
 
-**Five of the thirteen are behind the experimental-features switch** and are drawn only for a reader
-who asked for them — Quotes, Timeline, Referee, Diagram and Remember. The other eight (Plain,
-Hierarchy, Outline, Summary, Glossary, Ideas, Search, Chat) are what everybody sees, a signed-out
-visitor included. Hidden means hidden from the bar, not unreachable: `?mode=timeline` still works,
-and the bar retains whichever mode the URL names so the reader keeps their way back.
+**Four of the thirteen are behind the experimental-features switch** and are drawn only for a reader
+who asked for them — Quotes, Timeline, Referee and Remember. The other nine (Plain, Hierarchy,
+Outline, Summary, Glossary, Ideas, Search, Chat, Diagram) are what everybody sees, a signed-out
+visitor included. Diagram was the fifth until 2026-09-04, when the gate moved a level down: the mode
+is in everybody's bar and four of its five pictures are behind the switch instead
+([diagram.md](diagram.md), [experimental-features.md](experimental-features.md)).
+
+Hidden means hidden from the bar, not unreachable: `?mode=timeline` still works, and the bar retains
+whichever mode the URL names so the reader keeps their way back.
 [experimental-features.md](experimental-features.md) is the switch, and it gives a reason per mode —
 mostly unfinished work, but **Referee is behind it for its audience rather than its readiness**: all
 four of its sub-modes are built, and it is for somebody asked to peer-review the piece, which most
@@ -133,8 +137,8 @@ That is eleven of the thirteen; `plain` and `hierarchy` are the two that open no
 - **[reader-profile.md](reader-profile.md)** — two boxes and one string telling the model who is
   reading, where it rides in a prompt, and the microphone that looked broken twice and was not.
 - **[experimental-features.md](experimental-features.md)** — the switch for features that are not
-  finished, on this page and at the end of the bottom bar. Off by default, five modes behind it, and
-  the rule that hiding a feature never breaks a link to it.
+  finished, on this page and at the end of the bottom bar. Off by default, four modes and four Diagram
+  pictures behind it, and the rule that hiding a feature never breaks a link to it.
 - **[dictation.md](dictation.md)** — talking into a text box: why it transcribes twice, the one
   microphone a page is allowed, and the three lines that give any box a button.
 - **[live-conversation.md](live-conversation.md)** — talking to the article out loud, in the middle

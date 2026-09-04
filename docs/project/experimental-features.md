@@ -8,8 +8,8 @@ One setting, off by default, with **two controls**: a checkbox on
 > (which is what we want for most users). When on, it includes extra features that might be still
 > under development or not ready for production.
 
-**Five modes are behind it**, since 2026-09-03 — [What is behind it today](#what-is-behind-it-today)
-names them. Features go behind it one at a time, each with a reason: the switch and the decision
+**Four modes and four Diagram pictures are behind it** —
+[What is behind it today](#what-is-behind-it-today) names them. Features go behind it one at a time, each with a reason: the switch and the decision
 about which features are unfinished are two separate arguments, and taking them together means
 neither gets made properly.
 
@@ -36,9 +36,13 @@ below holds and a second `npm run setup` does not move the date.
 
 **Hidden means hidden from the controls, not unreachable.** `?mode=timeline` still works with the
 switch off, and the bar draws Timeline's button while the reader is in it, so the radiogroup still
-has exactly one checked thing. The switch is about clutter, not enforcement — an old bookmark keeps
+has exactly one checked thing. Since 2026-09-04 the same sentence covers `?diagram=trail`, and it is
+the same code saying it: [`experimental-visibility.ts`](../../src/web/experimental-visibility.ts) is
+one rule with two callers, `visibleModes` in [`Dock.tsx`](../../src/web/Dock.tsx) and `visibleKinds`
+in [`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx). The switch is about clutter, not enforcement — an old bookmark keeps
 working, and a shared URL shows two people **the same band**, whatever their switches say. Their
-*bars* differ, which is the whole point: eight buttons for one and thirteen for the other. A gate
+*bars* differ, which is the whole point: nine buttons for one and thirteen for the other, and one
+Diagram chip against five. A gate
 that redirected or 404'd would turn a preference into a broken link.
 
 **Hiding never deletes.** Turning the switch off must not remove an artefact, a note or a
@@ -96,8 +100,8 @@ stories about what they turned on. Greg asked for the second one mid-run:
 | Also says | *when* it was turned on | nothing else; the bar is seventeen icons |
 | Inert by | `disabled` | `aria-disabled`, so the tooltip explaining *why* is still reachable — a `disabled` button fires no hover and takes no focus, which fails in exactly the states that need explaining |
 
-**A toggle, not a link to `/profile`**: one press, where the effect is — the five modes it reveals
-are three inches to the left of it.
+**A toggle, not a link to `/profile`**: one press, where the effect is — the modes it reveals are
+three inches to the left of it, and so are the four Diagram pictures.
 
 **It is not one of the modes**, and says so: `aria-pressed`, outside the `role="radiogroup"`. It is
 the only button in the bar that is about the app rather than about the article, which is why it is
@@ -158,7 +162,8 @@ is a column rather than something in the browser's `localStorage`.
 
 ## What is behind it today
 
-**Five of the thirteen modes**, since 2026-09-03. Greg picked them
+**Four of the thirteen modes**, and **four of Diagram's five pictures**. Greg picked the modes on
+2026-09-03
 ([260903c](../plans/260903c-gate-unpolished-modes-behind-experimental-features.md)), and each row is
 a required `experimental: boolean` in `MODES_UI` ([`Dock.tsx`](../../src/web/Dock.tsx)), so mode
 fourteen cannot be added without somebody deciding which side of the line it is on.
@@ -168,14 +173,37 @@ fourteen cannot be added without somebody deciding which side of the line it is 
 | [Quotes](quotes.md) | Verification is finished and deliberately narrow — it proves the words are in the piece and **not who wrote them**, which is a real limit a reader meets without being told. And the selection has been calibrated against one article. |
 | [Timeline](timeline.md) | Four dating states, and drawing an undated row like a dated one throws away what the article actually said. Ten of twenty-six rows on the test article carry no date. |
 | [Referee](referee-mode.md) | **Not because it is unfinished** — its own doc opens by saying all four sub-modes are built and working. It is the newest mode and by far the narrowest: it is for somebody who has been *asked to peer-review* the piece, which most readers never are. Greg's call, and the one row here that is about audience rather than readiness. |
-| [Diagram](diagram.md) | Four pictures with different promises — `force`, `drift`, `trail` and `sketch` — and the expensive one is a ~$0.20 sketch that takes two to three minutes. |
 | [Remember](remember-mode.md) | The name suggests saved notes and spaced repetition, neither of which exists; the quiz half is newer still. |
 
-**The eight that stay visible**: Plain, Hierarchy, Outline, Summary, Glossary, Ideas, Search, Chat.
-Hierarchy and Outline are stand-ins for the merged **Structure** mode
+**The nine that stay visible**: Plain, Hierarchy, Outline, Summary, Glossary, Ideas, Search, Chat,
+Diagram. Hierarchy and Outline are stand-ins for the merged **Structure** mode
 ([260903b](../plans/260903b-one-structure-mode-hierarchy-and-outline-merged.md)); when that lands it
-takes one default-visible slot and those two go, making it seven of twelve. **Do not write
-seven/twelve anywhere before then.**
+takes one default-visible slot and those two go, making it eight of twelve. **Do not write
+eight/twelve anywhere before then.**
+
+## The one thing that is gated below mode level
+
+**Diagram, since 2026-09-04.** It came out from behind the switch and four of its five pictures went
+behind it instead, on a reader's report:
+
+> We have this idea of experimental features. The only diagram sub-mode that is good enough to show
+> everyone is the sketch mode. The other ones should be only visible to people who have experimental
+> features on, because they don't work so well yet.
+>
+> — a reader, 2026-09-04 (SPIDERYARN-READING2-13)
+
+| Picture | Behind the switch? |
+|---|---|
+| `sketch` | **no** — and it is the default, on or off. One default rather than two, so a shared link and a fresh arrival land on the same picture |
+| `force`, `drift`, `trail` | yes |
+| `illustrated` | yes — the dearest and slowest thing in the app |
+
+**It cost one boolean and no new machinery**, which is the shape to copy if a second sub-feature ever
+needs this: a required `experimental` field on the row that already describes the control
+(`KIND_UI`), and the same `shownBehindTheSwitch` the bar uses. A generalised sub-feature gating
+system was deliberately not built — [diagram.md § Who sees which chip](diagram.md#who-sees-which-chip-2026-09-04)
+has the rest of the reasoning, including why this changes *discoverability, not authority*: entering
+Diagram buys nothing, and a shared visitor is pinned to the free picture whatever their switch says.
 
 ## See also
 

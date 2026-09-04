@@ -2072,6 +2072,19 @@ describe("the same address, as the owner", () => {
     session.user = { id: "owner-1", email: "greg@example.com" };
     notBuilt = `/api/sketch/`;
     await open("?mode=diagram");
+
+    /* **Both halves of the arrival, before the trace is cleared.** The read
+       really happened and really said no, so the POST below is a decision
+       rather than an accident of ordering — and it happens *here* rather than
+       after the press, because since 2026-09-04 Sketch is the picture Diagram
+       opens on (params.ts § diagramParam). What the reader meets is the empty
+       state's invitation with the price on it, and this is the assertion that
+       meeting it costs nothing. */
+    expect(trace.some((r) => r.url.startsWith("/api/sketch/")), "the GET settled").toBe(true);
+    expect(
+      trace.filter((r) => r.method === "POST" && r.url === "/api/jobs"),
+      "arriving at Diagram bought a picture",
+    ).toEqual([]);
     trace.length = 0;
 
     const chip = host.querySelector<HTMLButtonElement>('[data-diag-kind="sketch"]');
@@ -2079,9 +2092,6 @@ describe("the same address, as the owner", () => {
     await act(async () => chip?.click());
     await settle();
 
-    /* The artefact read really happened and really said no, so the POST is a
-       decision rather than an accident of ordering. */
-    expect(trace.some((r) => r.url.startsWith("/api/sketch/"))).toBe(true);
     expect(
       trace.filter((r) => r.method === "POST" && r.url === "/api/jobs"),
       "exactly one job, under React's double-invoked effects",

@@ -91,11 +91,18 @@
  * ## And a second rule, which is *whether* a button is drawn at all
  *
  * Since 2026-09-03 the order is not the only question a `MODES_UI` row answers.
- * Five of the thirteen — Quotes, Timeline, Referee, Diagram and Remember — are
- * behind the experimental-features switch, so the bar draws the rows that are
- * not experimental **plus whichever mode the reader is in**. Every row carries a
+ * Four of the thirteen — Quotes, Timeline, Referee and Remember — are behind the
+ * experimental-features switch, so the bar draws the rows that are not
+ * experimental **plus whichever mode the reader is in**. Every row carries a
  * required `experimental: boolean`, so mode fourteen cannot be added without
  * somebody deciding which side of that line it is on.
+ *
+ * **Diagram came back out on 2026-09-04**, and the gate went one level down
+ * rather than away: the mode is in the default bar, and four of its five
+ * pictures are behind the switch instead — `KIND_UI` in DiagramPanel.tsx, which
+ * carries the same required flag and shares this file's rule
+ * (experimental-visibility.ts). A reader asked for exactly that: *"the only
+ * diagram sub-mode that is good enough to show everyone is the sketch mode"*.
  *
  * The rule itself, and why the current mode is retained rather than dropped, is
  * `visibleModes` below. The manual is
@@ -156,6 +163,9 @@ import {
   experimentalIsOn,
   experimentalOffline,
 } from "./experimental-copy.js";
+/* The one rule both this bar and Diagram's picture chips draw by — see
+   `visibleModes` below. experimental-visibility.ts. */
+import { shownBehindTheSwitch } from "./experimental-visibility.js";
 import { DEFAULT_MODE, type Mode, type Panel } from "./params.js";
 import { Link } from "./Link.js";
 import { type ArticleView, carriedSearch, readHref } from "./router.js";
@@ -595,12 +605,22 @@ const MODES_UI = [
   },
   /* Diagram sits between the ways *into* the article and the conversation about
      it, next to Summary rather than next to Chat, because it is the same move
-     Summary makes — the article restated — with a picture instead of prose. */
+     Summary makes — the article restated — with a picture instead of prose.
+
+     **Not experimental since 2026-09-04**, and the flag moved rather than
+     went: one of its five pictures is good enough for everybody and four are
+     not, so the switch now hides the four (`KIND_UI` in DiagramPanel.tsx).
+     Opening the mode still buys nothing — the picture it lands on is a Sketch
+     nobody has drawn, which is an invitation with the price on it, and only a
+     press on that button spends anything (activation.ts § MODE_TARGET).
+
+     The blurb names the picture a default reader will actually meet. It used to
+     list the three geometries, which are now the hidden ones. */
   {
     mode: "diagram",
-    experimental: true,
+    experimental: false,
     icon: Network,
-    blurb: "The article's shape as a picture: as an outline, as a graph, or as paragraphs placed by meaning",
+    blurb: "The article's shape as a picture: a model reads the argument and draws it",
   },
   {
     mode: "chat",
@@ -686,9 +706,15 @@ export type ModesMissingFromDock<
  *
  * Exported for tests/dock-experimental-modes.test.tsx, which is the only way to
  * ask this question without a DOM.
+ *
+ * **The rule itself lives in experimental-visibility.ts since 2026-09-04**,
+ * because Diagram's picture chips now obey the same one and a shared link has to
+ * survive both of them — `visibleKinds` in DiagramPanel.tsx is the other caller.
  */
 export function visibleModes(on: boolean, current: Mode | undefined): readonly ModeUi[] {
-  return MODES_UI.filter((m) => !m.experimental || on || m.mode === current);
+  return MODES_UI.filter((m) =>
+    shownBehindTheSwitch({ experimental: m.experimental, on, current: m.mode === current }),
+  );
 }
 
 /**
@@ -776,8 +802,6 @@ const PRESS = {
 } as const satisfies Record<ExperimentalVariant, "toggle" | "retry" | "nothing">;
 
 export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
-  // eslint-disable-next-line no-console
-  console.log("TMP_DEBUG toggleVariant input", JSON.stringify(e));
   /* Nobody to save it for. Not a disabled button either: a signed-out reader is
      forcibly off by decision, and a control they cannot use is an advertisement
      for an account, which is not what the bottom bar is for. */
@@ -806,9 +830,10 @@ export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
  * for as long as the marker was up. GPT Sol, reviewing stage 2.
  *
  * **The modes go in by name, not by count.** It was `MODES_UI.length` until
- * 2026-09-03, when five modes went behind the experimental switch: the bar
+ * 2026-09-03, when five modes went behind the experimental switch (four since
+ * 2026-09-04, Diagram having come back out): the bar
  * retains whichever experimental mode the reader is in, so `?mode=quotes`
- * becoming `?mode=remember` leaves the count at nine and changes the row's
+ * becoming `?mode=remember` leaves the count unmoved and changes the row's
  * width, because those two words are not the same width. A signature that
  * counted would not re-run the fit, leaving the bar overflowing after a move to
  * a wider label or its labels dropped with room to spare after a narrower one.
@@ -1132,8 +1157,9 @@ export function Dock({
             > explain what this does.
 
             A toggle rather than a link to `/profile`: one press, where the
-            effect is — the five modes it reveals are three inches to the left
-            of it. `/profile` keeps the checkbox, and keeps the one thing this
+            effect is — the modes it reveals are three inches to the left of
+            it, and since 2026-09-04 the four hidden pictures inside Diagram
+            too. `/profile` keeps the checkbox, and keeps the one thing this
             cannot say, which is when you turned it on.
 
             After Metadata because it is not about this article at all. It is
