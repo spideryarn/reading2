@@ -162,7 +162,12 @@ async function open(): Promise<void> {
       createElement(
         NuqsAdapter,
         null,
-        createElement(Metadata, { slug: SLUG, article: ARTICLE, onRenamed: () => {} }),
+        createElement(Metadata, {
+          slug: SLUG,
+          article: ARTICLE,
+          onRenamed: () => {},
+          onVisibility: () => {},
+        }),
       ),
     );
   });

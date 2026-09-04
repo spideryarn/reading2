@@ -1334,6 +1334,35 @@ export interface Article {
    * hot-link exactly as before rather than read it as "every image failed".
    */
   assets: Assets | undefined;
+
+  /**
+   * **May a stranger read this** — the owner's copy of `articles.visibility`,
+   * so the masthead can say so without a request of its own.
+   *
+   * The one field here that is not an artefact. It is on this payload rather
+   * than behind a route because it is a property of *the work* (src/routes.ts
+   * § the sharing switch), because the Postgres store selects the `articles`
+   * row anyway so it costs nothing, and because the alternative — a `GET`
+   * beside the existing `PUT` — is a second round trip on every article open to
+   * carry one enum that is already on the wire.
+   * docs/plans/260904b-sharing-mark-on-the-article-masthead.md.
+   *
+   * **Absent means *this store cannot say*, and never `private`.** The
+   * filesystem store has no visibility column — `visibilityStore.set` refuses
+   * with a 501 there (src/store/index.ts) — so absence is the only honest
+   * answer it has, and a `private` default would have the mark tell an owner
+   * that only they can read an article nobody ever asked about. That is the one
+   * sentence this control must not get wrong, and it is the same rule
+   * `ArticleMetadata.sharing` follows for the same reason.
+   * docs/reusable/silent-success.md.
+   *
+   * Optional rather than `Visibility | undefined`, unlike `assets` above:
+   * `assets` is required-but-undefinable precisely so a store that forgets it
+   * is a type error, and here the *forgetting* is a legitimate answer one of
+   * the two stores gives on every article. There is nothing for a compiler to
+   * insist on.
+   */
+  visibility?: Visibility;
 }
 
 /**

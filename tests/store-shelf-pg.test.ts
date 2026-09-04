@@ -451,6 +451,52 @@ when("the Postgres shelf and library search", () => {
     });
   });
 
+  describe("what the reading view knows about sharing", () => {
+    /**
+     * **The other projection of the same column, and the one the masthead's
+     * sharing mark reads.**
+     *
+     * A test of its own rather than a line in the shelf's, because it is a
+     * different projection with a different rule: the shelf omits the field on
+     * a private article (there is no private badge to draw), and
+     * `loadArticle` states it, because the mark has three states and drawing a
+     * lock is the whole point of the second one. A `loadArticle` that dropped
+     * the field would leave every article looking like the filesystem
+     * store's — *we could not say* — and the mark would simply never appear.
+     *
+     * This is also the positive half of the exemption in
+     * tests/store-parity.test.ts, which cannot compare a field only one of the
+     * two stores can answer.
+     * docs/plans/260904b-sharing-mark-on-the-article-masthead.md.
+     */
+    it("states `public` and `private` on the article payload, never omits either", async () => {
+      const db = getDb();
+      /* Put back in the `finally`, for the reason the shelf's test above gives:
+         a fixture left world-readable is a lie sitting in the local database. */
+      await db
+        .update(articles)
+        .set({ visibility: "public", publicAt: new Date("2026-09-01T00:00:00.000Z") })
+        .where(eq(articles.id, OTHER_ARTICLE_ID));
+      try {
+        expect((await pgArticleReader.loadArticle(OTHER_SLUG)).visibility).toBe("public");
+      } finally {
+        await db
+          .update(articles)
+          .set({ visibility: "private", publicAt: null })
+          .where(eq(articles.id, OTHER_ARTICLE_ID));
+      }
+
+      /* **Stated, not absent** — `"visibility" in article` rather than a
+         `toBe("private")` alone, because those are the two ways this can be
+         wrong and only one of them is a wrong *value*. The other is the key
+         going missing, which reads on the wire as the filesystem store's
+         honest silence and would draw nothing at all. */
+      const back = await pgArticleReader.loadArticle(OTHER_SLUG);
+      expect("visibility" in back).toBe(true);
+      expect(back.visibility).toBe("private");
+    });
+  });
+
   describe("the shelf's writes", () => {
     it("renames, and the reading view agrees with the card", async () => {
       const entry = await pgShelfStore.patch(SLUG, { title: "What I call it" });

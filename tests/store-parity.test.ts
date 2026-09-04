@@ -424,15 +424,30 @@ when("the filesystem and Postgres stores agree", () => {
 
   describe.each(slugs)("%s", (slug) => {
     /**
-     * `meta` without the two fields stage 1 owns and stage 2 merely copied.
+     * `meta` without the two fields stage 1 owns and stage 2 merely copied,
+     * and the article without the one field only one store can answer.
      *
-     * Both are compared, per slug, in the test below this one — as equalities
-     * against the file each store actually reads, not as an exemption that
-     * asserts nothing.
+     * The two `meta` fields are compared, per slug, in the test below this one
+     * — as equalities against the file each store actually reads, not as an
+     * exemption that asserts nothing.
+     *
+     * **`visibility` is dropped for the reason the shelf's is** (see
+     * `comparable` in the `listArticles` block below, and
+     * `Article.visibility` in src/types.ts): the filesystem store has no
+     * visibility column, so absence there is the honest answer and equality
+     * between the two stores could never have expressed it. What is lost —
+     * Postgres losing a `public`, or emitting one where the row says
+     * `private` — was never covered here either, and is covered positively in
+     * tests/store-shelf-pg.test.ts against a known public row and a known
+     * private one.
+     * docs/plans/260904b-sharing-mark-on-the-article-masthead.md.
      */
-    function comparable(article: Article): Omit<Article, "meta"> & { meta: Omit<Meta, "url" | "fetchedAt"> } {
+    function comparable(
+      article: Article,
+    ): Omit<Article, "meta" | "visibility"> & { meta: Omit<Meta, "url" | "fetchedAt"> } {
       const { url: _url, fetchedAt: _fetchedAt, ...meta } = article.meta;
-      return { ...article, meta };
+      const { visibility: _visibility, ...rest } = article;
+      return { ...rest, meta };
     }
 
     it("returns an identical Article", async () => {

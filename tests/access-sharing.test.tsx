@@ -22,7 +22,7 @@
  *     is not evidence a field was honoured.
  */
 import { act, createElement } from "react";
-import type { ArticleSharing, PublicArtefacts } from "../src/types.js";
+import type { ArticleSharing, PublicArtefacts, Visibility } from "../src/types.js";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -43,6 +43,16 @@ const SLUG = "a-piece";
 
 /** Every request the card made. */
 const calls: { url: string; method: string; body: unknown }[] = [];
+/**
+ * Every `onVisibility` the card reported upwards.
+ *
+ * The masthead one click away draws this same fact off the article payload, and
+ * that payload is fetched once for all of an article's views and never
+ * refetched between them — so what is recorded here is what stops a lock
+ * sitting over a document anyone with the link can read.
+ * src/web/App.tsx § `OwnedArticle`.
+ */
+const reported: (Visibility | null)[] = [];
 /** How the `PUT` is answered. */
 let put: () => Response;
 /**
@@ -99,6 +109,7 @@ let root: Root;
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   calls.length = 0;
+  reported.length = 0;
   put = () => json({ visibility: "public", publicAt: "2026-08-28T11:00:00.000Z" });
   held = [];
   hold = false;
@@ -137,7 +148,19 @@ afterEach(async () => {
  */
 async function mount(sharing: ArticleSharing | undefined): Promise<void> {
   await act(async () => {
-    root.render(createElement(AccessSharing, { slug: SLUG, title: "A piece", sharing }));
+    root.render(
+      createElement(AccessSharing, {
+        slug: SLUG,
+        title: "A piece",
+        sharing,
+        onVisibility: (forSlug: string, visibility: Visibility | null) => {
+          /* The slug is asserted rather than ignored: the callback resolves
+             after the reader may have moved on, and the receiver keys on it. */
+          expect(forSlug).toBe(SLUG);
+          reported.push(visibility);
+        },
+      }),
+    );
   });
   for (let i = 0; i < 4; i++) {
     await act(async () => {
@@ -538,6 +561,88 @@ describe("when a write does not come back cleanly", () => {
 
     expect(host.textContent).toContain("may have");
     expect(host.textContent).not.toContain("Only you can read this");
+  });
+});
+
+/**
+ * **The other view of this fact, and why it cannot be left to go stale.**
+ *
+ * The reading view's masthead draws public-or-private off `Article.visibility`
+ * (src/web/Masthead.tsx § `SharingMark`), and `ArticlePage` fetches that payload
+ * **once for all three of an article's views** and does not refetch when the
+ * view changes — deliberately, so stepping out here and back is free. So this
+ * card is the only thing that can tell the masthead the answer just changed.
+ * Without it, publishing an article and pressing Back left a lock over a
+ * document anyone with the link could read: the payload correct, the card
+ * correct, and the two disagreeing with nothing to notice.
+ *
+ * Asserted here rather than through a mounted `OwnedArticle`, because what can
+ * actually go wrong is at this seam — reporting the value we *asked for*, or
+ * reporting one at all when the write left us unable to say.
+ * docs/plans/260904b-sharing-mark-on-the-article-masthead.md.
+ */
+describe("telling the rest of the page what changed", () => {
+  it("reports the server's answer, not the value it sent", async () => {
+    /* The same disagreement `draws what the server said` above uses: asking for
+       a state the article is already in returns the current representation and
+       changes nothing. */
+    put = () => json({ visibility: "private", publicAt: null });
+    await mount(PRIVATE);
+    press("Share with anyone");
+    tickTheBox();
+    press("Share it");
+    await settle();
+
+    expect(reported).toEqual(["private"]);
+  });
+
+  it("reports the publish when it lands", async () => {
+    put = () => json({ visibility: "public", publicAt: "2026-08-28T11:00:00.000Z" });
+    await mount(PRIVATE);
+    press("Share with anyone");
+    tickTheBox();
+    press("Share it");
+    await settle();
+
+    expect(reported).toEqual(["public"]);
+  });
+
+  /**
+   * **`null`, not silence, and not the state from before the write.**
+   *
+   * A failed request is not proof nothing was written — the route writes and
+   * then reads back, so every failure after the write leaves the write
+   * standing. Reporting nothing would leave the masthead drawing whatever the
+   * payload said when the page loaded, which is precisely the answer that has
+   * just stopped being trustworthy. An absent `Article.visibility` draws no
+   * mark at all, which is the true sentence.
+   */
+  it("says it no longer knows when the write fails", async () => {
+    put = () => json({ error: "the connection went away" }, 500);
+    await mount(PRIVATE);
+    press("Share with anyone");
+    tickTheBox();
+    press("Share it");
+    await settle();
+
+    expect(reported).toEqual([null]);
+  });
+
+  it("says it no longer knows when the answer cannot be parsed", async () => {
+    put = () => new Response(null, { status: 204 });
+    await mount(PRIVATE);
+    press("Share with anyone");
+    tickTheBox();
+    press("Share it");
+    await settle();
+
+    expect(reported).toEqual([null]);
+  });
+
+  it("reports nothing at all until the owner presses something", async () => {
+    await mount(SHARED);
+
+    expect(reported).toEqual([]);
   });
 });
 

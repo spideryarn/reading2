@@ -65,7 +65,12 @@ import {
   sharingConfirmBody,
   sharingInFlight,
 } from "../messages.js";
-import type { ArticleSharing, PublicArtefacts, VisibilityState } from "../types.js";
+import type {
+  ArticleSharing,
+  PublicArtefacts,
+  Visibility,
+  VisibilityState,
+} from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import {
   sharedInventory,
@@ -197,9 +202,36 @@ export function AccessSharing({
   slug,
   title,
   sharing,
+  onVisibility,
 }: {
   slug: string;
   title: string;
+  /**
+   * **The switch was thrown — tell whoever else is drawing this fact.**
+   *
+   * The reading view's masthead draws the same fact from the same article
+   * payload (`Article.visibility`, src/web/Masthead.tsx § `SharingMark`), and
+   * that payload is fetched once for all three of an article's views and is
+   * **not** refetched when the view changes (`ArticlePage` in App.tsx says why:
+   * stepping out to this page and back should be free rather than 150KB and a
+   * spinner). So without this, publishing an article here and pressing Back
+   * left a lock sitting over a document anyone with the link could read — the
+   * one sentence this control must never get wrong, arriving by the back door
+   * of a payload nobody thought of as stale.
+   *
+   * Reported upwards rather than written into a store, exactly as the rename
+   * beside it is: `OwnedArticle` owns the payload and layers this over it.
+   *
+   * **`null` means *we no longer know*, and it is not a nicety.** A write that
+   * failed after the server committed leaves this card in `WRITE_UNCERTAIN` —
+   * see `set` below — and the honest thing for every other view of the fact is
+   * to stop claiming one. The masthead draws nothing for an absent
+   * `visibility`, which is exactly that sentence.
+   *
+   * Optional so the card can still be mounted on its own — tests/access-sharing.test.tsx
+   * does — without every caller inventing a no-op.
+   */
+  onVisibility?: ((slug: string, visibility: Visibility | null) => void) | undefined;
   /**
    * From the page's own metadata fetch. `undefined` covers both *not landed
    * yet* and *this store cannot say*, and the card draws the same thing for
@@ -304,6 +336,12 @@ export function AccessSharing({
          we cannot parse is not an answer; it is the absence of one. */
       const state = asVisibilityState(await readJson<unknown>(res));
       setActed(state ? { kind: "known", state } : WRITE_UNCERTAIN);
+      /* **The server's answer, not `to`** — the same rule the line above
+         follows, and for the same reason: a 200 is not evidence a field was
+         honoured, and an unparseable one is the absence of an answer rather
+         than the value we asked for. `null` in that case, which every other
+         view of this fact renders as *we cannot say*. */
+      onVisibility?.(slug, state ? state.visibility : null);
       setConfirming(false);
       setRights(false);
     } catch (e) {
@@ -317,6 +355,10 @@ export function AccessSharing({
          load said, which is now exactly the stale answer that must not be
          drawn. */
       setActed(WRITE_UNCERTAIN);
+      /* And the same sentence to everybody else drawing this fact. A failed
+         request is not proof nothing was written, so the masthead must stop
+         claiming either state rather than keep the one from before the write. */
+      onVisibility?.(slug, null);
     }
   }
 
