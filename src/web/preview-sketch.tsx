@@ -92,7 +92,7 @@ function Band({ width, slug, label }: { width: number; slug: string; label: stri
           } as React.CSSProperties
         }
       >
-        <SketchView slug={slug} blocks={BLOCKS} atRow={40} onJump={(id: BlockId) => console.log("jump", id)} />
+        <SketchView access={{ kind: "owner", slug: slug }} blocks={BLOCKS} atRow={40} onJump={(id: BlockId) => console.log("jump", id)} />
       </aside>
     </div>
   );
