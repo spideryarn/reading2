@@ -126,9 +126,12 @@ exact about who emits that shape, because "18.6% of a batched job" reads like mo
 account today and mostly it is not.
 
 - **The reading view never batches.** Every mode button enqueues exactly one step —
-  `steps: [step]` at [src/web/useStepJob.ts:385](../../src/web/useStepJob.ts) — so a reader pressing
+  `steps: [step]` in [`useStepJob.start`](../../src/web/useStepJob.ts) — so a reader pressing
   "Find the terms" and then "Choose the quotes" makes two jobs, minutes apart, and misses the
-  5-minute TTL anyway.
+  5-minute TTL anyway. **True when this was written; no longer universally true.** Later that day
+  Illustrated's *"Draw the Sketch, then paint"* gained `precededBy`, so one press can post
+  `["sketch", "illustrated"]` in a single job — [diagram.md § Illustrated](../project/diagram.md#illustrated).
+  Whether that pair shares a cache group has not been measured.
 - **An ordinary ingest carries no article stage at all** since `arc` left `DEFAULT_INGEST_STEPS` on
   2026-08-29.
 - **What does emit it:** `POST /api/jobs`, which takes whatever step list a client sends; the CLI;

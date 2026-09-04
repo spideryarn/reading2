@@ -187,7 +187,17 @@ export interface StepOutcome {
  */
 export interface ExpirySettlement {
   id: string;
-  status: Extract<JobStatus, "error" | "cancelled">;
+  /**
+   * **`queued` is a settlement too**, and the odd one out: the job is not over,
+   * it has been given back to the queue on its own row for another attempt. See
+   * `settleExpired`'s `requeueBudget`.
+   *
+   * It is in this type rather than in a second one because the caller's question
+   * is the same for all three — *which jobs did this sweep move, and how* — and
+   * a resumption nobody reported would be a silent success in the one place
+   * there is no other account of what happened.
+   */
+  status: Extract<JobStatus, "error" | "cancelled" | "queued">;
 }
 
 /** How a job ended, and everything the card needs to say so. */
@@ -411,8 +421,38 @@ export interface JobStore {
    * case proving that listing as one owner cannot settle another's. Omitted,
    * the sweep is table-wide, which is what the advance path still wants: it is
    * housekeeping for the machine at the moment somebody wants the slot.
+   *
+   * ## `requeueBudget` — and it is not always an ending
+   *
+   * **A lapsed claim on a job that has not used up its budget goes back to
+   * `queued` on its own row instead of ending**, and comes back in the answer
+   * with `status: "queued"`.
+   *
+   * That is what the filesystem adapter's `sweepStopped` has always done at
+   * restart — running steps back to `pending`, the job back to `queued`, the row
+   * otherwise untouched — so a dev-server restart is a pause rather than an
+   * abandoned ingest. Postgres had no equivalent and ended the job, which on the
+   * store we ship means a deploy landing mid-ingest costs the reader their job.
+   * **The same row is the whole point**: the slug does not move, so the article
+   * does not move, so the article's checkpoints (checkpoints.ts) are still
+   * reachable. A new job could not have that.
+   *
+   * **A budget rather than a flag, because without one it never stops.** A job
+   * that overruns every lease would requeue for ever, buying model calls nobody
+   * is waiting for. It is the *caller's* number and the store's to enforce, the
+   * same division `leaseMs` and `maxRunning` already have — `REQUEUE_BUDGET` in
+   * src/jobs.ts says what it is and why.
+   *
+   * **Zero by default, so a caller that has not asked for this sees exactly what
+   * it saw before.** A `cancelling` row is never requeued whatever the budget:
+   * the reader pressed Stop, and resuming what they stopped is the app not
+   * listening.
    */
-  settleExpired(now?: Date, owner?: OwnerId): Promise<ExpirySettlement[]>;
+  settleExpired(
+    now?: Date,
+    owner?: OwnerId,
+    requeueBudget?: number,
+  ): Promise<ExpirySettlement[]>;
 
   /*
    * **`activeForSlug` was here, and it is deleted rather than replaced.**

@@ -89,8 +89,11 @@ export function portInRange(port: number): boolean {
  *
  * So the file is the source of truth, and the warning tells you what is true now
  * rather than what will be true after somebody extends the list and restarts
- * Supabase. Regex rather than a TOML parser, matching `declaredBuckets` in
- * scripts/deploy-checks.ts, which reads the same file the same way.
+ * Supabase. Regex rather than a TOML parser — which `declaredBuckets` in
+ * scripts/deploy-checks.ts also did until 2026-09-03, when it moved to
+ * `smol-toml` because hand-parsing made it report no drift about a file it
+ * could not read. This one only ever *warns*, so the same argument is weaker
+ * here; if it ever grows a decision, move it too.
  *
  * Remember that **the running container is a third answer**: GoTrue bakes the
  * list in at start and never re-reads it, so a freshly-edited file still means a

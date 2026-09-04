@@ -89,7 +89,7 @@
  *   and nothing calls it. Recorded only for entries the dynamic witness never
  *   saw; see `evidence` below.
  *
- * ## `evidence`, and why four entries carry it
+ * ## `evidence`, and why some entries carry it
  *
  * `"dynamic"` — the default — means **the instrumented run watched this file
  * execute a condemned function**, so its name is in the witness's `touched`
@@ -97,10 +97,11 @@
  * graph plus the file's own docstring, which is weaker evidence. The guard
  * holds the two apart, so this field cannot quietly become decorative.
  *
- * Three of the four are files that **did not exist when the witness ran**, at
- * 2026-09-03T09:19Z, and arrived from `dev` inside the next ninety minutes;
- * re-running witness 2 is what upgrades them. The fourth,
- * `tests/slug.test.ts`, is different and is here on the grep's authority: it
+ * All but one are files that **did not exist when the witness ran**, at
+ * 2026-09-03T09:19Z, and arrived over the following day; re-running witness 2
+ * is what upgrades them, and the list grows whenever a suite lands between two
+ * runs. The exception is
+ * `tests/slug.test.ts`, which is here on the grep's authority: it
  * reads a condemned file's *source text*, which is invisible to an import walk
  * and executes nothing, so both witnesses are structurally blind to it and only
  * a human verdict covers it.
@@ -178,6 +179,28 @@ export type StoreEntry =
  * Finalised in stage A. A file added here is a claim that somebody read it.
  */
 export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
+  /**
+   * **Arrived from `dev` on 2026-09-04 and the hole check caught it**, which is
+   * why that check walks the import graph live instead of reading a stored
+   * answer. It reaches a condemned module through `src/jobs.js`; it never runs
+   * one.
+   *
+   * **`npm test` cannot redden this file at all.** Its assertions are three
+   * `@ts-expect-error` directives over `precededBy`, and vitest strips those
+   * without looking — `tests/tsconfig.json` is the instrument, and the file's
+   * own header says so. So the flag cannot reach it from either side: no store
+   * is selected, and no store code executes.
+   */
+  "tests/step-job-preceded-by.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "A compile-time test of `StepBefore<S>`. It imports src/jobs.js, which is how the import " +
+      "graph reaches a condemned module, but its subject is a type and its assertions are " +
+      "`@ts-expect-error` directives that only `npm run typecheck` evaluates. Nothing here selects " +
+      "a store or calls one, so the hinge changes it in no way.",
+  },
   /**
    * **The entry the dynamic witness could not produce**, and the reason the
    * registry does not take its silence as proof.
@@ -791,6 +814,18 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "a source. Built on the fixture loader on purpose, so that what the adapter writes and what " +
       "the export reads are provably the same thing.",
   },
+  "tests/retry-keeps-the-checkpoints.test.ts": {
+    category: "database-integration",
+    /* It landed on 2026-09-03, after the witness ran, so the verdict rests on
+       the import graph and the file's own docstring until witness 2 is re-run. */
+    evidence: "static-only",
+    reason:
+      "Whether the Retry button lands on the article the failed attempt paid for — the question " +
+      "`tests/checkpoints-durable-resume.test.ts` assumed away by building both attempts' " +
+      "`articleId` by hand. It drives real `enqueue`/`retryJob` against the Postgres queue and a " +
+      "real checkpoint write-then-read, and article identity is only expressible there: the " +
+      "filesystem store has no articles table and no second owner.",
+  },
   "tests/store-jobs-parity.test.ts": {
     category: "filesystem-adapter-behaviour",
     reason:
@@ -943,7 +978,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "read, and that isolation problem gets sharper, not softer, on a shared database.",
   },
 
-  /* ---- Static-only: the dynamic witness never saw these three ------------- */
+  /* ---- Static-only: the dynamic witness never saw these ------------------- */
 
   "tests/an-upload-is-queued-only-once-its-bytes-arrive.test.ts": {
     category: "database-integration",
@@ -975,6 +1010,29 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "claim, `openPgStoreSession`, `advanceJobWith` and a real publication, then reads back on " +
       "another connection — entirely Postgres, and its static reach into `artifacts-fs` is " +
       "`src/jobs.ts`, which is `runStep` computing paths. Re-run witness 2 to confirm.",
+  },
+  "tests/pdf-page-cap-message.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with the swallowed-sentence work " +
+      "(docs/plans/260903k-pdf-page-cap-refused-with-no-reason-given.md § Stage 1). Builds a real " +
+      "142-page PDF and asks what `readerFailureOf` gives the reader when `pass0` refuses it. Its " +
+      "whole static reach is `src/pdf-read.ts` importing `cli-ledger.ts` for its command-line " +
+      "half; the refusal is thrown before any paid call, so no ledger row is ever written and the " +
+      "checkpoint store is a `Map`. Re-run witness 2 to confirm.",
+  },
+  "tests/pdf-read-failure-sentences.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Its sibling, same work and same shape: the other three refusals in `runPdfExtract` — a " +
+      "chunk too large to encode, a truncated answer, a safety-filter refusal — asserted at the " +
+      "reader seam. The two chunk cases pass a fake `PdfReader`, so nothing reaches a provider or " +
+      "a ledger, and the same `src/pdf-read.ts` → `cli-ledger.ts` import is the only reach. " +
+      "Re-run witness 2 to confirm.",
   },
   "tests/store-glossary-delete-pg.test.ts": {
     category: "shared-mechanism-collateral",
@@ -1162,6 +1220,12 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/admin-store.test.ts": "shared-services",
   "tests/auth-user-seeding.test.ts": "shared-services",
   "tests/db-test-create.test.ts": "shared-services",
+  /* Arrived from `dev` on 2026-09-04, after T-C's lane map was written, and the
+     lane guard refused to stay green — which is the whole point of a guard that
+     re-derives the universe rather than reading a stored answer. It calls
+     `pgReady` and its oracle is checkpoint rows it writes itself, so the
+     private lane is right and nothing about it needs the shared stack. */
+  "tests/retry-keeps-the-checkpoints.test.ts": "private-postgres",
   "tests/seed-admin-signin.test.ts": "shared-services",
 
   /* ---- private-postgres: everything else that touches a database --------- */

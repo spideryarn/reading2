@@ -104,6 +104,15 @@ let host: HTMLDivElement;
 let root: Root;
 /** Every request `fetch` was given, as `METHOD url`, in order. */
 let asked: string[] = [];
+/**
+ * The body of every `POST /api/jobs`, parsed.
+ *
+ * The URL alone cannot answer the question the one-press chain raises: *which
+ * steps did that press buy, and did it force any of them?* A test that counted
+ * `POST /api/jobs` would pass just as happily on a request naming `sketch`
+ * alone, on one naming both forced, and on the right one.
+ */
+let posted: { slug?: string; steps?: string[]; force?: string[] }[] = [];
 
 interface Serving {
   /** 404 the artefact, which is the ordinary case for an unpainted article. */
@@ -114,17 +123,36 @@ interface Serving {
   plateStatus?: number;
   /** Hold `GET /api/sketch/:slug` open, so `checking` can be observed. */
   hangSketch?: boolean;
+  /** What `GET /api/jobs` answers. Empty unless a test puts a run in flight. */
+  jobs?: unknown[];
+}
+
+/**
+ * Write the request down before answering it.
+ *
+ * Its own function rather than four lines inside the stub, so that the stub
+ * stays about *what the server says* — it is already at biome's cognitive
+ * complexity ceiling, and the recording has nothing to do with the routing.
+ */
+function record(method: string, u: string, init?: RequestInit): void {
+  /* The method as well as the URL, because the assertion that matters most here
+     is that nothing was **posted** — the job list is polled on a GET by a
+     tab-level engine this component does not control, so counting requests to
+     `/api/jobs` would prove nothing either way. */
+  asked.push(`${method} ${u}`);
+  if (method === "POST" && /\/api\/jobs$/.test(u) && typeof init?.body === "string") {
+    posted.push(JSON.parse(init.body));
+  }
 }
 
 function serving(opts: Serving = {}) {
   asked = [];
+  posted = [];
+  const jobs = opts.jobs ?? [];
   vi.stubGlobal("fetch", async (url: RequestInfo | URL, init?: RequestInit) => {
     const u = String(url);
-    /* The method as well as the URL, because the assertion that matters most
-       here is that nothing was **posted** — the job list is polled on a GET by
-       a tab-level engine this component does not control, so counting requests
-       to `/api/jobs` would prove nothing either way. */
-    asked.push(`${(init?.method ?? "GET").toUpperCase()} ${u}`);
+    const method = (init?.method ?? "GET").toUpperCase();
+    record(method, u, init);
     if (/\/api\/illustrated\/[^/]+\/[0-9a-f]{64}\.jpeg$/.test(u)) {
       /* **A refusal still has a body**, which is the whole hazard: an error
          page makes a perfectly good Blob, so a component that skipped `res.ok`
@@ -162,7 +190,11 @@ function serving(opts: Serving = {}) {
     if (u.includes("/advance")) {
       return new Response(JSON.stringify({ job: null, ran: null, busy: false, done: true }), { status: 200 });
     }
-    if (u.includes("/api/jobs")) return new Response(JSON.stringify({ jobs: [] }), { status: 200 });
+    /* The list the engine polls, and — unchanged — the body a POST gets back.
+       Nothing in this file reads a created job back out of the POST, and the
+       tests that watch a run in flight seed `jobs` instead, which is also what
+       a job started in another tab looks like. */
+    if (u.includes("/api/jobs")) return new Response(JSON.stringify({ jobs }), { status: 200 });
     return new Response("{}", { status: 200 });
   });
   jobEngine.start("reader-1");
@@ -442,9 +474,9 @@ describe("a plate the run could not paint", () => {
 describe("the empty state, which has three refusals to tell apart", () => {
   /**
    * The step refuses when the Sketch is absent, stale, or drawn for a different
-   * reader profile — always before the brief call, so nothing is spent. The
-   * refusal being free is exactly why the button must not be offered: a press
-   * that cannot work costs no money and still lies about what it does.
+   * reader profile — always before the brief call, so nothing is spent. Each of
+   * the three has to say which one it is, because they send the reader to
+   * different places.
    */
   const cases = [
     { name: "absent", sketch: null, says: "no Sketch of this article yet" },
@@ -453,20 +485,214 @@ describe("the empty state, which has three refusals to tell apart", () => {
   ] as const;
 
   for (const c of cases) {
-    it(`names the ${c.name} Sketch and points at the chip instead of offering a button`, async () => {
+    it(`names the ${c.name} Sketch and still points at the chip one to the left`, async () => {
       serving({ noArtefact: true, sketch: c.sketch });
       await mount();
 
       const why = host.querySelector(`[data-ill-refusal="${c.name}"]`);
       expect(why, `the ${c.name} refusal is not distinguished from the other two`).not.toBeNull();
       expect(why?.textContent).toContain(c.says);
-      expect(why?.textContent).toContain("Sketch");
-      expect(
-        host.querySelector(".ill-run"),
-        "a button was offered for a run that would certainly be refused",
-      ).toBeNull();
+      /* **The other route survives the one-press button.** A reader who wants
+         to look at the Sketch before spending anything on a painting is not
+         doing something wrong, and the sentence that tells them how is the only
+         thing that says so. */
+      expect(why?.textContent, "the way to draw the Sketch on its own is gone").toContain("Sketch");
     });
   }
+
+  /**
+   * **The sentence above the branch, which every test up to here reads straight
+   * past.**
+   *
+   * They all query `[data-ill-refusal]`, which is the *second* paragraph. The
+   * first one said *"there is no Sketch to paint from"* for all three branches
+   * until 2026-09-03 — true of `absent`, and flatly contradicted in the other
+   * two by the sentence immediately underneath it, which describes the Sketch
+   * that supposedly does not exist. A reader has no way to tell which half to
+   * believe. GPT Sol found it; nothing here could have, and that gap is the
+   * reason this test exists rather than the wording.
+   *
+   * **Two assertions, and they do different jobs.** The `toBe` is the gate: the
+   * headline is one sentence for all three branches, so pinning it is what makes
+   * a rewrite come back and re-read it against all three. The regex is what says
+   * *why* — it rejects the class, a bare denial of the Sketch's existence, and
+   * it is the half that still bites when somebody rewrites the copy and this
+   * constant together. Neither alone is enough: `toBe` would wave through a
+   * matched pair of wrong sentences, and the regex cannot tell a missing
+   * headline from a good one.
+   */
+  const REFUSAL_HEAD =
+    "Nobody has painted this one yet, and there is no usable Sketch to paint from.";
+
+  for (const c of cases) {
+    it(`does not deny the Sketch it then describes (${c.name})`, async () => {
+      serving({ noArtefact: true, sketch: c.sketch });
+      await mount();
+
+      const why = host.querySelector("[data-ill-refusal]");
+      expect(why, `no ${c.name} refusal on screen, so nothing below means anything`).not.toBeNull();
+      expect(
+        why?.previousElementSibling?.textContent,
+        `the ${c.name} refusal's headline is not the one sentence that is true of all three`,
+      ).toBe(REFUSAL_HEAD);
+
+      /* `absent` is the one branch where denying the Sketch is the truth, and it
+         says so in its own words — so the contradiction below is only ever
+         asked of the two where a Sketch exists. */
+      if (c.sketch === null) return;
+      expect(
+        why?.textContent,
+        `the ${c.name} branch stopped describing the Sketch, so there is nothing left for the headline to contradict and this test has quietly stopped testing anything`,
+      ).toContain("The Sketch of this article");
+      expect(
+        `${why?.previousElementSibling?.textContent} ${why?.textContent}`,
+        `the ${c.name} panel says there is no Sketch and then describes the Sketch`,
+      ).not.toMatch(/(?:is|are) no Sketch\b(?! of this article yet)/);
+    });
+  }
+
+  /**
+   * **The reversal, and the condition it came with.**
+   *
+   * These three states dead-ended until 2026-09-03: no button, because
+   * `illustrated` on its own would certainly be refused. Greg asked for one
+   * press that draws the Sketch and then paints — which is the `enqueue(["sketch",
+   * "illustrated"])` the previous day's plan refused as *"a hidden $0.20 charge
+   * and a three-minute wait that nothing warned about"*.
+   *
+   * **The objection was to the hiding.** So the assertion that matters here is
+   * not that a button exists — it is that all four numbers are on screen
+   * *beside* it, in front of the press. A button with only the painting's price
+   * under it would pass a laxer version of this test and would be the exact
+   * thing the old refusal was protecting against.
+   *
+   * Written red first against the three dead ends: `.ill-run` was null, so the
+   * button assertion failed on every one of the three, and `data-ill-both-cost`
+   * did not exist.
+   */
+  for (const c of cases) {
+    it(`offers one press that draws and then paints, with both prices in front of it (${c.name})`, async () => {
+      serving({ noArtefact: true, sketch: c.sketch });
+      await mount();
+
+      const run = host.querySelector(".ill-run");
+      expect(run, `the ${c.name} Sketch is still a dead end`).not.toBeNull();
+      expect(run?.textContent).toContain("Draw the Sketch, then paint");
+
+      const cost = host.querySelector("[data-ill-both-cost]")?.textContent ?? "";
+      /* Every one of the four, because a sentence that names three of them is a
+         sentence that hides one — and which one it hides is not a detail: the
+         Sketch's are the two the reader did not ask for. */
+      for (const said of ["about $0.20", "about two minutes", "$0.27–$0.40", "four to seven minutes"]) {
+        expect(cost, `"${said}" is not said before the press`).toContain(said);
+      }
+      /* And nothing was bought by reading the sentence. */
+      expect(posted, "arriving at a refusal posted a job").toEqual([]);
+    });
+  }
+
+  /**
+   * **What the press actually asks for**, which the button's own label cannot
+   * establish and a request count cannot either.
+   *
+   * One job naming both steps, not two jobs sequenced by the browser: a tab
+   * closed between the two POSTs would leave a Sketch drawn and paid for and no
+   * painting. `orderSteps` (src/jobs.ts) sorts the names by `STEP_ORDER`, so
+   * the server is what guarantees the Sketch runs first.
+   *
+   * **And unforced** — for the reason src/web/useIllustrated.ts §
+   * `drawThenPaint` gives, which is not the one this docstring gave until
+   * 2026-09-03. It said *"forcing `sketch` would cascade over every step after
+   * it, redrawing a Sketch that may be perfectly current — $0.20 for nothing"*,
+   * and no part of that is how the code behaves: a force from this hook names
+   * `illustrated` and never `sketch` (`force: [step]` in useStepJob.ts), and
+   * both steps are in `FORCE_ONLY_WHEN_NAMED`, so the positional cascade cannot
+   * speak for either. What `force` would actually cost is the work key —
+   * `workKeyFor` hashes it, so a forced press and an unforced one are two jobs
+   * at $0.27–$0.40 rather than one. Which is why the assertion is `force`
+   * **absent** rather than an empty array: `parseJobRequest` reads the two the
+   * same way and `workKeyFor` does not.
+   */
+  it("posts one job naming both steps, unforced", async () => {
+    serving({ noArtefact: true, sketch: { stale: true, profileChanged: false } });
+    await mount();
+
+    const button = [...host.querySelectorAll<HTMLButtonElement>(".ill-run button")].find((b) =>
+      b.textContent?.includes("Draw the Sketch, then paint"),
+    );
+    expect(button, "no one-press button to press").not.toBeUndefined();
+    await act(async () => {
+      button?.click();
+    });
+    await settle();
+
+    expect(posted.length, "one press did not buy exactly one job").toBe(1);
+    expect(posted[0]?.slug).toBe("s");
+    expect(posted[0]?.steps, "the press did not ask for both steps in one job").toEqual([
+      "sketch",
+      "illustrated",
+    ]);
+    expect(
+      posted[0]?.force,
+      "the press forced something — a different work key from the unforced press beside it, so two tabs buy two $0.27–$0.40 jobs",
+    ).toBeUndefined();
+  });
+
+  /**
+   * **While the Sketch half runs, the band is progress and not a button.**
+   *
+   * The failure this is written against is specific and quiet: the panel is
+   * still in its `none` state — there is no painting, and there will not be one
+   * for six to nine minutes — so if the refusal branch went on drawing its
+   * sentence and its button, a reader would be looking at *"there is no Sketch
+   * to paint from"* and a pressable button over a paid job that was already
+   * drawing one. Pressing again is the loop the whole feature exists to close.
+   *
+   * The job here has **two steps with the Sketch running**, which is what a job
+   * from this button looks like a minute in — and it is seeded through the job
+   * list rather than by pressing, because that is also what a run started in
+   * another tab looks like.
+   */
+  it("shows the Sketch half running, rather than the refusal and a live button", async () => {
+    serving({
+      noArtefact: true,
+      sketch: null,
+      jobs: [
+        {
+          id: "job-1",
+          slug: "s",
+          status: "running",
+          createdAt: new Date().toISOString(),
+          startedAt: new Date().toISOString(),
+          steps: [
+            { name: "sketch", label: "Drawing the argument", status: "running", startedAt: new Date().toISOString() },
+            { name: "illustrated", label: "Painting the argument", status: "pending" },
+          ],
+        },
+      ],
+    });
+    await mount();
+
+    expect(host.textContent, "the reader is not told anything is happening").toContain(
+      "Drawing the argument",
+    );
+    expect(
+      host.querySelector(".cmt-spinner"),
+      "a two-step job is running and nothing on screen is moving",
+    ).not.toBeNull();
+    expect(
+      host.querySelector('[data-ill-refusal="absent"]'),
+      "the refusal is still on screen over a job that is drawing the Sketch right now",
+    ).toBeNull();
+    const pressable = [...host.querySelectorAll<HTMLButtonElement>("button")].filter((b) =>
+      b.textContent?.includes("Draw the Sketch, then paint"),
+    );
+    expect(pressable, "the button is still pressable, so a second job is one click away").toEqual([]);
+    /* And there is a way out of it, which is the other half of "not a dead
+       spinner": a six-to-nine-minute job the reader cannot stop is worse than
+       one they never started. */
+    expect(host.textContent).toContain("Stop");
+  });
 
   it("names the price before the press when there IS a Sketch to paint from", async () => {
     serving({ noArtefact: true, sketch: { stale: false, profileChanged: false } });

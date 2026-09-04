@@ -124,6 +124,52 @@ export interface UseIllustrated {
    * swept in with it.
    */
   regenerate(): Promise<void>;
+  /**
+   * **Draw the Sketch, then paint it** — one job holding both steps, for the
+   * three states in which painting alone would be refused.
+   *
+   * The chain is the server's: `STEP_ORDER` puts `illustrated` immediately after
+   * `sketch`, so a job naming both draws before it paints (src/pipeline.ts), and
+   * `stepIsDone` is what decides whether the Sketch half runs at all. That last
+   * part is the load-bearing one for `stale` and `profile-changed`, where the
+   * Sketch has to be **re-drawn rather than adopted**: the sketch step's stamp
+   * is read out of the artefact's own `sourceHash` and `profileHash`, which are
+   * the same two fields the route reports `stale` and `profileChanged` from — so
+   * a Sketch the panel calls out of date is a Sketch the step cannot call
+   * current. Asserted rather than assumed:
+   * tests/illustrated-step-registration.test.ts § one press that draws and then
+   * paints.
+   *
+   * **Unforced — and the reason this said until 2026-09-03 was wrong in every
+   * clause.** It read: *"a force would name `sketch`, and forcing a step forces
+   * every step after it, so a Sketch that is genuinely current would be redrawn
+   * at $0.20 for nothing"*. GPT Sol checked it against the code:
+   *
+   *  - a force from here names **`illustrated`**, never `sketch` —
+   *    `useStepJob.start` sends `force: [step]`, its own step, and nothing
+   *    widens it (src/web/useStepJob.ts § `precededBy`);
+   *  - `sketch` is *before* `illustrated`, and `cascadeForce` (src/jobs.ts)
+   *    starts at the first forced name and looks only at what follows it, so
+   *    nothing this button can send would sweep the Sketch in;
+   *  - and it could not be swept in even from further back: **both** steps are
+   *    in `FORCE_ONLY_WHEN_NAMED` (src/pipeline.ts), the set the positional
+   *    cascade is not allowed to speak for. `regenerate` above says this
+   *    correctly about `illustrated`; the same is true of `sketch`.
+   *
+   * So the Sketch half is unforced whichever way this button goes, and
+   * `stepIsDone` is the only thing deciding whether it is redrawn — which is
+   * the paragraph above, and that part was right.
+   *
+   * **What unforced actually buys is de-duplication of the painting half.**
+   * `work_key` is computed over the request with `force` in it (`workKeyFor`,
+   * src/jobs.ts), so a forced press and an unforced one are two keys and two
+   * $0.27–$0.40 jobs: two tabs, or a press either side of a poll, and the reader
+   * pays twice — `ensure` above, at length. There is nothing for a force to
+   * overcome here in any case, because this verb is offered only from the empty
+   * state, where there is no painting for the step to skip. Narrower than the
+   * sentence it replaces, and true.
+   */
+  drawThenPaint(): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -241,6 +287,9 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
   const regenerate = useCallback(async () => {
     await queue.start({ force: true });
   }, [queue]);
+  const drawThenPaint = useCallback(async () => {
+    await queue.start({ precededBy: ["sketch"] });
+  }, [queue]);
 
   /* Asked only when there is nothing to show — see the header. Re-asked when an
      Illustrated job ends, because a refusal is itself evidence the Sketch is
@@ -311,6 +360,7 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
     automatic: auto && (queue.job !== null || queue.starting),
     ensure,
     regenerate,
+    drawThenPaint,
     cancel: queue.cancel,
   };
 }
