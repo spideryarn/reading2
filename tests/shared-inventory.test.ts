@@ -175,7 +175,6 @@ describe("the sweep over the modes", () => {
   it("always names the owner's own work, which no mode covers", () => {
     expect(keys(sharedInventory(EVERYTHING).withheld)).toEqual(
       expect.arrayContaining([
-        "comments",
         "lookups",
         "profile",
         "rename",
@@ -183,6 +182,40 @@ describe("the sweep over the modes", () => {
         "provenance-internal",
       ]),
     );
+  });
+
+  /**
+   * **`comments` crossed from one list to the other on 2026-09-04**, and this
+   * is the assertion that says which side it is on now — the only row that has
+   * ever moved.
+   *
+   * Asserted as *not withheld* as well as *shared*, because the failure that
+   * matters is not a missing row: it is the row appearing in **both** lists,
+   * which reads to an owner as "this goes out" and "this stays" on one screen.
+   * The partition test above would catch that too; saying it here as well means
+   * the failure names the row that moved.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
+   */
+  it("puts the owner's comments on the shared side, and only there", () => {
+    const { shared, withheld, ifBuilt } = sharedInventory(EVERYTHING);
+    expect(keys(shared)).toContain("comments");
+    expect(keys(withheld)).not.toContain("comments");
+    expect(keys(ifBuilt)).not.toContain("comments");
+  });
+
+  /**
+   * **And the sentence has to name the answers**, which is the half an owner
+   * would not predict from the label.
+   *
+   * Their own words going out is what "share my comments" sounds like; the
+   * model's replies going with them is the part that surprises, and they can be
+   * long, cite the web, and were written for one reader. A row that said only
+   * "the passages you marked" would be true and would still mislead —
+   * docs/project/copy.md § a true sentence that leaves the wrong impression.
+   */
+  it("says that the model's answers go out too", () => {
+    const row = sharedInventory(EVERYTHING).shared.find((r) => r.key === "comments");
+    expect(row?.detail).toContain("what the model");
   });
 
   /* Every row says something, and nothing says the same thing twice. A label
@@ -226,6 +259,11 @@ const WIRE_ROW = {
   quotes: "quotes",
   tweets: "tweets",
   timeline: "timeline",
+  /* Not a mode: comments have no button in the bar and are swept by neither
+     `MODES` nor `visitorGap`. Their row is the prose one that moved out of
+     `NEVER_SHARED` on 2026-09-04.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3. */
+  comments: "comments",
 } satisfies Record<keyof PublicArticle, string>;
 
 describe("the list against the wire", () => {

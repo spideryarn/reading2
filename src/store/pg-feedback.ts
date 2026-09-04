@@ -11,7 +11,9 @@
  * 1. **An owner-scoped advisory lock**, taken first.
  * 2. **Idempotency**: this reader already filed this id ⇒ `duplicate`, nothing
  *    written.
- * 3. **The cap**: ten reports an hour ⇒ `limited`, nothing written.
+ * 3. **The cap**: too many reports in an hour ⇒ `limited`, nothing written.
+ *    Skipped entirely for an administrator, who has no cap — `feedbackHourlyCap`
+ *    in ./contracts.ts says why.
  * 4. Insert, and answer `created`.
  *
  * **The lock is not decoration.** `count` then `insert` is raceable: concurrent
@@ -55,8 +57,8 @@ import type {
   FeedbackKind,
 } from "../types.js";
 import {
-  FEEDBACK_HOURLY_CAP,
   FEEDBACK_WINDOW_MS,
+  feedbackHourlyCap,
   type FeedbackReport,
   type FeedbackStore,
   type FeedbackSubmission,
@@ -240,30 +242,33 @@ const rawPgFeedbackStore: FeedbackStore = {
          other, on a serverless instance whose clock nobody watches. GPT Sol's
          code review, 2026-08-31. `now()` is the transaction's start time, so it
          is also the same instant for both halves of this. */
-      const windowSeconds = FEEDBACK_WINDOW_MS / 1000;
-      const recent = await tx
-        .select({
-          retryAfterMs: sql<number>`ceil(extract(epoch from (${feedbackTable.createdAt} + make_interval(secs => ${windowSeconds}) - now())) * 1000)::double precision`,
-        })
-        .from(feedbackTable)
-        .where(
-          and(
-            eq(feedbackTable.ownerId, ownerId),
-            sql`${feedbackTable.createdAt} >= now() - make_interval(secs => ${windowSeconds})`,
-          ),
-        )
-        .orderBy(asc(feedbackTable.createdAt))
-        .limit(FEEDBACK_HOURLY_CAP);
-      const oldest = recent[0];
-      if (recent.length >= FEEDBACK_HOURLY_CAP && oldest) {
-        /* At least a millisecond: a `retryAfterMs` of 0 is a header that tells
-           the client to try again immediately, for ever. */
-        const retryAfterMs = Math.max(1, Math.ceil(Number(oldest.retryAfterMs)));
-        logger.warn(
-          { recent: recent.length, retryAfterMs },
-          "feedback report refused: hourly cap",
-        );
-        return { kind: "limited", retryAfterMs };
+      const cap = feedbackHourlyCap(ownerId);
+      if (cap !== null) {
+        const windowSeconds = FEEDBACK_WINDOW_MS / 1000;
+        const recent = await tx
+          .select({
+            retryAfterMs: sql<number>`ceil(extract(epoch from (${feedbackTable.createdAt} + make_interval(secs => ${windowSeconds}) - now())) * 1000)::double precision`,
+          })
+          .from(feedbackTable)
+          .where(
+            and(
+              eq(feedbackTable.ownerId, ownerId),
+              sql`${feedbackTable.createdAt} >= now() - make_interval(secs => ${windowSeconds})`,
+            ),
+          )
+          .orderBy(asc(feedbackTable.createdAt))
+          .limit(cap);
+        const oldest = recent[0];
+        if (recent.length >= cap && oldest) {
+          /* At least a millisecond: a `retryAfterMs` of 0 is a header that tells
+             the client to try again immediately, for ever. */
+          const retryAfterMs = Math.max(1, Math.ceil(Number(oldest.retryAfterMs)));
+          logger.warn(
+            { recent: recent.length, retryAfterMs },
+            "feedback report refused: hourly cap",
+          );
+          return { kind: "limited", retryAfterMs };
+        }
       }
 
       /* Step 4. **A plain insert, on purpose.** Under the lock a conflicting id

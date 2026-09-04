@@ -271,7 +271,6 @@ function Reading({ slug, start }: { slug: string; start: Mode }): ReactElement {
       view: "article" as const,
       mode,
       onMode: setMode,
-      signedIn: true,
       experimental: EXPERIMENTAL_ON,
     }),
   );

@@ -741,6 +741,36 @@ class FakeResizeObserver {
 }
 
 describe("the chip in the diagram row", () => {
+  /**
+   * **The visitor case this file could not have before.**
+   *
+   * The chip is the cheapest way into a $0.20 draw — one press arms
+   * `armActivation` — so the assertion that matters for a shared link is that
+   * a visitor has no chip at all, rather than a disabled one. Not rendered, not
+   * hidden: `hidden` leaves an element a later change can reveal.
+   */
+  it("is absent for a visitor, along with the whole picker", async () => {
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    serving({ noArtefact: true, sketch: null });
+    const { root: tree, blocks } = article();
+    await act(async () => {
+      root.render(
+        <DiagramPanel
+          access={{ kind: "visitor" }}
+          slug="s" root={tree} kind="force" onKind={() => {}} atRow={0} onJump={() => {}}
+          blocks={blocks} axis="spread" onAxis={() => {}} hue="section" onHue={() => {}}
+        />,
+      );
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(host.querySelector('[data-diag-kind="illustrated"]'), "no Illustrated chip").toBeNull();
+    expect(host.querySelector("[data-diag-kind]"), "no picker at all").toBeNull();
+    /* Not vacuous: the panel really did mount and draw its band. */
+    expect(host.querySelector(".mode-band.diag"), "the band").not.toBeNull();
+  });
+
+
   it("is there for an owner, and Diagram mode is what keeps it from a visitor", async () => {
     vi.stubGlobal("ResizeObserver", FakeResizeObserver);
     serving({ noArtefact: true, sketch: null });
@@ -757,11 +787,14 @@ describe("the chip in the diagram row", () => {
     });
 
     expect(host.querySelector('[data-diag-kind="illustrated"]'), "no Illustrated chip").not.toBeNull();
-    /* And the reason there is no visitor case to test in this file: the whole
-       of Diagram mode is owners-only, so a visitor never reaches the row the
-       chip is in. tests/public-network-trace.tsx holds the band a visitor gets
-       instead. */
-    expect(visitorGap("diagram", {} as never)).toEqual({ kind: "owners-only", feature: "Diagram" });
+    /* **What keeps this chip from a visitor changed on 2026-09-04**, and the
+       assertion had to change with it. Diagram mode used to be owners-only
+       outright, so a visitor never reached the row the chip is in and the check
+       here was on `visitorGap`. A visitor reaches the panel now — pinned to the
+       free picture — so the thing that keeps them from a $0.20 draw is the
+       panel's own `access`, not the mode's policy.
+       docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */
+    expect(visitorGap("diagram", {} as never)).toBeNull();
   });
 
   /**

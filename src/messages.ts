@@ -2644,6 +2644,33 @@ export const ALWAYS_SHARED = [
       "The title the page itself carried, the byline, the publication, the language, the " +
       "publication's own one-line excerpt, and a link back to the original where we have one.",
   },
+  {
+    /**
+     * **This row moved out of `NEVER_SHARED` on 2026-09-04**, and it is the one
+     * line in either list that changed what it promised rather than being
+     * added to it. Greg decided that a shared link carries the reader's own
+     * marks and notes; the sentence it used to sit under said they never left.
+     * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
+     *
+     * **"and what the model answered when you asked" is the load-bearing
+     * half.** An owner reading "Comments and notes" pictures their own
+     * sentences; the thing they would not predict from the label is that the
+     * *answers* go too, and those can be long, can cite the web, and were
+     * written for them rather than for an audience. The old wording listed the
+     * answers as well, and it was listing what stayed behind — so the words
+     * survive and the bucket is the change.
+     *
+     * What is not said here, deliberately: nothing about referee notes or
+     * half-finished questions. Neither crosses — `PUBLIC_COMMENTS_WHERE` in
+     * src/store/public-reader.ts refuses both in SQL — and a promise that has
+     * to enumerate its exceptions is a promise a reader stops trusting.
+     */
+    key: "comments",
+    label: "Your comments and notes",
+    detail:
+      "Every passage you bookmarked or annotated, what you wrote about it, and what the model " +
+      "answered when you asked.",
+  },
 ] as const;
 
 /**
@@ -2680,15 +2707,15 @@ export const SHARED_ARC = {
  * here: they arrive from the sweep, which is what keeps a mode added next month
  * on this side of the line without anybody editing this file. What is here is
  * the things that are not modes at all.
+ *
+ * **It was six rows and is five.** `comments` moved to `ALWAYS_SHARED` on
+ * 2026-09-04, which is the only time a row has crossed between these two lists.
+ * That is worth knowing before moving a second one: a row here is a promise
+ * somebody has already read, and moving it is a change to what they agreed to
+ * rather than a change to a list.
+ * docs/plans/260904c-more-modes-on-a-shared-link.md.
  */
 export const NEVER_SHARED = [
-  {
-    key: "comments",
-    label: "Comments and notes",
-    detail:
-      "Every passage you bookmarked or annotated, your questions about them, and what the model " +
-      "answered.",
-  },
   {
     key: "lookups",
     label: "Glossary lookups",

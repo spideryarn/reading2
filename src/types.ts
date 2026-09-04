@@ -3253,7 +3253,7 @@ export interface FeedbackDiagnostics {
  * for.
  *
  * `feedback` is the only table in this app an ordinary account holder can add
- * rows to — capped at ten an hour each (`FEEDBACK_HOURLY_CAP`), which is a
+ * rows to — rate-capped per owner (`FEEDBACK_HOURLY_CAP`), which is a
  * ceiling on the rate and not on the total. An unbounded select on it is a
  * response whose size is decided by whoever wrote the most, so the ceiling is
  * here rather than in the caller's good intentions.
