@@ -35,6 +35,17 @@
       // help: the scanner walks the whole allowlist whatever path you pass it.
       // These are captured inputs, not our code; there is nothing here to lint.
       "!evals/extraction/fixtures/**",
+      // Captured model answers, and the same reasoning one line up: not our
+      // code, nothing here to lint. `<slug>.raw.json` is *deliberately* the
+      // model's reply saved before anything touched it — evals/illustrated/run.ts
+      // says so twice — so several of them are a JSON object wrapped in a
+      // ```json fence, which is what the model actually sent. Biome parses them
+      // because of the extension and reports 16 parse errors, which failed
+      // `npm run check`'s `cycles` gate for everybody in the tree from commit
+      // 8d8aaadf. Stripping the fences or renaming to .txt would both destroy
+      // the one property these files exist for; not linting captured data is
+      // the fix.
+      "!evals/results/**",
       "styles/**",
       "vite.config.ts",
       "vitest.config.ts",
