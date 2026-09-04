@@ -3617,7 +3617,7 @@ export const feedback = spideryarn.table(
     ),
     /**
      * **The rate cap's only query**, and the reason it can be a `count` rather
-     * than a scan: ten reports an hour, per owner, counted over
+     * than a scan: a fixed number of reports an hour, per owner, counted over
      * `(owner_id, created_at)` inside the transaction that is about to insert.
      * src/store/pg-feedback.ts.
      */
