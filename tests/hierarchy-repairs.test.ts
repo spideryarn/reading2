@@ -598,7 +598,20 @@ describe("a fault in what the model said is still refused", () => {
     );
   });
 
-  it("refuses a root that does not cover the whole article", () => {
+  /**
+   * **This used to refuse, and it now repairs** — 2026-09-04. The root was the
+   * one node whose range was believed rather than derived, which made an
+   * ordinary short last section fatal there and nowhere else; see "the root,
+   * which has no parent to be derived from" below for the three arms that lost
+   * an article to it and for what the clamp costs.
+   *
+   * The refusal it leaves behind is the *post-condition*: the guard in
+   * `buildTree` is still there and still throws, and it is now unreachable
+   * except through a bug in the clamp itself. That is the shape worth keeping —
+   * a normaliser in front, an assertion behind it — rather than deleting the
+   * check because nothing fires it any more.
+   */
+  it("stretches a root that stops short, rather than refusing it", () => {
     const partial: ModelNode = {
       ...gapped,
       range: ["spya-aaaaaa", "spya-eeeeee"],
@@ -607,8 +620,12 @@ describe("a fault in what the model said is still refused", () => {
         { title: "Second", gist: "It closes.", range: ["spya-dddddd", "spya-eeeeee"] },
       ],
     };
-    expect(() => buildTree(partial, {}, BLOCKS, "test", report())).toThrow(
-      /does not cover the whole article/,
+    const r = report();
+    const tree = buildTree(partial, {}, BLOCKS, "test", r);
+    expect(tree.nodes[tree.rootId]!.range).toEqual(["spya-aaaaaa", "spya-ffffff"]);
+    expect(checkTree(BLOCKS, tree).problems).toEqual([]);
+    expect(r.repairs.some((x) => x.where === "root" && x.kind === "short" && x.size === 1)).toBe(
+      true,
     );
   });
 });
@@ -887,5 +904,122 @@ describe("any proposal whose ranges resolve comes back as a valid tree", () => {
     // Two leaves for block 1, none for block 2 — exactly what a bad tiling does.
     leaf!.range = [blocks[1]!.id, blocks[1]!.id];
     expect(checkTree(blocks, tree).problems.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * **The root is the one node with no parent to derive its range from.**
+ *
+ * Everywhere else `planChildRanges` believes a start and computes an end, so a
+ * section that stops short is stretched and counted. The root's range came
+ * straight from the model and was then put to a hard equality test, which made
+ * it the only place in the tree where the ordinary fault was fatal.
+ *
+ * It is not a corner. `openai-huggingface` ends on an empty paragraph, a
+ * stranded footnote the prompt renders as `NOT-GISTABLE: (withheld)`, and a
+ * blog footer whose entire text is "No posts"; ending the article before those
+ * three is what a careful reader would do, and three independent arms — Sonnet
+ * at two efforts and glm-5.3-flash — did exactly that and lost the article to
+ * the same message every time.
+ * evals/results/hierarchy-cheap-models-2026-09-03.md, recommendation 3.
+ *
+ * So the root is clamped to the article's own ends before anything descends,
+ * and the guard stays behind it as a post-condition. The clamp is **counted**,
+ * because a repair nobody is told about is the same shape as the bug it
+ * repaired (docs/reusable/silent-success.md) — and at the closing end it shares
+ * its coordinate with the last child's own stretch, which is one boundary seen
+ * at two depths, so `repairedBlockCount` says three rather than six.
+ */
+describe("the root, which has no parent to be derived from", () => {
+  const someBlocks = (n: number): Block[] =>
+    Array.from({ length: n }, (_, i) => block(`spya-${String(i).padStart(6, "0")}`, `Block ${i}`));
+
+  it("stretches a root that stops short of the last block, and counts it", () => {
+    const blocks = someBlocks(8);
+    const short: ModelNode = {
+      title: "t",
+      gist: "A sentence about the whole.",
+      // Three blocks of trailing furniture the model declined to cover.
+      range: [blocks[0]!.id, blocks[4]!.id],
+      children: [
+        { title: "a", gist: "A sentence.", range: [blocks[0]!.id, blocks[1]!.id] },
+        { title: "b", gist: "A sentence.", range: [blocks[2]!.id, blocks[4]!.id] },
+      ],
+    };
+    const r = report();
+    const tree = buildTree(short, {}, blocks, "short-root", r);
+
+    expect(checkTree(blocks, tree).problems).toEqual([]);
+    expect(tree.nodes[tree.rootId]!.range).toEqual([blocks[0]!.id, blocks[7]!.id]);
+
+    /* Counted at the root, and at the child that actually absorbed the blocks.
+       Both name the same boundary — one past the article's last block — so the
+       total is three blocks moved, not six. */
+    expect(r.repairs.map((x) => [x.where, x.kind, x.at, x.size])).toEqual([
+      ["root", "short", 8, 3],
+      ["root > child 2", "short", 8, 3],
+    ]);
+    expect(repairedBlockCount(r.repairs)).toBe(3);
+  });
+
+  it("stretches a root that starts late, and counts that separately", () => {
+    const blocks = someBlocks(8);
+    const late: ModelNode = {
+      title: "t",
+      gist: "A sentence about the whole.",
+      range: [blocks[2]!.id, blocks[7]!.id],
+      children: [
+        { title: "a", gist: "A sentence.", range: [blocks[2]!.id, blocks[4]!.id] },
+        { title: "b", gist: "A sentence.", range: [blocks[5]!.id, blocks[7]!.id] },
+      ],
+    };
+    const r = report();
+    const tree = buildTree(late, {}, blocks, "late-root", r);
+
+    expect(checkTree(blocks, tree).problems).toEqual([]);
+    expect(tree.nodes[tree.rootId]!.range).toEqual([blocks[0]!.id, blocks[7]!.id]);
+    /* The two leading blocks join the first child, which is where a start that
+       says nothing always sends them — `planChildRanges` pins the first child
+       to its parent's start. **One boundary, seen at two depths**, exactly as
+       the closing end is above: the root records the clamp and the child
+       records the stretch that followed from it, both at index 0, and
+       `repairedBlockCount` charges the article twice for neither. */
+    expect(r.repairs.map((x) => [x.where, x.kind, x.at, x.size])).toEqual([
+      ["root", "gap", 0, 2],
+      ["root > child 1", "gap", 0, 2],
+    ]);
+    expect(repairedBlockCount(r.repairs)).toBe(2);
+  });
+
+  it("counts nothing when the root already covers the article", () => {
+    /* The control. Both assertions above would also pass if the clamp fired on
+       every tree and the numbers happened to come out; this is what says the
+       repair log stays empty when there is nothing to repair. */
+    const blocks = someBlocks(6);
+    const whole: ModelNode = {
+      title: "t",
+      gist: "A sentence about the whole.",
+      range: [blocks[0]!.id, blocks[5]!.id],
+      children: [
+        { title: "a", gist: "A sentence.", range: [blocks[0]!.id, blocks[2]!.id] },
+        { title: "b", gist: "A sentence.", range: [blocks[3]!.id, blocks[5]!.id] },
+      ],
+    };
+    const r = report();
+    buildTree(whole, {}, blocks, "whole-root", r);
+    expect(r.repairs).toEqual([]);
+  });
+
+  it("still refuses a root whose end is not a block id at all", () => {
+    const blocks = someBlocks(4);
+    /* The clamp must not become a way of accepting an invented id. An endpoint
+       that resolves to nothing is a fault in what the model *said*, and those
+       still throw — see "a fault in what the model said is still refused". */
+    const bogus = {
+      title: "t",
+      gist: "A sentence.",
+      range: [blocks[0]!.id, "spya-zzzzzz"],
+    } as ModelNode;
+    expect(() => buildTree(bogus, {}, blocks, "bogus", report())).toThrow(/not in blocks\.json/);
   });
 });

@@ -167,6 +167,44 @@ describe("splitBlocks", () => {
     expect(split.stranded).toBe(1);
     expect(split.body.length).toBe(stranded.length);
   });
+
+  /**
+   * **The count is the only thing that says this happened, and it was silent in
+   * the one shape that reaches it most often.**
+   *
+   * The scan walks back from the end looking for the trailing apparatus run. If
+   * the *last* block is body there is no run, and the function returned `none`
+   * — with `stranded: 0` — before counting anything earlier. So an article
+   * whose apparatus sits mid-body and whose last block is an ordinary paragraph
+   * reported no apparatus at all: no Notes node built, the note buried under an
+   * ordinary structural branch, `HierarchyRun.strandedSupplement` zero, and the
+   * CLI printing its usual "0 nodes over 0 blocks".
+   *
+   * `openai-huggingface` is exactly that article — a stranded footnote at index
+   * 93 followed by a blog footer reading "No posts" — and the root clamp
+   * (src/hierarchy.ts) has just made it publishable, so this stops being a
+   * latent hole and starts being something we do. Nothing about `body` or
+   * `groups` changes; what changes is that the run says so.
+   * docs/reusable/silent-success.md.
+   */
+  it("counts a stranded note even when the article ends on body", () => {
+    const stranded = [...bodyBlocks.slice(0, 5), note(99), ...bodyBlocks.slice(5)];
+    const split = splitBlocks(stranded);
+    expect(split.groups).toEqual([]);
+    expect(split.stranded).toBe(1);
+    // Unchanged, and that is the point: this is a reporting fix, not a
+    // behaviour change. Every block is still body and nothing is grouped.
+    expect(split.body.length).toBe(stranded.length);
+  });
+
+  it("still says nothing happened when nothing did", () => {
+    /* The control. The assertion above would also pass if `stranded` had become
+       "how many blocks are there", so this is what says zero is still reachable. */
+    const split = splitBlocks(bodyBlocks);
+    expect(split.groups).toEqual([]);
+    expect(split.stranded).toBe(0);
+    expect(split.body.length).toBe(bodyBlocks.length);
+  });
 });
 
 describe("the appended tree", () => {
