@@ -116,4 +116,9 @@ you commit. See [silent-success.md](silent-success.md).
 
 ## At the end
 
+**Push it.** Then, if every gate is green and the job is finished, clear the worktree away — check it
+is safe to delete first, because gitignored artefacts nobody else has a copy of survive a clean
+`git status` ([worktrees.md § Before you remove one](../project/worktrees.md#before-you-remove-one)).
+Anything failed or unfinished: leave the tree standing and say why.
+
 Follow [debrief-progress.md](debrief-progress.md).

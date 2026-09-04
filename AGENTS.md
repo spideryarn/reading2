@@ -204,8 +204,9 @@ shared primary. Call the `EnterWorktree` tool (or launch with `claude --worktree
 [worktrees.md](docs/project/worktrees.md). A doc edit or a one-line fix may stay here; anything
 that touches code moves. Run the job itself the way
 [engineering-manager.md](docs/reusable/engineering-manager.md) says — a plan doc, a few stages,
-the work delegated, and a GPT Sol review at the end of every stage. Commit each stage, and push to
-`dev` when you finish. **Before deleting a worktree, run `npm run worktree:check` inside it** —
+the work delegated, and a GPT Sol review at the end of every stage. Commit each stage, push to
+`dev` when you finish, and then remove the worktree if everything is green and done.
+**Before deleting a worktree, run `npm run worktree:check` inside it** —
 `data/` and `.env.local` are gitignored, so a clean `git status` says "safe" over the top of work
 nothing else has a copy of.
 
