@@ -26,7 +26,6 @@ import { SketchView } from "./SketchView.js";
 import { MODE_IDEAL, MODE_MIN, SPINE_W } from "./layout.js";
 import { buildSummaryTree } from "./tree.js";
 import type { Block, BlockId, Tree } from "../types.js";
-import "./styles.css";
 import "./tailwind.css";
 
 const WORDS = [

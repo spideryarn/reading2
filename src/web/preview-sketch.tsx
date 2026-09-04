@@ -19,7 +19,6 @@ import { SketchView } from "./SketchView.js";
 import { MODE_IDEAL, MODE_MIN, SPINE_W } from "./layout.js";
 import type { Block, BlockId } from "../types.js";
 import fixture from "./preview-sketch-fixture.json";
-import "./styles.css";
 import "./tailwind.css";
 
 const { sketch, blockIds } = fixture as { sketch: unknown; blockIds: string[] };
