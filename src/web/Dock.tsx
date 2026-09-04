@@ -91,11 +91,18 @@
  * ## And a second rule, which is *whether* a button is drawn at all
  *
  * Since 2026-09-03 the order is not the only question a `MODES_UI` row answers.
- * Five of the thirteen — Quotes, Timeline, Referee, Diagram and Remember — are
- * behind the experimental-features switch, so the bar draws the rows that are
- * not experimental **plus whichever mode the reader is in**. Every row carries a
+ * Four of the thirteen — Quotes, Timeline, Referee and Remember — are behind the
+ * experimental-features switch, so the bar draws the rows that are not
+ * experimental **plus whichever mode the reader is in**. Every row carries a
  * required `experimental: boolean`, so mode fourteen cannot be added without
  * somebody deciding which side of that line it is on.
+ *
+ * **Diagram came back out on 2026-09-04**, and the gate went one level down
+ * rather than away: the mode is in the default bar, and four of its five
+ * pictures are behind the switch instead — `KIND_UI` in DiagramPanel.tsx, which
+ * carries the same required flag and shares this file's rule
+ * (experimental-visibility.ts). A reader asked for exactly that: *"the only
+ * diagram sub-mode that is good enough to show everyone is the sketch mode"*.
  *
  * The rule itself, and why the current mode is retained rather than dropped, is
  * `visibleModes` below. The manual is
@@ -156,14 +163,15 @@ import {
   experimentalIsOn,
   experimentalOffline,
 } from "./experimental-copy.js";
+/* The one rule both this bar and Diagram's picture chips draw by — see
+   `visibleModes` below. experimental-visibility.ts. */
+import { shownBehindTheSwitch } from "./experimental-visibility.js";
 import { DEFAULT_MODE, type Mode, type Panel } from "./params.js";
 import { Link } from "./Link.js";
 import { type ArticleView, carriedSearch, readHref } from "./router.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useSlow } from "./useSlow.js";
 import { InstallHint } from "./InstallHint.js";
-import { VisitorNotice } from "./PublicChrome.js";
-import { COMMENTS_GAP } from "./visitor.js";
 
 /**
  * **The experimental-features switch, as the bar sees it.**
@@ -273,24 +281,25 @@ interface Props {
    */
   marked?: ReadonlyMap<Mode, string> | undefined;
   /**
-   * Whether this reader has an account — read **only** by the visitor drawer's
-   * call to action. reader-capability.ts § signedIn.
+   * **There is no `signedIn` prop any more, and this is the note saying so.**
    *
-   * **Not the prop the experimental switch keys on**, and the difference is not
-   * pedantry. This one is optional visitor-copy input: `Metadata.tsx` and
-   * `Tweets.tsx` mount the bar without it, so a control drawn on `signedIn`
-   * would vanish the moment an owner pressed Metadata — present on one page of
-   * their own article and gone on the next. `experimental.signedIn` comes from
-   * the store, which knows the session, so it has one answer on every page.
-   * (GPT Sol, finding 2; Fable reached the same conclusion independently.)
+   * It existed to tell the visitor drawer's call to action whether to offer an
+   * account, and that call to action went on 2026-09-04 when a shared link
+   * began carrying the owner's comments: the drawer shows the comments now, and
+   * there is nothing left in it that an account would change.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
    *
-   * So the file now carries two spellings of *is somebody signed in*, as it
-   * already carries two of *is this a visitor* (`visitor` and `drawer.visitor`).
-   * The question each answers: this one is **what to say to a reader who has no
-   * account**; `experimental.signedIn` is **whether there is an account to save
-   * a setting to**.
+   * **The distinction it recorded is worth keeping**, because the remaining
+   * spelling is easy to reach for wrongly. `experimental.signedIn` comes from
+   * the store, which knows the session, so it has one answer on every page. The
+   * deleted prop was *optional visitor-copy input*, and `Metadata.tsx` and
+   * `Tweets.tsx` mounted the bar without it — so any control drawn on it
+   * vanished the moment an owner pressed Metadata, present on one page of their
+   * own article and gone on the next. (GPT Sol, finding 2; Fable reached the
+   * same conclusion independently.) If something here ever needs *is somebody
+   * signed in* again, take it from the store, not from a prop the callers may
+   * forget.
    */
-  signedIn?: boolean | undefined;
   /**
    * **Whether this article is theirs**, which is a different question from
    * `signedIn` and the one every other piece of chrome keys on.
@@ -324,23 +333,27 @@ interface Props {
     visitor?: false;
   } | {
     /**
-     * The drawer a **visitor** gets: it opens, and what is in it is the
-     * sentence about whose comments these would be.
+     * The drawer a **visitor** gets, and since 2026-09-04 it has the owner's
+     * comments in it rather than a sentence about them.
      *
-     * A separate member of the union rather than five optional fields, so
-     * there is no `comments: []` for a later edit to read and no `loaded`
-     * for it to test. The five that are missing are missing because there is
-     * nothing to fetch — `useComments` is not mounted anywhere on a shared
-     * document. docs/plans/260827ai-public-read-only-access.md.
+     * Greg's decision: a shared link carries them.
+     * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
      *
-     * The alternative was passing no drawer at all, which degrades the
-     * Comments button to a link back to the page it is already on. A control
-     * that does nothing is exactly what marking-rather-than-hiding exists to
-     * avoid.
+     * **Still a separate member of the union**, and the two fields it does not
+     * have are the reason. There is no `loaded` and no `loadFailed`, because
+     * there was no request: the comments arrived inside the page's own payload,
+     * so there is nothing to be waiting for and nothing to have failed.
+     * `useComments` is still mounted nowhere on a shared document. That is the
+     * same shape `PublicArtefactSet` has against the owner's hooks —
+     * src/web/reader-capability.ts § what "visitor" means.
      */
     visitor: true;
+    /** The owner's, read-only, in reading order. `visitorComments` derives them. */
+    comments: Comment[];
     panel: Panel | null;
     onPanel(next: Panel | null): void;
+    /** Open one, exactly as the owner's arm does. Reading is the whole verb. */
+    onOpenComment(id: string): void;
   };
 }
 
@@ -595,12 +608,22 @@ const MODES_UI = [
   },
   /* Diagram sits between the ways *into* the article and the conversation about
      it, next to Summary rather than next to Chat, because it is the same move
-     Summary makes — the article restated — with a picture instead of prose. */
+     Summary makes — the article restated — with a picture instead of prose.
+
+     **Not experimental since 2026-09-04**, and the flag moved rather than
+     went: one of its five pictures is good enough for everybody and four are
+     not, so the switch now hides the four (`KIND_UI` in DiagramPanel.tsx).
+     Opening the mode still buys nothing — the picture it lands on is a Sketch
+     nobody has drawn, which is an invitation with the price on it, and only a
+     press on that button spends anything (activation.ts § MODE_TARGET).
+
+     The blurb names the picture a default reader will actually meet. It used to
+     list the three geometries, which are now the hidden ones. */
   {
     mode: "diagram",
-    experimental: true,
+    experimental: false,
     icon: Network,
-    blurb: "The article's shape as a picture: as an outline, as a graph, or as paragraphs placed by meaning",
+    blurb: "The article's shape as a picture: a model reads the argument and draws it",
   },
   {
     mode: "chat",
@@ -686,9 +709,15 @@ export type ModesMissingFromDock<
  *
  * Exported for tests/dock-experimental-modes.test.tsx, which is the only way to
  * ask this question without a DOM.
+ *
+ * **The rule itself lives in experimental-visibility.ts since 2026-09-04**,
+ * because Diagram's picture chips now obey the same one and a shared link has to
+ * survive both of them — `visibleKinds` in DiagramPanel.tsx is the other caller.
  */
 export function visibleModes(on: boolean, current: Mode | undefined): readonly ModeUi[] {
-  return MODES_UI.filter((m) => !m.experimental || on || m.mode === current);
+  return MODES_UI.filter((m) =>
+    shownBehindTheSwitch({ experimental: m.experimental, on, current: m.mode === current }),
+  );
 }
 
 /**
@@ -776,8 +805,6 @@ const PRESS = {
 } as const satisfies Record<ExperimentalVariant, "toggle" | "retry" | "nothing">;
 
 export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
-  // eslint-disable-next-line no-console
-  console.log("TMP_DEBUG toggleVariant input", JSON.stringify(e));
   /* Nobody to save it for. Not a disabled button either: a signed-out reader is
      forcibly off by decision, and a control they cannot use is an advertisement
      for an account, which is not what the bottom bar is for. */
@@ -806,9 +833,10 @@ export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
  * for as long as the marker was up. GPT Sol, reviewing stage 2.
  *
  * **The modes go in by name, not by count.** It was `MODES_UI.length` until
- * 2026-09-03, when five modes went behind the experimental switch: the bar
+ * 2026-09-03, when five modes went behind the experimental switch (four since
+ * 2026-09-04, Diagram having come back out): the bar
  * retains whichever experimental mode the reader is in, so `?mode=quotes`
- * becoming `?mode=remember` leaves the count at nine and changes the row's
+ * becoming `?mode=remember` leaves the count unmoved and changes the row's
  * width, because those two words are not the same width. A signature that
  * counted would not re-run the fit, leaving the bar overflowing after a move to
  * a wider label or its labels dropped with room to spare after a narrower one.
@@ -846,7 +874,6 @@ export function Dock({
   mode,
   onMode,
   marked,
-  signedIn,
   visitor,
   drawer,
   experimental,
@@ -986,16 +1013,23 @@ export function Dock({
           {/* One panel, so no branch. There were two until the About panel
               became a page; if a second ever comes back, this is where it
               branches. */}
+          {/* **One list for both**, since 2026-09-04. This used to branch to a
+              `VisitorNotice` carrying `COMMENTS_GAP` — *comments belong to
+              whoever added this article* — which was true until a shared link
+              started carrying them. Both the gap and the union member behind it
+              are gone; there is no state left they could describe.
+              docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3. */}
           <div className="dock-drawer-body">
-            {own ? (
+            {drawer && (
               <Questions
-                comments={own.comments}
-                loaded={own.loaded}
-                loadFailed={own.loadFailed}
-                onOpen={own.onOpenComment}
+                comments={drawer.comments}
+                onOpen={drawer.onOpenComment}
+                access={
+                  own
+                    ? { kind: "owner", loaded: own.loaded, loadFailed: own.loadFailed }
+                    : { kind: "visitor" }
+                }
               />
-            ) : (
-              <VisitorNotice gap={COMMENTS_GAP} signedIn={signedIn ?? false} />
             )}
           </div>
         </div>
@@ -1132,8 +1166,9 @@ export function Dock({
             > explain what this does.
 
             A toggle rather than a link to `/profile`: one press, where the
-            effect is — the five modes it reveals are three inches to the left
-            of it. `/profile` keeps the checkbox, and keeps the one thing this
+            effect is — the modes it reveals are three inches to the left of
+            it, and since 2026-09-04 the four hidden pictures inside Diagram
+            too. `/profile` keeps the checkbox, and keeps the one thing this
             cannot say, which is when you turned it on.
 
             After Metadata because it is not about this article at all. It is
@@ -1775,17 +1810,32 @@ function QuestionsLoading() {
  * back to a piece a day later. Order comes from comment-nav.ts and therefore
  * from the block index, never from the id string (block-ids.md).
  */
+/**
+ * **Who is reading this list**, and therefore which empty state is honest.
+ *
+ * The owner's arm carries the two fetch facts, because their list came from a
+ * request that can still be out or have failed. A visitor's came inside the
+ * page's payload, so neither state exists for them — and neither does the
+ * sentence that tells them how to add one.
+ */
+type QuestionsAccess =
+  | { kind: "owner"; loaded: boolean; loadFailed: boolean }
+  | { kind: "visitor" };
+
 function Questions({
   comments,
-  loaded,
-  loadFailed,
+  access,
   onOpen,
 }: {
   comments: Comment[];
-  loaded: boolean;
-  loadFailed: boolean;
+  access: QuestionsAccess;
   onOpen(id: string): void;
 }) {
+  /* Narrowed once, so the three reads below are the compiler checking one fact
+     rather than three tests that could drift apart — the same move `own` makes
+     in `Dock` above. */
+  const loaded = access.kind === "visitor" || access.loaded;
+  const loadFailed = access.kind === "owner" && access.loadFailed;
   /* **"Nothing asked yet" is a claim about the reader, and it takes a fetch
      that came back and worked to earn it.** Three states get here with an empty
      list and only the third one may say it.
@@ -1806,6 +1856,8 @@ function Questions({
     return <QuestionsLoading />;
   }
 
+  /* Owner-only by construction: `loadFailed` is `false` on the visitor arm,
+     because there was no request. */
   if (comments.length === 0 && loadFailed) {
     return (
       <p className="dock-empty">
@@ -1815,10 +1867,23 @@ function Questions({
   }
 
   if (comments.length === 0) {
+    /* **Two sentences, because the second half of the owner's is an
+       instruction a visitor cannot follow.** *"Select a sentence in the article
+       to bookmark it"* is the right thing to say to somebody who can, and a
+       dead end for somebody who cannot — the shape
+       docs/project/copy.md keeps warning about, where the true half of a
+       sentence carries a false half along with it. A visitor is told what the
+       absence means and nothing else. */
     return (
       <p className="dock-empty">
-        Nothing marked yet. Select a sentence in the article to bookmark it, and add a
-        comment if you want one.
+        {access.kind === "owner" ? (
+          <>
+            Nothing marked yet. Select a sentence in the article to bookmark it, and add a
+            comment if you want one.
+          </>
+        ) : (
+          <>Whoever added this article hasn't marked anything in it.</>
+        )}
       </p>
     );
   }

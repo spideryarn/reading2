@@ -309,9 +309,13 @@ export function fitView({
    * prose — orientation without a mode switch — is a design question for Greg
    * rather than something to decide here. docs/plans/260827t-mobile-reading-view.md
    * § Open for Greg.
+   *
+   * Takes `maxN` rather than always starting from `gistDepths.length`, because
+   * automatic fit (below) no longer considers L0 a candidate at all — the pool
+   * it is choosing among can be smaller than the article's full depth range.
    */
-  const gistsThatFit = (avail: number) => {
-    let n = gistDepths.length;
+  const gistsThatFit = (avail: number, maxN: number) => {
+    let n = maxN;
     while (n > 0 && n * GIST_MIN + detailMin > avail) n--;
     return n;
   };
@@ -336,9 +340,18 @@ export function fitView({
   const spine: SpineMode = (showSpine ?? showText) ? "on" : "off";
   const avail = Math.max(0, windowWidth - spineWidth(spine));
 
+  /**
+   * **Automatic never opens L0.** `?cols=` unset is not "every level that
+   * fits" — it is a starting *preference*, and L0 is not in it: the spine
+   * already carries the coarse levels (granularity-zoom.md#the-arc), a
+   * single-cell column spanning the whole article is close to zero
+   * information per pixel, and Greg's own read of it was "I can't currently
+   * see any value to the L0 column" (same doc). A reader who wants it back
+   * still can — `?cols=0,1,2` is honoured exactly, below.
+   */
   let gists =
     chosen === null
-      ? [...gistDepths]
+      ? gistDepths.filter((d) => d !== 0)
       : gistDepths.filter((d) => chosen.includes(d));
 
   /**
@@ -359,9 +372,16 @@ export function fitView({
   const leafBesideText = showText && (chosen?.includes(leafDepth) ?? false);
 
   if (chosen === null) {
-    // Drop the coarsest first — see `gistsThatFit` for why the floor is zero
-    // rather than one.
-    gists = gists.slice(gists.length - gistsThatFit(avail));
+    /* Within what's left after L0 is excluded above, drop the *finest* level
+     * first — the opposite direction from the old rule, and deliberate: Greg
+     * reported landing on a narrow window (`?cols=1,2` on an iPad) and wanting
+     * L1 and L2 by default, and squeezed to one column that has to be L1 —
+     * L2's whole point is being the finest-grained context, which is the
+     * first thing worth losing on a screen too narrow for both. `gists` is
+     * ascending (coarse to fine) with L0 already gone, so keeping the front
+     * keeps the coarser survivors. See `gistsThatFit` for why the floor is
+     * zero rather than one. */
+    gists = gists.slice(0, gistsThatFit(avail, gists.length));
   }
 
   // Fixed-width columns: the gists, plus the leaf column when it is riding

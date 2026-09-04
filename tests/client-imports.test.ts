@@ -61,6 +61,15 @@ const SHARED = new Set([
   "supplement.js",
   "ingest.js", // slug derivation, so the client can show the same one the server will mint
   "term-match.js", // where a glossary term appears in a block
+  /* What the glossary's *Look up a term* box will accept — the bound, the
+     screen, and the three sentences a refused term gets. On the list for the
+     reason the header gives rather than for convenience: it imports nothing at
+     all, having been made a leaf when this test caught it reaching for one
+     number in `vocabulary.ts`. The box refuses on `parseAskedTerm` and so does
+     `POST /api/glossary/:slug/ask`, so a second copy would be a reader told two
+     different things by one rule depending on which side caught it.
+     See src/asked-term.ts and docs/project/glossary.md § Looking a term up. */
+  "asked-term.js",
   "quote-match.js",
   // Whether a saved search still describes the article. The panel puts a
   // warning on a row and the server answers the same question at the read seam;

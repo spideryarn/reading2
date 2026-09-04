@@ -200,8 +200,27 @@ const PDF_META = {
  */
 const PUBLIC_GIST = "What the piece says.";
 
+/** The owner's own words, on the fixture's one paragraph. */
+const PUBLIC_NOTE = "The bit I keep coming back to.";
+const PUBLIC_ANSWER = "Because the example is doing the arguing.";
+
 const ARTICLE: PublicArticle = {
   meta: { slug: SLUG, title: "A piece", byline: "Somebody" },
+  /* **A real one, not `[]`.** A visitor's drawer showing nothing would pass
+     every assertion about *not fetching* while proving nothing about what they
+     are shown — which is the whole of stage 3.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3. */
+  comments: [
+    {
+      id: "spya-cmt23z",
+      blockId: "spya-bbbbbb",
+      quote: "The first paragraph of the piece.",
+      start: 0,
+      createdAt: "2026-09-01T09:00:00.000Z",
+      body: PUBLIC_NOTE,
+      answer: PUBLIC_ANSWER,
+    },
+  ],
   /* Absent: this fixture has never been through the `assets` step, so the
      reader hot-links exactly as it always did. The third state, and it is
      what the publisher-host assertions below are measured against. */
@@ -1364,12 +1383,48 @@ describe("a signed-out browser on a shared document", () => {
     },
   );
 
-  it("opens the comments drawer without asking for anybody's comments", async () => {
+  /**
+   * **Rewritten 2026-09-04.** This used to assert the drawer said *comments
+   * belong to whoever added this article* — the sentence a visitor got instead
+   * of the comments. They get the comments now, and still ask for nothing:
+   * they arrived in the article payload.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
+   */
+  it("shows the owner's comments in the drawer, without asking for them", async () => {
     await open("?panel=questions");
+
     expect(outsidePublic()).toEqual([]);
-    /* And it says whose they would be, rather than "nothing asked yet" — which
-       is what an empty owner drawer says, and would be a false claim here. */
-    expect(host.textContent).toContain("belong to whoever added this article");
+    /* The reader's own words, which is what the list previews. */
+    expect(host.textContent).toContain(PUBLIC_NOTE);
+    /* And the sentence that is no longer true is really gone, rather than
+       merely not asserted — the failure mode of a rewritten expectation. */
+    expect(host.textContent).not.toContain("belong to whoever added this article");
+  });
+
+  /**
+   * **Opening one gives the answer and none of the verbs.**
+   *
+   * The dialog is where every owner capability lives — edit, delete, retry,
+   * "search the web", the follow-up composer — and `CommentAccess`'s visitor
+   * arm carries none of them. Asserted by *label*, because that is what a
+   * reader would press; a query on a class name would pass over a button whose
+   * text changed.
+   */
+  it("opens a comment read-only, with no verbs and no composer", async () => {
+    await open("?panel=questions&note=spya-cmt23z");
+
+    expect(host.textContent, "the answer").toContain(PUBLIC_ANSWER);
+    for (const verb of ["Delete", "Try again", "Search the web"]) {
+      const found = [...host.querySelectorAll("button")].some(
+        (b) => (b.textContent ?? "").trim() === verb,
+      );
+      expect(found, verb).toBe(false);
+    }
+    /* The follow-up box is absent rather than disabled — a greyed-out one is an
+       invitation to press it, and the press would spend the owner's money. */
+    expect(host.querySelector(".cmt-followup"), "no composer").toBeNull();
+    expect(outsidePublic()).toEqual([]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
   });
 
   /**
@@ -2072,6 +2127,19 @@ describe("the same address, as the owner", () => {
     session.user = { id: "owner-1", email: "greg@example.com" };
     notBuilt = `/api/sketch/`;
     await open("?mode=diagram");
+
+    /* **Both halves of the arrival, before the trace is cleared.** The read
+       really happened and really said no, so the POST below is a decision
+       rather than an accident of ordering — and it happens *here* rather than
+       after the press, because since 2026-09-04 Sketch is the picture Diagram
+       opens on (params.ts § diagramParam). What the reader meets is the empty
+       state's invitation with the price on it, and this is the assertion that
+       meeting it costs nothing. */
+    expect(trace.some((r) => r.url.startsWith("/api/sketch/")), "the GET settled").toBe(true);
+    expect(
+      trace.filter((r) => r.method === "POST" && r.url === "/api/jobs"),
+      "arriving at Diagram bought a picture",
+    ).toEqual([]);
     trace.length = 0;
 
     const chip = host.querySelector<HTMLButtonElement>('[data-diag-kind="sketch"]');
@@ -2079,9 +2147,6 @@ describe("the same address, as the owner", () => {
     await act(async () => chip?.click());
     await settle();
 
-    /* The artefact read really happened and really said no, so the POST is a
-       decision rather than an accident of ordering. */
-    expect(trace.some((r) => r.url.startsWith("/api/sketch/"))).toBe(true);
     expect(
       trace.filter((r) => r.method === "POST" && r.url === "/api/jobs"),
       "exactly one job, under React's double-invoked effects",

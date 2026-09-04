@@ -31,7 +31,7 @@ import { canonicalKey, stagingKey } from "../src/source.js";
 import { fsArtifacts } from "../src/store/artifacts-fs.js";
 import { blobStore, CONTENT_TYPE } from "../src/store/blobs.js";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
-import { MAX_PAGES } from "../src/pdf-read.js";
+import { MAX_PAGES } from "../src/uploads.js";
 import { claimUpload, forgetUpload, mintUpload, readUpload } from "../src/upload-records.js";
 import { getDb } from "../src/db/client.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";

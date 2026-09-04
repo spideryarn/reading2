@@ -1276,8 +1276,9 @@ export async function openRouterJson(
 /**
  * **A picture, on the same gateway and in a shape nothing else here speaks.**
  *
- * `POST /v1/images` with `openai/gpt-image-2`, for the Illustrated diagram
- * sub-mode — docs/plans/260903c-illustrated-diagram-sub-mode.md.
+ * `POST /v1/images` with `google/gemini-3.1-flash-image`, for the Illustrated
+ * diagram sub-mode — docs/plans/260903c-illustrated-diagram-sub-mode.md, and
+ * docs/research/260904a-nano-banana-text-in-generated-images.md for the swap.
  *
  * It is in this file, beside `openRouterJson`, rather than in a file of its
  * own, because what this file is *for* is that there is no second way to spend
@@ -1298,16 +1299,18 @@ export async function openRouterJson(
  *    2026-09-03 posted five fields and got a complete `usage` object back
  *    unasked, so asking for it would be a guess on the one call whose failure
  *    mode is a 400. See `Route.provider`.
- * 3. **The bill is zero on purpose.** `openai/gpt-image-2` is served on
- *    somebody else's key, so OpenRouter answers `is_byok: true`, `usage.cost:
- *    0`, and puts the real figure in
- *    `usage.cost_details.upstream_inference_cost` ($0.013237 for the measured
- *    plate). **Nothing here does anything about that**, and that is the point:
- *    `Meter.saw` already reads both fields and `normaliseByokUpstream` in
- *    [`ai-spend.ts`](ai-spend.ts) already puts the second one in
- *    `byok_upstream_nanos` under the three conditions the database CHECK
- *    enforces. A second money path here would be a second answer to a question
- *    that has one.
+ * 3. **The bill arrives priced, and the BYOK path is still the one to know
+ *    about.** `google/gemini-3.1-flash-image` answers `is_byok: false` with a
+ *    real `usage.cost` ($0.0676 for a 1K plate, measured 2026-09-04), so the
+ *    `Meter` reads it exactly as it reads a chat call — better accounting than
+ *    the model it replaced. `openai/gpt-image-2` was served on somebody else's
+ *    key and answered `is_byok: true`, `usage.cost: 0`, with the real figure in
+ *    `usage.cost_details.upstream_inference_cost`; **nothing here ever did
+ *    anything about that**, and that is why the swap needed no money code at
+ *    all. `Meter.saw` reads both fields and `normaliseByokUpstream` in
+ *    [`ai-spend.ts`](ai-spend.ts) puts the second in `byok_upstream_nanos` under
+ *    the three conditions the database CHECK enforces, whichever kind of row a
+ *    future model produces.
  *
  * Everything that makes a call accountable is shared unchanged: `apiKey`,
  * `keyFingerprint`, `OPENROUTER_BASE`, `ATTRIBUTION`, `send`, `generationIdOf`,
@@ -1315,7 +1318,7 @@ export async function openRouterJson(
  * fetch, finished exactly once in a `finally`, so a throw still writes a row.
  */
 
-/** One reference image, inline. `input_references` takes 0-16 of them. */
+/** One reference image, inline. `input_references` takes 0-14 of them. */
 export interface ImageReference {
   /** `data:image/png;base64,…` — the whole picture in the URL. */
   dataUrl: string;
@@ -1334,26 +1337,26 @@ export interface ImageRequest {
   prompt: string;
   /** `"2:3"`, `"1:1"`, … Omitted from the body when absent, so the model's default stands. */
   aspectRatio?: string;
-  /** `low | medium | high | auto`. Omitted when absent. */
-  quality?: string;
   /**
-   * `png | jpeg | webp`. Omitted when absent, and worth 22× the bytes.
+   * `512 | 1K | 2K | 4K`, per the model's own enum. Omitted when absent.
    *
-   * **This parameter is not in the model's `supported_parameters`** from
-   * `GET /api/v1/images/models`, and it is honoured anyway — measured twice on
-   * 2026-09-03, at `1:1` and at the `2:3` this app actually sends: the response
-   * came back `media_type: "image/jpeg"` with the signature `ff d8 ff e0` to
-   * agree, at 73 KB and 159 KB against the 3.5 MB the same plate costs as PNG.
+   * **The only size knob this endpoint has for the model we draw with**, and
+   * the one the 2026-09-04 spike settled at `1K` — cheaper, faster *and* more
+   * legible at thumbnail than `2K`, because the model spends extra pixels on
+   * detail rather than on type
+   * (docs/research/260904a-nano-banana-text-in-generated-images.md).
    *
-   * That gap between the capability list and the behaviour is the reason
-   * `readPlate` decides the media type **from the signature and never from the
-   * claim**: if a future model quietly ignores this and returns PNG, the bytes
-   * say so on the way in, rather than a `.jpeg` object being served as a lie
-   * three stages downstream.
+   * **What is deliberately not here is `quality`, `output_format` and
+   * `output_compression`.** They were sent while `openai/gpt-image-2` drew the
+   * plates and they are absent from `google/gemini-3.1-flash-image`'s
+   * `supported_parameters` — `output_format` measurably so: sent at 1K on
+   * 2026-09-04 and ignored, PNG back regardless. An unmeasured body key on this
+   * endpoint is what turned a `temperature: 0` into a 404 with no endpoints
+   * left (§ `env-proposal`), so a field nothing sends is a field this interface
+   * does not have. The history of the three is in this file's git log and in
+   * docs/project/diagram.md § Illustrated.
    */
-  outputFormat?: string;
-  /** 0–100, for `jpeg` and `webp`. Omitted when absent. */
-  outputCompression?: number;
+  resolution?: string;
   /** Style and content references. **Omitted entirely when empty**, never sent as `[]`. */
   inputReferences?: readonly ImageReference[];
 }
@@ -1397,9 +1400,7 @@ function outgoingImage(job: ImageJob, body: ImageRequest): string {
     prompt: body.prompt,
     n: 1,
     ...(body.aspectRatio === undefined ? {} : { aspect_ratio: body.aspectRatio }),
-    ...(body.quality === undefined ? {} : { quality: body.quality }),
-    ...(body.outputFormat === undefined ? {} : { output_format: body.outputFormat }),
-    ...(body.outputCompression === undefined ? {} : { output_compression: body.outputCompression }),
+    ...(body.resolution === undefined ? {} : { resolution: body.resolution }),
     /* **Absent rather than `[]`.** 0-16 is the documented range and an empty
        array is a value inside it that nothing has been measured against;
        omission is what the spike sent when it sent none. */
@@ -1428,8 +1429,9 @@ interface ImageBody {
 /**
  * **How big a picture is allowed to be before we call it an attack.**
  *
- * Not tuning knobs — a plate at `quality: "low"` and `2:3` measured 1024x1536
- * and 3.5 MB, so every bound here is several times what the feature produces.
+ * Not tuning knobs — a plate at `resolution: "1K"` and `2:3` measured 848x1264
+ * and 1.9 MB of PNG, so every bound here is several times what the feature
+ * produces.
  * They exist because the bytes arrive from outside this process. Stage 3 reads
  * the dimensions out of the header rather than decoding — src/assets.ts
  * § `imageDimensions` — so nothing downstream allocates width x height x 4 any

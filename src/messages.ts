@@ -27,7 +27,7 @@
  */
 import type { Mode } from "./modes.js";
 import type { DateRejection, EmbeddingReason, StepName } from "./types.js";
-import { MAX_UPLOAD_BYTES } from "./uploads.js";
+import { MAX_PAGES, MAX_UPLOAD_BYTES } from "./uploads.js";
 
 /**
  * Which kind of failure this is, which decides what the reader should do.
@@ -303,6 +303,22 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      an interrupted job resumes from its artefacts rather than starting again,
      so another go is both allowed and cheap. See `INTERRUPTED`. */
   "jb-gone": "retry",
+  /* **The two refusals "Check the web" can give**, and the only `gl-` pair.
+     Neither is a model call and neither is a fault: one says the article never
+     quotes the term, the other that the glossary no longer fits the article.
+     `blocked` because both refuse again unchanged — see
+     `GLOSSARY_TERM_NOT_QUOTED` for why they carry codes at all. */
+  "gl-not-quoted": "blocked",
+  "gl-stale": "blocked",
+  /* **The three ways the *Look up a term* box comes back empty.** All
+     `blocked`: each refuses again unchanged, and each names a different way
+     through — chat, a different spelling, or nothing at all. Three codes rather
+     than one because they are three facts, which is the lesson of
+     docs/postmortems/260904c-the-glossary-said-the-term-was-not-there.md
+     applied on the same code path a day later. See `ASKED_TERM_ABSENT`. */
+  "gl-ask-absent": "blocked",
+  "gl-ask-part-word": "blocked",
+  "gl-ask-no-prose": "blocked",
   /* **The four generic step failures**, `stepGaveUp` above — one per kind, and
      that is why there are four rather than one. The kind is what decides
      whether a Retry appears, and a single sentence would have had to either
@@ -1031,7 +1047,10 @@ export function pdfTooManyPages(pages: number, limit: number): ReaderFacingFailu
   return {
     kind: "blocked",
     message:
-      `This PDF has ${pages} pages, and this app reads at most ${limit} of them in one go. That ` +
+      /* **Not "reads at most 250 of them"**, which the reader can hear as a
+         promise to read the first 250 and stop — this refuses the document
+         whole, and nothing of it is read. GPT Sol, 2026-09-04. */
+      `This PDF has ${pages} pages, and this app takes documents of at most ${limit}. That ` +
       `is a limit on what reading a document is allowed to cost rather than a technical one, so ` +
       `the same file will be refused the same way — a shorter document, or the part of this one ` +
       `you actually want, will go through. [pdf-pages]`,
@@ -1238,6 +1257,190 @@ export const QUIZ_NOTHING_ANCHORED: ReaderFacingFailure = {
     "None of the questions written for this article could be tied back to a passage in it, so " +
     "there was nothing to check your answers against. Writing the questions again usually " +
     "works. [quiz-unanchored]",
+};
+
+/* -------------------------------------------------------------------- glossary -- */
+
+/**
+ * **The two ways "Check the web" cannot run**, and they are not the same fact.
+ *
+ * A lookup is [`explain`](explain.ts) with a different selection: it needs a
+ * passage of the article to anchor the question to, and it finds one by walking
+ * `entry.blocks` — the occurrences the glossary stage recorded. There are two
+ * ways that walk can come back empty, and until 2026-09-04 they shared one
+ * sentence, which **named the term and said it "does not appear in this
+ * article"**. A reader met that under a row headed with the term, beside the
+ * entry's own definition, and reported it as the app denying that the entry
+ * existed — which is exactly what it reads like:
+ *
+ * > it said that the phrase in the glossary when I was checking didn't exist
+ * > even though it clearly did, because there was a glossary entry for it and I
+ * > can see it right there on the page
+ * >
+ * > — a reader, 2026-09-04
+ *
+ * So: two sentences, two codes, and **neither of them names the term**. The
+ * failure is rendered inside the selected entry's own row
+ * ([`GlossaryPanel.tsx`](web/GlossaryPanel.tsx) § `Looked`), so the name is
+ * already on screen a line above — repeating it bought nothing and cost the
+ * reader their confidence in the list.
+ *
+ * **`blocked`, both of them**, which is the kind for *refused, and refused
+ * again unchanged*: nothing is broken, nothing is misconfigured, and there is a
+ * way through that is not pressing the same button. It changes no behaviour
+ * here — the Check-the-web button deliberately does not consult
+ * `worthRetrying`, for the reason set out in that function's docstring — so the
+ * kind is doing its other job, which is telling `kindOfMessage` what a stored
+ * sentence meant.
+ *
+ * **`GLOSSARY_TERM_NOT_QUOTED` says what was searched for, not why it was not
+ * found.** A draft said the article *"names the idea rather than quoting it"*,
+ * which is the usual cause and not the only one — a hallucinated entry and a
+ * set of aliases too narrow to match are both live possibilities that
+ * `buildGlossary` allows for (glossary.ts § `findOccurrences`). All the scan
+ * establishes is that no name the glossary holds appears in the piece, so that
+ * is what the sentence claims. ⟨Sol⟩
+ *
+ * **They carry codes, which docs/project/copy.md's *a refusal that is an answer
+ * gets no code* rule would not have given them.** The rule is right about
+ * `ARTICLE_IS_BUSY`, where a code would have invited a bug report about the
+ * system working. It is wrong here, and this bug is the proof: a reader did
+ * report it, was right to, and had to paraphrase the sentence — which left
+ * three candidate branches to tell apart from prose. Four characters would have
+ * ended that in a minute. A refusal a reader may reasonably question gets a
+ * code.
+ */
+export const GLOSSARY_TERM_NOT_QUOTED: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "This entry is here, but none of the words the glossary has for it — the term or its other " +
+    "names — appear anywhere in the article, and a check on the web is anchored to a passage of " +
+    "the piece. There is no passage to anchor this one to, so pressing the button again will not " +
+    "help. [gl-not-quoted]",
+};
+
+/**
+ * **The glossary outlived the article it was written against.**
+ *
+ * A reachable state rather than a defensive one: a glossary is *carried* into
+ * every new revision (`glossary: "carry"`, [pg-revisions.ts](store/pg-revisions.ts)),
+ * so a re-extraction leaves the old list attached to new blocks. It is
+ * `GlossaryResponse.stale`, and the panel is already showing the banner that
+ * says so when this fires — **which is why the sentence points at that banner's
+ * *Find them again* rather than at *Start again* in the foot.** They are
+ * different operations, and the foot draws progress instead of its buttons while
+ * a job is in flight; the banner is the one that is certainly on screen at the
+ * moment this sentence arrives. ⟨Sol⟩
+ *
+ * **It makes no claim about where the term is used**, and two drafts did before
+ * settling here. *"The passage it points at is no longer there"* is false when
+ * the block survived and the words did not; *"no longer uses this one where the
+ * list says it does"* is false when the list says nowhere, which is exactly the
+ * carried-and-empty entry this branch most often meets. A stale list cannot say
+ * where — or whether — the piece uses the term, and that is the whole of what is
+ * known. ⟨Sol, twice⟩
+ */
+export const GLOSSARY_OUT_OF_DATE: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "This list of terms was written for an earlier version of the article, so it cannot say " +
+    "where — or whether — the piece uses this one. Checking it will not help until the terms are " +
+    "found again: the banner at the top of the panel has the button. [gl-stale]",
+};
+
+/**
+ * **The three ways the glossary's *Look up a term* box comes back empty**, and
+ * they are three because they want three different things from the reader.
+ *
+ * The box is the answer to *"I would like to be able to type into a search box
+ * in the glossary for a particular term and for it to look for that term"*
+ * (a reader, 2026-09-04, `[SPIDERYARN-READING2-Y]`). It scans the article with
+ * `term-match.ts`'s rule — case, plurals and possessives folded, and nothing
+ * else — and explains the passage it finds.
+ *
+ * Written **immediately after** the postmortem whose named class is *collapsed
+ * diagnosis* (260904c), on the same code path, so the split is deliberate
+ * rather than lucky:
+ *
+ * 1. {@link ASKED_TERM_ABSENT} — the words are nowhere in the piece, not even
+ *    inside a longer one. **Chat is the way through**, because chat may answer
+ *    from outside the article and the glossary may not.
+ * 2. {@link ASKED_TERM_PART_WORD} — the characters *are* in the piece, but never
+ *    with a boundary on both sides. The reader has a move the first case does
+ *    not give them: type the word as the piece writes it.
+ * 3. {@link ASKED_TERM_NO_PROSE} — there was no prose to search. This one is
+ *    **not a claim about the term at all**, and that is why it exists: without
+ *    it, an article the extractor left with no text would answer every question
+ *    with *"the piece does not use those words"*, which is the reported bug's
+ *    exact shape — a confident sentence over an empty scan.
+ *
+ * **None of them names the term back at the reader.** It is in the box they
+ * typed it into, a line above; repeating it is what turned a refusal into a
+ * denial last time.
+ *
+ * **No "did you mean…".** Considered and rejected on 2026-09-04: the shared
+ * matcher gives no typo tolerance at all, and the word a reader wants is as
+ * often a lowercase idea as a proper noun, so there is no candidate list worth
+ * ranking yet. Guessing badly here would be worse than the honest handoff.
+ */
+export const ASKED_TERM_ABSENT: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "Those words are not in this article — not in that form, a plural or a possessive, and not " +
+    "inside a longer word either. The glossary only ever explains what the piece itself says, so " +
+    "there is nothing here to explain and asking again will not help. Chat can answer from " +
+    "outside the article. [gl-ask-absent]",
+};
+
+/**
+ * **The characters are there and they never stand on their own** — see
+ * {@link ASKED_TERM_ABSENT} for why this is its own sentence.
+ *
+ * The commonest way to reach it is a stem: *"axiom"* against a piece that says
+ * *axiomatic*. (Not *"axi"* against *axis* — a draft of this comment said so and
+ * it is false, because `termPattern`'s optional plural makes *axis* a match.
+ * ⟨Sol⟩)
+ *
+ * **It claims exactly what the second scan establishes, and one draft claimed
+ * more.** That draft said *"every time inside a longer word"*, and the
+ * counterexample is a term with punctuation at its edge: `-bar` against an
+ * article that says `foo-bar` fails the bounded scan — the character before the
+ * hyphen is a letter — and passes the loose one, yet `-bar` is right there,
+ * starting with its own separator. What is true in *every* case this branch
+ * fires on is the thing the lookarounds actually tested: a letter or a digit is
+ * run up against the characters, on one side or the other. So that is what the
+ * sentence says. Claiming a word, or a typo, is the reported bug's own fault in
+ * a friendlier tone. ⟨Sol⟩
+ */
+export const ASKED_TERM_PART_WORD: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "Those characters do turn up in the article, but never standing on their own — every time, a " +
+    "letter or a digit runs straight into them, so there is no phrase here to explain and asking " +
+    "for the same ones again will not help. Try the words as the piece writes them, or ask chat, " +
+    "which can answer from outside the article. [gl-ask-part-word]",
+};
+
+/**
+ * **Nothing was searched**, so nothing may be concluded about the term.
+ *
+ * **Reachable by construction, and never yet seen.** `assertSomethingWasProduced`
+ * (src/blocks.ts) requires *a* block and not a block with words in it, and
+ * figures, images and embeds carry no `text` — so an article of nothing but
+ * pictures is storable and the reading view will open a glossary band over it.
+ * It has not happened: 0 of 52 revisions in the local corpus on 2026-09-04
+ * (`bool_or(text <> '')` over `spideryarn.revision_blocks`).
+ *
+ * Kept anyway, and the number is the argument rather than against it: the
+ * alternative to this sentence is `ASKED_TERM_ABSENT` — a confident claim about
+ * the reader's words over a scan that read nothing, which is the reported bug's
+ * exact shape.
+ */
+export const ASKED_TERM_NO_PROSE: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "There is no prose in this article to search, so asking again will not help — and this says " +
+    "nothing about the words you typed. [gl-ask-no-prose]",
 };
 
 /* ---------------------------------------------------------- placing passages -- */
@@ -1516,10 +1719,13 @@ export const UPLOAD_MISSING: ReaderFacingFailure = {
  * limit. Splitting them is what lets the state machine record *why* an upload
  * was refused without either half inventing a number it does not have.
  *
- * **The limit is not in this sentence, and that is the cost of it being
- * static.** `MAX_PAGES` lives in src/pdf-read.ts, which pulls in pdf.js and
- * p-queue; this module is imported by the browser. `pdfTooManyPages` takes the
- * limit as an argument for exactly that reason.
+ * **The limit is in this sentence and the count is not, which is the cost of it
+ * being static.** Until 2026-09-04 neither was: `MAX_PAGES` lived in
+ * src/pdf-read.ts, which pulls in pdf.js and p-queue, and this module is
+ * imported by the browser. It is in src/uploads.ts now — beside
+ * `MAX_UPLOAD_BYTES`, which this module has always named — so the limit can be
+ * stated here. The *count* still cannot, because a static value cannot know it;
+ * that is why `pdfTooManyPages` takes both as arguments.
  *
  * `blocked` for the same reason as the ones above it: the file has the same
  * number of pages every time it is counted.
@@ -1555,10 +1761,10 @@ export const UPLOAD_MISSING: ReaderFacingFailure = {
 export const UPLOAD_TOO_MANY_PAGES: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "That PDF has more pages than this app reads in one go. That is a limit on what reading a " +
-    "document is allowed to cost rather than a technical one, so the same file will come back " +
-    "the same way — a shorter document, or the part of this one you actually want, will go " +
-    "through. [up-pages]",
+    `That PDF has more than the ${MAX_PAGES} pages this app takes in one document. That is a ` +
+    "limit on what reading a document is allowed to cost rather than a technical one, so the " +
+    "same file will come back the same way — a shorter document, or the part of this one you " +
+    "actually want, will go through. [up-pages]",
 };
 
 /**
@@ -2644,6 +2850,33 @@ export const ALWAYS_SHARED = [
       "The title the page itself carried, the byline, the publication, the language, the " +
       "publication's own one-line excerpt, and a link back to the original where we have one.",
   },
+  {
+    /**
+     * **This row moved out of `NEVER_SHARED` on 2026-09-04**, and it is the one
+     * line in either list that changed what it promised rather than being
+     * added to it. Greg decided that a shared link carries the reader's own
+     * marks and notes; the sentence it used to sit under said they never left.
+     * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
+     *
+     * **"and what the model answered when you asked" is the load-bearing
+     * half.** An owner reading "Comments and notes" pictures their own
+     * sentences; the thing they would not predict from the label is that the
+     * *answers* go too, and those can be long, can cite the web, and were
+     * written for them rather than for an audience. The old wording listed the
+     * answers as well, and it was listing what stayed behind — so the words
+     * survive and the bucket is the change.
+     *
+     * What is not said here, deliberately: nothing about referee notes or
+     * half-finished questions. Neither crosses — `PUBLIC_COMMENTS_WHERE` in
+     * src/store/public-reader.ts refuses both in SQL — and a promise that has
+     * to enumerate its exceptions is a promise a reader stops trusting.
+     */
+    key: "comments",
+    label: "Your comments and notes",
+    detail:
+      "Every passage you bookmarked or annotated, what you wrote about it, and what the model " +
+      "answered when you asked.",
+  },
 ] as const;
 
 /**
@@ -2680,15 +2913,15 @@ export const SHARED_ARC = {
  * here: they arrive from the sweep, which is what keeps a mode added next month
  * on this side of the line without anybody editing this file. What is here is
  * the things that are not modes at all.
+ *
+ * **It was six rows and is five.** `comments` moved to `ALWAYS_SHARED` on
+ * 2026-09-04, which is the only time a row has crossed between these two lists.
+ * That is worth knowing before moving a second one: a row here is a promise
+ * somebody has already read, and moving it is a change to what they agreed to
+ * rather than a change to a list.
+ * docs/plans/260904c-more-modes-on-a-shared-link.md.
  */
 export const NEVER_SHARED = [
-  {
-    key: "comments",
-    label: "Comments and notes",
-    detail:
-      "Every passage you bookmarked or annotated, your questions about them, and what the model " +
-      "answered.",
-  },
   {
     key: "lookups",
     label: "Glossary lookups",

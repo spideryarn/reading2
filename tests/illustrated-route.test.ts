@@ -288,12 +288,29 @@ when("the illustrated routes", { timeout: 30_000 }, () => {
     if (!one || !two) throw new Error("need two plates in evals/results/illustrated-2026-09-03b/");
 
     const { storePlateImage } = await import("../src/illustrated-image.js");
-    for (const [key, name] of [["a", one], ["b", two]] as const) {
-      const bytes = new Uint8Array(await readFile(path.join(dir, name)));
-      const image = await storePlateImage({ image: bytes, mediaType: "image/jpeg" });
-      stored[key] = { image, bytes };
-    }
+    const bytesA = new Uint8Array(await readFile(path.join(dir, one)));
+    stored.a = {
+      bytes: bytesA,
+      image: await storePlateImage({ image: bytesA, mediaType: "image/jpeg" }),
+    };
+    /* **`B`'s plate is a PNG, and that is the point of it being one.** Since
+       2026-09-04 an article holds whatever the illustrator returned, and the
+       current one returns PNG — so the two articles here are also the two
+       formats, and every assertion below about the wrong article's plate is
+       simultaneously an assertion that the extension in the URL is not
+       decorative. `two` is left unread on purpose; the bytes only have to
+       differ from `a`'s. */
+    const bytesB = new Uint8Array(24);
+    bytesB.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    new DataView(bytesB.buffer).setUint32(16, 848);
+    new DataView(bytesB.buffer).setUint32(20, 1264);
+    stored.b = {
+      bytes: bytesB,
+      image: await storePlateImage({ image: bytesB, mediaType: "image/png" }),
+    };
     expect(stored.a.image.sha256, "the two plates must differ").not.toBe(stored.b.image.sha256);
+    expect(stored.a.image.ext).toBe("jpeg");
+    expect(stored.b.image.ext).toBe("png");
 
     await sweepAbandoned();
     const sketchA = sketchFor(A.slug);
@@ -352,12 +369,43 @@ when("the illustrated routes", { timeout: 30_000 }, () => {
    * its key from the path rather than from the artefact: 200, and B's picture.
    */
   it("refuses a hash that is a plate of a DIFFERENT article", async () => {
-    const sent = await get(`/api/illustrated/${A.slug}/${stored.b.image.sha256}.jpeg`);
+    /* Its own extension, so the 404 is about the article and not about the
+       suffix — a URL that was wrong twice would prove neither. */
+    const sent = await get(
+      `/api/illustrated/${A.slug}/${stored.b.image.sha256}.${stored.b.image.ext}`,
+    );
     expect(sent.status).toBe(404);
     expect(
       Buffer.compare(sent.body, Buffer.from(stored.b.bytes)),
       "the other article's bytes must not be in the response at all",
     ).not.toBe(0);
+  });
+
+  /**
+   * **A PNG plate, served as one, all the way from the store to the header.**
+   *
+   * The illustrator changed on 2026-09-04 to one that ignores `output_format`
+   * and returns PNG whatever it is asked. Every link in this chain used to say
+   * `jpeg` as a literal — the storage key, the route pattern, the
+   * `Content-Type`, and the URL the panel builds — so this is the assertion
+   * that the whole of the change landed rather than most of it.
+   */
+  it("serves a PNG plate as a PNG", async () => {
+    const sent = await get(`/api/illustrated/${B.slug}/${stored.b.image.sha256}.png`);
+    expect(sent.status).toBe(200);
+    expect(sent.headers["content-type"]).toBe("image/png");
+    expect(Buffer.compare(sent.body, Buffer.from(stored.b.bytes))).toBe(0);
+  });
+
+  /**
+   * **The extension is a promise about the bytes, not decoration.** The record
+   * decides the `Content-Type`, so a `.jpeg` URL answered from a PNG record
+   * would be this route telling a cache one thing and the header another — and
+   * both are immutable for a year.
+   */
+  it("refuses a plate asked for under the wrong extension", async () => {
+    const sent = await get(`/api/illustrated/${A.slug}/${stored.a.image.sha256}.png`);
+    expect(sent.status).toBe(404);
   });
 
   it("refuses a well-formed hash that is nobody's plate", async () => {

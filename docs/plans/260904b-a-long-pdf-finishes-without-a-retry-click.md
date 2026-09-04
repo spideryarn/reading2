@@ -840,6 +840,131 @@ the cases — a deeply-numbered paper, a sparsely-headed web article, one whose 
 labels; `droppedHeadings` and max section span both improve on the first without regressing the
 others; the estimator is re-checked against trees generated under the new prompt.
 
+### Stage 8a — the heading snap, built and measured ⟨2026-09-04⟩
+
+Lever 1 only. `snapStartsToHeadings` in [`src/hierarchy.ts`](../../src/hierarchy.ts), documented at
+[hierarchy.md § A section that starts one block below its own heading](../project/hierarchy.md#heading-snap).
+`SYSTEM` is untouched — the wire request is byte-identical — and `PROMPT_VERSION` goes to `toc/4`
+anyway, because the structure *checkpoint* is keyed on it and the same answer now builds a different
+tree. Lever 2, the depth/fan-out re-scope, is stage 8b and is deliberately not in this.
+
+**Fable's numbers reproduced exactly** from the saved answer: 82 non-root nodes, 24 starting on a
+heading, 53 one after, 5 elsewhere; 75 `sourceHeading` claims; `droppedHeadings: 59`;
+`maxSectionBlocks: 241`; five sections over `MAX_BATCH`; `headingsCut` 21/254.
+
+**Before and after, replaying `m4-kuhn-structure-raw.json` through the real `buildTree`.** No paid
+calls.
+
+| | Kuhn, before | Kuhn, after | noema (43 saved trees) |
+|---|---|---|---|
+| internal nodes | 83 | 83 | unchanged |
+| `sourceHeading` backed | 24 / 75 claimed | **74** / 75 | unchanged |
+| `droppedHeadings` | 59 | **9** | 0 → 0 |
+| `headingsCut` | 21 / 254 | **67** / 254 | unchanged |
+| `repairedBlocks` | 40 | 86 *(really 64 — see below)* | 0 → 0 |
+| `largestRepair` | 5 | 5 | 0 → 0 |
+| repairs by kind | 26 gap, 3 short, 1 overlap | 46 **heading**, 30 gap, 2 over, 1 short, 1 overlap | none → none |
+| `maxSectionBlocks` | 241 | 242 | unchanged |
+| sections over `MAX_BATCH` | 5 | 5 | unchanged |
+| `checkTree` problems | 0 | 0 | 0 → 0 |
+
+**Fable's 24 → ~75 prediction held**: 74. The one that stayed unbacked, and the 7 of 53 one-after
+starts that did not snap, are nodes with no claim or a claim naming a heading outside the run — the
+gate declining, which is what it is for. Four nodes gained a backing without a repair of their own:
+when a node snaps, its first child is pinned to the new start, and if that child names the same
+heading it becomes backed too.
+
+**`repairedBlocks` rises, 40 → 86, and that is the point rather than a regression.** 46 headings
+really did change hands; a repair that moved 46 boundaries and reported 40 blocks moved would be the
+silent-success shape this file already argues against. Whoever reads the pipeline log next should
+expect the number to be larger on heavily-headed documents than it was.
+
+**But 86 over-counts, and the true figure is 64** ⟨GPT Sol's code review, finding 1⟩. When the model
+also got a boundary's *size* wrong, that boundary is now recorded twice — once by
+`recordBoundaryFaults` at the coordinate the model named, once by the snap at the coordinate it
+ended up — and `repairedBlockCount` groups by coordinate, so it cannot see them as one movement. The
+blocks overlap: a snap moving back inside ground a `gap` already covers adds nothing new. The union
+per boundary is `max(gap, snap)` for a gap and `gap + snap` for an overlap, and auditing Kuhn's
+repairs by that rule gives **64**, against 40 before. `tests/hierarchy-repairs.test.ts` § "records
+the gap and the snap separately" pins the smallest instance: three blocks change hands, four are
+reported.
+
+**Not fixed here, deliberately.** Doing it properly means giving every `PartitionRepair` a stable
+boundary identity and a `from`/`to` rather than an `at` and a `size`, and re-deriving
+`repairedBlockCount`, its tests, and the parallel implementation in `src/hierarchy-cascade.ts`. That
+is a stage of its own. The error is bounded by the snap's own size, it errs toward reporting *more*,
+and `repairedBlocks` is a "go and look" number rather than a gate — so it is a known inaccuracy
+written down rather than a silent one. **It should be fixed before anyone fits a threshold to
+`repairedBlocks`**, which is what the re-ask trigger would be.
+
+**The no-op control.** Every saved tree under `evals/results/hierarchy-structure/*/trees/` for which
+there are local blocks — 43 of them, over `noema-mythology-of-conscious-ai` and `openai-huggingface`
+— replayed identically with the snap off and on, on every metric in the table. noema has 9 heading
+blocks, 17 starts on a heading and **0 one after one**, so there is nothing for the snap to find,
+which is the finding. (The `constitution` trees could not be replayed: the local
+`data/constitution/blocks.json` is a different extraction and its ids do not resolve. It threw
+identically with the snap off and on.)
+
+**Three things Fable's analysis under-called.**
+
+1. **The unconditional rule does harm**, and the case is already a fixture: in
+   `tests/hierarchy-repairs.test.ts` § "closes an overlap", the model puts a heading inside child 1
+   and starts child 2 on the paragraph beneath it. Snapping there moves a heading the model
+   deliberately placed. So the snap is gated on the child's own `sourceHeading` naming a heading in
+   the run — which also makes it self-evidencing, and costs 7 of the 53.
+2. **Taking the whole run can rob the section above it** ⟨GPT Sol, finding 2⟩. "Snap to the first of
+   the run" is right when the run is this section's own title stack, and wrong when the previous
+   section *named* one of those headings while starting further up. That node would lose its
+   provenance badge and go on describing prose its own heading had left. So the walk also stops at
+   any heading the previous kept sibling claims. It changes nothing on Kuhn — every number above is
+   identical with and without it — which is what a guard against a case that has not happened yet
+   looks like.
+3. **`maxSectionBlocks` gets marginally worse** (241 → 242), because the largest section inherits its
+   own heading. Immaterial, and it is stage 8b's problem, but it means the snap cannot be sold as
+   improving span.
+
+**Not in scope and worth a note:** [`src/hierarchy-cascade.ts`](../../src/hierarchy-cascade.ts) fixes
+each wave's ranges *before* the next call, and tells its caller to hand the final `buildTree` a fresh
+report because "there is nothing left for it to mend". The snap is now something left to mend.
+Nothing wires that module into the pipeline or the evals today, so it is a note for whoever does.
+
+## It worked — 2026-09-04, 16:19–16:39 UTC
+
+A real upload of the real document, through the real picker, on the merged code, watched end to end.
+**No human intervention, no Retry, and not one error-level line in the whole run.**
+
+```
+16:19:23  fetch                                       1.3 s
+16:19:25  extract      142 pages, 69 chunks           6 min 34 s   (12 quality notes)
+16:25:59  blocks       2,046 blocks                  36 s
+16:26:35  ── hand-back: not enough window left for hierarchy ──
+16:26:51  hierarchy    20 AI calls, $2.89            12 min 07 s
+16:38:58  ── hand-back ──
+16:39:04  assets → revision published → job done
+```
+
+**19 min 41 s, three lease windows, two automatic hand-backs, ~$3.50.**
+
+Three things in that are the stages working rather than a lucky draw:
+
+- **Both hand-backs happened before a step started, never partway through one.** That is stage 3's
+  raised `STEP_BUDGET_MS.hierarchy`: the claimant declined to begin a twelve-minute step in the tail of
+  a window and put the job down instead. The browser re-drove it in about sixteen seconds, unattended.
+- **`hierarchy` took 727 s — longer than a whole 740 s deadline leaves once anything else has run.** It
+  fits only because it got a window to itself. Under the old 320.4 s budget this document could not
+  have completed at any point, whatever the token estimate said.
+- **12 quality notes**, against 20 and 32 on two earlier runs of the same file — stage 5's folio fix
+  showing up in the reader-visible outcome rather than only in a unit test. Run-to-run variance is
+  high, so this is a direction, not a measurement.
+
+The postmortem is
+[260904c](../postmortems/260904c-a-document-refused-for-an-answer-it-never-had-to-give.md), and it
+covers both bugs: the estimator, and the folio fix that briefly widened the hole it was narrowing.
+
+**Not yet on production.** `main` is written only by `npm run deploy`, and the two dead Kuhn jobs there
+are `blocked`, so they show no Retry and cannot be revived — recovery is a fresh upload, which re-buys
+the transcription at about $0.66.
+
 ## Deliberately not doing
 
 - **Lowering `effort` or shrinking `THINKING_HEADROOM`** to buy headroom.

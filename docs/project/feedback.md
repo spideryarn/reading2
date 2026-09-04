@@ -20,8 +20,8 @@ It asked three questions in three boxes for two days. Greg:
 Three boxes is a form, and a form is what you fill in once you have *decided* to file a bug. The
 reader this whole feature exists for is the one who was merely annoyed. So: one `body`, a `kind`
 that is **a problem, a suggestion, or nothing at all** (Greg: *"don't default to Problem. Default to
-null/unknown"*), a line of thanks above it, a "Not sure what to write?" disclosure below it, and a
-microphone — [dictation.md](dictation.md), the same three lines as every other box.
+null/unknown"*), a line of thanks above it, guidance under the label, and a microphone —
+[dictation.md](dictation.md), the same three lines as every other box.
 
 The three questions themselves survived the boxes and sit above the one box, always visible:
 
@@ -30,7 +30,25 @@ The three questions themselves survived the boxes and sit above the one box, alw
 >
 > — Greg, 2026-09-03
 
-They had spent a day inside the disclosure, and a hint nobody opens is a hint nobody reads.
+They had spent a day inside a "Not sure what to write?" disclosure, and a hint nobody opens is a
+hint nobody reads.
+
+**Since 2026-09-04 that guidance follows the toggle, and the disclosure is gone.** Greg, having
+filed the report from inside the dialog:
+
+> I think if the user clicks on a problem, then we want to show that guidance for bug tracking about
+> steps to reproduce and what happened and what do they expect to happen — we want to show that text
+> explicitly and quite prominently … And then we can get rid of not sure what to write because no
+> one will click that.
+>
+> — Greg, 2026-09-04
+
+So: **Problem** breaks the three asks out as three lines with the disclosure's old look; **Suggestion**
+asks what you'd like and what it would let you do; **nothing picked** keeps the 2026-09-03 sentence
+unchanged, which is what makes the instruction above still true for a reader who never touches the
+toggle. One reassurance was folded out of the disclosure and rides under the three asks; the rest of
+it went. `KindHint` in [`FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) is the whole of it,
+pinned by `tests/feedback-dialog.test.tsx`.
 
 The three old columns were backfilled into `body` under their old headings and **dropped**, so there
 is one shape in the table rather than two. The route still accepts the old three from a tab loaded
@@ -72,6 +90,22 @@ authentication, the validation, the consent and the durable copy all happen some
 Its cost is real and named — **when our API is down, the way to report that our API is down is also
 down** — and the answer is not a browser-direct backdoor but the Copy button the dialog shows on a
 failed send, so the reader still has their words and somewhere to put them.
+
+## The rate cap, and who has none
+
+**Thirty reports an hour, per owner**, counted in the same transaction that is about to insert —
+`FEEDBACK_HOURLY_CAP` in [`src/store/contracts.ts`](../../src/store/contracts.ts). Past it the
+reader gets a 429, a `Retry-After`, and a sentence saying when. It stops a loop and one account
+hammering; it is not a defence against account farming and does not pretend to be.
+
+It was ten until 2026-09-04, when Greg hit it in an afternoon's testing — ten was low enough to stop
+the person the button is *for*, somebody who has just found four things wrong on one page.
+
+**The administrator has no cap at all.** `feedbackHourlyCap` returns `null` for an account
+[`isAdmin`](../../src/admin.ts) recognises, and the store skips the counting query entirely — the
+account that files reports on purpose all afternoon is the one we do not need protecting from. It is
+the same id check that guards `/api/admin` ([admin.md](admin.md)), asked of the request's owner,
+which *is* the verified account id.
 
 ## Where the code is
 

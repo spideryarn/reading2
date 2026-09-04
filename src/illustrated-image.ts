@@ -5,7 +5,7 @@
  * `generateIllustrated` (src/illustrated.ts) hands back one `PlateDraw` per
  * image call, each carrying raw bytes, and its comment says *"the caller
  * decides where these bytes go"*. This is that decision: the bytes go to the
- * blob store under `canonicalKey(sha256, "jpeg")` — the same machinery the
+ * blob store under `canonicalKey(sha256, ext)` — the same machinery the
  * article's own figures use — and what comes back is the `IllustratedImage`
  * record the artefact holds. **Never base64 in the artefact**: that column
  * would then be dragged along by every read of the revision
@@ -13,21 +13,52 @@
  *
  * ## Why it refuses rather than stores whatever arrived
  *
- * The key ends in `.jpeg` and the object is stored as `image/jpeg`, so those
- * two are a promise about the bytes. `output_format: "jpeg"` is honoured by
- * `openai/gpt-image-2` **despite not appearing in that model's
- * `supported_parameters`** (plan § Storage), which is exactly the shape of thing
- * that stops being true one day without anybody being told. If a future model
- * quietly returns PNG, this must fail loudly here rather than write a `.jpeg`
- * object that is not one and leave a reader's browser to work it out.
+ * The key ends in the extension and the object is stored under the matching
+ * content type, so those two are a promise about the bytes. It is a closed set
+ * of two — JPEG and PNG — and anything else is refused rather than stored under
+ * a name that is not true. **That refusal has already fired once**: the plan
+ * predicted that `output_format: "jpeg"`, honoured by `openai/gpt-image-2`
+ * despite not appearing in its `supported_parameters`, "stops being true one
+ * day without anybody being told". It did, on 2026-09-04, when the illustrator
+ * changed to `google/gemini-3.1-flash-image`, which ignores the field and
+ * returns PNG. What that cost was one line of this file, because the check was
+ * here.
+ *
+ * ## PNG, and why we do not re-encode it
+ *
+ * A 1K plate is about **1.9 MB of PNG** against about 150 KB of JPEG, so this
+ * is not free: four plates is ~7.6 MB of storage per illustrated article, and
+ * the reader downloads one of them to look at it. It is stored anyway, because
+ * the alternative is worse in a way that is measured rather than argued:
+ *
+ *  - **Re-encoding needs a decoder, and the only one here is banned from this
+ *    bundle.** `@napi-rs/canvas` is already a dependency and would do it in
+ *    three lines — and naming it from anything the API function reaches adds
+ *    **34 MB** to the Vercel bundle, which is why
+ *    `tests/pdf-bundle-trace.test.ts` lists `@napi-rs/canvas/index.js` under
+ *    `MUST_NOT_SHIP`. The illustrated step runs inside that function.
+ *    src/feedback-image.ts § JPEG is refused made the same call for the same
+ *    reason, and refusing there was the right answer too.
+ *  - **A hand-rolled JPEG encoder is a DCT and a Huffman table**, which is a
+ *    real piece of work to own for a saving in bytes, and a new dependency is
+ *    what the plan deliberately did without.
+ *  - **The money is not here.** An illustrated article costs $0.27–$0.40 of
+ *    model spend; 7.6 MB of Supabase Storage is rounding error beside it. What
+ *    it does cost is the reader's download, and that is named in
+ *    docs/project/diagram.md so the next person can weigh it rather than
+ *    discover it.
+ *
+ * If the download turns out to matter, the two ways forward are the 34 MB or a
+ * baseline encoder, and that is Greg's call rather than one to make inside a
+ * model swap.
  *
  * It does **not** re-sniff the signature to find that out. `readPlate` in
  * src/ai-call.ts already decides the media type from the bytes' own magic
  * numbers and refuses a provider whose claim disagrees, so `PlateDraw.mediaType`
  * is already the earned answer rather than the claimed one, and a second
- * statement of the JPEG magic bytes here would be a second thing to keep in
- * step. One place decides what the bytes are; this decides whether that is
- * allowed.
+ * statement of the magic bytes here would be a second thing to keep in step.
+ * One place decides what the bytes are; this decides whether that is allowed,
+ * and under which name they are stored.
  *
  * ## Orphans are accepted, and no sweep is built
  *
@@ -43,11 +74,23 @@
  * wrong deletes a picture a reader is looking at.
  */
 import { imageDimensions } from "./assets.js";
-import type { IllustratedImage } from "./illustrated-plate.js";
+import type { IllustratedImage, IllustratedImageExt } from "./illustrated-plate.js";
 import { type RawSourceStore, blobStore, storeRawSource } from "./store/blobs.js";
 
-/** What the plate's bytes must be, spelled once. */
-export const PLATE_MEDIA_TYPE = "image/jpeg";
+/**
+ * **What a plate may be, and under which name it is stored** — spelled once,
+ * and a closed map rather than two lists that could drift apart.
+ *
+ * The key is what `readPlate` (src/ai-call.ts) earned from the bytes' own
+ * signature; the value is what goes into `canonicalKey` and therefore into the
+ * URL, the `Content-Type` header and the object's own metadata. Reading the
+ * extension out of the media type rather than deciding it separately is what
+ * makes "the key ends in `.png`" and "the bytes are a PNG" one fact.
+ */
+export const PLATE_MEDIA_TYPES: Readonly<Record<string, IllustratedImageExt>> = {
+  "image/jpeg": "jpeg",
+  "image/png": "png",
+};
 
 /**
  * Put one plate in the blob store and hand back the record the artefact keeps.
@@ -65,10 +108,11 @@ export async function storePlateImage(
   draw: { image: Uint8Array; mediaType?: string },
   store: RawSourceStore = blobStore(),
 ): Promise<IllustratedImage> {
-  if (draw.mediaType !== PLATE_MEDIA_TYPE) {
+  const ext = draw.mediaType === undefined ? undefined : PLATE_MEDIA_TYPES[draw.mediaType];
+  if (!ext) {
     throw new Error(
       `the illustrator returned ${draw.mediaType ?? "bytes of no stated type"} and a plate ` +
-        `must be ${PLATE_MEDIA_TYPE} — see src/illustrated-image.ts`,
+        `must be ${Object.keys(PLATE_MEDIA_TYPES).join(" or ")} — see src/illustrated-image.ts`,
     );
   }
   if (draw.image.byteLength === 0) throw new Error("the illustrator returned an empty plate");
@@ -82,6 +126,6 @@ export async function storePlateImage(
     throw new Error("the illustrator's plate does not say what size it is");
   }
 
-  const { sha256 } = await storeRawSource(draw.image, "jpeg", store);
-  return { sha256, ext: "jpeg", bytes: draw.image.byteLength, width: size.width, height: size.height };
+  const { sha256 } = await storeRawSource(draw.image, ext, store);
+  return { sha256, ext, bytes: draw.image.byteLength, width: size.width, height: size.height };
 }

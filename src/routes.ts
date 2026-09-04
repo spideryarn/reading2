@@ -27,6 +27,7 @@
  *   GET    /api/glossary/:slug   the terms this piece uses, and whether they are stale
  *   DELETE /api/glossary/:slug   throw the list away, so the next run starts over
  *   POST   /api/glossary/:slug/:id/lookup   check one term on the web, and keep the sources
+ *   POST   /api/glossary/:slug/ask   find a term the reader typed and explain it; stores nothing
  *   GET    /api/ideas/:slug      the propositions the piece needs you to hold, and staleness
  *   GET    /api/timeline/:slug   when the piece says things happened, and staleness
  *   GET    /api/quiz/:slug       the questions the piece can ask you back, and staleness
@@ -122,6 +123,7 @@ import {
   loadArticle,
   loadGlossary,
   lookUpTerm,
+  askAboutTerm,
   loadArc,
   loadIdeas,
   loadQuotes,
@@ -588,7 +590,12 @@ async function sendSource(res: ServerResponse, slug: string): Promise<void> {
  * so the bytes at it can never change. `private` because the article is one
  * reader's — a shared cache must not hold it.
  */
-async function sendPlate(res: ServerResponse, slug: string, hash: string): Promise<void> {
+async function sendPlate(
+  res: ServerResponse,
+  slug: string,
+  hash: string,
+  ext: string,
+): Promise<void> {
   /* Ownership first, before the artefact is read and long before a byte moves —
      `sendSource`'s rule, and the failure it was written after. */
   await shelfStore.read(slug);
@@ -596,9 +603,13 @@ async function sendPlate(res: ServerResponse, slug: string, hash: string): Promi
   const found = await loadIllustrated(slug);
   const plates = (found.illustrated as { plates?: { image?: IllustratedImage }[] }).plates ?? [];
   /* **The stored record, not the caller's string.** Everything below is built
-     from `plate.image`; `hash` is never used again after this line. */
+     from `plate.image`; `hash` and `ext` are never used again after these two
+     lines. The extension has to *match* rather than be ignored: since 2026-09-04
+     an article can hold JPEG plates drawn by the old illustrator beside PNG ones
+     drawn by the new, so serving a `.jpeg` URL from a PNG record would be this
+     route telling a cache one thing and the `Content-Type` header another. */
   const image = plates.find((p) => p.image?.sha256 === hash)?.image;
-  if (!image) throw httpError(404, "No such plate.");
+  if (!image || image.ext !== ext) throw httpError(404, "No such plate.");
 
   const bytes = await blobStore().get(canonicalKey(image.sha256, image.ext));
   if (!bytes) {
@@ -6374,6 +6385,19 @@ export async function serveAuthenticatedApi(
      the better part of a minute if the model searches, so the client's fetch
      needs a patient deadline; `explain` has its own. */
   const lookup = /^\/api\/glossary\/([\w.%-]+)\/([\w.%-]+)\/lookup$/.exec(path);
+  /* **The glossary's second POST, and it writes nothing.** A reader types a term
+     into the box and this finds it in the prose and explains the passage —
+     `lookup` above with the entry replaced by a phrase, so it is the same
+     `explain` call at the same cost with the same patient deadline.
+
+     The term is in the **body**, never the path. It is the reader's own words,
+     which docs/project/logging.md keeps out of an address, and it can carry
+     spaces and punctuation `[\w.%-]` would not take.
+
+     It cannot collide with `lookup`: that one is three segments after the slug's
+     and this is one, so no term id can reach it and no article can be named
+     `find`. src/term-lookup.ts § `makeAskAboutTerm`. */
+  const askTerm = /^\/api\/glossary\/([\w.%-]+)\/ask$/.exec(path);
   /* Read only, and no DELETE beside it: `ideas` replaces rather than appends,
      so re-running the step already *is* "start again". The glossary needs a
      delete precisely because running it again would add to the list it is
@@ -6412,9 +6436,16 @@ export async function serveAuthenticatedApi(
      an artefact points at.** The hash is spelled out as 64 hex characters here
      rather than as a loose capture — not because `sendPlate` trusts it (it does
      not; see that function) but because a pattern that accepts anything invites
-     the next reader to think the capture is a key. */
+     the next reader to think the capture is a key.
+
+     **Both extensions since 2026-09-04**, when the illustrator changed to one
+     that ignores `output_format` and returns PNG. The extension is captured and
+     `sendPlate` requires it to be the one the stored record names, so a `.jpeg`
+     URL can never serve a PNG: an artefact holds plates of both kinds side by
+     side, and the URL is a promise about the bytes exactly as the storage key
+     is (src/illustrated-image.ts). */
   const illustrated = /^\/api\/illustrated\/([\w.%-]+)$/.exec(path);
-  const illustratedPlate = /^\/api\/illustrated\/([\w.%-]+)\/([0-9a-f]{64})\.jpeg$/.exec(path);
+  const illustratedPlate = /^\/api\/illustrated\/([\w.%-]+)\/([0-9a-f]{64})\.(jpeg|png)$/.exec(path);
   /* The arc on its own. It also travels inside `/api/article/:slug`, and this is
      not a second way to do the same thing — since 2026-08-29 the arc is not built
      by every ingest, so a reader can arrive without one, ask for one, and need to
@@ -6848,6 +6879,36 @@ export async function serveAuthenticatedApi(
       );
       return;
     }
+    if (askTerm && req.method === "POST") {
+      const at = slugPart(askTerm, 1);
+      /* **Only `term` is read off the body, and it is the only thing there is
+         to read.** No block id, no offset, no definition, no owner — the
+         passage is found from the article, server-side, which is what stops
+         this being a way to ask a paid model about text of the caller's
+         choosing. `askAboutTerm` validates and normalises it; the route does
+         not pre-judge it, so there is one bound in one place.
+
+         **No rate limit, and there is none to reuse.** The sibling `lookup`
+         POST has none either, and feedback's hourly cap is the only limiter in
+         this file (`fileFeedback`). So an owner with one article of their own
+         can drive paid `explain` calls as fast as they can post: ownership says
+         *which* article, not *how many* requests, and `withSpendAttribution`
+         records the spend rather than authorising it. **This request never
+         enters the job queue**, so the queue's concurrency of three is not a
+         limit on it either — a first draft of this comment claimed it was, and
+         GPT Sol was right that it is false. Stated rather than fixed here
+         because it is the shape of every paid request in this file and a scheme
+         invented on the day for one endpoint would be the wrong place to put
+         one. docs/project/glossary.md § Looking a term up, and the note in
+         docs/user-feedback/ for Greg. */
+      const askBody = (await readBody(req)) as { term?: unknown } | null;
+      send(
+        res,
+        200,
+        await withSpendAttribution({ articleSlug: at }, () => askAboutTerm(at, askBody?.term)),
+      );
+      return;
+    }
     if (ideas && req.method === "GET") {
       {
         const at = slugPart(ideas, 1);
@@ -6946,7 +7007,12 @@ export async function serveAuthenticatedApi(
          pattern allows `%` and `.` — and `part` is not used at all on the hash,
          which is already narrowed to hex by the pattern and is in any case only
          ever compared, never joined onto anything. */
-      await sendPlate(res, slugPart(illustratedPlate, 1), part(illustratedPlate, 2));
+      await sendPlate(
+        res,
+        slugPart(illustratedPlate, 1),
+        part(illustratedPlate, 2),
+        part(illustratedPlate, 3),
+      );
       return;
     }
     /* Read only, like the ideas above and for the same reason: running the step

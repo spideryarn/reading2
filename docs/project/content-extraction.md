@@ -62,7 +62,7 @@ The differences that matter to a reader:
   layer ([`src/pdf-score.ts`](../../src/pdf-score.ts)) and the step fails, naming the page, rather
   than writing a half-transcribed article that reads fluently.
 - **A PDF can be too long, and on the queue's path it is refused in stage 1.** The cap is
-  [`src/pdf-read.ts`](../../src/pdf-read.ts) § `MAX_PAGES` — a limit on what reading a document is
+  [`src/uploads.ts`](../../src/uploads.ts) § `MAX_PAGES` — a limit on what reading a document is
   allowed to cost, not a technical one — and since 2026-09-04 it is enforced where the bytes first
   arrive rather than here: `refuseAnOverlongPdf` in [`src/pipeline.ts`](../../src/pipeline.ts) counts
   the pages before an upload is promoted to its canonical name or a fetched document is stored, so

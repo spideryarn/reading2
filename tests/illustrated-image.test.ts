@@ -116,14 +116,44 @@ describe("storePlateImage", () => {
     ]);
   });
 
-  it("refuses bytes that are not a JPEG, rather than storing a .jpeg that is not one", async () => {
-    /* A PNG: the real case is a future model quietly ignoring
-       `output_format`, and `readPlate` would hand us `image/png` having earned
-       that from the signature. Nothing may be written. */
-    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  /**
+   * **The case this file was written to refuse, which has now happened.**
+   *
+   * It said: *"the real case is a future model quietly ignoring
+   * `output_format`"*, and stored nothing. On 2026-09-04 that future arrived —
+   * `google/gemini-3.1-flash-image` ignores the field and returns PNG whatever
+   * it is asked. So a PNG is now stored, and stored **as a PNG**: the key ends
+   * `.png`, the object's content type is `image/png`, and the record says
+   * `png`. What has not changed is that no byte is written under a name that is
+   * not true, which is the whole point of the check.
+   */
+  it("stores a PNG plate as a PNG, key and content type and record together", async () => {
+    /* Signature plus an IHDR saying 848x1264 — the size a `1K` `2:3` plate
+       actually comes back at. Synthetic rather than a real plate on purpose:
+       what is under test is the branch, and the marker *walk* is tested above
+       against the bytes a provider really sent. */
+    const png = new Uint8Array(24);
+    png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    new DataView(png.buffer).setUint32(16, 848);
+    new DataView(png.buffer).setUint32(20, 1264);
     const store = fakeStore();
-    await expect(storePlateImage({ image: png, mediaType: "image/png" }, store)).rejects.toThrow(
-      /must be image\/jpeg/,
+
+    const image = await storePlateImage({ image: png, mediaType: "image/png" }, store);
+
+    expect(image).toMatchObject({ ext: "png", width: 848, height: 1264, bytes: 24 });
+    expect(store.puts).toEqual([
+      { key: `sha256/${image.sha256}.png`, contentType: "image/png", bytes: 24 },
+    ]);
+  });
+
+  it("refuses a format that is neither, rather than storing bytes under a name that is not true", async () => {
+    /* A GIF, which `sniffImage` knows and this file does not accept: `ext`
+       reaches `canonicalKey` and the `Content-Type` header, so a third value
+       would be a lookup miss or a lie about the bytes. */
+    const gif = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00]);
+    const store = fakeStore();
+    await expect(storePlateImage({ image: gif, mediaType: "image/gif" }, store)).rejects.toThrow(
+      /must be image\/jpeg or image\/png/,
     );
     expect(store.puts).toEqual([]);
   });

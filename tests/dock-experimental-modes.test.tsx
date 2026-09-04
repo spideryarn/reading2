@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
- * **Five of the thirteen modes are only drawn for a reader who asked for them.**
+ * **Four of the thirteen modes are only drawn for a reader who asked for them.**
  *
- * Quotes, Timeline, Referee, Diagram and Remember are behind the
+ * Quotes, Timeline, Referee and Remember are behind the
  * experimental-features switch since 2026-09-03
  * (docs/project/experimental-features.md,
  * docs/plans/260903c-gate-unpolished-modes-behind-experimental-features.md).
@@ -11,7 +11,14 @@
  * > When a non-logged-in user reads a Public-readable article, I thin it should
  * > default to treating them as "Experimental Features" = false.
  *
- * **The counts here are eight and thirteen, not seven and twelve.** Structure —
+ * **Diagram came back out on 2026-09-04**, and the gate went one level down
+ * rather than away: the mode is in everybody's bar and four of its five
+ * pictures are behind the switch instead, a reader having reported that only
+ * the Sketch is good enough to show everyone (SPIDERYARN-READING2-13). The chip
+ * row's end of that is tests/diagram-kind-gating.test.tsx; both ends draw by one
+ * rule, src/web/experimental-visibility.ts.
+ *
+ * **The counts here are nine and thirteen, not seven and twelve.** Structure —
  * the merge of Hierarchy and Outline — has not landed, so both of those are
  * today's default-visible stand-ins for it. Seven/twelve is the shape *after*
  * that merge and must not be written down before it.
@@ -46,10 +53,10 @@ import {
   EXPERIMENTAL_SIGNED_OUT,
 } from "./helpers/experimental-fixtures.js";
 
-/** The five, by name, so a sixth cannot be added without this file saying so. */
-const BEHIND_THE_SWITCH: readonly Mode[] = ["quotes", "timeline", "referee", "diagram", "remember"];
+/** The four, by name, so a fifth cannot be added without this file saying so. */
+const BEHIND_THE_SWITCH: readonly Mode[] = ["quotes", "timeline", "referee", "remember"];
 
-/** Everything else — eight of them, until Structure replaces two with one. */
+/** Everything else — nine of them, until Structure replaces two with one. */
 const ALWAYS: readonly Mode[] = MODES.filter((m) => !BEHIND_THE_SWITCH.includes(m));
 
 let host: HTMLDivElement;
@@ -84,7 +91,7 @@ function reading(props: Record<string, unknown>): void {
   });
 }
 
-/** The bar off the reading view: thirteen loose links, or eight of them. */
+/** The bar off the reading view: thirteen loose links, or nine of them. */
 function loose(search: string, props: Record<string, unknown> = {}): void {
   history.replaceState(null, "", `/read/a-piece/metadata${search}`);
   act(() => {
@@ -124,9 +131,9 @@ function checked(): string[] {
 const labels = (modes: readonly Mode[]) => modes.map((m) => MODE_LABEL[m]).sort();
 
 describe("how many buttons the bar draws", () => {
-  it("eight, with the switch off", () => {
+  it("nine, with the switch off", () => {
     reading({ experimental: EXPERIMENTAL_OFF });
-    expect(radioModes()).toHaveLength(8);
+    expect(radioModes()).toHaveLength(9);
     expect([...radioModes()].sort()).toEqual(labels(ALWAYS));
   });
 
@@ -139,7 +146,7 @@ describe("how many buttons the bar draws", () => {
   /**
    * The signed-out reader Greg was looking at, **as far as this file can see
    * them**: the bar is handed the answer, so what is checked here is that being
-   * told *signed out, off* draws eight buttons.
+   * told *signed out, off* draws nine buttons.
    *
    * It does not exercise a session, and the name used to imply it did (GPT Sol,
    * reviewing stage 2). That a signed-out session produces this answer *because
@@ -147,13 +154,13 @@ describe("how many buttons the bar draws", () => {
    * tests/experimental-store.test.tsx's, and that the reading view asks for
    * nothing on their behalf is tests/public-network-trace.test.tsx's.
    */
-  it("eight when the bar is told the reader is signed out and off", () => {
+  it("nine when the bar is told the reader is signed out and off", () => {
     reading({
       experimental: EXPERIMENTAL_SIGNED_OUT,
       visitor: true,
       marked: markedModes(NOTHING_SHARED),
     });
-    expect(radioModes()).toHaveLength(8);
+    expect(radioModes()).toHaveLength(9);
     expect(radioModes()).not.toContain(MODE_LABEL.timeline);
   });
 });
@@ -172,11 +179,11 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
   it("a reading view in Timeline draws it, checked, with the switch off", () => {
     reading({ mode: "timeline", experimental: EXPERIMENTAL_OFF });
     expect(radioModes()).toContain(MODE_LABEL.timeline);
-    expect(radioModes()).toHaveLength(9);
+    expect(radioModes()).toHaveLength(10);
     expect(checked()).toEqual([MODE_LABEL.timeline]);
   });
 
-  it("every one of the five, and never more than one radio checked", () => {
+  it("every one of the four, and never more than one radio checked", () => {
     for (const mode of BEHIND_THE_SWITCH) {
       reading({ mode, experimental: EXPERIMENTAL_OFF });
       expect(radioModes(), mode).toContain(MODE_LABEL[mode]);
@@ -192,12 +199,12 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
    */
   it("the metadata page retains the mode its URL carries", () => {
     loose("?mode=quotes");
-    expect(linkModes()).toHaveLength(9);
+    expect(linkModes()).toHaveLength(10);
     expect(linkModes()).toContain(MODE_LABEL.quotes);
     expect(linkModes()).not.toContain(MODE_LABEL.timeline);
   });
 
-  it("the metadata page with no mode in its URL draws the eight", () => {
+  it("the metadata page with no mode in its URL draws the nine", () => {
     loose("");
     expect([...linkModes()].sort()).toEqual(labels(ALWAYS));
   });
@@ -210,7 +217,7 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
 
 /**
  * **The fit key carries the identities, not the count.** GPT Sol, finding 4:
- * retaining the current mode keeps the count at nine while `?mode=quotes`
+ * retaining the current mode keeps the count unmoved while `?mode=quotes`
  * becomes `?mode=remember`, and those two words are not the same width — so a
  * signature counting buttons would leave the bar overflowing, or its labels
  * dropped with room to spare, until the next resize.

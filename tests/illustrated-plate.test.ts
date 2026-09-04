@@ -50,6 +50,10 @@ const BLOCKS = new Map<BlockId, string>([
 
 const OPTS = { blockText: BLOCKS, sceneIds: ["overview", "zoom-1"] };
 
+/** Real runs of two other blocks' own words, so a second vignette can pass. */
+const CUP_QUOTE = "asks what it is like to be the cup";
+const JAR_QUOTE = "picks up a coffee cup and asks what";
+
 const IMAGE = {
   sha256: "a".repeat(64),
   ext: "jpeg",
@@ -65,6 +69,11 @@ function good(over: Record<string, unknown> = {}): Record<string, unknown> {
     block: "spya-aaaaaa",
     quote: "minerals at the bottom and angels at the top",
     depicts: "A gilded ladder up the left margin, minerals on the bottom rung.",
+    /* **Every vignette a fixture builds carries one**, because since
+       `illustrated/3` a brief without titles is a brief that will be drawn
+       wordless, and a fixture missing one would make every unrelated case in
+       this file assert against a plate that had quietly lost its lettering. */
+    title: "Scala Naturae",
     ...over,
   };
 }
@@ -116,6 +125,9 @@ describe("readModelBrief", () => {
       block: "spya-aaaaaa",
       quote: "minerals at the bottom and angels at the top",
       depicts: "A gilded ladder up the left margin, minerals on the bottom rung.",
+      /* Upper-cased on the way in, so the caption in the picture and the caption
+         in the reader's row are the same characters. */
+      title: "SCALA NATURAE",
     });
   });
 
@@ -363,6 +375,128 @@ describe("readModelBrief", () => {
     expect(report.faults[0]?.what).toContain("the plate is nameless");
   });
 
+  /**
+   * **Caption every drawn vignette, or none** — the half of the rule that lives
+   * in the reader, and the one that can only be enforced here.
+   *
+   * The one thing `google/gemini-3.1-flash-image` misspelt across the whole
+   * 2026-09-04 spike was a word nobody supplied: given a composition drawing
+   * eleven things and a caption list naming ten, it lettered the eleventh
+   * itself, and `MALL TISSUE BLOB` — `SMALL` with its first letter eaten — is
+   * the only wrong string in 111. A dropped vignette makes exactly that gap,
+   * because the composition prose still describes the thing it was written to
+   * draw, so the plate goes out with an uncaptioned scene on it.
+   *
+   * By the time `imagePrompt` sees the plate the drop is gone and the count is
+   * unrecoverable, which is why the decision is here.
+   */
+  describe("caption every drawn vignette, or none", () => {
+    /**
+     * **The dropped vignette keeps its caption, and that is the whole
+     * correction.** The first version of this rule stripped every title from a
+     * plate that lost one — and the plate came back lettered anyway, because
+     * the brief model writes its titles into the composition prose as well.
+     * Measured 2026-09-04 on a real run: ten of eleven scenes lettered
+     * correctly, and one caption repeated on the twelfth. So the list covers
+     * what was **drawn**, which includes the drop.
+     */
+    it("captions the vignette that was dropped, because it is still drawn", () => {
+      const { illustrated } = readModelBrief(
+        brief([
+          good({ title: "The Ladder" }),
+          good({ block: "spya-bbbbbb", quote: "not a sentence in that block at all", title: "The Cup" }),
+        ]),
+        ONE,
+      );
+      const plate = illustrated.plates[0];
+      /* The reader's list is the survivors — the drop protects the navigation. */
+      expect(plate?.vignettes).toHaveLength(1);
+      expect(plate?.vignettes[0]?.quote).toBe("minerals at the bottom and angels at the top");
+      /* The illustrator's list is what is on the page. */
+      expect(plate?.lettering?.map((c) => c.title)).toEqual(["THE LADDER", "THE CUP"]);
+      /* Each bound to its own scene, because a floating title is untested. */
+      expect(plate?.lettering?.[0]?.where).toContain("A gilded ladder");
+    });
+
+    it("letters nothing at all when one vignette simply has no title", () => {
+      const { illustrated, report } = readModelBrief(
+        brief([good({ title: "The Ladder" }), good({ block: "spya-bbbbbb", quote: JAR_QUOTE, title: undefined })]),
+        ONE,
+      );
+      const plate = illustrated.plates[0];
+      expect(plate?.lettering).toBeUndefined();
+      /* And the reader's rows lose their captions with it, so the row never
+         shows a word that is not on the picture. */
+      expect(plate?.vignettes).toHaveLength(2);
+      expect(plate?.vignettes.map((v) => v.title)).toEqual([undefined, undefined]);
+      expect(report.faults.map((f) => f.what).join(" ")).toContain("no lettering at all");
+    });
+
+    it("keeps them all when nothing was dropped and every vignette has one", () => {
+      const { illustrated, report } = readModelBrief(
+        brief([good({ title: "The Ladder" }), good({ block: "spya-bbbbbb", quote: CUP_QUOTE, title: "The Cup" })]),
+        ONE,
+      );
+      expect(illustrated.plates[0]?.vignettes.map((v) => v.title)).toEqual([
+        "THE LADDER",
+        "THE CUP",
+      ]);
+      expect(illustrated.plates[0]?.lettering?.map((c) => c.title)).toEqual([
+        "THE LADDER",
+        "THE CUP",
+      ]);
+      expect(report.faults).toEqual([]);
+    });
+
+    /**
+     * **A stored artefact is exempt, and that is not an oversight.** Its
+     * pictures are painted and the captions are in the pixels; a re-read drops
+     * vignettes because block ids moved under a re-extracted article, which has
+     * nothing to do with what was drawn. Stripping there would take the caption
+     * out of the reader's row while it was still on the plate in front of them.
+     */
+    it("leaves a stored plate's titles alone when a re-read drops a vignette", () => {
+      const { illustrated } = readStoredIllustrated(
+        brief(
+          [good({ title: "The Ladder" }), good({ block: "spya-nope00", title: "The Cup" })],
+          { image: IMAGE },
+        ),
+        ONE,
+      );
+      expect(illustrated.plates[0]?.vignettes.map((v) => v.title)).toEqual(["THE LADDER"]);
+      /* **And no caption list is invented for it.** What was really asked of
+         the illustrator included the vignette this re-read just dropped;
+         rebuilding the list from the survivors would produce a shorter one and
+         call it the record. Nothing on this path reads it. */
+      expect(illustrated.plates[0]?.lettering).toBeUndefined();
+    });
+
+    /**
+     * **Characters, not words**, and the difference was measured. A four-word
+     * cap sat here for one afternoon and cost two whole plates every caption
+     * they had, over `ALL ROADS TO HUGGING FACE` and `HUGGING FACE HOLDS THE
+     * ANSWER` — 25 and 29 characters, both of which letter perfectly. Words are
+     * a proxy; the character count is the thing that decides whether a caption
+     * fits under a small scene.
+     */
+    it("lets a five-word title through, and refuses one too long to letter", () => {
+      const fine = readModelBrief(brief([good({ title: "all roads to hugging face" })]), ONE);
+      expect(fine.illustrated.plates[0]?.lettering?.[0]?.title).toBe("ALL ROADS TO HUGGING FACE");
+      expect(fine.report.faults).toEqual([]);
+
+      const long = readModelBrief(brief([good({ title: "t".repeat(41) })]), ONE);
+      expect(long.illustrated.plates[0]?.lettering).toBeUndefined();
+      expect(long.illustrated.plates[0]?.vignettes[0]?.title).toBeUndefined();
+      expect(long.report.faults.map((f) => f.what).join(" ")).toContain("over the 40 cap");
+    });
+
+    /** A caption in the picture and a caption in the row must be one string. */
+    it("upper-cases the title once, where both readers of it will see the same one", () => {
+      const { illustrated } = readModelBrief(brief([good({ title: "Face in the bun" })]), ONE);
+      expect(illustrated.plates[0]?.vignettes[0]?.title).toBe("FACE IN THE BUN");
+    });
+  });
+
   it("hands back an empty brief rather than throwing on rubbish", () => {
     for (const raw of [null, 42, "a string", []]) {
       const { illustrated, report } = readModelBrief(raw, ONE);
@@ -452,11 +586,35 @@ describe("readStoredIllustrated", () => {
       { ...IMAGE, height: 40_000 },
       { ...IMAGE, bytes: 64 * 1024 * 1024 },
       { ...IMAGE, sha256: "not-a-hash" },
-      { ...IMAGE, ext: "png" },
+      /* **`png` is a plate now and `gif` is not**, which is the point of the
+         closed set: `ext` reaches `canonicalKey` and the `Content-Type` header,
+         so a third value would be a lookup miss or a lie about the bytes.
+         src/illustrated-plate.ts § `readImage`. */
+      { ...IMAGE, ext: "gif" },
+      { ...IMAGE, ext: "webp" },
     ]) {
       const { illustrated, report } = readStoredIllustrated(brief([good()], { image }), ONE);
       expect(illustrated.plates[0]?.image, JSON.stringify(image)).toBeUndefined();
       expect(report.faults[0]?.what).toContain("the image record is not one");
+    }
+  });
+
+  /**
+   * **PNG is a plate too, since 2026-09-04.** The illustrator changed to one
+   * that ignores `output_format` and returns PNG whatever it is asked, so an
+   * article now holds records of both kinds — and every reader of one, the
+   * route and the panel included, takes the extension from the record rather
+   * than assuming. A reader that still hard-coded `"jpeg"` would drop every
+   * plate the current illustrator has painted, silently, as "no picture yet".
+   */
+  it("reads back a PNG plate record as readily as a JPEG one", () => {
+    for (const ext of ["jpeg", "png"] as const) {
+      const { illustrated, report } = readStoredIllustrated(
+        brief([good()], { image: { ...IMAGE, ext } }),
+        ONE,
+      );
+      expect(illustrated.plates[0]?.image, ext).toEqual({ ...IMAGE, ext });
+      expect(report.faults, ext).toEqual([]);
     }
   });
 

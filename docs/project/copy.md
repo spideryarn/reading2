@@ -127,6 +127,15 @@ dropped or a deadlock that lost, `[db-failed]` for a database that answered "no"
 and will answer "no" again. A reader quoting four characters, and whoever they
 quote them to, can tell those apart without looking anything up — which was the
 argument for not folding a failed write in with `[ai-unexpected]`.
+`jb-` is a job. `gl-` is the glossary's *Check the web* refusing — `[gl-not-quoted]` because the
+article names the term rather than quoting it, `[gl-stale]` because the list was written for an
+older version of the piece
+([glossary.md § The two ways it refuses](glossary.md#the-two-ways-it-refuses-and-why-they-used-to-be-one)).
+`up-` is the upload record — a file the server took delivery of and then refused — and `pick-` is
+the file picker in the browser refusing before anything is sent, which is the distinction that
+matters when somebody quotes one at you
+([ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf)). `pdf-` is a document the
+pipeline could not read: too long, locked, or damaged.
 
 **The `mic-` family is the exception to the paragraph after next**, and worth
 knowing about before you go looking for it in `src/messages.ts`: it is not there.
@@ -177,6 +186,30 @@ the rule: **a refusal that is an answer gets no code**, and a server sentence sa
 has the job itself, so `displayJob` says *Building the hierarchy · 2m 14s* or *Waiting to continue.*
 live, from the one vocabulary. A state word baked into a server sentence is a second account, and it
 arrives stale.
+
+**The glossary's two refusals went the other way on 2026-09-04, and this is the record of it** —
+`[gl-not-quoted]` and `[gl-stale]` are refusals that are answers, and they carry codes anyway.
+The rule holds where it was argued: a code on *"already running"* invites a bug report about the
+system working. It fails where a reader may reasonably think the refusal is *wrong*. One did, and
+was right to, and had to paraphrase the sentence — which left three candidate branches to tell
+apart from prose, and cost an afternoon that four characters would have ended in a minute
+([the postmortem](../postmortems/260904c-the-glossary-said-the-term-was-not-there.md)). Whether
+that is the rule needing a clause or this being its exception is Greg's to say; until he does, the
+argument lives at `GLOSSARY_TERM_NOT_QUOTED` in [`src/messages.ts`](../../src/messages.ts).
+
+**The file picker's three went the same way on the same day, and for the same reason.**
+`[pick-pdf]`, `[pick-empty]` and `[pick-big]` in [`src/uploads.ts`](../../src/uploads.ts) are
+raised in the browser over a filename and the OS's guess at a MIME type, before a byte is sent, and
+they carried no code until 2026-09-04 on the argument that *nothing here involves a provider or a
+request, so there is nothing to look up*. That tested the wrong thing: the `mic-` family already
+settles that a failure the browser raises alone is worth naming. What settled it was a report that
+read, in full, *"couldn't upload PDF"* — a sentence that fitted seven branches across four files, and
+four characters would have picked one
+([the postmortem](../postmortems/260904b-a-sentence-written-for-the-reader-was-thrown-away-at-the-seam.md)).
+**`pick-` rather than `up-`, deliberately**: `up-` is the upload *record's* refusals, decided on the
+server over the bytes that arrived, so the prefix itself tells whoever is helping whether anything
+was ever sent. Like `mic-`, they live beside the code that raises them and are not in `CODE_KINDS` —
+nothing classifies them, and `kindOfMessage` answers `null` for a code it does not know.
 
 The `db-` pair also marks the **second widening of `src/messages.ts`**, after
 `UNEXPECTED_FAILURE`: these sentences exist because a failed Drizzle query puts

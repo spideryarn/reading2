@@ -173,6 +173,9 @@ function Band({ width, children, label }: { width: number; label: string; childr
 const panel = (slug: string, kind: "force" | "drift") => (
   <DiagramPanel
     access={{ kind: "owner" }}
+    /* The whole picker, so this preview shows the row a reader with the
+       experimental-features switch on sees. DiagramPanel.tsx § visibleKinds. */
+    experimental
     slug={slug}
     root={ROOT}
     kind={kind}

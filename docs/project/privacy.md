@@ -158,6 +158,17 @@ that too. The page says "the **default** models", because
 **Everything else on the page is prose that a person has to re-read.** Go and look at it when any of
 these moves:
 
+- **what a shared article carries**, which changed on 2026-09-04 and is the only claim on the page
+  that has ever gone from true to false. The paragraph under *Who can see your shelf* said *"Your
+  notes, your comments and your conversations are not shared"*; two thirds of that stopped being
+  true when Greg decided a public link carries the reader's comments and the model's answers to
+  them ([260904c](../plans/260904c-more-modes-on-a-shared-link.md)). **Conversations are still
+  private, and the page says so separately** rather than quietly dropping all three — somebody who
+  read the old sentence should be able to find out which half of it survived. The page does not
+  enumerate the rest: the Access & Sharing card derives the full inventory at the moment of sharing
+  ([`shared-inventory.ts`](../../src/web/shared-inventory.ts)), and two lists of one fact is how one
+  of them goes stale.
+
 - a new **subprocessor** arrives, or one goes — the list is Supabase, Vercel, OpenRouter, OpenAI,
   Google, Sentry, Stripe
 - the **regions** change, or an article's bytes start living somewhere other than

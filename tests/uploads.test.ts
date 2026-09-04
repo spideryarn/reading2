@@ -13,7 +13,13 @@
  * is the thing a reader acts on.
  */
 import { describe, expect, it } from "vitest";
-import { MAX_UPLOAD_BYTES, formatBytes, uploadProblem } from "../src/uploads.js";
+import {
+  formatBytes,
+  MAX_PAGES,
+  MAX_UPLOAD_BYTES,
+  uploadLimits,
+  uploadProblem,
+} from "../src/uploads.js";
 
 const pdf = (over: Partial<Parameters<typeof uploadProblem>[0]> = {}) => ({
   name: "paper.pdf",
@@ -75,8 +81,45 @@ describe("uploadProblem", () => {
     // The one thing about a refusal's wording worth pinning: a size refusal
     // that does not name the limit leaves the reader guessing how much to cut.
     const message = uploadProblem(pdf({ size: 60 * 1024 * 1024 })) ?? "";
-    expect(message).toContain("60.0 MB");
-    expect(message).toContain("50.0 MB");
+    expect(message).toContain("60 MB");
+    expect(message).toContain(formatBytes(MAX_UPLOAD_BYTES));
+  });
+});
+
+describe("the pick- codes", () => {
+  /**
+   * **Every refusal here carries one, and they are all different.**
+   *
+   * The point of a code is that somebody can quote four characters instead of
+   * paraphrasing — and the report that put these here was a paraphrase,
+   * *"couldn't upload PDF"*, which fitted seven different branches. Two branches
+   * sharing a code would put that ambiguity straight back.
+   *
+   * Matched on the shape, not on the exact codes, so renaming one is a copy
+   * change rather than a red test — except that it must stay a `pick-` code, so
+   * the family that means *the browser refused this before anything was sent*
+   * stays distinguishable from `up-`, which means the server did.
+   */
+  const refusals = [
+    uploadProblem(pdf({ name: "notes.txt", type: "text/plain" })),
+    uploadProblem(pdf({ size: 0 })),
+    uploadProblem(pdf({ size: MAX_UPLOAD_BYTES + 1 })),
+  ];
+
+  it("ends every sentence with a distinct pick- code", () => {
+    const codes = refusals.map((m) => m?.match(/\[(pick-[a-z0-9-]+)\]$/)?.[1]);
+    expect(codes.every((c) => c !== undefined), `not all coded: ${refusals}`).toBe(true);
+    expect(new Set(codes).size).toBe(refusals.length);
+  });
+});
+
+describe("uploadLimits", () => {
+  /* The sentence itself is copy and is allowed to change; that it is derived
+     from the two constants is the property, because a hint naming a limit the
+     server does not enforce is worse than no hint at all. */
+  it("names both caps, from the constants that enforce them", () => {
+    expect(uploadLimits()).toContain(formatBytes(MAX_UPLOAD_BYTES));
+    expect(uploadLimits()).toContain(String(MAX_PAGES));
   });
 });
 
@@ -89,5 +132,12 @@ describe("formatBytes", () => {
 
   it("stops pretending to a decimal above 100 MB", () => {
     expect(formatBytes(104.7 * 1024 * 1024)).toBe("105 MB");
+  });
+
+  it("does not print a trailing .0", () => {
+    /* The round numbers this prints are mostly the *limits* — `uploadLimits()`
+       and the size refusal — and "up to 50.0 MB" reads as a measurement of
+       something rather than a rule. */
+    expect(formatBytes(MAX_UPLOAD_BYTES)).toBe("50 MB");
   });
 });

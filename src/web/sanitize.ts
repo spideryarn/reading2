@@ -65,6 +65,72 @@ import { ARTICLE_CONFIG, installArticlePolicy } from "../sanitize-policy.js";
 const purify = DOMPurify(window);
 installArticlePolicy(purify);
 
+/**
+ * **Every link that leaves this app opens a new tab.**
+ *
+ * > So I'm using Spideryarn shared to home page, and so if I click the link I
+ * > certainly don't want it to open instead of Spideryarn, so then I have to
+ * > click back. I wanted to open in a new blank tab or whatever.
+ * >
+ * > — Greg, 2026-09-04 (SPIDERYARN-READING2-10)
+ *
+ * Added to a home screen, Spideryarn runs as a standalone web app: there is no
+ * browser chrome, so a link that navigates in place replaces the whole app and
+ * leaves the reader nothing to go back with. On the desktop the same click only
+ * loses their place — worse than a new tab, and not the emergency. It is one
+ * rule on both, so there is one behaviour to explain rather than two.
+ *
+ * **Here, not in the shared policy**, and that is deliberate. `ARTICLE_CONFIG`
+ * governs what is *stored*, and rewriting an author's markup to record a
+ * decision about our own reading view would put it in the export, in the
+ * public payload and in every model prompt. This is a rendering rule, so it
+ * lives on the browser pass that runs at ingress on every load — which also
+ * means it applies to every article already on the shelf, with nothing
+ * re-extracted.
+ *
+ * **`target` is not in the sanitiser's allowlist, and that is what makes this
+ * safe.** Measured 2026-09-04: DOMPurify drops `target` from article markup
+ * (`tests/prose-links-new-tab.test.ts` pins it), so by the time this hook runs no anchor carries
+ * one, and the only `target` that can reach a reader is the one written below.
+ * A publisher therefore cannot aim a link at `_top`, at a named frame, or at
+ * anything else. *(A comment in TableView.tsx said the sanitiser keeps an
+ * article's own `target`. It never did.)*
+ *
+ * Same-origin links are left alone: an `<a>` back into Spideryarn should stay
+ * in Spideryarn, which is the whole point of the report.
+ */
+purify.addHook("afterSanitizeAttributes", (node) => {
+  // Duck-typed for the same reason the shared policy's hook is — see it.
+  const el = node as Element;
+  if (el.tagName !== "A") return;
+  if (!leavesTheApp(el.getAttribute("href"))) return;
+  el.setAttribute("target", "_blank");
+  /* `noreferrer` as well as `noopener`: the address of the article being read
+     is a reading history, and a link the article supplied should not be handed
+     ours. The same pair the hover card's own "open in a new tab" uses. */
+  el.setAttribute("rel", "noopener noreferrer");
+});
+
+/**
+ * Does following this href take the reader out of the app?
+ *
+ * `http`/`https` only. A `mailto:` or a `tel:` hands off to another app and a
+ * blank tab left behind is litter; an in-article `#fragment` is a jump we
+ * handle ourselves. Anything that will not parse — a relative href with no base
+ * to resolve against — resolves to our own origin and stays.
+ */
+function leavesTheApp(href: string | null): boolean {
+  if (!href) return false;
+  let url: URL;
+  try {
+    url = new URL(href, window.location.href);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+  return url.origin !== window.location.origin;
+}
+
 /** One block's HTML, made safe for this engine to parse. */
 export function sanitizeBlockHtml(html: string): string {
   return purify.sanitize(html, { ...ARTICLE_CONFIG });

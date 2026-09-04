@@ -26,9 +26,14 @@
  * > The Feedback / Problem dialog box wording should explicitly ask users for:
  * > Steps to reproduce; What you expected to see; and What you saw instead.
  *
- * So they are one sentence above the single box, always visible. They had been
- * moved into the "Not sure what to write?" disclosure, and a hint nobody opens
- * is a hint nobody reads.
+ * So they are above the single box, always visible. They had been moved into the
+ * "Not sure what to write?" disclosure, and a hint nobody opens is a hint nobody
+ * reads.
+ *
+ * On 2026-09-04 he asked for them to change with the toggle — three lines when
+ * the reader has said this is a problem, one sentence otherwise — and for the
+ * disclosure to go, since nobody would click it. `KindHint` below is that, with
+ * his words on it.
  *
  * Three boxes is a form. A form is what you fill in once you have *decided* to
  * file a bug — and the reader this whole feature exists for is the one who was
@@ -164,6 +169,67 @@ const KIND_LABEL: Record<FeedbackKind, string> = {
 };
 
 /**
+ * **The guidance under the label, and it follows the toggle.**
+ *
+ * Greg, 2026-09-04, having filed a report from this very dialog:
+ *
+ * > I think if the user clicks on a problem, then we want to show that guidance
+ * > for bug tracking about steps to reproduce and what happened and what do they
+ * > expect to happen — we want to show that text explicitly and quite
+ * > prominently, because that will help hint to them what would make for a
+ * > better bug report. And then we can get rid of not sure what to write because
+ * > no one will click that.
+ *
+ * So the three asks are **a list when the reader has said this is a problem**,
+ * and one sentence otherwise. This is the third arrangement of the same words
+ * and the direction has been consistent throughout: 2026-09-02 hid them in a
+ * "Not sure what to write?" disclosure, 2026-09-03 brought them out as one
+ * always-visible sentence, and this makes them prominent exactly when they
+ * apply. A hint nobody opens is a hint nobody reads; a hint that is the same
+ * whatever you picked is a hint nobody uses.
+ *
+ * **The unset wording is unchanged**, deliberately: a reader who has not touched
+ * the toggle is the one Greg's 2026-09-03 instruction was about — the dialog
+ * must ask for the three things without anybody clicking anything, and
+ * tests/feedback-dialog.test.tsx pins that.
+ *
+ * The disclosure it replaced said two more things, and the one worth keeping is
+ * the reassurance rather than the list — a reader who has been handed three
+ * questions is the reader most likely to decide their answer is not good enough
+ * to send. It rides along as the last line.
+ *
+ * Phrasing content only, `<span>`s rather than a `<ul>`, because this sits
+ * inside the `<label>` that wraps the box and a list is not allowed there.
+ */
+function KindHint({ kind }: { kind: FeedbackKind | null }) {
+  if (kind === "problem") {
+    return (
+      <span className="fb-hint fb-asks">
+        <span className="fb-ask">The steps to reproduce it — what you did, in order.</span>
+        <span className="fb-ask">What you expected to see.</span>
+        <span className="fb-ask">What you saw instead.</span>
+        <span className="fb-ask-note">
+          Any of the three is better than none, and nobody is going to judge the writing.
+        </span>
+      </span>
+    );
+  }
+  if (kind === "suggestion") {
+    return (
+      <span className="fb-hint">
+        What you'd like, and what it would let you do. A rough sketch is plenty.
+      </span>
+    );
+  }
+  return (
+    <span className="fb-hint">
+      If something went wrong: the steps to reproduce it, what you expected to
+      see, and what you saw instead.
+    </span>
+  );
+}
+
+/**
  * **The request body, built field by field.**
  *
  * The same rule `src/routes.ts` keeps at the other end of the wire and
@@ -211,8 +277,6 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
 
   const [body, setBody] = useState("");
   const [kind, setKind] = useState<FeedbackKind | null>(null);
-  /** The "what helps" guidance, shut until somebody wants it. */
-  const [helpOpen, setHelpOpen] = useState(false);
   const [consented, setConsented] = useState(false);
   const [shot, setShot] = useState<Shot | null>(null);
   const [shotProblem, setShotProblem] = useState<string | null>(null);
@@ -325,7 +389,6 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
   const discard = useCallback(() => {
     setBody("");
     setKind(null);
-    setHelpOpen(false);
     setConsented(false);
     setShot(null);
     setShotProblem(null);
@@ -651,15 +714,12 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
 
         <label className="fb-field">
           <span className="fb-label">What happened, or what would you like?</span>
-          {/* **The three asks, said out loud.** They used to be three boxes, then
-              they were hidden behind "Not sure what to write?", and a hint nobody
-              opens is a hint nobody reads — Greg, 2026-09-03, asked for the
-              dialog to ask for them explicitly. One box still, one sentence
-              above it. */}
-          <span className="fb-hint">
-            If something went wrong: the steps to reproduce it, what you expected to
-            see, and what you saw instead.
-          </span>
+          {/* **The three asks, said out loud, and louder once the reader has
+              said this is a problem.** They used to be three boxes, then they
+              were hidden behind "Not sure what to write?" — and a hint nobody
+              opens is a hint nobody reads. See `KindHint` for the three
+              wordings and whose instruction each one answers. */}
+          <KindHint kind={kind} />
           <textarea
             ref={box}
             className="fb-input fb-body"
@@ -682,35 +742,17 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
               disabled={stage.kind === "sending"}
             />
           )}
-          {/* **A disclosure rather than a hover tooltip.** Greg asked for
-              "perhaps a tooltip"; this dialog is a modal `<dialog>` painted in
-              the top layer and the house tooltip portals to `document.body`,
-              which is underneath it — and hover-only guidance is invisible on a
-              phone. A line that opens is the same help without either problem. */}
-          <button
-            type="button"
-            className="fb-help-toggle"
-            aria-expanded={helpOpen}
-            onClick={() => setHelpOpen((was) => !was)}
-          >
-            {helpOpen ? "Hide the hints" : "Not sure what to write?"}
-          </button>
+          {/* **"Not sure what to write?" used to open here**, and it is gone —
+              Greg, 2026-09-04: *"we can get rid of not sure what to write
+              because no one will click that."* Its guidance is in `KindHint`
+              now, on screen without a click. It was a disclosure rather than the
+              tooltip Greg first suggested because this dialog is a modal
+              `<dialog>` in the top layer and the house tooltip portals to
+              `document.body`, underneath it — worth keeping written down, since
+              the next person to want help text here will reach for a tooltip
+              too. */}
         </div>
         <DictationStrip dictation={dictate.dictation} />
-
-        {helpOpen ? (
-          <div className="fb-help">
-            <p>
-              Anything you have helps — the page you were on, roughly what you had
-              clicked, anything odd on the screen. In any order, in as few words as you
-              like, and a missing piece is better than a delayed report.
-            </p>
-            <p>
-              Don't polish it. A half-sentence we can ask you about beats a tidy report
-              you never send, and nobody is going to judge the writing.
-            </p>
-          </div>
-        ) : null}
 
         {over ? (
           <span className="fb-over">

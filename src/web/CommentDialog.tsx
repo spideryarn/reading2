@@ -27,23 +27,65 @@ import { parseRoute } from "./router.js";
 import { useDictationField } from "./useDictationField.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
 
+/**
+ * **What this reader may do with the comment they are looking at.**
+ *
+ * The owner's arm carries eight verbs and two facts about work in flight; the
+ * visitor's carries nothing at all, because since 2026-09-04 a shared link
+ * carries the owner's comments and reading them is the whole of what a stranger
+ * may do. docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
+ *
+ * **A union rather than a `readOnly` boolean beside the verbs**, which is the
+ * idiom this codebase already uses at every owner/visitor seam
+ * (`QuotesAccess`, `GlossaryAccess`, `DiagramAccess`, `ReaderCapability`). The
+ * difference is not style: with a boolean, `onDelete` is still in scope on a
+ * visitor's render and one `&&` dropped in a later edit deletes a stranger's
+ * way into somebody else's data. Here there is no `onDelete` to reach for.
+ *
+ * `pending` and `error` are on the owner's arm for the same reason the drawer's
+ * `loaded` is: both are facts about a request, and a visitor made none.
+ */
+export type CommentAccess =
+  | {
+      kind: "owner";
+      /** How many *other* comments are still waiting on the model. */
+      pending: number;
+      onDelete(): void;
+      onRetry(): void;
+      /** Ask again and search properly — for an answer the reader has judged thin. */
+      onDeepen(): void;
+      /**
+       * The reader typed a follow-up.
+       *
+       * Opens a conversation rather than growing a transcript in here — Greg's
+       * call, see chat-handoff.ts.
+       */
+      onDiscuss(question: string): void;
+      /** Save the reader's own words, or `null` to clear them back to a bookmark. */
+      onEdit(body: string | null): void;
+      /** Offered only when the conversation is really there — App.tsx says why. */
+      onOpenThread?: (() => void) | undefined;
+      /** **Referee mode is open**, so a placement can be seen and changed. */
+      placing: boolean;
+      /** Change this comment's placement, or clear it with both fields `null`. */
+      onPlace(next: Mark): void;
+      /** The comments transport's own error line, if there is one. */
+      error: string | null;
+    }
+  | { kind: "visitor" };
+
 interface Props {
   comment: ClientComment;
+  access: CommentAccess;
   /** 1-based position in reading order, and how many there are. */
   position: number;
   total: number;
-  /** How many *other* comments are still waiting on the model. */
-  pending: number;
   /** Null at the ends — the arrows stop rather than wrap (comment-nav.ts). */
   onPrev(): void;
   onNext(): void;
   hasPrev: boolean;
   hasNext: boolean;
   onClose(): void;
-  onDelete(): void;
-  onRetry(): void;
-  /** Ask again and search properly — for an answer the reader has judged thin. */
-  onDeepen(): void;
   /**
    * The reader typed a follow-up.
    *
@@ -52,63 +94,24 @@ interface Props {
    * floating panel rather than chat mode, and it carries this comment's anchor,
    * so the passage keeps its mark and the new chat is tied to the same words.
    */
-  onDiscuss(question: string): void;
-  /** Save the reader's own words, or `null` to clear them back to a bookmark. */
-  onEdit(body: string | null): void;
-  /**
-   * **Referee mode is open**, so this comment's placement can be seen and
-   * changed — see the prop of the same name on `AnnotateDialog`.
-   *
-   * When it is false the section is not drawn at all, including for a comment
-   * that already carries a placement. That is a simplification with a cost
-   * worth naming: an ordinary reader's dialog stays exactly as it was, and a
-   * referee who has left the mode cannot see a judgement that is still stored.
-   * The alternative — a read-only line outside the mode — needs the criteria
-   * fetched anyway to print the pole words, so it buys nothing but a branch.
-   * Reopen it if a referee is ever surprised by the absence.
-   */
-  placing: boolean;
-  /** Change this comment's placement, or clear it with both fields `null`. */
-  onPlace(mark: Mark): void;
-  /**
-   * The last transport failure, or `null` — `CommentsApi.error`.
-   *
-   * Here for one reason: a placement that did not save must say so. The dialog
-   * shows the *old* placement in that case, which is correct and, on its own,
-   * indistinguishable from nothing having been pressed.
-   */
-  error?: string | null;
-  /**
-   * Open the conversation this comment started, if it still exists.
-   *
-   * Absent when there is nothing to open — either the comment never started one
-   * or the reader has since deleted it. **Whether the thread is really there is
-   * the caller's to decide**, because only the caller has the summary list; a
-   * `threadId` on the comment is advisory and can point at nothing.
-   */
-  onOpenThread?: (() => void) | undefined;
 }
 
 export function CommentDialog({
   comment,
+  access,
   position,
   total,
-  pending,
-  onDeepen,
-  onDiscuss,
   onPrev,
   onNext,
   hasPrev,
   hasNext,
   onClose,
-  onDelete,
-  onRetry,
-  onEdit,
-  onOpenThread,
-  placing,
-  onPlace,
-  error,
 }: Props) {
+  /* Narrowed once, so every guard below is the compiler checking one fact —
+     the same move `Dock` makes with `own` and `TimelinePanel` with its owner
+     half. A visitor reaches none of the verbs because there are none to
+     reach. */
+  const own = access.kind === "owner" ? access : null;
   const [followUp, setFollowUp] = useState("");
   const followUpBox = useRef<HTMLInputElement>(null);
   /* The other box in this app with an article in scope, and therefore the other
@@ -239,11 +242,20 @@ export function CommentDialog({
           which only a comment made before 2026-08-28 has — sits underneath it.
           Editable in place, because a note you cannot change is a note you stop
           making. */}
-      <CommentBody
-        key={comment.id}
-        body={comment.body ?? ""}
-        onSave={onEdit}
-      />
+      {/* **A visitor gets the words and not the textarea.** Not a disabled
+          `CommentBody`: that component is a click-to-edit surface, and one that
+          silently refuses the click is worse than a paragraph. There is no
+          `onSave` to hand it on this arm anyway.
+          docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3. */}
+      {own ? (
+        <CommentBody
+          key={comment.id}
+          body={comment.body ?? ""}
+          onSave={own.onEdit}
+        />
+      ) : (
+        comment.body && <p className="cmt-body">{comment.body}</p>
+      )}
 
       {/* **The referee's own placement, and the instrument to change it.**
           Offered on a comment with no criterion too, because a reading note
@@ -256,7 +268,7 @@ export function CommentDialog({
           new one — `useComments.place` writes nothing to the list until the
           server has answered, and a component holding its own copy would paint
           the new value over the top and call a failure a success. */}
-      {placing && route.kind === "read" && (
+      {own?.placing && route.kind === "read" && (
         <PlaceOnCriterion
           slug={route.slug}
           showCurrent
@@ -264,7 +276,7 @@ export function CommentDialog({
             criterionId: comment.criterionId ?? null,
             valence: comment.valence ?? null,
           }}
-          onChange={onPlace}
+          onChange={own.onPlace}
         />
       )}
 
@@ -273,10 +285,10 @@ export function CommentDialog({
           the hook, and until this line existed a PATCH that 500d left the
           reader looking at a panel that had simply not changed. That is the
           shape docs/reusable/silent-success.md is about. */}
-      {error && <p className="cmt-write-error">{error}</p>}
+      {own?.error && <p className="cmt-write-error">{own.error}</p>}
 
-      {onOpenThread && (
-        <button type="button" className="linky cmt-open-thread" onClick={onOpenThread}>
+      {own?.onOpenThread && (
+        <button type="button" className="linky cmt-open-thread" onClick={own.onOpenThread}>
           Open the conversation this started
         </button>
       )}
@@ -318,8 +330,8 @@ export function CommentDialog({
               mistake", and a button is a more emphatic way of saying it than a
               sentence. src/messages.ts § worthRetrying; an error this app did
               not write still gets the button. */}
-          {worthRetrying(comment.error) && (
-            <button type="button" className="linky" onClick={onRetry}>
+          {own && worthRetrying(comment.error) && (
+            <button type="button" className="linky" onClick={own.onRetry}>
               Try again
             </button>
           )}
@@ -365,7 +377,13 @@ export function CommentDialog({
           when the whole panel scrolled and the footer was the only fixed thing.
           Now that the transcript is the only part that moves, a composer that
           slid off the bottom would be the same complaint as the moving ✕. */}
-      {comment.status !== "pending" && (
+      {/* **No composer for a visitor, and absent rather than disabled** — the
+          same rule the chat panel's deferral records. A greyed-out box that
+          says "ask a follow-up" is an invitation to press it, and the press
+          would spend the owner's money on a model call. There is no `onDiscuss`
+          on this arm to call.
+          docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3. */}
+      {own && comment.status !== "pending" && (
         <form
           className="cmt-followup"
           onSubmit={(e) => {
@@ -377,7 +395,7 @@ export function CommentDialog({
             const q = followUp.trim();
             if (!q) return;
             setFollowUp("");
-            onDiscuss(q);
+            own.onDiscuss(q);
           }}
         >
           <input
@@ -418,7 +436,7 @@ export function CommentDialog({
             something else. This is the reader saying the answer was thin, and
             the model is told exactly that. Hidden while one is running, because
             two overlapping re-asks race to write the same row. */}
-        {comment.status !== "pending" && (
+        {own && comment.status !== "pending" && (
           <Tooltip
             content={
               <>
@@ -427,22 +445,24 @@ export function CommentDialog({
               </>
             }
           >
-            <button type="button" className="linky cmt-deepen" onClick={onDeepen}>
+            <button type="button" className="linky cmt-deepen" onClick={own.onDeepen}>
               Search the web
             </button>
           </Tooltip>
         )}
         {/* Said here rather than in the panel body, because the whole point of
             firing several at once is that you go on reading while they run. */}
-        {pending > 0 && (
+        {own && own.pending > 0 && (
           <span className="cmt-inflight">
             <LoaderCircle className="cmt-spinner" size={10} />
-            {pending} still working
+            {own.pending} still working
           </span>
         )}
-        <button type="button" className="linky cmt-delete" onClick={onDelete}>
-          Delete
-        </button>
+        {own && (
+          <button type="button" className="linky cmt-delete" onClick={own.onDelete}>
+            Delete
+          </button>
+        )}
       </footer>
     </aside>
   );
