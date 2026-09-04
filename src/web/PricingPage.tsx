@@ -252,10 +252,13 @@ export function PricingPage({ readerId }: { readerId: string | null }) {
  * easy to state backwards — a slot is reserved only where the request carries a
  * URL or an upload, and settled only on a `done` ending
  * (src/billing/admission.ts, src/store/pg-session.ts § settleJob). In
- * particular: **there is no route from Reader to Researcher while you are
- * subscribed** (docs/project/billing.md — `canCheckout` is false while any
- * non-terminal subscription exists, and the hosted Portal cannot switch tiers
- * either), so the answer about reaching your limit must not offer one.
+ * particular: **this page offers a subscriber no route from Reader to
+ * Researcher**, so the answer about reaching your limit must not promise one.
+ * The hosted Portal *can* switch tiers, since 2026-09-04; what stops it being
+ * offered here is that `canCheckout` (src/billing/summary.ts) asks whether an
+ * open subscription exists and not whether this tier is a place to go, so every
+ * plan button below is hidden from a paying reader — docs/project/billing.md
+ * § *Reader → Researcher: open at Stripe, closed in our own UI*.
  */
 function Faq() {
   return (
