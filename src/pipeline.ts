@@ -2,11 +2,10 @@
  * The ingest pipeline, as data.
  *
  * Seven steps, each one a name, a label a reader can watch tick over, the
- * artefact it produces, and the function that produces it. The *order* itself
- * moved to `src/step-order.ts` on 2026-09-04 so the browser could read it
- * without naming this file, and is re-exported here — the last two, `tweets`
- * and `glossary`, are in the order without being in the default, which is why
- * there are two lists rather than one.
+ * artefact it produces, and the function that produces it. Everything that
+ * knows the *order* of the pipeline knows it from this file — and the last two,
+ * `tweets` and `glossary`, are in the order without being in the default, which
+ * is why there are two lists below rather than one.
  *
  * Written as a list rather than as a function that calls four other functions
  * for one reason: Greg asked for jobs beyond "add this URL" — re-run one stage
@@ -96,6 +95,7 @@ import { countPdfPages, pdfIsUnreadable, refuseTooManyPages, TooManyPages } from
 import type { CheckpointStore } from "./store/checkpoints.js";
 import { log } from "./log.js";
 import { ARTICLE_RENDERER, type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
+import { STEP_ORDER } from "./step-order.js";
 import { articleFingerprint, hashBlocks } from "./source-hash.js";
 import { hashProfile, profileIsStale } from "./profile.js";
 import {
@@ -127,7 +127,6 @@ import { getDb } from "./db/client.js";
 import { articleRevisions, articles } from "./db/schema.js";
 import { STORE } from "./store/live.js";
 import { ownedSlug } from "./store/owned-slug.js";
-import { STEP_ORDER } from "./step-order.js";
 
 /**
  * One line per step, saying what the step cost.
@@ -153,23 +152,27 @@ import { STEP_ORDER } from "./step-order.js";
  */
 const plog = log("pipeline");
 
+export type { StepName };
+
 /**
- * **The order, and the two types read off it, live in `src/step-order.ts`.**
+ * **The order, and the two types read off it, live in
+ * [step-order.ts](./step-order.ts)** — `STEP_ORDER` re-exported here so that
+ * every importer that has always said `from "./pipeline.js"` still can, and so
+ * that there is one ordering in the repository rather than two.
  *
- * They were here until 2026-09-04 and moved so the browser could reach
- * `StepBefore` without naming this file — the header of that module has the
- * reason, and it is a rule rather than a preference.
+ * They moved out on 2026-09-04 because `src/web/useStepJob.ts` needs
+ * `StepBefore` and may not import this file: it is a server module, and
+ * `tests/client-imports.test.ts` holds the client to leaves. The leaf's header
+ * has the reasoning, including why the `import type` that was there first is
+ * not the exemption it looks like.
  *
- * `STEP_ORDER` is re-exported because it is imported from `pipeline.js` in a
- * couple of dozen places and none of them needed to know it moved.
- * **`StepBefore` and `StepsMissingFromOrder` are not**, and that is deliberate:
- * nothing imports either from here any more, so a façade would be an unused
- * export — which knip says out loud, and which the `@public` tag on the
- * declaration would not have covered. GPT Sol, 2026-09-04. Import them from
- * `step-order.js`.
+ * Only this one name is re-exported. `StepBefore`'s one importer is the client,
+ * which names the leaf directly, and `StepsMissingFromOrder` exists to be
+ * checked beside the array it guards, by nothing importing it at all — a
+ * re-export of either would be a second address for a name with no callers at
+ * this one.
  */
 export { STEP_ORDER };
-export type { StepName };
 
 /**
  * What "add this URL" runs: every step that makes the article readable.

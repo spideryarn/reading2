@@ -116,7 +116,62 @@ import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
 import { useSlow } from "./useSlow.js";
 
+/**
+ * **Whose searches these are, and therefore what may be done to them.**
+ *
+ * Greg, 2026-09-04:
+ *
+ * > Only owner can create new searches. Everyone else can see the ones they
+ * > have already created.
+ *
+ * So the four verbs live on the owner's arm and a visitor reaches none of them,
+ * because there are none to reach — the same shape `CommentAccess`,
+ * `TimelineAccess` and `DiagramAccess` already have, and the same reason:
+ * a `readOnly` boolean leaves every button in the tree with a disabled
+ * attribute somebody can delete, while an absent function cannot be called.
+ *
+ * **The three fetch flags are on the owner's arm too**, which is the part worth
+ * noticing. `loaded`, `loadFailed` and `error` are facts about a *request* —
+ * `useSearch` fetching `/api/search/:slug` — and a visitor makes none: their
+ * list arrived inside the page. Modelling them as props on both arms would have
+ * meant the visitor band inventing `loaded={true}` every render, which is a
+ * true value standing for a question nobody asked.
+ * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
+ */
+export type SearchAccess =
+  | {
+      kind: "owner";
+      /** False until the first fetch has answered, either way — `SearchApi.loaded`. */
+      loaded: boolean;
+      /** …and whether it answered by failing. `SearchApi.loadFailed`. */
+      loadFailed: boolean;
+      /** A transport failure. Model failures live on the run that failed. */
+      error: string | null;
+      onAsk(criterion: string): void;
+      onRetry(id: string): void;
+      /**
+       * Pin one saved search to a palette slot — `null` hands it back to the hash.
+       *
+       * Greg, 2026-08-27: *"In Search mode, I'd like to be able to change the
+       * colour for a given row."* The panel deals in slot numbers only; see
+       * `ColourPicker` at the foot of this file for why there is no library
+       * behind it and why a colour value never reaches TypeScript.
+       */
+      onRecolour(id: string, colour: number | null): void;
+      onDelete(id: string): void;
+    }
+  | { kind: "visitor" };
+
 interface Props {
+  access: SearchAccess;
+  /**
+   * Which of the two matchers is running.
+   *
+   * **Pinned to `meaning` for a visitor**, upstream in `useSearchMode` — the
+   * words matcher is free and would work, and it is out of v1 because its input
+   * lives in the composer this reader does not get.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
+   */
   matcher: Matcher;
   onMatcher(next: Matcher): void;
   /** The literal query, in words mode. Live-bound to `?find=`. */
@@ -127,10 +182,6 @@ interface Props {
    * article has moved since it was answered — `SavedSearch` in useSearch.ts.
    */
   runs: SavedSearch[];
-  /** False until the fetch has answered — see `SearchApi.loaded`. */
-  loaded: boolean;
-  /** …and whether it answered by failing. `SearchApi.loadFailed`. */
-  loadFailed: boolean;
   /** Which of them are switched on — `?runs=`. Possibly none, which is the default. */
   active: string[];
   /** Its palette slot, for every saved run. `assignSlots` in hit-colours.ts. */
@@ -145,18 +196,6 @@ interface Props {
   onSolo(id: string): void;
   /** Every box at once — the control at the top of the list. */
   onToggleAll(on: boolean): void;
-  onAsk(criterion: string): void;
-  onRetry(id: string): void;
-  /**
-   * Pin one saved search to a palette slot — `null` hands it back to the hash.
-   *
-   * Greg, 2026-08-27: *"In Search mode, I'd like to be able to change the
-   * colour for a given row."* The panel deals in slot numbers only; see
-   * `ColourPicker` at the foot of this file for why there is no library behind
-   * it and why a colour value never reaches TypeScript.
-   */
-  onRecolour(id: string, colour: number | null): void;
-  onDelete(id: string): void;
   /** The results of whichever matcher is running, already ordered and merged. */
   found: Found[];
   order: HitOrder;
@@ -175,27 +214,20 @@ interface Props {
   /** The row the reader last pressed, so the list and the prose agree. */
   openKey: string | null;
   onOpen(key: string, blockId: BlockId): void;
-  /** A transport failure. Model failures live on the run that failed. */
-  error: string | null;
 }
 
 export function SearchPanel({
+  access,
   matcher,
   onMatcher,
   find,
   onFind,
   runs,
-  loaded,
-  loadFailed,
   active,
   slots,
   onToggle,
   onSolo,
   onToggleAll,
-  onAsk,
-  onRetry,
-  onRecolour,
-  onDelete,
   found,
   all,
   order,
@@ -205,9 +237,20 @@ export function SearchPanel({
   onGate,
   openKey,
   onOpen,
-  error,
 }: Props) {
   useRenderCount("SearchPanel");
+  /* Narrowed once, so every guard below is the compiler checking one fact —
+     the same move `CommentDialog` makes with `own` and `Dock` with its owner
+     half. A visitor reaches none of the four verbs because there are none to
+     reach. */
+  const own = access.kind === "owner" ? access : null;
+  /* **A visitor's list is loaded, and it never failed**, because it came with
+     the page rather than from a request. Resolved here, once, so that `Saved`
+     and `Results` below ask the same question of the same value — the two used
+     to take the flag as a prop each, and this is the seam where the union turns
+     back into the booleans they were written against. */
+  const loaded = own === null || own.loaded;
+  const loadFailed = own !== null && own.loadFailed;
   /**
    * The draft question, lifted out of `Box`.
    *
@@ -242,19 +285,28 @@ export function SearchPanel({
         <h2>Search</h2>
       </div>
 
-      <Box
-        ref={box}
-        matcher={matcher}
-        onMatcher={onMatcher}
-        find={find}
-        onFind={onFind}
-        draft={draft}
-        onDraft={setDraft}
-        busy={matcher === "meaning" && searching}
-        onAsk={onAsk}
-      />
+      {/* **Absent for a visitor, not disabled**, and it takes the words matcher
+          with it — the box is one input over both, so there is no half of it to
+          leave behind (the ternary in `Box` is the whole of that design). A
+          reader following a shared link gets the list and the marks, and the
+          two things they cannot have — asking a new question, and typing a
+          literal one — are simply not on the screen.
+          docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */}
+      {own && (
+        <Box
+          ref={box}
+          matcher={matcher}
+          onMatcher={onMatcher}
+          find={find}
+          onFind={onFind}
+          draft={draft}
+          onDraft={setDraft}
+          busy={matcher === "meaning" && searching}
+          onAsk={own.onAsk}
+        />
+      )}
 
-      {error && <p className="srch-error">{error}</p>}
+      {own?.error && <p className="srch-error">{own.error}</p>}
 
       {/* The saved list and the results are on screen together now, rather than
           one replacing the other. That is the whole of the multi-search change
@@ -264,6 +316,7 @@ export function SearchPanel({
           alone. */}
       {matcher === "meaning" && (
         <Saved
+          access={access}
           runs={runs}
           loaded={loaded}
           loadFailed={loadFailed}
@@ -273,9 +326,6 @@ export function SearchPanel({
           onSolo={onSolo}
           onToggleAll={onToggleAll}
           onReuse={reuse}
-          onRetry={onRetry}
-          onRecolour={onRecolour}
-          onDelete={onDelete}
         />
       )}
       {/* Above the results and below the ticks, because it is about the marks
@@ -618,6 +668,7 @@ function SavedLoading() {
 }
 
 function Saved({
+  access,
   runs,
   loaded,
   loadFailed,
@@ -627,11 +678,10 @@ function Saved({
   onSolo,
   onToggleAll,
   onReuse,
-  onRetry,
-  onRecolour,
-  onDelete,
 }: {
+  access: SearchAccess;
   runs: SavedSearch[];
+  /** Already resolved by `SearchPanel` — a visitor's list is always loaded. */
   loaded: boolean;
   loadFailed: boolean;
   active: string[];
@@ -640,10 +690,10 @@ function Saved({
   onSolo(id: string): void;
   onToggleAll(on: boolean): void;
   onReuse(criterion: string): void;
-  onRetry(id: string): void;
-  onRecolour(id: string, colour: number | null): void;
-  onDelete(id: string): void;
 }) {
+  /* The same single narrowing the panel above makes, and it is what takes ↺,
+     the colour picker, the retry and the delete off a visitor's rows. */
+  const own = access.kind === "owner" ? access : null;
   const sorted = [...runs].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   /* Not "nothing searched for yet" until we know that. An empty list means two
@@ -670,15 +720,37 @@ function Saved({
   }
 
   if (sorted.length === 0) {
+    /* **Two empty states, because the owner's is an instruction a visitor
+       cannot follow.** *"Describe what you are after"* is the right thing to
+       say to somebody with a box to type it in, and a dead end for somebody
+       without one — the shape docs/project/copy.md keeps warning about, where
+       the true half of a sentence carries a false half along with it. The
+       visitor's says what the absence means and stops. The wording is the
+       comments drawer's, deliberately: it is the same fact about the same
+       person, and `Dock` § Questions already chose how to name them without
+       naming them. */
     return (
       <div className="srch-empty">
-        <p>Nothing searched for yet.</p>
-        <p className="srch-empty-hint">
-          Describe what you are after — <em>arguments against the main claim</em>, <em>anywhere he
-          gives numbers</em> — and the passages that match get marked in the article, strongest
-          first. Searches are kept, so coming back to one costs nothing, and you can switch several
-          on at once — each gets a colour of its own.
-        </p>
+        {own ? (
+          <>
+            <p>Nothing searched for yet.</p>
+            <p className="srch-empty-hint">
+              Describe what you are after — <em>arguments against the main claim</em>, <em>anywhere
+              he gives numbers</em> — and the passages that match get marked in the article,
+              strongest first. Searches are kept, so coming back to one costs nothing, and you can
+              switch several on at once — each gets a colour of its own.
+            </p>
+          </>
+        ) : (
+          <>
+            <p>Whoever added this article hasn't searched it.</p>
+            <p className="srch-empty-hint">
+              A search is a question somebody asked of the piece — <em>anywhere he gives
+              numbers</em> — and the passages that answered it stay marked in the article. They
+              come with the link, so there is nothing to wait for; this one has none.
+            </p>
+          </>
+        )}
       </div>
     );
   }
@@ -785,13 +857,20 @@ function Saved({
                   search failed and to be able to read why. What goes is the
                   invitation to spend another model call on the same refusal.
                   src/messages.ts § worthRetrying. */}
-              {run.status === "error" &&
+              {/* `own &&` on the whole thing, not only on the button half: a
+                  failed run never reaches a visitor at all, because the public
+                  read takes finished runs only (`PUBLIC_SEARCHES_WHERE`). So
+                  this is the compiler agreeing with a SQL predicate rather than
+                  a second filter — and if the predicate is ever widened, this
+                  branch is where somebody has to decide what a stranger is
+                  shown about a failure of ours. */}
+              {own && run.status === "error" &&
                 (worthRetrying(run.error) ? (
                   <button
                     type="button"
                     className="srch-icon"
                     title={run.error ?? "This search failed. Try it again."}
-                    onClick={() => onRetry(run.id)}
+                    onClick={() => own.onRetry(run.id)}
                   >
                     <AlertTriangle size={13} />
                   </button>
@@ -809,28 +888,39 @@ function Saved({
                   swatch pressed to *open* a menu sits a few pixels from a box
                   that means something else entirely, which is the arrangement
                   .srch-saved-tick's own comment warns about. */}
-              <ColourPicker
-                slot={slot}
-                chosen={run.colour}
-                criterion={run.criterion}
-                onPick={(colour) => onRecolour(run.id, colour)}
-              />
-              <button
-                type="button"
-                className="srch-icon"
-                title="Put this question back in the box"
-                onClick={() => onReuse(run.criterion)}
-              >
-                <RotateCcw size={13} />
-              </button>
-              <button
-                type="button"
-                className="srch-icon danger"
-                title="Delete this search"
-                onClick={() => onDelete(run.id)}
-              >
-                <Trash2 size={13} />
-              </button>
+              {/* **All three go for a visitor**, and each for its own reason
+                  rather than for one blanket one. The colour is a choice
+                  written to `search_runs.colour`, so it is a write. ↺ puts the
+                  question in a box that is not on their screen. Delete is
+                  somebody else's row. What is left is the tick and the row
+                  itself, which is exactly *see the ones they have already
+                  created*. */}
+              {own && (
+                <>
+                  <ColourPicker
+                    slot={slot}
+                    chosen={run.colour}
+                    criterion={run.criterion}
+                    onPick={(colour) => own.onRecolour(run.id, colour)}
+                  />
+                  <button
+                    type="button"
+                    className="srch-icon"
+                    title="Put this question back in the box"
+                    onClick={() => onReuse(run.criterion)}
+                  >
+                    <RotateCcw size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    className="srch-icon danger"
+                    title="Delete this search"
+                    onClick={() => own.onDelete(run.id)}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </>
+              )}
             </li>
           );
         })}

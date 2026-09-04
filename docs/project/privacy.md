@@ -161,16 +161,33 @@ that too. The page says "the **default** models", because
 **Everything else on the page is prose that a person has to re-read.** Go and look at it when any of
 these moves:
 
-- **what a shared article carries**, which changed on 2026-09-04 and is the only claim on the page
-  that has ever gone from true to false. The paragraph under *Who can see your shelf* said *"Your
-  notes, your comments and your conversations are not shared"*; two thirds of that stopped being
-  true when Greg decided a public link carries the reader's comments and the model's answers to
-  them ([260904c](../plans/260904c-more-modes-on-a-shared-link.md)). **Conversations are still
-  private, and the page says so separately** rather than quietly dropping all three — somebody who
-  read the old sentence should be able to find out which half of it survived. The page does not
-  enumerate the rest: the Access & Sharing card derives the full inventory at the moment of sharing
+- **what a shared article carries**, which changed twice on 2026-09-04 and is the only claim on the
+  page that has ever gone from true to false. The paragraph under *Who can see your shelf* said
+  *"Your notes, your comments and your conversations are not shared"*; two thirds of that stopped
+  being true when Greg decided a public link carries the reader's comments and the model's answers
+  to them, and their **saved searches** a few hours later — the questions they typed, in their own
+  words, and the passages those found
+  ([260904c](../plans/260904c-more-modes-on-a-shared-link.md), stages 3 and 4).
+  **Conversations are still private, and the page says so separately** rather than quietly dropping
+  all three — somebody who read the old sentence should be able to find out which half of it
+  survived. The page does not enumerate the rest: the Access & Sharing card derives the full
+  inventory at the moment of sharing
   ([`shared-inventory.ts`](../../src/web/shared-inventory.ts)), and two lists of one fact is how one
   of them goes stale.
+
+  **Two constants went stale the same day and were only found by a review**, which is the part worth
+  remembering rather than the fix. `SHARED_LINK_CARRIES` — the visitor's own sentence — still ended
+  *"It never carries the comments, conversations, searches or notes of whoever added it"*, so the
+  page told a reader that the comments in the drawer beside it had not been shared. And
+  `NOT_SHARED_NOTE`, the one-line summary under the owner's third column, still said a shared link
+  carries the piece *"never your own work on it"*, on a card whose first column had begun listing
+  *Your comments and notes*. GPT Sol found both.
+
+  The lesson is about the shape rather than the words: **a sentence that enumerates what does not
+  cross is a promise with no test behind it**, and a hand-written summary of a derived list is worse
+  — the list moves and the summary does not. `NOT_SHARED_NOTE` was deleted rather than reworded, and
+  the note that replaced it on the *other* column (`SHARED_NOTE`, *"nothing a visitor does can spend
+  a model call"*) is one `tests/public-network-trace.test.tsx` actually enforces.
 
 - a new **subprocessor** arrives, or one goes — the list is Supabase, Vercel, OpenRouter, OpenAI,
   Google, Sentry, Stripe

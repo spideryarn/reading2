@@ -59,14 +59,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { jobWorthRetrying } from "../job-failure.js";
 import { driverStalled } from "../job-state.js";
 import { worthRetrying } from "../messages.js";
-/* **From `src/step-order.ts`, not from `src/pipeline.ts`**, and that is the
-   whole of what tests/client-imports.test.ts had against this line from
-   `a9fd3197` until 2026-09-04. `pipeline.ts` is a server module — the database,
-   `node:crypto`, every stage behind it — and the rule refuses a `src/web/` file
-   that names one *even through an erased `import type`*, because a rule with a
-   standing exception is a rule nobody can read off the test. Nothing shipped
-   wrong in between: the import really was erased. `step-order.ts` is the same
-   ordering in a module that imports nothing but types. */
+/* **From the leaf, not from `src/pipeline.ts`.** This read
+   `import type { StepBefore } from "../pipeline.js"` until 2026-09-04, on the
+   argument that `import type` is erased (`verbatimModuleSyntax`) so none of the
+   pipeline reaches the browser bundle. True about the bundle, and beside the
+   point: the rule tests/client-imports.test.ts enforces is that the client
+   reaches only leaves, and it went red on this. `src/step-order.ts` is that
+   leaf — it holds the order itself, imports one type and nothing else, and
+   `src/pipeline.ts` re-exports it, so there is still one ordering.
+   src/step-order.ts § `StepBefore`. */
 import type { StepBefore } from "../step-order.js";
 import type { Job, StepName } from "../types.js";
 import { useJobs } from "./useJobs.js";

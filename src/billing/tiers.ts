@@ -28,6 +28,9 @@
  * subscription statuses, and for the same reason.
  */
 
+/* The wire's own union, over the database's row type. One set of arms, written
+   where the browser can read it — see `Purchase` for why it is a parameter. */
+import type { Purchase } from "../billing-plan.js";
 import type { QuotaRules } from "./quota-adjustment.js";
 import type { ChoiceRules } from "./subscription.js";
 
@@ -237,6 +240,111 @@ export function offerableTiers(tiers: readonly TierRow[]): readonly TierRow[] {
     .filter((t) => t.active && t.stripePriceId !== null)
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+/**
+ * Where this reader stands, as far as *selling* is concerned.
+ *
+ * Three states rather than a row and two booleans, because the middle one is the
+ * only one that carries a number and the other two would have to leave it
+ * optional. Built in src/billing/summary.ts from the `billing_accounts` row and
+ * the entitlement, which is the only place that knows both.
+ */
+export type Standing =
+  /**
+   * No subscription, or one that is **over** (`isTerminalStatus`), so a Checkout
+   * Session may be sold.
+   */
+  | { readonly kind: "unsubscribed" }
+  /**
+   * An open, entitled subscription, **on this row**.
+   *
+   * The row rather than a number, and that is a guard rather than a
+   * convenience: `Entitlement.limit` is not the tier's allowance. A plan change
+   * mid-period leaves a **prorated** override on `billing_accounts`
+   * (`quotaLimitDelta`, ./quota-adjustment.ts), so a reader who moved to
+   * Researcher a fortnight in is entitled to something like 33 this month
+   * against a tier that sells 150 — and ranking *that* number against the
+   * catalogue would offer them a switch to the tier they are already on. There
+   * is no way to hand the wrong number to a parameter that takes a row.
+   */
+  | { readonly kind: "subscribed"; readonly on: TierRow }
+  /**
+   * An open subscription that entitles nothing — `unpaid`, `incomplete`, a
+   * status Stripe invented since — or one whose stored period has run out, or
+   * one on a price no tier sells, so the tier behind it cannot be trusted.
+   *
+   * Nothing is sold into this state. It is not a judgement about deserving: a
+   * second subscription beside one Stripe may still collect on charges the
+   * reader twice, and there is nothing to compute *higher* against.
+   */
+  | { readonly kind: "unresolved" };
+
+/**
+ * **What may be sold to a reader in that standing, and through which door.**
+ *
+ * The gate used to be a boolean meaning *has no open subscription*, which drew
+ * a paying Reader no button anywhere while Stripe's Portal would have taken the
+ * switch (docs/project/billing.md § *Reader → Researcher*). This is the
+ * tier-aware version: **a reader may not buy the tier they are on, and may buy a
+ * larger one.**
+ *
+ * ## Larger is decided by the allowance, and the precedent is already here
+ *
+ * `ingests_per_period`, not `sort_order` and not price:
+ *
+ * - **`sort_order` is a display column** and nothing constrains it to ascend
+ *   with what a tier actually *sells* — `choiceRules` above says so in as many
+ *   words, and it is why the ranking there is the allowance too. It decides the
+ *   order these are drawn in and nothing else.
+ * - **There is no price to compare.** A tier carries an amount per currency, and
+ *   nothing makes them agree about which of two tiers is dearer; picking one
+ *   currency to rank by would be picking a country.
+ * - **The allowance is what the reader is buying**, it is what
+ *   `nextQuotaAdjustment` measures a plan change by, and
+ *   `tests/billing-tiers.test.ts` already pins that a dearer tier allows more —
+ *   so ranking by it cannot disagree with ranking by price while that holds.
+ *
+ * **A tie is not higher.** Two tiers allowing 20 a month are two ways to pay for
+ * the same thing, and an equal allowance is offered to nobody who already has
+ * one — the button would take money and change nothing. The failure direction is
+ * a switch we decline to offer rather than one that buys nothing, and the reader
+ * still has the Portal. Their own tier is excluded **by name as well**, which is
+ * redundant against a strict `>` and is the cheap half of the guard: it holds
+ * even if somebody later ranks by something that can tie with itself.
+ *
+ * ## The order survives the filter
+ *
+ * `offerableTiers` sorts by `sort_order` and this only ever **filters** that
+ * list, so what comes out is still ascending. That matters downstream:
+ * `PlanCards` promotes nothing and draws plans in the order it is handed them
+ * (`e8d75ac6` — a raised card that jumped the queue read as *$10 / No charge /
+ * $50* on a phone), so nothing below here would put a jumbled list right.
+ *
+ * `top` means *nothing on sale is larger than what you have* — which on an empty
+ * catalogue is also true, and is the reading the copy above it should take.
+ */
+export function tiersToOffer(
+  tiers: readonly TierRow[],
+  standing: Standing,
+): Purchase<TierRow> {
+  if (standing.kind === "unresolved") return { kind: "none" };
+  const sold = offerableTiers(tiers);
+  const list =
+    standing.kind === "subscribed"
+      ? sold.filter(
+          (tier) =>
+            tier.id !== standing.on.id && tier.ingestsPerPeriod > standing.on.ingestsPerPeriod,
+        )
+      : sold;
+  /* Destructured rather than indexed, because the non-empty tuple is the whole
+     guarantee: this is the one place it is established. */
+  const [first, ...rest] = list;
+  if (!first) return standing.kind === "subscribed" ? { kind: "top" } : { kind: "none" };
+  return {
+    kind: standing.kind === "subscribed" ? "switch" : "checkout",
+    tiers: [first, ...rest],
+  };
 }
 
 /**

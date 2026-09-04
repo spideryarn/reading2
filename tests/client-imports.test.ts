@@ -71,6 +71,15 @@ const SHARED = new Set([
      See src/asked-term.ts and docs/project/glossary.md § Looking a term up. */
   "asked-term.js",
   "quote-match.js",
+  /* The order the steps run in, and the two types read off it. On the list
+     because it was made a leaf for this — `useStepJob` needs `StepBefore` to
+     hold a caller's `precededBy` to steps that really do precede, and it read
+     that type off `src/pipeline.ts`, a server module, until this test went red
+     on it (2026-09-04). It imports `StepName` from `types.js` and nothing else,
+     and `src/pipeline.ts` re-exports it, so the ordering still has one home.
+     This is the outcome the long comment below argues for, reached one more
+     time. See src/step-order.ts. */
+  "step-order.js",
   // Whether a saved search still describes the article. The panel puts a
   // warning on a row and the server answers the same question at the read seam;
   // src/source-hash.ts computes the fingerprints and needs `node:crypto`, so
@@ -372,21 +381,6 @@ const SHARED = new Set([
      file names the prefix) and
      docs/plans/260831af-carrying-markup-facts-past-readability.md. */
   "reserved.js",
-  /* The order the steps run in, and `StepBefore<S>` read off it. On the list
-     because it qualifies — it imports `types.js`, already here, and nothing
-     else — and because it exists *because of this test* rather than in spite of
-     it, which is the third module to be written for that reason after
-     `referee-mirror-types.js` and `injection-scan-types.js`.
-
-     The client needs it because `useStepJob.ts` checks a caller's `precededBy`
-     against the real order at compile time, and the alternative is the browser
-     carrying a second copy of the sequence. It carried one once
-     (src/web/feedback-diagnostics.ts § `WORD` argues against a third), and a
-     copy is how `precededBy: ["assets"]` on `hierarchy` comes to name a step
-     that runs afterwards — which GPT Sol reproduced on 2026-09-03 and which the
-     server does not honour and never has. One ordering, not two.
-     See src/step-order.ts. */
-  "step-order.js",
 ]);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. */

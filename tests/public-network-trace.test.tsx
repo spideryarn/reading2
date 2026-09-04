@@ -239,6 +239,14 @@ const SKETCH: PublicSketch = {
 const PUBLIC_NOTE = "The bit I keep coming back to.";
 const PUBLIC_ANSWER = "Because the example is doing the arguing.";
 
+/**
+ * The owner's saved question, in their own words — the one field of a search
+ * run that is disclosure rather than article prose (src/public-types.ts
+ * § PublicSearchRun). Distinctive enough that finding it on screen means the
+ * payload's list was drawn rather than an empty state.
+ */
+const PUBLIC_CRITERION = "anywhere the argument turns on a number";
+
 const ARTICLE: PublicArticle = {
   meta: { slug: SLUG, title: "A piece", byline: "Somebody" },
   sketch: SKETCH,
@@ -255,6 +263,27 @@ const ARTICLE: PublicArticle = {
       createdAt: "2026-09-01T09:00:00.000Z",
       body: PUBLIC_NOTE,
       answer: PUBLIC_ANSWER,
+    },
+  ],
+  /* **A real one too, and for the same reason.** A visitor's search band with
+     an empty list draws the *"whoever added this article hasn't searched it"*
+     state, which passes every assertion about not fetching while proving
+     nothing about what the reader is shown.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
+  searches: [
+    {
+      id: "spya-run23z",
+      criterion: PUBLIC_CRITERION,
+      createdAt: "2026-09-02T09:00:00.000Z",
+      stale: false,
+      hits: [
+        {
+          blockId: "spya-bbbbbb",
+          quote: "The first paragraph of the piece.",
+          confidence: 90,
+          reasoning: "It says the thing.",
+        },
+      ],
     },
   ],
   /* Absent: this fixture has never been through the `assets` step, so the
@@ -781,7 +810,12 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
   diagram: { where: ".mode-band.diag", says: PUBLIC_SKETCH_TITLE },
   /* The four that spend, each named by `MODE_LABEL[mode]` — the policy in
      src/web/visitor.ts carries no string of its own. */
-  search: { where: VISITOR_BAND, says: "Search is for whoever added this article" },
+  /* **Free since 2026-09-04**, and the string is the owner's own criterion off
+     the payload — so this row fails if the saved list stops being drawn.
+     Asserting the band's *"Search"* heading would pass over an empty `<aside>`,
+     which is the trap the two facts in this map exist to close.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
+  search: { where: ".mode-band.srch", says: PUBLIC_CRITERION },
   chat: { where: VISITOR_BAND, says: "Chat is for whoever added this article" },
   remember: { where: VISITOR_BAND, says: "Remember is for whoever added this article" },
   /* Referee reached the fall-through until 2026-09-02 and was announced by its
@@ -1462,6 +1496,88 @@ describe("a signed-out browser on a shared document", () => {
   });
 
   /**
+   * **The owner's saved searches, read and only read.**
+   *
+   * Greg drew the line at *making* one — *"Only owner can create new searches.
+   * Everyone else can see the ones they have already created."* — so the four
+   * verbs and the composer are what must not be on this screen, and the list
+   * and its marks are what must.
+   *
+   * **`/api/search/:slug` never being asked is the assertion behind the whole
+   * design.** `useSearch` fetches on mount, so it is mounted in `SearchBand`
+   * alone; if somebody ever gave `VisitorSearchBand` a slug and a hook, this is
+   * the line that goes red rather than a code review.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
+   */
+  it("shows the owner's saved searches, and offers no way to add one", async () => {
+    await open("?mode=search");
+
+    /* The reader's own question, drawn from the payload. */
+    expect(host.textContent).toContain(PUBLIC_CRITERION);
+    /* And no composer: the box is one input over both matchers, so its absence
+       is the whole of "no new searches, and no words matcher either". */
+    expect(host.querySelector(".srch-box"), "the composer").toBeNull();
+    expect(
+      [...host.querySelectorAll("input")].filter((i) => i.type !== "checkbox"),
+      "any text input at all",
+    ).toEqual([]);
+
+    /* The three per-row controls, **by their titles**: all three are the same
+       `.srch-icon` button, so a class would not tell them apart, and the title
+       is what the reader is offered. A control whose only difference from its
+       neighbour is a tooltip has to be asserted by the tooltip. */
+    const titles = [...host.querySelectorAll("button")].map((b) => b.getAttribute("title") ?? "");
+    expect(titles, "delete").not.toContain("Delete this search");
+    expect(titles, "reuse").not.toContain("Put this question back in the box");
+    expect(titles, "the colour picker").not.toContain("Change this search's colour");
+    /* And the row itself is there, or all three absences are absences of
+       everything — the row's own button carries the criterion in its title. */
+    expect(titles.some((t) => t.includes(PUBLIC_CRITERION)), "the row").toBe(true);
+
+    expect(trace.filter((r) => r.url.includes("/api/search/")), "no search read").toEqual([]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+    expect(outsidePublic()).toEqual([]);
+  });
+
+  /**
+   * **A pasted `?match=words` does not put a visitor in front of a box that is
+   * not there.**
+   *
+   * `?match=` is ordinary query state, so hiding the toggle would not have been
+   * enough — the same reason the diagram panel pins `?diagram=` rather than
+   * filtering its chip row. Without the pin this reader gets the words
+   * matcher's empty state, *"Type to find words in the article"*, over a panel
+   * with nothing to type into.
+   */
+  it("pins a visitor to the saved searches, whatever ?match= says", async () => {
+    await open("?mode=search&match=words&find=prose");
+
+    expect(host.textContent).toContain(PUBLIC_CRITERION);
+    expect(host.textContent, "the words matcher's instruction").not.toContain(
+      "Type to find words in the article",
+    );
+    expect(outsidePublic()).toEqual([]);
+  });
+
+  /**
+   * **And an article nobody has searched says so without inviting anything.**
+   *
+   * The owner's empty state is an instruction — *"Describe what you are
+   * after"* — and a visitor cannot follow it. The same shape the comments
+   * drawer settled on one stage earlier: a visitor is told what the absence
+   * means and nothing else. docs/project/copy.md.
+   */
+  it("tells a visitor an unsearched article is unsearched, and asks nothing of them", async () => {
+    served = { ...ARTICLE, searches: [] };
+    await open("?mode=search");
+
+    expect(host.textContent).toContain("hasn't searched it");
+    expect(host.textContent, "the owner's instruction").not.toContain("Describe what you are after");
+    expect(host.querySelector(".srch-box"), "the composer").toBeNull();
+    expect(outsidePublic()).toEqual([]);
+  });
+
+  /**
    * **And the drawing itself comes from the payload**, with no request for it.
    *
    * The negative twin of the case above: with a sketch on the article a visitor
@@ -2005,8 +2121,15 @@ describe("when the reader's own session cannot be confirmed", () => {
     /* **Not `View only`**, which is the `ViewOnlyChip` in the *reading view's*
        controls bar and is drawn on none of these three (PublicChrome.tsx). What
        carries the same fact here is `SharedNotice`'s first sentence, so that is
-       what is asserted. */
-    expect(host.textContent).toContain("shared this article with you");
+       what is asserted.
+
+       **The wording changed on 2026-09-04**: it was *"Somebody shared this
+       article with you"*, which stopped being true the day a public article
+       could be found through the public listing rather than through a link
+       somebody sent. What is asserted now is the clause that survives either
+       way — the article is public — rather than a phrase about how the reader
+       got here. src/messages.ts § SHARED_WITH_YOU. */
+    expect(host.textContent).toContain("This article was shared publicly");
     /* The two halves of C3: the fact, and the one action that gets the reader
        off this footing. Neither may depend on which view they wandered to. */
     expect(host.textContent).toContain("couldn't confirm that you're signed in");

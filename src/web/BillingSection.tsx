@@ -9,8 +9,12 @@
  *
  * ## Two buttons, and neither of them is a billing UI
  *
- * **Upgrade** posts a tier id and follows the hosted Checkout Session that comes
- * back; **Manage billing** follows a hosted Customer Portal session. Invoices,
+ * **Upgrade** posts a tier id and follows what comes back — a hosted Checkout
+ * Session for a reader with no subscription, and the hosted **Portal** for one
+ * who has one, which is why that button reads *Switch plan* to them: the tier
+ * they press is not what decides the door, `startCheckout` is
+ * (docs/project/billing.md § *Reader → Researcher*). **Manage billing** follows a
+ * hosted Customer Portal session. Invoices,
  * receipts, changing a card and cancelling are all the Portal's, on purpose —
  * card details never reach this server, which is what keeps us in Stripe's
  * lightest PCI scope. A proposal to draw any of that here is a proposal to take
@@ -55,7 +59,7 @@
 import { CalendarClock, CreditCard, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { describeAmounts, describePlan } from "../billing-plan.js";
+import { SWITCHING_PLAN, describeAmounts, describePlan, noHigherPlan } from "../billing-plan.js";
 import type { TierOffer } from "../billing-plan.js";
 import { PlanCards, RECOMMENDED_TIER } from "./PlanCards.js";
 import type { PlanCard } from "./PlanCards.js";
@@ -111,6 +115,11 @@ export function BillingSection() {
      field the wire carries, so this cannot come to disagree with the sentence
      `describePlan` wrote from the same field. */
   const ending = summary.plan.kind === "paid" && summary.plan.endsAt !== null;
+  /* Pulled out of the summary so the JSX below narrows on a `const`: the arms
+     differ in what they carry, and reading `summary.purchase.tiers` inside a
+     branch that has only tested `summary.purchase.kind` is not something the
+     compiler will keep narrowed across the property access. */
+  const buying = summary.purchase;
 
   return (
     <div className="tw:flex tw:flex-col tw:gap-4">
@@ -164,15 +173,22 @@ export function BillingSection() {
       <CheckoutReturnNote billing={billing} />
 
       {/* ------------------------------------------------------ what to buy -- */}
-      {/* **`canCheckout`, not `plan.kind !== "paid"`.** The first version asked
-          the plan, which hides the cards for a subscriber and shows them to
-          three kinds of account whose press of *Upgrade* only ever opens the
+      {/* **The server's answer, not `plan.kind !== "paid"`.** The first version
+          asked the plan, which hides the cards for a subscriber and shows them
+          to three kinds of account whose press of *Upgrade* only ever opens the
           Portal — an `unpaid` or `incomplete` subscription, and a live one whose
-          dates we cannot read. `startCheckout` refuses while any *non-terminal*
-          subscription exists, and that is a shorter list than unentitled, so the
-          server answers the question rather than the page guessing at it. See
-          `BillingSummary.canCheckout`; GPT Sol, 2026-09-03. */}
-      {summary.canCheckout && summary.offers.length > 0 && (
+          dates we cannot read. GPT Sol, 2026-09-03. It asked `canCheckout` after
+          that, which was the same answer said as a boolean, and drew a paying
+          Reader nothing at all while the Portal would have taken the switch.
+          `summary.purchase` is both halves at once — whether there is anything,
+          and which door it goes through — so a card and its label cannot come
+          apart. See `Purchase`, src/billing-plan.ts. */}
+      {buying.kind === "top" && (
+        <p className="tw:m-0 tw:text-xs tw:text-muted-foreground">
+          {noHigherPlan(summary.plan.kind === "paid" ? summary.plan.tierName : null)}
+        </p>
+      )}
+      {(buying.kind === "checkout" || buying.kind === "switch") && (
         <div className="tw:flex tw:flex-col tw:gap-2">
           {/* **The same component `/pricing` draws**, since the buying moved
               there on 2026-09-04 (PlanCards.tsx). One rendering of a plan, two
@@ -186,17 +202,20 @@ export function BillingSection() {
               without a deploy. `cardFor` below is the whole of the difference
               between the two callers. */}
           <PlanCards
-            plans={summary.offers.map(cardFor)}
+            plans={buying.tiers.map(cardFor)}
             /* **This page recommends, and until the stage 2 review it did not.**
                The reasoning it declined on — *its reader has already chosen* —
-               is backwards for the state these cards render in: the whole block
-               is behind `canCheckout`, so anybody looking at it is on the free
-               allowance or lapsed and is choosing between the two paid tiers
-               right now. Which tier is the product's suggestion is
-               `PlanCards`' to say, not this file's, and `PlanCards` drops the
-               eyebrow by itself if the rows do not offer that tier. GPT Sol,
-               stage 2 code review, finding 3. */
-            recommended={RECOMMENDED_TIER}
+               is backwards for a reader who is choosing between the paid tiers
+               right now. Which tier is the product's suggestion is `PlanCards`'
+               to say, not this file's, and `PlanCards` drops the eyebrow by
+               itself if the rows do not offer that tier. GPT Sol, stage 2 code
+               review, finding 3.
+
+               **And `switch` is the case that reasoning excludes**: a subscriber
+               is being shown what is *above* them, not a choice between plans,
+               and the step up from Free is not a recommendation to somebody who
+               is past it. */
+            recommended={buying.kind === "checkout" ? RECOMMENDED_TIER : null}
             action={(plan) => {
               /* `plan.id` cannot be null here — every card came from an offer —
                  but the type says it can, and a cast would be a worse way of
@@ -204,17 +223,21 @@ export function BillingSection() {
               const tierId = plan.id;
               if (tierId === null) return null;
               const pressed = billing.busy?.kind === "upgrade" && billing.busy.tierId === tierId;
+              /* **The verb is the door.** A subscriber's press opens the hosted
+                 Portal, where the plan is chosen again and confirmed, so
+                 *Upgrade* would name something this button cannot do on its own
+                 — `SWITCHING_PLAN` under the cards says the rest of it. */
+              const verb = buying.kind === "switch" ? "Switch plan" : "Upgrade";
               return {
-                label: pressed ? "Opening Stripe…" : "Upgrade",
+                label: pressed ? "Opening Stripe…" : verb,
                 /* **Three buttons reading *Upgrade* are one button as far as a
                    screen reader's button list is concerned**, which is how that
                    list is actually used: pulled up out of context, with the
                    card's heading nowhere near it. The visible word stays short
-                   because *Upgrade to Researcher* wraps in a 210px card, and
-                   *Upgrade* is contained in the name below, which is what
-                   WCAG's Label in Name asks. GPT Sol, stage 2 code review,
-                   finding 5. */
-                ariaLabel: pressed ? undefined : `Upgrade to ${plan.name}`,
+                   because *Upgrade to Researcher* wraps in a 210px card, and it
+                   is contained in the name below, which is what WCAG's Label in
+                   Name asks. GPT Sol, stage 2 code review, finding 5. */
+                ariaLabel: pressed ? undefined : `${verb} to ${plan.name}`,
                 /* Any button on the section is mid-request, so none of them may
                    be pressed. */
                 disabled: billing.busy !== null,
@@ -225,22 +248,36 @@ export function BillingSection() {
           {/* Said once, under the cards, because it is true of all of them and
               because a reader looking at three prices will ask which one they
               pay. */}
+          {/* **A subscriber is told something else entirely**, because almost
+              none of the buying sentence is what happens to them: they are not
+              being sold a subscription, no card is being taken, and the page
+              they land on is the one this section already links to.
+              `SWITCHING_PLAN` (src/billing-plan.ts) is shared with `/pricing`,
+              so one mechanism is described once. */}
           <p className="tw:m-0 tw:text-xs tw:text-ink-faint">
-            {/* **No "the button above".** It said that, and a free account that
-                has never checked out has no Manage billing button — the Portal
-                needs a Stripe customer, and the first Upgrade is what makes one.
-                GPT Sol, 2026-09-03. */}
-            {/* **Three currencies named, rather than "yours".** The same
-                overstatement GPT Sol found in `/pricing`'s FAQ (stage 2 code
-                review, finding 2), and it is one click from that page: a tier
-                carries USD, GBP and EUR, and hosted Checkout can only pick a
-                currency the price actually has, so a reader outside those three
-                is not charged in their own. The cards above already show all
-                three, which is what made the sentence read as a promise. */}
-            Stripe charges in dollars, pounds or euros — whichever fits your location — and takes
-            the card details; they never reach us. Invoices, changing a card and cancelling all
-            happen in Stripe's own billing page, which this page links to once you have a
-            subscription; a cancellation ends at the end of the month you have paid for.
+            {buying.kind === "switch" ? (
+              SWITCHING_PLAN
+            ) : (
+              <>
+                {/* **No "the button above".** It said that, and a free account
+                    that has never checked out has no Manage billing button — the
+                    Portal needs a Stripe customer, and the first Upgrade is what
+                    makes one. GPT Sol, 2026-09-03. */}
+                {/* **Three currencies named, rather than "yours".** The same
+                    overstatement GPT Sol found in `/pricing`'s FAQ (stage 2 code
+                    review, finding 2), and it is one click from that page: a
+                    tier carries USD, GBP and EUR, and hosted Checkout can only
+                    pick a currency the price actually has, so a reader outside
+                    those three is not charged in their own. The cards above
+                    already show all three, which is what made the sentence read
+                    as a promise. */}
+                Stripe charges in dollars, pounds or euros — whichever fits your location — and
+                takes the card details; they never reach us. Invoices, changing a card and
+                cancelling all happen in Stripe's own billing page, which this page links to once
+                you have a subscription; a cancellation ends at the end of the month you have paid
+                for.
+              </>
+            )}
           </p>
         </div>
       )}

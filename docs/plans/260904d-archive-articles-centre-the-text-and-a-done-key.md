@@ -246,29 +246,46 @@ issue. **A retraction that lives only in a Sentry comment is a retraction nobody
 
 `awaiting-approval.md` was empty, and is still empty.
 
-### The carried-over red test, cleared
+### The carried-over red test, cleared — twice, by two agents who never met
 
 `tests/client-imports.test.ts` had been red on `dev` since `a9fd3197` because
 `src/web/useStepJob.ts` took `import type { StepBefore }` from `src/pipeline.ts` — a server module.
 Nothing shipped wrong: the import really was erased, which is why it survived. What was wrong is
 that the rule had a standing exception, and a rule with an exception cannot be read off its own test.
 
-`STEP_ORDER`, `StepsMissingFromOrder` and `StepBefore` moved to **`src/step-order.ts`**, which imports
-`types.js` and nothing else. `pipeline.ts` re-exports all three, so the couple of dozen callers that
-say `from "./pipeline.js"` did not change. This is the third module written for this test rather than
-in spite of it, after `referee-mirror-types.ts` and `injection-scan-types.ts`, and the test's own
-header names the remedy: *move the shared thing into a module that imports nothing.*
+**Two agents fixed it independently within the same hour, and produced the same answer**: a new
+`src/step-order.ts` holding `STEP_ORDER`, `StepsMissingFromOrder` and `StepBefore`, importing
+`types.js` and nothing else, with `pipeline.ts` re-exporting `STEP_ORDER` alone so its two dozen
+callers did not change. Same file name, same three symbols, same decision *not* to re-export the two
+types — which this pass only reached after GPT Sol pointed out that a façade re-export is an unused
+export knip will list, and that `@public` protects the declaration rather than the façade.
+
+`d138c609` landed first and is what is on `dev`; this pass's copy was discarded at the merge in its
+favour. **Agreement reached separately is the only kind that says anything** — the registry two
+directories away makes the same remark about a classification arrived at twice — and it is worth the
+paragraph because the alternative design (rewriting `StepBefore` to take a hand-written order) was
+available to both and taken by neither.
+
+What did survive from this pass, because the other agent's change did not include it:
+
+**A debt nobody was tracking.** `src/web/tsconfig.json` carried `"../*.d.ts"` in its `include` for
+one reason, stated in its own comment: the old import dragged the pipeline's whole type closure into
+the client project, through `src/fetch.ts` and `src/pdf.ts`, and without the glob those resolved as
+`any` and the project failed TS7016 on packages the browser never loads. The comment recorded the
+price — 267 files to 346, and 2.5s → 3.2s across `npm run typecheck`. With the import moved there is
+nothing left for it to declare, so it is gone, and the comment now says why it is absent.
+
+**And two corrections to it, from Sol.** There *is* still a closure —
+`step-order.ts → types.ts → messages/assets/ids` — merely a small one already in the project. And
+**TS7016 is not what will catch the next breach**: a client import of a fully typed server module
+would typecheck in silence. `tests/client-imports.test.ts` is the diagnostic; that `include` was only
+ever a plaster over one breach of it.
+
+Also this pass's, and small: the stale citation in
+[new-mode.md](../project/new-mode.md) that still sent a reader to `pipeline.ts` for the array.
 
 **The check was proved able to fail** before it was believed: a `node:crypto` import added to
-`step-order.ts` turns the new allowlist entry red, and removing it turns it green again.
-
-**It paid a debt nobody was tracking.** `src/web/tsconfig.json` carried `"../*.d.ts"` in its
-`include` for one reason, stated in its own comment: the old import dragged the pipeline's whole type
-closure into the client project, through `src/fetch.ts` and `src/pdf.ts`, and without the glob those
-resolved as `any` and the project failed TS7016 on packages the browser never loads. The comment
-recorded the price at the time — 267 files to 346, and 2.5s → 3.2s across `npm run typecheck`. With
-the import moved there is no closure left to drag in, so the glob is gone and the comment now says
-why it is absent, which is the thing the next reader of `tests/tsconfig.json` will wonder about.
+`step-order.ts` turns the allowlist entry red, and removing it turns it green again.
 
 ### Decisions and assumptions, this pass
 
@@ -288,20 +305,30 @@ why it is absent, which is the thing the next reader of `tests/tsconfig.json` wi
 
 ### GPT Sol on the move, and what it caught
 
-No runtime finding — Sol checked the one that mattered, that `import { STEP_ORDER }` followed by
+Sol reviewed this pass's copy of the move, which the merge then discarded in favour of `d138c609`.
+Two of its four findings went with it — **and both are worth reading anyway**, because the surviving
+implementation had already got them right, which is part of why it is the one that survived.
+
+No runtime finding: Sol checked the one that mattered, that `import { STEP_ORDER }` followed by
 `export { STEP_ORDER }` is the same live binding as the old `export const` for every consumer,
 including `import * as`, enumeration and interop, and confirmed the cycle gate clean across 1,370
-files. Four Lows, all real, all fixed bar the last:
+files. That verdict covers `d138c609` too — it is the same construction.
 
-1. **The compatibility re-exports defeated the very protection they looked like.** `pipeline.ts`
-   re-exported `StepBefore` and `StepsMissingFromOrder` as well as `STEP_ORDER`, and nothing in the
-   tree imports either from there any more — so knip listed both as unused exports. The `@public`
-   tag that keeps `StepsMissingFromOrder` alive protects the **declaration**, not a façade in front
-   of it. Both re-exports dropped; knip is quiet on all three names.
+Four Lows, all real:
+
+1. **The compatibility re-exports defeated the very protection they looked like.** This pass's
+   `pipeline.ts` re-exported `StepBefore` and `StepsMissingFromOrder` as well as `STEP_ORDER`, and
+   nothing in the tree imports either from there any more — so knip listed both as unused exports.
+   The `@public` tag that keeps `StepsMissingFromOrder` alive protects the **declaration**, not a
+   façade in front of it. *(Moot: `d138c609` re-exported only `STEP_ORDER` from the start, and says
+   so in its header. Two routes to the same place, one of them via a reviewer.)*
 2. **Four comments stopped being true in transit**, which is what a move does and why it is worth a
    reviewer: `isStepName` described as "below" when it stayed behind; a warning that a value import
    would pull the pipeline into the bundle, when it would now pull nine short strings; and two files
-   still naming `pipeline.ts` as where `StepBefore` is defined.
+   still naming `pipeline.ts` as where `StepBefore` is defined. *(Also moot: the surviving copy caught all four
+   unaided, including the two in files it did not otherwise touch. Both agents rewrote
+   `tests/step-job-preceded-by.test.ts` line 17 to the same string, and the merge took it as one
+   edit.)*
 3. **The new tsconfig comment overclaimed, twice.** There *is* still a closure —
    `step-order.ts → types.ts → messages/assets/ids` — merely a small one that was already in the
    project. And **TS7016 is not what will catch the next breach**: a future client import of a fully
@@ -316,7 +343,7 @@ files. Four Lows, all real, all fixed bar the last:
    modules are already on the right side of, and it belongs in its own piece of work rather than
    riding along with a move.
 
-### The trunk had a second red, and it was also this batch's
+### The trunk had a second red, and it was also this batch's — and it was fixed twice too
 
 `npm run check` came back with three failing files out of 661. Two —
 `tests/admin-store.test.ts` and `tests/step-failure-seam.test.ts` — were 20- and 30-second
@@ -331,12 +358,19 @@ previous batch's answer to the microphone misspelling "Spideryarn"** — and it 
 `store-migration-witness.json` was recorded, which is precisely the case the registry's hole check
 exists to catch and the third time it has caught one.
 
-Proved not to be this pass's doing before it was fixed: with the old `../pipeline.js` import put back
-in `useStepJob.ts`, the failure is identical. Classified the way the two arrivals before it were —
-`store-agnostic-fake` / `static-only`, because the file replaces `src/store/index.js` wholesale with
-an object literal and constructs no store at all, and because re-running witness 2 is what would
-upgrade the evidence. Green.
+Proved not to be this pass's doing before it was touched: with the old `../pipeline.js` import put
+back in `useStepJob.ts`, the failure is identical.
+
+**And classified twice, like the move above it.** This pass wrote
+`store-agnostic-fake` / `static-only` off the file's own contents; the registry's owner had already
+written `shared-mechanism-collateral` / `import-only` / `static-only` off **Witness 1's bucketing** —
+`flag-selection-only`, the mildest reach it records — which is evidence this pass did not have and
+did not think to look for. Theirs stands; the duplicate key is gone. The registry's header remarks
+that agreement reached separately is the only kind that says anything, and this is the shape of the
+case where it is *not* agreement: two verdicts, one of them better sourced.
 
 **Two red tests on the trunk, both left there by this batch, and neither noticed until a later run of
-the loop went looking.** The gate that would have caught them is `npm run check`, which takes half an
-hour here and was not run at the end of that batch.
+the loop went looking** — by which time another agent was already fixing both. The gate that would
+have caught them at the time is `npm run check`, which takes half an hour here and was not run at the
+end of that batch. That is the lesson, and it survives the fact that this pass's own fixes were the
+ones discarded.

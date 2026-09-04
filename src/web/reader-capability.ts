@@ -32,6 +32,7 @@
  * chrome one thing rather than two.
  */
 import type { Comment, Glossary, ThreadSummary } from "../types.js";
+import type { SavedSearch } from "./useSearch.js";
 import type { PublicArtefactSet, PublicArtefacts } from "../public-types.js";
 import type { GlossaryRead } from "./useGlossary.js";
 import type { ChatAnchorsApi } from "./useChatAnchors.js";
@@ -78,6 +79,21 @@ export type ReaderCapability =
        * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
        */
       comments: Comment[];
+      /**
+       * **The owner's saved searches, read-only** — since 2026-09-04, and the
+       * paragraph above applies to these word for word.
+       *
+       * The owner's arm has no counterpart, because on their side the searches
+       * are a `SearchApi` fetched inside the band itself (`useSearch`) rather
+       * than something `Reader` holds. That asymmetry is the same one
+       * `artefacts` has and it is the right way round: a fetch belongs to the
+       * component that can afford to make it.
+       *
+       * Greg, 2026-09-04 — *"Only owner can create new searches. Everyone else
+       * can see the ones they have already created."*
+       * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
+       */
+      searches: SavedSearch[];
       /**
        * **The artefacts this piece has, as data rather than as a loader.**
        *

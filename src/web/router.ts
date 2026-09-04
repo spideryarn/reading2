@@ -100,13 +100,13 @@ export type Route =
    * the two have to agree or one of them serves a 404 for a page the other
    * renders. docs/plans/260904b-pricing-page-and-public-showcase.md § 3.
    *
-   * **There is no page behind it yet**, and this variant is honest about that
-   * rather than papering over it: App.tsx draws the 404 page and the edge
-   * answers 404, which is what an address with nothing at it should do. Stage 3b
-   * of the plan builds `PublicLibraryPage` and flips both — two lines, in two
-   * files that already have the branch. The data and the route it will read are
-   * built: `GET /api/public/library`, and `loadPublicLibrary` in
-   * src/web/public-api.ts.
+   * **The page is src/web/PublicLibraryPage.tsx**, since 2026-09-04, and it
+   * reads `GET /api/public/library` through `loadPublicLibrary`
+   * (src/web/public-api.ts). App.tsx mounts it on both arms — a visitor and an
+   * owner get the same page, which is the rule the whole public namespace
+   * follows — and the edge answers 200 with the default head. Both said 404 for
+   * the day between the route landing and the page landing, deliberately: an
+   * address with nothing at it should say so. docs/project/public-shelf.md.
    */
   | { kind: "public-library" }
   /**

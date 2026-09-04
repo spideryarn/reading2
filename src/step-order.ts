@@ -1,37 +1,36 @@
 /**
  * **The order the steps run in, and the two types read off it.**
  *
- * This is `src/pipeline.ts`'s ordering, moved out into a module that imports
- * nothing but types — and it moved for a rule rather than for tidiness.
+ * Its own module, and a leaf, for one reason: `src/web/useStepJob.ts` needs
+ * `StepBefore` to hold a caller's `precededBy` to steps that really do precede,
+ * and `src/pipeline.ts` — where all of this lived until 2026-09-04 — is a
+ * server module the client may not import.
  *
- * `StepRun.precededBy` in `src/web/useStepJob.ts` is checked against this order
- * at compile time, so `StepBefore` has to be reachable from the browser's code.
- * `pipeline.ts` is a server module: it opens the database, hashes with
- * `node:crypto` and pulls in every stage behind it. `tests/client-imports.test.ts`
- * refuses a `src/web/` file that names it **even through an erased `import type`**,
- * and deliberately — the header of that test says the fix is to *move the shared
- * thing into a module that imports nothing*, which `public-types.ts`,
- * `referee-mirror-types.ts` and `injection-scan-types.ts` were each written for
- * before this one. The import was type-only from the start (commit `a9fd3197`)
- * and the test was red on `dev` from then until 2026-09-04; nothing shipped
- * wrong, because an erased import really does cost the bundle nothing. What was
- * wrong was a standing exception to a rule that only works when it has none.
+ * **`import type` was tried first and is not the exemption it looks like.** The
+ * import is erased, so nothing reaches the browser bundle; but the rule
+ * `tests/client-imports.test.ts` enforces is *shared modules stay leaves*, and
+ * a type-only edge is a real dependency in the source. That test's own header
+ * records the same relaxation being written and reverted inside a day
+ * (`src/messages.ts` → `embeddings.ts`, 2026-08-28), and the better outcome
+ * both times was to move the shape into a module that imports almost nothing.
+ * This is that module.
  *
- * `pipeline.ts` re-exports every name below, so nothing that imported them from
- * there had to change, and nothing should be moved to import from here for its
- * own sake. The one caller that must is the browser's.
+ * `src/pipeline.ts` re-exports `STEP_ORDER`, so every file that has always
+ * imported it from there still can, and there is one ordering in the repository
+ * rather than two. The other two names are not re-exported: `StepBefore`'s only
+ * importer is the client, which now says `from "../step-order.js"`, and
+ * `StepsMissingFromOrder` is checked here, beside the array it guards, by
+ * nobody importing it at all.
  */
 import type { StepName } from "./types.js";
-
-export type { StepName };
 
 /**
  * Every step there is, in pipeline order.
  *
  * This constant does two jobs and both need every name: `orderSteps` sorts by
  * `indexOf` here (a name that is missing gets `-1` and sorts to the **front**,
- * so it would run before `fetch`), and `isStepName` — which stayed in
- * `pipeline.ts` — is what decides which names the API will accept at all.
+ * so it would run before `fetch`), and `isStepName` (src/pipeline.ts) is what
+ * decides which names the API will accept at all.
  *
  * It used to do a third — being the default for a job that named no steps — and
  * that is `DEFAULT_INGEST_STEPS` now, because `tweets` was the first step that
@@ -61,11 +60,11 @@ export const STEP_ORDER = [
   /* Straight after `glossary`, and that is not cosmetic: the two send
      byte-identical article bytes at the same effort, so a job asking for BOTH
      pays for the article once (src/models.ts § ARTICLE_RENDERER). Two separate
-     jobs share nothing — `cacheArticle` below only marks a prefix another step
-     of the SAME job will read — so this buys the reader who asks for both at
-     once and nobody else. And it bought nobody anything at all until 2026-09-03,
-     when `quotes` started sending a breakpoint of its own: see
-     `cacheArticleForStep`. docs/project/quotes.md. */
+     jobs share nothing — `cacheArticle` (src/pipeline.ts) only marks a prefix
+     another step of the SAME job will read — so this buys the reader who asks
+     for both at once and nobody else. And it bought nobody anything at all
+     until 2026-09-03, when `quotes` started sending a breakpoint of its own:
+     see `cacheArticleForStep` (src/pipeline.ts). docs/project/quotes.md. */
   "quotes",
   "ideas",
   /* Beside `ideas`, and that is the same argument `quotes` makes two rows up:
@@ -148,18 +147,19 @@ export type StepsMissingFromOrder<
  * exactly that on 2026-09-03; the one caller in the tree is safe, so what this
  * closes is the next caller rather than a live bug.
  *
- * The check has to be a type rather than a `STEP_ORDER.indexOf` comparison at
- * the call site, because the call site is in the browser and **nothing under
- * `src/web/` may import `src/pipeline.ts`**: that is a server module, and the
- * client's answer to needing part of it has twice been a shape rather than a
- * copy (src/web/feedback-diagnostics.ts § `WORD`, *"why a third copy of
- * `STEP_ORDER` would be worse than a shape"*). Splitting this file out is what
- * made the check legal rather than merely erased.
+ * **A type rather than a `STEP_ORDER.indexOf` comparison at the call site**,
+ * because a wrong `precededBy` should fail the build rather than a test, and
+ * because the check is then erased: `verbatimModuleSyntax` makes that a rule
+ * rather than an optimisation, so the browser pays nothing for it.
  *
- * `useStepJob.ts` still takes it `import type`, and that is now a preference
- * rather than a load-bearing rule: a value import from here would cost the
- * bundle nine short strings, not the pipeline. It stays type-only because
- * nothing in the browser needs the array at runtime.
+ * That argument used to have a second half — that a value import would drag
+ * `src/pipeline.ts`, a server module, into the client bundle — and since the
+ * array moved into this leaf on 2026-09-04 it no longer holds: a value import
+ * here would pull in this file and nothing else. Keep it type-only anyway. The
+ * client's answer to needing part of the server has twice been a shape rather
+ * than a copy (src/web/feedback-diagnostics.ts § `WORD`, *"why a third copy of
+ * `STEP_ORDER` would be worse than a shape"*), and a shape that costs the
+ * bundle nothing is the cheapest version of that answer.
  *
  * `[S] extends [Head]` rather than `S extends Head`, so a union `S` — which is
  * what the defaulted `StepJob<StepName>` supplies — fails every branch and

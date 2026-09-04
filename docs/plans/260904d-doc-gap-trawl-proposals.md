@@ -1,11 +1,15 @@
 # Doc gaps — a trawl, and what it found
 
-**Status, 2026-09-04: the trawl is finished and reviewed; none of the edits it proposes are made.**
-The register below is the deliverable and it is complete. What is left is Greg picking tiers, and
-then a few hours of small edits to existing docs plus at most two new ones. Nothing is half-done and
-nothing is blocked — see § [Where this stands](#where-this-stands).
+**Status, 2026-09-04: done enough to stop here.** The trawl is finished and reviewed, and everything
+it recommended has landed except two items, both of which are Greg's to call rather than mine:
+**Tier 4** (needs an entry-point edit, and has a trap — see that section) and **the PDF question**
+(whether the unbuilt half of Greg's 2026-08-30 call gets built). Tier 1.2 belongs to the background
+agent finishing the `classifyEnd` migration, since the doc fix and the code fix are one job.
 
-**Nothing here is built.** This is a register of findings for Greg to approve or drop, in tiers.
+Stages 1 and 2 are `36a38c3b` and `f309c10e`, 17 files. § [Progress log](#progress-log) says what
+each was and what changed my mind; § [Where this stands](#where-this-stands) has the cost of
+stopping.
+
 Greg asked for the trawl on 2026-09-04, with the method delegated to Fable and the bulk reading to
 GPT Luna, "because it's 10x cheaper than Sonnet".
 
@@ -33,9 +37,12 @@ returned nothing.
 
 ## What the trawl did *not* find, which is the headline
 
-There is no large hole, and after review there is barely a medium one. Every source file over 400
-lines is cited by some doc; every doc has exactly one owner and `tests/doc-links.test.ts` keeps it
-that way; no doc's code citations have rotted. The docs are in better shape than the trawl first
+There is no large hole, and after review there is barely a medium one. Every doc has exactly one
+owner and `tests/doc-links.test.ts` keeps it that way; no doc's code citations have rotted. (An
+earlier draft of this line also claimed every source file over 400 lines was cited by some doc.
+**That was false** — the check counted a citation from a *plan*, so `src/assets.ts` and
+`src/collect-assets.ts`, cited by no `docs/project/` or `docs/reusable/` doc at all, read as covered.
+That is how the one genuine missing doc nearly got missed.) The docs are in better shape than the trawl first
 claimed — **most of the "gaps" were the search being bad at reading prose**, which is the finding in
 § What the review killed.
 
@@ -162,7 +169,21 @@ the others go on asserting the old behaviour in the same confident phrasing. Tha
 waiting to happen three times at once.
 
 **Proposal:** `reading-view-overview.md § True across the whole view` keeps the rule; the three
-duplicates collapse to one sentence naming the mode's own button label and citing it.
+duplicates collapse to a short section naming the mode's own button label, its profile sentence, and
+one citation.
+
+**Not applied, and it needs Greg, for two reasons.** It edits `reading-view-overview.md`, which is an
+entry point — the category `AGENTS.md` guards most closely. And Fable found the catch: the two-verbs
+explanation (`ensure` is unforced and is what *both* the automatic run and the empty state's button
+call, because `work_key` is computed from the request and two keys are two paid jobs; `regenerate` is
+forced) **exists only in the three copies**. `reading-view-overview.md` contains neither word —
+verified, `grep -n "ensure\|regenerate"` returns nothing. So a collapse that is not preceded by
+moving that paragraph up **deletes a fact about money**, which is a worse outcome than the drift it
+prevents. The three sections also genuinely differ in their last paragraph: ideas and quotes say
+*Using your profile*, timeline has no profile tickbox at all.
+
+The order is therefore: move the two-verbs paragraph into the overview first, check it reads as the
+rule rather than as ideas-mode's rule, and only then cut the three.
 
 ---
 
@@ -357,6 +378,51 @@ one most worth keeping.
 agent finishing the `classifyEnd` migration, since the doc fix and the code fix are the same job.
 Tier 1.1 (the PDF quality contradiction) and Tier 4 are waiting on Fable — 1.1 because it may be a
 code fix rather than a doc fix, Tier 4 because the repetition may earn its place.
+
+**2026-09-04, stage 2 — Tier 1.1, five Tier 3 items, `article-images.md`, z-index, offline.**
+Fable was asked the three calls I was unsure about and its answers changed three of them.
+
+| Edit | File |
+|---|---|
+| **Tier 1.1** rewritten: checked, publishes since 2026-08-30, and the saying-so is unbuilt | `content-extraction.md` |
+| the 3 MB planning bound vs the 30 MB request ceiling, and that it cannot split a page | `content-extraction.md` |
+| the bucket allowlist, no SVG, enforced on both sides, and the drift class | `database.md` |
+| the allowance prorates and the column is a **delta** | `billing.md` |
+| adding a billing dimension turns harmless rules into policy | `billing.md` |
+| process-wide state must have process lifetime — a rule, signposting the queue's story | `architecture.md` § Conventions |
+| **new doc**, plus its stage-4.5 row in the table and its line in `AGENTS.md` | `article-images.md` |
+| the stacking order transcribed; the old claim was stale | `design-css-overview.md` |
+| the three deliberate offline limits | `library.md` |
+
+**What Fable changed about the plan, all three verified against the tree before acting:**
+
+1. **Tier 1.1 is not "the doc is stale".** `meta.quality` is on `Meta` and **rendered nowhere in
+   `src/web/`** — so Greg's 2026-08-30 call, *"publish it and say what looked wrong"*, shipped its
+   first half only, and the comment in `runPdfExtract` saying "if the reader does not look, nobody
+   looks" describes a reader who *cannot*. That is a better finding than the one I had, and it is a
+   product question rather than a doc fix — put to Greg separately, not folded in here.
+2. **Restoring the gate as I framed it would reintroduce the false refusals.** `coverageOf`'s
+   `missing` is *any requested page with no record at all*, so a gate on it refuses a blank verso or
+   a full-page figure. A safe gate needs a baseline word-count guard, which is code with a test.
+3. **`design-css-overview.md`'s own z-index claim was stale** — "nine values between 1 and 80… the
+   tooltip 80". Counted 2026-09-04: 28 declarations from 0 to 100, and the tooltip is 100. So the
+   section that flagged the gap had itself drifted, which is the tidiest possible illustration of why
+   the gap mattered.
+
+**Cut on Fable's advice**, and I agree with all four: the generic write-boundary validation (it
+documents an absence, which is a plan not a paragraph); the cascade governor (`hierarchy.md` already
+says the module is unwired, and zero is shorter than short); the latched-props item (`260903d` is its
+home and a `web-client.md` copy is Shape 3 exactly); a tweets section (`library.md` already has the
+`/tweets` row). `chat.md` deferred — `reading-view-overview.md` deliberately says chat is in the
+plans, and that pointer plus `chat-tools.md` covers it for now.
+
+**Also corrected here:** this register claimed "every source file over 400 lines is cited by some
+doc". False, and it is how `article-images.md` nearly got missed — the original check searched all of
+`docs/`, so a file cited *only by a plan* counted as covered. `src/assets.ts` and
+`src/collect-assets.ts` were cited by no doc under `docs/project/` or `docs/reusable/` at all.
+
+**Still not done: Tier 4.** It needs an edit to `reading-view-overview.md`, an entry point, and
+Fable found the catch that makes it more than a tidy-up — see § Tier 4.
 
 ## Where this stands
 

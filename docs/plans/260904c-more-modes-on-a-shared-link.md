@@ -371,7 +371,7 @@ Docs, and the two things a stage cannot check about itself.
 
 ## Progress
 
-**Stages 0, 1, 2 and 3 are built.** Stage 4 (saved searches) and stage 5 (the sweep) are not.
+**Stages 0 to 4 are built.** Stage 5 (the sweep) is not.
 
 | | |
 |---|---|
@@ -380,6 +380,7 @@ Docs, and the two things a stage cannot check about itself.
 | **2 — Diagram** | Built, `6212c75b`. `DiagramAccess`; the visitor arm pins `kind` to `force`, disables three fetching hooks and renders no picker |
 | **3 — Comments** | Built. The projection, the dedicated query, the two SQL row filters, `CommentAccess`, the drawer, and the copy in `messages.ts` and `PrivacyPage.tsx` |
 | **3a — Sketch** | Built, and **not in the original plan**. Greg changed the visitor's picture from Force to Sketch on 2026-09-04, after stage 2 had landed |
+| **4 — Searches** | Built. `PublicSearchRun`, the dedicated query, the `done`-only filter, the derived `stale`, `SearchAccess`, `useSearchMode` split out of `SearchBand`, and the `?match=` pin |
 
 ### What the build changed about the plan
 
@@ -411,6 +412,11 @@ Not one of these was believed on a green run alone —
 | The read-only dialog | mounted the owner's arm for a visitor | the first verb, *Delete* |
 | The Sketch gate | handed every reader `{ kind: "owner", slug }` | eleven tests, and the output shows a visitor being offered *$0.20* and *Draw the argument* |
 | The table tripwire | — | fired on its own when `comments` entered the public graph, before it was widened on purpose |
+| The searches' `publicSlug` | dropped it from the `where` | the neighbour article's run appeared in the payload, and `public-reads.test.ts` lost the clause |
+| The `done`-only filter | replaced `PUBLIC_SEARCHES_WHERE` with `true` | the pending and failed runs crossed |
+| The staleness fingerprint | hashed the blocks in reverse | *a run answered against these very blocks: expected true to be false* |
+| The visitor's search band | handed a visitor `SearchBand` | six tests, including a request leaving `/api/public/` |
+| The table tripwire, again | — | fired on its own for `searchRuns` too, and was widened with the three sentences it demands |
 
 ### The stage the plan did not have
 
@@ -440,9 +446,65 @@ yet."* — where before 3a they got a Force graph for free. That is what the dec
 put to Greg in those terms, and the fallback (Sketch when there is one, Force otherwise) was not
 asked for.
 
+### What stage 4 changed about the plan, and one thing it inherited
+
+- **`SearchAccess` carries the three fetch flags**, which the plan did not anticipate. `loaded`,
+  `loadFailed` and `error` were props on both arms; they are facts about a request a visitor never
+  makes, and leaving them on `Props` would have meant the visitor band writing `loaded={true}` every
+  render — a true value standing for a question nobody asked.
+- **`useSearchMode` returns two things, not one.** Its siblings (`useTimelineMode`,
+  `useQuotesMode`) return a flat object the band spreads. This one also returns `setActive`, because
+  `onAsk` and `onDelete` are the owner's alone and both have to write `?runs=` — a search the reader
+  just paid for switches itself on, a deleted one switches itself off. Passing those two verbs *in*
+  as optionals would have put the owner/visitor seam inside the shared hook, which is the thing the
+  split exists to avoid.
+- **`sourceHashFor` had to be imported dynamically** in `tests/public-visibility-pg.test.ts`. A
+  static import of `src/store/pg.js` at the top of that file reaches `STORE` before
+  `process.env.SPIDERYARN_STORE` is set two lines below it, and every request in the suite becomes a
+  501. The file's header already warned about this for the route layer; the warning now covers the
+  store too.
+- **`tests/public-reads.test.ts` had no case for `publicCommentsQuery` at all** — a gap stage 3 left
+  and stage 4 closed while adding its own. Both queries' predicates, row filters and column
+  absences are read off the generated SQL now.
+- **The neighbour article is new**, and it is what makes the `publicSlug` repetition testable. With
+  one article in the fixture, a query filtering on nothing returns the same rows as one filtering
+  correctly — which is exactly the hole `tests/public-imports.test.ts` was written for, left
+  unreachable by every test that existed.
+
+### The two sentences that had gone false, handed over rather than found
+
+GPT Sol, reviewing the *listing* work in a peer session, found two live falsehoods in constants this
+plan owns, and that session handed them over rather than editing underneath. Both were made false by
+stage 3 and neither had a test:
+
+- **`SHARED_LINK_CARRIES`**, the visitor's own sentence, still ended *"It never carries the comments,
+  conversations, searches or notes of whoever added it."* — on a page whose comments drawer was full
+  of them.
+- **`NOT_SHARED_NOTE`**, the one-line summary under the owner's *These stay with you* column, still
+  said a shared link carries the piece *"never your own work on it"*, directly under a first column
+  that had begun listing *Your comments and notes*.
+
+The first was rewritten. **The second was deleted**, on Sol's recommendation and for a reason that
+generalises: it was a hand-written summary of a *derived* list, so the list could move and the
+summary could not. What replaced it is a note on the **other** column — `SHARED_NOTE`, *"nothing a
+visitor does can spend a model call, and nothing they do adds to it"* — which is the one prose claim
+on that card with a test behind it (`tests/public-network-trace.test.tsx` pins a visitor at zero
+non-`GET` requests and zero requests outside `/api/public/`). That sentence had existed before, was
+dropped on 2026-09-02, and was recorded at the time as *"worth a line back if an owner ever asks
+whether a link can spend their money"*. Diagram and Search moved into that column two days later,
+which is when it stopped being optional.
+
+`OWNER_MODE_NOTE.diagram` was stale too, in the same card: it named *"the tree, the neighbours, the
+projection"* — one picture cut on 2026-08-30 and two behind the experimental switch.
+
 ### Still open
 
-- **The payload measurement** § The one architectural call owes. Not done, and it is stage 5's.
+- **The payload measurement** § The one architectural call owes. Not done, and it is stage 5's —
+  and stage 4 makes it more pressing rather than less, since a `search_runs.hits` array is the
+  largest per-row thing this plan has put on the wire.
+- **`SHARED_WITH_YOU`** says *"Somebody shared this article with you"* on every public article,
+  which the peer session's public listing makes false for anybody arriving through the listing
+  rather than through a link. It is their consequence and they offered to take it; left to them.
 - **`security-map.md` is wrong about diagram**, which says the mode is owners-only "unconditionally".
   It is an entry-point doc, so the correction goes to Greg as its own approved edit rather than
   riding along here.
