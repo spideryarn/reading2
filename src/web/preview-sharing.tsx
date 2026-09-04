@@ -54,6 +54,8 @@ const AVAILABLE = {
   glossary: true,
   ideas: true,
   quotes: false,
+  timeline: true,
+  sketch: true,
 };
 
 const CASES: { what: string; sharing: ArticleSharing | undefined }[] = [

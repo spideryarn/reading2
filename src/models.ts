@@ -541,8 +541,11 @@ export type ToolAiJob = "env-proposal";
  * belongs beside the feature that chose it rather than being a second copy
  * here.
  *
- * It still spends real money — about $0.013 a plate, measured — which is the
- * whole reason it is in `AiJob` at all.
+ * It still spends real money — about $0.068 a plate at the 1K the feature buys,
+ * measured 2026-09-04 — which is the whole reason it is in `AiJob` at all. The
+ * $0.013 recorded here until then was `openai/gpt-image-2`, whose bill arrived
+ * as a BYOK upstream figure rather than as a price; the model that replaced it
+ * is priced on the wire.
  */
 export type ImageAiJob = "illustrate";
 

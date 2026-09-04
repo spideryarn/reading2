@@ -107,9 +107,10 @@ the reader is least likely to say. Three files, and the split is what makes it r
 know where it came from. The plan, the measurements and the alternatives are in
 [260828l-dictation-vocabulary.md](../plans/260828l-dictation-vocabulary.md).
 
-1. **The app's own words** — `Spideryarn`, `granularity zoom`, a block id. Small, flat, always.
-   Nothing in an article ever supplies them, and `Spideryarn` is the word a reader is most likely to
-   say into this app.
+1. **The app's own words** — `Spideryarn`, `Greg Detre`, `granularity zoom`, a block id. Small,
+   flat, always. Nothing in an article ever supplies them, and `Spideryarn` is the word a reader is
+   most likely to say into this app. The name arrived on 2026-09-04, when Greg asked for it from
+   inside the Feedback dialog: *"along with my name, the author of Spideryarn, Greg Detre"*.
 2. **"Why you're reading this one"** — the box on the Metadata page, in the reader's own words
    about *this* article. The most specific thing this app has, and the only source where a person
    has simply told us what is on their mind rather than us inferring it from something else. A
@@ -254,6 +255,16 @@ guesses, or on Safari and Firefox sends nothing that was said at all. GPT Sol fo
 Feedback dialog, 2026-09-02; [`FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) is the worked
 example.
 
+**And disable the button too, not only the guard.** A correct guard behind a lit button is a press
+that does nothing and says nothing — the worse half of the pair, because the reader has no way to
+tell it from a broken app. GPT Sol found four boxes in that state on 2026-09-04, when Enter started
+promising Send in the chat composer: chat, the comment follow-up, the annotate box and the quiz
+answer all guarded `readOnly` alone or lit a button the guard would refuse. Every box that *sends* now does both —
+chat, the comment follow-up, annotate, quiz and Feedback — and
+`tests/the-enter-key-really-sends.test.tsx` presses two of them while armed. The profile boxes are
+the exception on purpose: ⌘+Enter there saves prose to a field the arriving transcript will overwrite
+a second later, and the next blur saves it again, so there is nothing to lose.
+
 **And if the box lives in a component that stays mounted when it disappears** — a dialog whose
 parent renders it open *or* shut, as `FeedbackButton` does — closing it unmounts nothing, so
 `useDictation`'s cleanup never runs and the microphone keeps recording behind a shut dialog. One
@@ -311,7 +322,15 @@ was said.
    is a success rather than an error — the box is left as it was, and the audio is offered back.
 3. **The vocabulary quietly stops being assembled.** Returns a slightly worse transcript and no
    other symptom. Pinned by [`tests/transcribe.test.ts`](../../tests/transcribe.test.ts) asserting
-   on the request body.
+   on the request body — and, since 2026-09-04, by
+   [`tests/feedback-dictation-vocabulary.test.tsx`](../../tests/feedback-dictation-vocabulary.test.tsx),
+   which walks the **two joins in front of that**: the box hands `useDictation` a `context`, and
+   [`dictation-upload.ts`](../../src/web/dictation-upload.ts) puts it in the body. Those are what a
+   box owns, and a box that dropped its `context` would fail this way and no other. It exists because
+   a report of `Spideryarn` coming back misspelt was read as this failure class and turned out not to
+   be — the whole chain was intact, the word was in `SITE_TERMS`, and the residue is what a model does
+   with real speech. [`transcribe.ts`](../../src/transcribe.ts) also warns when the assembled
+   vocabulary is empty, which nothing can legitimately produce, since every recipe names `site`.
 4. **The Anthropic provider pin.** The app's other OpenRouter calls send
    `provider: { order: ["anthropic"] }` so repeat calls land on the cache. Copied onto a Gemini
    model that is wrong *quietly* — OpenRouter finds no Anthropic upstream, falls through, and

@@ -157,6 +157,17 @@ function type(text: string) {
   });
 }
 
+/** Press one of the two kind toggles, by the words on it. */
+function pick(label: string) {
+  const button = [...host.querySelectorAll<HTMLButtonElement>("button.fb-kind-button")].find(
+    (b) => (b.textContent ?? "").includes(label),
+  );
+  if (!button) throw new Error(`no kind button called ${label}`);
+  act(() => {
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
 function send() {
   const button = host.querySelector<HTMLButtonElement>("button.fb-send");
   if (!button) throw new Error("no Send");
@@ -217,6 +228,53 @@ describe("the feedback dialog", () => {
     expect(shown).toMatch(/steps to reproduce/i);
     expect(shown).toMatch(/what you expected/i);
     expect(shown).toMatch(/what you saw instead/i);
+    expect(host.querySelector(".fb-help")).toBeNull();
+  });
+
+  /* **The guidance follows the toggle**, Greg 2026-09-04: a reader who says
+     "a problem" should be shown what makes a good bug report *prominently*,
+     rather than the same one-liner everybody else gets. What is pinned is the
+     behaviour — that picking a kind changes the guidance, and that the
+     bug-report asks are broken out as separate lines once Problem is picked —
+     not the phrasing, which is FeedbackDialog.tsx § KindHint's. */
+  it("breaks the bug-report asks out into lines once Problem is picked", () => {
+    mount();
+    expect(host.querySelectorAll(".fb-ask")).toHaveLength(0);
+    pick("A problem");
+    const asks = [...host.querySelectorAll(".fb-ask")].map((el) => el.textContent ?? "");
+    expect(asks).toHaveLength(3);
+    expect(asks[0]).toMatch(/steps to reproduce/i);
+    expect(asks[1]).toMatch(/what you expected/i);
+    expect(asks[2]).toMatch(/what you saw instead/i);
+  });
+
+  it("asks a suggestion what it is for, and does not ask it to reproduce anything", () => {
+    mount();
+    pick("A suggestion");
+    const shown = host.textContent ?? "";
+    expect(shown).toMatch(/what it would let you do/i);
+    expect(shown).not.toMatch(/steps to reproduce/i);
+    expect(host.querySelectorAll(".fb-ask")).toHaveLength(0);
+  });
+
+  /* Un-picking puts the general sentence back, which is the same code path as a
+     dialog nobody has touched — and the one a reader reaches by pressing the
+     pressed button, which is why the toggle is two buttons rather than radios. */
+  it("goes back to the general sentence when the kind is un-picked", () => {
+    mount();
+    pick("A problem");
+    pick("A problem");
+    expect(host.querySelectorAll(".fb-ask")).toHaveLength(0);
+    expect(host.textContent ?? "").toMatch(/if something went wrong/i);
+  });
+
+  /* Greg, 2026-09-04: *"we can get rid of not sure what to write because no one
+     will click that."* Guidance behind a click is guidance nobody reads, and
+     the point of the change above is that there is nothing left to click. */
+  it("has no disclosure to open", () => {
+    mount();
+    expect(host.textContent ?? "").not.toMatch(/not sure what to write/i);
+    expect(host.querySelector(".fb-help-toggle")).toBeNull();
     expect(host.querySelector(".fb-help")).toBeNull();
   });
 
@@ -556,5 +614,55 @@ describe("the feedback dialog", () => {
     /* And the address is on screen, because the message beside it says to send
        the report by email. */
     expect(host.querySelector<HTMLAnchorElement>('a[href^="mailto:"]')).not.toBeNull();
+  });
+});
+
+/**
+ * **The panel with the keyboard up.**
+ *
+ * Greg, from an installed iOS app, 2026-09-04: the soft keyboard covered Send
+ * and there was no way to reach it. Two things put it back, and only one of
+ * them is testable here.
+ *
+ * The untestable half is CSS and a viewport meta. `interactive-widget=
+ * resizes-content` in index.html *asks* the keyboard to shrink the layout
+ * viewport, which Chromium does and **WebKit does not reliably**
+ * (bugs.webkit.org/show_bug.cgi?id=259770) — so the sizing that follows from it
+ * is a Chromium fix, unverified on any phone. The engine-independent half is
+ * `window.visualViewport`, which the dialog reads for its own top and height;
+ * that one *is* testable and tests/visual-viewport-dialogs.test.tsx holds it.
+ *
+ * The half a test can hold is the shape that makes the sizing worth anything:
+ * the buttons are a **sibling** of the scrolling middle rather than content
+ * inside it. Put them inside and a short panel scrolls them out of reach again,
+ * with a stylesheet that still looks right — `.cmt-dialog` learnt this once
+ * already, with its ✕.
+ */
+describe("the keyboard, and the button under it", () => {
+  it("keeps Send out of the part that scrolls", () => {
+    mount();
+    const scroll = host.querySelector(".fb-scroll");
+    const actions = host.querySelector(".fb-actions");
+    expect(scroll, "no scrolling middle").not.toBeNull();
+    expect(actions, "no buttons").not.toBeNull();
+    expect(scroll?.contains(actions ?? null), "Send is inside the scroller").toBe(false);
+    /* And both hang off the panel itself, which is what the flex rules key on. */
+    expect(actions?.parentElement?.classList.contains("fb-panel")).toBe(true);
+    expect(scroll?.parentElement?.classList.contains("fb-panel")).toBe(true);
+    /* The ✕ stays put for the same reason. */
+    expect(scroll?.contains(host.querySelector(".fb-close"))).toBe(false);
+  });
+
+  /**
+   * **The Enter key is not the answer here, and must not claim to be.**
+   *
+   * `enterKeyHint="send"` on this box would be a lie twice over: ⌘/Ctrl+Enter is
+   * what sends, and iOS inserts a newline whatever the key is labelled. See
+   * AnnotateDialog.tsx, which records the same decision, and
+   * docs/project/touch.md § What the Enter key promises.
+   */
+  it("promises nothing on Enter, because Enter writes a newline", () => {
+    mount();
+    expect(firstBox().getAttribute("enterkeyhint")).toBeNull();
   });
 });

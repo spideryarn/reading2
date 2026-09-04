@@ -196,7 +196,7 @@ describe("the caption is not a tooltip over the whole picture", () => {
   it("draws no SVG <title>, and still says the caption where it should", async () => {
     serving();
     await act(async () => {
-      root.render(<SketchView slug="s" blocks={BLOCKS} atRow={0} onJump={() => {}} />);
+      root.render(<SketchView access={{ kind: "owner", slug: "s" }} blocks={BLOCKS} atRow={0} onJump={() => {}} />);
     });
     await settle();
 
@@ -243,7 +243,7 @@ describe("the caption is not a tooltip over the whole picture", () => {
     const { root: tree, blocks } = article();
     await act(async () => {
       root.render(
-        <DiagramPanel slug="s" kind={kind} root={tree} onKind={() => {}} atRow={0} onJump={() => {}}
+        <DiagramPanel access={{ kind: "owner" }} experimental slug="s" kind={kind} root={tree} onKind={() => {}} atRow={0} onJump={() => {}}
           blocks={blocks} axis="spread" onAxis={() => {}} hue="section" onHue={() => {}} />,
       );
     });

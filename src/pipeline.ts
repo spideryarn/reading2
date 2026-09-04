@@ -89,7 +89,8 @@ import {
   inputFingerprint as sketchFingerprint,
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
 } from "./sketch.js";
-import { MAX_PAGES, runPdfExtract } from "./pdf-read.js";
+import { runPdfExtract } from "./pdf-read.js";
+import { MAX_PAGES } from "./uploads.js";
 import { countPdfPages, pdfIsUnreadable, refuseTooManyPages, TooManyPages } from "./pdf.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
 import { log } from "./log.js";

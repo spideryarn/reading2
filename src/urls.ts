@@ -281,6 +281,49 @@ function publishableHost(url: URL): boolean {
 }
 
 /**
+ * **A citation's URL, as a stranger may have it** — or `null` to publish none.
+ *
+ * Added 2026-09-04, when a shared link began carrying the owner's comments and
+ * the model's answers to them
+ * (docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3). Every
+ * `Citation.url` in that payload was chosen by a model out of a web search, so
+ * the ordinary case is a perfectly public page — and the ordinary case is not
+ * what a boundary is for.
+ *
+ * **Three refusals, and the omission is the interesting one.**
+ *
+ *  - Not `http`/`https` — the same first gate as everywhere else.
+ *  - Credentials in the address. `https://user:token@example.com/x` is a
+ *    secret pasted into a URL, and publishing it hands it out.
+ *  - A host a stranger could not have reached anyway — `publishableHost`, the
+ *    shape rule `publicSourceUrl` already leans on, with its own honest account
+ *    of what it cannot catch.
+ *
+ * **The query string is kept, and that is the difference from
+ * `safePublicCanonical`, which drops any URL that has one.** A canonical is a
+ * machine's claim about which document this *is*, so a query makes it the wrong
+ * claim. A citation is "here is where that came from", and half the public web
+ * addresses its articles with a query — refusing them would silently drop real
+ * citations and leave the reader an answer whose sources had evaporated. GPT
+ * Sol raised citation sanitising in review and named the two risks this
+ * refuses; keeping the query is the deliberate half of the answer, written down
+ * so the next reader does not "fix" it into `safePublicCanonical`.
+ *
+ * A tracking parameter therefore crosses. That is a privacy nuisance about the
+ * *publisher*, not a leak of the owner's, and stripping `utm_*` here would be a
+ * second, partial copy of a job nothing else in this repo does.
+ */
+export function publicCitationUrl(value: string): string | null {
+  if (!isWebUrl(value)) return null;
+  if (hasCredentials(value)) return null;
+  try {
+    return publishableHost(new URL(value)) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The hostname, with a leading `www.` dropped — or `""` if the string will not
  * parse.
  *

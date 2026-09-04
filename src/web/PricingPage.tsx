@@ -3,26 +3,42 @@
  *
  * **This page holds no numbers of its own.** It renders the same
  * `<WebsitePlans />` the landing page and the features page do, which is the
- * point: three copies of a price table would be three chances to disagree, and
+ * point: three copies of the prices would be three chances to disagree, and
  * the one that is wrong is always the one the customer read. Greg asked for this
  * page on 2026-09-03 and asked, if possible, that it keep itself up to date.
  *
- * ## How "up to date" is arranged, given the table is hardcoded
+ * ## How "up to date" is arranged, given the numbers are hardcoded
  *
  * The numbers in PlanCards.tsx are copy rather than configuration — a deliberate
  * trade so a signed-out page needs no fetch (PlanCards.tsx explains it). A public
- * `/api/tiers` would have undone that trade for a table that changes a few
+ * `/api/tiers` would have undone that trade for a set of numbers that changes a few
  * times a year, and would have put a spinner in front of the first thing a
  * stranger wants to know.
  *
  * So the drift is caught rather than designed away: `tests/plans-match-tiers.test.ts`
- * reads `billing_tiers` and fails if this table disagrees with it. Raising a
+ * reads `billing_tiers` and fails if those numbers disagree with it. Raising a
  * quota is still one `UPDATE` (docs/project/billing.md), and it is still two
  * edits — but the second one can no longer be forgotten quietly, which is the
  * part that actually costs a customer.
  *
  * Reachable signed out, like `/privacy` and `/features`, and rather more so: a
  * price you have to sign up to read is the thing people complain about.
+ *
+ * ## It is one of the marketing pages now, and that was a defect before
+ *
+ * Until 2026-09-04 this was a bare `<main class="max-w-3xl">` with a *← Back*
+ * link and **no navigation at all**, while `/` and `/features` opened with
+ * `className="site"` and `SiteNav`. Measured in the browser that day: this
+ * page's content column started at x=360 where theirs start at x=168 — the same
+ * three plans, in a column that did not line up with the rest of the site. Worse
+ * than crooked, the `--site-*` custom properties are declared on `.site`, so
+ * `site-panel` and `site-cta-ghost` were simply not available here.
+ *
+ * So it now carries the shell the other two do: `.site`, `SiteNav here="pricing"`
+ * (a third value, and the *Sign in* link stays on this page because this page
+ * has its own panel — SiteBits.tsx says why that matters), a hero with the glow,
+ * and `SiteFooter variant="marketing"`. The four *How it works* paragraphs are
+ * folded into `Faq` below rather than sitting above it twice.
  *
  * ## This page can take money now, and the flow moved rather than being copied
  *
@@ -64,7 +80,7 @@
  * ## Which plan you are on, and why that is a prop rather than a fetch
  *
  * Greg, 2026-09-03, asked the page to "indicate what you're on now". A signed-in
- * reader gets one line saying so, below the table; a signed-out one gets
+ * reader gets one line saying so, below the cards; a signed-out one gets
  * nothing, and — the point — makes no request. `readerId` comes from App.tsx,
  * which already branches on signed-in to decide whether this page wears the
  * corner logo, so the answer is known before the page renders and there is no
@@ -94,15 +110,16 @@
  * every class.
  */
 import { useEffect, useRef } from "react";
-import { ArrowLeft, TriangleAlert } from "lucide-react";
+import type { ReactNode } from "react";
+import { TriangleAlert } from "lucide-react";
 
 import { describePlan } from "../billing-plan.js";
 import type { BillingSummary } from "../billing-plan.js";
 import { Link } from "./Link.js";
-import { WebsitePlans } from "./PlanCards.js";
+import { RECOMMENDED_TIER, WebsitePlans } from "./PlanCards.js";
 import type { PlanCard, PlanCardAction } from "./PlanCards.js";
 import { SignInControls } from "./SignInControls.js";
-import { H2 } from "./SiteBits.js";
+import { H2, SHELL, SiteNav } from "./SiteBits.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { buyIntentIsFresh, rememberBuyIntent, takeBuyIntent } from "./buy-intent.js";
 import type { BuyIntent } from "./buy-intent.js";
@@ -117,96 +134,279 @@ export function PricingPage({ readerId }: { readerId: string | null }) {
   useDocumentTitle(pageTitle({ kind: "pricing" }));
 
   return (
-    <main className="tw:mx-auto tw:max-w-3xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:pb-24 tw:font-sans tw:text-[0.95rem] tw:leading-relaxed tw:text-muted-foreground">
-      <Link
-        href="/"
-        className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
-      >
-        <ArrowLeft size={13} />
-        Back
-      </Link>
+    /* **`className="site"` is required, not decorative.** The `--site-*` custom
+       properties are declared on `.site` (styles.css § the site), so without it
+       every `site-panel` on this page draws a transparent border over no fill
+       and the ghost buttons lose their outline — a page that looks unstyled
+       rather than broken, which is the version nobody reports. */
+    <div className="site tw:font-sans tw:text-muted-foreground">
+      {/* **The reader id decides the top bar too, not just the cards.** Signed
+          in, this page's *Sign in* link pointed at `#sign-in`, and that anchor
+          is inside `PlansForAStranger` — so for the half of this page's readers
+          who already have an account it named nothing at all. GPT Sol
+          reproduced it in a mounted test: stage 2 code review, finding 1.
+          SiteBits.tsx § `signedIn`. */}
+      <SiteNav here="pricing" signedIn={readerId !== null} />
 
-      <H2>Plans</H2>
-      {/* **Keyed here as well as in App.tsx, and this is the one that counts.**
-          App.tsx keys the page on the account for the same reason it keys the
-          shelf, but a guarantee that lives only in the caller is one edit away
-          from being gone, and nothing in this file would notice. Keying the
-          signed-in half on the reader whose plan it is makes the page safe on
-          its own terms: a `readerId` change cannot leave the previous reader's
-          summary — or their half-pressed Upgrade button — mounted, whatever the
-          caller does. */}
-      {readerId === null ? <PlansForAStranger /> : <PlansForAReader key={readerId} />}
+      {/* The same hero shape as `/features`: glow, display heading, one lede,
+          no picture. No `site-grid` — that belongs to the front door, and the
+          research's rule for a pricing page is that the prices are the thing
+          above the fold. */}
+      <header className="tw:relative tw:overflow-hidden tw:pt-16 tw:pb-2">
+        <div className="site-glow" />
+        <div className={`${SHELL} tw:relative`}>
+          {/* **An `h1` at last.** This page opened with an `H2` reading *Plans*
+              and had no `h1` at all, so its outline began at level two — the
+              same defect `Showcase`'s `under` flag exists to prevent on the
+              other two pages. */}
+          <h1 className="site-display tw:max-w-[14ch]">What it costs</h1>
+          {/* [tissue] The pricing model in one sentence, compressed from the
+              *How it works* paragraph that used to sit further down this page —
+              a restructure moving a sentence, which
+              docs/project/marketing-pages.md § The copy is not yours to write
+              allows, rather than a new claim.
 
-      {/* **What a reader is actually buying**, said once and plainly. The quota
-          rule is the plan's (docs/project/billing.md § What we sell); the
-          currency sentence is a fact about the Stripe prices, which carry all
-          three and let hosted Checkout pick — docs/project/billing.md § Why
-          three currencies rather than one. */}
-      <H2>How it works</H2>
-      <p className="tw:mt-4">
-        You are charged in your own currency — the price you see on the payment page is the price
-        that leaves your account, tax included. Nothing is added on top.
-      </p>
-      <p className="tw:mt-4">
-        A month's allowance is articles <em>added</em>, and it resets on the day you subscribed.
-        Everything you do with an article afterwards — the glossary, the summaries, the questions,
-        chat — is included, however many times you come back to it.
-      </p>
-      {/* **The free three, said out loud, including the part that surprises
-          people.** The table says "3, for life" and the sentence under it
-          explains what counts, but neither says that *for life* means what it
-          says: the count does not reset, and it does not pause while you are
-          subscribed. So somebody who takes forty articles on Reader and
-          cancels is past the free allowance permanently — the policy Greg chose
-          on 2026-09-03 (docs/project/billing.md § *Reading is never gated*),
-          and the reason `pay-lapsed` in src/messages.ts needs a third sentence.
-          A rule a reader meets for the first time in a refusal reads as a bug;
-          here it is a term of sale, which is the right place for it.
+              **It read *"You pay for the articles you add"* for a day, and that
+              describes a product we do not sell.** Nothing here is metered: a
+              plan is a subscription at a fixed monthly amount with a capped
+              allowance, and adding nothing all month costs exactly the same as
+              filling it (src/billing/admission.ts — a slot is *reserved*, never
+              charged for). GPT Sol, stage 2 code review, finding 2. */}
+          <p className="site-lede tw:mt-6">
+            A plan is a fixed price each month, and what differs is how many articles you can add.
+            Everything you then do with one is included.
+          </p>
+        </div>
+      </header>
 
-          The numbers are `PlanCards`' to state and this paragraph deliberately
-          repeats none of them — a "3" here would be a fourth copy, outside
-          what tests/plans-match-tiers.test.ts reads. Nor does it repeat
-          *reading is never gated*, which the plans have just said three inches
-          above; saying it twice on one page reads as a page that doubts it.
+      <main className={SHELL}>
+        {/* **The level the cards hang off, and it is hidden because the page
+            already says it twice.** Each plan title is an `h3`
+            (PlanCards.tsx § `OnePlan`), so without this the outline went `h1`
+            → `h3` and a screen reader's heading list read as though a section
+            had been deleted. The other three callers each supply an enclosing
+            `h2` of their own — *Simple, and reading is never gated.* on `/` and
+            `/features`, the *Plan* section heading on `/profile` — and this page
+            did not, which is the whole of GPT Sol's stage 2 finding 4.
 
-          **It does not say "every article you have ever added", which would be
-          false.** The ledger started empty when billing launched and articles
-          added before that were grandfathered rather than backfilled
-          (docs/plans/260902i-stripe-payments-and-subscription-tiers.md), so an
-          account older than the ledger has additions that do not count. GPT
-          Sol caught that as a false absolute on a sales page, which is the
-          right way to read it: the sentence now states the rule going forwards,
-          which is both true and the part that can surprise somebody. */}
-      <p className="tw:mt-4">
-        The free allowance is for the lifetime of the account rather than per month, so it does not
-        reset. Articles added while you are subscribed count towards it too, so cancelling does not
-        hand back a fresh allowance — though whatever you have added stays yours either way.
-      </p>
-      {/* **This sentence used to say "from the same page you subscribed on",
-          and this change is what made that false.** Subscribing moved here on
-          2026-09-04; cancelling did not move at all, and could not — it happens
-          in Stripe's own hosted billing page, which only `/profile` links to,
-          because that link needs a Stripe customer to open and this page has no
-          idea whether you have one. Fixed in the change that broke it rather
-          than left for somebody to notice: a sales page that is wrong about
-          cancelling is the worst sentence on the site to be wrong. */}
-      <p className="tw:mt-4">
-        Cancel whenever you like, from{" "}
-        <Link href="/profile" className="tw:text-highlight">
-          your profile
-        </Link>
-        , which opens Stripe's own billing page. You keep the month you have paid for, and nothing
-        you have added is taken away.
-      </p>
+            `sr-only` rather than a visible heading: the `h1` above it says
+            *What it costs* and the cards are the next thing on the page, so a
+            visible *Plans* between them would be a label for something nobody
+            could mistake. A heading level is structure, and structure that is
+            only announced is still structure. */}
+        <h2 className="tw:sr-only">Plans</h2>
+        {/* **Keyed here as well as in App.tsx, and this is the one that counts.**
+            App.tsx keys the page on the account for the same reason it keys the
+            shelf, but a guarantee that lives only in the caller is one edit away
+            from being gone, and nothing in this file would notice. Keying the
+            signed-in half on the reader whose plan it is makes the page safe on
+            its own terms: a `readerId` change cannot leave the previous reader's
+            summary — or their half-pressed Upgrade button — mounted, whatever the
+            caller does.
 
-      {/* **The shared row, not a hand-written one.** The first draft of this
-          page copied the features page's footer, which is exactly the
-          duplication SiteFooter.tsx was extracted to stop — and it says so: a
-          Terms page should be one entry in its `LINKS`, not an edit to every
-          page. No `here` is needed, because `/pricing` parses to its own route
-          and the row can drop its own link by itself. */}
-      <SiteFooter />
-    </main>
+            **No `site-reveal` around the cards**, unlike the plans block on the
+            other two pages. A scroll-driven reveal on the first thing below the
+            hero is a page that opens empty for a reader who does not scroll, on
+            the one page whose entire purpose is above the fold — and it is also
+            what makes a full-page screenshot of this page come back blank
+            (docs/project/marketing-pages.md § Screenshotting the pages). */}
+        <div className="tw:mt-10">
+          {readerId === null ? <PlansForAStranger /> : <PlansForAReader key={readerId} />}
+        </div>
+
+        <Faq />
+
+        {/* **The shared row, not a hand-written one.** The first draft of this
+            page copied the features page's footer, which is exactly the
+            duplication SiteFooter.tsx was extracted to stop — and it says so: a
+            Terms page should be one entry in its `LINKS`, not an edit to every
+            page. No `here` is needed, because `/pricing` parses to its own route
+            and the row can drop its own link by itself. `marketing` since
+            2026-09-04, when this page joined the other two: the tighter measure
+            read as the page having been cut off. */}
+        <SiteFooter variant="marketing" />
+      </main>
+    </div>
+  );
+}
+
+/**
+ * The questions a metered unit creates, answered under the cards.
+ *
+ * **This replaces the four *How it works* paragraphs rather than sitting under
+ * them.** They were four unlabelled paragraphs a reader had to read in order to
+ * find the one they came for; every one of them is here, in the question it
+ * answers, and the plan's rule was that folding them in beats leaving them
+ * duplicated above.
+ *
+ * **Which sentences are Greg's and which are not is marked, per answer.** The
+ * four that came from *How it works* are moved word for word — a restructure may
+ * move a sentence and may not rewrite one
+ * (docs/project/marketing-pages.md § The copy is not yours to write). The rest
+ * are `[tissue]`: agent-written, approved by Greg on 2026-09-04, marked so a
+ * later dictation pass can find them
+ * (docs/project/positioning.md § Whose words).
+ *
+ * **Every new sentence here was checked against the admission path rather than
+ * against a doc about it**, because three of these answers are the kind that is
+ * easy to state backwards — a slot is reserved only where the request carries a
+ * URL or an upload, and settled only on a `done` ending
+ * (src/billing/admission.ts, src/store/pg-session.ts § settleJob). In
+ * particular: **this page offers a subscriber no route from Reader to
+ * Researcher**, so the answer about reaching your limit must not promise one.
+ * The hosted Portal *can* switch tiers, since 2026-09-04; what stops it being
+ * offered here is that `canCheckout` (src/billing/summary.ts) asks whether an
+ * open subscription exists and not whether this tier is a place to go, so every
+ * plan button below is hidden from a paying reader — docs/project/billing.md
+ * § *Reader → Researcher: open at Stripe, closed in our own UI*.
+ */
+function Faq() {
+  return (
+    <>
+      <H2 eyebrow="The details">Questions people ask</H2>
+      {/* Two columns of short answers rather than one long column: a reader
+          scanning for their own question is reading the headings, and eight
+          headings down one column is a scroll. */}
+      <div className="site-reveal tw:mt-8 tw:grid tw:gap-4 tw:lg:grid-cols-2">
+        <Answer q="What counts as an article?">
+          {/* [tissue] **"A paywall" was too broad and now names what actually
+              happens.** Nothing in the pipeline detects a paywall; what it
+              refuses is an extraction that produced no blocks
+              (`assertSomethingWasProduced`, src/blocks.ts) — which is what a
+              hard paywall or an error page comes to. A soft paywall or a teaser
+              that still yields readable prose ends `done`, and a `done` ending
+              is the one that settles the slot
+              (src/store/pg-session.ts § settleJob). Saying *a paywall costs you
+              nothing* would have been a promise the code does not make. GPT
+              Sol, stage 2 code review, finding 2. */}
+          One URL you paste, or one file you upload, counted once when it comes back readable.
+          Anything that does not — a fetch that fails, a paywall that leaves no readable article, a
+          PDF we turn down — costs you nothing at all.
+        </Answer>
+
+        <Answer q="Does coming back to an article cost anything?">
+          {/* Greg's, moved from *How it works*, word for word. */}
+          Everything you do with an article afterwards — the glossary, the summaries, the questions,
+          chat — is included, however many times you come back to it.{" "}
+          {/* [tissue] The free half is a fact about the admission path: a
+              re-run carries a slug rather than a URL, so it never reserves. */}
+          Re-running one that is already on your shelf is free too.
+        </Answer>
+
+        <Answer q="What happens when I reach my limit?">
+          {/* [tissue] *Reading is never gated* is Greg's, 2026-09-02. The
+              second sentence deliberately offers a subscriber no upgrade: there
+              is not one to offer while a subscription is live.
+
+              **"until your allowance starts again" was false for a subscription
+              that is ending**, and that is the case a reader at their limit is
+              most likely to be in when they read this. At period end the
+              entitlement falls back to the lifetime Free one, and that query
+              counts *every* success on the account, paid months included
+              (`usageSql`, src/store/pg-billing.ts) — so somebody who has added
+              more than three gets no fresh allowance at all, only a smaller
+              ceiling they are already past. GPT Sol, stage 2 code review,
+              finding 2. The clause names the lifetime allowance rather than
+              explaining it: *Is the free allowance monthly?* is the answer that
+              owns that rule, and a positional *see below* is a lie in a
+              two-column grid that stacks. */}
+          You can still read — every article you have, and every public one. Only adding stops: on a
+          paid plan until the next month of your subscription begins — unless the plan is ending
+          rather than renewing, in which case what you go back to is the lifetime free allowance —
+          and on the free allowance until you subscribe.
+        </Answer>
+
+        <Answer q="Do unused articles roll over?">
+          {/* [tissue], around Greg's *A month's allowance is articles added,
+              and it resets on the day you subscribed*. Checked in the code: a
+              paid tier's usage counts only successes inside the current Stripe
+              period, so nothing carries forward. */}
+          No. A month's allowance is articles <em>added</em>, and it resets on the day you
+          subscribed — an unused one does not carry into the next month.
+        </Answer>
+
+        {/* **The free three, said out loud, including the part that surprises
+            people.** The card says "3 articles, for life" and the footnote
+            explains what counts, but neither says that *for life* means what it
+            says: the count does not reset, and it does not pause while you are
+            subscribed. So somebody who takes forty articles on Reader and
+            cancels is past the free allowance permanently — the policy Greg
+            chose on 2026-09-03 (docs/project/billing.md § *Reading is never
+            gated*), and the reason `pay-lapsed` in src/messages.ts needs a third
+            sentence. A rule a reader meets for the first time in a refusal reads
+            as a bug; here it is a term of sale, which is the right place for it.
+
+            The numbers are `PlanCards`' to state and this answer deliberately
+            repeats none of them — a "3" here would be a fourth copy, outside
+            what tests/plans-match-tiers.test.ts reads.
+
+            **It does not say "every article you have ever added", which would be
+            false.** The ledger started empty when billing launched and articles
+            added before that were grandfathered rather than backfilled
+            (docs/plans/260902i-stripe-payments-and-subscription-tiers.md), so an
+            account older than the ledger has additions that do not count. GPT
+            Sol caught that as a false absolute on a sales page, which is the
+            right way to read it: the sentence states the rule going forwards,
+            which is both true and the part that can surprise somebody. */}
+        <Answer q="Is the free allowance monthly?">
+          {/* Greg's, moved from *How it works*, word for word. */}
+          The free allowance is for the lifetime of the account rather than per month, so it does
+          not reset. Articles added while you are subscribed count towards it too, so cancelling
+          does not hand back a fresh allowance — though whatever you have added stays yours either
+          way.
+        </Answer>
+
+        {/* The currency sentence is a fact about the Stripe prices, which carry
+            all three and let hosted Checkout pick —
+            docs/project/billing.md § Why three currencies rather than one. */}
+        <Answer q="What currency am I charged in?">
+          {/* The second half is Greg's, moved from *How it works*, word for
+              word, and it is supported: the Stripe prices are tax-inclusive.
+
+              **The first half said *"You are charged in your own currency"*,
+              and that is only true of three of them.** A tier carries USD, GBP
+              and EUR (`WEBSITE_PLANS`, PlanCards.tsx, and the `amounts` on each
+              `billing_tiers` row), and hosted Checkout can only pick a currency
+              the price actually has — so a reader in Sydney or Tokyo is charged
+              in one of these three, not in theirs. Correcting a sentence that
+              is false is not the restructure
+              docs/project/marketing-pages.md § The copy is not yours to write
+              is about; a claim on these pages is checked against the code. GPT
+              Sol, stage 2 code review, finding 2. */}
+          In dollars, pounds or euros — the payment page picks whichever fits your location. The
+          price you see there is the price that leaves your account, tax included. Nothing is added
+          on top.
+        </Answer>
+
+        {/* **This answer used to say "from the same page you subscribed on",
+            and stage 1 made that false.** Subscribing moved here on 2026-09-04;
+            cancelling did not move at all, and could not — it happens in
+            Stripe's own hosted billing page, which only `/profile` links to,
+            because that link needs a Stripe customer to open and this page has
+            no idea whether you have one. */}
+        <Answer q="How do I cancel?">
+          {/* Greg's, moved from *How it works*, word for word. */}
+          Cancel whenever you like, from{" "}
+          <Link href="/profile" className="tw:text-highlight">
+            your profile
+          </Link>
+          , which opens Stripe's own billing page. You keep the month you have paid for, and nothing
+          you have added is taken away.
+        </Answer>
+      </div>
+    </>
+  );
+}
+
+/** One question and its answer, as a panel. */
+function Answer({ q, children }: { q: string; children: ReactNode }) {
+  return (
+    <div className="site-panel site-panel-hover tw:p-6">
+      {/* `h3` under the section's `h2`, so the outline reads as a list of
+          questions rather than as eight new sections. */}
+      <h3 className="tw:mb-2 tw:font-prose tw:text-base tw:text-foreground">{q}</h3>
+      <p className="tw:text-sm tw:leading-relaxed tw:text-muted-foreground">{children}</p>
+    </div>
   );
 }
 
@@ -225,12 +425,31 @@ export function PricingPage({ readerId }: { readerId: string | null }) {
  * front of the first thing a stranger came here to read.
  */
 function PlansForAStranger() {
+  /* Both kinds of press end in the same place, so the jump is written once.
+     Both calls are optional: jsdom has no `scrollIntoView`, and a page that
+     threw on a button press would be a worse failure than a page that jumped
+     without animating. The anchor is a real element either way, so a reader who
+     has scripting trouble still has the panel below them. */
+  const toSignIn = () =>
+    document.getElementById(SIGN_IN_ID)?.scrollIntoView?.({
+      behavior: "smooth",
+      block: "center",
+    });
+
   const wantPlan = (plan: PlanCard): PlanCardAction | null => {
     /* Pulled out of the property so the closure below closes over a `const`
        string rather than over `plan.id`, which TypeScript will not keep narrowed
        across a function boundary. */
     const tierId = plan.id;
-    if (tierId === null) return null;
+    /* **Free gets a button too, and it is not a bought thing.** A card with
+       nothing to press on the one plan a stranger is most likely to start on
+       was the gap the cards made obvious: the other two say *Get Reader* and
+       Free said nothing at all. It stores no buy intent — there is no tier to
+       buy — and lands them at the same panel, where three articles free is what
+       signing up gets them. */
+    if (tierId === null) {
+      return { label: "Start reading", disabled: false, onPress: toSignIn };
+    }
     return {
       /* "Get Reader", not "Sign in to get Reader": the sign-in is a step on the
          way and not the thing they want, and the panel it scrolls to says
@@ -239,36 +458,31 @@ function PlansForAStranger() {
       disabled: false,
       onPress: () => {
         rememberBuyIntent(tierId);
-        /* Both optional: jsdom has no `scrollIntoView`, and a page that threw
-           on a button press would be a worse failure than a page that jumped
-           without animating. The anchor is a real element either way, so a
-           reader who has scripting trouble still has the panel below them. */
-        document.getElementById(SIGN_IN_ID)?.scrollIntoView?.({
-          behavior: "smooth",
-          block: "center",
-        });
+        toSignIn();
       },
     };
   };
 
   return (
     <>
-      <WebsitePlans action={wantPlan} />
+      {/* Everybody who reaches this half is choosing: they have no account yet,
+          so every plan on the row is one they could take. */}
+      <WebsitePlans action={wantPlan} recommend />
 
       {/* The landing page's panel, at the foot of this page's plans rather than
           the foot of the page: this is the only thing a stranger who pressed a
           button is now looking for. LandingPage.tsx § sign in.
 
-          **Ordinary utilities, not `site-panel`.** The `--site-*` tokens are
-          declared on `.site`, which this page does not carry — it is a bare
-          `<main>` with a Back link rather than one of the marketing pages — so
-          `site-panel` here would draw a transparent border over no fill and
-          look like a class somebody forgot to define. Stage 2 of the plan moves
-          the whole page onto the site shell, and this can become `site-panel`
-          in the same breath. */}
+          **`site-panel` since 2026-09-04**, and it was ordinary utilities for
+          exactly one day before that: the `--site-*` tokens are declared on
+          `.site`, which this page did not carry while it was a bare `<main>`
+          with a Back link, so `site-panel` would have drawn a transparent
+          border over no fill. Stage 2 moved the whole page onto the site shell,
+          which is what makes this the same panel the landing page has rather
+          than a lookalike. */}
       <section
         id={SIGN_IN_ID}
-        className="tw:mt-8 tw:scroll-mt-20 tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-6"
+        className="site-panel tw:mt-8 tw:max-w-2xl tw:scroll-mt-20 tw:p-6 tw:sm:p-8"
       >
         <p className="tw:mb-5 tw:text-sm">
           {/* [tissue] Both halves, as on the landing page: the same controls
@@ -345,7 +559,22 @@ function PlansForAReader() {
 
   return (
     <>
-      <WebsitePlans action={buyPlan} />
+      {/* **Recommended only to somebody who could take the recommendation**,
+          which is the same pair of questions `buyPlan` asks one card at a time:
+          may this reader check out at all, and is the tier we point at one the
+          database actually offers them. A Researcher subscriber has
+          `canCheckout` false, so the row goes flat rather than labelling the
+          downgrade they cannot buy as Recommended — GPT Sol, stage 2 code
+          review, finding 3. Before the summary lands it is `false`, which is
+          the right answer to *don't know yet*: the row has no buttons then
+          either. */}
+      <WebsitePlans
+        action={buyPlan}
+        recommend={
+          summary?.canCheckout === true &&
+          summary.offers.some((offer) => offer.id === RECOMMENDED_TIER)
+        }
+      />
       {/* **The plan, or the reason there is no plan on screen — never neither.**
           Until the read lands there are no buttons, because `buyPlan` needs
           `offers` and `canCheckout` to know what may be pressed; so a read that
@@ -509,7 +738,7 @@ function useBuyIntent(billing: UseBilling): void {
  *   the sentence being long.
  *
  * The other three keep the headline alone: `free` and a renewing `paid` are
- * explained by the table six inches above, and `exempt` and `off` are
+ * explained by the cards six inches above, and `exempt` and `off` are
  * self-contained. Two explanations of one rule read as a page that is not sure.
  *
  * **And the headline is printed as it stands, with no sentence built around

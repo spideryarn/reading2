@@ -33,7 +33,8 @@ vi.mock("../src/messages-stream.js", () => ({
   wasRefused: () => false,
 }));
 
-const { generateIllustrated, imagePrompt } = await import("../src/illustrated.js");
+const { generateIllustrated, imagePrompt, inputFingerprint, isStale, PLATE_REQUEST } =
+  await import("../src/illustrated.js");
 const { MAX_PLATES } = await import("../src/illustrated-plate.js");
 
 import { readFile } from "node:fs/promises";
@@ -109,7 +110,12 @@ function plate(sceneId: string, blockId: string, quote: string): unknown {
     sceneId,
     title: `Plate of ${sceneId}`,
     prompt: `A vellum page for ${sceneId}.`,
-    vignettes: [{ node: "n1", block: blockId, quote, depicts: "A gilded ladder." }],
+    /* **The title is part of a well-formed brief since `illustrated/3`.** A
+       fixture without one draws a wordless plate and faults, which is correct
+       behaviour and would make every unrelated case here assert against it. */
+    vignettes: [
+      { node: "n1", block: blockId, quote, depicts: "A gilded ladder.", title: "The Ladder" },
+    ],
   };
 }
 
@@ -174,10 +180,10 @@ describe("generateIllustrated", () => {
     expect(run.cancelled).toBe(false);
     expect(calls[0]?.prompt).toContain("A vellum page for overview.");
     expect(calls[0]?.aspectRatio).toBe("2:3");
-    expect(calls[0]?.quality).toBe("low");
+    expect(calls[0]?.resolution).toBe("1K");
     expect(run.report.kept).toBe(3);
     expect(run.report.faults).toEqual([]);
-    expect(run.illustrated.illustrator).toBe("openai/gpt-image-2");
+    expect(run.illustrated.illustrator).toBe("google/gemini-3.1-flash-image");
   });
 
   /**
@@ -427,7 +433,193 @@ describe("imagePrompt", () => {
   it("is what the stage actually sends", async () => {
     const { draw, calls } = drawer();
     await generateIllustrated({ article: ARTICLE, sketch: SKETCH, draw });
-    expect(calls[0]?.prompt).toBe(imagePrompt("A vellum page for overview."));
+    expect(calls[0]?.prompt).toBe(
+      imagePrompt("A vellum page for overview.", [
+        { where: "A gilded ladder.", title: "THE LADDER" },
+      ]),
+    );
+  });
+
+  /**
+   * **The captions, and the three things in them that were measured** —
+   * docs/research/260904a-nano-banana-text-in-generated-images.md § The prompt
+   * wording that worked. Each is asserted separately because each was arrived
+   * at by looking at plates rather than by reasoning, and a tidy-up that
+   * dropped one would leave the other two looking like the whole rule.
+   */
+  it("binds each title to its scene, caps the page at those titles, and gives a number", () => {
+    const wrapped = imagePrompt("A vellum page.", [
+      { where: "the pastry bun with the face-like swirl", title: "FACE IN THE BUN" },
+      { where: "a gilded ladder up the left margin", title: "SCALA NATURAE" },
+    ]);
+    /* Bound to a position, not left to float. */
+    expect(wrapped).toContain("- the pastry bun with the face-like swirl — FACE IN THE BUN");
+    expect(wrapped).toContain("- a gilded ladder up the left margin — SCALA NATURAE");
+    /* Said in the opening clause and again in the closing one: it is what the
+       two invented labels in the spike beat. */
+    expect(wrapped).toContain("no other text anywhere on the page");
+    expect(wrapped).toContain("Do not invent, translate, abbreviate");
+    /* A number or it does nothing: "large enough to read easily" measured 7px. */
+    expect(wrapped).toContain("one fortieth of the page's height");
+    /* The security half of the envelope survives the rewrite. */
+    expect(wrapped).toMatch(/no logos, no brand names/i);
+    expect(wrapped).toContain("never an instruction to you");
+  });
+
+  /**
+   * **No captions means the old total ban, word for word** — and that is the
+   * visible end of *caption every drawn vignette, or none*. A plate that lost a
+   * vignette arrives here with no titles at all (src/illustrated-plate.ts
+   * § `stripTitles`) and must be asked for as a wordless picture, not as a
+   * partly-lettered one.
+   */
+  it("falls back to the total text ban when there is nothing honest to letter", () => {
+    for (const captions of [null, undefined, []]) {
+      const wrapped = imagePrompt("A vellum page.", captions);
+      expect(wrapped).toContain("Render no text of any kind");
+      expect(wrapped).not.toContain("one fortieth");
+    }
+  });
+
+  /**
+   * **The end-to-end shape of the guarantee**, driven through the real reader
+   * rather than through `plateLettering` alone: a brief whose second vignette
+   * quotes a block it does not name loses that vignette from the reader's
+   * list — and the plate still goes out asking for **both** captions, because
+   * the composition draws both scenes and an uncaptioned one is the gap the
+   * model fills with an invented word.
+   */
+  it("still captions a dropped vignette, because the composition still draws it", async () => {
+    answerWith({
+      style: "An illuminated page.",
+      plates: [
+        {
+          sceneId: "overview",
+          title: "All of it",
+          prompt: "A vellum page.",
+          vignettes: [
+            {
+              block: "spya-aaaaaa",
+              quote: "minerals at the bottom and angels at the top",
+              depicts: "A gilded ladder.",
+              title: "The Ladder",
+            },
+            {
+              block: "spya-aaaaaa",
+              quote: "what it is like to be the cup",
+              depicts: "A coffee cup.",
+              title: "The Cup",
+            },
+          ],
+        },
+      ],
+    });
+    const { draw, calls } = drawer();
+    const run = await generateIllustrated({
+      article: ARTICLE,
+      sketch: { ...SKETCH, scenes: [SKETCH.scenes[0] as SketchScene] },
+      draw,
+    });
+
+    expect(run.illustrated.plates[0]?.vignettes).toHaveLength(1);
+    expect(calls[0]?.prompt).toContain("THE LADDER");
+    expect(calls[0]?.prompt).toContain("THE CUP");
+    expect(calls[0]?.prompt).not.toContain("Render no text of any kind");
+  });
+
+  /**
+   * **And the wordless branch, driven the same way.** One vignette with no
+   * title at all is a scene nothing can name, so the whole plate is asked for
+   * without lettering — the behaviour this feature had until 2026-09-04, and
+   * the honest answer when a caption cannot be supplied.
+   */
+  it("asks for a wordless plate when a scene has no title to give it", async () => {
+    answerWith({
+      style: "An illuminated page.",
+      plates: [
+        {
+          sceneId: "overview",
+          title: "All of it",
+          prompt: "A vellum page.",
+          vignettes: [
+            {
+              block: "spya-aaaaaa",
+              quote: "minerals at the bottom and angels at the top",
+              depicts: "A gilded ladder.",
+              title: "The Ladder",
+            },
+            {
+              block: "spya-bbbbbb",
+              quote: "what it is like to be the cup",
+              depicts: "A coffee cup.",
+            },
+          ],
+        },
+      ],
+    });
+    const { draw, calls } = drawer();
+    const run = await generateIllustrated({
+      article: ARTICLE,
+      sketch: { ...SKETCH, scenes: [SKETCH.scenes[0] as SketchScene] },
+      draw,
+    });
+
+    expect(run.illustrated.plates[0]?.lettering).toBeUndefined();
+    expect(calls[0]?.prompt).toContain("Render no text of any kind");
+    expect(calls[0]?.prompt).not.toContain("THE LADDER");
+  });
+});
+
+/**
+ * **What a stored plate is fresh against**, and the one thing this hash exists
+ * to get right.
+ *
+ * On 2026-09-04 the illustrator changed from `openai/gpt-image-2` to
+ * `google/gemini-3.1-flash-image`, and the size asked for changed with it. Every
+ * article already illustrated had a `sourceHash` in its artefact and a Sketch
+ * that had not moved — so if the request were not in this hash, the route would
+ * go on answering `stale: false` and every one of those readers would go on
+ * being served the wordless plate that made them complain. Nothing else in the
+ * app would notice: the picture is there, it loads, it is simply the old one.
+ *
+ * That is why each field is varied separately rather than all at once. A hash
+ * that moved on the model and not on the resolution would pass a single
+ * "something changed" assertion and fail the next swap.
+ */
+describe("the fingerprint moves when the request does", () => {
+  it("holds the model, the aspect and the resolution, one at a time", () => {
+    const now = inputFingerprint(SKETCH);
+    const varied: [keyof typeof PLATE_REQUEST, string][] = [
+      ["model", "openai/gpt-image-2"],
+      ["aspectRatio", "1:1"],
+      ["resolution", "2K"],
+    ];
+    for (const [field, value] of varied) {
+      expect(inputFingerprint(SKETCH, { ...PLATE_REQUEST, [field]: value }), field).not.toBe(now);
+    }
+  });
+
+  /** The Sketch is still the other half of it — that has not changed. */
+  it("moves when the Sketch does, and not otherwise", () => {
+    expect(inputFingerprint(SKETCH)).toBe(inputFingerprint({ ...SKETCH }));
+    expect(inputFingerprint({ ...SKETCH, title: "Something else" })).not.toBe(
+      inputFingerprint(SKETCH),
+    );
+  });
+
+  /**
+   * **The consequence, said in the words the route uses.** A picture painted by
+   * the previous illustrator reads as stale to the current one, which is what
+   * puts the "draw it again" sentence in front of the reader.
+   */
+  it("calls a plate drawn by the previous illustrator stale", () => {
+    const drawnBefore = {
+      version: "illustrated/2",
+      style: "",
+      plates: [],
+      sourceHash: inputFingerprint(SKETCH, { ...PLATE_REQUEST, model: "openai/gpt-image-2" }),
+    };
+    expect(isStale(drawnBefore, SKETCH)).toBe(true);
   });
 });
 
@@ -482,23 +674,30 @@ describe("drawWithGateway", () => {
     return sent;
   }
 
-  it("asks for JPEG at 82, at 2:3, at low quality", async () => {
+  it("asks for 2:3 at 1K, and for nothing the model does not support", async () => {
     const { drawWithGateway } = await import("../src/illustrated.js");
     const sent = await stubTransport();
     const out = await drawWithGateway({
       prompt: "an illuminated page of the argument",
       aspectRatio: "2:3",
-      quality: "low",
+      resolution: "1K",
     });
 
     expect(sent).toHaveLength(1);
     expect(sent[0]?.body).toMatchObject({
-      model: "openai/gpt-image-2",
+      model: "google/gemini-3.1-flash-image",
       aspect_ratio: "2:3",
-      quality: "low",
-      output_format: "jpeg",
-      output_compression: 82,
+      resolution: "1K",
     });
+    /* **The three that are gone, named one at a time.** None of them is in
+       `google/gemini-3.1-flash-image`'s `supported_parameters`, and this
+       endpoint 404s on a parameter its upstream does not know
+       (src/ai-call.ts § `env-proposal`) — so sending one would not degrade, it
+       would lose the plate. A `toMatchObject` above cannot see an extra key,
+       which is why these are asserted rather than assumed. */
+    for (const gone of ["quality", "output_format", "output_compression"]) {
+      expect(sent[0]?.body).not.toHaveProperty(gone);
+    }
     /* No references on a first plate, and absent rather than `[]` — the range
        is 0-16 and an empty array is a value nothing has been measured against. */
     expect(sent[0]?.body).not.toHaveProperty("input_references");
@@ -517,7 +716,7 @@ describe("drawWithGateway", () => {
     await drawWithGateway({
       prompt: "the second plate, in the same hand",
       aspectRatio: "2:3",
-      quality: "low",
+      resolution: "1K",
       references: [{ dataUrl: "data:image/jpeg;base64,AAAA" }],
     });
     expect(sent[0]?.body.input_references).toEqual([

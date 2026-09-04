@@ -172,6 +172,10 @@ function Band({ width, children, label }: { width: number; label: string; childr
 
 const panel = (slug: string, kind: "force" | "drift") => (
   <DiagramPanel
+    access={{ kind: "owner" }}
+    /* The whole picker, so this preview shows the row a reader with the
+       experimental-features switch on sees. DiagramPanel.tsx § visibleKinds. */
+    experimental
     slug={slug}
     root={ROOT}
     kind={kind}
@@ -197,7 +201,7 @@ createRoot(document.getElementById("root") as HTMLElement).render(
     <Band width={MODE_MIN} label="Drift, projection in flight">{panel("drift-wait", "drift")}</Band>
     <Band width={MODE_MIN} label="Drift, projection refused">{panel("drift-fail", "drift")}</Band>
     <Band width={MODE_MIN} label="Sketch, a redraw under way">
-      <SketchView slug="sk-busy" blocks={BLOCKS} atRow={1} onJump={() => {}} />
+      <SketchView access={{ kind: "owner", slug: "sk-busy" }} blocks={BLOCKS} atRow={1} onJump={() => {}} />
     </Band>
   </div>
   </>,

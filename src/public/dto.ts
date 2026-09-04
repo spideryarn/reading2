@@ -51,17 +51,23 @@
  */
 
 import type { Assets } from "../assets.js";
+import type { Sketch } from "../sketch-scene.js";
 import type {
   Arc,
   ArcEntry,
   Block,
   BlockKind,
+  Citation,
+  Comment,
   Glossary,
   Idea,
   Ideas,
   Quote,
   Quotes,
   NodeId,
+  Timeline,
+  TimelineEvent,
+  TimelineOccurrence,
   Tree,
   TreeNode,
   Tweet,
@@ -73,11 +79,14 @@ import type {
   PublicGlossary,
   PublicGlossaryEntry,
   PublicIdeas,
+  PublicComment,
   PublicQuotes,
   PublicMeta,
+  PublicSketch,
+  PublicTimeline,
   PublicTweets,
 } from "../public-types.js";
-import { publicSourceUrl } from "../urls.js";
+import { publicCitationUrl, publicSourceUrl } from "../urls.js";
 
 /**
  * The masthead.
@@ -374,6 +383,123 @@ function publicQuotes(quotes: Quotes): PublicQuotes {
   };
 }
 
+/**
+ * The timeline, rebuilt event by event.
+ *
+ * The envelope is the work here: `version`, `generator`, `slug`, `sourceHash`,
+ * `generatedAt`, `elapsedMs` and `orderConflicts` all stay behind, and
+ * src/public-types.ts § `PublicTimeline` argues the last of those, which is the
+ * only one that is a close call.
+ *
+ * **The events cross whole**, like `Idea` and `Quote` and unlike the glossary:
+ * every field of a `TimelineEvent` is about the article — a label, the
+ * article's own dating words, the model's ordering, and offsets into blocks the
+ * visitor is already reading. `dating` and `occurrences` are passed through as
+ * the structures they are rather than rebuilt field by field, because
+ * `Dating` is a four-member union whose members a hand-copy would have to
+ * re-switch on, and a `default:` arm that dropped an unhandled kind would
+ * silently publish an event with no date rather than fail. The type is the
+ * allowlist for these two; the day `TimelineEvent` grows a field that is about
+ * a person, this comment is wrong and the test below is what says so.
+ */
+function publicTimeline(timeline: Timeline): PublicTimeline {
+  return {
+    events: timeline.events.map(
+      (event): TimelineEvent => ({
+        id: event.id,
+        label: event.label,
+        dating: event.dating,
+        order: event.order,
+        modality: event.modality,
+        occurrences: event.occurrences.map(
+          (occurrence): TimelineOccurrence => ({
+            blockId: occurrence.blockId,
+            quote: occurrence.quote,
+            start: occurrence.start,
+          }),
+        ),
+      }),
+    ),
+  };
+}
+
+/**
+ * The owner's comments, rebuilt comment by comment and citation by citation.
+ *
+ * **The filtering is not here**, and that is deliberate rather than an
+ * oversight: the two rows that must never reach a visitor — a referee's note,
+ * and an unfinished or failed model call — are refused **in SQL**, by
+ * `PUBLIC_COMMENTS_WHERE` in src/store/public-reader.ts. A projection that
+ * dropped them would be a second answer to the same question, and the one that
+ * ran second would be the one nobody tested. See that predicate for the
+ * argument.
+ *
+ * What this does is the allowlist half: name every key, and re-judge the one
+ * value in a comment that is an address.
+ */
+function publicComments(comments: readonly Comment[]): PublicComment[] {
+  return comments.map(
+    (comment): PublicComment => ({
+      id: comment.id,
+      blockId: comment.blockId,
+      quote: comment.quote,
+      start: comment.start,
+      createdAt: comment.createdAt,
+      ...opt(comment, "body"),
+      ...opt(comment, "answer"),
+      ...publicCitations(comment.citations),
+    }),
+  );
+}
+
+/**
+ * **The citations, re-judged one at a time**, or the key left off entirely.
+ *
+ * `publicCitationUrl` (src/urls.ts) refuses a credential in the address and a
+ * host a stranger could not have reached anyway. A citation that fails is
+ * **dropped rather than blanked**: a footnote whose address has been replaced
+ * by nothing is a claim the reader cannot follow and cannot see the failure of.
+ *
+ * **An empty result drops the key**, rather than crossing as `[]`. The two
+ * would render differently — `citations: []` is *"the model cited nothing"* and
+ * an absent key is *"this comment has no citations"* — and after this function
+ * has thrown one away, neither of those is true. Absent is the honest one of
+ * the two, because it is what a comment that never had any looks like.
+ *
+ * `title` through `opt`, so a mis-spelled key is a compile error rather than a
+ * field that silently stops crossing. src/public/dto.ts § the idiom.
+ */
+function publicCitations(citations: Citation[] | undefined): { citations?: Citation[] } {
+  if (citations === undefined) return {};
+  const kept = citations.flatMap((citation): Citation[] => {
+    const url = publicCitationUrl(citation.url);
+    return url === null ? [] : [{ url, ...opt(citation, "title") }];
+  });
+  return kept.length === 0 ? {} : { citations: kept };
+}
+
+/**
+ * The Sketch, as three fields of the artefact's nine.
+ *
+ * **The scenes are passed through whole**, and src/public-types.ts
+ * § `PublicSketch` argues it: a scene is geometry and the model's own labels,
+ * with `SketchNode.block` carrying a block id of the article the visitor is
+ * already reading. There is nothing in it about a person, so copying a hundred
+ * nested fields by hand would buy a transcription error rather than safety.
+ *
+ * **`profileHash` is the field to notice going.** It is who the drawing was
+ * made for — a hash of the owner's reader profile — and a visitor is looking at
+ * a picture drawn for somebody else. The other four absences are the ordinary
+ * pipeline ones.
+ */
+function publicSketch(sketch: Sketch): PublicSketch {
+  return {
+    title: sketch.title,
+    caption: sketch.caption,
+    scenes: sketch.scenes,
+  };
+}
+
 /** The ideas, rebuilt idea by idea and occurrence by occurrence. */
 function publicIdeas(ideas: Ideas): PublicIdeas {
   return {
@@ -439,6 +565,9 @@ export function publicArticle(row: {
   ideas: Ideas | null;
   quotes: Quotes | null;
   tweets: TweetThread | null;
+  timeline: Timeline | null;
+  comments: readonly Comment[];
+  sketch: Sketch | null;
 }): PublicArticle {
   return {
     meta: publicMeta(row),
@@ -466,6 +595,12 @@ export function publicArticle(row: {
     ...(row.ideas !== null ? { ideas: publicIdeas(row.ideas) } : {}),
     ...(row.quotes !== null ? { quotes: publicQuotes(row.quotes) } : {}),
     ...(row.tweets !== null ? { tweets: publicTweets(row.tweets) } : {}),
+    ...(row.timeline !== null ? { timeline: publicTimeline(row.timeline) } : {}),
+    ...(row.sketch !== null ? { sketch: publicSketch(row.sketch) } : {}),
+    /* **A required key, so leaving this line out is a type error** — unlike the
+       artefacts above it, where an absent key is the meaning. An article with
+       no comments crosses as `[]`. See PublicArticle.comments. */
+    comments: publicComments(row.comments),
   };
 }
 

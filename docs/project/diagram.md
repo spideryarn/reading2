@@ -61,7 +61,7 @@ the article's tree, so each draws the same shape whatever the article is.
 
 | | Vertical axis is | Honest about | Not honest about |
 |---|---|---|---|
-| **Force** (default, `?diagram=force`) | reading order, **pinned** (`fy`) | *what* clusters with what, across **five kinds of relationship** | exact position — it is a physics settlement |
+| **Force** (`?diagram=force`) | reading order, **pinned** (`fy`) | *what* clusters with what, across **five kinds of relationship** | exact position — it is a physics settlement |
 | **Drift** (`?diagram=drift`) | the article, linearly in **rows** | *where* the piece returns to a subject | how far apart two subjects are — the sideways axis is a projection |
 | **Trail** (`?diagram=trail`) | **nothing** — it is the second component | whether the piece travels or circles | position, except through the chain and the colour |
 
@@ -131,7 +131,59 @@ an actual pasted link behind it. `?diagram=tree` is the one to watch: it was the
 default for three days, so it is in more bookmarks than the other four together.
 Pinned in `tests/url-state.test.ts`.
 
-### Why Force is the default, and what changed
+### Who sees which chip, 2026-09-04
+
+**The mode is in everybody's bar; four of its five pictures are not.** A reader
+wrote in:
+
+> We have this idea of experimental features. The only diagram sub-mode that is
+> good enough to show everyone is the sketch mode. The other ones should be only
+> visible to people who have experimental features on, because they don't work
+> so well yet.
+>
+> — a reader, 2026-09-04 (SPIDERYARN-READING2-13)
+
+So Diagram's row in `MODES_UI` is `experimental: false` and each row of
+`KIND_UI` ([`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx)) carries the flag
+instead — Sketch false, the other four true. The chip row draws the ones that
+are not experimental **plus whichever the URL names**, which is the mode bar's
+own rule, shared rather than copied
+([`experimental-visibility.ts`](../../src/web/experimental-visibility.ts)); so
+`?mode=diagram&diagram=trail` still opens Trail for a reader with the switch off,
+and shows them a checked chip for it.
+[experimental-features.md](experimental-features.md) is the operating manual.
+
+**It is not a gate, and nothing here should be written as though it were.** The
+switch is about clutter and the server does not read it. What actually decides
+what a reader may buy is one level in: `access` pins a visitor to Force and draws
+no picker at all, and `/api/similar/:slug` and `/api/projection/:slug` sit behind
+`requireUser`. [security-map.md](security-map.md).
+
+**What this does and does not change about spend.** It changes discoverability,
+not authority. Every article owner could already start unlimited paid Sketch
+reruns and still can; a shared visitor is still Force-only; entering the mode or
+following a link still buys nothing, because only a chip *gesture* arms an
+automatic run ([`activation.ts`](../../src/web/activation.ts)). There is no
+per-owner or cumulative spend cap in this repo, which was true before this change
+and is why the empty state has to stay cheap — see the next section.
+
+### Why Force was the default, and why Sketch is now
+
+**Sketch is the default since 2026-09-04**, for the reason above: it is the one
+picture everybody can see, and a default most readers cannot see would be an odd
+thing to keep. It is `sketch` whether the switch is on or off — one default
+rather than two, so a pasted link and a fresh arrival land on the same picture.
+
+**Arriving costs nothing**, and that is the whole safety of the move. A Sketch
+nobody has drawn is an empty state that says what it costs and what it takes and
+draws nothing until asked ([`SketchView.tsx`](../../src/web/SketchView.tsx));
+`diagram` is deliberately absent from `MODE_TARGET` in
+[`activation.ts`](../../src/web/activation.ts), so pressing the mode button arms
+no run. `tests/public-network-trace.test.tsx` asserts the GET settles and no job
+is posted, for an owner arriving at `?mode=diagram` and at
+`?mode=diagram&diagram=sketch`.
+
+Force held the default until then, on the opposite argument:
 
 **Nothing here is free any more.** The Tree was, and that was the whole of its
 claim on the default slot: stage 4 had already written a gist onto every
@@ -146,7 +198,9 @@ without their model call. So the reader who opens the mode still sees a picture
 straight away; they just also, now, buy the dotted lines.
 
 That is a real cost the old default did not have, and it is why the hover card
-on each chip says where the picture comes from as well as what it shows.
+on each chip says where the picture comes from as well as what it shows. The
+argument was right while Force was the picture everybody saw; it is not an
+argument for keeping a default nobody can see.
 
 ### Waiting, and failing, without borrowing a picture
 
@@ -1513,14 +1567,19 @@ else would show it.
 five articles. That is the slowest single thing in the app and four times the
 glossary, and three consequences follow from it rather than from taste:
 
-- **Never the default and never in an ingest.** `sketch` is off
+- **Never run by the pipeline, and never in an ingest.** `sketch` is off
   `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED`, so nothing sweeps it in.
+  It became the *view's* default on 2026-09-04 — the picture Diagram opens on —
+  which is a different thing and buys nothing; see
+  [Who sees which chip](#who-sees-which-chip-2026-09-04).
 - **Picking the Sketch chip draws it, if nobody ever has.** Since 2026-09-02,
   and it is the chip's `onClick` that arms it, never `?diagram=` — that is query
   state, so Back and Forward move it, and a pasted
   `?mode=diagram&diagram=sketch` must not buy a two-minute call. *Opening
-  Diagram costs nothing*: the mode lands on a picture drawn from the tree, so
-  the bar's Diagram button arms nothing at all.
+  Diagram costs nothing*: with nothing drawn the mode lands on the empty state
+  below, so the bar's Diagram button arms nothing at all — `diagram` is
+  deliberately absent from `MODE_TARGET`, and that mattered more from 2026-09-04,
+  when the button went into every reader's bar.
   [`src/web/activation.ts`](../../src/web/activation.ts),
   [`useAutoRun.ts`](../../src/web/useAutoRun.ts), and
   [glossary.md § That decision was reversed](glossary.md#that-decision-was-reversed-on-2026-09-02-and-the-loop-is-still-closed-structurally)
@@ -1690,9 +1749,9 @@ that prompt.
 
 Sketch decides what shape the argument is and draws it in boxes. **Illustrated
 takes that same scene and has it painted.** Two calls: a model reads the article
-and the scene and writes an illustration brief, and `openai/gpt-image-2` draws
-the brief. On the Anil Seth essay it chose an illuminated manuscript page and
-said why —
+and the scene and writes an illustration brief, and `google/gemini-3.1-flash-image`
+draws the brief. On the Anil Seth essay it chose an illuminated manuscript page
+and said why —
 
 > the essay itself invokes golems, Scala Naturae, souls and psychē — vellum,
 > gold leaf, and marginalia are the article's own idiom, not an imported one
@@ -1707,6 +1766,97 @@ The whole design, every measured number, and the four things it deliberately doe
 [260903c-illustrated-diagram-sub-mode.md](../plans/260903c-illustrated-diagram-sub-mode.md).
 What follows is what a reader touches and the three facts that decide everything
 else.
+
+### The picture carries words now, and that was the reader's complaint
+
+<a id="lettering"></a>
+
+> the images that are generated don't have any text. So they're just the images,
+> and without the text, it's almost impossible to make sense of what the image is
+> about. … we want the text to be readable even when the image is in thumbnail.
+>
+> — a reader, 2026-09-04 (report -12)
+
+Until 2026-09-04 the plates carried **no text at all, deliberately** — the ban is
+still written into the history of [`src/illustrated.ts`](../../src/illustrated.ts),
+and its reasoning was never wrong: *a misspelt word is a confident-looking lie*,
+and `openai/gpt-image-2` returned "SΩUL MACHINE" on the first heading it was asked
+for. What changed is the premise, not the argument.
+[260904a](../research/260904a-nano-banana-text-in-generated-images.md) put **111
+supplied strings across 15 plates** through `google/gemini-3.1-flash-image` and
+got **not one character wrong** — proper nouns, an umlaut, a hyphen, and five
+verbatim article sentences included. So the ban was costing the reader a legible
+picture to prevent a failure the new model does not have.
+
+Four things came out of that, and each was measured rather than reasoned to:
+
+- **Every scene the composition draws gets a title, or the plate carries no
+  lettering at all.** This is the one to know, and it is **structural rather than
+  an instruction**. The model's *only* misspelling in the whole spike was a word
+  nobody supplied: handed a composition drawing eleven things and a list naming
+  ten, it captioned the eleventh itself.
+  [`lettersFor`](../../src/illustrated-plate.ts) builds that list, and
+  [`plateLettering`](../../src/illustrated.ts) is a second gate on the same rule
+  at the prompt.
+
+  **The load-bearing word is *drawn*, and it is not the same list as *kept*.** A
+  vignette dropped for a quote that is not in the block it names is still on the
+  page — a drop cannot be excised from the composition prose without mangling it
+  (§ *A drop protects the navigation, not the picture*) — so it gets its caption
+  too. What it does not get is a row in the reader's legend, which is where the
+  claims live and where the checking happened.
+
+  **The first version had this backwards, and the picture said so.** It stripped
+  every title from a plate that had lost one, meaning to fall back on the old
+  wordless plate. Run for real on 2026-09-04, the plate came back **lettered
+  anyway** — because the brief model writes its titles into the composition prose
+  as well, `(SWARM OF AGENTS)` in place, where our "render no text" envelope
+  simply lost the argument. Ten of eleven scenes came out correct and one caption
+  was repeated on the twelfth: exactly the failure the rule was written to
+  prevent, wearing the rule's own clothes. A guarantee the picture ignores is not
+  a guarantee, and a wordless branch nothing can deliver is worse than no branch
+  because it is written down.
+
+  So the wordless branch is now rare and real: it fires when a drawn scene has no
+  title we can use at all — none given, one over the 40-character cap, one carrying control
+  characters — and then there genuinely is a scene nobody can name.
+- **`1K`, not `2K`, and it is not a compromise.** Cheaper ($0.068 against
+  $0.101), 40% faster, and *more* legible at 288 px — 10.5 px of cap height
+  against 7.3. A larger plate makes the enlarged view better and the thumbnail
+  worse, because the model spends the extra pixels on detail rather than on type.
+- **The size clause is a number or it does nothing.** *"at least one fortieth of
+  the page's height"* produced 56 px where a fortieth is 63; *"large enough to be
+  read easily"* produced 7 px and meant nothing.
+- **Don't compose scenes made of writing.** A scribe at a scroll comes back
+  covered in glyph-shapes that are not words — unchanged on both Gemini models
+  and on the OpenAI one. It carries no misspelling because it carries no word,
+  and a reader could still fairly call it lettering. The fix is in the brief
+  prompt, not in a rule about text, and on an article *about* transcripts and
+  tampered logs the brief model writes scrolls anyway: a run on 2026-09-04 came
+  back with banner-glyphs on a plate whose eight captions were all correct.
+
+**What eleven real plates looked like, 2026-09-04.** Nine of nine captioned
+plates spelled every supplied string correctly, and every caption was readable at
+288 px. The caption's size is not constant — it falls as the plate gets more
+crowded, and one plate that drew twelve roundels for eight vignettes came back at
+the edge of legible where a nine-roundel plate was comfortable. So *how many
+vignettes* remains the lever on how readable the thumbnail is, which is the same
+thing § *Ornament may not crowd the scenes* already says for a different
+reason.
+
+**A caption in the picture is not a row in the legend, and the gap is on
+purpose.** A dropped vignette's caption is on the page with nothing beneath the
+plate to click; that is the same bargain the drop already made — the picture was
+never checkable, the legend always was — and it is the price of not leaving an
+uncaptioned scene for the model to name itself.
+
+**The HTML legend beneath the plate is unchanged, and that is a firm decision
+rather than an oversight.** The title in the picture is *wayfinding*; the checked,
+block-local quote in the row beneath is the claim. A correctly-spelt caption on
+the wrong vignette is a better-looking lie than a garbled one, and the legend is
+what makes the plate answerable at all. The row now shows the caption above what
+it depicts, so a reader who has just read a title off a vignette can find the row
+it belongs to.
 
 ### It is an interpretation, and the app says so
 
@@ -1785,29 +1935,65 @@ for when it is worth building; a vision model's *confidence* is not one of them.
 ### The wire, and what it costs
 
 It goes through **OpenRouter** like everything else —
-[ai-gateway.md](ai-gateway.md) — because `openai/gpt-image-2` is routable at
-`/api/v1/images` with `input_references`, and comes back with a real cost line.
-There is no second bypass. `openRouterImage` in
+[ai-gateway.md](ai-gateway.md) — because `google/gemini-3.1-flash-image` is
+routable at `/api/v1/images` with `input_references`, and comes back
+`is_byok: false` with a real `usage.cost`, so the meter reads a plate exactly as
+it reads a chat call. **That is why the lettering swap needed no money code and
+no new provider seam**, and it is what keeps
+[`src/web/PrivacyPage.tsx`](../../src/web/PrivacyPage.tsx) true when it tells a
+reader that OpenRouter carries every AI call bar live voice: a direct Google call
+would have made that page false in the same commit. There is no second bypass.
+`openRouterImage` in
 [`src/ai-call.ts`](../../src/ai-call.ts) sits beside `openRouterJson` sharing the
 same meter, on a `wire` of `"images"` — which is a **column on the route table**
 since 2026-09-03, because it used to be derived from the path by a binary test
 that would have recorded every plate as a chat call.
 
 **The brief call is the bill and the pictures are not**, which is the opposite of
-every intuition about this feature: measured across three articles at **$0.23–$0.38
-an article, 80–88% of it the brief**, against Sketch's $0.20. Worst case 417 s
-inside a 760 s lease. The numbers, per article and per plate, are in
+every intuition about this feature. Measured across three articles on 2026-09-04,
+under the lettering prompt and `google/gemini-3.1-flash-image` at 1K:
+
+| | brief | plates | wall clock |
+|---|---|---|---|
+| noema | $0.4182 | $0.2042 (3) | 349 s + 36 s |
+| constitution | $0.2814 | $0.2041 (3) | 241 s + 35 s |
+| openai-huggingface | $0.2096–$0.3224 | ~$0.2040 (3) | 183–293 s + 37 s |
+
+So **$0.41–$0.62 an article, two thirds of it the brief**, against Sketch's
+$0.20, and comfortably inside the 760 s lease. Two things moved on 2026-09-04 and
+they moved in opposite directions: a plate went from about $0.013 to **$0.068**,
+because it is priced on the wire now rather than arriving as a BYOK figure; and
+the brief got longer, because it writes a title for every vignette. The earlier
+numbers — $0.23–$0.38 an article, 80–88% of it the brief — are in
 [`evals/results/illustrated-v2b/README.md`](../../evals/results/illustrated-v2b/README.md),
 and the before-and-after of the prompt that produced them is
 [§ Tuning the prompt](../plans/260903c-illustrated-diagram-sub-mode.md#tuning-the-prompt-illustrated2).
 
-Plates are asked for as JPEG (`output_format`, which the model honours despite not
-advertising it) and stored content-addressed in the blob store, never base64 in
-the artefact. A plate's media type is decided **from the signature, never from
-what the provider claimed**, and
-[`src/illustrated-image.ts`](../../src/illustrated-image.ts) refuses to store
-anything that is not `image/jpeg` — a `.jpeg` object that is not one is the
-failure a future model silently ignoring `output_format` would cause.
+Plates are stored content-addressed in the blob store, never base64 in the
+artefact, and a plate's media type is decided **from the signature, never from
+what the provider claimed**.
+[`src/illustrated-image.ts`](../../src/illustrated-image.ts) accepts exactly two
+— JPEG and PNG — and refuses anything else rather than writing an object under a
+name that is not true.
+
+**They are PNGs now, and that is a cost worth naming.** The old model honoured
+`output_format: "jpeg"` despite not advertising it, and this file used to warn
+that such a thing "stops being true one day without anybody being told". It did:
+`google/gemini-3.1-flash-image` ignores the field and returns PNG whatever it is
+asked. So a 1K plate is about **1.9 MB** where a JPEG was about 150 KB — roughly
+7.6 MB of storage per illustrated article, and one of those down the wire when a
+reader opens the mode. Re-encoding was weighed and refused: the only decoder here
+is `@napi-rs/canvas`, which
+[`tests/pdf-bundle-trace.test.ts`](../../tests/pdf-bundle-trace.test.ts) keeps out
+of the API bundle because it costs **34 MB** there, and a hand-rolled JPEG encoder
+is a DCT and a Huffman table. Beside $0.27–$0.40 of model spend an article, the
+bytes are the cheap part. If the *download* turns out to matter, the two ways
+forward are the 34 MB or an encoder, and that is Greg's call.
+
+Both extensions are live at once, because an article painted before 2026-09-04
+still holds JPEG plates. The extension in the plate URL must **match** the stored
+record, so a `.jpeg` URL can never be answered from a PNG — the URL is a promise
+about the bytes exactly as the storage key is.
 
 ### Where the pieces are, and the two things that are unlike every other mode
 
@@ -1817,7 +2003,7 @@ failure a future model silently ignoring `output_format` would cause.
 | the two calls, and what it was painted from | [`src/illustrated.ts`](../../src/illustrated.ts) |
 | a plate's bytes, validated and content-addressed | [`src/illustrated-image.ts`](../../src/illustrated-image.ts) |
 | the step | `illustrated` in [`src/pipeline.ts`](../../src/pipeline.ts) |
-| the routes | `/api/illustrated/:slug` and `/api/illustrated/:slug/:hash.jpeg`, [`src/routes.ts`](../../src/routes.ts) |
+| the routes | `/api/illustrated/:slug` and `/api/illustrated/:slug/:hash.(jpeg\|png)`, [`src/routes.ts`](../../src/routes.ts) |
 | the read, and whether the button would be refused | [`src/web/useIllustrated.ts`](../../src/web/useIllustrated.ts) |
 | the plate, the plate row, Enlarge, and the *what it depicts* list | [`src/web/IllustratedView.tsx`](../../src/web/IllustratedView.tsx) |
 | the harness that paints one offline | [`evals/illustrated/`](../../evals/illustrated/) |
@@ -1916,6 +2102,72 @@ content-addressed blobs has to be right about every artefact in every revision
 that could still hold a hash — getting that wrong deletes a picture somebody is
 looking at. Named here so the next person knows it was decided rather than
 forgotten.
+
+## A visitor gets the Sketch, and only the Sketch
+
+Since 2026-09-04 a signed-out reader of a Public-readable article can open this mode.
+[260904c](../plans/260904c-more-modes-on-a-shared-link.md) § Stage 2, and
+[`src/web/visitor.ts`](../../src/web/visitor.ts) now gives `diagram` an **`available`** policy where
+it had `owners-only`.
+
+**What made this the one judgement call in that table** was never the band — the default picture is
+drawn from the tree already on the page and costs nothing — but the panel, which mounts hooks that
+POST. Force is the default, so *merely opening* `?mode=diagram` bought embeddings. The carve-out was
+recorded as "real work and not slice 1a's", and it turned out to be a prop:
+[`DiagramPanel`](../../src/web/DiagramPanel.tsx) takes a `DiagramAccess` union, and the visitor arm
+
+- **pins `kind` to `sketch`**, in the component, whatever `?diagram=` says — it was `force` for one
+  day, and Greg changed the picture on 2026-09-04: *"only Sketch will be visible to those without
+  Experimental Features"*, and, asked whether a visitor could therefore *draw* one, **an
+  already-drawn Sketch only**;
+- **turns off all three fetching hooks** — `useSimilar`, `useProjection` and `useSketchCaption`;
+- **renders no picker at all**, rather than a hidden one;
+- and carries **the drawing itself**, out of the article payload.
+
+### The Sketch a visitor sees is one somebody already paid for
+
+`article_revisions.sketch` crosses as `PublicSketch` — `title`, `caption`, `scenes`, and none of
+`version`, `generator`, `slug`, `sourceHash` or **`profileHash`**, that last being *who the picture
+was drawn for* and so a fact about a person rather than about the article.
+
+**`useSketch` is mounted in exactly one place**, `OwnerSketch`, and that is the boundary rather than
+a tidy-up: the hook carries the auto-runner, so **mounting it is the decision to spend**.
+`SketchView` was split on 2026-09-04 into that owner half and a presentational `SketchBody`, and the
+visitor arm of `SketchAccess` **has no slug in it** — there is nothing to hand a hook even if
+somebody wired one.
+
+**Most articles have no sketch**, because `sketch` is not in `DEFAULT_INGEST_STEPS`. So the
+commonest thing a visitor meets here is *"Nobody has drawn this one yet."* and nothing else — where
+the owner's version of that screen names the price and carries the button.
+`tests/public-network-trace.test.tsx` asserts the visitor's carries neither, and handing a visitor
+the owner's arm turns eleven of its tests red.
+
+**The pin is the gate; the missing picker is only presentation.** `?diagram=` is ordinary query
+state, so a pasted `?diagram=trail` — or the Back button onto one — names a picture without pressing
+anything. `tests/public-network-trace.test.tsx` asserts, once per kind, that arriving at each of the
+five buys nothing; removing the pin turns `sketch` and `illustrated` red, which was checked rather
+than assumed.
+
+**`useSketchCaption` is the one an audit of the other two misses**, and it is worth knowing why. It
+had no `enabled` argument at all — for an owner there is no purchase to gate, so it never needed
+one — which made it an unconditional GET to an authenticated route on every mount of this panel. It
+now takes `string | null` and issues no request for `null`, rather than catching the 401, for the
+reason [silent-success.md](../reusable/silent-success.md) gives: catching it is the right answer
+with the wrong reasoning, and stops being the right answer the day the gate moves.
+
+**What a visitor loses** is the dotted semantic layer over Force, which is what `useSimilar` buys.
+`similar.pairs` is a shared empty array while the hook is idle and `buildGraph` takes it as an
+argument, so the hierarchy, sequence, anchor and vocabulary edges all draw as usual.
+
+**And they do get a button for it**, since 2026-09-04: Diagram came out from behind the
+experimental-features switch, so it is in the bar a signed-out reader sees as well as being reachable
+by a shared `?mode=diagram` URL. What their switch — off by decision — still decides is the picture
+chips, and they have none of those anyway: a visitor gets no picker at all.
+[experimental-features.md](experimental-features.md), and
+[Who sees which chip](#who-sees-which-chip-2026-09-04) above.
+
+**And the picture they get is the Sketch, not Force** — later the same day, and the two changes were
+made by different hands within an hour. See the section above.
 
 ## What is deliberately not here
 

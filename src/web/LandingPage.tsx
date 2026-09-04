@@ -91,7 +91,12 @@ export function LandingPage() {
 
   return (
     <div className="site tw:font-sans tw:text-muted-foreground">
-      <SiteNav here="home" />
+      {/* **`signedIn={false}` is a fact about this page, not a guess.** App.tsx
+          reaches for `LandingPage` only in its signed-out branch — a signed-in
+          reader at `/` gets the shelf — so there is no reader here who has an
+          account open, and the sign-in panel this page carries is the whole
+          point of it. SiteBits.tsx § `signedIn`. */}
+      <SiteNav here="home" signedIn={false} />
 
       {/* ------------------------------------------------------- the hero --
           `overflow-hidden` is load-bearing twice: it clips the glow, which is
@@ -303,7 +308,11 @@ export function LandingPage() {
             rule PlanCards.tsx states in full. */}
         <H2 eyebrow="Plans">Simple, and reading is never gated.</H2>
         <div className="site-reveal">
-          <WebsitePlans />
+          {/* **`recommend`, because this page only ever has a stranger on it**
+              — App.tsx renders `LandingPage` from its signed-out branch alone —
+              and a stranger reading a page of plans is deciding between them.
+              PlanCards.tsx § `recommended`. */}
+          <WebsitePlans recommend />
           {/* [tissue] The same three rows are on `/pricing`, which exists to be
               an address you can send somebody rather than a page with more on
               it. Same shape as the features link above. */}

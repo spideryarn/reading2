@@ -81,6 +81,7 @@ listed here; the names under each are files in `docs/project/`.
   each job uses) · `supabase-local.md` · `version-control.md` · `deployment.md` ·
   `vercel-hosting-deployment.md` (reading the logs) · `sentry-error-monitoring.md` · `logging.md` ·
   `feedback.md` (the Feedback button, and where a bug report goes) ·
+  `feedback-reports.md` (and what an agent does with one afterwards) ·
   `hetzner-remote-server-box.md` (the always-on box, and `gjd-remote`) ·
   `worktrees.md` (one tree per agent, and how to start one)
 

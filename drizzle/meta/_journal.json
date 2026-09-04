@@ -470,6 +470,20 @@
       "when": 1788505820903,
       "tag": "20260904071020_billing_cancel_at_and_quota_delta",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1788522663938,
+      "tag": "20260904115103_checkpoints_hierarchy_structure",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1788544682883,
+      "tag": "20260904175802_articles_public_listing",
+      "breakpoints": true
     }
   ]
 }

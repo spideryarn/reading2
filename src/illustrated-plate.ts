@@ -142,7 +142,7 @@ import type { BlockId } from "./types.js";
  * Bump it whenever `SYSTEM` or `renderPrompt` changes what the model is asked.
  * It also feeds `inputFingerprint`, so a bump marks every stored plate stale.
  */
-export const ILLUSTRATED_VERSION = "illustrated/2";
+export const ILLUSTRATED_VERSION = "illustrated/3";
 
 /**
  * **How many plates one run may draw**, and it is one character to change.
@@ -216,6 +216,38 @@ export const MAX_STYLE_CHARS = 600;
 export const MAX_TITLE_CHARS = 200;
 /** A sketch node id, which the model copies from the scene. */
 export const MAX_NODE_CHARS = 80;
+/**
+ * **The caption lettered under one vignette, in the picture itself** — forty
+ * characters, and characters is the whole of it.
+ *
+ * A *design* bound rather than a safety one, which is a change from what the ban
+ * it replaced was for: the 2026-09-04 spike put 111 supplied strings through
+ * `google/gemini-3.1-flash-image` and got every character back correct, full
+ * sentences included, so no cap here is load-bearing for spelling
+ * (docs/research/260904a-nano-banana-text-in-generated-images.md § The verdict).
+ * It exists because a short title reads under a small vignette at 288 px and a
+ * long one does not.
+ *
+ * **There was a four-word cap beside it for one afternoon, and it was the wrong
+ * measure.** Characters are what decide whether a caption fits under a scene;
+ * words are a proxy that gets `ALL ROADS TO HUGGING FACE` (25 characters) wrong.
+ * And because the caption rule is all-or-nothing per plate, that proxy was
+ * expensive: on a real run, 2026-09-04, two five-word titles cost two whole
+ * plates every caption they had, over strings that would have lettered
+ * perfectly. One cap, on the thing actually being bounded.
+ */
+export const MAX_VIGNETTE_TITLE_CHARS = 40;
+/**
+ * How much of a scene's description goes into the caption list beside its
+ * title.
+ *
+ * Only enough to say *which* scene, because the composition has already
+ * described it at length a few lines further down the same prompt — this is a
+ * pointer into that, not a second copy of it. It is also stored on the plate,
+ * so an uncapped `depicts` here would put a second copy of every description in
+ * the artefact.
+ */
+export const MAX_CAPTION_WHERE_CHARS = 200;
 /** Our own sentence saying why a plate has no picture. Not exported: one file
     writes it (`plateFailed`) and the same file reads it back. */
 const MAX_FAILED_CHARS = 200;
@@ -243,6 +275,35 @@ export interface IllustratedVignette {
   quote: string;
   /** What the illustrator draws. Free text from a model — treat as untrusted. */
   depicts: string;
+  /**
+   * **The caption lettered under this vignette in the picture** — at most 40
+   * characters, upper-cased by us so the picture and the legend cannot disagree.
+   *
+   * This copy is the *reader's*: it is what the row under the plate shows, so
+   * somebody who has read a title off a vignette can find the row it belongs
+   * to. What the illustrator was actually told to letter is the plate's
+   * `lettering`, which is a longer list — it covers the dropped vignettes too,
+   * because those are still drawn. The two are written from the same strings in
+   * the same pass, and a plate drawn with no lettering has neither.
+   *
+   * It is a caption, not a claim. The checked, block-local sentence stays in the
+   * HTML legend under the picture, because a correctly-spelt caption on the
+   * wrong vignette is a better-looking lie than a garbled one.
+   */
+  title?: string;
+}
+
+/**
+ * **One caption, bound to the scene it is lettered under.**
+ *
+ * `where` is the vignette's own `depicts`, folded to one line and capped, so the
+ * title has a place on the page rather than floating — every draw in the
+ * 2026-09-04 spike put a bound title under the right scene, and an unbound one
+ * is untested. Both fields are model text; neither is a claim about the article.
+ */
+export interface PlateCaption {
+  where: string;
+  title: string;
 }
 
 /** Everything about a plate the brief model writes, before anybody draws it. */
@@ -253,6 +314,23 @@ export interface IllustratedPlateBrief {
   /** The composition prompt that was sent to the image model. Shown to the reader. */
   prompt: string;
   vignettes: IllustratedVignette[];
+  /**
+   * **What the illustrator was told to letter — every scene the composition
+   * draws, or nothing at all.**
+   *
+   * Not the same list as `vignettes`, and the difference is the whole point.
+   * `vignettes` is what survived checking and is what the reader may click;
+   * this is what is *drawn*, which includes the vignettes that were dropped —
+   * because a drop cannot be excised from the composition prose without
+   * mangling it, so the scene is still on the page
+   * (docs/project/diagram.md § Illustrated). Leaving those uncaptioned is the
+   * one arrangement measured to make the model invent a word and misspell it.
+   *
+   * `undefined` means *this plate is drawn with no lettering at all*, which is
+   * what happens when any drawn scene could not be given a caption. See
+   * `readVignettes`.
+   */
+  lettering?: PlateCaption[];
 }
 
 /**
@@ -272,14 +350,24 @@ export type IllustratedPlate =
 /**
  * Where a plate's bytes are, never the bytes themselves.
  *
- * Content-addressed in the blob store under `canonicalKey(sha256, "jpeg")`, the
+ * Content-addressed in the blob store under `canonicalKey(sha256, ext)`, the
  * same machinery the article's own figures use. **Never base64 in the
  * artefact** — that column would then be dragged along by every read of the
  * revision. Stage 3 puts the bytes there; this is the shape it writes.
+ *
+ * **`ext` is a field and not a constant**, since 2026-09-04. It was `"jpeg"`
+ * only, which was true while `openai/gpt-image-2` honoured `output_format`;
+ * `google/gemini-3.1-flash-image` does not, and returns PNG whatever it is
+ * asked. Stored plates of both kinds now exist side by side, so every reader of
+ * this record — the route, the panel, the store key — takes the extension from
+ * here rather than assuming one. src/illustrated-image.ts § PNG has why we
+ * store the PNG rather than re-encoding it.
  */
+export type IllustratedImageExt = "jpeg" | "png";
+
 export interface IllustratedImage {
   sha256: string;
-  ext: "jpeg";
+  ext: IllustratedImageExt;
   bytes: number;
   width: number;
   height: number;
@@ -287,8 +375,8 @@ export interface IllustratedImage {
 
 /** The same plate, now with the picture that was drawn for it. */
 export function plateDrawn(plate: IllustratedPlate, image: IllustratedImage): IllustratedPlate {
-  const { sceneId, title, prompt, vignettes } = plate;
-  return { sceneId, title, prompt, vignettes, image };
+  const { sceneId, title, prompt, vignettes, lettering } = plate;
+  return { sceneId, title, prompt, vignettes, ...(lettering ? { lettering } : {}), image };
 }
 
 /**
@@ -298,9 +386,9 @@ export function plateDrawn(plate: IllustratedPlate, image: IllustratedImage): Il
  * already inside the bound a re-read enforces.
  */
 export function plateFailed(plate: IllustratedPlate, why: string): IllustratedPlate {
-  const { sceneId, title, prompt, vignettes } = plate;
+  const { sceneId, title, prompt, vignettes, lettering } = plate;
   const failed = why.trim().slice(0, MAX_FAILED_CHARS) || "the plate could not be drawn";
-  return { sceneId, title, prompt, vignettes, failed };
+  return { sceneId, title, prompt, vignettes, ...(lettering ? { lettering } : {}), failed };
 }
 
 export interface Illustrated {
@@ -428,6 +516,27 @@ function bounded(v: unknown, cap: number, what: string): { ok: string } | { bad:
   return { ok: s };
 }
 
+/**
+ * One vignette's caption, checked and upper-cased — **not** repaired.
+ *
+ * The upper-casing is the one normalisation here and it is not a repair in the
+ * sense this file usually refuses: it changes no word, invents nothing, and it
+ * is applied to the string that goes into *both* the image prompt and the
+ * reader's legend, so the caption in the picture and the caption in the row are
+ * the same characters by construction. Asking the model for capitals and then
+ * passing whatever came back would let the two disagree, which is a small lie
+ * about a picture we are otherwise careful not to lie about.
+ *
+ * `toUpperCase()` and not `toLocaleUpperCase()`: the locale forms differ by
+ * machine, and a caption that came out differently on Vercel than on a laptop
+ * would be a plate that failed to dedup against itself.
+ */
+function readVignetteTitle(raw: unknown): { ok: string } | { bad: string } {
+  const title = bounded(raw, MAX_VIGNETTE_TITLE_CHARS, "title");
+  if ("bad" in title) return title;
+  return { ok: title.ok.toUpperCase() };
+}
+
 function readVignette(
   raw: unknown,
   opts: IllustratedReadOptions,
@@ -474,6 +583,19 @@ function readVignette(
   if ("bad" in depicts) return drop(depicts.bad);
 
   const vignette: IllustratedVignette = { block, quote: quote.ok, depicts: depicts.ok };
+  /* **A title is optional here and expensive to lose**, which is the opposite of
+     `node` below and is deliberate. Absent or unusable, the vignette still
+     stands — but the plate it is on is then drawn with no lettering at all,
+     because a picture that captions nine of its ten scenes is exactly the shape
+     that made the model invent a word for the tenth and misspell it. That
+     decision is `lettersFor`'s, which sees every vignette the model wrote and
+     not only the survivors; this only reads the reader's copy of the string,
+     and says nothing when there is none — `lettersFor` faults once per plate,
+     where ten silent omissions are one fact about the brief rather than ten. */
+  if (!missing(raw.title)) {
+    const title = readVignetteTitle(raw.title);
+    if ("ok" in title) vignette.title = title.ok;
+  }
   /* `node` is optional, so absence is fine and *rubbish* is not: a vignette
      carrying eighty characters of junk where a scene node id belongs is a
      vignette the model was not writing carefully. Dropping it is the same rule
@@ -647,13 +769,22 @@ function readPlate(
     return drop("a brief may not name an image or a failure — the whole plate is dropped");
   }
 
-  const { vignettes, written } = readVignettes(raw.vignettes, opts, faults, where);
+  const { vignettes, written, lettering } = readVignettes(raw.vignettes, opts, faults, where, trust);
 
   const brief: IllustratedPlateBrief = {
     sceneId,
     title: readTitle(raw.title, faults, where, trust),
     prompt: prompt.ok,
-    vignettes,
+    /* **The reader's copy of the captions goes only where the picture has
+       them.** `lettering` is what the illustrator was told to letter; if there
+       is none, the plate is wordless and a caption in the row beneath would be
+       pointing at something that is not on the page. See `lettersFor`.
+
+       On the stored path `lettering` is `null` because it is not recomputed
+       there — the titles the reader sees are the ones in the pixels of a
+       picture already paid for, and a re-read must not take them away. */
+    vignettes: trust === "stored" || lettering ? vignettes : vignettes.map(({ title: _t, ...r }) => r),
+    ...(lettering ? { lettering } : {}),
   };
 
   if (vignettes.length === 0) {
@@ -671,6 +802,76 @@ function readPlate(
 }
 
 /**
+ * **Caption every drawn vignette, or none** — and the load-bearing word is
+ * *drawn*, which is not the same list as *kept*.
+ *
+ * The one thing `google/gemini-3.1-flash-image` got wrong across the whole
+ * 2026-09-04 spike was a word nobody asked it for: given a composition that drew
+ * eleven things and a caption list naming ten, it lettered the eleventh anyway,
+ * and that invented string — `MALL TISSUE BLOB`, which is `SMALL` with its first
+ * letter eaten — is the *only* misspelling in 111 supplied strings. The model
+ * spells what it is told to spell; it fills a gap when there is one.
+ *
+ * **A dropped vignette is that gap**, and this pipeline makes it on purpose:
+ * `readVignette` drops a vignette whose quote is not in the block it names, and
+ * the composition prose the same model wrote **still describes the thing**,
+ * because it cannot be un-written without mangling the paragraph
+ * (docs/project/diagram.md § *A drop protects the navigation, not the
+ * picture*). So the caption list is built from what the model **wrote**, not
+ * from what survived — every scene on the page gets the title its author gave
+ * it, and the reader's legend goes on listing only the vignettes that checked
+ * out.
+ *
+ * **The first design was the other way round and it was wrong on the page.**
+ * Stripping every title from a plate that lost a vignette was measured on
+ * 2026-09-04: the plate came back lettered anyway, because the brief model
+ * writes its titles *into the composition prose* as well — `(SWARM OF AGENTS)`,
+ * in place — where our "render no text" envelope simply lost the argument. It
+ * lettered ten of eleven scenes correctly and repeated one caption on the
+ * twelfth. A guarantee that the picture ignores is not a guarantee, and a
+ * wordless branch nothing can actually deliver is worse than no branch, because
+ * it is written down.
+ *
+ * `null` is still reachable, and means *this plate carries no lettering at all*:
+ * a scene the model gave no title, a title over the character cap or full of
+ * control characters, or vignettes past `MAX_VIGNETTES` that were never read and so
+ * cannot be counted. In each of those there is genuinely a scene we cannot
+ * name, and a wordless plate is the honest answer — it is the behaviour this
+ * feature had until 2026-09-04, and it is merely disappointing rather than
+ * false.
+ */
+function lettersFor(
+  written: readonly unknown[],
+  overCap: boolean,
+  faults: IllustratedFault[],
+  where: string,
+): PlateCaption[] | null {
+  const none = (why: string): null => {
+    faults.push({ where, what: `${why} — this plate is drawn with no lettering at all` });
+    return null;
+  };
+  if (written.length === 0) return null;
+  if (overCap) return none(`more than ${MAX_VIGNETTES} vignettes, so some scenes were never read`);
+  const captions: PlateCaption[] = [];
+  for (const [i, raw] of written.entries()) {
+    if (!isObj(raw)) return none(`vignette ${i} is not an object`);
+    const title = readVignetteTitle(raw.title);
+    if ("bad" in title) return none(`vignette ${i}: ${title.bad}`);
+    /* **The scene's own description, folded to one line and capped.** The list
+       in the image prompt is line-oriented, so a newline in `depicts` would turn
+       one caption into two half-instructions; and `where` only has to identify
+       the scene, which the composition has already described at length. */
+    const depicts = bounded(raw.depicts, MAX_DEPICTS_CHARS, "depicts");
+    if ("bad" in depicts) return none(`vignette ${i}: ${depicts.bad}`);
+    captions.push({
+      where: depicts.ok.replace(/\s+/g, " ").slice(0, MAX_CAPTION_WHERE_CHARS),
+      title: title.ok,
+    });
+  }
+  return captions;
+}
+
+/**
  * The vignettes of one plate: parsed, capped, de-duplicated, and counted for
  * the report **as the model wrote them** rather than as they survived.
  */
@@ -679,7 +880,8 @@ function readVignettes(
   opts: IllustratedReadOptions,
   faults: IllustratedFault[],
   where: string,
-): { vignettes: IllustratedVignette[]; written: number } {
+  trust: Trust,
+): { vignettes: IllustratedVignette[]; written: number; lettering: PlateCaption[] | null } {
   let all: unknown[] = [];
   if (Array.isArray(raw)) all = raw;
   else if (!missing(raw)) faults.push({ where, what: "vignettes is not a list" });
@@ -709,7 +911,22 @@ function readVignettes(
     vignettes.push(v);
   }
 
-  return { vignettes, written: all.length };
+  /* **Built from `looked`, not from `vignettes`** — see `lettersFor`. The
+     duplicates dropped just above are deliberately still in it: the composition
+     drew the scene twice, so it needs a caption twice, and one uncaptioned copy
+     is exactly the gap this exists to close.
+
+     **And only from a model.** A stored plate's list is what was *actually*
+     asked of the illustrator, which included the vignettes this artefact no
+     longer contains — recomputing it from the survivors would produce a shorter
+     list and call it the record. Nothing on the stored path reads it, so it is
+     simply not answered. */
+  return {
+    vignettes,
+    written: all.length,
+    lettering:
+      trust === "model" ? lettersFor(looked, all.length > looked.length, faults, where) : null,
+  };
 }
 
 /**
@@ -792,7 +1009,14 @@ function countVignettes(raw: unknown): number {
 function readImage(raw: unknown): IllustratedImage | null {
   if (!isObj(raw)) return null;
   const sha256 = str(raw.sha256);
-  if (!/^[0-9a-f]{64}$/.test(sha256) || raw.ext !== "jpeg") return null;
+  if (!/^[0-9a-f]{64}$/.test(sha256)) return null;
+  /* **A closed set, checked, not a string carried through.** `ext` reaches
+     `canonicalKey` and `CONTENT_TYPE`, so anything else here would be a lookup
+     miss at best and a wrong `Content-Type` on bytes a stranger's model drew at
+     worst. Widened from `"jpeg"` on 2026-09-04; see `IllustratedImage`. */
+  const ext: IllustratedImageExt | null =
+    raw.ext === "jpeg" ? "jpeg" : raw.ext === "png" ? "png" : null;
+  if (!ext) return null;
   const nums: Record<"bytes" | "width" | "height", number> = { bytes: 0, width: 0, height: 0 };
   for (const k of ["bytes", "width", "height"] as const) {
     const v = raw[k];
@@ -801,7 +1025,7 @@ function readImage(raw: unknown): IllustratedImage | null {
   }
   if (nums.bytes > MAX_IMAGE_BYTES) return null;
   if (nums.width > MAX_IMAGE_EDGE || nums.height > MAX_IMAGE_EDGE) return null;
-  return { sha256, ext: "jpeg", bytes: nums.bytes, width: nums.width, height: nums.height };
+  return { sha256, ext, bytes: nums.bytes, width: nums.width, height: nums.height };
 }
 
 /**

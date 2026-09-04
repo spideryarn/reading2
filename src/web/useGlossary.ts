@@ -22,8 +22,16 @@
  *
  * See docs/project/glossary.md.
  */
-import { useCallback, useEffect, useState } from "react";
-import type { Glossary, GlossaryEntry, GlossaryLookup, GlossaryResponse, Job } from "../types.js";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type {
+  AskedTermAnswer,
+  Glossary,
+  GlossaryEntry,
+  GlossaryLookup,
+  GlossaryResponse,
+  Job,
+} from "../types.js";
+import { ASKED_TERM_REFUSED, parseAskedTerm } from "../asked-term.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
@@ -384,6 +392,30 @@ export interface UseGlossary {
   looking: string | null;
   /** Why the last lookup failed, if it did. Cleared when another is started. */
   lookFailed: string | null;
+  /**
+   * Find a term the reader typed **in the article** and explain the passage it
+   * is in — the box at the top of the panel.
+   *
+   * A reader asked for a search box that would "look for that term and add it
+   * to the glossary" (2026-09-04, `[SPIDERYARN-READING2-Y]`). This is the first
+   * half; **the second is deferred and nothing is stored**, so the answer lives
+   * in this hook's state and goes when the reader leaves the article. The three
+   * reasons are on `AskedTermAnswer` in src/types.ts, and the one that decides
+   * it is that the glossary document is published with a shared article.
+   *
+   * Which is why the answer is **not** merged into `glossary` by `patchEntry`:
+   * there is no entry to merge it into, and inventing one client-side would put
+   * a row on screen that the next reload silently removes.
+   */
+  ask(term: string): Promise<void>;
+  /** True while the box's call is out. One at a time, like `look`. */
+  asking: boolean;
+  /** The last answer the box got, or null. Never stored, never in the URL. */
+  asked: AskedTermAnswer | null;
+  /** Why the last one was refused, if it was. Carries a `[gl-ask-…]` code. */
+  askFailed: string | null;
+  /** Put the box back to empty — the reader's dismiss. */
+  clearAsked(): void;
 }
 
 /**
@@ -397,6 +429,9 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
   const hasProfile = useHasProfile(slug);
   const [looking, setLooking] = useState<string | null>(null);
   const [lookFailed, setLookFailed] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [asked, setAsked] = useState<AskedTermAnswer | null>(null);
+  const [askFailed, setAskFailed] = useState<string | null>(null);
 
   /**
    * Revalidate on mount, behind whatever is on screen.
@@ -539,6 +574,93 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     [slug, looking, patchEntry],
   );
 
+  /**
+   * The box at the top of the panel: find a term in the prose and explain it.
+   *
+   * **The same shape as `look` above, minus the merge**, and the missing merge
+   * is the deferral: `lookUpTerm` stores its answer against an entry id and this
+   * has no entry to store against. So the answer lives here until the reader
+   * leaves. See `ask` on `UseGlossary` for why nothing is persisted.
+   *
+   * **Refused here on the same rule the server refuses on** —
+   * `parseAskedTerm`, one function reaching both halves (src/asked-term.ts) —
+   * so an empty box or eighty-one characters costs no request. The sentences
+   * are the box's own: the server's three 400s are written for a reader too,
+   * but a round trip to be told the box is empty is a round trip nobody needs.
+   *
+   * `clearAsked` before the request, not after it, so the previous answer does
+   * not sit on screen under a spinner belonging to a different term.
+   */
+  /**
+   * **Which question the answer on screen is allowed to be about.**
+   *
+   * `useOrderedRead`'s generation, in the smallest form the job needs: the box
+   * stays editable while the request is out, so a reply can arrive after the
+   * reader has typed something else — and an explanation of *attention head*
+   * sitting under a box that says *transformer* is the panel asserting something
+   * false, which is the whole fault this feature was built beside. Bumped by
+   * `clearAsked`, which every keystroke calls. GPT Sol's review of the built
+   * code.
+   *
+   * A ref, not state: it is read inside a callback that outlives its render, and
+   * the answer must be the value at the moment the reply lands rather than the
+   * one captured when the request left.
+   */
+  const askGeneration = useRef(0);
+
+  const ask = useCallback(
+    async (term: string) => {
+      if (asking) return;
+      const parsed = parseAskedTerm(term);
+      if (!parsed.ok) {
+        setAsked(null);
+        /* **The server's own sentence, from the file both halves import.** Not a
+           second set of words for the same rule: a reader must not be told two
+           different things by one check depending on which side caught it.
+           src/asked-term.ts § `ASKED_TERM_REFUSED`. */
+        setAskFailed(ASKED_TERM_REFUSED[parsed.fault]);
+        return;
+      }
+      const mine = ++askGeneration.current;
+      setAsking(true);
+      setAsked(null);
+      setAskFailed(null);
+      try {
+        const res = await apiFetch(`/api/glossary/${encodeURIComponent(slug)}/ask`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ term: parsed.term }),
+        });
+        const answer = await readJson<AskedTermAnswer>(res);
+        /* After the await, not before: the reader can type during the read as
+           well as during the request. */
+        if (askGeneration.current === mine) setAsked(answer);
+      } catch (err) {
+        if (askGeneration.current === mine) setAskFailed((err as Error).message);
+      } finally {
+        /* **Always**, superseded or not. The request is over either way, and
+           leaving `asking` true would disable the button for the rest of the
+           visit — the failure mode of guarding a `finally` with the generation
+           it was about to discard. */
+        setAsking(false);
+      }
+    },
+    [slug, asking],
+  );
+
+  /**
+   * Put the box back to nothing, **and disown whatever is in flight.**
+   *
+   * The bump is the half that is not obvious: with an answer already on screen
+   * the two `setState`s are the whole of it, but during a request there is
+   * nothing on screen to clear and the reply is still coming.
+   */
+  const clearAsked = useCallback(() => {
+    askGeneration.current += 1;
+    setAsked(null);
+    setAskFailed(null);
+  }, []);
+
   return {
     status,
     glossary,
@@ -561,5 +683,10 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     look,
     looking,
     lookFailed,
+    ask,
+    asking,
+    asked,
+    askFailed,
+    clearAsked,
   };
 }

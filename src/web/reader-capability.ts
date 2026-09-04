@@ -31,7 +31,7 @@
  * on *am I signed in*. That is Greg's rule and it is what makes the read-only
  * chrome one thing rather than two.
  */
-import type { Glossary, ThreadSummary } from "../types.js";
+import type { Comment, Glossary, ThreadSummary } from "../types.js";
 import type { PublicArtefactSet, PublicArtefacts } from "../public-types.js";
 import type { GlossaryRead } from "./useGlossary.js";
 import type { ChatAnchorsApi } from "./useChatAnchors.js";
@@ -61,6 +61,23 @@ export type ReaderCapability =
     }
   | {
       kind: "visitor";
+      /**
+       * **The owner's comments, read-only** — since 2026-09-04.
+       *
+       * The paragraph below is about artefacts and applies word for word here:
+       * this is *data rather than a loader*. The owner's arm carries a
+       * `CommentsApi` — a status, an error, and the verbs to add, edit, deepen
+       * and delete — because theirs is a request in flight over a table they
+       * can write to. A visitor's comments arrived inside the page's own
+       * payload and they may do exactly one thing with them, which is read
+       * them, so what they get is an array.
+       *
+       * **The absence of the verbs is the enforcement**, not a `readOnly` flag
+       * beside them: there is no `create` here for a later edit to reach, in
+       * the same way there was no `comments` field at all before this.
+       * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
+       */
+      comments: Comment[];
       /**
        * **The artefacts this piece has, as data rather than as a loader.**
        *

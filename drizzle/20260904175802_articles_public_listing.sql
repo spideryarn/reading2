@@ -1,0 +1,1 @@
+CREATE INDEX "articles_public_listing" ON "spideryarn"."articles" USING btree ("public_at" DESC NULLS LAST,"slug") WHERE "spideryarn"."articles"."visibility" = 'public';

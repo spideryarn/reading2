@@ -90,6 +90,8 @@ export const NOUN: Record<keyof PublicArtefacts, string> = {
   ideas: "a list of ideas",
   quotes: "a set of quotes",
   tweets: "a tweet thread",
+  timeline: "a timeline",
+  sketch: "a sketch",
 };
 
 /**
@@ -179,41 +181,64 @@ const POLICY: Record<Mode, VisitorPolicy> = {
   chat: { kind: "owners-only" },
   remember: { kind: "owners-only" },
   /**
-   * **Diagram is `owners-only` rather than `artefact`, and it is the one
-   * judgement call in this table.**
+   * **Diagram became `available` on 2026-09-04, and the carve-out the old
+   * comment said was "real work and not slice 1a's" turned out to be a prop.**
    *
-   * The band itself fetches nothing — the default picture is drawn from the
-   * tree that is already on the page, and a visitor could have it for free. But
-   * `DiagramPanel` mounts `useSimilar` and `useProjection` for its other two
-   * pictures, both of which are POSTs that embed and therefore spend, so a
-   * visitor who pressed *graph* would issue exactly the request the acceptance
-   * test for this slice forbids.
+   * What stood here: the band itself fetches nothing — the default picture is
+   * drawn from the tree already on the page and a visitor could have it for
+   * free — but `DiagramPanel` mounts hooks that POST for embeddings, so a
+   * visitor pressing *graph* would issue exactly the request the acceptance
+   * test for this feature forbids. That was true, and it was the one judgement
+   * call in this table.
    *
-   * Carving the free picture out of a 1700-line panel is real work and it is
-   * not slice 1a's. Marked whole, deliberately, and recorded here rather than
-   * discovered later. 2026-08-28.
+   * It is `available` because the panel now takes a `DiagramAccess` union
+   * (DiagramPanel.tsx) rather than assuming an owner. A visitor's arm pins the
+   * picture to Force and turns off **three** fetching hooks — `useSimilar`,
+   * `useProjection` and `useSketchCaption`, the third of which had no `enabled`
+   * argument at all and is the one an audit of the other two misses. Force
+   * draws without embeddings: `similar.pairs` is a shared empty array while the
+   * hook is idle, so what a visitor loses is the dotted semantic layer.
+   *
+   * **The pin is the safety property, not the hidden chip row.** `?diagram=` is
+   * ordinary query state, so a pasted `?diagram=trail` walks past a filtered
+   * picker; the value is forced in the component, where nothing can route round
+   * it. docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2.
+   *
+   * `available` rather than `artefact`, because there is no artefact: the
+   * picture comes from the tree in the payload every reader already holds, the
+   * same bargain `outline` and `summary` make.
    */
-  diagram: { kind: "owners-only" },
+  diagram: { kind: "available" },
   /**
-   * **Timeline is owners-only in v1, stated rather than defaulted into.**
+   * **Timeline became an artefact mode on 2026-09-04**, and it was
+   * `owners-only` before that — stated rather than defaulted into, which is
+   * what made this a decision to revisit rather than an omission to discover.
+   * Greg had said at the time:
    *
-   * The fall-through this table used to have would have made it owners-only
-   * anyway, which is exactly why it was named: a mode that is private because
-   * nobody listed it and a mode that is private because somebody decided so are
-   * indistinguishable in the code, and the second is what this is. Greg,
-   * 2026-08-31: *"it would be nice to have the option for this to be
-   * Public-readable, but that could be a follow-up"* — and doing it properly
-   * wants a general answer for all the modes rather than a fifth hand-written
-   * table, so it is a separate piece of work.
+   * > it would be nice to have the option for this to be Public-readable, but
+   * > that could be a follow-up
+   * >
+   * > — Greg, 2026-08-31
    *
-   * It is `owners-only` rather than `artefact` because there is no
-   * `PublicArtefacts` flag to read: a shared payload carries no timeline at
-   * all. The sentence a visitor gets is therefore *this belongs to whoever
-   * added the article*, which is true, rather than *nobody has built one*,
-   * which we cannot know from here.
-   * docs/plans/260831i-timeline-mode.md § Making a mode public-readable.
+   * This is that follow-up. What changed is not the cost — reading
+   * `article_revisions.timeline` never cost anything, and only *generating* a
+   * timeline spends — but that the payload now carries the artefact, so there
+   * is a flag to read. That is the whole distinction the old comment named:
+   * it was `owners-only` rather than `artefact` *because there was no
+   * `PublicArtefacts` flag*, so a visitor could only be told *this belongs to
+   * whoever added the article*, never *nobody has built one*. Now we can tell
+   * them which it is.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1.
+   *
+   * **The bar still does not draw the button for a signed-out reader**, and
+   * that is a separate switch rather than this one: Timeline is behind
+   * experimental features, and a signed-out reader is `experimental: false` by
+   * decision. They reach it by a shared `?mode=timeline` URL and from the
+   * visitor's metadata page. Greg accepted that on 2026-09-04 rather than
+   * inherit it. docs/project/experimental-features.md § Hidden means hidden
+   * from the controls, not unreachable.
    */
-  timeline: { kind: "owners-only" },
+  timeline: { kind: "artefact", key: "timeline" },
   /**
    * **Referee is `timeline`'s case, and it arrived here the slow way.**
    *

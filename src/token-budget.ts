@@ -92,6 +92,14 @@ export const MODEL_MAX_TOKENS = 128_000;
  * and writes a dozen labels does not need it and should pass its own, smaller
  * figure to `budgetFor` — see `LABEL_HEADROOM` in src/labels.ts. Inheriting
  * 40,000 onto every small batch would be the wrong lesson from this number.
+ *
+ * **And a stage that meets longer inputs than this was measured on needs its
+ * own, larger figure** — the same argument in the other direction. On
+ * 2026-09-04 a 142-page paper's structure call was measured spending 47,289
+ * tokens of reasoning, over this reservation, and came back whole; had it been
+ * sized with this number it would have truncated eight minutes and two dollars
+ * in. So stage 4 passes `STRUCTURE_HEADROOM` (src/hierarchy.ts) instead. This
+ * constant is a default, not a rule.
  */
 export const THINKING_HEADROOM = 40_000;
 

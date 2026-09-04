@@ -116,6 +116,103 @@ Resolution goes through `internalTarget` in [`internal-links.ts`](../../src/web/
 fragment lands. It returns null for a fragment this document does not answer to, and then there is no
 card: an honest "we cannot tell you" rather than a panel about nothing.
 
+## Every link that leaves the app opens a new tab
+
+> So I'm using Spideryarn shared to home page, and so if I click the link I certainly don't want it
+> to open instead of Spideryarn, so then I have to click back. I wanted to open in a new blank tab
+> or whatever.
+>
+> — Greg, 2026-09-04 ([SPIDERYARN-READING2-10](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-10))
+
+The load-bearing half of that is **"shared to home page"**. Added to an iPad's home screen the app
+runs standalone: no address bar, no back button. A link that navigates in place therefore replaces
+the whole of Spideryarn with somebody else's page and leaves nothing to come back with. On a desktop
+the same click only loses the reader's place — worse than a new tab, and not an emergency — and it
+is one rule on both, because two behaviours would be two things to explain.
+
+So an `http(s)` link whose origin is not ours gets `target="_blank" rel="noopener noreferrer"`, and
+**the browser does the rest natively**: a middle click, a ⌘-click and a long-press *Open in New Tab*
+all behave exactly as they do everywhere else, which is what an interception in a click handler
+would have taken away.
+
+**It is written at ingress, beside the browser sanitiser and not inside it**
+([`src/web/external-links.ts`](../../src/web/external-links.ts), applied by `sanitizeArticle` in
+[`src/web/sanitize.ts`](../../src/web/sanitize.ts)), and that placement is two decisions rather than
+one.
+
+*Not in the pipeline*, because `ARTICLE_CONFIG` governs what is *stored* — the export, the public
+payload, every model prompt — and this is a fact about our reading view, not about the author's
+markup. Running at ingress also means it reaches every article already on the shelf, with nothing
+re-extracted, and it reaches **every** sink `block.html` is later injected into: the prose column,
+the note preview card (whose links are live, outside `.prose`, and mostly external), and the figure
+lightbox. A pass bolted onto one sink would leave the other two navigating in place.
+
+*Not inside the sanitiser*, because the two sanitiser bindings have to be the same function. It was
+written as a client-only DOMPurify hook on 2026-09-04 and the browser binding immediately stopped
+matching the server one — `tests/sanitize-client.test.ts` went red the same day, and the comment at
+the top of it is the argument: two passes that disagree "look like defence in depth and are really
+two half-policies". A sanitiser answers *what is allowed*; where a link opens is *how it is
+presented*. So it is one policy, identical on both sides, and then this, afterwards, on the browser
+only. There is no per-render cost: it runs once per article load, not on the render path
+[`tests/prose-not-rebuilt.test.tsx`](../../tests/prose-not-rebuilt.test.tsx) guards.
+
+**`target` is not in the sanitiser's allowlist, and that is what makes it safe.** DOMPurify drops an
+author's own `target` (measured 2026-09-04; `tests/prose-links-new-tab.test.ts` pins it), so by the
+time the second pass runs no anchor carries one and the only `target` a reader can meet is ours — a
+publisher cannot aim a link at `_top`. **That is why the order is sanitise, then rewrite**, and it is
+the reason the two passes cannot simply be swapped for convenience. *A comment in `TableView.tsx`
+claimed the sanitiser kept an article's `target`; it never did.*
+
+Left alone: an in-article `#fragment`, a relative href, a `mailto:` or `tel:` — a blank tab left
+behind by a hand-off to another app is litter — and a link back into Spideryarn, which should stay
+in Spideryarn.
+
+**"Every link" means more than `<a href>`.** An `<area>` in an image map is a link, and so is an
+`<a>` inside inline SVG, which may spell its destination `xlink:href`; all three survive the
+sanitiser. There are **0 of any of them in 5,301 stored blocks** (measured 2026-09-04), so this is the
+promise being true rather than a hole being closed — but a promise with three quiet exceptions is not
+one, and nothing else would ever have noticed. An SVG anchor that said only `xlink:href` is also
+given a plain `href`, so the hover card, `internalTarget` and the touch rule all find the link the
+same way this pass did; widening the rewrite without that would have swapped one disagreement for
+another. Found by a GPT Sol review, 2026-09-04.
+
+### On a coarse pointer the first tap reveals and the second opens
+
+> What I wanted was for it to first show me a pop up about the web link. And then perhaps if I click
+> again it should open it in a new page or browser.
+>
+> — Greg, same report
+
+The spine's `bandPress` rule, which this card already used for a glossary term and for a footnote
+marker — [touch.md](touch.md#what-happens-where) has the pattern and the trap. Nothing new was
+built: `tapSelector` gained `.prose a[target="_blank"]` and `onCommit` gained a third branch.
+
+Two things about that selector are deliberate. It is keyed on **`target`, not on the href**, because
+the rule is *"a link that is about to take you out of the app shows itself first"* and that attribute
+is exactly the set of links that do — and only our own ingress can write one, so a publisher can
+neither opt in nor out. And **a glossary term inside a link still wins**: `closest` returns the
+innermost match, so a tap on the underlined words finds the `mark.term` and the link is never the
+hit. That keeps the rule a reader has already learnt for the 13% of this corpus's links whose text
+is a term ([Two things over one phrase](#two-things-over-one-phrase)); the link is still one press
+away at the card's foot. Decided against reversing it, on a GPT Sol review, 2026-09-04.
+
+The commit calls `window.open` rather than letting the click through, because the hook swallows the
+compatibility click after any tap it has acted on (`useHoverCard.ts` § `swallowed`); unpicking that
+for one consumer would be a second way of committing beside the one every other target uses. It runs
+inside the `pointerup` listener, so it is a user activation rather than a popup for a blocker to
+refuse, and it passes `noopener,noreferrer` — a `window.open` does not inherit the anchor's `rel`.
+
+**Checked in Chrome on an 834×1194 viewport with `hasTouch`, 2026-09-04**, driving CDP
+`Input.dispatchTouchEvent` rather than synthetic events, because
+[260903g](../postmortems/260903g-the-touch-card-closed-itself-on-every-tap.md) is 24 synthetic-event
+tests staying green through a bug that broke every real touch device. First tap opened the card and
+navigated nothing; a tap on a *different* link revealed that one instead; the second tap on the same
+link opened exactly one tab at the right URL with `window.opener === null`; a 140px drag opened
+nothing; a term inside a link went to `?mode=glossary&term=…` and opened no tab; a marker still
+previewed and then jumped. On a 1440×900 mouse viewport a plain click, a middle click, a ⌘-click and
+Enter all opened one tab and left the reading view where it was, and an in-article fragment still
+jumped in place.
+
 ## A footnote marker is one of those links, and it gets the note instead
 
 A superscript `1` is an in-article `#fragment` like any other, so the card above would happily draw
@@ -141,6 +238,65 @@ A marker is recognised by its `data-spya-note-ref` stamp **and** by the `role` o
 stamp resolves to — never by being inside a `<sup>`, because superscripts are also powers, ordinals
 and trademarks. The other direction is the same machinery: a note's back-links point at the passages
 that cite it, one per use, and their card says *cited here* rather than *elsewhere in this article*.
+
+## What the reader meets at the note
+
+> When I get to the bottom, I want to be able to go back and it doesn't show the number at the
+> bottom either. … if we know that they are footnotes … then we should surround them in a box, or
+> otherwise indicate that they are footnotes. But the key thing is at the bottom, they should be
+> numbered, and there should be a way back to the point in the article where they come from.
+>
+> — Greg, 2026-09-04, on `xanadu-spya-ueuvaf` ([SPIDERYARN-READING2-14](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-14))
+
+**The data was all there and none of it was drawn**, which is worth stating in that order because a
+review had guessed the opposite. Read out of that article's own public payload, 2026-09-04: nine
+notes, each `role: "footnote"`, `treatment: "supplement"`, with a `noteId`; nine markers, each
+labelled `1`…`9`; and nine back-links, every one of them the author's own `↩︎` carrying
+`data-spya-note-back`. Nothing had gone down a different path. What reached the reader was:
+
+- **No number**, because a note's body is an `<li>` and stage 3 gives every block its own row — so
+  the `<ol>` that numbered it is gone, and an orphan `<li>` numbers nothing. This is a rendering
+  gap, not a pipeline one.
+- **No boundary**, because a note is `gistable` body prose to every rule in the reading column. The
+  spine and the outline both dress a supplement differently ([granularity-zoom.md](granularity-zoom.md));
+  the prose did not, so nine notes simply followed gwern's `## Bibliography` looking like nine more
+  paragraphs.
+- **A back-link nobody could see.** It was there and it worked: a bare `↩︎`, `--ink-faint`, three
+  pixels of padding, at the end of 126 words. The reader asking for "a way back" was looking
+  straight at one. `data-came-from` was already marking the right one of them (§ above), with a 1px
+  outline on a glyph a few pixels wide.
+
+So the fix is entirely in the reading view, and it is three things:
+
+- **The region is set apart** — `td.text.note` on every block of it, `note-open` on the first, from
+  the note index rather than from `block.role`, so the stylesheet and the hover card share one
+  definition of what a note is. A rule across the top, a `--muted` ground, softer ink, and the list
+  markers dropped now that the number replaces them. `background-color` and not the `background`
+  shorthand, or the search bar down the left of a matched paragraph would be reset to none.
+- **Every note carries its number**, and it is **the author's own** — the text of the first marker
+  that cites it, in document order, so `[5]` on Wikipedia stays `[5]`. Counting was rejected: it
+  drifts the moment one note of a piece goes unrecognised, and then the marker and the note disagree
+  with nobody able to say which is lying. `Note.label` in
+  [`notes-view.ts`](../../src/web/notes-view.ts) falls back to an ordinal for a note nothing cites
+  and for a label too long to be a number.
+- **The back-link is a control.** A pill with a border, 44px square on a coarse pointer — the number
+  the bottom bar already answers to ([touch.md](touch.md#how-big-a-thing-has-to-be-to-press-it)) —
+  and the one the reader actually came by says *back to your place* in words. Only that one: a
+  Wikipedia note with thirteen back-links would be noise if every one of them were labelled, and
+  exactly one of them can be theirs.
+
+A **"Notes" heading** is drawn only where the source wrote none. Wikipedia's own `References` counts;
+**`Bibliography` deliberately does not**, because gwern's page ends with one directly above the
+notes, and reading it as their heading is how this fix would silently do nothing on the very page it
+was reported from.
+
+Seen in Chrome at 834×1194 with a coarse pointer, 2026-09-04: nine numbered notes, one *NOTES*
+heading, one 1px rule at the top of the region, back-links measuring 44×44 (30×31 under a mouse),
+and a tap on marker 7 landing at note 7 with its back-link on screen and highlighted.
+
+**Deferred**, and written down as deferred rather than left as an idea: margin or side notes, a
+floating "return" button that follows the reader down the notes, and making browser Back restore the
+scroll position.
 
 ## The identifier the path is carrying
 

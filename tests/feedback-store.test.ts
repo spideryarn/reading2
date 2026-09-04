@@ -1,5 +1,5 @@
 /**
- * The feedback store: one report, filed once, ten an hour, and nobody else's.
+ * The feedback store: one report, filed once, so many an hour, and nobody else's.
  *
  * Four properties, and each one is a thing that would be silently wrong rather
  * than loudly broken if it went:
@@ -9,7 +9,8 @@
  *    two copies of one bug, because feedback events are not deduped there.
  * 2. **Capped, and the cap is inside the transaction.** `count` then `insert` is
  *    raceable: concurrent requests all see the same count and all insert. The
- *    owner-scoped advisory lock is what makes ten mean ten.
+ *    owner-scoped advisory lock is what makes the cap mean the cap. The
+ *    administrator has no cap at all, and that is its own test.
  * 3. **Owned.** One reader cannot read another's report, and their ids cannot
  *    collide — the key is `(owner_id, id)` and the id is minted by a browser.
  * 4. **Postgres only.** The filesystem branch refuses with a 501, and the
@@ -66,6 +67,7 @@ import { runAsOwner, type OwnerId } from "../src/owner.js";
 import {
   FEEDBACK_HOURLY_CAP,
   FEEDBACK_WINDOW_MS,
+  feedbackHourlyCap,
   type NewFeedback,
 } from "../src/store/contracts.js";
 import {
@@ -77,6 +79,7 @@ import {
   type FeedbackKind,
 } from "../src/types.js";
 import { pgFeedbackStore } from "../src/store/pg-feedback.js";
+import { ADMIN_USER_ID_LOCAL, ADMIN_USER_ID_PROD } from "../src/admin.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
@@ -112,6 +115,29 @@ describe("the feedback store on the filesystem", () => {
        was not saved" is the only honest thing to say. */
     await expect(refused).rejects.toMatchObject({ status: 501 });
     await expect(refused).rejects.toThrow(/not saved/);
+  });
+});
+
+/* ------------------------------------------------------- who is capped -- */
+
+/**
+ * **No database needed either**, and worth pinning apart from the store: that an
+ * administrator has no cap is a decision, and one that reverted by accident
+ * would look exactly like the store forgetting to ask.
+ */
+describe("the hourly cap", () => {
+  it("holds an ordinary reader to the tripled cap", () => {
+    /* The number, spelled out. Every store test below reads the constant, so
+       all of them would stay green if it quietly went back to ten. */
+    expect(FEEDBACK_HOURLY_CAP).toBe(30);
+    expect(feedbackHourlyCap(ALICE)).toBe(30);
+  });
+
+  it("holds an administrator to nothing at all, on either project", () => {
+    /* `null`, not a large number: the store skips the counting query entirely
+       on this answer, so an `Infinity` here would be a different behaviour. */
+    expect(feedbackHourlyCap(ADMIN_USER_ID_LOCAL)).toBeNull();
+    expect(feedbackHourlyCap(ADMIN_USER_ID_PROD)).toBeNull();
   });
 });
 
@@ -253,6 +279,11 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
   beforeAll(async () => {
     await seedUser(ALICE, "feedback-alice@example.invalid");
     await seedUser(BOB, "feedback-bob@example.invalid");
+    /* **`ADMIN_USER_ID_LOCAL` is not seeded here**, though the test below files
+       as it: every private lane already has that account, from
+       `seedLocalAccounts` in tests/helpers/seed-local-accounts.ts. Seeding it a
+       second time worked and said something false — that this suite owned the
+       row — which GPT Sol caught, 2026-09-04. */
     await warmPool();
     await clear();
   });
@@ -328,7 +359,7 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
     expect(await rowsFor(ALICE)).toBe(1);
   });
 
-  it("refuses the eleventh report in an hour, and takes the tenth", async () => {
+  it("refuses the report past the cap in an hour, and takes the one before it", async () => {
     const kinds: string[] = [];
     for (let i = 0; i < FEEDBACK_HOURLY_CAP; i++) {
       const filed = await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: mintId() })));
@@ -348,6 +379,52 @@ when("the Postgres feedback store", { timeout: 30_000 }, () => {
     expect(overflow.retryAfterMs).toBeGreaterThan(0);
     expect(overflow.retryAfterMs).toBeLessThanOrEqual(FEEDBACK_WINDOW_MS);
     expect(await rowsFor(ALICE)).toBe(FEEDBACK_HOURLY_CAP);
+  });
+
+  it("files past the cap for an administrator, who has none", async () => {
+    /* **The one account the cap is not for.** It exists to stop a loop and one
+       account hammering; the administrator files reports on purpose all
+       afternoon while testing, which is what put this here — Greg, 2026-09-04,
+       having been refused mid-session. */
+    const filed: string[] = [];
+    try {
+      const kinds: string[] = [];
+      for (let i = 0; i < FEEDBACK_HOURLY_CAP + 1; i++) {
+        const id = mintId();
+        filed.push(id);
+        const answer = await runAsOwner(ADMIN_USER_ID_LOCAL as OwnerId, () =>
+          pgFeedbackStore.submit(report({ id })),
+        );
+        kinds.push(answer.kind);
+      }
+      /* All of them, including the one past the cap that is `limited` for
+         anybody else — which is the assertion the test above makes. */
+      expect(kinds).toEqual(Array(FEEDBACK_HOURLY_CAP + 1).fill("created"));
+
+      /* **And the rows, counted outside the store.** `created` thirty-one times
+         is what the store *said*; an admin branch that answered `created`
+         without inserting would satisfy every assertion above it. GPT Sol asked
+         for this one, 2026-09-04, and it is the rule
+         docs/reusable/silent-success.md states. */
+      const stored: number[] = [];
+      for (const id of filed) stored.push(await rowsFor(ADMIN_USER_ID_LOCAL as OwnerId, id));
+      expect(stored).toEqual(Array(FEEDBACK_HOURLY_CAP + 1).fill(1));
+    } finally {
+      /* **By id, never by owner.** `clear()` deletes ALICE and BOB outright
+         because this suite seeded them and owns everything they have. This
+         account is the lane's, seeded for every suite that runs in it, so this
+         removes exactly the rows it wrote and leaves the account alone. */
+      for (const id of filed) {
+        await getDb()
+          .delete(feedbackTable)
+          .where(
+            and(
+              eq(feedbackTable.ownerId, ADMIN_USER_ID_LOCAL as OwnerId),
+              eq(feedbackTable.id, id),
+            ),
+          );
+      }
+    }
   });
 
   it("still calls a retry a duplicate once the cap is reached", async () => {

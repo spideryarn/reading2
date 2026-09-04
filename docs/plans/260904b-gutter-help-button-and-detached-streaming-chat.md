@@ -554,6 +554,107 @@ the bookmark `rgb(219 138 69)` at 0.75, both untouched. Any further injected var
 `.block-chat:not(.has)`, and `tests/gutter-target-size.test.ts` now fails if anything inside the touch
 query sets a `color` at all.
 
+### The merge with `dev`, and the 22.5px nobody could have seen <a id="the-merge"></a>
+
+Stages 1 and 2 came back to a `dev` that had, in the meantime, **centred the prose in its cell** —
+`8f1a0a3e`, from Greg's *"Always centre the Text view within its column when visible, no matter
+which mode is active."* Two conflicts, both in rules this work rewrote, and
+[git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md) is the process that
+was followed: read both histories, propose, get a second model, then edit.
+
+**Both sides were kept in both hunks.** `.blk-gutter` takes their `left:` calc — which adds half
+the room the centring divides — and the two font declarations that make `65ch` count the *prose's*
+zeroes rather than the chrome's, on top of this work's `--blk-top` / `--blk-gutter-w` / 2 × 2 grid.
+Their `top`, `width: 1.4rem`, `display: flex` and `flex-direction: column` are the four declarations
+stage 1 replaced, so they go. Their two literals become `--blk-gutter-x`, here and in the notes
+region's opt-out, and the two assertions in their `tests/prose-centred-in-its-cell.test.ts` that
+read `0.35rem` were updated to name the token. In `TableView`, their `note` / `note-open` classes
+sit beside a `gutter-pad` that **absorbs** their `has-marks` rather than joining it — the same class
+renamed, and two floors on one row would be a bug.
+
+The two compose rather than merely coexist, and the reason is worth stating: their calc reads
+`--text-pad-l`, which this work widened, so the leftover it divides shrinks by exactly what the
+gutter grew. The gutter's right edge stays at `--text-pad-l − --blk-gutter-x`, i.e. `0.35rem` clear
+of the prose, before and after. **It is a pure horizontal translation of the gutter and the prose
+together**, so none of stage 1's vertical numbers can move. Re-measured rather than argued:
+258 controls over 12 combinations, every one 24 × 24, topmost at its own centre and inside its own
+row, worst clearance 4.453 / 5.953 / 7.438px owner at roots 12/16/20 against a pre-merge baseline
+of 4.45 / 5.95 / 7.44 — identical. Gutter-to-prose gap 4.20 / 5.61 / 7.0px against a predicted
+`0.35rem`.
+
+**And then the thing neither branch could have caught.** GPT Sol, reviewing the resolution, read
+`.reader.text-alone .masthead-inner` — Plain mode's title bar — and predicted from source that it
+would now sit ~22px left of the prose. Measured in a browser: **22.53px at 1280 and at 1600**,
+against the 4px its own comment claimed.
+
+Nothing was wrong with either change. The rule said "the reading *cell*" — `--table-w` less its two
+pads — which was the right box for as long as the prose filled its cell. `dev` moved the prose right
+within that cell; this work widened the cell's left padding from 33.6px to 59.2px. **Both moved the
+prose and neither moved the title, and the errors added rather than cancelling.** Each branch's
+tests were green, because each branch was correct.
+
+The fix is one declaration and it is exact, not an approximation. The prose sits
+`(--text-pad-l − --text-pad-r) / 2` right of the table's centre, so a box centred on the same axis
+must lose twice that to start on the same pixel:
+
+```css
+max-width: calc(var(--reading-measure) + var(--text-pad-r) - var(--text-pad-l));
+```
+
+**Measured after the change: +4.766px** at both 1280 and 1600, from −22.53px. And the number
+decomposes, which is the part worth keeping — 2.762px from the weight axis (this box's `65ch` is
+5.524px short of the prose's, because matching the prose's 450 would embolden the byline and the
+source note that inherit from it) plus 2.0px because the masthead bar's own padding is 148px left
+against 144px right, so centring *in the bar* is 2px right of centring in the window. 4.762
+predicted against 4.766 measured, and the second term was not in the prediction at all — it came
+back from the browser.
+
+Two limitations were found the same way and are written into the rule rather than left to be
+rediscovered. The new width is a **constant per root** where `--table-w` shrank with the window —
+365.2px at a 9px root and 503.8px at 12, identical at 600, 700 and 731px of window — so "nothing
+moves below the crossover" is true at the default root and false below it. And under about
+`measure / 0.9` of window, `.prose` takes the `90vw` branch of its `clamp` and this rule does not
+follow: −5.7px at a 12px root at 700 and 731px, **−22.1px at 600**. Not fixed, because the fix is a
+second `clamp` here or a custom property `.prose` and this rule share, and neither earns its keep
+for a reader who has both shrunk their type and narrowed their window.
+
+`.blk-gutter` has the same two exposures and neither bites, for two reasons now stated there: its
+`max(0px, …)` self-limits where a fixed `max-width` cannot, and the `90vw` interval is closed at
+**every** root rather than only at 16 — `9 × (padL + padR + spine)` beats the measure at 9, 12, 16
+and 20 (670/417, 713/556, 842/742, 1026/928), because the padding has a px floor and the measure
+does not. That was checked at one root when the merge landed and at the rest afterwards, which is
+precisely the shortcut that produced the 22.5px in the first place.
+
+**Sol's review of the fix corrected two supporting claims, and the second one is the interesting
+one.** The residual is 2.8px and not the 1.4px first written down — that came from halving the
+sibling's number a second time, when the weight error reaches the left edge through `W / 2` either
+way. And "the rule goes inert below ~1009px so nothing moves" is true at the default root and
+**false at a small one**: `--table-w` shrank with the window, this constant does not, and
+`--blk-slot`'s px floor stops `--text-pad-l` shrinking with the type while `--reading-measure` goes
+on shrinking — so at a 9px root the width is ~373px against an old ~422px and around a 700px window
+the title moves ~25px, toward the prose rather than away from it. A change, and the sentence that
+claimed none is gone.
+
+He also found a **latent bug that is `dev`'s rather than this work's**, and it is the same species
+as the 22.5px: below 731px the narrow query wrote `td.text { padding-right: 0.9rem }` — the padding,
+not the token — so `--text-pad-r` went on reading 1.4rem. Harmless while nothing but the padding
+read it, and wrong the moment three rules started computing *half the room the centring divides*
+from it. It is now `.reader { --text-pad-r: 0.9rem }`, which the cell's own `padding` shorthand
+reads too, so the five consumers of that token agree at every width. Set on `.reader` rather than in
+the `:root` block beside it, because that is where the token is declared.
+
+`tests/text-alone-centring.test.ts` had an assertion that `--table-w` was present, which was **true
+of the broken rule** — so the assertion is inverted to name the other box, and three more added.
+Each was watched red: against the exact pre-merge rule, against the same arithmetic with the sign
+flipped, and against a version missing the `font-size` that makes `65ch` mean the prose's `ch`.
+
+> **The class, named:** *a defect that exists only in the composition.* Two correct changes to
+> boxes that share an axis, landing on different branches, neither able to run the other's checks.
+> A source-level test on either side would have passed. What found it was a second model reading the
+> merge as a whole, and then a browser. It is the argument for measuring after a merge rather than
+> only resolving one — the doc's own last line, *"run the checks for whatever the merge touched, not
+> just the tests"*, with a rendered check as the only check that could have spoken.
+
 ### Stage 3 — one click sends, exactly once
 
 - **A launch seam that does not hoist streaming state above `TableView`.** Sol's blocker 2: the

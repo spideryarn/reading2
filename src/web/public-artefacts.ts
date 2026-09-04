@@ -42,6 +42,7 @@
  * truth and a length test starts reporting a built artefact as never built.
  * docs/plans/260827ai-public-read-only-access.md § The state that cannot happen.
  */
+import type { Comment } from "../types.js";
 import type { PublicArtefactSet, PublicArtefacts, PublicArticle } from "../public-types.js";
 
 /**
@@ -63,6 +64,8 @@ export function artefactsOf(article: PublicArticle): PublicArtefactSet {
     ...(article.ideas === undefined ? {} : { ideas: article.ideas }),
     ...(article.quotes === undefined ? {} : { quotes: article.quotes }),
     ...(article.tweets === undefined ? {} : { tweets: article.tweets }),
+    ...(article.timeline === undefined ? {} : { timeline: article.timeline }),
+    ...(article.sketch === undefined ? {} : { sketch: article.sketch }),
   };
 }
 
@@ -80,5 +83,36 @@ export function artefactsIn(article: PublicArticle): PublicArtefacts {
     glossary: article.glossary !== undefined,
     ideas: article.ideas !== undefined,
     quotes: article.quotes !== undefined,
+    timeline: article.timeline !== undefined,
+    sketch: article.sketch !== undefined,
   };
+}
+
+/**
+ * **The owner's comments, as the reading view's own components want them.**
+ *
+ * A `PublicComment` deliberately carries no `status` — src/public-types.ts says
+ * why: the public read refuses unfinished and failed rows in SQL, so the field
+ * would be a constant on the wire as well as a fact about our machine. But
+ * `Comment` requires one, and the drawer's preview line and the dialog both
+ * branch on it, so somebody has to say what it is.
+ *
+ * **Derived, and there are exactly two answers it can be.** `none` is a bare
+ * bookmark — the reader marked the words and asked nothing — and `done` is a
+ * comment with an answer. Those are the only two states that cross, which is
+ * the query's guarantee (`PUBLIC_COMMENTS_WHERE`), so this derivation cannot
+ * invent a state the payload did not have. `pending` and `error` are
+ * unreachable here, and if they ever became reachable this function would be
+ * quietly wrong — which is why the guarantee is named rather than assumed.
+ *
+ * Done here rather than in the components, so there is one derivation instead
+ * of one per reader of the field.
+ */
+export function visitorComments(article: PublicArticle): Comment[] {
+  return article.comments.map(
+    (comment): Comment => ({
+      ...comment,
+      status: comment.answer === undefined ? "none" : "done",
+    }),
+  );
 }

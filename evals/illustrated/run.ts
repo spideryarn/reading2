@@ -372,16 +372,17 @@ function articleNotes(slug: string, r: IllustratedRun, written: string[]): strin
 }
 
 async function writeReadme(opts: Options, rows: string[], notes: string[]): Promise<void> {
-  const { PROMPT_VERSION, IMAGE_MODEL, ASPECT_RATIO, QUALITY } = await import(
+  const { PROMPT_VERSION, IMAGE_MODEL, ASPECT_RATIO, RESOLUTION } = await import(
     "../../src/illustrated.js"
   );
   const readme = [
     `# Illustrated run — ${new Date().toISOString()}`,
     "",
     `Prompt version \`${PROMPT_VERSION}\`; illustrator \`${IMAGE_MODEL}\` at ` +
-      `\`${ASPECT_RATIO}\`, quality \`${QUALITY}\`, JPEG. Each article has ` +
+      `\`${ASPECT_RATIO}\`, resolution \`${RESOLUTION}\`. Each article has ` +
       "`<slug>.raw.json` (what the model sent, before any checking), " +
-      "`<slug>.brief.json` (after `readModelBrief`) and one `.jpeg` per plate.",
+      "`<slug>.brief.json` (after `readModelBrief`) and one image per plate, " +
+      "named for the format that actually arrived.",
     "",
     opts.systemFile
       ? `Prompt variant: \`${opts.systemFile}\``

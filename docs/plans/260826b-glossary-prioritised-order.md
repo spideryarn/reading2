@@ -341,8 +341,8 @@ where the actual decisions live.
 | [url-state.md](../project/url-state.md) | `?sort=` — what its absence now means — and `?gate=` |
 
 The artefact is untouched. `glossary.json` still stores document order, all of this is client-side and
-pure, and [glossary.md § Five ways to break this
-quietly](../project/glossary.md#five-ways-to-break-this-quietly) item 2 — *do not sort the entries in
+pure, and [glossary.md § Six ways to break this
+quietly](../project/glossary.md#six-ways-to-break-this-quietly) item 2 — *do not sort the entries in
 the artefact* — is unaffected and still stands.
 
 ## See also

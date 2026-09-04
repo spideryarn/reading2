@@ -14,7 +14,7 @@ three later stages consume it**:
 ```
 A (store inventory) ✅ → B0 ✅ (already done) → T-B (factory) ✅ → T-C (lanes) ✅
   → T-D (activation) ✅ → T-E (pollution) ✅
-  → B (12 of 26 done) → B2 (`routes.test.ts`) → C → D → E → F (hinge) → G → H → I
+  → B ✅ → B2 ✅ → C → D → E → F (hinge) → G → H → I
 ```
 
 **`C → B` became `B → C` on 2026-09-04**, and this line is the only place the order lives, so
@@ -32,7 +32,7 @@ more*.
 | **T-C** | `TEST_LANES`, `OWNER_AUDIT`, and `seedLocalAccounts`. Reviewed; the owner guard rebuilt per `(file, owner)` pair. |
 | **T-D** | **`npm test` is three projects now** — see below. The first stage of the six that is visible to anybody else. |
 | **T-E** | Four verdicts at the private lane's teardown, `POLLUTED` and `TEARDOWN FAILED` among them; the pool names itself; the shared lane reports its neighbours on failure. Two Sol rounds — the design one refused half the spec, the built one refused the commit. |
-| **B** | **12 of 26.** Two in the pilot, then ten more in two parallel halves. All green, each with one mutation watched red and a written note of what that mutation does *not* cover. |
+| **B** | **25 of 26.** Two in a pilot, ten in two halves, then thirteen in three. Only `routes.test.ts` is left, and it is B2. Every file carries its mutation, the run's own numbers, and what the mutation does *not* cover — retained in the file after a review found the first ten had reported the evidence without keeping it. |
 | **D′1** | Landed earlier; since **extended by another worktree**, and its "unforgeable" claim is measured false — see D′1b. |
 
 **This paragraph used to say "nothing yet changes the default `npm test`", and T-D is where that
@@ -2195,6 +2195,382 @@ above is reasoned rather than reproduced, and the review **says so itself, unpro
 verdict** rather than letting a retained log stand in for a run it did not do. That is the behaviour
 the instruction to hand it evidence is meant to produce, and it is worth recording that it worked —
 but it means the follow-ups were verified here, in this tree, and not there.
+
+### B2 is done — `routes.test.ts`, and stage B's 26 of 26
+
+2026-09-04, ~150 minutes against an estimate of 240. **127 tests, green, in the private lane**, which
+now runs 126 files and 1966 tests. Converted one `describe` at a time, as the stage said, and **not**
+split into siblings.
+
+**Thirteen mutation runs across the 17 blocks, ten of them recorded: seven red, three green.** Every
+one is written beside the assertion it bears on with its `**Blind to.**`. Five blocks were judged to
+need none, and each says so in its own header — the two stream-refusal blocks and the two PATCH-body
+tables validate above any store, and the tweets route's every plausible break also answers *"nothing
+here"*, which is not a mutation, it is an ambiguity.
+
+##### Three findings, and the first should stop somebody deleting a check
+
+- **The slug guard is triply redundant and no single mutation can move it.** `require-slug`,
+  `routes.ts` § `slugPart` and `api.ts` each refuse independently; the block proves *some* guard
+  refuses and cannot say which. Only turning off all three moved it — and then a traversal is a
+  **404, not an escape**, because it is the filesystem store that made the class reachable at all.
+  Worth having before somebody deletes a "redundant" check on the strength of a green suite.
+- **`PATCH /api/reader` answers from its own input, not from the row.** `writeProfile` returns its
+  argument, so a write that did nothing still replies with what it was told. Only the `GET`-backed
+  assertions can see a broken write, which is a general shape worth looking for: **a route that
+  echoes cannot witness its own persistence.**
+- **Nothing in the file could tell *this run* from *these runs*** for saved searches — `remove` and
+  `recolour` could each lose their id predicate silently. One assertion closed `recolour`; `remove`
+  has no two-run case at all, and that green is kept and recorded rather than papered over.
+
+##### What changed meaning, and the one case that had to be added
+
+The reader-profile block's `SPIDERYARN_READER_FILE` isolation has no Postgres equivalent, so it is a
+seeded owner under `asTestOwner` with the row **asserted gone** in `afterAll` — the decision this plan
+recorded before B2 began. The three admin cases now assert 200-and-a-list, 200-and-a-page, and
+`[401, 403, 200]`; *"says nothing about users in three refusals"* keeps its name and gains force,
+because the third arm is what proves an empty `users` really would be indistinguishable from a
+refusal.
+
+And **an orphaned `pending` comment turns out to be one whose lease has expired**, which needed a new
+case — *leaves a live attempt alone*. It is the only case the sweep mutation can reach: **all three
+inherited cases would have watched that mutation go green.** Nothing was dropped; two cases gained
+assertions.
+
+##### A trap this plan states, which is false
+
+Trap 5 above says `scratchArticleInPg`'s `mutate` rewrites the article URL to
+`spideryarn-test.invalid`. **It does not.** The string is defined locally in two test files
+(`jobs.test.ts` and `retry-is-only-for-a-failed-job.test.ts`), each with its own `urlFor`. The trap
+was written into B2's brief by generalising one agent's local fix into a claim about the shared
+helper, without opening the helper. Harmless in B2, where nothing pumps — but it is the fourth thing
+today asserted from a report rather than from the code, and the correction belongs next to the claim.
+
+**Promoting it to the helper is the right fix and is not done**, because it changes a fixture every
+suite in the lane uses and stage B is closing. It is a candidate for stage C or D: one place, distinct
+per slug, so `freeSlug` cannot adopt one fixture for another.
+
+#### The guard is built, and marking the 25 found four files whose evidence was not evidence
+
+`convertedInB` on the `STORE_MIGRATION` entry, and
+[store-migration-registry.test.ts](../../tests/store-migration-registry.test.ts) §
+*"makes every converted file show its working"*, which requires `**Mutation.**` and `**Blind to.**`
+in every file carrying it — with the same three checks the registry already applies to `reason`: a
+length floor, and no text repeated word for word **between** files. Watched failing on all 25 before
+the marking began, and watched failing again afterwards on a deliberately broken marker.
+
+**The exercise was meant to be transcription and was not.** Marking a claim forces somebody to read
+it, and four of the twenty-five did not survive that:
+
+- **`chat-anchor-route` — a *pilot* — had no evidence in it at all.** Its mutation lived only in this
+  document's own table. It is now in the file, attributed as *recorded, not re-watched*, which is the
+  honest label.
+- **`owner-jobs` cited this plan for its evidence** — *"the mutation recorded in § B is exactly that
+  line"*. That is precisely the failure the guard exists to close: a file whose proof is a pointer to
+  prose somewhere else. Re-run, and it now points at the case above `is not in Bob's list`.
+- **`list-reconciles-expired`'s four "watched red" notes are all *call-site* mutations** — replacing
+  `store.list(owner)`, dropping the owner argument at the call. **Not one of them reaches a line of
+  SQL**, so the conversion had no Postgres-reaching evidence at all, while reading as the
+  best-evidenced file in the batch. It was cited as such in this document. Re-run against
+  `settleExpired`'s owner predicate: `1 failed | 8 passed`.
+- **`jobs-walk`'s seven mutations were all on the filesystem queue.** A `claimIn` that had lost its
+  `where` entirely would have left every one of them green.
+
+**And the pilot's own account here needed correcting.** § *Two of the 26 are converted* says
+`anchorQuote: quoteOf(…) → null` is a mutation the filesystem store could not have caught, which is
+true, and adds that it is *"sharper than intended"* because it trips the `chat_threads_anchor_both`
+CHECK. What it does not say is the consequence: **because the route 500s, its four reds do not
+separate *the quote was written* from *the row was written at all*.** A sharper mutation is not
+automatically a better one.
+
+##### The guard had two bugs of its own, and the second was the instructive one
+
+The first stopped a marker's body at the next `**`. These files bold mid-sentence constantly, so
+`**Mutation.** Deleting **the owner term** from …` captured `"Deleting"` — eight characters — and
+would have been failed as too short, **teaching authors to strip emphasis out of good prose to satisfy
+a guard**. Caught before dispatch by running the regex against realistic prose rather than reading it.
+
+The second looked 900 characters ahead for the next marker or `*/`. A marker further than that from
+its terminator matched nothing, and because the file passed on its *other* marker, it was **silently
+not counted** — a guard under-reporting while green, which is the shape this whole plan is about.
+Caught by the agent using it, and only because it was using it. Rewritten as a scan with no window and
+therefore no cliff.
+
+#### The inventory that sized the tail was wrong in both directions
+
+The 16.75-hour figure above came from reading all fourteen remaining files and classifying every
+filesystem site. Three of its numbers have since been checked against the files, and none survived:
+
+| | inventory said | actually |
+| --- | --- | --- |
+| `jobs.test.ts` tests | ~35 | **71** |
+| `jobs-walk.test.ts` tests | 9 | **10** |
+| `routes.test.ts` filesystem sites | ~40 | **46** — and the inventory was right; see below |
+| `routes.test.ts` "501 because filesystem" tests | ~9 | **4 assertions** across 3 tests |
+
+**It is not that the inventory was careless — it is that a site count is the wrong instrument.** The
+queue round's own verdict was that *"the byte assertions were the easy part — they are rows"*, and
+that the real cost was `claimSession` needing a draft and the Postgres store shape-checking products,
+neither of which any count of `readFile` calls can see. So `step-failure-seam` was called an outlier
+and took forty minutes, while `jobs-walk` was called ordinary and took ninety.
+
+**And the row about `routes.test.ts`'s sites is a correction of a correction.** This section first
+said the inventory had over-counted by more than tenfold — *"3 functions, `cp`, `rm`, `writeFile`,
+over a handful of fixture slugs"* — from a grep for `readFile|writeFile|mkdir|rm\(|existsSync|dataRoot`.
+B2 counted properly: **16 call sites of those functions, 28 calls into filesystem-only readers and
+writers** (`loadComments` ×13, `loadRuns` ×7, `loadShelf` ×5, `createComment` ×2, `deleteRun` ×2,
+`patchComment`, `beginAnswer`, `beginRun`) and 2 `SPIDERYARN_READER_FILE` sites. **46, so the
+inventory's ~40 was right and the correction was wrong.**
+
+The grep missed the 28 because **it looked for filesystem verbs, and the filesystem-only readers do
+not have filesystem verbs in their names** — which is the trap this document spends a table and two
+paragraphs on, made by the person who wrote the table. It is the same failure in a third costume: a
+search that did not cover the answer, reported as an absence.
+
+**The 240 minutes was still too high — B2 took ~150** — but not for the reason given here. The
+estimate was wrong because a site count is the wrong instrument, not because the sites were few.
+
+Recorded because § *Counts are perishable here* is this document's rule and this document keeps
+breaking it: **five of the six counts that went stale went stale by being copied**, and these went
+wrong by being derived from the wrong thing, which is the harder failure to notice.
+
+#### The evidence guard: cite it, do not copy it
+
+The review's process finding — evidence reported and not retained — wants a mechanical check, because
+the instrument that failed was *"a convention says a comment should be there"*, and this orchestrator
+then demonstrated the point twice in ten minutes: a grep for the word "mutation" **falsely accused**
+five converted files of carrying no evidence, and a second grep nearly **missed** the evidence three
+of them did carry. Prose cannot be audited by looking for prose.
+
+**The obvious design is wrong.** A typed `mutation` field on the `STORE_MIGRATION` entry — what was
+broken, what the run printed, what it does not cover — makes the compiler enforce the pairing, which
+is this registry's own idiom (`StoreEntry` is a discriminated union precisely so that a collateral
+verdict without a mechanism cannot be written). But it would put **one fact in two homes**, against
+`CLAUDE.md`'s *cite, don't restate*, and the two would drift: the registry entry is edited by whoever
+is thinking about categories, and the test file by whoever is thinking about the test.
+
+**And the test file is the better home**, which settles it. The evidence earns its keep by sitting
+beside the assertion it bears on — *"what this cannot tell you is whether the read was scoped to this
+article"*, three lines above the assertion that cannot tell you. Moved to the registry it becomes a
+record; left where it is it is a warning to the next person to touch that line.
+
+**So the guard checks that the citation exists, not what it says.** Every file with a `TEST_LANES`
+entry whose `STORE_MIGRATION` entry records a stage-B conversion must contain a findable marker; the
+marker's neighbourhood is the evidence, and no copy of it lives anywhere else. What the guard can
+honestly check is presence and shape — that a converted file says which mutation was run, what the run
+printed, and what it does not cover — and **not** whether any of that is true. That limit is the point
+rather than a weakness: a guard that claimed more would be the next thing to trust wrongly.
+
+Deferred out of the stage-B batch because three agents were editing the registry, and out of the
+commit that closed it because 25 files were mid-run. **Do it before B2**, so that `routes.test.ts` —
+the file with the thinnest mutation coverage per test in the whole stage — lands under it rather than
+before it.
+
+#### The four queue suites, the `jobs-fs-adapter` split, and 25 of 26
+
+2026-09-04. `jobs`, `jobs-walk`, `jobs-commit-path`, `retry-is-only-for-a-failed-job`. **4 files, 80
+tests**, plus [`tests/jobs-fs-adapter.test.ts`](../../tests/jobs-fs-adapter.test.ts) at 12. Only
+`routes.test.ts` remains, and it is B2.
+
+**Two of this document's counts were wrong.** `jobs.test.ts` had **71** tests, not the *"~35"*
+recorded above, and `jobs-walk` had 10, not 9. Both came from an inventory that counted `it(` at a
+glance. The § *Counts are perishable* rule keeps being right about this document's own numbers.
+
+**The split took 12 tests, not the 5 the brief named**, and the two extra are the right call:
+
+- **`sweepStopped` (6 tests)** — a pure function exported only from `src/store/jobs-fs.ts` and used
+  only by it. Left inside a converted `jobs.test.ts`, it would have kept that file importing a
+  condemned module **and** orphaned six tests at stage G. That is the brief's own argument for the
+  other two blocks, applied to a block the brief had not seen.
+- **`leaves the marker behind when a step fails` (1)** — asserts `fsArtifacts.interrupted` and then
+  `rm`s `data/<slug>/steps`. Postgres has no marker; the equivalent is a rolled-back draft and a
+  `revision_step_runs` row left `error`.
+
+The new file's header names **two deletion moments**, not one — `jobs-fs`/`artifacts-fs` for most of
+it, `step-context-paths` for the `outputs(ctx)` block — and, per block, what already covers the
+Postgres side, **checked rather than assumed**: `store-jobs-parity` for `sweepStopped`,
+`store-artefacts-pg` for `interrupted` both ways, and **nothing for `writeOnce`'s rename, correctly**.
+It also records the one thing none of them has: the marker seen through the real runner.
+
+##### A green mutation says the artefact check cannot see what it is for
+
+Deleting `if (run?.status !== "done") return false;` from `hasArtefacts` left `jobs.test.ts` at 60/60.
+A control in the same function (`if (run) return false;`) turned 3 red, so the function is genuinely
+on the path — **nothing in the file distinguishes "the artefacts are present" from "a step is recorded
+as having run".** `jobs.test.ts` is the only converted queue suite whose skip decisions come from real
+rows; `jobs-walk` and `retry` both replace `session.reads`, so neither could have found it.
+
+##### Three traps, and the first is the most dangerous thing found today
+
+1. **`vi.resetModules()` silently moves a private-lane worker onto another database.** The reload of
+   [`src/env.ts`](../../src/env.ts) takes a **fresh `INHERITED` snapshot** in which our minted URL
+   already sits, so nothing "differs from what was inherited" and `.env.local` wins the next
+   `loadEnvLocal()`. Measured: the next pool lands in **`postgres`**, the maintenance database. **A
+   suite that only writes would have written there and passed.** Surfaced in `jobs-walk` as a job
+   reading `gone` instead of `busy`.
+
+   Fixed in [`tests/setup/private-db.ts`](../../tests/setup/private-db.ts) with the one line
+   `src/env.ts` § `PINNED` exists for, which [`unit-no-database.ts`](../../tests/setup/unit-no-database.ts)
+   has always had and this lane never did. Above the branch, so the deliberately-unreachable poison URL
+   is pinned too — otherwise a reset in a lane with *no* database replaces *"refused fast"* with a live
+   connection to the shared one.
+
+   [`tests/private-lane-survives-a-module-reset.test.ts`](../../tests/private-lane-survives-a-module-reset.test.ts)
+   is the control, and **its first form passed while the hole was open**: importing `src/env.ts` after
+   the reset changes nothing, because `loadEnvLocal()` is a function and not a top-level effect. The
+   reload has to reach a caller — `src/db/client.ts` § `databaseUrl` calls it before every pool. That
+   wrong first version is recorded in the file, because it is the more useful half.
+
+2. **A seeded article gives `requireUrl` a real URL, and the pump will fetch the web.** These fixtures
+   were free of it only because they had no `meta.json`. `scratchArticleInPg`'s `mutate` now rewrites
+   to a per-slug `https://spideryarn-test.invalid/<slug>` — verified to fail at DNS with nothing
+   leaving the box, and *distinct per slug* so that `freeSlug` cannot adopt one fixture for another.
+3. **`jobs.upload_id` is a third id Postgres validates** — a foreign key, so an invented uuid fails the
+   insert with `23503`. Beside `jobs_id_format` and `attempt_id` in trap 2 above.
+
+And two shortcuts: **a claim does not need an article** (`lockOrCreateArticle` makes the row when a
+draft opens on a bare slug), and **a fake step's product must be one the store accepts** — `{ made:
+name }` is refused, `raw` needs a manifest naming a real `raw_sources` row, and without a `stamp`
+`publishRevisionIn` refuses with *"the tree was built from different blocks"* and the job ends `error`
+one step after the thing under test.
+
+##### Where the manifest was wrong about its own outliers
+
+§ *B's manifest* called `jobs`, `jobs-walk` and `step-failure-seam` the expensive ones because of
+`data/_jobs/` byte assertions. **The byte assertions were the easy part — they are rows.** The real
+cost was that `claimSession` needs a draft and the Postgres store **shape-checks products**, neither of
+which this document mentions anywhere. Estimating conversion cost from a count of filesystem sites
+over-counted `step-failure-seam` badly and under-counted `jobs-walk`.
+
+And *"one mutation per `describe`"* needs the qualifier the agent used: **one per *store-touching*
+`describe`**, since eight of `jobs.test.ts`'s blocks are pure functions.
+
+#### The lane went green, then two files went red, and neither was what it looked like
+
+Running the whole `private-postgres` lane after the pin: **2 failed of 125**. Both diagnosed, both
+fixed, and the lane now runs **125 files, 1839 tests, exit 0**.
+
+##### `store-shelf-reads` had never seeded the articles it audits
+
+It filters the shelf to `!slug.startsWith("test-")` and asserts over what remains, believing that to be
+the `data/` corpus. **This file has never put an article anywhere.** It was reading whatever another
+suite had loaded under a corpus name and left behind in the run's shared database, and stage B's move
+onto `scratchArticleInPg` — which names articles `test-…` — removed the accident. **It fails when run
+alone**, and did so before today; the full lane was hiding it.
+
+**Its own non-vacuity guard is what caught it** — `expect(entries.length).toBeGreaterThan(0)`, written
+so the file could not pass while asserting over nothing. It fired the first time the accident stopped
+happening, which is the entire argument for writing such a guard.
+
+Fixed by seeding three corpus articles through the real `loadArticleIntoPg` → `publishRevision` path,
+and by **turning the filter from a deny-list into an allow-list** — the deny-list is what made the file
+order-dependent, and both concerns its original comments record (a foreign fixture's `title_override`
+changing mid-run, a foreign fixture's wrong column reddening the wrong file) are settled by owning the
+slugs, where *"exclude the fixtures we know about today"* holds only until the next suite arrives.
+
+**And the fix uncovered a second vacuity.** The case *"and the corpus, where it has one, really does
+exercise the fallback"* had been printing a warning and returning, because the committed corpus has no
+untitled article — **a permanently vacuous non-vacuity control**. One of the three seeded articles is
+`writes` with its title deleted, so it is now a real assertion. A third, from `openai-huggingface`, is
+the only corpus article with a `supplement` block, which makes the scalars audit's recomputation
+distinguishable — something that file's own comment says nothing in the database previously did.
+
+##### `jobs.test.ts` was a defect, and not the cross-file interference it looked like
+
+*"Expected 'busy' to be 'claimed'"*, only in full-lane runs. **`pgJobStore.claim` opens by taking the
+`queue_state` singleton with `for update nowait`**, so any claim arriving while another claim is
+mid-transaction is answered `busy` — *"another claim is being decided"* — whatever job it names. The
+other claimant is **the same file**: `enqueue` starts a pump, a request handed an already-running job
+is given one too, and those pumps are still waking on their 250 ms→5 s backoff several cases later.
+
+Established from a timeline, not a story — every `claim` call logged, six job ids inside 400 ms in the
+red run against four and no overlap in green ones. The obvious alternative was ruled out by measurement:
+a probe for `running` rows immediately before the fixture claim, after deliberately running five other
+database suites first, returned **zero** — the concurrency cap is not involved and no other file leaves
+a `running` row.
+
+**It reproduces alone on a loaded box — 3 of 12, then 1 of 15 — and never on a quiet one.** It read as
+interference only because a full lane run is slow enough to be loaded. Worth knowing separately: **lane
+file order is not stable run to run**, because vitest's default sequencer sorts by cached durations in
+`node_modules/.vite/vitest/*/results.json`.
+
+Fixed by asking again on `busy`, which is the queue's **documented contract** — *"whoever takes it
+runs; everybody else is told `busy` and asks again. The pump is not privileged."* **And the retry does
+not soften the file**: re-applying the mutation its header records (`leaseIsOver` → `leaseIsLive`)
+still produces exactly the two documented reds, with the first now taking 3046 ms instead of 94 ms
+because it exhausts the whole budget first. 20 of 20 green repeats under the load that gave 3/12 before.
+
+[`docs/project/testing.md`](../project/testing.md) § *One database, many suites* attributed this error
+message solely to a stray `running` row filling the cap. It now carries the second cause, because
+looking for a `running` row finds nothing in this case.
+
+#### The eight mutations, re-run and retained — and five of them stayed green
+
+2026-09-04, after the review found the evidence missing. Twenty mutations across the eight files;
+**fifteen red, five green**, all twenty written into the file beside the assertion they bear on, with
+the run's own numbers. All eight re-run green afterwards (**66 tests**), `src/` clean.
+
+**The five greens are the return on the whole exercise**, and none of them is a small point:
+
+1. **The seeder ships the artefact the oracle asserts.** Suppressing `artifacts.write` in
+   `pg-session.commit` left `article-cache-call-site` **green**, because `scratchArticleInPg` clones
+   `data/writes`, which already contains `arc.json`, `tweets.json` and `glossary.json`;
+   `openOrBeginJobDraft` carries them forward, and `assertProduced` reads back **the fixture's**
+   artefact. Verified here: those files are in `data/writes/`. **The file would pass over a session
+   that persisted nothing.** This is not one file's bug — **any converted suite whose oracle is "the
+   artefact exists after the step" is blind exactly to the extent that the corpus slug it cloned
+   already had one**, and that is most of them. It goes in every remaining brief and it is a question
+   for the ones already landed.
+2. **An unjournalled ticket ships green.** Suppressing `realtimeSessionStore.issue` in the route left
+   `chat-live-ticket-route` untouched: no assertion in it ever asks whether the row exists — the table
+   appears in a `pgReady` list and a teardown comment, and nowhere else. Covered now only because
+   `live-session-routes` was converted the same day, by a different agent, which is luck rather than
+   design.
+3. **The token is carried and never checked.** Removing the `attemptId` fence from `pgChatStore.finish`
+   left `chat-live-turn` green. The `MissingAttempt` throw above it still catches an *absent* token —
+   another mutation proved that — but nothing calls `finish` with a **stale** one, because the retry
+   aborts the original stream rather than letting the loser land.
+4. **"First" is untested.** Swapping the two 409 checks in `refuseAMovedQuiz` left `quiz-mark-route`
+   green: the case named *refuses a source-stale quiz before it looks at the batch at all* deliberately
+   sends the **correct** batch id, so under either order the batch check passes and the staleness one
+   throws. Ordering claims need a case with **both** wrong.
+5. **One owner cannot see a predicate that narrows to one owner.** Deleting the owner term from
+   `ownedSlug` left the query-string suite green. **That is the fourth file today** — with
+   `criteriaFor`, `markConnected`/`close`/`find`, and the referee half's own note. It is a property of
+   the private lane, not of any of the four: *a private database with one seeded owner cannot tell a
+   scoped query from an unscoped one.* `tests/owner-isolation.test.ts` is what speaks for all of them.
+
+**Two more greens are recorded in the files rather than here**, both of the same shape — a case that
+refuses one line earlier than the claim it is cited for, so its 409 is evidence about a different
+claim than the file thinks.
+
+##### Three header claims that no mutation can reach
+
+Worth having, because a claim nothing can falsify is a claim resting on a reading of the code:
+
+- `quiz-mark-route`'s *"every refusal happens before a single SSE header is written"* — asserted as
+  `streamed === false` on four cases, but nothing can move `sse(res)` relative to the checks without
+  rewriting the handler.
+- `chat-live-ticket-route`'s *"the history and the tail, from one read"* — both come out of the same
+  `threadsFor` call, so the file would not notice if somebody split it.
+- `one-article-for-one-address`'s reliance on `jobs_active_source`, which is a partial unique index in
+  [`src/db/schema.ts`](../../src/db/schema.ts): loosening it is a **migration, not an edit**, so both
+  mutations reached the classifier and the repair while the index went on doing the refusing.
+
+##### And one correction to a header, found by mutating it
+
+The query-string suite claimed `chatStore.load` reaches the article through its slug *and its current
+revision*. It does not: `articleIdForOwned` predicates on `ownedSlug` **alone**, and `onTheShelf` — the
+published-revision rule — is not in that path. The header named the wrong predicate and now names the
+right one.
+
+##### A failure shape that reads as a finding
+
+The first attempt at one mutation used `desc(chatMessages.ordinal)`, a symbol `pg-chat.ts` does not
+import. **All 11 tests failed, including the ungated `STORE` control.** That is a module that would not
+load, and in a summary line it is indistinguishable from a real whole-file red — so a mutation must be
+checked for *which* tests it turned red, not only how many. Recorded in the file beside the real
+result.
 
 #### The other four — 21 of 26, and the worst trap yet is a suite that is green and blind
 

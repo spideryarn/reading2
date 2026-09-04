@@ -37,6 +37,7 @@ import type {
   Ideas,
   Quotes,
   NodeId,
+  Timeline,
   Tree,
   TreeNode,
   TweetThread,
@@ -55,6 +56,12 @@ const NO_ARTEFACTS = {
   ideas: null,
   quotes: null,
   tweets: null,
+  timeline: null,
+  /* **An empty array, not `null`** — comments are not an artefact, so there is
+     no "nobody built one" state for them to be in. src/public-types.ts
+     § PublicArticle.comments. */
+  comments: [],
+  sketch: null,
 } as const;
 
 /** Every key path in a value, dotted, with array elements collapsed to `[]`. */
@@ -272,6 +279,7 @@ const FORBIDDEN_ON_META = [
 ];
 
 describe("the public article payload", () => {
+
   const built = publicArticle({
     slug: "noema",
     title: "The mythology of conscious AI",
@@ -321,6 +329,13 @@ describe("the public article payload", () => {
            undefined value, so an article with no manifest still sends no
            `assets` key over the wire — the shape is a compile-time discipline,
            not a wire change. src/public-types.ts. */
+        /* **An empty array is still a present key**, which is why it is in this
+           list even though this fixture has no comments: `PublicArticle.comments`
+           is required, and `[]` means *nobody wrote on it* rather than *this
+           payload does not carry comments*. The nested paths are asserted
+           separately, against a fixture that has some.
+           docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3. */
+        "comments",
         "assets",
         "assets.entries",
         "assets.entries[].at",
@@ -853,7 +868,62 @@ describe("the artefacts a shared link carries", () => {
     ],
   };
 
-  const built = publicArticle({
+  /**
+   * **A real one, not `null`**, for the reason `QUOTES` above is real: an
+   * assertion about an absent artefact agrees with a projection that returns
+   * nothing, which is the vacuous pass this file was caught in once already.
+   *
+   * **Two events, and the `dating` union is why.** A `TimelineEvent`'s date is a
+   * four-member union, and a single `dated` event would leave the projection's
+   * treatment of the other three unexercised — the same shape as the
+   * `TreeNode.treatment` regression in src/public/dto.ts's own header, where a
+   * field that never crossed was invisible because every fixture had it.
+   */
+  const TIMELINE: Timeline = {
+    version: "timeline/1",
+    generator: "some-model",
+    slug: "noema",
+    sourceHash: "abc123",
+    orderConflicts: 2,
+    generatedAt: "2026-08-31T10:14:21.120Z",
+    elapsedMs: 31_000,
+    events: [
+      {
+        id: "spya-event1",
+        label: "The first example is offered",
+        dating: {
+          kind: "dated",
+          when: {
+            earliest: "2026-07-04",
+            latest: "2026-07-04",
+            extent: "instant",
+            phrase: "on 4 July",
+            at: { blockId: "spya-k3m9qt", start: 3, end: 12 },
+            yearFilled: true,
+          },
+        },
+        order: 1,
+        modality: "happened",
+        occurrences: [
+          { blockId: "spya-k3m9qt", quote: "does not survive its own first example", start: 17 },
+        ],
+      },
+      {
+        id: "spya-event2",
+        label: "The trouble is named",
+        dating: { kind: "words", phrase: "another month later" },
+        order: 2,
+        modality: "predicted",
+        occurrences: [{ blockId: "spya-k3m9qt", quote: "which is the whole trouble", start: 56 }],
+      },
+    ],
+  };
+
+  /**
+   * Everything `publicArticle` needs that is not the thing under test, so the
+   * comment cases below can name only their comments.
+   */
+  const ARTICLE_BASE = {
     slug: "noema",
     title: "The mythology of conscious AI",
     byline: null,
@@ -866,10 +936,21 @@ describe("the artefacts a shared link carries", () => {
     tree: TREE,
     arc: null,
     assets: null,
+    /* **No `as const`.** It would freeze `blocks` into a readonly tuple, which
+       `publicArticle` will not take — and vitest would never have said so,
+       because it does not typecheck. `npm run typecheck` is the only thing that
+       reads this. */
+  };
+
+  const built = publicArticle({
+    ...ARTICLE_BASE,
     glossary: GLOSSARY,
     ideas: IDEAS,
     quotes: QUOTES,
     tweets: THREAD,
+    timeline: TIMELINE,
+    comments: [],
+    sketch: null,
   });
 
   /** Everything under one key, deeply, against the allowlist for that artefact. */
@@ -968,6 +1049,169 @@ describe("the artefacts a shared link carries", () => {
   });
 
   /**
+   * **The events, and not the count of the model's own mistakes.**
+   *
+   * `orderConflicts` is the field to look for in this list and not find. It is
+   * the number of pairs the article's own dates order one way and the model
+   * ordered the other — a fact about our pipeline's quality, shown to nobody,
+   * and src/public-types.ts § PublicTimeline argues it against
+   * `PublicQuotes.discarded`, which *does* cross because a reader is shown it.
+   */
+  /**
+   * **The owner's comments, and the three fields of one that are not there.**
+   *
+   * `PublicComment` is where the argument lives for each absence. What this
+   * pins is that the projection agrees with it — a `Comment` carries `status`,
+   * `model`, `searches`, `error`, `threadId`, `updatedAt`, `criterionId` and
+   * `valence`, and the fixture below sets **every one of them** so that a
+   * projection which spread its argument would fail here rather than pass for
+   * want of anything to leak.
+   */
+  it("carries a comment's words and none of the machinery around them", () => {
+    const built = publicArticle({
+      ...ARTICLE_BASE,
+      ...NO_ARTEFACTS,
+      comments: [
+        {
+          id: "spya-cmt111",
+          blockId: "spya-k3m9qt",
+          quote: "does not survive its own first example",
+          start: 17,
+          createdAt: "2026-09-01T09:00:00.000Z",
+          body: "This is the bit I keep coming back to.",
+          answer: "The example is offered as a measurement, which is the trouble.",
+          citations: [{ url: "https://example.com/paper?id=7", title: "The paper" }],
+          /* Everything below must not cross. Set, so that a spread would show. */
+          status: "done",
+          updatedAt: "2026-09-02T09:00:00.000Z",
+          threadId: "spya-thr999",
+          criterionId: "spya-crt2aa",
+          valence: -50,
+          searches: 3,
+          model: "some-model",
+          error: "a previous attempt failed",
+        },
+      ],
+    });
+
+    expect(keyPaths(built.comments)).toEqual(
+      [
+        "[].answer",
+        "[].blockId",
+        "[].citations",
+        "[].citations[].title",
+        "[].citations[].url",
+        "[].createdAt",
+        "[].id",
+        "[].quote",
+        "[].start",
+        "[].body",
+      ].sort(),
+    );
+    /* And not vacuously: the words really are there. */
+    expect(built.comments[0]?.body).toContain("keep coming back to");
+    expect(built.comments[0]?.answer).toContain("offered as a measurement");
+    /* **The query string survives**, which is the deliberate half of
+       `publicCitationUrl` — half the public web addresses its articles this
+       way, and `safePublicCanonical` refusing them is a rule about canonicals
+       rather than about citations. */
+    expect(built.comments[0]?.citations?.[0]?.url).toBe("https://example.com/paper?id=7");
+  });
+
+  /**
+   * **A citation that would hand out a secret, or name a host only this machine
+   * can reach, is dropped** — and the ones beside it are kept.
+   *
+   * Both refusals are the ones GPT Sol named when it reviewed this stage.
+   * Asserted one at a time rather than as "the list got shorter", so a failure
+   * says which policy stopped working.
+   */
+  it("drops a citation carrying credentials, and one naming a private host", () => {
+    const built = publicArticle({
+      ...ARTICLE_BASE,
+      ...NO_ARTEFACTS,
+      comments: [
+        {
+          id: "spya-cmt222",
+          blockId: "spya-k3m9qt",
+          quote: "does not survive",
+          start: 17,
+          createdAt: "2026-09-01T09:00:00.000Z",
+          status: "done",
+          answer: "Three sources.",
+          citations: [
+            { url: "https://good.example.com/a" },
+            { url: "https://user:t0ken@example.com/secret" },
+            { url: "http://localhost:5273/private" },
+            { url: "http://10.0.0.5/internal" },
+          ],
+        },
+      ],
+    });
+
+    expect(built.comments[0]?.citations?.map((c) => c.url)).toEqual([
+      "https://good.example.com/a",
+    ]);
+  });
+
+  /**
+   * **Every citation refused means the key goes, not an empty array.**
+   *
+   * `citations: []` reads as *the model cited nothing*; an absent key reads as
+   * *this comment has no citations*. After the policy has thrown all of them
+   * away neither is quite true, and absent is the honest one — it is what a
+   * comment that never had any looks like. src/public/dto.ts § publicCitations.
+   */
+  it("leaves the key off when nothing survives the policy", () => {
+    const built = publicArticle({
+      ...ARTICLE_BASE,
+      ...NO_ARTEFACTS,
+      comments: [
+        {
+          id: "spya-cmt333",
+          blockId: "spya-k3m9qt",
+          quote: "does not survive",
+          start: 17,
+          createdAt: "2026-09-01T09:00:00.000Z",
+          status: "done",
+          citations: [{ url: "http://localhost/only" }],
+        },
+      ],
+    });
+
+    expect("citations" in (built.comments[0] ?? {})).toBe(false);
+  });
+
+  it("carries the events and none of the pipeline around them", () => {
+    expect(pathsUnder("timeline")).toEqual(
+      [
+        "events",
+        "events[].dating",
+        "events[].dating.kind",
+        "events[].dating.phrase",
+        "events[].dating.when",
+        "events[].dating.when.at",
+        "events[].dating.when.at.blockId",
+        "events[].dating.when.at.end",
+        "events[].dating.when.at.start",
+        "events[].dating.when.earliest",
+        "events[].dating.when.extent",
+        "events[].dating.when.latest",
+        "events[].dating.when.phrase",
+        "events[].dating.when.yearFilled",
+        "events[].id",
+        "events[].label",
+        "events[].modality",
+        "events[].occurrences",
+        "events[].occurrences[].blockId",
+        "events[].occurrences[].quote",
+        "events[].occurrences[].start",
+        "events[].order",
+      ].sort(),
+    );
+  });
+
+  /**
    * **And the artefacts are really there**, which every assertion above passes
    * without. A DTO returning `{}` for all four satisfies every key set and
    * every "does not contain", and it is the failure this repo keeps writing up:
@@ -981,6 +1225,15 @@ describe("the artefacts a shared link carries", () => {
     expect(built.ideas?.ideas[0]?.occurrences[0]?.quote).toContain("first example");
     expect(built.tweets?.tweets[0]?.text).toBe("The first post.");
     expect(built.tweets?.limit).toBe(280);
+    expect(built.timeline?.events).toHaveLength(2);
+    expect(built.timeline?.events[0]?.label).toBe("The first example is offered");
+    /* The second event's `words` dating, which is the arm a one-event fixture
+       would not reach: the article dated it as far as it ever will, and losing
+       the phrase would lose the only thing it said. */
+    expect(built.timeline?.events[1]?.dating).toEqual({
+      kind: "words",
+      phrase: "another month later",
+    });
   });
 
   /**
@@ -1014,6 +1267,9 @@ describe("the artefacts a shared link carries", () => {
       ideas: { ...IDEAS, ideas: [] },
       quotes: null,
       tweets: null,
+      timeline: null,
+      comments: [],
+      sketch: null,
     });
     expect("glossary" in empty).toBe(true);
     expect(empty.glossary?.entries).toEqual([]);

@@ -281,6 +281,34 @@ export const articles = spideryarn.table("articles", {
    * notices. The CHECK is what makes it loud instead.
    */
   check("articles_visibility", sql`${t.visibility} in ('private','public')`),
+  /**
+   * **The shelf's own index, and what makes `limit 200` a bound on work rather
+   * than only on rows.**
+   *
+   * `publicLibraryQuery` (src/store/public-library.ts) is the one query on this
+   * table that anybody can run without signing in, and it asks for
+   * `visibility = 'public'` ordered by `public_at desc nulls last, slug`. With
+   * no index matching that, Postgres filters and **sorts the whole public corpus
+   * before applying the limit** — so the ceiling bounds what comes back and not
+   * what it cost, on an endpoint with no rate limit and no session. GPT Sol's
+   * finding 3 on stage 3a, 2026-09-04.
+   *
+   * **Partial, on `visibility = 'public'`**, which is the shape that earns its
+   * keep here: almost every row in this table is private and will stay private,
+   * so a full index would be mostly entries no reader can ever reach, paid for
+   * on every write. The predicate is written the same way the query writes it,
+   * because a partial index is only used when the planner can prove the query's
+   * clause implies the index's.
+   *
+   * The columns are the `order by`, in its order and its direction — including
+   * `nulls last`, which is not the default under `desc` and which the query
+   * spells out for its own reasons. Getting either wrong yields an index the
+   * planner will not use for the sort, which is the failure that looks like
+   * success. `slug` is there because the ordering is deliberately total.
+   */
+  index("articles_public_listing")
+    .on(t.publicAt.desc().nullsLast(), t.slug.asc())
+    .where(sql`${t.visibility} = 'public'`),
 ]);
 
 /**
@@ -1811,7 +1839,11 @@ export const jobs = spideryarn.table(
      * lease — cost the reader their job and sent them to the Retry button. It
      * now puts the job back to `queued` on **this same row** instead, which is
      * what the filesystem store's `sweepStopped` has always done on restart, and
-     * what keeps the slug, the article and therefore the article's checkpoints.
+     * what keeps the slug, the article and therefore the article's checkpoints —
+     * and, since 2026-09-04, the **draft** as well, without which the block ids
+     * those checkpoints are keyed on move and reaching them is not the same as
+     * being able to use them (src/store/pg-jobs.ts § the requeue's
+     * `draftRevisionId`).
      *
      * **A counter rather than a flag, because without one it never stops.** A
      * job that overruns every lease would requeue for ever, buying model calls
@@ -3617,7 +3649,7 @@ export const feedback = spideryarn.table(
     ),
     /**
      * **The rate cap's only query**, and the reason it can be a `count` rather
-     * than a scan: ten reports an hour, per owner, counted over
+     * than a scan: a fixed number of reports an hour, per owner, counted over
      * `(owner_id, created_at)` inside the transaction that is about to insert.
      * src/store/pg-feedback.ts.
      */
@@ -3702,7 +3734,10 @@ export const checkpoints = spideryarn.table(
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.namespace, t.key] }),
-    check("checkpoints_namespace", sql`${t.namespace} in ('hierarchy-labels','pdf-chunk')`),
+    check(
+      "checkpoints_namespace",
+      sql`${t.namespace} in ('hierarchy-labels','hierarchy-structure','pdf-chunk')`,
+    ),
     /**
      * The same rule as `CHECKPOINT_KEY_RE`, here as well, because the
      * filesystem adapter turns this string into a **file name**. A key the

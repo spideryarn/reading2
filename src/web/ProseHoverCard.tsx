@@ -241,7 +241,30 @@ export function ProseHoverCard({
        place in the argument leaves every column for the sake of a citation they
        have not read yet. First tap shows the note, second tap goes there: the
        spine's `bandPress` rule, which this card already uses for a term. */
-    tapSelector: `mark.term, a[${NOTE_REF_ATTR}]`,
+    /* **And a link out of the app**, since 2026-09-04, for the reason the two
+       above are here: a finger has no hover, so committing blind is the only
+       thing a first tap can mean.
+
+       > What I wanted was for it to first show me a pop up about the web link.
+       > And then perhaps if I click again it should open it in a new page.
+       >
+       > — Greg, 2026-09-04 (SPIDERYARN-READING2-10)
+
+       **Keyed on `target="_blank"`, not on the href**, and that is the honest
+       spelling: this rule is "a link that is about to take you out of the app
+       reveals itself first", and the attribute is exactly the set of links that
+       do. Only our own ingress can write one — the sanitiser strips the
+       author's, and src/web/external-links.ts writes ours immediately after —
+       so a publisher cannot opt a link into or out of this.
+
+       **A glossary term inside a link still wins**, and nothing here had to be
+       written to make it so: `closest` returns the innermost match, so a tap on
+       the underlined words finds the `mark.term` and the link is never the hit.
+       That keeps the rule the reader has already learnt — second tap opens the
+       glossary — for the 13% of this corpus's links whose text is a term. The
+       link half of that card is still one press away, at its foot. Decided by
+       the orchestrator on GPT Sol's review, 2026-09-04. */
+    tapSelector: `mark.term, a[${NOTE_REF_ATTR}], .prose a[target="_blank"]`,
     /* The second tap on the same words, which is what the foot's "in the
        glossary" button does. Both, rather than the button alone: on a touch
        screen the words are a far bigger target than a 10px-tall row of text,
@@ -264,9 +287,27 @@ export function ProseHoverCard({
       }
       const ids = data.termIds.filter((id) => byId.has(id));
       const only = ids.length === 1 ? ids[0] : undefined;
-      if (!only) return;
-      close();
-      onOpenTerm(only);
+      if (only) {
+        close();
+        onOpenTerm(only);
+        return;
+      }
+      /* **The link's own tab, on the second tap.** Last of the three, so a
+         marker and a term both still get the answer they had — and reached only
+         when the hit *is* the anchor, which a tap on a glossary term inside a
+         link never is (see `tapSelector`).
+
+         `window.open` rather than letting the click through, because the hook
+         swallows the compatibility click after any tap it has acted on
+         (useHoverCard.ts § swallowed) and unpicking that for one consumer would
+         put a second way of committing next to the one every other target uses.
+         This runs inside the `pointerup` listener, so it is a user activation
+         and not a popup for a blocker to refuse. `noopener,noreferrer` is the
+         pair the anchor itself carries — a `window.open` does not inherit it. */
+      if (data.link?.kind === "external" && data.href) {
+        close();
+        window.open(data.href, "_blank", "noopener,noreferrer");
+      }
     },
   });
 

@@ -910,6 +910,26 @@ once a claimant has stopped answering`, and neighbours — all of them `expected
 'claimed'`, all of them green in the same tree once the ingest finished. **Look for a `running` row
 before believing a claim case.**
 
+**And when there is no `running` row, the same sentence has a second cause: the queue lock, taken by
+this file's own pumps.** `claim` opens by taking the `queue_state` singleton with `for update
+nowait` ([`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts)), so a claim that arrives while *any*
+other claim is mid-transaction is refused — `busy`, *"another claim is being decided"* — however free
+the job and however empty the table. The other claimant is usually the suite itself: `enqueue`
+starts a `pump`, a request handed an already-running job is given one too, and those loops go on
+waking up on a 250ms→5s backoff several cases later. Measured 2026-09-04 in
+[`tests/jobs.test.ts`](../../tests/jobs.test.ts) by logging every `claim` the file makes — in the run
+that went red a leftover pump's claim began 19ms before the case's own and was still inside its
+transaction; six job ids claimed inside 400ms. It reproduced 1 in 15 runs of the file **alone** on a
+loaded box and never on a quiet one, which is exactly how a same-file race disguises itself as
+interference from another file.
+
+The remedy is not a lock and not a wait: it is to **ask again**, because that is the queue's
+contract — *"whoever takes it runs; everybody else is told `busy` and asks again. The pump is not
+privileged"* ([`src/jobs.ts`](../../src/jobs.ts) § `advanceJob`). A bounded retry costs a case
+nothing it was proving: the failures these cases are written against — a sweep that never runs, a
+claim predicate that lets a second runner in — answer `busy` *every* time, so they exhaust the
+budget and still go red. `tests/jobs.test.ts` § *asking again, on `busy`* is the shape to copy.
+
 **There is a fourth, and no fixture can hide from it: the expiry sweep is unscoped.**
 `advanceJobWith` opens with `store.settleExpired()` — no owner, no slug, the whole table
 ([`src/jobs.ts`](../../src/jobs.ts)) — so one dev server mid-ingest settles *any* row that is

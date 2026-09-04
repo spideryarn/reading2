@@ -62,7 +62,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
   CALLBACK_PATH: "/auth/callback",
 }));
 
-const { AdminUsersPage } = await import("../src/web/AdminPage.js");
+const { AdminHome, AdminUsersPage } = await import("../src/web/AdminPage.js");
 
 /* The page's sort lives in the address bar through nuqs, which needs its
    adapter above it — src/web/main.tsx wraps the whole app in the same one, and
@@ -455,5 +455,83 @@ describe("the users page", () => {
     expect(rows(el).map((r) => r[0])).not.toEqual(before);
     expect(rows(el)[0]?.[0]).toContain("alice@example.test");
     expect(location.search).toContain("by=articles");
+  });
+});
+
+/**
+ * The build stamp on `/admin`, both ways round.
+ *
+ * `vite.config.ts` compiles the commit and the build time into the bundle, so
+ * in a test — where there is no `define` at all — the identifiers resolve
+ * through the global scope, which is exactly what `vi.stubGlobal` reaches. That
+ * makes both states testable: a real deployment, and the dev server that has no
+ * stamp to report. The second is the one worth pinning, because "nothing built
+ * this" must not render as a confident timestamp of the epoch.
+ *
+ * The relative phrase itself is not asserted — `Intl.RelativeTimeFormat` says
+ * something else in another locale, correctly, which src/web/relative-time.ts
+ * documents. The `title` is locale-*dependent* and still assertable, because
+ * the test formats the same instant the same way and compares: what is being
+ * pinned is that the timestamp is there and is the one it was handed, not what
+ * English calls it.
+ */
+describe("the deploy stamp on the admin index", () => {
+  const SHA = "8ca6bc73f0e1d2c3b4a596877665544332211000";
+
+  async function showHome(): Promise<HTMLElement> {
+    history.replaceState(null, "", "/admin");
+    await act(async () => {
+      root.render(
+        <NuqsAdapter>
+          <AdminHome />
+        </NuqsAdapter>,
+      );
+    });
+    await settle();
+    return host;
+  }
+
+  it("names when this bundle was built, and the commit it came from", async () => {
+    const built = new Date(Date.now() - 2 * 3_600_000);
+    vi.stubGlobal("__SPIDERYARN_BUILD_COMMIT__", SHA);
+    vi.stubGlobal("__SPIDERYARN_BUILD_TIME__", built.toISOString());
+
+    const el = await showHome();
+    const line = [...el.querySelectorAll("p")].find((p) =>
+      (p.textContent ?? "").startsWith("Built"),
+    );
+    expect(line, "the index carries a Built line").toBeTruthy();
+    /* Short, because that is what the dashboard and `--short` both show — and
+       long enough that `sameCommit` would still compare it. */
+    expect(line?.textContent).toContain("8ca6bc7");
+    expect(line?.textContent).not.toContain(SHA);
+    /* **The time is actually drawn**, which the sha alone would not have said:
+       the fallback branch prints "at an unknown time" and would otherwise have
+       passed every assertion in here. GPT Sol, reviewing this, 2026-09-04. */
+    expect(line?.textContent).not.toContain("unknown");
+
+    /* The precise moment is never lost, only moved: it is the next question
+       after "2 hours ago", and the whole sha goes with it. Formatted here the
+       way `exactly()` formats it — independently, so a title that dropped the
+       timestamp or carried a different one fails. */
+    const title = line?.getAttribute("title") ?? "";
+    expect(title).toContain(
+      built.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }),
+    );
+    expect(title).toContain(SHA);
+    /* The caveats are the honest half of the claim — see AdminPage.tsx §
+       BuildStampLine on why the line says "Built" rather than "Deployed". */
+    expect(title).toContain("this tab is running");
+    expect(title).toContain("rollback");
+  });
+
+  it("says there is no stamp rather than inventing one, off a build", async () => {
+    /* `beforeEach` already cleared the globals; this is the dev server and
+       vitest alike, where `define` never ran. A page that answered "1 Jan 1970"
+       here would be worse than one that answered nothing. */
+    const el = await showHome();
+    expect(el.textContent).toContain("Running unbuilt");
+    expect(el.textContent).not.toContain("Built");
+    expect(el.textContent).not.toContain("1970");
   });
 });

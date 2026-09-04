@@ -37,9 +37,15 @@
  * reading-order mistake the text layer made. A page costs input tokens and buys
  * visual evidence.
  *
- * **Nothing is written until every chunk passes.** A half-transcribed article
- * that reads fluently is the worst artefact this pipeline could produce,
- * because every later stage would treat it as the article.
+ * **A chunk that fails its check is published with a quality note, not
+ * thrown.** This paragraph said the opposite — *"nothing is written until every
+ * chunk passes"* — for five days after it stopped being true. Greg's call on
+ * 2026-08-30, and the evidence and the cost are both on `runPdfExtract`'s
+ * publish branch: the gate's observed behaviour on real papers was to refuse
+ * good work, and a reader who asked for a paper got nothing at all. What is
+ * still true is why anybody would want the gate — a half-transcribed article
+ * reads fluently and every later stage would treat it as the article — so the
+ * note is the thing a reader has to be able to see.
  *
  * **The raw model responses are cached per chunk** on a key that includes the
  * prompt and the model, so fixing the renderer or the checker costs nothing and
@@ -83,6 +89,7 @@ import {
 } from "./pdf.js";
 import { type Check, check, report } from "./pdf-score.js";
 import type { Meta } from "./types.js";
+import { MAX_PAGES } from "./uploads.js";
 import { ProviderRefused, openRouterJson } from "./ai-call.js";
 
 /**
@@ -99,29 +106,15 @@ import { ProviderRefused, openRouterJson } from "./ai-call.js";
  */
 export const PROMPT_VERSION = "pdf-v2";
 
-/**
- * A cost cap, not a capability one: roughly a dollar per hundred pages of
- * transcription.
- *
- * **250 since 2026-09-04, up from 100.** Greg's call, and the document that
- * prompted it is the argument: a 142-page journal paper is exactly what this
- * app is for, and it was refused. Two things had to be true before the number
- * could move, and both are:
- *
- * - **A retry keeps the article**, so the per-chunk checkpoints a first attempt
- *   paid for are reachable by a second (`slugForRetry` in src/jobs.ts). Without
- *   that, raising the cap makes a long PDF fail *for ever* rather than fail
- *   once — every attempt starting from zero and re-buying every chunk.
- * - **`CHUNK_CONCURRENCY` is wide enough that 250 pages of ordinary prose fit
- *   the deadline**; see the arithmetic there, which is now written against this
- *   number — and note that it does *not* claim the pathological case fits.
- *
- * **Where it is enforced is not where it is spent.** Stage 1 counts the pages
- * and refuses before the document is stored (src/pipeline.ts), so the reader
- * hears it in seconds. `pass0`'s guard stays as the backstop, for an article
- * ingested before that or re-extracted after this number moves again.
- */
-export const MAX_PAGES = 250;
+/* `MAX_PAGES` — the cost cap on how long a document may be — is imported from
+   src/uploads.ts, where it lives beside `MAX_UPLOAD_BYTES`, the other half of
+   the same policy. It was declared here until 2026-09-04, and this module pulls
+   in pdf.js and p-queue, so the browser could not import it: the add box could
+   not say *up to 250 pages* until a reader had uploaded a book and been turned
+   away. Why 250 is safe against the step deadline is the arithmetic under
+   `CHUNK_CONCURRENCY` below; why it is 250 at all is the docblock over the
+   declaration. `pass0`'s guard is the backstop — stage 1 refuses first, in
+   src/pipeline.ts § `refuseAnOverlongPdf`. */
 
 /** No chunk larger than this, however sparse its pages. Long calls drift into summarising. */
 const MAX_CHUNK_PAGES = 6;
@@ -141,6 +134,46 @@ const CHUNK_WORDS = 3200;
 
 /** A page with fewer than this many words in the text layer tells us nothing about density. */
 const ASSUMED_WORDS = 500;
+
+/**
+ * **The third bound on a chunk, and the one for what `CHUNK_WORDS` cannot see.**
+ *
+ * An image-heavy page holds almost no words, so the word bound never closes a
+ * chunk of them and `MAX_CHUNK_PAGES` is all that is left. On Kuhn's 142-page
+ * paper the figure pages 8–13 did exactly that: one chunk of **4.54 MB** against
+ * a 200 KB median, 22× the document's own typical chunk, and it was the 354 s
+ * call in a run whose per-call mean was 52 s and p95 96 s. That outlier is the
+ * whole reason this exists.
+ *
+ * **This is a planning bound and not the request limit.** `MAX_ENCODED_BYTES`
+ * below is the hard ceiling a provider will accept, two orders of magnitude
+ * above this, and it refuses a chunk that is already built. This one shapes the
+ * plan so that nothing normal ever gets near it.
+ *
+ * **Three megabytes, measured rather than picked.** Run over four real
+ * documents, cutting the plans either side of the change and weighing them:
+ *
+ *     document           │ chunks before → after │ largest chunk before → after
+ *     ───────────────────┼───────────────────────┼─────────────────────────────
+ *     kuhn (142pp)       │      69   →   69      │  4.54 MB → 2.58 MB
+ *     easy (8pp)         │       2   →    2      │  0.12 MB → 0.12 MB
+ *     harder (14pp)      │       5   →    6      │  7.98 MB → 7.03 MB
+ *     much-harder (17pp) │       3   →    3      │  2.54 MB → 2.54 MB
+ *
+ * The number sits in the gap the corpus leaves: `harder` and `much-harder`
+ * routinely make 2.5 MB chunks and are not pathological, so a bound below that
+ * would reshape documents that already work — at 1 MB, `much-harder` goes from
+ * 3 chunks to **14** and `harder` from 5 to 11, which is chunk count, and chunk
+ * count is a copy of `SYSTEM` bought each time. 3 MB is the smallest value that
+ * costs Kuhn no extra chunks at all while removing its outlier, and 4 MB
+ * behaves identically on all four — so this is the tighter of two choices the
+ * evidence cannot separate.
+ *
+ * **What it cannot do**, said plainly: split one page. `harder` has a single
+ * page that encodes to 7.0 MB on its own, and it is still sent on its own, over
+ * this bound. Same limitation as `CHUNK_WORDS` against a 10,000-word page.
+ */
+const MAX_CHUNK_BYTES = 3 * 1024 * 1024;
 
 const MAX_TOKENS = 16_000;
 
@@ -187,20 +220,27 @@ const ATTEMPTS = 2;
  * width. Width buys latency, and nothing else.
  *
  * **Why a number rather than "all of them".** Unbounded was the ask, and two of
- * the three reasons against it survived being measured:
+ * the three reasons against it survived being measured — **and the first of
+ * them has since been fixed, so it no longer argues for anything.**
  *
- * - **Memory, and not for the reason first written down.** `cutPages` calls
- *   `PDFDocument.load(source)` and pdf-lib eagerly parses the *whole source
- *   file* every time, so memory scales with N × the **source**, not N × the
- *   chunk — encoded chunks are small (median 0.29 MB on the 144-page paper).
- *   Peak RSS holding N chunks of the dense `evals/pdf/harder` fixture: 749 MB at
- *   8, **866 MB at 16**, 1105 MB at 24, 1374 MB at 32. The ceiling is almost
- *   certainly Vercel's 2 GB default (`vercel.json` sets no `memory` and Vercel
- *   does not allow it there) — **unconfirmed**, because no credential on the box
- *   this was measured on can read the dashboard. 16 leaves real headroom for the
- *   rest of the request and for a co-located second ingest; 32 does not.
+ * - **Memory: no longer a function of the width at all, since 2026-09-04.** The
+ *   argument used to be that `cutPages` called `PDFDocument.load(source)` per
+ *   chunk and pdf-lib eagerly parses the *whole source file* every time, so
+ *   memory scaled with N × the **source** rather than N × the chunk. On the
+ *   8.4 MB 142-page Kuhn paper, peak RSS went 283 MB idle → **466 MB with 16 in
+ *   flight** → 948 MB at 48. `openPdfCuts` parses once and `runPdfExtract` takes
+ *   every cut from that parse before the fan-out, so the same document now
+ *   measures 260 MB idle → 276 MB after the one parse → 311 MB after measuring
+ *   all 142 pages and cutting and *holding* all 71 chunks (22.9 MB of bytes).
+ *   Flat in the width, and ~52 MB over baseline against ~183 MB at 16 and
+ *   ~665 MB at 48. Same box, same file, same day. The Vercel ceiling is almost
+ *   certainly the 2 GB default (`vercel.json` sets no `memory` and Vercel does
+ *   not allow it there) — **still unconfirmed**, because no credential on the
+ *   box this was measured on can read the dashboard.
  * - **Width past the point the deadline is met buys latency nobody is waiting
- *   on**, and costs the memory above.
+ *   on.** This is now the only reason of the two, and it is the one that holds
+ *   the number where it is. Raising the width is out of scope here and stays
+ *   deliberately unraised — see the plan's "Deliberately not doing".
  *
  * The third reason was **overstated and is corrected here**: *"a fatal chunk
  * costs the whole document"*. `keepChunk` runs inside each chunk's own task the
@@ -237,7 +277,15 @@ const ATTEMPTS = 2;
  */
 export const CHUNK_CONCURRENCY = 16;
 
-/** Anthropic's own limit is on the whole encoded request; OpenRouter's providers are no kinder. */
+/**
+ * Anthropic's own limit is on the whole encoded request; OpenRouter's providers
+ * are no kinder.
+ *
+ * **The hard ceiling, and not the planning bound** — `MAX_CHUNK_BYTES` is that,
+ * ten times smaller, and it is what stops an ordinary document ever coming near
+ * this one. This stays as the refusal for a chunk that is already built, which
+ * a single enormous page can still be.
+ */
 const MAX_ENCODED_BYTES = 30 * 1024 * 1024;
 
 // ────────────────────────────────────────────────────────────── the ask
@@ -365,20 +413,77 @@ export interface Chunk {
  *
  * A scan has no word counts at all, which is why `ASSUMED_WORDS` exists: with
  * no information, assume a full page rather than an empty one.
+ *
+ * **And words are not the only thing a page holds**, which is what
+ * `pageBytes` is for — see `MAX_CHUNK_BYTES`. Without it a run of image-heavy
+ * pages is bounded by nothing but `MAX_CHUNK_PAGES`, because the thing making
+ * them big is the thing `CHUNK_WORDS` cannot see.
  */
-export function planChunks(pass: Pass0, maxChunkPages = MAX_CHUNK_PAGES): Chunk[] {
+export function planChunks(
+  pass: Pass0,
+  opts: {
+    maxChunkPages?: number;
+    /**
+     * Each page's encoded size, cut on its own — `PdfCuts.measurePages`.
+     *
+     * Optional because the byte bound needs pdf-lib and half of this
+     * function's callers (the CLI's chunk listing, the eval fixtures, most of
+     * the tests) only want the shape of the plan. Omit it and the plan is
+     * exactly what it was before the bound existed, which the test next to the
+     * bound's own asserts.
+     */
+    pageBytes?: ReadonlyMap<number, number>;
+  } = {},
+): Chunk[] {
+  const maxChunkPages = opts.maxChunkPages ?? MAX_CHUNK_PAGES;
+  const sizes = opts.pageBytes;
+  /**
+   * **What a page costs *on top of* what every cut costs anyway.**
+   *
+   * A one-page cut is not the page: pdf-lib copies the fonts, the catalogue and
+   * the rest of the shared furniture into it, and on Kuhn that floor is 126 KB
+   * of a 156 KB median page. Summing raw per-page sizes would therefore say a
+   * three-page chunk is 468 KB when it is really 205 KB — a bound in those
+   * units would mean nothing you could compare to a real request.
+   *
+   * So: the lightest page stands in for the shared part, and every page is
+   * charged its excess over it. Checked against the real cut sizes on four
+   * documents — the estimate lands between 0.81× and 1.33× of the bytes that
+   * actually go on the wire, which is close enough for a bound that exists to
+   * stop a 22× outlier.
+   */
+  const shared = sizes?.size ? Math.min(...sizes.values()) : 0;
+  const marginal = (page: number) => (sizes ? Math.max(0, (sizes.get(page) ?? shared) - shared) : 0);
+
   const chunks: Chunk[] = [];
   let current: number[] = [];
   let words = 0;
+  let bytes = 0;
   for (const page of pass.pages) {
     const weight = Math.max(page.words, ASSUMED_WORDS);
-    if (current.length && (current.length >= maxChunkPages || words + weight > CHUNK_WORDS)) {
+    const cost = marginal(page.page);
+    const full =
+      current.length >= maxChunkPages ||
+      words + weight > CHUNK_WORDS ||
+      (sizes !== undefined && bytes + cost > MAX_CHUNK_BYTES);
+    /* `current.length &&` on every one of these: a bound may close a chunk, and
+       must never be able to drop a page. One page over any of the three limits
+       is still that page, on its own. */
+    if (current.length && full) {
       chunks.push(chunkFrom(current, chunks));
       current = [];
       words = 0;
     }
+    /* The context page `chunkFrom` is about to attach travels with the chunk, so
+       it is charged to it — the bound is on what the request carries, not on
+       what the chunk is named after. */
+    if (current.length === 0) {
+      const previous = page.page - 1;
+      bytes = shared + (chunks.length && previous >= 1 ? marginal(previous) : 0);
+    }
     current.push(page.page);
     words += weight;
+    bytes += cost;
   }
   if (current.length) chunks.push(chunkFrom(current, chunks));
   return chunks;
@@ -389,8 +494,31 @@ function chunkFrom(pages: number[], before: Chunk[]): Chunk {
   return previous >= 1 && before.length ? { pages, context: previous } : { pages };
 }
 
+/** The source PDF, parsed once, and every page range cut out of that one parse. */
+export interface PdfCuts {
+  /**
+   * The encoded size of every page cut on its own, 1-based.
+   *
+   * Not free — one save per page, measured at 8.8 ms a page on a 142-page
+   * document — so it is a method rather than a field, and the cost is visible
+   * where it is paid. `planChunks` is the only caller.
+   */
+  measurePages(): Promise<Map<number, number>>;
+  /** A page range, 1-based and in the order given, as its own PDF. */
+  cut(pages: number[]): Promise<Uint8Array>;
+}
+
 /**
- * `pdf-lib` cuts a page range out of the source.
+ * **Parse the source once and cut every chunk out of that.**
+ *
+ * The old shape was one function, `cutPages(source, pages)`, called per chunk —
+ * and pdf-lib eagerly parses the *whole* source on every `PDFDocument.load`,
+ * so width N cost N full parses of the same file. Measured on the 8.4 MB
+ * 142-page Kuhn paper: 291 ms a call, 309 ms a call over twenty sequential
+ * calls, and peak RSS 281 MB idle → 435 MB at 16 in flight → 926 MB at 48. The
+ * parse is synchronous on the one event loop, so it was also wall-clock off a
+ * deadline that is already the binding constraint. `CHUNK_CONCURRENCY`'s memory
+ * paragraph was written against that curve and is rewritten against this one.
  *
  * The three `set…` calls are not cosmetic. pdf-lib stamps a fresh document id
  * and the current time into every save, so the same page range produces
@@ -398,8 +526,15 @@ function chunkFrom(pages: number[], before: Chunk[]): Chunk {
  * never hits, and a claim that two calls saw "the same PDF" is false while
  * looking true. Found in the bake-off, where it had quietly invalidated a
  * comparison.
+ *
+ * **`cut` is not called concurrently and should not be**, which is why
+ * `runPdfExtract` cuts every chunk it needs before the fan-out starts rather
+ * than inside each task. `copyPages` flushes the source document before reading
+ * it, and interleaving that across sixteen tasks is a race nobody needs: the
+ * cuts are cheap once the parse is paid for, and the bytes they produce are
+ * bounded by roughly the source size rather than by N × the source.
  */
-export async function cutPages(source: Uint8Array, pages: number[]): Promise<Uint8Array> {
+export async function openPdfCuts(source: Uint8Array): Promise<PdfCuts> {
   /* **Imported here rather than at the top of the file**, and it is a cold-start
      cost rather than tidiness. `api-dist/vercel.js` is one bundle that every
      request loads before its clock starts, and a static import here put pdf-lib
@@ -411,23 +546,48 @@ export async function cutPages(source: Uint8Array, pages: number[]): Promise<Uin
      in src/pdf.ts; Node caches the module, so the second call is free. */
   const { PDFDocument } = await import("pdf-lib");
   const src = await PDFDocument.load(source);
-  const out = await PDFDocument.create();
-  const copied = await out.copyPages(
-    src,
-    pages.map((p) => p - 1),
-  );
-  for (const page of copied) out.addPage(page);
-  out.setCreationDate(new Date(0));
-  out.setModificationDate(new Date(0));
-  out.setProducer("spideryarn");
-  return out.save();
+  const cut = async (pages: number[]): Promise<Uint8Array> => {
+    const out = await PDFDocument.create();
+    const copied = await out.copyPages(
+      src,
+      pages.map((p) => p - 1),
+    );
+    for (const page of copied) out.addPage(page);
+    out.setCreationDate(new Date(0));
+    out.setModificationDate(new Date(0));
+    out.setProducer("spideryarn");
+    return out.save();
+  };
+  return {
+    cut,
+    async measurePages() {
+      const sizes = new Map<number, number>();
+      for (let page = 1; page <= src.getPageCount(); page++) {
+        sizes.set(page, (await cut([page])).byteLength);
+      }
+      return sizes;
+    },
+  };
+}
+
+/**
+ * The pages the file actually carries: the chunk's own, and the context page in
+ * front of them.
+ *
+ * One definition, because the cut and the instruction that describes it have to
+ * agree about the order — the prompt tells the model "the attached file's pages
+ * are, in order, …" and a mismatch there is a whole chunk read under the wrong
+ * page numbers.
+ */
+function sentPages(chunk: Chunk): number[] {
+  return chunk.context ? [chunk.context, ...chunk.pages] : chunk.pages;
 }
 
 /** What the model is told, beyond the prompt: which pages these are, and which not to emit. */
 export function instructionFor(chunk: Chunk): string {
   const { pages, context } = chunk;
   const emit = pages.length === 1 ? `page ${pages[0]}` : `pages ${pages[0]}–${pages.at(-1)}`;
-  const sent = context ? [context, ...pages] : pages;
+  const sent = sentPages(chunk);
   const note =
     context === undefined
       ? ""
@@ -1529,7 +1689,13 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
     throw err;
   }
   const rawSha256 = createHash("sha256").update(opts.bytes).digest("hex");
-  const chunks = planChunks(pass);
+  /* One parse of the source for the whole stage. Every cut below comes out of
+     it — see `openPdfCuts` for what it used to cost to do otherwise. */
+  const cuts = await openPdfCuts(opts.bytes);
+  /* Measured here and nowhere else: this is the only caller of `planChunks`
+     that is about to *send* the chunks, so it is the only one that pays for
+     knowing how big they are. ~9 ms a page, once. See `MAX_CHUNK_BYTES`. */
+  const chunks = planChunks(pass, { pageBytes: await cuts.measurePages() });
   /**
    * **Every key, and then one read for all of them.**
    *
@@ -1543,6 +1709,47 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
    */
   const keys = chunks.map((chunk) => chunkKey(chunk, { rawSha256, readerId: reader.id }));
   const stored = await storedChunks(opts.checkpoints, opts.slug, keys);
+
+  /**
+   * **Every chunk that has to be read, cut here, from the one parsed source,
+   * before any of them is sent.**
+   *
+   * Three things fall out of doing it here rather than inside each task, and
+   * the first is why it moved. `openPdfCuts` parses once; the old `cutPages`
+   * parsed the whole 8.4 MB source *per call*, so peak RSS grew with the width
+   * — 435 MB at 16 in flight, 926 MB at 48 — for bytes that are the same every
+   * time. Second, a chunk asked twice (`ATTEMPTS`) is now cut once. Third, the
+   * cutting is sequential, which is what `PdfCuts.cut` wants.
+   *
+   * What this holds instead is the cut bytes for every uncached chunk at once.
+   * That is bounded by roughly the source plus one shared skeleton per chunk —
+   * 17 MB on the 142-page paper against a source of 8.4 MB — rather than by
+   * N × the source, so it is a trade in the right direction and not a swap.
+   *
+   * `usableChunkReading` moved up with it, so a chunk that has a checkpoint is
+   * never cut at all. It is the same call it was inside the task, made once per
+   * chunk rather than once, and its warning is still one line per bad
+   * checkpoint.
+   */
+  const cached = new Map<number, ChunkReading>();
+  const bodies = new Map<number, Uint8Array>();
+  for (const [at, chunk] of chunks.entries()) {
+    /* `keys` is built from `chunks` by `map`, so the index is the same chunk —
+       but `noUncheckedIndexedAccess` is on and a missing key would be a wiring
+       bug rather than a miss, so it says so instead of quietly checkpointing
+       under `undefined`. */
+    const key = keys[at];
+    if (key === undefined) {
+      throw new Error(`No checkpoint key was minted for chunk ${at} of ${chunks.length}.`);
+    }
+    const reading = usableChunkReading(stored.get(key), {
+      slug: opts.slug,
+      chunk: key,
+      pages: chunk.pages,
+    });
+    if (reading) cached.set(at, reading);
+    else bodies.set(at, await cuts.cut(sentPages(chunk)));
+  }
 
   const all: PdfRecord[] = [];
   const usage = { input: 0, output: 0 };
@@ -1610,14 +1817,8 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
       queue.add(
         async () => {
           /* Minted above, with all of its siblings, so the whole set could be
-             read in one statement. `keys` is built from `chunks` by `map`, so
-             the index is the same chunk — but `noUncheckedIndexedAccess` is on
-             and a missing key would be a wiring bug rather than a miss, so it
-             says so instead of quietly checkpointing under `undefined`. */
-          const key = keys[at];
-          if (key === undefined) {
-            throw new Error(`No checkpoint key was minted for chunk ${at} of ${chunks.length}.`);
-          }
+             read in one statement, and checked there too. */
+          const key = keys[at]!;
 
           /**
            * **One retry of a chunk that fails its check, and it is not the
@@ -1636,30 +1837,35 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
            * eight-page paper one run in three, on a fault that is gone when you
            * ask again, is a gate somebody turns off.
            *
-           * Two runs, then it fails with the page numbers in the message. The
-           * failure is still visible and still hard.
+           * **Two runs, and then it is published with a quality note** — not,
+           * as this said until 2026-09-04, "then it fails with the page numbers
+           * in the message. The failure is still visible and still hard." That
+           * stopped being true on 2026-08-30; the reasoning is on
+           * `runPdfExtract`'s publish branch. What a second attempt buys is
+           * therefore fewer notes on the article rather than the difference
+           * between an article and none — measured on the 142-page Kuhn paper,
+           * 21 of 69 chunks were asked twice and 15 still failed their final
+           * attempt, so it published with 20 notes.
            */
           let reading: ChunkReading;
           let result: Check;
           /* Empty, and deliberately not `seen` — see the note above this block. */
           const alone = new Set<string>();
           const asked: string[] = [];
-          const cached = usableChunkReading(stored.get(key), {
-            slug: opts.slug,
-            chunk: key,
-            pages: chunk.pages,
-          });
-          if (cached) {
-            reading = cached;
+          const checkpointed = cached.get(at);
+          if (checkpointed) {
+            reading = checkpointed;
             result = checkChunk(reading, chunk, pass, alone);
           } else {
+            /* Cut before the fan-out, from the one parsed source, and reused
+               across both attempts. A chunk with no checkpoint always has a
+               body; a missing one is a wiring bug and says so. */
+            const body = bodies.get(at);
+            if (body === undefined) {
+              throw new Error(`Chunk ${at} of ${chunks.length} was never cut out of the source.`);
+            }
             for (let attempt = 1; ; attempt++) {
-              const sent = chunk.context ? [chunk.context, ...chunk.pages] : chunk.pages;
-              reading = await reader.read(
-                await cutPages(opts.bytes, sent),
-                instructionFor(chunk),
-                signal,
-              );
+              reading = await reader.read(body, instructionFor(chunk), signal);
               usage.input += reading.usage.input;
               usage.output += reading.usage.output;
               /* `length` is a truncated answer, and a truncated answer is a lost page —

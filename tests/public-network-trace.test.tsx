@@ -72,7 +72,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Article } from "../src/types.js";
-import type { PublicArticle, PublicTweets } from "../src/public-types.js";
+import type { PublicArticle, PublicSketch, PublicTweets } from "../src/public-types.js";
 /* The vocabulary itself, so the sweeps below cannot fall behind it — src/modes.ts
    imports nothing, which is why the server can read it too. */
 import { DEFAULT_MODE, MODES, type Mode } from "../src/modes.js";
@@ -200,8 +200,63 @@ const PDF_META = {
  */
 const PUBLIC_GIST = "What the piece says.";
 
+/**
+ * **A drawing, because the fixture's diagram band is a visitor's default now.**
+ *
+ * Small on purpose — one scene, one box — but a real `Sketch`: with no sketch
+ * at all the band says *nobody has drawn this one yet*, which is a true and
+ * common state and proves nothing about the picture a visitor is supposed to
+ * get. The absent case is asserted separately below.
+ */
+const PUBLIC_SKETCH_TITLE = "One claim, one example";
+const SKETCH: PublicSketch = {
+  title: PUBLIC_SKETCH_TITLE,
+  caption: "The example is doing the arguing.",
+  scenes: [
+    {
+      id: "s0",
+      title: "Overview",
+      height: 200,
+      items: [
+        {
+          kind: "node",
+          id: "n1",
+          shape: "box",
+          x: 10,
+          y: 10,
+          w: 120,
+          h: 40,
+          text: "The claim",
+          size: "md",
+          block: "spya-bbbbbb",
+        },
+      ],
+    },
+  ],
+};
+
+/** The owner's own words, on the fixture's one paragraph. */
+const PUBLIC_NOTE = "The bit I keep coming back to.";
+const PUBLIC_ANSWER = "Because the example is doing the arguing.";
+
 const ARTICLE: PublicArticle = {
   meta: { slug: SLUG, title: "A piece", byline: "Somebody" },
+  sketch: SKETCH,
+  /* **A real one, not `[]`.** A visitor's drawer showing nothing would pass
+     every assertion about *not fetching* while proving nothing about what they
+     are shown — which is the whole of stage 3.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3. */
+  comments: [
+    {
+      id: "spya-cmt23z",
+      blockId: "spya-bbbbbb",
+      quote: "The first paragraph of the piece.",
+      start: 0,
+      createdAt: "2026-09-01T09:00:00.000Z",
+      body: PUBLIC_NOTE,
+      answer: PUBLIC_ANSWER,
+    },
+  ],
   /* Absent: this fixture has never been through the `assets` step, so the
      reader hot-links exactly as it always did. The third state, and it is
      what the publisher-host assertions below are measured against. */
@@ -716,13 +771,33 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      the *present*-quotes renderer; that one could break with this green, and no
      fixture in this file can reach it. */
   quotes: { where: VISITOR_BAND, says: "Nobody has built a set of quotes for this piece yet" },
-  /* The six that spend, each named by `MODE_LABEL[mode]` — the policy in
+  /* No timeline on the payload either, so this is the *nobody built one*
+     sentence rather than the boundary — it moved out of the group below on
+     2026-09-04, when the payload grew a flag to be sure with.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1. */
+  timeline: { where: VISITOR_BAND, says: "Nobody has built a timeline for this piece yet" },
+  /* **Free since 2026-09-04, and it is the only one here that draws a real
+     picture for a visitor.** Force is built from the tree in the payload; the
+     panel's three fetching hooks are off and the picker is hidden. The string
+     is a node title off that tree, so this row fails if the picture stops being
+     drawn — asserting the band's own heading would pass over an empty
+     `<aside>`. § Stage 2. */
+  /* **A visitor's diagram is the Sketch**, since 2026-09-04 — and it was the
+     free Force picture for one day in between, which is why this row has moved
+     twice. Greg: *"only Sketch will be visible to those without Experimental
+     Features"*, and an already-drawn one only.
+
+     The string is the drawing's own title, off the payload, so this row is
+     about the picture rather than about the panel's furniture. Unlike Force,
+     the Sketch needs no layout to put its title on screen, so jsdom can see it
+     — which is why this assertion could get stronger when the picture changed.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Sketch. */
+  diagram: { where: ".mode-band.diag", says: PUBLIC_SKETCH_TITLE },
+  /* The four that spend, each named by `MODE_LABEL[mode]` — the policy in
      src/web/visitor.ts carries no string of its own. */
   search: { where: VISITOR_BAND, says: "Search is for whoever added this article" },
   chat: { where: VISITOR_BAND, says: "Chat is for whoever added this article" },
   remember: { where: VISITOR_BAND, says: "Remember is for whoever added this article" },
-  diagram: { where: VISITOR_BAND, says: "Diagram is for whoever added this article" },
-  timeline: { where: VISITOR_BAND, says: "Timeline is for whoever added this article" },
   /* Referee reached the fall-through until 2026-09-02 and was announced by its
      raw mode id; the capital R is the assertion that it no longer does.
      docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C2. */
@@ -1322,12 +1397,138 @@ describe("a signed-out browser on a shared document", () => {
     expect(outsidePublic()).toEqual([]);
   });
 
-  it("opens the comments drawer without asking for anybody's comments", async () => {
-    await open("?panel=questions");
+  /**
+   * **The hostile deep link, one picture at a time.**
+   *
+   * Hiding the chips is not the gate and never could be: `?diagram=` is
+   * ordinary query state, so a pasted address — or the Back button onto one —
+   * names a picture without pressing anything. Four of the five spend:
+   * `drift` and `trail` POST for a projection, `sketch` and `illustrated`
+   * mount children that auto-run a job, and `force` itself POSTs for
+   * embeddings. `DiagramPanel` pins a visitor's `kind` to `force` and turns
+   * off all three of its fetching hooks, and this is the assertion that the
+   * pin holds from the URL rather than only from the picker.
+   *
+   * **Asserted per kind rather than in one loop over a joined string**, so a
+   * failure names the picture that leaked. GPT Sol asked for exactly this
+   * shape when it reviewed the stage.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2.
+   */
+  it.each(["force", "drift", "trail", "sketch", "illustrated"])(
+    "buys nothing when a visitor arrives at ?diagram=%s",
+    async (kind) => {
+      await open(`?mode=diagram&diagram=${kind}`);
+
+      /* The band is open — a visitor gets the free picture, so this is not the
+         vacuous pass where nothing mounted and therefore nothing fetched. */
+      expect(host.querySelector(".mode-band.diag"), `${kind}: the band`).not.toBeNull();
+      expect(trace.filter((r) => r.method !== "GET"), `${kind}: no POST`).toEqual([]);
+      expect(outsidePublic(), `${kind}: nothing outside /api/public/`).toEqual([]);
+      /* Named individually as well, because `outsidePublic` would also be empty
+         if the whole panel failed to mount. These are the four addresses this
+         stage is about. */
+      for (const paid of ["/api/similar/", "/api/projection/", "/api/sketch/", "/api/illustrated/"]) {
+        expect(trace.filter((r) => r.url.includes(paid)), `${kind}: ${paid}`).toEqual([]);
+      }
+    },
+  );
+
+  /**
+   * **Rewritten 2026-09-04.** This used to assert the drawer said *comments
+   * belong to whoever added this article* — the sentence a visitor got instead
+   * of the comments. They get the comments now, and still ask for nothing:
+   * they arrived in the article payload.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
+   */
+  /**
+   * **The Sketch a visitor is never offered.**
+   *
+   * Greg asked for Sketch on a shared link and, asked whether a visitor could
+   * *draw* one, said an already-drawn Sketch only. The empty state is where
+   * that decision is either kept or lost: the owner's version of this screen
+   * names the price and carries the button that spends it, and a visitor's must
+   * carry neither.
+   *
+   * **Asserted on an article with no sketch**, which is the ordinary case —
+   * `sketch` is not in `DEFAULT_INGEST_STEPS`, so most articles have never had
+   * one. The fixture carries one by default, so this case has to take it away.
+   */
+  it("offers a visitor no way to draw a sketch, and never names its price", async () => {
+    /* `delete` rather than `sketch: undefined`, because
+       `exactOptionalPropertyTypes` distinguishes an absent key from one holding
+       `undefined` — and absent is what the wire actually carries. */
+    const { sketch: _drawn, ...withoutSketch } = ARTICLE;
+    served = withoutSketch;
+    await open("?mode=diagram");
+
+    /* The honest sentence, and the whole of it. */
+    expect(host.textContent).toContain("Nobody has drawn this one yet");
+    /* And none of the owner's invitation. `$0.20` and the wait are the two
+       halves of the price, and "Draw the argument" is the button. */
+    expect(host.textContent, "the price").not.toContain("costs one model call");
+    expect(
+      [...host.querySelectorAll("button")].some(
+        (b) => (b.textContent ?? "").includes("Draw the argument"),
+      ),
+      "the Draw button",
+    ).toBe(false);
+    /* The profile tickbox goes with it — it is an input to a job. */
+    expect(host.querySelector(".sk-run"), "the run row").toBeNull();
+
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
     expect(outsidePublic()).toEqual([]);
-    /* And it says whose they would be, rather than "nothing asked yet" — which
-       is what an empty owner drawer says, and would be a false claim here. */
-    expect(host.textContent).toContain("belong to whoever added this article");
+  });
+
+  /**
+   * **And the drawing itself comes from the payload**, with no request for it.
+   *
+   * The negative twin of the case above: with a sketch on the article a visitor
+   * sees the picture, and `/api/sketch/:slug` is never asked — which is the
+   * assertion that would fail if somebody gave the visitor arm a slug.
+   */
+  it("draws the owner's sketch from the payload, asking nothing", async () => {
+    await open("?mode=diagram");
+
+    expect(host.textContent).toContain(PUBLIC_SKETCH_TITLE);
+    expect(trace.filter((r) => r.url.includes("/api/sketch/")), "no sketch read").toEqual([]);
+    expect(outsidePublic()).toEqual([]);
+  });
+
+  it("shows the owner's comments in the drawer, without asking for them", async () => {
+    await open("?panel=questions");
+
+    expect(outsidePublic()).toEqual([]);
+    /* The reader's own words, which is what the list previews. */
+    expect(host.textContent).toContain(PUBLIC_NOTE);
+    /* And the sentence that is no longer true is really gone, rather than
+       merely not asserted — the failure mode of a rewritten expectation. */
+    expect(host.textContent).not.toContain("belong to whoever added this article");
+  });
+
+  /**
+   * **Opening one gives the answer and none of the verbs.**
+   *
+   * The dialog is where every owner capability lives — edit, delete, retry,
+   * "search the web", the follow-up composer — and `CommentAccess`'s visitor
+   * arm carries none of them. Asserted by *label*, because that is what a
+   * reader would press; a query on a class name would pass over a button whose
+   * text changed.
+   */
+  it("opens a comment read-only, with no verbs and no composer", async () => {
+    await open("?panel=questions&note=spya-cmt23z");
+
+    expect(host.textContent, "the answer").toContain(PUBLIC_ANSWER);
+    for (const verb of ["Delete", "Try again", "Search the web"]) {
+      const found = [...host.querySelectorAll("button")].some(
+        (b) => (b.textContent ?? "").trim() === verb,
+      );
+      expect(found, verb).toBe(false);
+    }
+    /* The follow-up box is absent rather than disabled — a greyed-out one is an
+       invitation to press it, and the press would spend the owner's money. */
+    expect(host.querySelector(".cmt-followup"), "no composer").toBeNull();
+    expect(outsidePublic()).toEqual([]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
   });
 
   /**
@@ -2054,6 +2255,19 @@ describe("the same address, as the owner", () => {
     session.user = { id: "owner-1", email: "greg@example.com" };
     notBuilt = `/api/sketch/`;
     await open("?mode=diagram");
+
+    /* **Both halves of the arrival, before the trace is cleared.** The read
+       really happened and really said no, so the POST below is a decision
+       rather than an accident of ordering — and it happens *here* rather than
+       after the press, because since 2026-09-04 Sketch is the picture Diagram
+       opens on (params.ts § diagramParam). What the reader meets is the empty
+       state's invitation with the price on it, and this is the assertion that
+       meeting it costs nothing. */
+    expect(trace.some((r) => r.url.startsWith("/api/sketch/")), "the GET settled").toBe(true);
+    expect(
+      trace.filter((r) => r.method === "POST" && r.url === "/api/jobs"),
+      "arriving at Diagram bought a picture",
+    ).toEqual([]);
     trace.length = 0;
 
     const chip = host.querySelector<HTMLButtonElement>('[data-diag-kind="sketch"]');
@@ -2061,9 +2275,6 @@ describe("the same address, as the owner", () => {
     await act(async () => chip?.click());
     await settle();
 
-    /* The artefact read really happened and really said no, so the POST is a
-       decision rather than an accident of ordering. */
-    expect(trace.some((r) => r.url.startsWith("/api/sketch/"))).toBe(true);
     expect(
       trace.filter((r) => r.method === "POST" && r.url === "/api/jobs"),
       "exactly one job, under React's double-invoked effects",

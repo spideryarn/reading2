@@ -29,6 +29,7 @@
  *
  * See docs/plans/260827ai-public-read-only-access.md § The seam.
  */
+import type { PublicLibrary } from "../public-library-types.js";
 import type { PublicArticle } from "../public-types.js";
 import { readJson } from "./lib/api.js";
 
@@ -106,12 +107,32 @@ export async function loadPublicArticle(slug: string): Promise<PublicRead<Public
 }
 
 /**
- * The one loader above, and the shape of any that follow.
+ * `GET /api/public/library` — the shelf of every article somebody has shared.
  *
- * Kept generic though there is a single caller since 2026-09-02, when
- * `loadPublicMetadata` was deleted with its route: what it holds is the
- * 404-is-an-answer rule, and that belongs to the namespace rather than to the
- * article.
+ * **No slug, and so nothing to encode**, which is the whole difference between
+ * this loader and the one above. The path is a constant, and
+ * tests/public-client-fetch.test.ts checks it against the server's own inventory
+ * (src/public/route-names.ts) so a rename on either side is a red test rather
+ * than a 404 in a stranger's browser.
+ *
+ * `not-shared` is in the return type because `read` is shared and the namespace's
+ * rule is the namespace's; in practice this route does not answer 404 — an empty
+ * shelf is a 200 with an empty list, because *"nobody has shared anything"* is
+ * an answer about the world rather than a missing route.
+ * src/store/public-library.ts § `scrubbed`.
+ */
+export async function loadPublicLibrary(): Promise<PublicRead<PublicLibrary>> {
+  return read<PublicLibrary>("/api/public/library");
+}
+
+/**
+ * The two loaders above, and the shape of any that follow.
+ *
+ * Generic because what it holds is the 404-is-an-answer rule, and that belongs
+ * to the namespace rather than to the article. It was down to one caller between
+ * 2026-09-02, when `loadPublicMetadata` was deleted with its route, and
+ * 2026-09-04, when the library listing arrived — kept as a shared helper through
+ * that, which is why the second loader is two lines.
  */
 async function read<T>(path: string): Promise<PublicRead<T>> {
   const res = await publicFetch(path);

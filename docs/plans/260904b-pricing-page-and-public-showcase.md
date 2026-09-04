@@ -83,15 +83,81 @@ a filter*. A public index changes what an owner agreed to.
 Sol offered three ways out; **Greg chose the third on 2026-09-04: list every public article, and
 change the promise.** So two things are load-bearing and neither may slip:
 
-- **The sharing copy changes before the listing ships, not after.** `SHARING_ON`, the confirmation
-  dialogue (`SHARING_CONFIRM_TITLE` and its body) and `SHARING_CANNOT_UNRING` must say that a shared
-  article may be listed publicly. Shipping the listing first would retroactively publish material
-  people shared under a narrower promise. This is a gate, not a task ordering preference.
-- **Before deploying, count the public articles that are not Greg's.** This box reaches only the
-  local Supabase, where there are currently **zero** public articles. If production holds public
-  articles owned by somebody else, they were shared under the old sentence, and Greg decides per
-  article whether to notify, unshare or leave — before the index is live, not after. The plan cannot
-  make that call and does not.
+- **The sharing copy changes.** `SHARING_ON`, the confirmation dialogue (`SHARING_CONFIRM_TITLE` and
+  its body) and `SHARING_CANNOT_UNRING` say that a shared article may be listed publicly.
+
+#### What the sharing copy has to sit against, settled 2026-09-04
+
+The neighbouring worktree landed its half first and handed over the exact text, so this is written
+down rather than remembered. Three constraints on the sentences this plan still owes:
+
+- **`PrivacyPage.tsx` § "Who can see your shelf" already says *"The sharing card lists exactly what
+  will go out before you turn it on."*** That is a promise about *our* dialog, made on their page. So
+  the confirm body may keep enumeration to one clause — but the inventory underneath it has to
+  actually be complete, or that sentence is false.
+- **Do not promise conversations either way round.** Their paragraph says *"Your chat conversations
+  are not shared"* deliberately: the old sentence was *"Your notes, your comments and your
+  conversations are not shared"*, two thirds of it stopped being true, and naming the surviving third
+  is what stops a reader guessing which. So our copy must not say notes stay private, and must not
+  imply chat is shared.
+- **One sentence on that page is left for us**, untouched on purpose: the section opens *"Your
+  articles and notes are yours. Another reader signed into Spideryarn cannot see them."* A public
+  index makes that need a caveat, and it is ours to add in the stage that builds the index — not
+  before, because the page must not describe a listing that does not exist.
+
+Also worth knowing when writing the inventory: `comments` is hand-written prose in `ALWAYS_SHARED`
+because it has no mode; timeline and diagram appear automatically through the `MODES` sweep. Saved
+searches are **not** in the inventory yet — that row arrives with the stage that builds them, because
+a row promising them today would be false.
+
+**And that is the argument for the confirm body enumerating nothing at all.** Saved searches *are*
+going to be shared, one stage from now. Any sentence in the dialog that lists what goes out is a
+sentence that becomes wrong the day that row lands, and nobody will think to re-read a confirmation
+dialog when adding an artefact. The inventory is derived and cannot go stale; prose beside it can.
+So the body points at the inventory and the inventory does the listing — which is also what makes
+their page's *"lists exactly what will go out"* stay true without anybody maintaining it.
+
+**Placement, from the same handover:** the caveat belongs *inside* their "anyone with the link can
+read it without signing in" sentence rather than after it. Two sentences — reachable by link, then
+also listed — read as a correction; one reads as a single fact.
+
+**And `SHARING_ON` is not one sentence in one place**, which is the thing to check before editing it.
+It is the sharing card's line, the shelf badge's hover text (`SHARING_BADGE`), and half of the
+masthead's mark (`SHARING_MARK_PUBLIC` is built from it, deliberately, so the three cannot drift into
+near-misses of one sentence — the dock and the band came apart exactly that way). So the new wording
+has to work as a **card line, a badge tooltip and a link label at once**, which rules out anything
+long.
+
+The clause it loses is *"with the link"*, and losing it is the point: reaching the article is no
+longer conditional on having been sent one. Draft, to be checked against the three surfaces rather
+than admired in a plan — *"Anyone can read this without signing in, and it's listed publicly."*
+
+### And then it stopped being a gate, for a reason about today rather than about the design
+
+The first version of this section made two things load-bearing: that the copy ship *before* the
+listing, and that somebody count the public rows in production that are not Greg's. Both existed to
+protect owners who shared under a narrower promise.
+
+Meanwhile a second worktree (`260904c-more-modes-on-a-shared-link`) was widening the same promise
+from the other side: a visitor to a shared article would also get the owner's **comments, chat
+transcripts and saved searches**. Its agent flagged the same retroactive-consent problem
+independently, and the two changes together are different in kind from either alone — an article
+shared in July under *"anyone with the link can read this"* would become listed *and* carry the
+reader's own questions about it, with the owner pressing nothing.
+
+Put to Greg as one decision, 2026-09-04:
+
+> There are no users yet, only me. So no risk. Do what's simplest.
+
+So: **both changes apply retroactively to every public article, with no grandfathering flag, no
+old-versus-new consent distinction, and no notice.** The pre-deploy count is dropped with them.
+
+**The reason is a fact about today, not a judgement that the exposure does not matter**, and that
+distinction is the whole reason this section survives rather than being deleted. It rests on there
+being one account holder. The moment there is a second, the question returns — so the dialog copy
+still has to say plainly what a shared link now carries, which is cheap and worth doing properly for
+an audience of one. Written down so that a later reader does not mistake *"we decided this was
+fine"* for *"we decided this did not apply to anybody yet"*.
 
 ### 2. The URL cannot be the consent, and the first mechanism did not work
 
@@ -227,6 +293,35 @@ product.
   and a currency switcher (hosted Checkout picks the currency from the customer's location — which
   is why each Stripe price carries all three, [billing.md](../project/billing.md)).
 
+## Where this stands, 2026-09-04 evening
+
+**Important work left.** Three of six stages are on `dev` and the tree is green; what remains
+includes a promise the code has already broken.
+
+| Stage | State |
+|---|---|
+| 1 — buying from `/pricing` | **on `dev`** (`275a6230`, `fd081a15`) |
+| 2 — the pricing page rebuilt | **on `dev`** (`07412b79`) |
+| 3a — the listing's data and API | **on `dev`** (`80573d0c`, `1ef8ba6b`) |
+| 3b — `/read/public` itself | not started; two lines flip the 404s, plus the page |
+| 4 — showcase links, takedown route, byline | not started |
+| 5 — a public article counts half | not started; needs a migration |
+
+**The one thing that is worse than not-yet-built.** Stage 3a shipped the listing's API while
+`src/messages.ts` was fenced by a neighbouring session, so `SHARING_ON` still tells an owner *"Anyone
+with the link can read this"* when the code now makes public articles enumerable. Nothing is exposed
+that Greg did not agree to expose — he is the only account holder — but **the app is saying something
+untrue**, and `PrivacyPage` now promises *"The sharing card lists exactly what will go out before you
+turn it on"* on top of it. This is the next thing to do, and it is small: the constants are agreed to
+be ours, and the wording is drafted in §1 above.
+
+**What each remaining stage costs, honestly.** 3b is the cheapest — the route parses, both sides
+answer 404 deliberately, and it needs a page reusing the shelf's card with the owner verbs off.
+Stage 5 is the expensive one and the only one touching money: a migration adding `article_id` to
+`ingest_events`, a weighted `SUM` replacing a `COUNT`, and a warning at the unshare moment that is a
+gate rather than a nicety, because the free tier's window is lifetime and there is no next month to
+rescue anybody who unshares themselves over the wall.
+
 ## Stages
 
 ### Stage 1 — you can pay from the page that shows the prices
@@ -267,6 +362,22 @@ product.
 - **Done:** a private article can never appear in the listing, proven by a two-owner test that was
   red first; the generated-SQL assertion is in place; sharing copy tells the truth.
 
+### Stage 3c — the copy stage 3a owed, paid late
+
+**This runs first, before 3b**, because it is the one item where the app is saying something that is
+not true rather than merely missing a feature. `src/messages.ts` was fenced by a neighbouring session
+when 3a landed, so the listing shipped and the promise did not change with it.
+
+- `SHARING_ON` stops promising reachability-by-link only. Its two dependants
+  (`SHARING_MARK_PUBLIC`, and the shelf badge's hover) inherit whatever it becomes, so length is a
+  constraint and not a preference — check the masthead mark and the badge, not just the card.
+- `sharingConfirmBody` gains the listing, and still enumerates nothing (§1): the inventory does the
+  listing, prose beside it goes stale the day saved searches land.
+- `PrivacyPage.tsx` § *Who can see your shelf* — the caveat goes **inside** the "anyone with the
+  link" sentence, not after it, per the neighbouring worktree's handover.
+- **Done:** no surface tells an owner that sharing is link-only, and the four constants still read as
+  one voice rather than four near-misses.
+
 ### Stage 3b — `/read/public`
 
 - `/read/public` matched before `/read/:slug` in the client **and** the edge (§3), after the
@@ -284,6 +395,13 @@ product.
   keeps the `article_visibility_changes` rights row honest — a raw SQL flip would not).
 - Showcase links driven by the listing, so an unshared article leaves no dead link.
 - **Pre-deploy gate:** the count of non-Greg public rows in production (§1).
+- **Which articles to flip is a content decision with a technical constraint.** As of `8f752885` a
+  visitor's Diagram shows the **Sketch**, and `sketch` is not in `DEFAULT_INGEST_STEPS` — so most
+  articles have never had one drawn and their Diagram mode tells a stranger *"Nobody has drawn this
+  one yet."* A showcase article whose headline mode is empty is a showcase that argues against us.
+  The flag is on the wire as `PublicArtefacts.sketch`, so this can be checked rather than guessed.
+  The listing card does **not** carry artefact flags and should not start: a card advertising what a
+  piece has is a second projection to keep in step with the reader.
 
 ### Stage 5 — a public article counts half
 
@@ -321,6 +439,76 @@ people to say yes, and stage 3 is simultaneously widening what sharing *means* f
 link" to "listed publicly". Both dials move the same way at once. Fable was asked for a straight
 answer on whether that is a genuine problem; whatever it says goes in the log here, and if it is a
 problem the answer is a product decision for Greg, not a mitigation an agent picks.
+
+#### The banner, added 2026-09-04
+
+Greg, after the mechanics above were worked out:
+
+> Perhaps we could also add a banner for free users who have hit their 3-article quota, e.g. along
+> the lines of *"If you are willing to make some of these articles Public-readable, then they only
+> count as half-an-article towards your 3-article quota"* or something like that, but better-worded
+> and more fully explained. Use your judgment about copy and placement, with input from Fable if
+> needed, then consider it approved.
+
+**It cannot ship before the rule it describes**, so it is part of this stage and not a separate one.
+A banner offering a discount the code does not give is the same class of fault as stage 3c's.
+
+**The shape is already in the tree, and it is not a banner.** `src/web/QuotaNotice.tsx` renders every
+ingest refusal in four places from one component, and already chooses a different remedy per
+refusal code with no `default` arm. So this is a second thing that component can say, not a new
+surface — which also means it inherits the four placements for free rather than three of them
+forgetting it.
+
+**Fable answered on 2026-09-04, and the answer changed the shape of it. It is not a banner.**
+
+`QuotaNotice` stays untouched. The offer is **one conditional sentence inside the server's own
+refusal**, appended by `ingestQuotaReached` — which means all four placements inherit it rather than
+three of them forgetting it, and there is still one link per refusal, which is that component's own
+rule. A standalone banner component is cut.
+
+- **`pay-free` and `pay-limit` get it. `pay-lapsed` does not**, and the reason is arithmetic rather
+  than tone: the lifetime count includes the paid months, so a lapsed reader with forty charged rows
+  is eighty half-units against a budget of six and cannot share their way under the wall. The offer
+  would be false for almost everybody who saw it, and they already have a real remedy.
+- **It is conditional on a number the server computed**, never unconditional. The same usage query
+  can count the charged rows that resolve to a currently-private article, so the sentence appears
+  only when sharing would actually make room — which is what stops it being shown to the reader who
+  has already shared everything, and to the reader whose rows all predate the discount and cannot be
+  cheapened at all. **Copy cannot rescue a false offer; conditionality has to.**
+- **The number is computed, never written into the prose.** No surface says "6 public articles" as a
+  literal.
+
+**And two rules about where money may appear, which are the answer to the ethical question.** Fable's
+verdict is that the worry is real, small, and fixable by placement rather than by delay:
+
+- **Money never appears inside the sharing confirmation.** The rights tick-box is not a rights
+  *check* — it moves responsibility onto the owner, and the platform's actual protection is that plus
+  the takedown route. A discount printed beside it makes the inducement ours and weakens exactly
+  that.
+- **Unsharing is never harder than sharing.** This is the sharper half, and it inverts what the
+  mechanics section assumed: the unshare warning is a *statement of consequence*, not a gate with a
+  tick-box, because a cost attached to taking something down is a cost attached to acting on a
+  complaint. It says the number, says that reading is never limited, and asks for no confirmation
+  beyond the one already there.
+- **Ordering, and it is the order already planned:** the widened meaning of public must be in
+  `SHARING_ON` and the confirmation *before* the discount ships, never after. Stage 3c, then 5.
+
+#### The one question in it that turned out not to need Greg — settled by reading the wall
+
+Fable's first point was that *"6 public articles"* might be false: under a wall of
+`used + cost <= budget`, a free account at five shared articles is refused its sixth, because the new
+article is private at add time and costs 2. Two readings of the wall, two different promises, and it
+looked like a product call.
+
+It is not: the existing rule is `used + inFlight < limit`
+([`pg-billing.ts` § `refusalFor`](../../src/store/pg-billing.ts)), and doubling both sides gives
+`usedHalves + inFlightHalves < limit * 2`. So the half-unit version is the **unchanged** comparison,
+not a new choice — and under it Greg's sentence is literally true: five shared is `5 < 6`, the sixth
+add is admitted, and at six shared `6 < 6` is false. The reader can sit one article over the line
+between adding and sharing, which is the same slack the rule has always had.
+
+Written down because the arithmetic is not obvious from either sentence, and the next person to read
+`refusalFor` will wonder whether the `<` was considered.
 
 **Done looks like:** one authoritative place computes the cost of an article, every surface that
 states a number agrees with it, and a test proves that sharing and unsharing move the count in both
@@ -376,6 +564,126 @@ tier's budget is `limit * 2`, and the wall compares half-units to half-units. `u
 untouched, which is the argument for half-units rather than fractions, and not a stylistic
 preference.
 
+### Stage 4b — the upgrade path, which turned out to be mostly built
+
+Added 2026-09-04 because stage 5's offer needs somewhere a paying subscriber can act on. Greg:
+
+> it should go to $10/month subscribers when they're at their quota limit too. And also, it should
+> provide a direct link to the /buy page as an alternative!
+
+**The question I put to Greg was based on a stale doc, and the answer is cheaper than the question
+implied.** [billing.md § A paying Reader cannot become a Researcher](../project/billing.md) describes
+a closed loop — Portal `subscription_update` disabled, `startCheckout` sending subscribers there
+anyway — and every step of it was fixed by
+[260903i](260903i-fix-the-upgrade-path-and-the-cancellation-telling.md) on 2026-09-04. That plan's
+log records `stripe:setup --prod --apply` moving the Portal fields and `stripe:check --prod` going
+from five blocking problems to none. `scripts/stripe-setup.ts` § `SUBSCRIPTION_UPDATE` sets
+`default_allowed_updates: ["price"]`, `billing_cycle_anchor: "unchanged"` and
+`proration_behavior: "always_invoice"`; `ensurePortalConfiguration` now reconciles an existing
+configuration rather than returning early. **So the Stripe half is open and no live configuration
+needs touching.**
+
+**The dead end moved into our own UI, and that is what this stage is.**
+`canCheckout` ([`summary.ts`](../../src/billing/summary.ts)) is
+`!(row?.stripeSubscriptionId && !isTerminalStatus(row.status))` — a boolean meaning *has no open
+subscription*, not *has nowhere to go*. Every render site gates on it
+([`BillingSection.tsx`](../../src/web/BillingSection.tsx),
+[`PricingPage.tsx`](../../src/web/PricingPage.tsx)), so a Reader sees no button on either page while
+the Portal behind them would take the switch.
+
+- **What changes:** `canCheckout` becomes tier-aware, or gains a sibling that is — true when a
+  *higher* tier exists to move to. The button for an existing subscriber opens the Portal rather than
+  a Checkout Session, because `startCheckout` already forces that and is right to: Reader and
+  Researcher are separate Stripe **Products**, so a scheduled change between their prices is not
+  available and the Portal's `subscription_update` is the mechanism. A direct `subscriptions.update()`
+  was considered by 260903i and not built.
+- **Three docs argue from the fact that stopped being true**, and one is a comment written on
+  2026-09-04 by this plan's own stage 2: billing.md's warning block, `PricingPage.tsx`'s *"the hosted
+  Portal cannot switch tiers either"*, and `QuotaNotice.tsx`'s header, whose third reason for sending
+  `pay-limit` to `/profile` is now false. All three are corrected in this stage. The routing itself
+  is decided here rather than there.
+- **The allowance side needs nothing.** `quota-adjustment.ts` already computes
+  `floor(limit + (allowance(new) − allowance(old)) × fractionRemaining)`, keyed on
+  `(subscriptionId, periodStart)`. Its `delta` is **a signed count of whole ingests** — read that
+  twice before stage 5, which is where doubling it would grant ninety-one articles to somebody
+  entitled to thirty-three.
+- **What has never actually happened:** 260903i's own log says no real Reader → Researcher event has
+  ever reached `nextQuotaAdjustment`. The upgrade was impossible until minutes before that plan
+  ended, so the delta arithmetic is proven by unit tests and by nothing else. Worth knowing before
+  we invite people down it.
+- **`PlanCards` no longer rescues a jumbled list.** As of `e8d75ac6` it draws the plans in the order
+  it is handed them and promotes nothing — `tw:order-first` was removed because below `lg` the grid
+  collapses to one column and the raised card jumped the queue, so a phone read *$10 / No charge /
+  $50*. Both callers pass cheapest-first today. **If `canCheckout` starts filtering offers per tier,
+  whatever survives must stay in ascending price order**, because nothing downstream will fix it.
+- **Done:** a signed-in Reader at `/pricing` is offered Researcher and reaches something that takes
+  the money; the three stale arguments are gone; `stripe:check` still passes.
+
+### What GPT Sol found in stage 5's design, 2026-09-04
+
+Reviewed before anything was built, which is the point of reviewing a plan. **Three P1s, four P2s, no
+P0s**, and the verdict on the mechanism was that live recomputation stands. The full answer is
+`sol-stage5-answer.md` in the session scratchpad; what changes the design:
+
+**P1 — the `quotaLimitDelta` unit trap, and it is the one that would have cost real money.** Sol ran
+`tests/billing-quota-adjustment.test.ts` and confirmed the stored contract: Researcher `150` plus a
+stored delta of `-117` means an allowance of `33`. If stage 5 doubles the tier *before*
+`limitForPeriod`, that same row yields `300 - 117 = 183` half-units where the right answer is
+`(150 - 117) * 2 = 66` — a budget of ninety-one articles instead of thirty-three. **So every tier,
+delta, proration and clamp stays in article units, `limitForPeriod` is called unchanged, and
+`budgetHalfUnits = articleLimit * 2` is derived only at the admission seam.** The two units get
+different names so one cannot be passed where the other belongs. No stored delta is migrated.
+
+**P1 — excluding `pay-lapsed` was wrong as a class.** Fable's reasoning was an example, not a rule:
+a Reader who added three private articles and then lapsed is at six half-units against a free budget
+of six, and sharing one of them makes room. So **all three refusal codes get the same conditional
+treatment** and the exclusion list disappears — conditionality does the work, which is what it was
+for. `pay-lapsed`'s existing sentence also stops claiming that resubscribing is the only remedy.
+
+**P1 — "the unchanged wall" was my mistake, and it introduces a bounded overdraft.** `used < limit`
+is equivalent to `used + 1 <= limit` only because every reservation costs exactly one today. Once a
+reservation costs two, `5 < 6` admits an ingest that settles at seven. So it is **not** the same rule
+doubled, and I said in chat that it was.
+
+The decision is to **take the overdraft, knowingly**, because Greg's own sentence settles it: he said
+a free account can make six public articles, and `U + 2 <= B` delivers five. What is being accepted is
+one half-unit, once: a reader at five half-units may add a sixth article, and is then refused
+everything until they are back under. It cannot repeat and it cannot compound — at seven they are
+refused, and sharing the new article returns them to six, which is still refused. **Tests have to pin
+both halves**: that the overdraft never exceeds one half-unit, and that no add-then-unshare cycle
+gets a second one.
+
+**P2 — the offer counts rows and speaks about articles.** A re-added URL owns several charged rows,
+so "share three articles" can be false when three half-units are available from one article. Savings
+are aggregated by `article_id` within the entitlement window, and the number of *articles* is derived
+from those groups.
+
+**P2 — visibility is written outside the billing lock.** `pg-visibility.ts` locks the article;
+admission locks `billing_accounts`. An unshare committing between the usage read and the reservation
+lets a reservation commit against stale usage. Sol confirms this does **not** let two ingests consume
+one slot. The fix is a lock *order*, applied everywhere: **`billing_accounts` before `articles`**,
+and `read committed` is then sufficient — serializable is not needed.
+
+**P2 — no rounding rule makes the reader-facing counts correct.** `ceil(5/2)` says "3 of 3 used"
+while the wall still admits one; `floor` says "2 of 3" while two and a half are gone. So **half-units
+are never divided for display**: the marketed limit stays in articles, the enforcement budget is a
+separately named field, and any surface that must show usage gets integer counts it can add up
+itself. The surfaces that drift otherwise are `describePlan` (both `/profile` and `/pricing`),
+`ingestQuotaReached`'s "all N articles", the lapsed `remaining = limit - used`, `/admin/users` —
+which has its own aggregate and does not go through `usageSql` — and the plan cards' habit lines.
+
+**P2 — my claim about the `ai_calls` precedent was half wrong.** `ai_calls.article_id` *is* a real FK
+with `on delete set null`; the text-not-FK reasoning applies only to `job_id`, which is about
+disposable jobs. So the FK is fine. The real consequence is different: deleting a public article
+turns each of its ledger rows back into full price, so **deletion silently raises usage**. There is no
+article-deletion path in the app today, so this is a policy to write down rather than a defect: if
+one is ever built it takes the same billing lock and says the same thing the unshare warning says.
+
+**And the guard worth more than any of them:** `settleReservation` takes a *discriminated successful
+outcome carrying `articleId`*, and writes `succeeded_at` and `article_id` in the same update. An
+optional argument would let a future caller omit the link and charge a public article full price for
+ever, silently. Legacy rows rule out a `NOT NULL` constraint, so the type is the only guard available.
+
 ## What this deliberately does not do
 
 - No annual billing, no currency switcher, no comparison table.
@@ -388,6 +696,213 @@ preference.
 
 ## Log
 
+- **2026-09-04, GPT Sol reviewed stage 3a's code and all four findings are fixed.** The review is
+  [260904b-stage3a-code-review-sol.md](260904b-stage3a-code-review-sol.md); it found **no
+  private-article disclosure path**, so every one of these is hardening. What is worth carrying
+  forward:
+  - **The guard did not cover the whole path a stranger runs, which is the one that mattered.** Its
+    import graph roots at `src/public/routes.ts` and `src/public/page.ts` — but a request executes
+    `serveApi`'s pre-auth dispatch or `serve` in src/vercel.ts *first*, so a query added there would
+    be publicly reachable and invisible. Sol offered extraction-into-a-module or assertions over the
+    transports; **the extraction is worse and the reasoning is written at the test**: the two
+    transports' anonymous regions are different code and not shareable, moving vercel's would either
+    put transport concerns inside `src/public/` or pull `src/owner.ts` into the closed graph
+    `tests/public-imports.test.ts` keeps it out of, and it would leave a residue needing the same
+    assertion anyway. So: the region is cut out of each transport by parsing, and it is the whole
+    dispatcher **minus the hand-off call** rather than the prefix above the gate — the `catch` and
+    `finally` run for a stranger too. What makes it not a second stale list of roots is that the
+    transports are *derived*: `publicEntryImporters()` asks the repo who imports a public entry, and
+    the guard asserts the answer.
+  - **Two more defects in the same guard, both real.** It recognised only `.from(articles)` — an
+    alias, a relational query or raw SQL walked past — so it parses now
+    ([tests/helpers/article-queries.ts](../../tests/helpers/article-queries.ts)), following
+    `tests/fixture-ids.test.ts`'s conclusion the same week: *parse them all*. And its SQL assertion
+    proved only that `visibility` and `"public"` appeared *somewhere*; it now cuts the `where` out of
+    the statement, reads the `$n` the comparison binds, and looks that slot up in the parameters.
+  - **A row cap is not a byte cap.** Nothing bounds a title or an `<h1>` and a fetched document may
+    be 32 MB, so one enormous public heading made an anonymous request allocate and serialise it.
+    Every text column is now `left()`-capped **in the SQL** — truncating in JS is after the bytes
+    have crossed — and a fixture with 5,000-character title, gist, site name and `<h1>` measures it.
+    The seven-column guard had to learn to split on commas at paren depth zero, which its own
+    comment had predicted would be needed the first time an expression held one.
+  - **`limit` bounded rows and not work**, so `articles_public_listing` is a partial index on
+    `(public_at desc nulls last, slug) where visibility = 'public'` —
+    `drizzle/20260904175802_articles_public_listing.sql`, generated from the schema and applied
+    locally (`Target: postgresql://postgres@127.0.0.1:54362/postgres`). `explain` shows the planner
+    reaching for it.
+  - **Two claims had no test and one comment was stronger than its code.** The 200/201 boundary is
+    now a case that fills the shelf to exactly the cap and then adds one — exact because this file
+    runs in the private lane and owns its database. And the listing's `<h1>` fallback is compared
+    against `loadHead` on a fixture with an `<h2>` before the `<h1>` and a second `<h1>` after it,
+    so losing `level = 1` or losing `order by ordinal` makes the two disagree; the docstring that
+    claimed they were checked together is now true.
+  - **And the full suite found a fifth thing, which Sol's review did not.**
+    `tests/store-guarded.test.ts` asks the question from the other end — *every*
+    `export const pgX` under `src/store/` is `guardDbStore`-wrapped or declared as an exception —
+    and `pgPublicLibraryReader` was neither. It is now an exception with the reason
+    `pgPublicReader` gives beside it: the closed room keeps its own `scrubbed` because
+    `guardDbStore` drags `src/chat.ts` into an import graph
+    tests/public-imports.test.ts exists to keep small. Worth noticing that the guard written
+    *for this shape of miss* is what caught it, an adapter it had never heard of.
+  - **Red first, every one.** Watched failing on 2026-09-04: an aliased `.from()` planted in
+    `src/public/routes.ts`; an ownerless `select … from articles` planted in `serveApi`'s
+    public-namespace branch, and again in `serve`'s `catch`; a `pg-admin` import used pre-auth; a
+    third module importing a public entry; the visibility clause moved from the `where` into the
+    projection; `left()` dropped from `root_gist` and from `title`; `level = 1` changed to `2`;
+    `>` changed to `>=`; and `PUBLIC_LIBRARY_LIMIT + 1` changed to `PUBLIC_LIBRARY_LIMIT`. Each was
+    reverted by editing the text back.
+
+- **2026-09-04, stage 3a built** — the data and the API, without the sharing copy (`src/messages.ts`
+  was being held by another session, so §1's copy change is still outstanding and is the one part of
+  the stage that did not land). Eight things worth knowing:
+  - **The listing is `GET /api/public/library`**, a `publicCollection` entry in the inventory, and
+    `PublicRouteName` is now a discriminated union — `{kind:"slug"; path(slug)}` |
+    `{kind:"collection"; path()}`. `pathOf(route, slug)` lives in the leaf so all three sweeps and
+    the client's path test ask the question the same way rather than each writing its own ternary.
+    `servePublicApi` switches on `kind` with a `never` arm, and `requirePostgres()` stays *inside*
+    each arm: hoisting it above the switch would make a malformed slug a 501 on a filesystem
+    machine and a 400 elsewhere.
+  - **`RESERVED` in src/slug.ts really was the wrong gate**, as §3 says — and so, it turned out, was
+    `isSlug`. That function is asked at every *read*, so refusing `public` there would refuse it on
+    the way out too and a row that somehow held the name could never be repaired. The reservation is
+    a second function, `isReservedSlug`, enforced at `lockOrCreateArticle` — the one line in the
+    repo that brings an article address into existence, and the one a client can reach directly
+    through `POST /api/jobs`'s adopted branch. **After the lock attempt, before the insert**, so an
+    article that already holds the name goes on working; what is refused is *taking* it.
+  - **The `/read/public` branch is in both routers and they are tested together.**
+    `tests/reserved-article-address.test.ts` reads `parseRoute`, `decidePublicPage` and
+    `lockOrCreateArticle` against one constant in one run, because the failure this guards is
+    *disagreement* and three assertions in three suites each pass while the trio drifts. Both
+    answer 404 today — there is no page yet — and stage 3b flips both to 200 in two lines.
+  - **The guard's new ownerless-enumeration section was watched failing seven ways** before it was
+    believed: the visibility clause deleted; an owner clause added; an owner column added to the
+    projection; a non-owner column added to the projection; the `limit` and the tiebreak removed;
+    the readability bar removed; the query moved out of its own function; and a second
+    `.from(articles)` added to `src/public/routes.ts`. The behavioural half went red three more
+    ways — no visibility clause, an owner filter that excluded the second account, and no
+    readability bar.
+  - **Two owners, and the second one is the whole point.** With one owner a listing that had
+    acquired `eq(articles.ownerId, currentOwnerId())` would still pass every case, because the only
+    rows in the fixture would be that owner's. `seedAuthUser` makes a real `auth.users` row, and
+    `articles.owner_id` references that table.
+  - **The import-graph walker moved to `tests/helpers/import-graph.ts`**, unchanged, because the new
+    guard needs the same walk `tests/public-imports.test.ts` makes. Two copies would be two sets of
+    rules about what counts as an import — the drift both guards exist to catch, one level up.
+  - **The fixture ids collided with three other files and are minted per run now.**
+    `tests/fixture-ids.test.ts` caught it; its header says why the remedy is `randomUUID()` rather
+    than picking unused constants (a fixed id also collides with itself when one file runs in two
+    processes, which no static guard can see), and why every *unique* column has to be minted, not
+    only the primary key — so the slugs carry the run's suffix and `short_id` is minted too.
+  - **The new suite needed two manifest entries, not one.** `TEST_LANES` for the private Postgres
+    lane, and a `STORE_MIGRATION` entry because the stored witness predates the file — measured with
+    `store-migration-witness.ts --files` (*ran, touched nothing*), recorded as `static-only` because
+    `--files` writes no JSON.
+
+- **2026-09-04, what the neighbouring worktree settled, and what it costs this plan.**
+  `260904c-more-modes-on-a-shared-link` is widening a shared link from the other side, and two of its
+  findings land on this plan rather than only on its own.
+  - **Chat is not shareable, and the reason is not a missing allowlist entry.** A stored chat answer
+    can quote the owner's *other private articles*, because `search_library` and
+    `read_library_passage` range over the whole shelf — so the disclosure sits in the prose of
+    `chat_messages.text`, the one column the feature cannot exist without. Stripping every
+    surrounding field leaves *"In your other piece on X, the author argues…"* untouched. Written up
+    in [chat-tools.md](../project/chat-tools.md); the consequence here is that **the sharing copy
+    must not promise conversations**.
+  - **`PrivacyPage.tsx`'s "Who can see your shelf" paragraph is wanted by both plans**, and is being
+    edited sequentially rather than split: that worktree takes the whole paragraph first, adding
+    nothing about listing, and the listing clause is added here afterwards — because the page must
+    not claim a public index before there is one. Two sessions editing one paragraph is a merge
+    conflict inside a sentence.
+  - Its stage order is timeline, diagram, comments, saved searches — chat dropped.
+- **2026-09-04, a subagent deleted three untracked files it did not create** — `.tmp-smoke.mts`,
+  `privacy-1280.png`, `privacy-390.png` — while tidying its own scratch files out of the worktree
+  root. Copies survive in the shared primary checkout, dated 2026-09-02 and 09-03, so nothing is
+  known to be lost; they were **not** copied back, because a file that cannot be confirmed identical
+  is worse in a shared tree than a gap. The cause is a brief that said *keep your files out of the
+  repo root* without saying *delete nothing you did not write*, and every brief since says the
+  second thing. [version-control.md](../project/version-control.md) already forbids the git commands
+  that throw work away; `rm` is the hole in that rule.
+- **2026-09-04, stage 2 built.** `/pricing` joined the marketing pages (`.site`, `SiteNav`, hero,
+  `SiteFooter variant="marketing"`), the table became variant B's cards, and the four *How it works*
+  paragraphs are folded into a seven-question FAQ. Six things worth knowing:
+  - **The design was spiked before it was argued about.** Three variants on a throwaway page,
+    looked at side by side and at a real 390px viewport in an iframe; B won and the spike was
+    deleted. Cheaper than a discussion, and the file is gone, which is what a spike is for.
+  - **`site-panel` needed to leave `.site`, and the fix is one selector.** `/profile` draws the
+    same cards from the billing rows and is not a marketing page, so the `--site-*` properties are
+    now declared on `.plan-cards` as well. The failure this avoids is silent: transparent border,
+    no fill, no error.
+  - **The drift guard's records changed shape and the binding was re-checked.** `allowance` carries
+    the noun now (`20 articles a month` — `20 a month` said nothing on a card with no columns) and
+    the price is a headline plus a fainter line of the other currencies, so the guard reads both.
+    Sol's swapped-id mutation was re-run: it still goes red, on the name.
+  - **`/profile` declines the headline currency, and that one is not cosmetic.** It cannot know
+    which of three Checkout will pick, so it puts all of them in `price` and the card sizes the
+    figure smaller because `alt` is unset. Three currencies at 2.1rem in a 230px column is an
+    overflow.
+
+    **It declined `recommended` too, and that was wrong** — corrected after the stage 2 review
+    below. The reasoning written here on the day was *its reader has already chosen*, which is
+    backwards for the state those cards actually render in: the whole block is behind
+    `canCheckout`, so anybody looking at it is free or lapsed and is choosing between the two paid
+    tiers right now. The recommendation is now attached to **whether somebody is choosing**, not to
+    which page they are on.
+  - **Three FAQ answers were checked against the admission path, not against a doc.** A failed
+    fetch costs nothing; pasting the same URL again costs a second article even though every step
+    then skips; a re-run against a slug you already own is free. And the *what happens at my limit*
+    answer offers a subscriber no upgrade, because there is not one — `canCheckout` is false while
+    a subscription is live and the Portal cannot switch tiers.
+  - **The screenshots, and what they measured.** Signed out, one viewport at a time, headless
+    system Chrome: `/pricing` at 1440 in three screens and at 390 in five, plus the plans block on
+    `/` and `/features` at both widths. The captures were session scratch and were not kept; what
+    they settled is written down instead, because a picture in a directory nobody will open is not
+    evidence:
+    - The `h1` content column starts at **x=168** on all three pages. It was x=360 on `/pricing`,
+      which is the defect this stage was for, and the number is the whole of what "joins the
+      family" means.
+    - The raised card reads at a glance: `rgba(255,255,255,0.05)` on `rgba(255,255,255,0.16)`
+      against `0.027`/`0.1` for its neighbours.
+    - **No horizontal scroll at 390**, and zero console errors on any of the eight screens.
+    - **A trap worth the ten minutes it cost**, now in
+      [marketing-pages.md](../project/marketing-pages.md#screenshotting-the-pages-themselves-for-review):
+      `locator.screenshot()` clips to the bounding box, and the raised card is lifted out of its own
+      by a negative margin — so an element shot of it arrives with RECOMMENDED sliced off and looks
+      like a broken design.
+- **2026-09-04, stage 2 code-reviewed by GPT Sol and fixed before committing**
+  ([the review](260904b-stage2-code-review-sol.md)). One P1, four P2s, two documentation gaps:
+  - **The top bar's *Sign in* now knows who is reading it.** `SiteNav` chose its destination from
+    `here` alone, but `/features` and `/pricing` are mounted signed in too — where `#sign-in` names
+    nothing on `/pricing` (the anchor is inside `PlansForAStranger`) and `/#sign-in` lands on the
+    shelf. Two dead links, of which the `/features` one predates this stage. `signedIn` is a
+    required prop with no default, so a new caller has to answer the question;
+    `tests/site-nav-sign-in.test.tsx` mounts both pages both ways and was red on both signed-in
+    cases first.
+  - **Four sentences said more than the code guarantees.** *"You are charged in your own currency"*
+    → the three currencies a tier actually carries; *"until your allowance starts again"* → a plan
+    that is *ending* falls back to the lifetime free allowance, which counts the articles added
+    while subscribed (`usageSql`, src/store/pg-billing.ts), so there is no fresh allowance for
+    somebody already past three; *"You pay for the articles you add"* → a fixed monthly price with
+    a capped allowance, since nothing here is metered; *"a paywall … costs you nothing"* → *a
+    paywall that leaves no readable article*, because what the code refuses is an extraction that
+    produced no blocks, and a soft paywall that yields prose ends `done` and is charged. The same
+    currency overstatement was on `/profile` and is fixed in the same breath.
+  - **The recommendation follows the choice, not the route.** `WebsitePlans` took `recommend`, a
+    boolean each caller answers: `/` always (only strangers reach it), `/features` when signed out,
+    `/pricing` for a stranger, and for a signed-in reader only when `canCheckout` *and* the tier is
+    in `offers` — so a Researcher no longer sees the downgrade they cannot buy labelled
+    Recommended. `/profile` now recommends, for the reason in the corrected bullet above.
+    `WEBSITE_PLANS` is `as const satisfies`, so `RECOMMENDED_TIER` is checked against the ids that
+    exist; a runtime throw would have been wrong, because a tier legitimately absent from one
+    reader's offers is the normal case.
+  - **`/pricing` has an `h2` again**, `sr-only`, because the plan titles are `h3` and the page went
+    `h1` → `h3`. The other three callers each supply one of their own.
+  - **`/profile`'s three Upgrade buttons have three names.** `PlanCardAction.ariaLabel` carries
+    *Upgrade to Reader* / *Upgrade to Researcher*; the visible word stays short because the long
+    form wraps in a 210px card, and it is contained in the accessible name, which is what WCAG's
+    Label in Name asks.
+  - **The `.plan-cards` token change stays** — Sol checked the leak and found none — but three
+    comments describing a two-page world were false and are not any more: styles.css § the site,
+    `SiteFooter.tsx`'s page count, and marketing-pages.md.
 - **2026-09-04, stage 1 built.** `PlanCards` is the presentational component (`src/web/Plans.tsx`
   renamed to `src/web/PlanCards.tsx`, since the numbers moved into it as data); `/`, `/features` and
   `/pricing` render `WebsitePlans`, the copy plus its footnote, and `/profile` renders `PlanCards`

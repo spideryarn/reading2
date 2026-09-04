@@ -1,17 +1,17 @@
 /**
- * The furniture the landing page and the features page share: the top bar, the
- * footer, a framed screenshot, headings, a bento tile, and the two calls to
- * action. Lifted out of LandingPage.tsx on 2026-09-03 when the features page
- * arrived, so the two pages cannot drift into two figures — and widened on
- * 2026-09-03 (afternoon) when both pages were redesigned.
+ * The furniture the marketing pages share: the top bar, the footer, a framed
+ * screenshot, headings, a bento tile, and the two calls to action. Lifted out of
+ * LandingPage.tsx on 2026-09-03 when the features page arrived, so the two pages
+ * cannot drift into two figures — widened on 2026-09-03 (afternoon) when both
+ * were redesigned, and `/pricing` joined them on 2026-09-04.
  *
  * ## The visual language lives in CSS, not here
  *
  * Every `site-*` class is defined in one block at the foot of styles.css, with
- * the reasoning beside it. That is deliberate: these are used on both pages, so
- * they are a *system*, and docs/project/design-css-overview.md § Which
+ * the reasoning beside it. That is deliberate: these are used on all three
+ * pages, so they are a *system*, and docs/project/design-css-overview.md § Which
  * mechanism owns what puts a system in that file rather than in a utility
- * string repeated down two components. `tw:` utilities stay for per-element
+ * string repeated down three components. `tw:` utilities stay for per-element
  * nudges, which is what they are good at.
  *
  * ## The posture was Greg's call, against advice
@@ -27,7 +27,7 @@
  * about the code.** The page said "six diagrams" for a day, having been written
  * from a doc, when there were four.
  *
- * **The words are Greg's**, and every sentence on both pages carries a comment
+ * **The words are Greg's**, and every sentence on these pages carries a comment
  * naming its source, or `[tissue]` for the connecting lines an agent wrote —
  * docs/project/positioning.md § Whose words. Restructuring is allowed to move a
  * sentence; it is not allowed to rewrite one.
@@ -45,17 +45,36 @@ import type { Shot as ShotRecord } from "./shots.js";
 export const SHELL = "tw:mx-auto tw:w-full tw:max-w-6xl tw:px-6";
 
 /**
- * The bar at the top of both pages: wordmark left, three links right.
+ * The bar at the top of all three pages: wordmark left, three links right.
  *
  * It is sticky and translucent, and it grows a hairline border only once the
  * page has scrolled — done in CSS with `animation-timeline: scroll()`, so there
  * is no scroll listener and no React state to get wrong. Where that is
  * unsupported it simply stays borderless, which is the right look at the top of
  * the page and an acceptable one below it.
+ *
+ * **`signedIn` has no default, and that is the point of it.** Two of the three
+ * pages that draw this bar are mounted signed in as well as signed out
+ * (App.tsx), and *Sign in* is the one entry whose destination exists only for a
+ * stranger — see the comment on it below. A defaulted prop would let the next
+ * caller inherit a dead link without saying anything, which is exactly how this
+ * one got here, so every caller answers the question.
  */
-export function SiteNav({ here }: { here: "home" | "features" }) {
+export function SiteNav({
+  here,
+  signedIn,
+}: {
+  here: "home" | "features" | "pricing";
+  /** Whether the reader looking at this bar already has an account open. */
+  signedIn: boolean;
+}) {
   const link =
     "tw:text-sm tw:text-muted-foreground tw:no-underline tw:transition-colors tw:hover:text-foreground";
+  /* Below `sm` the bar carries exactly one page link and *Sign in*, and that is
+     a measurement rather than a preference: it was measured to fit at the 320px
+     reflow width with two entries in it, and a third always-on one puts it back
+     over. So everything except the first link is `sm:`. */
+  const secondary = `${link} tw:hidden tw:sm:inline`;
   return (
     <nav className="site-nav">
       {/* The shell's own `px-6` is halved below `sm`, and the gap with it.
@@ -80,23 +99,38 @@ export function SiteNav({ here }: { here: "home" | "features" }) {
           </span>
         </Link>
         <div className="tw:flex tw:shrink-0 tw:items-center tw:gap-4 tw:whitespace-nowrap tw:sm:gap-5">
-          {here === "features" ? (
+          {/* **The one always-on link**, and it is whichever of Home/Features
+              is not the page you are standing on. `/pricing` joined this family
+              on 2026-09-04 and takes Home, which is the more useful of the two
+              from a page somebody was *sent* rather than one they browsed to. */}
+          {here === "home" ? (
+            <Link href={FEATURES_HREF} className={link}>
+              Features
+            </Link>
+          ) : (
             <Link href="/" className={link}>
               Home
             </Link>
-          ) : (
-            <Link href={FEATURES_HREF} className={link}>
+          )}
+          {/* Each page drops its own link rather than drawing it dead — the
+              same rule SiteFooter.tsx follows, and for the same reason: a link
+              to the page under the reader's feet is a link that visibly does
+              nothing. From `/features` the always-on link above is already
+              Home, so Features is the one missing here; from `/pricing` both
+              of these appear and Pricing is the one missing. */}
+          {here === "pricing" && (
+            <Link href={FEATURES_HREF} className={secondary}>
               Features
             </Link>
           )}
           {/* Greg, 2026-09-03, when Stripe went live: pricing wants a link at
-              the top, not only in the footer. `sm:` for the same reason Privacy
-              is — the bar is measured to fit at 320px with two links in it, and
-              a third always-on entry puts it back over. */}
-          <Link href={PRICING_HREF} className={`${link} tw:hidden tw:sm:inline`}>
-            Pricing
-          </Link>
-          <Link href={PRIVACY_HREF} className={`${link} tw:hidden tw:sm:inline`}>
+              the top, not only in the footer. */}
+          {here !== "pricing" && (
+            <Link href={PRICING_HREF} className={secondary}>
+              Pricing
+            </Link>
+          )}
+          <Link href={PRIVACY_HREF} className={secondary}>
             Privacy
           </Link>
           {/* The panel it jumps to only exists on the landing page, so from
@@ -109,10 +143,37 @@ export function SiteNav({ here }: { here: "home" | "features" }) {
               hash, so routing this in-page would land a reader at the top of the
               home page — a link that goes to the right document and the wrong
               place, which is the harder version of the bug to notice. A whole
-              page load, once, is the honest answer. */}
-          <a href={here === "home" ? "#sign-in" : "/#sign-in"} className={link}>
-            Sign in
-          </a>
+              page load, once, is the honest answer.
+
+              **`/pricing` has a panel of its own since 2026-09-04**, and that
+              is why it stays on the page rather than joining `/features` in the
+              `else`. It is not cosmetic: the whole buy path for a stranger is
+              *press Get Reader here, sign in here, come back here*, because
+              `SignInControls` remembers the address it was standing on
+              (PricingPage.tsx). Sending them to `/#sign-in` would hand the
+              continuation to the landing page and lose the tier they pressed.
+
+              **And it is drawn only for a stranger, because for anybody else
+              both spellings of it go nowhere.** `/features` and `/pricing` are
+              mounted signed in too (App.tsx), and there the panel this points
+              at does not exist: on `/pricing` `#sign-in` names nothing, because
+              the anchor lives in `PlansForAStranger`; from `/features`,
+              `/#sign-in` lands on the shelf, which is what `/` is once you are
+              signed in, and the shelf has no such panel either. Two dead links,
+              of which the `/features` one predates this stage. GPT Sol
+              reproduced the `/pricing` half in a mounted test — stage 2 code
+              review, finding 1 — and `tests/site-nav-sign-in.test.tsx` is that
+              reproduction kept.
+
+              **Nothing replaces it.** The always-on link to the left is already
+              *Home*, which for a signed-in reader is their shelf, so a second
+              way there would be the dead-control rule broken the other way
+              round. */}
+          {!signedIn && (
+            <a href={here === "features" ? "/#sign-in" : "#sign-in"} className={link}>
+              Sign in
+            </a>
+          )}
         </div>
       </div>
     </nav>
@@ -326,7 +387,7 @@ export function Feature({ name, children }: { name: string; children: ReactNode 
 }
 
 /* **`SiteFooter` was here until 2026-09-03**, and it is now the general one in
-   SiteFooter.tsx, which these two pages call with `variant="marketing"` to keep
+   SiteFooter.tsx, which these three pages call with `variant="marketing"` to keep
    the spacing this design chose. Two components with one name and the same job
    arrived on the same day in two worktrees and met at a merge; Greg's call was
    one component. The provenance sentence — every picture is a real article read

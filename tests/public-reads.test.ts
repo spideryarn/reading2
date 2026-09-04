@@ -133,7 +133,7 @@ describe("the public revision read", () => {
    * the same `articleQuery` object the predicate case above reads.
    */
   it("asks for the artefacts on the row it already filtered", () => {
-    for (const column of ["glossary", "ideas", "quotes", "tweets"]) {
+    for (const column of ["glossary", "ideas", "quotes", "tweets", "timeline"]) {
       expect(article, column).toContain(`"${column}"`);
     }
     /* **And the image manifest, on this same statement.** It is the half of

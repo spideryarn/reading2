@@ -26,10 +26,11 @@
  *
  * ## What is real here and what is not
  *
- * **Real:** `advanceJobWith` and the whole of `walkClaim`, the filesystem job
- * store with its claim and its fence, the filesystem session that records the
- * recovery ending, and the logger — including its `err` serialiser, which is the
- * thing that would do the leaking.
+ * **Real:** `advanceJobWith` and the whole of `walkClaim`, the **Postgres** job
+ * store with its claim and its fence, the session `claimSession` builds for a
+ * real claim — which records the recovery ending in the `jobs` table — and the
+ * logger, including its `err` serialiser, which is the thing that would do the
+ * leaking.
  *
  * **Fake:** the one pipeline step (so that it skips), and the session's `done`
  * settlement (so that it fails with something sensitive in it). Nothing a real
@@ -37,32 +38,53 @@
  * failure could never go red — which is why this file *makes* the failure rather
  * than finding one.
  *
- * **No database at all**, deliberately: `SPIDERYARN_STORE` is left unset, so the
- * job store is the filesystem one and this cannot skip itself into a green run
- * (docs/reusable/silent-success.md). The rule under test is the coordinator's
- * and is the same under either store.
+ * ## It ran with no database at all until 2026-09-04
  *
- * ## The mutation, watched red on 2026-09-01
+ * The header used to say **"No database at all, deliberately: `SPIDERYARN_STORE`
+ * is left unset… so this cannot skip itself into a green run"**, and the whole
+ * fixture was `fsJobStore` and `fsStoreSession`. That sentence is exactly what
+ * stage B falsifies: a claim that reaches the all-skipped door on the
+ * *filesystem* session reaches a door production never opens, because production
+ * settles that ending inside `pgStoreSession`'s transaction. The line under test
+ * is the coordinator's either way — but the error it is guarding against is a
+ * **Drizzle** error, and the only store that can hand `walkClaim` one is
+ * Postgres.
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § B.
  *
- * `errorFields(err)` in place of `{ errorType: … }` in `walkClaim`'s catch — the
- * shape this rule exists to forbid. The reading is in the report; it fails on
- * `not.toContain(SENTINEL)`, with the whole `Failed query: … params: …` message
- * in the line.
+ * So the flag is now pinned to `postgres` before any import, `expect(STORE)`
+ * flips with it, and the fixture is the real `pgJobStore` and the real
+ * `claimSession` over a seeded article. The self-check is not lost, it changed
+ * sides: a flag that failed to take now fails the first case rather than
+ * quietly running the test that does not deploy.
+ *
+ * ## The mutations, watched red
+ *
+ * **Mutation.** 2026-09-01, on the filesystem harness: `errorFields(err)` put in
+ * place of `{ errorType: … }` in `walkClaim`'s catch — the shape this rule
+ * exists to forbid. The run went red on `not.toContain(SENTINEL)`, with the
+ * whole `Failed query: … params: …` message sitting in the captured line.
+ *
+ * **Blind to.** The store underneath. That run was on the filesystem harness,
+ * where no Drizzle error exists at all, so it says nothing about whether the
+ * coordinator's catch is reached on the path that ships — which is the whole
+ * reason the file was converted. The 2026-09-04 mutation is the one that
+ * reaches the store, and it is recorded above `afterAll` rather than here.
  */
-import { readFile, readdir, rm } from "node:fs/promises";
-import path from "node:path";
-
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 /**
- * The log level, before any import. `level()` in src/log.ts reads `LOG_LEVEL`
- * once, at that module's load, and vitest's `NODE_ENV=test` otherwise makes the
- * logger `silent` — which writes nothing, which satisfies every `not.toContain`
- * below.
+ * Two environment variables, before any import.
  *
- * The store flag is **deleted** rather than set to `"files"`, because unset is
- * the state every laptop and every fresh clone is actually in, and `storeFromEnv`
- * treats the two the same on purpose (src/store/live.ts).
+ * **The log level**, because `level()` in src/log.ts reads `LOG_LEVEL` once, at
+ * that module's load, and vitest's `NODE_ENV=test` otherwise makes the logger
+ * `silent` — which writes nothing, which satisfies every `not.toContain` below.
+ *
+ * **The store flag**, because `src/store/live.ts` reads it once and imports are
+ * hoisted above every statement in a module. It used to be a `delete` here, on
+ * the argument that unset is the state a fresh clone is in; the argument stands
+ * and is no longer the one that matters, because unset is also the store that is
+ * not deployed. A plain assignment below the imports would leave `claimSession`
+ * handing back the filesystem session with nothing saying so.
  */
 const HOISTED = vi.hoisted(() => {
   const previousLevel = process.env.LOG_LEVEL;
@@ -70,27 +92,47 @@ const HOISTED = vi.hoisted(() => {
   if (previousLevel === undefined || ["silent", "fatal", "error"].includes(previousLevel)) {
     process.env.LOG_LEVEL = "warn";
   }
-  delete process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
   return { previousLevel, previousStore };
 });
 
+import { eq } from "drizzle-orm";
+
+import { closeDb, getDb } from "../src/db/client.js";
+import { jobs as jobsTable } from "../src/db/schema.js";
+import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
-import { advanceJobWith } from "../src/jobs.js";
+import { advanceJobWith, claimSession } from "../src/jobs.js";
 import { errorFields, log } from "../src/log.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEPS, type PipelineStep } from "../src/pipeline.js";
-import { fsArtifacts } from "../src/store/artifacts-fs.js";
-import { fsJobStore } from "../src/store/jobs-fs.js";
 import { STORE } from "../src/store/live.js";
-import { fsStoreSession } from "../src/store/session.js";
+import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { ArtifactReads } from "../src/store/artifacts.js";
 import type { JobEndTransition, StoreSession } from "../src/store/session.js";
 import type { Job, JobStep } from "../src/types.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
 
+/* Both put back straight after the imports: vitest reuses a worker across files
+   and does not reset `process.env` between them. */
 if (HOISTED.previousLevel === undefined) delete process.env.LOG_LEVEL;
 else process.env.LOG_LEVEL = HOISTED.previousLevel;
-if (HOISTED.previousStore !== undefined) process.env.SPIDERYARN_STORE = HOISTED.previousStore;
+if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
+
+loadEnvLocal();
+
+const { reachable } = await pgReady({
+  suite: "tests/all-skipped-publication-log.test.ts",
+  tables: ["spideryarn.articles", "spideryarn.jobs"],
+});
+
+const when = reachable ? describe : describe.skip;
+
+/** One slug, one article, for the whole file. */
+const SLUG = "all-skipped-log-fixture";
 
 /**
  * Two strings that must never reach a log line.
@@ -140,31 +182,51 @@ const READS = {
   hasEarlierBlocks: async () => false,
 } as unknown as ArtifactReads;
 
-const MADE: string[] = [];
+/**
+ * The article the claim below opens a draft of.
+ *
+ * **It has to exist**, and that is what the move to Postgres cost. `claimSession`
+ * carries the published revision forward into this claim's own draft
+ * (`openOrBeginJobDraft`), so there has to be something to carry; the filesystem
+ * session had no draft and no publication, so a job could be walked against a
+ * bare directory name.
+ */
+let article: ScratchArticle | undefined;
 
+/**
+ * Into the store, not through `enqueue`: `enqueue` starts the local pump, which
+ * would be a second driver racing the `advanceJobWith` below and claiming the
+ * job out from under it.
+ */
 async function queueJob(): Promise<Job> {
   const wanted: Job = {
     id: mintId(),
     ownerId: DEV_OWNER_ID,
-    slug: "all-skipped-log-fixture",
+    slug: SLUG,
     steps: [{ name: "arc", label: STEPS.arc.label, status: "pending" } satisfies JobStep],
     status: "queued",
     createdAt: new Date().toISOString(),
   };
-  const { job } = await fsJobStore.enqueueOrGet(wanted, { workKey: `all-skipped-log-${wanted.id}`, reservesName: false });
-  MADE.push(job.id);
+  const { job } = await pgJobStore.enqueueOrGet(wanted, {
+    workKey: `all-skipped-log-${wanted.id}`,
+    reservesName: false,
+  });
   return job;
 }
 
 /**
- * The real filesystem session, with **only** the `done` settlement replaced.
+ * **Production's own session factory, with the freshness reads and the `done`
+ * settlement replaced — and nothing else.**
  *
- * The `error` settlement the coordinator makes afterwards is the real one, so
- * the recovery this file asserts about is the production statement rather than a
- * stub agreeing with itself.
+ * `claimSession` is exported for exactly this (src/jobs.ts § *Exported so a test
+ * can drive the real one*). The `error` settlement the coordinator makes
+ * afterwards is therefore the real Postgres one, so the recovery this file
+ * asserts about is the production statement rather than a stub agreeing with
+ * itself. Spreading it is safe — `pgStoreSession` returns an object of closures,
+ * not methods that need a `this`.
  */
-function sessionThatCannotPublish(): StoreSession {
-  const real = fsStoreSession({ artifacts: fsArtifacts, jobs: fsJobStore });
+async function sessionThatCannotPublish(job: Job, attempt: string): Promise<StoreSession> {
+  const real = await claimSession(job, attempt);
   return {
     ...real,
     reads: READS,
@@ -175,24 +237,52 @@ function sessionThatCannotPublish(): StoreSession {
   };
 }
 
-describe("a claim where every step skipped and the publication failed", () => {
-  beforeAll(() => {
-    /* The control on the control: a flag that failed to take would run this
-       against Postgres, which is a different session and a different test. */
-    expect(STORE).toBe("files");
+describe("the store this claim is actually running on", () => {
+  it("is the Postgres one", () => {
+    /* The control on the control, and **not** gated on `reachable`: a flag that
+       failed to take would run this against the filesystem session, which is a
+       different `claimSession` branch and therefore a different test — and one
+       that would pass, since the coordinator's catch is the same on both sides.
+       A control that vanishes when the database is missing vanishes exactly when
+       it matters. */
+    expect(STORE).toBe("postgres");
   });
+});
 
+when("a claim where every step skipped and the publication failed", () => {
+  beforeAll(async () => {
+    /* Owned by `DEV_OWNER_ID` explicitly, because that is who the claim runs as:
+       the Postgres reader filters every article by owner, so a fixture seeded as
+       somebody else is invisible and the claim would refuse. */
+    article = await scratchArticleInPg(SLUG, { ownerId: DEV_OWNER_ID });
+  }, 120_000);
+
+  /**
+   * **Mutation.** Watched red on 2026-09-04: `error: ending.error ?? null`
+   * in `finishIn` (src/store/pg-jobs.ts) replaced by `error: null` — the column
+   * this recovery exists to write, on the statement that writes it. The first
+   * case fails on `expect(advanced?.job.error).toContain("Nothing was published
+   * …")` with `undefined`, which also settles a question the conversion raised:
+   * `advanced.job` is the row `finishIn` returned, **not** the in-memory object
+   * `endAsStorageFailure` mutated on its way there. So this file's assertions
+   * about `job.error` really are a Postgres round trip, which they were not on
+   * the filesystem store.
+   *
+   * **Blind to.** Not the log line, which is this file's actual
+   * subject: every one of the `logged` assertions — the door's sentence, the
+   * class, and the three absences — passed with the mutation in. And one column
+   * of one statement: `status`, `steps`, `failureKind`, `title` and the fence in
+   * the same `set` are untouched, as are `claimIn`, `releaseStepIn` and every
+   * other writer in that file. A single predicate is not the family.
+   */
   afterAll(async () => {
-    /* `fsJobStore` writes to the repository's own `data/_jobs/` — its directory
-       is a module-level constant, not the scratch root — so the records have to
-       be taken out by hand, exactly as tests/jobs-walk.test.ts does. */
-    const jobsDir = path.resolve(import.meta.dirname, "..", "data", "_jobs");
-    for (const file of await readdir(jobsDir).catch(() => [])) {
-      const full = path.join(jobsDir, file);
-      const record = JSON.parse(await readFile(full, "utf8").catch(() => "{}")) as { id?: string };
-      if (record.id !== undefined && MADE.includes(record.id)) await rm(full, { force: true });
-    }
-  });
+    /* Jobs first: a job row's `draft_revision_id` is a foreign key into the
+       revision the article delete would be trying to cascade away. By slug
+       rather than by id, so a case that died mid-walk leaves nothing behind. */
+    await getDb().delete(jobsTable).where(eq(jobsTable.slug, SLUG));
+    await article?.remove();
+    await closeDb();
+  }, 60_000);
 
   it("logs the class of the failure and the message of none of it", async () => {
     const job = await queueJob();
@@ -200,7 +290,7 @@ describe("a claim where every step skipped and the publication failed", () => {
     const logged = await logLinesWhile(async () => {
       const advanced = await runAsOwner(DEV_OWNER_ID, () =>
         advanceJobWith(job.id, {
-          session: async () => sessionThatCannotPublish(),
+          session: sessionThatCannotPublish,
           steps: { ...STEPS, arc: SKIPPING_STEP } as never,
         }),
       );

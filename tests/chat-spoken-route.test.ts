@@ -39,6 +39,61 @@
  * upsert, so *the response was right and the store was not* is a state that can
  * exist here — on files the thread is written whole, in one object, and cannot
  * be half-written.
+ *
+ * ## The mutations, watched rather than reasoned — 2026-09-04
+ *
+ * Four, because seventeen tests across three `when` blocks is not one claim.
+ * One for each thing the header above says is worth having, plus the one the
+ * move to Postgres is justified by. All four red.
+ *
+ * **Mutation.** 1 — half-written, which is the state the move creates.
+ * `src/store/pg-chat.ts` § `appendSpoken`: the second of the two
+ * `messageRow(…)` entries in the `.values([…])` deleted, so the *user* row is
+ * written and the *assistant* row is not. The response is built from
+ * `withSpokenTurn`'s return value, so it stays perfectly correct. The run
+ * printed `4 failed of 17`.
+ *
+ * **Which four**: *writes both rows, done, and titles the conversation*
+ * (`expected [ { id: 'spya-vangjm', …(4) } ] to have a length of 2 but got 1`),
+ * and all three of the tail block, which reads the store to know where it is.
+ * This is the mutation the filesystem store could not have: it writes the
+ * thread whole. Note which assertion caught it — the read-back, not the
+ * response.
+ *
+ * **Mutation.** 2 — the tool run's status, and it went red. `src/routes.ts` §
+ * `parseSpokenTools`: `status: "done" as const,` made `status: "running" as
+ * const,`. The run printed `1 failed of 17`: *NEVER stores a tool run as
+ * running*, `a running tool run reached the store: expected 'running' to be
+ * 'done'`.
+ *
+ * **Mutation.** 3 — the model mark, and it went red. `src/routes.ts`, the
+ * `appendSpoken` call: `model: LIVE_MODEL,` made a conditional spread of
+ * `body.model`, i.e. the browser's word taken instead of replaced. The run
+ * printed `2 failed of 17` — *marks the answer with the realtime model*
+ * (`expected undefined to be 'gpt-realtime-2.1'`) and *does
+ * not let the browser name the model* (`expected 'something-else' to be
+ * 'gpt-realtime-2.1'`). Both halves, which is the point of having the pair.
+ *
+ * **Mutation.** 4 — the 409, which is the idempotency, and it went red.
+ * `src/chat.ts` § `withSpokenTurn`: `if (tail !== expectedTailId) {` made `if
+ * (false && tail !== expectedTailId) {`. The run printed `2 failed of 17` —
+ * *makes a replayed request a 409 rather than a duplicated turn* and *refuses
+ * an append behind a conversation that has moved
+ * on*, both `expected 200 to be 409`.
+ *
+ * **Blind to.** The whole of the middle block except the two
+ * cases named: the block-id validation (`parseSpokenPassages`), the tool-name
+ * allowlist, the label trim and the empty-exchange refusal are four separate
+ * refusals and no mutation above touches any of them — *one predicate is not
+ * the family*.
+ *
+ * **Blind to.** Mutation 1 removed a row rather than corrupting one, so nothing
+ * here says whether `messageRow`'s column mapping is right: `passages` and
+ * `tools` are asserted only through the response in *takes a passage pointer
+ * and an interruption*, never read back, and pg-chat's own docstring records
+ * that a missing write-side field loses the data silently. And mutation 4
+ * disabled the guard rather than loosening it — a tail check that compared the
+ * wrong message, rather than none, would need its own run.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";

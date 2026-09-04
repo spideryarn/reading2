@@ -22,18 +22,18 @@ const fit = (o: Partial<FitInput> & { windowWidth: number }) =>
   fitView({ ...article, showText: true, chosen: null, ...o });
 
 describe("the widths granularity-zoom.md promises", () => {
-  it("1600px: three gist columns at 240 and 868 of prose", () => {
+  it("1600px: L1 and L2 at 240 and 1108 of prose — L0 stays closed", () => {
     const f = fit({ windowWidth: 1600 });
-    expect(f.columns).toEqual([0, 1, 2]);
-    expect(f.widths).toEqual([240, 240, 240, 868]);
+    expect(f.columns).toEqual([1, 2]);
+    expect(f.widths).toEqual([240, 240, 1108]);
     expect(f.overflowing).toBe(false);
     // Fills the window exactly: 12 of spine + 1588 of table.
     expect(f.minWidth).toBe(1600);
   });
 
-  it("760px: one gist column and prose, fitting exactly", () => {
+  it("760px: one gist column and prose, fitting exactly — the column is L1", () => {
     const f = fit({ windowWidth: 760 });
-    expect(f.columns).toEqual([2]);
+    expect(f.columns).toEqual([1]);
     expect(f.tableW).toBe(748);
     expect(f.overflowing).toBe(false);
   });
@@ -46,7 +46,7 @@ describe("the widths granularity-zoom.md promises", () => {
     // it moved from 744 when the rail was halved on 2026-08-28, which is the
     // whole reason tests/spine-width.test.ts exists: styles.css performs this
     // same sum by hand, in a `@media` query that cannot read either constant.
-    expect(fit({ windowWidth: 732 }).columns).toEqual([2]); // fits exactly
+    expect(fit({ windowWidth: 732 }).columns).toEqual([1]); // fits exactly, and it's L1
     expect(fit({ windowWidth: 731 }).columns).toEqual([]);
   });
 
@@ -61,12 +61,52 @@ describe("the widths granularity-zoom.md promises", () => {
   });
 });
 
+/**
+ * [SPIDERYARN-READING2-Z]: "The Hierarchy mode should perhaps default to
+ * showing Spine, L1 and L2." Reported from an iPad, where the reader had
+ * manually reached `?cols=1,2` — this pins that as the automatic default
+ * rather than something a reader has to ask for, while leaving `?cols=`
+ * itself exactly as honoured today.
+ */
+describe("the default hierarchy view (no ?cols=)", () => {
+  it("wide viewport: spine + L1 + L2, never L0", () => {
+    const f = fit({ windowWidth: 1600 });
+    expect(f.spine).toBe("on");
+    expect(f.columns).toEqual([1, 2]);
+  });
+
+  it("narrow (iPad-portrait-ish) viewport: spine + L1 only", () => {
+    const f = fit({ windowWidth: 760 });
+    expect(f.spine).toBe("on");
+    expect(f.columns).toEqual([1]);
+  });
+
+  it("an explicit ?cols= is honoured exactly, L0 included if asked for", () => {
+    const wide = fit({ windowWidth: 1600, chosen: [0, 1, 2] });
+    expect(wide.columns).toEqual([0, 1, 2]);
+
+    const narrow = fit({ windowWidth: 760, chosen: [0, 1, 2] });
+    // Unchanged even though it overflows — the window must not overrule it.
+    expect(narrow.columns).toEqual([0, 1, 2]);
+    expect(narrow.overflowing).toBe(true);
+
+    const onlyCoarse = fit({ windowWidth: 1600, chosen: [0] });
+    expect(onlyCoarse.columns).toEqual([0]);
+  });
+});
+
 describe("which levels get given up", () => {
-  it("drops the coarsest first — the spine already shows those", () => {
-    // Whatever survives is always the finest end of the range.
-    for (const w of [1600, 1200, 900, 800]) {
+  it("never auto-opens L0, and drops L2 before L1 when it has to squeeze further", () => {
+    // The spine already carries the coarse levels (granularity-zoom.md § the
+    // arc), so automatic fit's candidate pool excludes L0 outright — not just
+    // "first to go on a narrow window", as it used to be. What's left, [1, 2],
+    // is the whole ceiling: whatever survives is always its own front end, so
+    // a single surviving column is L1, never L2.
+    const candidates = article.gistDepths.filter((d) => d !== 0);
+    for (const w of [1600, 1200, 900, 800, 760]) {
       const cols = fit({ windowWidth: w }).columns;
-      expect(cols).toEqual(article.gistDepths.slice(article.gistDepths.length - cols.length));
+      expect(cols).toEqual(candidates.slice(0, cols.length));
+      expect(cols).not.toContain(0);
     }
   });
 
@@ -111,16 +151,17 @@ describe("which levels get given up", () => {
   });
 
   it("shrinks before it drops", () => {
-    // 1275px still shows all three, squeezed; nothing has been given up yet.
-    //
-    // **1279 until 2026-08-28, and halving the rail would have made it prove
-    // nothing.** At a 12px rail 1279 leaves 1267, and `floor((1267 - 544) / 3)`
-    // is 241, which clamps to GIST_IDEAL — so the columns are at their full
-    // width and "squeezed" is false. The assertion below would have gone red
-    // rather than silently passing, which is the good case; the window moves to
-    // 1275 (gistW 239) so the test keeps testing what its name says. GPT Sol.
-    const f = fit({ windowWidth: 1275 });
-    expect(f.columns).toEqual([0, 1, 2]);
+    // 1035px still shows both L1 and L2, squeezed; nothing has been given up
+    // yet. The candidate pool is now [1, 2] rather than [0, 1, 2] — L0 is
+    // never a candidate — so the ideal-width boundary moved from 1264 (three
+    // columns at GIST_IDEAL) to 1024 (two): at avail 1023, `floor((1023 - 544)
+    // / 2)` is 239, one below GIST_IDEAL, and at avail 1024 (windowWidth 1036)
+    // it lands on 240 exactly and "squeezed" goes false. Same trap the
+    // original three-column version of this test was written to dodge (GPT
+    // Sol, 2026-08-28): pick the width one pixel inside the boundary, not a
+    // round number that might land past it.
+    const f = fit({ windowWidth: 1035 });
+    expect(f.columns).toEqual([1, 2]);
     expect(f.widths[0]).toBeLessThan(240);
   });
 });
@@ -180,7 +221,9 @@ describe("the reader's choice beats the window", () => {
 describe("the leaf column", () => {
   it("is always present in outline mode, where it is the deepest rung", () => {
     const f = fit({ windowWidth: 1600, showText: false });
-    expect(f.columns).toEqual([0, 1, 2, 3]);
+    // L0 stays closed here too — automatic fit is the same negotiation in
+    // outline mode, and this file stays free of mode names on purpose.
+    expect(f.columns).toEqual([1, 2, 3]);
     // No prose, so no rail either: the table already is the whole-article view.
     expect(f.spine).toBe("off");
   });
@@ -231,8 +274,9 @@ describe("hiding the spine", () => {
   it("stays when asked, even in outline mode where nothing would show it", () => {
     const f = fit({ windowWidth: 1600, showText: false, showSpine: true });
     expect(f.spine).toBe("on");
-    // Still the whole outline: the rail is bought out of the detail column.
-    expect(f.columns).toEqual([0, 1, 2, 3]);
+    // Still the whole outline minus L0, same as automatic everywhere else —
+    // the rail is bought out of the detail column.
+    expect(f.columns).toEqual([1, 2, 3]);
     expect(f.minWidth).toBe(1600);
   });
 

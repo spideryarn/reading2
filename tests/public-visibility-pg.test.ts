@@ -849,7 +849,15 @@ when("sharing one article", { timeout: 60_000 }, () => {
        * and the two `false`s are the half that matters — an inventory that said
        * *arc* here would name a rung of Outline this article does not have.
        */
-      available: { arc: false, tweets: true, glossary: true, ideas: true, quotes: false },
+      available: {
+        arc: false,
+        tweets: true,
+        glossary: true,
+        ideas: true,
+        quotes: false,
+        timeline: false,
+        sketch: false,
+      },
     });
   });
 
@@ -1020,15 +1028,24 @@ when("sharing one article", { timeout: 60_000 }, () => {
              public path really looks like. */
           expect(() => currentOwnerId()).toThrow(/before the request was authenticated/);
           const { servePublicApi, PUBLIC_ROUTES } = await import("../src/public/routes.js");
+          const { pathOf } = await import("../src/public/route-names.js");
           /* **Every route in the inventory, not two paths typed here.** The
              dispatcher walks the same list, so "the whole public surface spends
              nothing" is a claim about whatever routes exist — including the four
              slice 1b adds. GPT Sol's finding 5. Plus a miss and an unknown path,
              because the error paths run code too. */
           expect(PUBLIC_ROUTES.length).toBeGreaterThan(0);
+          /* **Both kinds**, since 2026-09-04. `pathOf` hands back the collection
+             route's one path and the slug routes' per-slug ones, so the claim
+             stays *"the whole public surface"* rather than *"the routes that
+             happen to take a slug"*. The set is asserted so a sweep cannot go on
+             passing over an inventory that has quietly lost a kind. */
+          expect(new Set(PUBLIC_ROUTES.map((r) => r.kind))).toEqual(
+            new Set(["slug", "collection"]),
+          );
           for (const path of [
-            ...PUBLIC_ROUTES.map((route) => route.path(SLUG)),
-            ...PUBLIC_ROUTES.map((route) => route.path("no-such-article-anywhere")),
+            ...PUBLIC_ROUTES.map((route) => pathOf(route, SLUG)),
+            ...PUBLIC_ROUTES.map((route) => pathOf(route, "no-such-article-anywhere")),
             "/api/public/nothing",
           ]) {
             const res = {
@@ -1155,6 +1172,88 @@ when("sharing one article", { timeout: 60_000 }, () => {
     /* Nobody confirms rights to take something down, and the row says so. */
     expect(rows.map((r) => r.rightsConfirmed)).toEqual([true, false]);
     expect(rows.every((r) => r.actorOwnerId === OWNER)).toBe(true);
+  });
+
+  /**
+   * **The listing, in both of the states it has, and neither costs anything.**
+   *
+   * The ownerless sweep above visits `/api/public/library` once, with the
+   * fixture public. That is one of two shapes this route has, and the other is
+   * the one that would be easy to get wrong: an **empty** shelf. A listing that
+   * answered a 404, or threw, or fell back to *something* when there was nothing
+   * to list would pass every case in this file that runs while the fixture is
+   * shared.
+   *
+   * So the same route is asked twice with the switch thrown in between:
+   *
+   * - **private** → a 200 with an empty list, not a 404 and not an error.
+   *   *"Nobody has shared anything"* is an answer about the world, and a 404
+   *   would make it read as a missing route.
+   * - **public** → the article is on the shelf.
+   *
+   * Both inside `collectSpend` and under the `fetch` spy, because the point of
+   * that section is that a stranger cannot cost us money — and *"the shelf is
+   * empty, let me go and work something out"* is exactly the shape that would.
+   *
+   * **It lives down here, after the log assertion, and that is not filing.**
+   * Flipping the switch appends to `article_visibility_changes`, and *"the log
+   * now has both transitions, in order, and no more"* above counts every row in
+   * it. Two extra transitions from this test made that one red — which is the
+   * guard working, so the test moved rather than the guard being loosened. The
+   * race case below clears the table before it runs, so nothing after this
+   * counts rows either. The fixture is left private, which is how this test
+   * found it.
+   */
+  it("and the listing answers both a full shelf and an empty one, spending nothing", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const shelf = async (): Promise<string[]> => {
+      const { servePublicApi } = await import("../src/public/routes.js");
+      let text = "";
+      let status = 0;
+      const res = {
+        set statusCode(v: number) {
+          status = v;
+        },
+        get statusCode() {
+          return status;
+        },
+        setHeader() {},
+        end(chunk: string) {
+          text = chunk ?? "";
+        },
+      } as unknown as ServerResponse;
+      await runInRequest(async () => {
+        /* Ownerless, like every other visit to this namespace. */
+        expect(() => currentOwnerId()).toThrow(/before the request was authenticated/);
+        await servePublicApi({ res, path: "/api/public/library", method: "GET" });
+      });
+      expect(status).toBe(200);
+      return (JSON.parse(text) as { entries: { slug: string }[] }).entries.map((e) => e.slug);
+    };
+
+    try {
+      expect((await articleRow())?.visibility).toBe("private");
+      const { report } = await collectSpend(async () => {
+        /* A 200 with nothing in it — the empty case, asserted as an empty answer
+           rather than as an absence of failure. */
+        expect(await shelf()).not.toContain(SLUG);
+
+        await call("PUT", `/api/article/${SLUG}/visibility`, {
+          body: { visibility: "public", rightsConfirmed: true },
+          as: OWNER,
+        });
+        expect(await shelf()).toContain(SLUG);
+      });
+      expect(report.calls).toEqual([]);
+      expect(report.pending).toEqual([]);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      await call("PUT", `/api/article/${SLUG}/visibility`, {
+        body: { visibility: "private" },
+        as: OWNER,
+      });
+      fetchSpy.mockRestore();
+    }
   });
 
   /**

@@ -42,6 +42,7 @@
 import DOMPurify from "dompurify";
 import type { Article } from "../types.js";
 import { ARTICLE_CONFIG, installArticlePolicy } from "../sanitize-policy.js";
+import { openExternalLinksInNewTab } from "./external-links.js";
 
 /*
  * Our **own** instance, not the shared default export — which is already bound
@@ -65,13 +66,30 @@ import { ARTICLE_CONFIG, installArticlePolicy } from "../sanitize-policy.js";
 const purify = DOMPurify(window);
 installArticlePolicy(purify);
 
-/** One block's HTML, made safe for this engine to parse. */
+/**
+ * One block's HTML, made safe for this engine to parse.
+ *
+ * **This is the policy and nothing else**, and `tests/sanitize-client.test.ts`
+ * pins it to be byte-for-byte what the server binding produces for the same
+ * input, and to be a no-op on its output. Nothing that decides how the reading
+ * view *presents* a block belongs in here — the new-tab rule was written as a
+ * DOMPurify hook on 2026-09-04 and broke both of those assertions within the
+ * day. It lives in external-links.ts, applied by `sanitizeArticle` below.
+ */
 export function sanitizeBlockHtml(html: string): string {
   return purify.sanitize(html, { ...ARTICLE_CONFIG });
 }
 
 /**
- * An article with every block's HTML re-sanitised, done once at ingress.
+ * An article as the reading view wants it, done once at ingress: every block's
+ * HTML re-sanitised in this engine, and then every link out of the app aimed at
+ * a new tab.
+ *
+ * **Two passes, in that order, and the order is the safety argument.** The
+ * sanitiser strips an author's own `target`, so by the time the second pass
+ * runs the only `target` that can exist is the one it writes —
+ * [external-links.ts](./external-links.ts) has the reasoning, and
+ * `tests/prose-links-new-tab.test.ts` pins the precondition.
  *
  * Returns a new object rather than mutating: `Article` comes straight from
  * `res.json()` and nothing else should be holding the unsanitised version, but
@@ -86,7 +104,7 @@ export function sanitizeArticle(article: Article): Article {
   return {
     ...article,
     blocks: article.blocks.map((b) => {
-      const clean = sanitizeBlockHtml(b.html);
+      const clean = openExternalLinksInNewTab(sanitizeBlockHtml(b.html));
       return clean === b.html ? b : { ...b, html: clean };
     }),
   };

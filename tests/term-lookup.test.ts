@@ -9,9 +9,11 @@
  * actually reaches, rather than through a hand-built one that could be right
  * while the wiring is wrong.
  *
- * The four guards were tested before and still are: the fixture must not be
- * writable, an unknown slug is not a slug, an unknown term must not reach a
- * model call, and neither must a term the article does not contain.
+ * Three guards are tested here: an unknown slug is a 404, a slug that is not one
+ * is refused outright, an unknown term must not reach a model call, and neither
+ * must a term the article does not contain. **There were four**, and the fourth
+ * — the committed `example/` must not be writable — went with the store it was
+ * about; see the note at the end of this header.
  *
  * **What is new is the successful path.** The old tests deliberately stopped
  * short of it because it makes a model call — which is exactly why the review
@@ -22,83 +24,194 @@
  *
  * See docs/project/glossary.md and
  * docs/plans/260826e-postgres-storage-implementation.md § `lookUpTerm` has to move out.
+ *
+ * ## The guards ran on the filesystem store until 2026-09-04
+ *
+ * `src/store/index.ts` builds `lookUpTerm` out of whichever adapters are live,
+ * so *which* wiring this file drove was decided by `SPIDERYARN_STORE` — and
+ * unset meant the four guards were being asserted against the store that does
+ * not deploy. They now run against Postgres, over one article seeded out of the
+ * committed corpus with an extra glossary entry naming somebody the piece never
+ * mentions. docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § B.
+ *
+ * **One assertion was dropped rather than translated, and this is the record of
+ * it.** `lookUpTerm("example", …)` rejecting with `/built-in example/` was the
+ * `assertWritable` 403, and `src/store/index.ts` passes `assertWritable` **only
+ * when the store is not Postgres** — because the 403 exists to stop a lookup
+ * editing the one committed article directory in the repo, and Postgres has no
+ * such directory and no such article. Building a Postgres fixture so that a
+ * filesystem-shaped guard could go on being tested would be a green test
+ * proving nothing. The 404-for-an-unknown-slug half of that case is real under
+ * either store and is kept, in a case of its own. Stage G's *enumerate every
+ * surviving assertion* pass should find this paragraph rather than a gap.
+ *
+ * ## The mutation, watched red on 2026-09-04
+ *
+ * **Mutation.** `glossary: { ...glossary, entries }` in
+ * `pgArticleReader.loadGlossary` (src/store/pg.ts) replaced by `entries: []` —
+ * the line that hands back the terms the revision actually holds, with the
+ * stored lookups merged in. Re-run 2026-09-04: *1 failed | 8 passed (9)*,
+ * *refuses a term the article does not actually contain*, `expected [Function]
+ * to throw error matching /does not appear in this article/ but got 'No
+ * glossary term "spya-zzzzzz" in "te…'`. That is the proof the entry this file
+ * seeds comes back out of Postgres rather than out of a file.
+ *
+ * **Blind to.** Only the read half, and only the entry list: the lookup merge
+ * two lines above it, `stale`, `outdated` and the `blockHashInputs` query are
+ * all untouched and nothing here would notice them going wrong. It
+ * says nothing at all about the *write* — `pgGlossaryLookupStore.save`, which
+ * the successful path below drives through an injected fake rather than through
+ * the wiring, so no Postgres write is exercised by this file at any point. And
+ * the fourth guard stayed green under the mutation, because "no such term" is
+ * exactly what an emptied list produces.
+ *
+ * ## The sentence that guard matched on is gone
+ *
+ * The mutation above quotes `/does not appear in this article/`, which was the
+ * one sentence three different refusals shared until a reader reported reading
+ * it as a denial that their glossary entry existed. It is two sentences and two
+ * codes now, and this file matches the codes —
+ * docs/postmortems/260904c-the-glossary-said-the-term-was-not-there.md, and
+ * tests/glossary-lookup-refusals.test.ts for which fact goes with which.
  */
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { afterAll, describe, expect, it } from "vitest";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+/**
+ * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
+ * reads the flag once and imports are hoisted above every statement.
+ * `src/store/index.ts` reads it at module load to pick each adapter *and* to
+ * decide whether `lookUpTerm` gets an `assertWritable`, so this has to be true
+ * before that file is evaluated.
+ */
+const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
+  const previous = process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
+  return previous;
+});
+
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { lookUpTerm } from "../src/store/index.js";
+import { closeDb } from "../src/db/client.js";
+import { loadEnvLocal } from "../src/env.js";
+import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
+import { lookUpTerm, STORE } from "../src/store/index.js";
 import { makeLookUpTerm } from "../src/term-lookup.js";
-import { PROMPT_VERSION } from "../src/glossary.js";
-import { hashBlocks } from "../src/source-hash.js";
 import type { Block, GlossaryLookup, GlossaryResponse } from "../src/types.js";
 import type { LookupsByTerm } from "../src/glossary-lookups.js";
 import type { Article } from "../src/types.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
 
-const slugs: string[] = [];
+if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
 
-afterAll(async () => {
-  for (const slug of slugs) {
-    await rm(path.join(process.cwd(), "data", slug), { recursive: true, force: true });
-  }
+loadEnvLocal();
+
+const { reachable } = await pgReady({
+  suite: "tests/term-lookup.test.ts",
+  tables: ["spideryarn.articles", "spideryarn.article_revisions"],
 });
 
-/** One paragraph, one term, on disk under `data/`. Returns the slug. */
-async function fixture(opts: {
-  suffix: string;
-  text: string;
-  entry: Record<string, unknown>;
-}): Promise<string> {
-  const slug = `zz-test-lookup-${process.pid}-${opts.suffix}`;
-  slugs.push(slug);
-  const dir = path.join(process.cwd(), "data", slug);
-  await mkdir(dir, { recursive: true });
-  const blocks: Block[] = [
+const when = reachable ? describe : describe.skip;
+
+/** A throwaway slug, so nothing here is read or written by anybody else. */
+const SLUG = "test-term-lookup-guards";
+
+/**
+ * The id of the entry added below, and of one that is not there at all.
+ *
+ * `ABSENT_TERM` names a person the corpus article never mentions, which is what
+ * makes the 409 assertable: every entry `writes` ships with is matched by its
+ * name or one of its aliases somewhere in the text.
+ */
+const ABSENT_TERM = "spya-zzzzzz";
+const NO_SUCH_TERM = "spya-yyyyyy";
+
+let article: ScratchArticle | undefined;
+
+/**
+ * Every call below, as the reader who owns the fixture.
+ *
+ * **Not optional, and not the same as the process's own owner.** Outside a
+ * request `currentOwnerId()` is `environmentOwnerId()`, which reads
+ * `SPIDERYARN_OWNER_ID` out of `.env.local` — a different uuid on every box —
+ * while the Postgres reader filters every article by owner (`ownedSlug` in
+ * src/store/pg.ts). Seeding as one and reading as the other made the third case
+ * below fail with *"No article artefacts"*, and — the part worth writing down —
+ * left the two 404 cases **passing for the wrong reason**, because a 404 from
+ * "this article is not yours" is indistinguishable from a 404 from "there is no
+ * such term". `refuses a term the article does not actually contain` is the
+ * control that keeps them honest: it can only reach its 409 through a glossary
+ * *and* an article this owner can see.
+ */
+const lookUp = (slug: string, termId: string): Promise<unknown> =>
+  runAsOwner(DEV_OWNER_ID, () => lookUpTerm(slug, termId));
+
+/**
+ * Put one unmatchable entry into the corpus article's glossary on the way in.
+ *
+ * `mutate` runs on the **clone**, after the copy and before the load, so what it
+ * writes is what goes into Postgres — `ScratchOptions.mutate`. Appending rather
+ * than replacing, because the five entries already there are what the other
+ * suites over this fixture assert on, and because an entry that *is* matched is
+ * the control for the one that is not.
+ */
+async function addAnUnmatchableTerm(dir: string): Promise<void> {
+  const at = path.join(dir, "glossary.json");
+  const glossary = JSON.parse(await readFile(at, "utf8")) as { entries: unknown[] };
+  glossary.entries = [
+    ...glossary.entries,
     {
-      id: "spya-aaaaaa" as Block["id"],
-      kind: "text",
-      tag: "p",
-      gistable: true,
-      html: `<p>${opts.text}</p>`,
-      text: opts.text,
-      words: opts.text.split(/\s+/).length,
+      id: ABSENT_TERM,
+      name: "Barbara Liskov",
+      kind: "person",
+      aliases: [],
+      background: "Somebody the article never mentions.",
+      difficulty: 0.2,
+      centrality: 0.1,
+      blocks: [],
     },
   ];
-  await writeFile(path.join(dir, "blocks.json"), JSON.stringify({ blocks }));
-  await writeFile(path.join(dir, "tree.json"), JSON.stringify({ rootId: "spya-aaaaaa", nodes: {} }));
-  await writeFile(
-    path.join(dir, "glossary.json"),
-    JSON.stringify({
-      version: PROMPT_VERSION,
-      generator: "a-model",
-      slug,
-      sourceHash: hashBlocks(blocks),
-      entries: [opts.entry],
-      passes: 1,
-      generatedAt: "2026-08-25T12:00:00.000Z",
-      elapsedMs: 1,
-    }),
-  );
-  return slug;
+  await writeFile(at, JSON.stringify(glossary));
 }
 
-describe("the guards, through the store's own wiring", () => {
-  it("refuses to write into the built-in example", async () => {
-    /* `example/` is an article the filesystem store can reach and nobody owns,
-       so a lookup on it must be a 403 rather than an edit to the one committed
-       directory in the repo. The same guard `deleteGlossary` carries, for the
-       same reason. It is the one piece of this that is genuinely
-       filesystem-shaped: Postgres has no fixture at all. */
-    await expect(lookUpTerm("example", "spya-k3m9qt")).rejects.toThrow(/built-in example/);
+describe("the store this file's wiring was built from", () => {
+  it("is the Postgres one", () => {
+    /* Not gated on the database being up, deliberately. A flag that failed to
+       take would build `lookUpTerm` out of the filesystem adapters *and* hand it
+       an `assertWritable`, which is a different function with a different guard
+       — and three of the four cases below would still pass. A control that
+       vanishes when Postgres is missing vanishes exactly when it matters. */
+    expect(STORE).toBe("postgres");
+  });
+});
 
-    /* And a typo is a 404 now, not a 403 — `articleDir` used to fall through to
+when("the guards, through the store's own wiring", () => {
+  beforeAll(async () => {
+    /* `DEV_OWNER_ID`, because these calls are made outside a request and
+       `currentOwnerId()` is the environment's owner there — an article seeded as
+       anybody else is invisible to the reader and every case below would be a
+       404 for the wrong reason. */
+    article = await scratchArticleInPg(SLUG, {
+      ownerId: DEV_OWNER_ID,
+      mutate: addAnUnmatchableTerm,
+    });
+  }, 120_000);
+
+  afterAll(async () => {
+    await article?.remove();
+    await closeDb();
+  }, 60_000);
+
+  it("answers 404 for a slug no article holds", async () => {
+    /* A typo is a 404, not a 403 — `articleDir` used to fall through to
        `example/` for any slug with no output of its own, which is what put an
-       unknown slug one request away from writing into the fixture (src/api.ts §
-       `candidateDirs`). Asserted rather than dropped, because "no article" and
-       "not yours" are different things to be told, and the guard above must not
-       be what is answering this one. */
-    await expect(lookUpTerm("no-such-article-slug", "spya-k3m9qt")).rejects.toMatchObject({
+       unknown slug one request away from writing into the committed fixture
+       (src/api.ts § `candidateDirs`). This used to be the second half of a case
+       whose first half was the `example/` 403; see the note in this file's
+       header for why that half is gone and this one is not. */
+    await expect(lookUp("no-such-article-slug", "spya-k3m9qt")).rejects.toMatchObject({
       status: 404,
     });
   });
@@ -106,7 +219,7 @@ describe("the guards, through the store's own wiring", () => {
   it("rejects a slug that is not one", async () => {
     // Path traversal, refused where every other read-side entry point refuses
     // it — see docs/project/security.md.
-    await expect(lookUpTerm("../../etc", "spya-k3m9qt")).rejects.toThrow();
+    await expect(lookUp("../../etc", "spya-k3m9qt")).rejects.toThrow();
   });
 
   it("refuses a term the article does not actually contain", async () => {
@@ -120,35 +233,31 @@ describe("the guards, through the store's own wiring", () => {
 
        Both are refused before any model call, which is what makes this
        assertable without a network. */
-    const slug = await fixture({
-      suffix: "unmatched",
-      text: "Nothing relevant here.",
-      entry: {
-        id: "spya-zzzzzz",
-        name: "Leslie Lamport",
-        kind: "person",
-        aliases: [],
-        background: "Somebody the article never mentions.",
-        blocks: [],
-      },
-    });
-    await expect(lookUpTerm(slug, "spya-zzzzzz")).rejects.toThrow(/does not appear in this article/);
+    /* **Matched on the code, not the sentence** — docs/project/copy.md § The
+       bracketed code. It matched `/does not appear in this article/` until
+       2026-09-04, which pinned the wording of the very sentence a reader
+       reported as unreadable, and would have gone red for the fix rather than
+       for a regression.
+
+       **Either code, and that is not vagueness.** Which of the two fires
+       depends on whether this fixture's glossary reads as `stale`, and that is
+       a property of the corpus this box happens to hold: `sourceHash` was
+       written against the full article and a worktree carries a cut of it, so
+       the same seeding is stale here and need not be elsewhere. Pinning one
+       would be pinning the checkout. What this case is *for* — a term the
+       article does not contain never reaches a model call — is true of both,
+       and `tests/glossary-lookup-refusals.test.ts` drives `stale` itself to
+       assert which sentence goes with which fact. */
+    await expect(lookUp(SLUG, ABSENT_TERM)).rejects.toThrow(/\[gl-(not-quoted|stale)\]/);
+
+    /* The reported bug, asserted against the real wiring: whichever branch
+       fires, the reader is not told the term they are looking at does not
+       exist. */
+    await expect(lookUp(SLUG, ABSENT_TERM)).rejects.not.toThrow(/Barbara Liskov/);
   });
 
   it("refuses a term id that is not in the glossary at all", async () => {
-    const slug = await fixture({
-      suffix: "unknown-term",
-      text: "Nothing relevant here.",
-      entry: {
-        id: "spya-zzzzzz",
-        name: "Leslie Lamport",
-        kind: "person",
-        aliases: [],
-        background: "Somebody the article never mentions.",
-        blocks: [],
-      },
-    });
-    await expect(lookUpTerm(slug, "spya-yyyyyy")).rejects.toMatchObject({ status: 404 });
+    await expect(lookUp(SLUG, NO_SUCH_TERM)).rejects.toMatchObject({ status: 404 });
   });
 });
 

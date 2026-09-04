@@ -36,6 +36,53 @@
  * The other half the move buys is silent until you look for it: the ticket
  * writes a `realtime_sessions` row **before** the token leaves this server, and
  * on the filesystem store that journal is a file nobody in production reads.
+ *
+ * ## The mutations, watched rather than reasoned — 2026-09-04
+ *
+ * One for each of the two halves above. The first is red and the second is not,
+ * and the second is the one worth reading.
+ *
+ * **Mutation.** 1 — the ordering the tail is a fact about. `src/store/pg-chat.ts`
+ * § `threadsFor`: `.orderBy(asc(chatMessages.threadId), asc(chatMessages
+ * .ordinal))` made `.orderBy(asc(chatMessages.threadId), sql`…ordinal desc`)`.
+ * The run printed `2 failed of 11` — *seeds from the thread, and names the row
+ * that is last* (`expected [] to deeply equal [ { role: 'user', …(1) }, …(1) ]`)
+ * and *takes the block ids OUT of what the model is shown of its own speech*.
+ * Note the shape of the first failure: the seed came back **empty** rather than
+ * reversed, because `recentHistory` (src/live.ts) reads the array as a
+ * chronology and walks it from the end. So the ordering is load-bearing twice
+ * over, and this is the mutation the filesystem version could not have had —
+ * its messages come back in the order the object holds them.
+ *
+ * **Blind to.** Mutation 1 breaks the ordinal *ordering* and says nothing about
+ * `chat_messages.ordinal` being *assigned* right — `begin` and `appendSpoken`
+ * derive it from the pure function's array indices, and a mis-assignment would
+ * be invisible to a query that then sorted by it. It says nothing about the
+ * thread-level `orderBy` beside it either.
+ *
+ * *(A first attempt used `desc(chatMessages.ordinal)`, which `pg-chat.ts` does
+ * not import: all 11 failed, including the ungated `STORE` control. A whole-file
+ * red is a module that would not load, not a finding. Recorded because the two
+ * look identical in a summary line.)*
+ *
+ * **Mutation.** 2 — the journal, and it STAYED GREEN. `src/routes.ts`, the
+ * live-ticket branch: `await realtimeSessionStore.issue({…})` made `if (false)
+ * await realtimeSessionStore.issue({…})`, so no `realtime_sessions` row is
+ * written before the token goes out. The run printed `11 passed of 11`.
+ *
+ * **Blind to.** The journal row itself. Nothing in this file asks whether it
+ * exists — `spideryarn.realtime_sessions` appears in the `pgReady` table list
+ * and in the teardown note, and nowhere else. So the last
+ * paragraph above describes a mechanism this file **does not test**: an
+ * unjournalled ticket would ship green through here.
+ * tests/realtime-usage.test.ts and tests/store-realtime-sessions.test.ts are
+ * where that row is held.
+ *
+ * **Blind to.** Neither mutation reaches the claim that the seed and the tail
+ * come from **one** read: both
+ * come out of the same `threadsFor` call, so no mutation short of splitting
+ * that call can make them disagree, and this file would not notice if somebody
+ * did.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";

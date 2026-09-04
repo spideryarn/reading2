@@ -50,10 +50,35 @@
 import { Client } from "pg";
 import { inject } from "vitest";
 
-import { loadEnvLocal } from "../../src/env.js";
+import { loadEnvLocal, PINNED } from "../../src/env.js";
 import type { PrivateDatabase } from "./private-db-global.js";
 
 loadEnvLocal();
+
+/**
+ * **Name `DATABASE_URL` as this process's own, so a module reset cannot take it
+ * back.** Both assignments below are invisible to `src/env.ts`'s snapshot rule
+ * the moment anything calls `vi.resetModules()`: the reloaded copy takes a
+ * *fresh* `INHERITED` snapshot, our value is already in it, so nothing "differs
+ * from what was inherited" and `.env.local` wins the next `loadEnvLocal()`.
+ *
+ * The next pool then opens somewhere else entirely. Measured on 2026-09-04 by
+ * [`private-lane-survives-a-module-reset.test.ts`](../private-lane-survives-a-module-reset.test.ts),
+ * which without this line lands in **`postgres`** — the maintenance database —
+ * and a suite that only *writes* would have written there and passed. Found
+ * while converting `tests/jobs-walk.test.ts`, where it surfaced as a job reading
+ * `gone` instead of `busy`.
+ *
+ * `PINNED` is `src/env.ts`'s answer to exactly this and
+ * [`unit-no-database.ts`](unit-no-database.ts) has always used it; this lane
+ * never did. **`DATABASE_URL` only**: this lane mints a database, it does not
+ * mint a Supabase project, so `SUPABASE_URL` should still come from the file.
+ *
+ * Above the branch, so the poison URL is pinned too — otherwise a reset in a
+ * lane that deliberately has *no* database would replace "refused fast" with a
+ * live connection to the shared one, which is the same bug wearing a worse face.
+ */
+process.env[PINNED] = "DATABASE_URL";
 
 /**
  * `null` is "there was no reachable stack and none was required" — a state

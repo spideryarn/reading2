@@ -252,7 +252,7 @@ a broken tool unless something says which. The globe has an off state for the sa
 **Every citation goes through `safeUrl` at the storage boundary**, even though `explain` built them
 from the provider's own annotations. This is where a model-supplied URL stops being a value in flight
 and becomes a value on disk that the panel puts in an `href` — the same call `converse` makes, and
-[glossary.md § Five ways to break this quietly](../project/glossary.md#five-ways-to-break-this-quietly)
+[glossary.md § Six ways to break this quietly](../project/glossary.md#six-ways-to-break-this-quietly)
 item 3 is about exactly this field.
 
 **One writer per file, which is why there is a second file.** This paragraph used to describe a

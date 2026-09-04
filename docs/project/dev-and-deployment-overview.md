@@ -66,6 +66,9 @@ is the one worth knowing unprompted: a bad tree draws a *wrong article* rather t
 - **[feedback.md](feedback.md)** — the Feedback button and where a bug report goes: our own Postgres
   first, Sentry second, and an allowlist between the browser and both. The one place a reader's own
   prose is deliberately allowed out, which is why the rule for adding a field is written down.
+- **[feedback-reports.md](feedback-reports.md)** — the other half of the Feedback button: how an
+  agent works through the reports that arrive, where the queue lives, and why resolving the Sentry
+  issue is the whole of the bookkeeping.
 - **[logging.md](logging.md)** — why Pino, what the levels mean here, why path-based redaction makes
   the message string a rule, and why the CLI's `console.log` is not logging and is staying.
 - **[hetzner-remote-server-box.md](hetzner-remote-server-box.md)** — the always-on Hetzner box and `gjd-remote`, the one command

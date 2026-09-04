@@ -125,11 +125,16 @@ export type AutoRunTarget = Extract<
 /**
  * Which mode's button arms which target, and the four that do.
  *
- * **`diagram` is not here**, and that is right: opening Diagram costs nothing
- * and lands on a picture drawn from the tree. The Sketch chip inside it arms
- * `sketch` itself, because it is the chip that is the gesture — and the
+ * **`diagram` is not here**, and that is right — and it matters more since
+ * 2026-09-04, when Diagram came out from behind the experimental-features
+ * switch and its default picture became the Sketch. Opening Diagram still costs
+ * nothing: with no sketch drawn it lands on an empty state that says the price
+ * and the wait and draws nothing (SketchView.tsx). Adding `diagram: "sketch"`
+ * to this table would turn every press of a bar button that is now in front of
+ * every reader into a ~$0.20, two-minute job. The Sketch chip inside the mode
+ * arms `sketch` itself, because it is the chip that is the gesture — and the
  * Illustrated chip beside it arms `illustrated` for the same reason and a
- * dearer one: $0.27–$0.40 a press.
+ * dearer one: $0.40–$0.65 a press.
  *
  * Everything else in `MODES` is either free (Plain, Hierarchy, Outline,
  * Summary — they read the tree that is already there) or stores nothing at all

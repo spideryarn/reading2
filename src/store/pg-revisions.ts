@@ -73,7 +73,7 @@ import {
   revisionBlocks,
   revisionStepRuns,
 } from "../db/schema.js";
-import { shortIdInSlug } from "../ingest.js";
+import { isReservedSlug, shortIdInSlug } from "../ingest.js";
 import { mintId } from "../ids.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
@@ -483,6 +483,24 @@ export async function lockOrCreateArticle(
 ): Promise<typeof articles.$inferSelect> {
   const found = await lockArticle(tx, slug);
   if (found) return found;
+
+  /* **The one name an article may not be born with**, and it is checked here
+     rather than in `isSlug` because this is the only line in the repo that
+     brings an article address into existence — `POST /api/jobs` can name a slug
+     directly (the "adopted" branch of `enqueue`, src/jobs.ts), so a check that
+     lived only beside the minter would miss the path a client controls.
+
+     **After the lock attempt and before the insert**, deliberately: an article
+     that already holds the name on some deployment goes on being locked, read,
+     re-extracted and repaired exactly as before. What is refused is *taking* the
+     name, which is the only thing that could newly collide with `/read/public`.
+     src/ingest.ts § `isReservedSlug` has the routing argument. */
+  if (isReservedSlug(slug)) {
+    throw new PublishRefused(slug, [
+      `"${slug}" is an address the app already uses — /read/${slug} is the shelf of ` +
+        "public articles, not an article. Choose another name.",
+    ]);
+  }
 
   /* **The short id is minted here because this is where the row is born.**
      The slug already ends in one (src/ingest.ts § `slugWithShortId`), so the

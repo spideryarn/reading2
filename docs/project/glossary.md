@@ -512,8 +512,13 @@ Postgres store seam rather than on the streaming, is in
 [260826o-streaming-the-slow-two.md](../plans/260826o-streaming-the-slow-two.md) — **whoever finishes the glossary
 store should do it then**, which is why this note is here rather than only in the plan.
 
-**Its answers live in their own file**, `data/<slug>/glossary-lookups.json`, keyed by entry id
-([`src/glossary-lookups.ts`](../../src/glossary-lookups.ts)) — never inside `glossary.json`. A lookup
+**Its answers live apart from the glossary, keyed by entry id** — one row per `(article, entry)` in
+Postgres ([`src/store/pg-lookups.ts`](../../src/store/pg-lookups.ts)), and
+`data/<slug>/glossary-lookups.json` on the filesystem store
+([`src/glossary-lookups.ts`](../../src/glossary-lookups.ts)) — never inside `glossary.json`. **Both
+halves exist and both are wired**; the sentence above about the Postgres seam is about *streaming*
+and nothing else. It has been read as saying lookups are files-only, which they have not been since
+the seam landed — checked against the code and against the deployed store, 2026-09-04. A lookup
 is *reader state*, which by this repo's own rule lives beside the artefact rather than in it; and
 sharing a file with the generating stage is unfixable rather than merely racy, because that stage
 holds its read across a minute-long model call. Worse, `glossary.json` is written with a bare
@@ -523,8 +528,12 @@ temp-and-rename and serialised, both copied from [`src/comments.ts`](../../src/c
 `loadGlossary` attaches them at read time, so the panel still just sees `entry.lookup`.
 
 **It is `explain` with a different selection** — the same function comments use
-([`src/explain.ts`](../../src/explain.ts)), with the term's own name as the quote and
-`entry.blocks[0]` as the anchor. That is not opportunism: our review of the previous version argued a
+([`src/explain.ts`](../../src/explain.ts)), with the form of the term the article really uses as the
+quote and, since 2026-09-04, **the first block of the article that uses it** as the anchor, found by
+scanning rather than read out of `entry.blocks`. It was `entry.blocks[0]` and nothing else, which
+made a term used in five places uncheckable the moment the first of them changed — see
+[The two ways it refuses](#the-two-ways-it-refuses-and-why-they-used-to-be-one) below.
+That is not opportunism: our review of the previous version argued a
 glossary should be *the same mechanism as comments with a different prompt* rather than a second
 system, and this is the first half of that. It also means the article prefix is **cached and shared**,
 so a lookup on a piece somebody has already asked a question about is a cache hit.
@@ -547,6 +556,174 @@ Three decisions inside it:
 Sources render as **host names with the page title in a hover tooltip** — Greg's own suggestion, and
 the shape an 18rem band can take: the title is the useful thing to read and the wrong thing to lay
 out. `Tooltip.tsx` rather than a `title=` attribute, so it works on focus too.
+
+#### The two ways it refuses, and why they used to be one
+
+A lookup needs a **passage** to anchor the question to, and there are two quite different reasons it
+may not find one. They shared a sentence until 2026-09-04, and that sentence named the term and said
+it *"does not appear in this article"* — so a reader met it under a row headed with that term, beside
+the entry's own definition, and reported it:
+
+> I tried to use the glossary check the web option, but it said that the phrase in the glossary when
+> I was checking didn't exist even though it clearly did, because there was a glossary entry for it
+> and I can see it right there on the page.
+>
+> — a reader, 2026-09-04
+
+**The question is asked of the article, never of `entry.blocks`.** `anchorIn`
+([`term-lookup.ts`](../../src/term-lookup.ts)) scans the blocks as they are now for the first one
+that uses the term, under `term-match.ts`'s rule — which on a list that fits its article is exactly
+`entry.blocks[0]`, and on one that does not is the only honest answer available. The stored
+occurrences describe whichever extraction the list was written against, and a glossary is **carried**
+into every new revision (`glossary: "carry"`,
+[`pg-revisions.ts`](../../src/store/pg-revisions.ts)) — so an empty `entry.blocks` can sit beside an
+article that quotes the term in every paragraph.
+
+Only when the article uses none of the term's names is there a refusal, and then staleness decides
+which:
+
+| the list | what it means | what the reader gets |
+|---|---|---|
+| fits this article | none of the term's names is in the piece — the model named it rather than the article quoting it, or the aliases are too narrow, or the entry was invented | `[gl-not-quoted]`, and the button is **disabled** rather than left to fail |
+| was written for another version | it says nothing reliable about this article, in either direction | `[gl-stale]` — *find the terms again*, which is the banner already on screen |
+
+**That staleness is computed from the two objects in hand**, with `isStale`
+([`glossary.ts`](../../src/glossary.ts)) over the glossary and the article `lookUpTerm` is holding —
+not taken off `GlossaryResponse.stale`. `loadGlossary` and `loadArticle` are two reads through
+`articles.current_revision_id`, and a publish landing between them pairs one revision's glossary with
+another's blocks; comparing the pair the refusal is actually about is true of whatever it was
+given. ⟨Sol⟩
+
+Both sentences are in [`src/messages.ts`](../../src/messages.ts) § glossary, and **neither names the
+term**: the failure is rendered inside that entry's own row, so repeating the name bought nothing and
+cost the reader their confidence in the list.
+
+The first row is not damage and not rare — **5 of 141 entries** in the local corpus on 2026-09-04
+(`npx tsx` over `spideryarn.article_revisions.glossary` against every article that has one). It is
+`findOccurrences` doing its job on names like *"scaling laws / scaling curves"* and *"Conway's Game
+of Life"*, which the piece alludes to and never spells out. The panel has always said so
+(`gloss-nowhere`); what it did not do was stop offering a button that could only fail — and it now
+says it **only when we know the list was written against this article**, for the same reason the
+server does.
+
+**A visitor is told neither**, and that is a change rather than an oversight. A shared link carries
+no freshness and deliberately cannot — the public graph may not reach `isStale`
+(`tests/public-imports.test.ts`) and a visitor could not act on the answer — so
+`occurrencesFitTheArticle` is `false` for them and the sentence is withheld. It costs a visitor one
+explanatory line on rows that have no occurrences; what it buys is that they are never told the
+words in front of them are absent. The button is not drawn for a visitor at all, so nothing else
+changes. Reversing this is one boolean if Greg would rather have the sentence.
+
+**What is still open:** those entries are arguably the ones a web check would help most — the
+remembered answer is all there is — and we refuse them, because `explain` wants a selected passage
+and inventing one is a false premise handed to a model asked to reason from it. A web check written
+for an unquoted term — its own prompt, saying honestly that the glossary named something the article
+alludes to — is a real option and nobody has decided it.
+[The postmortem](../postmortems/260904c-the-glossary-said-the-term-was-not-there.md) has the rest.
+
+### Looking a term up
+
+A reader asked for one, the day after the bug above:
+
+> I would like to be able to type into a search box in the glossary for a particular term and for it
+> to look for that term and add it to the glossary. And maybe it should be a tiny bit robust in the
+> spelling or something if I type it wrong.
+>
+> — a reader, 2026-09-04, `[SPIDERYARN-READING2-Y]`
+
+Built the same day, and **cut down**: it finds the term in the piece and explains that passage.
+`AskATerm` in [`GlossaryPanel.tsx`](../../src/web/GlossaryPanel.tsx) →
+`POST /api/glossary/:slug/ask` → `makeAskAboutTerm` in
+[`term-lookup.ts`](../../src/term-lookup.ts), which is *"Check the web" with a phrase where the entry
+was*: the same `anchorIn` walk, the same `explain` call, the same `safeUrl` filter, drawn by the same
+`LookupAnswer` component. One anchor rule, which is the whole argument for that file existing.
+
+**"A tiny bit robust" is [the matching rule](#the-matching-rule-and-why-it-is-its-own-module) and
+nothing more** — case, plurals and possessives fold; a misspelling does not. There is deliberately
+**no "did you mean…"**, considered and rejected on the day: the matcher gives no typo tolerance at
+all to build a ranking on, and the word a reader wants is as often a lowercase idea as a proper noun,
+so the article's proper-noun list (`vocabulary-sources.ts` § names, which the plan proposed) would
+miss the commonest case while looking confident. A guess here is
+[the postmortem's fault](../postmortems/260904c-the-glossary-said-the-term-was-not-there.md) in a
+friendlier tone.
+
+**The article's own words are what the model is told about**, not the reader's — type *attention
+head* at a piece that says *Attention Heads* and the quote is the plural, because that is the text
+that is there. A side effect worth having: the reader's own string never reaches the model at all.
+
+#### The three ways it comes back empty
+
+Three, not one, because the sibling refusal above was one sentence over three causes and a reader
+reported it. Each says what was established and what the reader can do about it:
+
+| what was checked | code | what the reader gets |
+|---|---|---|
+| the characters are nowhere in the piece, not even inside a longer word | `[gl-ask-absent]` | **Ask in chat**, the one surface that may answer from outside the article |
+| the characters are there, but never with a boundary on both sides — *axiom* against *axiomatic* | `[gl-ask-part-word]` | try the words as the piece writes them; chat is still offered |
+| there is no prose to search at all | `[gl-ask-no-prose]` | **not a claim about the term** — the branch exists so an empty scan cannot be reported as an answer |
+
+The third has never fired: **0 of 52** revisions in the local corpus have no text-bearing block
+(`bool_or(text <> '')` over `spideryarn.revision_blocks`, run 2026-09-04). It is reachable by
+construction rather than defensive — `assertSomethingWasProduced`
+([`blocks.ts`](../../src/blocks.ts)) requires *a* block and not a block with words in it, and
+figures, images and embeds carry no `text` — and it is kept for the reason the whole split exists:
+the alternative is a confident sentence about the term over a scan that read nothing.
+
+The second scan is the same escaping and the same whitespace rule as `termPattern` **minus the
+boundary lookarounds**, so the only thing the two answers can disagree about is the boundary. It does
+not claim a typo, because a substring hit is not evidence of one — and its sentence **does not say
+"word"**, which a draft did. A term whose own edge is punctuation is the counterexample: `-bar`
+against a piece that says `foo-bar` fails the bounded scan and passes the loose one, yet `-bar` is
+right there. What is true every time is the thing the lookarounds tested, so that is what the
+sentence claims: *a letter or a digit runs straight into them*. ⟨Sol⟩ All three refusals are `409`,
+before any model call, and none of them names the term back at the reader — it is in the box a line
+above. [`messages.ts`](../../src/messages.ts) § glossary has the sentences;
+[`tests/glossary-asked-term.test.ts`](../../tests/glossary-asked-term.test.ts) has a case per cause,
+matched on the code and never on the wording.
+
+#### Nothing is stored, and that is deferred rather than forgotten
+
+**No entry is created. The answer lives in the panel until the reader leaves the article.** The
+reader asked for it to be added to the list, and that half is not implementable as it stands — three
+reasons, in the order they were found:
+
+1. **The glossary is one JSON document**, deliberately: entries are generated wholesale and
+   deduplicated wholesale, so `article_revisions.glossary` holds the lot
+   ([`schema.ts`](../../src/db/schema.ts) § `glossary`). That comment already names the condition —
+   *"if a reader ever edits or annotates one, that is the day this becomes a table"*.
+2. **[Find more terms](#finding-more-and-starting-again) recomputes and merges**, so a reader's entry
+   could be merged away by a button two lines further down the same panel.
+3. **A shared article publishes the whole glossary blob**
+   ([`public-reader.ts`](../../src/store/public-reader.ts)), and the public DTO strips only
+   `entry.lookup` and the provenance ([`public-types.ts`](../../src/public-types.ts)) — so **a term
+   the reader added would go out with an already-shared link.** All three verified in the code on
+   2026-09-04; the third is why v1 stores nothing rather than storing carefully.
+
+Persistence is its own piece of work: an additive `reader_glossary_entries` table keyed by owner,
+article and revision, merged into the owner's response only, and a decision recorded about the public
+projection. Until then the hint under the box says *"Not added to the list"*, so the answer's
+disappearance reads as the design rather than as a failure.
+
+**No rate limit, no quota and no single-flight guard — and there is none to reuse.** The sibling
+`lookup` POST has none either; the only limiter in [`routes.ts`](../../src/routes.ts) is the feedback
+form's hourly cap. So **an owner with one article of their own can drive paid `explain` calls as fast
+as they can post**, each of which may run up to eight web searches. Ownership decides *which* article,
+not *how many* requests; `withSpendAttribution` records the spend rather than authorising it; and this
+request never enters the job queue, so the concurrency limit of three is not a limit on it. Written
+down rather than fixed, because it is the shape of every paid request in this file and a scheme
+invented for one endpoint would be the wrong place to start. **A decision for Greg**, raised by GPT
+Sol's review of the built code, 2026-09-04, and in
+[`260904_1301`](../user-feedback/260904_1301-glossary-search-box-for-a-term.md).
+
+The cheapest thing that already exists is `inTurnOrder` ([`routes.ts`](../../src/routes.ts)), the
+per-key serialiser chat writes go through — one ask at a time per article. **It is per *process***,
+so it would slow a script on one box and bound nothing on a fleet; a real cap is a stored counter,
+which is [billing.md](billing.md)'s territory rather than this feature's.
+
+The endpoint takes **a term and nothing else**: no block id, no offset, no definition, no aliases, no
+owner. That does not mean the caller has no say in the passage — a long enough term picks out one
+paragraph of their own article — but there is no spelling of the request that gets a paid model to
+read text of the caller's own composition, or anybody else's article. ⟨Sol⟩
 
 ### What this replaced, and how old glossaries behave
 
@@ -825,7 +1002,7 @@ It reads the blocks and the tree and nothing reads what it writes, so the positi
 buy a model call for nothing — **and** forcing this step appends, so being swept in would silently
 lengthen the reader's glossary as a side effect of re-fetching the article.
 
-## Five ways to break this quietly
+## Six ways to break this quietly
 
 1. **Change the matching rule on one side.** `src/term-match.ts` is imported by the stage and by the
    reading view. Inlining a "quick" regex in either half makes the occurrence list and the underlines
@@ -843,6 +1020,12 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
    `senseHere` whenever the winner has none — which is precisely the case where it is the only one
    in the pair. Every field goes `winner.x ?? loser.x`, and the dedup's whole promise is that nothing
    is thrown away.
+6. **Append a reader's own entry to the glossary document.** It is one line and it would work on a
+   laptop. `article_revisions.glossary` is published whole to everyone a shared link is shared with
+   ([`public-reader.ts`](../../src/store/public-reader.ts)) and the public DTO strips only
+   `entry.lookup` — so the entry leaves with the article, and *Find more terms* may merge it away on
+   the way. This is why the [Look up a term](#looking-a-term-up) box stores
+   nothing. It needs its own owner-scoped table before it needs a UI.
 
 ## What is still open
 
@@ -894,6 +1077,13 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
   transport out of `src/explain.ts` into something both callers share — worth doing, not done, and
   the reason it is worth doing is that the prompt is the *only* part of that file a lookup wants to
   differ on.
+- **A term the reader looked up cannot be kept**, which is half of what they asked for —
+  [Looking a term up](#nothing-is-stored-and-that-is-deferred-rather-than-forgotten) has the three
+  reasons and the shape of the table it needs. The sharpest is that the glossary blob is published
+  with a shared article, so this is a projection decision before it is a schema one.
+- **The Chat handoff is a mode switch and nothing more.** The composer is not pre-filled with the
+  term, because a draft has to cross a component boundary only chat mode's own dialog has a prop for
+  ([`chat-handoff.ts`](../../src/web/chat-handoff.ts)). One prop's worth of work, not done.
 - **Nothing ties a term to a question.** [comments.md](comments.md) already answers "what does this
   mean" for a selected passage, and our review of their version argued a glossary should be *the same
   mechanism with a different prompt* rather than a second system. It is currently a second system —

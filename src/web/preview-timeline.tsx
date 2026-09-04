@@ -189,7 +189,7 @@ function Band({ slug, width, label }: { slug: string; width: number; label: stri
       >
         <div style={{ position: "relative", width, height: 620 }}>
           <TimelinePanel
-            owner={timeline}
+            access={{ kind: "owner", owner: timeline }}
             eventId={eventId}
             onEvent={(next) => {
               setEventId(next);
