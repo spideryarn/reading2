@@ -430,6 +430,18 @@ when("Referee's mirror route", { timeout: 60_000 }, () => {
          a number in a JSON file. */
       expect(valences).toEqual([-60, 100]);
 
+      /* **Mutation.** `toComment` in src/store/pg-comments.ts, `valence:
+         row.valence` made `valence: Math.max(0, row.valence)` — the clamp the
+         paragraph above says nothing else in the run would notice. Re-run
+         2026-09-04: *1 failed | 6 passed (7)*, this case, `expected [ +0, 100 ]
+         to deeply equal [ -60, 100 ]`.
+
+         **Blind to.** Which direction the sign was lost in. It proves the read
+         carries a minus out; a clamp on the way *in* would leave the column at
+         0 and fail this line identically, so `create` and `toComment` are not
+         told apart from here. It says nothing about the `criterion_id` half of
+         the same pair, and nothing about the two remaining cases in the file. */
+
       /* And the referee's own criterion text made it all the way through the
          join — `criterionId` off the comment, matched against the criteria the
          route loaded, printed into a sentence nobody paid for. */

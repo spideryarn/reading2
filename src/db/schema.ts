@@ -1811,7 +1811,11 @@ export const jobs = spideryarn.table(
      * lease — cost the reader their job and sent them to the Retry button. It
      * now puts the job back to `queued` on **this same row** instead, which is
      * what the filesystem store's `sweepStopped` has always done on restart, and
-     * what keeps the slug, the article and therefore the article's checkpoints.
+     * what keeps the slug, the article and therefore the article's checkpoints —
+     * and, since 2026-09-04, the **draft** as well, without which the block ids
+     * those checkpoints are keyed on move and reaching them is not the same as
+     * being able to use them (src/store/pg-jobs.ts § the requeue's
+     * `draftRevisionId`).
      *
      * **A counter rather than a flag, because without one it never stops.** A
      * job that overruns every lease would requeue for ever, buying model calls
@@ -3702,7 +3706,10 @@ export const checkpoints = spideryarn.table(
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.namespace, t.key] }),
-    check("checkpoints_namespace", sql`${t.namespace} in ('hierarchy-labels','pdf-chunk')`),
+    check(
+      "checkpoints_namespace",
+      sql`${t.namespace} in ('hierarchy-labels','hierarchy-structure','pdf-chunk')`,
+    ),
     /**
      * The same rule as `CHECKPOINT_KEY_RE`, here as well, because the
      * filesystem adapter turns this string into a **file name**. A key the

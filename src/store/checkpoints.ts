@@ -154,11 +154,23 @@
  * the `hierarchy` step's outputs — and two different checkpoints sharing one step's
  * name would share a key space for no reason. Closed, and matched by a CHECK on
  * the table, so a typo cannot open a namespace nothing ever reads.
+ *
+ * **Two of these belong to the same step, and that is the point of the split.**
+ * `hierarchy-structure` is stage 4's one big call — the tree — and
+ * `hierarchy-labels` is the batches that follow it. They were one namespace's
+ * worth of work and are two questions: on a 142-page paper the structure call is
+ * 508 seconds and about two dollars, the batches are 34 rows, and a run that
+ * dies in the batches must not buy the tree again. Adding a namespace is a
+ * migration, because the CHECK on the table is the other copy of this list.
  */
-export type CheckpointNamespace = "hierarchy-labels" | "pdf-chunk";
+export type CheckpointNamespace = "hierarchy-labels" | "hierarchy-structure" | "pdf-chunk";
 
 /** Every namespace, for the CHECK, the tests and anything that has to enumerate. */
-export const CHECKPOINT_NAMESPACES: readonly CheckpointNamespace[] = ["hierarchy-labels", "pdf-chunk"];
+export const CHECKPOINT_NAMESPACES: readonly CheckpointNamespace[] = [
+  "hierarchy-labels",
+  "hierarchy-structure",
+  "pdf-chunk",
+];
 
 /**
  * What a key may be, and it is narrower than "any string" for one reason,

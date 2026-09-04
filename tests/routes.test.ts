@@ -6,30 +6,214 @@
  * reaches the model — the requests under test are rejected before they get
  * anywhere near one.
  *
- * Writes under `data/<throwaway slug>/`, which is gitignored, and removes it.
+ * ## It ran on the filesystem store until 2026-09-04, and that is what B2 is
+ *
+ * The whole of it. Every route below was being driven against
+ * `data/<throwaway slug>/` — 16 `cp`/`rm`/`writeFile` sites and 28 calls into
+ * the filesystem-only readers and writers in `src/comments.ts`, `src/shelf.ts`
+ * and `src/searches.ts` — so the broadest suite in the repo was making its
+ * claims about the store that is not deployed
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § B2). It is now five articles seeded into Postgres by `scratchArticleInPg`,
+ * and every read-back goes through `commentStore`, `shelfStore`, `searchStore`
+ * or `readerStore`.
+ *
+ * **Three things changed meaning rather than merely moving**, and each says so
+ * where it is:
+ *
+ * 1. the reader profile is a row keyed on the **owner** rather than a file this
+ *    file could point somewhere safe (§ *the reader routes*);
+ * 2. the three admin cases that asserted **501 because filesystem** now assert
+ *    what an administrator actually gets — 200 and a list (§ *the admin gate*);
+ * 3. an orphaned `pending` comment is one whose **lease has run out**, which is
+ *    a distinction a directory could not hold (§ *a pending comment nobody is
+ *    answering*), and it brought a case with it.
+ *
+ * ## Every mutation this file was watched under is written beside the
+ * assertion it bears on
+ *
+ * Search for `**Mutation.**`. The rule is one per store-touching `describe`,
+ * and the blocks that need none say why in their own headers — a body-shape
+ * refusal that never reaches a store cannot be moved by breaking one.
  */
-import { cp, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { handleApi } from "../src/routes.js";
-import { beginAnswer, createComment, loadComments, patchComment } from "../src/comments.js";
-import { loadShelf } from "../src/shelf.js";
-import { beginRun, deleteRun, loadRuns } from "../src/searches.js";
-import { mintId } from "../src/ids.js";
-import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
-import { originalUrl } from "../src/vercel.js";
-import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+/**
+ * `SPIDERYARN_STORE=postgres`, before **any** import runs — `src/store/live.ts`
+ * reads the flag once, and a static `import` is hoisted above every statement.
+ * The same block, for the same reason, as tests/quiz-mark-route.test.ts.
+ */
+const PREVIOUS_STORE_FLAG = vi.hoisted(() => {
+  const previous = process.env.SPIDERYARN_STORE;
+  process.env.SPIDERYARN_STORE = "postgres";
+  return previous;
+});
+
+import { eq, sql } from "drizzle-orm";
+
+import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
+import { closeDb, getDb } from "../src/db/client.js";
+import { articles, comments as commentsTable, readerProfiles } from "../src/db/schema.js";
+import { loadEnvLocal } from "../src/env.js";
+import { mintId } from "../src/ids.js";
+import { originalUrl } from "../src/vercel.js";
+import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
+
+loadEnvLocal();
+
+/** The article the comment cases hang off, and the one the tweets route 404s on. */
 const SLUG = "test-routes-fixture";
-const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
-/** The committed fixture, which several blocks here copy in to have an article
-    with real block ids. It used to arrive for free — an unknown slug fell
-    through to `example/` — and that fallback is gone (src/api.ts §
-    `candidateDirs`), because it also answered a reader's own half-built article
-    with the fixture's prose. */
-const EXAMPLE = path.resolve(import.meta.dirname, "..", "example");
-afterEach(() => rm(DIR, { recursive: true, force: true }));
+/** The shelf routes' own article, so their writes cannot reach anybody else's. */
+const SHELF = "test-routes-shelf";
+/** The per-article purpose the reader routes read. */
+const PURPOSE_SLUG = "test-routes-purpose";
+const SEARCH_SLUG = "test-routes-search-fixture";
+const COLOUR_SLUG = "test-routes-colour-fixture";
+/**
+ * A slug nothing ever seeds.
+ *
+ * **The filesystem version did not need one**: it made an article by copying a
+ * directory and unmade it by removing one, so "no such article" was simply the
+ * state between two tests. A seeded article outlives the case that uses it, so
+ * the absence has to be a name of its own — and it has to be a *different* name,
+ * because asking a route about a slug that exists is not asking it about one
+ * that does not.
+ */
+const MISSING = "test-routes-no-such-article";
+
+const { reachable } = await pgReady({
+  suite: "tests/routes.test.ts",
+  tables: ["spideryarn.articles", "spideryarn.comments", "spideryarn.search_runs"],
+});
+
+const { handleApi } = await import("../src/routes.js");
+const { commentStore, readerStore, searchStore, shelfStore, STORE } = await import(
+  "../src/store/index.js"
+);
+
+if (PREVIOUS_STORE_FLAG === undefined) delete process.env.SPIDERYARN_STORE;
+else process.env.SPIDERYARN_STORE = PREVIOUS_STORE_FLAG;
+
+const when = reachable ? describe : describe.skip;
+
+describe("the store these tests are actually talking to", () => {
+  it("is the Postgres one", () => {
+    /* Not gated on the database being up, deliberately: a control that vanishes
+       when Postgres is missing vanishes exactly when it matters. A flag that
+       failed to take looks precisely like this file working — the filesystem
+       store answers `loadComments` out of a JSON file, and every case below
+       would go on passing about a store nobody deploys. */
+    expect(STORE).toBe("postgres");
+  });
+});
+
+/**
+ * The five articles, seeded once.
+ *
+ * **`SLUG` has its `tweets.json` taken out on the way in**, which the tweets
+ * block below depends on and which is the trap
+ * docs/plans/260903f-… § *The seeder ships the artefact your oracle asserts*
+ * names: `scratchArticleInPg` clones `writes`, and `writes` has a thread. Its
+ * *"says there is no thread yet"* case would then have been asserting 404
+ * against an article that has one, and would have gone red rather than green —
+ * but the same shape read the other way round is how an oracle passes over a
+ * step that persisted nothing.
+ */
+let fixture: ScratchArticle | undefined;
+let shelfArticle: ScratchArticle | undefined;
+let purposeArticle: ScratchArticle | undefined;
+let searchArticle: ScratchArticle | undefined;
+let colourArticle: ScratchArticle | undefined;
+
+/**
+ * A real block of the seeded article, and a phrase really inside it.
+ *
+ * **Read off the fixture rather than written down.** They were `spya-gp3g6s`
+ * and `"Berggruen Prize"` — a block of `example/blocks.json` — and the route
+ * checks the anchor against the article, so a literal from a different source
+ * article would make every 201 below a 400 and every 400 a pass for the wrong
+ * reason. `ScratchArticle.blocks` says the same thing at the helper.
+ */
+let BLOCK = "";
+let QUOTE = "";
+const AT = 0;
+/**
+ * A **second** real anchor in the same block.
+ *
+ * One case needs a different comment that is still anchorable — the id clash —
+ * and its old second quote ("Essay Competition") was another `example/`
+ * literal. A quote the route cannot find is a 400, and a 400 would have made
+ * *refuses an id that already belongs to a different comment* pass without ever
+ * reaching the id check.
+ */
+let QUOTE2 = "";
+const AT2 = 30;
+
+beforeAll(async () => {
+  if (!reachable) return;
+  fixture = await scratchArticleInPg(SLUG, {
+    ownerId: TEST_OWNER,
+    mutate: async (dir) => {
+      const { rm } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      await rm(join(dir, "tweets.json"), { force: true });
+    },
+  });
+  expect(fixture.copied).toContain("blocks");
+  /* The point of the `mutate` above, asserted rather than assumed: a step list
+     that still carried `tweets` would make the 404 case below a lie. */
+  expect(fixture.copied).not.toContain("tweets");
+  shelfArticle = await scratchArticleInPg(SHELF, { ownerId: TEST_OWNER });
+  purposeArticle = await scratchArticleInPg(PURPOSE_SLUG, { ownerId: TEST_OWNER });
+  searchArticle = await scratchArticleInPg(SEARCH_SLUG, { ownerId: TEST_OWNER });
+  colourArticle = await scratchArticleInPg(COLOUR_SLUG, { ownerId: TEST_OWNER });
+
+  const block = fixture.blocks.find((b) => b.text.length > 80);
+  if (!block) throw new Error("the fixture has no block long enough to quote");
+  BLOCK = block.id;
+  QUOTE = block.text.slice(AT, AT + 20);
+  QUOTE2 = block.text.slice(AT2, AT2 + 20);
+}, 120_000);
+
+afterAll(async () => {
+  if (reachable) {
+    /* **The reader profile is the one row this file writes that no article
+       owns**, so nothing cascades it away — see § *the reader routes*. Deleted
+       here, and then asserted gone, because "we tidied up" is a claim and the
+       read is the result. */
+    await getDb().delete(readerProfiles).where(eq(readerProfiles.ownerId, TEST_OWNER));
+    expect(await asTestOwner(() => readerStore.readProfile())).toBeNull();
+    expect(await asTestOwner(() => readerStore.readExperimental())).toBeNull();
+  }
+  await fixture?.remove();
+  await shelfArticle?.remove();
+  await purposeArticle?.remove();
+  await searchArticle?.remove();
+  await colourArticle?.remove();
+  await closeDb();
+});
+
+/** This article's comments, whatever a case left behind. */
+async function commentsOn(slug: string): Promise<Awaited<ReturnType<typeof commentStore.load>>> {
+  return asTestOwner(() => commentStore.load(slug));
+}
+
+/**
+ * Everything the reader wrote on the fixture, gone.
+ *
+ * This used to be `rm -rf data/<slug>/` in a file-level `afterEach` — a fresh
+ * article every test. The article now outlives the file, so what has to go is
+ * the reader state written on it.
+ */
+afterEach(async () => {
+  if (!reachable) return;
+  await asTestOwner(async () => {
+    for (const c of await commentStore.load(SLUG)) await commentStore.remove(SLUG, c.id);
+  });
+});
 
 /** A comment as a route answers with it — the fields these tests read off one. */
 interface ReplyComment {
@@ -150,7 +334,16 @@ async function callStreaming(
   return { status, headers, frames, streamed };
 }
 
-describe("asking a question is a stream, and refusing one is not", () => {
+/**
+ * **No mutation, and the reason is the block's own subject.** All three cases
+ * are refusals decided by `readBody` and the field checks, above every store
+ * call — there is nothing in Postgres to break that any of them could see, and
+ * a store made to fail would leave a 400 a 400. The thing they assert about is
+ * the *position* of `sse(res)` relative to the validation, which nothing can
+ * move without rewriting the handler — the same limit `quiz-mark-route`
+ * records against the same claim.
+ */
+when("asking a question is a stream, and refusing one is not", () => {
   /* The two shapes, and they must not be able to swap places. A failure the
      server can see before it starts writing is an HTTP status the client can
      read with `r.ok`; a failure after that can only be a frame. If validation
@@ -184,51 +377,117 @@ describe("asking a question is a stream, and refusing one is not", () => {
   });
 });
 
-describe("the library route", () => {
-  it("serves the shelf, with the committed fixture on it", async () => {
+when("the library route", () => {
+  /**
+   * **The fixture-visibility control for the whole file.**
+   *
+   * It used to look for `example` — the committed directory every block copied
+   * — and under Postgres the shelf is what *this reader* owns, so the honest
+   * question is whether the seeded article is on it. That makes this one of the
+   * two cases (the other is *still serves an ordinary slug*) that can only pass
+   * through a fixture the request can actually see, which is the guard against
+   * the failure the plan calls the most likely one here: seed as one owner,
+   * read as another, and every refusal in this file passes for the wrong reason
+   * with the fixture completely invisible.
+   *
+   * **Mutation.** `src/store/pg.ts` § `listArticles`, the owner term deleted
+   * from its `where` — `and(eq(articles.ownerId, currentOwnerId()), …)` reduced
+   * to the archived predicate alone. **Stayed green, 127 passed.** A private
+   * database with one seeded owner cannot tell a scoped query from an unscoped
+   * one: every article in it belongs to `TEST_OWNER`, so a query that dropped
+   * the filter returns the identical rows. Fourth file in stage B to find this,
+   * and it is a property of the lane rather than of this file —
+   * `tests/owner-isolation.test.ts` is what speaks for that predicate.
+   *
+   * **Blind to.** Ownership, per the above; and to *ordering*, the archived
+   * split, and every field on the card — this asserts one slug is present, not
+   * that the shelf is right. `tests/library-*.test.ts` cover the entry itself.
+   */
+  it("serves the shelf, with the seeded fixture on it", async () => {
     const r = await call("GET", "/api/library");
     expect(r.status).toBe(200);
     const articles = (r.body as unknown as { articles: { slug: string }[] }).articles;
-    expect(articles.some((a) => a.slug === "example")).toBe(true);
+    expect(articles.some((a) => a.slug === SLUG)).toBe(true);
   });
-
 });
 
-describe("the shelf routes", () => {
-  const SHELF = "test-routes-shelf";
-  const SHELF_DIR = path.resolve(import.meta.dirname, "..", "data", SHELF);
+/**
+ * The shelf routes, against one seeded article that outlives them.
+ *
+ * **`makeArticle()` is gone and the reset took its place.** Every case used to
+ * copy `example/` in and the block's `afterEach` removed it, so each started
+ * from a directory that had never been touched. A published revision cannot be
+ * made and unmade eleven times for 300 ms a go, and it does not have to be: what
+ * these cases change is four columns on `articles`, so the fixture is the
+ * article and the reset is those columns.
+ *
+ * **`shelfState()` reads through the store, not off disk.** `loadShelf` from
+ * src/shelf.ts is the filesystem adapter's own implementation exported from
+ * `src/*.ts` — it `readFile`s `data/<slug>/shelf.json` unconditionally and
+ * nothing in its name or its import path says so. Left alone it would have
+ * answered `{ opens: 0 }` for every one of these, and the two cases that assert
+ * exactly that would have passed while asserting nothing.
+ */
+when("the shelf routes", () => {
+  /** What the shelf now says, as the reader the request ran as. */
+  const shelfState = (slug: string) => asTestOwner(() => shelfStore.read(slug));
 
-  /** A complete-enough article, because the shelf routes now refuse to write for one that isn't. */
-  const makeArticle = () => cp(EXAMPLE, SHELF_DIR, { recursive: true });
+  /**
+   * The four columns these cases write, back to how a freshly seeded article
+   * has them. `opens` is why it is SQL: the store's only way to change it is
+   * `recordOpen`, which counts up.
+   */
+  beforeEach(async () => {
+    await getDb()
+      .update(articles)
+      .set({ opens: 0, lastOpenedAt: null, titleOverride: null, purpose: null, archivedAt: null })
+      .where(eq(articles.slug, SHELF));
+  });
 
-  afterEach(() => rm(SHELF_DIR, { recursive: true, force: true }));
-
+  /**
+   * **Mutation.** `src/store/pg-shelf.ts` § `recordOpen`, with
+   * `.set({ opens: sql\`${articles.opens} + 1\`, lastOpenedAt: sql\`now()\` })`
+   * cut down to `.set({ lastOpenedAt: sql\`now()\` })` — the update still
+   * matches a row, so the route still answers 204. **1 failed of 127**: *counts
+   * an open, and says nothing back*, `expected { opens: +0, …(1) } to match
+   * object { opens: 1 }`. The filesystem store has no such statement to break.
+   *
+   * **Blind to.** Whether the count is done *in Postgres* rather than
+   * read-then-written here, which is the property `recordOpen`'s own comment is
+   * about and which only two concurrent opens could show; and to `lastOpenedAt`,
+   * which nothing below reads.
+   */
   it("counts an open, and says nothing back", async () => {
-    await makeArticle();
     const r = await call("POST", `/api/library/${SHELF}/open`);
     expect(r.status).toBe(204);
-    expect(await loadShelf(SHELF)).toMatchObject({ opens: 1 });
+    expect(await shelfState(SHELF)).toMatchObject({ opens: 1 });
   });
 
   it("refuses to count an open for an article that does not exist", async () => {
-    /* And, crucially, writes nothing. src/shelf.ts will happily create
-       `data/<slug>/shelf.json` for any slug-shaped string, so without the
-       existence check a typo left a directory and a file behind for an article
-       the server had just said it did not have. */
-    const r = await call("POST", `/api/library/${SHELF}/open`);
+    /* And, crucially, creates nothing. On the filesystem this was the sharper
+       claim: `src/shelf.ts` would happily write `data/<slug>/shelf.json` for any
+       slug-shaped string, so without the existence check a typo left a directory
+       behind for an article the server had just said it did not have.
+
+       Postgres cannot be got into that state from here — `recordOpen` is an
+       `UPDATE`, and an UPDATE over no rows writes nothing — so what is left to
+       assert is that the slug is still unknown afterwards rather than newly
+       half-known. `shelfStore.read` throwing `notFound` is that assertion, and
+       it is also this block's proof that `MISSING` really is missing: a name
+       that had quietly acquired a row would answer instead of throwing. */
+    const r = await call("POST", `/api/library/${MISSING}/open`);
     expect(r.status).toBe(404);
-    expect(await loadShelf(SHELF)).toEqual({ opens: 0 });
+    await expect(shelfState(MISSING)).rejects.toThrow(/no such article|not found|No article/i);
   });
 
   it("stores a purpose and answers with what it stored, not with what was sent", async () => {
-    await makeArticle();
     const r = await call("PATCH", `/api/library/${SHELF}`, { purpose: "  the evidence\r\n " });
     expect(r.status).toBe(200);
     /* Normalised on the way in, and answered from the store rather than echoed.
        A box showing one string while every prompt carries another is the exact
        failure this feature is arranged around. */
     expect(r.body.purpose).toBe("the evidence");
-    expect((await loadShelf(SHELF)).purpose).toBe("the evidence");
+    expect((await shelfState(SHELF)).purpose).toBe("the evidence");
   });
 
   it("keeps the purpose off the shelf card", async () => {
@@ -236,25 +495,21 @@ describe("the shelf routes", () => {
        homepage is built from, and only the metadata page renders this. The same
        argument `titleOverridden` already makes about the superseded title, one
        field further on. */
-    await makeArticle();
     const r = await call("PATCH", `/api/library/${SHELF}`, { purpose: "the evidence" });
     expect(r.body.entry).not.toHaveProperty("purpose");
   });
 
   it("clears the purpose on null", async () => {
-    await makeArticle();
     await call("PATCH", `/api/library/${SHELF}`, { purpose: "the evidence" });
     const r = await call("PATCH", `/api/library/${SHELF}`, { purpose: null });
     expect(r.body.purpose).toBeNull();
   });
 
   it("refuses a purpose that is not a string or null", async () => {
-    await makeArticle();
     expect((await call("PATCH", `/api/library/${SHELF}`, { purpose: 42 })).status).toBe(400);
   });
 
   it("refuses a PATCH with nothing in it, rather than answering 200", async () => {
-    await makeArticle();
     const r = await call("PATCH", `/api/library/${SHELF}`, {});
     expect(r.status).toBe(400);
     expect(r.body.error).toMatch(/Nothing to change/);
@@ -268,7 +523,6 @@ describe("the shelf routes", () => {
   });
 
   it("refuses a title that is not a string or null", async () => {
-    await makeArticle();
     const r = await call("PATCH", `/api/library/${SHELF}`, { title: 42 });
     expect(r.status).toBe(400);
     expect(r.body.error).toMatch(/title must be/);
@@ -277,7 +531,6 @@ describe("the shelf routes", () => {
   it("refuses an archived flag that is not a boolean", async () => {
     // `"true"` is the shape a hand-written query string produces, and treating
     // it as truthy would mean `archived: "false"` archived the article.
-    await makeArticle();
     const r = await call("PATCH", `/api/library/${SHELF}`, { archived: "true" });
     expect(r.status).toBe(400);
     expect(r.body.error).toMatch(/archived must be/);
@@ -287,23 +540,21 @@ describe("the shelf routes", () => {
     /* The test this route was rewritten for. It used to write each field in
        turn, so this renamed the article and *then* answered 400 — a request
        that reports failure and changes your data. */
-    await makeArticle();
     const r = await call("PATCH", `/api/library/${SHELF}`, {
       title: "Should not stick",
       archived: "no",
     });
     expect(r.status).toBe(400);
-    expect(await loadShelf(SHELF)).toEqual({ opens: 0 });
+    expect(await shelfState(SHELF)).toEqual({ opens: 0 });
   });
 
   it("applies both fields together when both are valid", async () => {
-    await makeArticle();
     const r = await call("PATCH", `/api/library/${SHELF}`, {
       title: "Both at once",
       archived: true,
     });
     expect(r.status).toBe(200);
-    const state = await loadShelf(SHELF);
+    const state = await shelfState(SHELF);
     expect(state.title).toBe("Both at once");
     expect(state.archivedAt).toBeTruthy();
     // The entry comes back from the half it now lives in, not the one it left.
@@ -354,21 +605,60 @@ describe("the shelf routes", () => {
   });
 });
 
-describe("the reader routes", () => {
-  /* **A file of its own, not `data/reader.json`.** Every other reader-state
-     file is under `data/<slug>/`, so a test uses a fixture slug and cleans up
-     without touching anything real. The global profile has no such escape, and
-     the first version of this block wrote to the developer's own and deleted it
-     afterwards — which, with several agents running `npm test` in one working
-     tree, wiped Greg's profile mid-session and looked exactly like the save not
-     working. src/profile.ts reads the path at call time for this. */
-  const FILE = path.resolve(import.meta.dirname, "..", "data", "_test-reader.json");
-  beforeEach(() => {
-    process.env.SPIDERYARN_READER_FILE = FILE;
-  });
-  afterEach(() => {
-    delete process.env.SPIDERYARN_READER_FILE;
-    return rm(FILE, { force: true });
+/**
+ * The reader's own profile and switch — one row, keyed on the owner.
+ *
+ * ## The isolation moved, and there was no equivalent to move it to
+ *
+ * This block used to point `SPIDERYARN_READER_FILE` at a throwaway path,
+ * because the global profile is the one piece of reader state with no slug to
+ * hide behind: *"the first version of this block wrote to the developer's own
+ * and deleted it afterwards — which, with several agents running `npm test` in
+ * one working tree, wiped Greg's profile mid-session and looked exactly like
+ * the save not working."*
+ *
+ * `pg-reader.ts` keys every row on `currentOwnerId()` and there is no
+ * scratch-root equivalent, so the answer is the **owner**: every request below
+ * runs as `TEST_OWNER` (`acceptAny` authenticates as the local administrator),
+ * every read-back runs inside `asTestOwner`, and the whole file is in the
+ * `private-postgres` lane so that row is in a database minted for this run. On
+ * the *shared* database `TEST_OWNER` is Greg's own account, which is the same
+ * accident one layer down and the reason the lane entry says so out loud.
+ * Settled in docs/plans/260903f-… § *Two design decisions*.
+ *
+ * The row is deleted **and asserted gone** in the file's `afterAll`. Nothing
+ * cascades it away: it hangs off the owner, not off any article, so it is the
+ * one thing here that would outlive every `article.remove()`.
+ *
+ * **Mutation.** `src/store/pg-reader.ts` § `writeProfile`, its
+ * `.onConflictDoUpdate({ … })` replaced with `.onConflictDoNothing()` — the
+ * upsert the file's own header argues for, turned into the *"keep serving the
+ * FIRST thing the reader ever typed, for ever, while every write after it
+ * reported success"* version. **1 failed of 127**: *keeps the profile and the
+ * switch out of each other's way*, `expected null to be 'A physicist.'` — the
+ * only case that writes the row twice under two different columns, so the only
+ * one whose second write meets a conflict.
+ *
+ * **Blind to.** Only one case failed, and the one that did *not* is the
+ * interesting half. *Treats null and
+ * blank as clearing it* writes the profile twice and stayed green, because
+ * `writeProfile` **returns its own argument** and `PATCH /api/reader` answers
+ * with that: the reply is computed, not read back, so a write that did nothing
+ * still answers with what it was told. Only the assertions that go round
+ * through `GET` can see this at all. Also blind to whether two servers can lose
+ * each other's edit, which is the property the upsert exists for and which one
+ * process cannot show; and to `writeExperimental`'s `coalesce` — *does not move
+ * the date when it is switched on twice* covers the behaviour, but no mutation
+ * here reaches the SQL that makes it true.
+ */
+when("the reader routes", () => {
+  /** The one row this block writes, gone — so each case starts from nothing. */
+  beforeEach(async () => {
+    await getDb().delete(readerProfiles).where(eq(readerProfiles.ownerId, TEST_OWNER));
+    await getDb()
+      .update(articles)
+      .set({ purpose: null })
+      .where(eq(articles.slug, PURPOSE_SLUG));
   });
 
   it("answers null for a reader who has written nothing", async () => {
@@ -436,36 +726,29 @@ describe("the reader routes", () => {
        asking only about the global box hid them from a reader who had filled in
        "why you're reading this one" — who then could not opt out of something
        they could not see. GPT Sol's review of the built code, 2026-08-26. */
-    const SLUG = "test-routes-purpose-only";
-    const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
-    await cp(path.resolve(import.meta.dirname, "..", "example"), DIR, { recursive: true });
-    try {
-      await call("PATCH", `/api/library/${SLUG}`, { purpose: "the evidence" });
-      // No global profile at all, and — with no slug — nothing to say about a
-      // purpose either, however much of one this article has.
-      expect((await call("GET", "/api/reader")).body).toEqual({
-        profile: null,
-        purpose: null,
-        purposeFailed: false,
-        hasProfile: false,
-        experimentalSince: null,
-      });
-      /* …and the article still has one. `purpose` comes back as the reader's
-         own words rather than as a flag, because the panel prints each box
-         separately with its own way in to edit it — the joined string
-         `renderProfile` builds carries our prefixes and there is no honest way
-         back from it to the two boxes. docs/plans/260830c-profile-panel.md. */
-      const r = await call("GET", `/api/reader?slug=${SLUG}`);
-      expect(r.body).toEqual({
-        profile: null,
-        purpose: "the evidence",
-        purposeFailed: false,
-        hasProfile: true,
-        experimentalSince: null,
-      });
-    } finally {
-      await rm(DIR, { recursive: true, force: true });
-    }
+    await call("PATCH", `/api/library/${PURPOSE_SLUG}`, { purpose: "the evidence" });
+    // No global profile at all, and — with no slug — nothing to say about a
+    // purpose either, however much of one this article has.
+    expect((await call("GET", "/api/reader")).body).toEqual({
+      profile: null,
+      purpose: null,
+      purposeFailed: false,
+      hasProfile: false,
+      experimentalSince: null,
+    });
+    /* …and the article still has one. `purpose` comes back as the reader's
+       own words rather than as a flag, because the panel prints each box
+       separately with its own way in to edit it — the joined string
+       `renderProfile` builds carries our prefixes and there is no honest way
+       back from it to the two boxes. docs/plans/260830c-profile-panel.md. */
+    const r = await call("GET", `/api/reader?slug=${PURPOSE_SLUG}`);
+    expect(r.body).toEqual({
+      profile: null,
+      purpose: "the evidence",
+      purposeFailed: false,
+      hasProfile: true,
+      experimentalSince: null,
+    });
   });
 
   /* -------------------------------------------- the experimental switch -- */
@@ -581,32 +864,29 @@ describe("the reader routes", () => {
        spaces where it should say nothing is written. GPT Sol, 2026-08-30.
 
        **It has to be the PURPOSE, and that is the whole fixture.** The global
-       profile cannot reach this state: `loadReaderProfile` normalises on read
-       (src/profile.ts). The shelf normalises on *write* and reads raw
-       (src/shelf.ts § read), so a `shelf.json` written before that rule existed
-       — or edited by hand — is the one way in. Writing it directly rather than
-       through PATCH for exactly that reason: PATCH would clean it on the way
-       past and the fixture would be testing nothing, which is what the first
-       version of this test did. */
-    const SLUG = "test-routes-dirty-purpose";
-    const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
-    await cp(path.resolve(import.meta.dirname, "..", "example"), DIR, { recursive: true });
-    try {
-      await writeFile(
-        path.join(DIR, "shelf.json"),
-        JSON.stringify({ opens: 0, purpose: "   \r\n  " }),
-        "utf8",
-      );
-      expect((await call("GET", `/api/reader?slug=${SLUG}`)).body).toEqual({
-        profile: null,
-        purpose: null,
-        purposeFailed: false,
-        hasProfile: false,
-        experimentalSince: null,
-      });
-    } finally {
-      await rm(DIR, { recursive: true, force: true });
-    }
+       profile cannot reach this state: `readProfile` normalises on read
+       (src/store/pg-reader.ts, and src/profile.ts for the other half). The
+       shelf normalises on *write* and reads raw (`shelfFrom` in
+       src/store/pg.ts hands the column straight back), so a row written before
+       that rule existed — or edited by hand — is the one way in.
+
+       **The `writeFile` over `shelf.json` became an `UPDATE`, and it is the
+       same fixture rather than a weaker one.** Writing it directly rather than
+       through PATCH is the whole point: PATCH runs `normaliseProfileText` on
+       the way past and the fixture would be testing nothing, which is what the
+       first version of this test did. Postgres has no more of a route to a
+       dirty purpose than the filesystem had — which is why this is SQL. */
+    await getDb()
+      .update(articles)
+      .set({ purpose: "   \r\n  " })
+      .where(eq(articles.slug, PURPOSE_SLUG));
+    expect((await call("GET", `/api/reader?slug=${PURPOSE_SLUG}`)).body).toEqual({
+      profile: null,
+      purpose: null,
+      purposeFailed: false,
+      hasProfile: false,
+      experimentalSince: null,
+    });
   });
 
   it("keeps the two halves apart, rather than the string the model is given", async () => {
@@ -616,26 +896,25 @@ describe("the reader routes", () => {
        this piece: …" — whose prefixes are ours and which cannot be taken back
        apart into two boxes. This asserts the shape stays split.
        docs/plans/260830c-profile-panel.md. */
-    const SLUG = "test-routes-both-halves";
-    const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
-    await cp(path.resolve(import.meta.dirname, "..", "example"), DIR, { recursive: true });
-    try {
-      await call("PATCH", "/api/reader", { profile: "A physicist." });
-      await call("PATCH", `/api/library/${SLUG}`, { purpose: "the evidence" });
-      expect((await call("GET", `/api/reader?slug=${SLUG}`)).body).toEqual({
-        profile: "A physicist.",
-        purpose: "the evidence",
-        purposeFailed: false,
-        hasProfile: true,
-        experimentalSince: null,
-      });
-    } finally {
-      await rm(DIR, { recursive: true, force: true });
-    }
+    await call("PATCH", "/api/reader", { profile: "A physicist." });
+    await call("PATCH", `/api/library/${PURPOSE_SLUG}`, { purpose: "the evidence" });
+    expect((await call("GET", `/api/reader?slug=${PURPOSE_SLUG}`)).body).toEqual({
+      profile: "A physicist.",
+      purpose: "the evidence",
+      purposeFailed: false,
+      hasProfile: true,
+      experimentalSince: null,
+    });
   });
 });
 
-describe("the library route, continued", () => {
+/**
+ * **No mutation: this is the route table, not a store.** Its one case asserts
+ * that `/api/library/anything` is a 404 rather than a fall-through, which is
+ * decided by pattern matching before anything is read. The library read itself
+ * is mutated in *the library route* above.
+ */
+when("the library route, continued", () => {
   it("does not answer to a path that merely starts with it", async () => {
     // `/api/library/anything` quietly serving the whole shelf would be the
     // kind of thing nobody notices until something depends on it.
@@ -674,8 +953,40 @@ describe("the library route, continued", () => {
  * same evidence as a 400 that was reached before any path was joined.
  *
  * See docs/project/security.md § The URL is the second untrusted party.
+ *
+ * ## The mutations, and the one that had to break three things at once
+ *
+ * **Mutation.** Three, because the first two both stayed green and the reason
+ * they did is the finding.
+ *
+ * 1. `src/store/require-slug.ts` § `requireSlug`, `if (isSlug(slug)) return;`
+ *    weakened to `if (slug) return;` — the *store's* guard gone. **Stayed
+ *    green, 127 passed.**
+ * 2. `src/routes.ts` § `slugPart`, `if (!isSlug(value)) throw httpError(400, …)`
+ *    reduced to `if (false) …` — the *route's* guard gone. **Also stayed green,
+ *    127 passed.**
+ * 3. Both of those plus `src/api.ts` § `requireSlug`, the third copy, weakened
+ *    the same way. **5 failed of 127** — every case in this block bar *still
+ *    serves an ordinary slug*, plus *refuses a slug that is not a slug* in the
+ *    shelf block and *refuses a slug that could climb out of data/* in the
+ *    tweets one. All five `expected 404 to be 400`.
+ *
+ * **So this block proves that *some* guard refuses, and cannot say which.** The
+ * three are belt and braces over each other — `src/api.ts`'s own comment says
+ * so in as many words — and a mutation of any one is invisible from here. That
+ * is the right design and a real limit on the evidence at the same time, and it
+ * is worth knowing before somebody deletes a "redundant" check on the strength
+ * of a green suite. The 404s in run 3 are also the honest news: with all three
+ * off, a traversal under Postgres is a query for a slug nothing owns, not a
+ * read outside the repository — the filesystem store is what made this class of
+ * bug reachable, and the move is most of the fix.
+ *
+ * **Blind to.** Which layer answered, per the above; and to what a traversal
+ * would have *done* — the original vulnerability was a planted `blocks.json`
+ * coming back with HTTP 200, and no store the app can reach today has a path to
+ * join, so this block is now about the refusal rather than about the escape.
  */
-describe("a slug that is not a slug", () => {
+when("a slug that is not a slug", () => {
   // Deep enough to climb out of any checkout, then somewhere absolute.
   const TRAVERSAL = `${encodeURIComponent("../".repeat(12))}private%2Ftmp%2Fanything`;
 
@@ -718,14 +1029,33 @@ describe("a slug that is not a slug", () => {
   });
 
   it("still serves an ordinary slug", async () => {
-    // The guard has to be narrow enough to leave the app working, and this is
-    // the assertion that would catch it being too strict.
-    expect((await call("GET", "/api/article/example")).status).toBe(200);
-    expect((await call("GET", "/api/metadata/example")).status).toBe(200);
+    /* The guard has to be narrow enough to leave the app working, and this is
+       the assertion that would catch it being too strict.
+
+       **It is also the second of the two cases in this file that can only pass
+       through a fixture the reader can see.** It named `example` — the
+       committed directory — and every refusal above it is a 4xx that would go
+       on being a 4xx if the seeded article were invisible to this request. The
+       block is refusal-shaped, so it needs one case that is not. */
+    expect((await call("GET", `/api/article/${SLUG}`)).status).toBe(200);
+    expect((await call("GET", `/api/metadata/${SLUG}`)).status).toBe(200);
   });
 });
 
-describe("what a failure is reported as", () => {
+/**
+ * **No mutation, and one of these seven is a judgement rather than an
+ * exemption.** Six are body-shape and route-table refusals with no store under
+ * them. The seventh — *404s an unknown slug, rather than serving the example
+ * fixture under it* — is a real store read, and the bug it pins is a
+ * **filesystem** one: `loadArticle` tried `data/<slug>/` and then fell through
+ * to `example/`, so every slug in a dev checkout resolved with a 200 and a
+ * reader was shown somebody else's prose under their own address. Postgres has
+ * no directory to fall through to; `currentRevision` finds a row or it does
+ * not, and every way of breaking it that this case could see makes a *known*
+ * slug 404 as well, which the block above catches. The move is what closed the
+ * class, and this case is now a guard against somebody reopening it.
+ */
+when("what a failure is reported as", () => {
   // Every one of these used to come back 404, which sent the reader looking for
   // a missing article instead of the thing that was actually wrong.
   it("calls a malformed body 400, not 404", async () => {
@@ -777,7 +1107,16 @@ describe("what a failure is reported as", () => {
   });
 });
 
-describe("the anchor offset must be a real offset", () => {
+/**
+ * **No mutation of its own, and its store read is a negative that cannot be
+ * moved from underneath.** Both cases are 400s decided before `commentStore` is
+ * called, and the read after each asks whether nothing was written — an
+ * assertion a broken `create` satisfies just as well as a working one, since
+ * the route never reaches it. What makes the read non-vacuous is that the same
+ * `commentStore.load` is watched going red in *making a comment costs nothing*
+ * below, so it is known to be able to see a row.
+ */
+when("the anchor offset must be a real offset", () => {
   // A negative start silently drew the mark a few characters left of the words
   // it belonged to. Refusing it at the door is cheaper than defending every
   // reader of the value. See src/web/annotate.ts § resolveMark.
@@ -785,35 +1124,93 @@ describe("the anchor offset must be a real offset", () => {
   // number at all and is caught by the missing-field check above.
   for (const start of [-1, 1.5]) {
     it(`rejects start = ${start}`, async () => {
+      /* A **real** block and a quote really inside it, so the 400 is about the
+         offset and nothing else. The literals here were `spya-k3m9qt` and "the
+         hard problem" — an id of `example/blocks.json` — and against the seeded
+         article they would have named a block that does not exist, which is a
+         400 as well and would have made both cases pass for the wrong reason. */
       const r = await call("POST", `/api/comments/${SLUG}`, {
-        blockId: "spya-k3m9qt",
-        quote: "the hard problem",
+        blockId: BLOCK,
+        quote: QUOTE,
         start,
       });
       expect(r.status).toBe(400);
       expect(r.body.error).toMatch(/non-negative integer/);
       // Nothing was written: a refused request must not leave a comment behind.
-      expect(await loadComments(SLUG)).toEqual([]);
+      expect(await commentsOn(SLUG)).toEqual([]);
     });
   }
 });
 
-describe("a pending comment nobody is answering", () => {
+/**
+ * A pending comment nobody is answering — and under Postgres "nobody" is a
+ * fact about a **lease** rather than about a process.
+ *
+ * **This is the block whose meaning changed most.** On the filesystem a
+ * `pending` row was *"indistinguishable from a live request on disk — only the
+ * running process knows"*, and the sweep errored every one it saw. The Postgres
+ * store keeps a `lease_expires_at`, and `sweepPending` refuses to touch a row
+ * whose lease is still running: an answer arriving on another machine is not an
+ * orphan. So the orphan fixture has to age its own lease, and the distinction
+ * earns a case of its own — *leaves a live attempt alone* below, which nothing
+ * in the filesystem version could express.
+ *
+ * **Mutation.** `src/store/pg-comments.ts` § `sweepPending`, its lease
+ * predicate deleted — the
+ * `sql` line reading `lease_expires_at is null or lease_expires_at <=
+ * clock_timestamp()` removed from the `and(...)`, leaving it to sweep every
+ * `pending` row the way the filesystem store did. **1 failed of 127**: *leaves
+ * a live attempt alone, because somebody else may be answering it*, `expected
+ * 'error' to be 'pending'`. **That is the only case it can reach**, and it is
+ * the one the move added: the other three either age the lease themselves or
+ * never make one, so a sweep that ignored leases answers them identically. The
+ * three inherited from the filesystem version would have watched this mutation
+ * go green — read off the fixtures rather than re-run, which is the weaker kind
+ * of evidence and is said so here rather than dressed up.
+ *
+ * **Blind to.** `keep`, the live-work set the route passes in: every case here
+ * sweeps from a request that is answering nothing, so a sweep that ignored
+ * `keep` entirely would pass. And to the *clearing* of `attempt_id` beside the
+ * status, which nothing here reads back.
+ */
+when("a pending comment nobody is answering", () => {
   /* A `pending` row now has to be *made* pending, because creating one is free
      and lands as `none`. `beginAnswer` is the only thing that writes `pending`
      — which is exactly the property the sweep depends on — and it refuses a
      `none` row, so this walks the whole way round: make the mark, give it an
-     answer as the old world would have, then re-ask it. */
-  const orphaned = async (id: string) => {
-    await createComment(SLUG, { blockId: "spya-k3m9qt", quote: "the hard problem", start: 12, id });
-    await patchComment(SLUG, id, { status: "done", answer: "an old explanation" });
-    return (await beginAnswer(SLUG, id)).comment;
+     answer as the old world would have, then re-ask it.
+
+     **"As the old world would have" is an `UPDATE` now, and it has to be.**
+     `commentStore.patch` refuses a call with no attempt token (`MissingAttempt`),
+     and the only way to get one is `beginAnswer`, which refuses a `none` row —
+     so there is no path through the live store from a bookmark to a legacy
+     explanation, which is the point: nothing makes one any more. The SQL below
+     is the fixture, exactly as `patchComment` over a JSON file was. */
+  const orphaned = async (id: string, opts: { live?: boolean } = {}) => {
+    await asTestOwner(() =>
+      commentStore.create(SLUG, { blockId: BLOCK, quote: QUOTE, start: AT, id }),
+    );
+    await getDb()
+      .update(commentsTable)
+      .set({ status: "done", answer: "an old explanation" })
+      .where(eq(commentsTable.id, id));
+    const { comment } = await asTestOwner(() => commentStore.beginAnswer(SLUG, id));
+    if (!opts.live) {
+      /* The process that took this lease is gone. `beginAnswer` stamps a live
+         one, so an orphan has to be aged — which is the honest fixture: a crash
+         mid-answer leaves a row whose lease nobody is renewing. */
+      await getDb()
+        .update(commentsTable)
+        .set({ leaseExpiresAt: sql`clock_timestamp() - interval '1 hour'` })
+        .where(eq(commentsTable.id, id));
+    }
+    return comment;
   };
 
   it("comes back as an error the reader can retry, not an eternal spinner", async () => {
-    // What a crash mid-answer leaves on disk. Since `pending` is written before
-    // the model call, this is indistinguishable from a live request *on disk* —
-    // only the running process knows, and this one is not answering it.
+    // What a crash mid-answer leaves in the database. Since `pending` is written
+    // before the model call, the row alone cannot say whether anybody is still
+    // working on it — the expired lease is what says nobody is.
     const orphan = await orphaned("spya-k3m9qt");
     expect(orphan.status).toBe("pending");
 
@@ -823,14 +1220,30 @@ describe("a pending comment nobody is answering", () => {
     expect(r.body.comments?.[0]?.error).toMatch(/server stopped/);
 
     // And it is written down, so a second reader sees the same thing.
-    expect((await loadComments(SLUG))[0]?.status).toBe("error");
+    expect((await commentsOn(SLUG))[0]?.status).toBe("error");
+  });
+
+  it("leaves a live attempt alone, because somebody else may be answering it", async () => {
+    /* **The case the move brought with it.** On Vercel the process answering a
+       question is not the process the next `GET` lands on, so a sweep that
+       errored every `pending` row would bury an answer while the reader watched
+       it arrive — the same shape as the referee sweep's grace period
+       (docs/plans/260903f-… § *Two mutations stayed green*). The filesystem
+       store had one process and no lease, so it could not have this case, and
+       the three inherited ones cannot see the predicate that makes it true. */
+    const live = await orphaned("spya-k3m9qt", { live: true });
+    expect(live.status).toBe("pending");
+
+    const r = await call("GET", `/api/comments/${SLUG}`);
+    expect(r.body.comments?.[0]?.status).toBe("pending");
+    expect((await commentsOn(SLUG))[0]?.status).toBe("pending");
   });
 
   it("leaves an already-answered comment alone", async () => {
     await orphaned("spya-k3m9qt");
     await call("GET", `/api/comments/${SLUG}`);
     const first = await call("GET", `/api/comments/${SLUG}`);
-    // Swept once, then stable — the sweep must not keep rewriting the file.
+    // Swept once, then stable — the sweep must not keep rewriting the row.
     expect(first.body.comments?.[0]?.status).toBe("error");
     expect(first.body.comments).toHaveLength(1);
   });
@@ -841,7 +1254,9 @@ describe("a pending comment nobody is answering", () => {
        because it passes the moment `none` exists. What it guards is the
        *reverse* change: somebody widening the filter to "anything without an
        answer" would turn every bookmark on the shelf into an error. */
-    await createComment(SLUG, { blockId: "spya-k3m9qt", quote: "q", start: 0, body: "mine" });
+    await asTestOwner(() =>
+      commentStore.create(SLUG, { blockId: BLOCK, quote: QUOTE, start: AT, body: "mine" }),
+    );
     const r = await call("GET", `/api/comments/${SLUG}`);
     expect(r.body.comments?.[0]?.status).toBe("none");
     expect(r.body.comments?.[0]?.error).toBeUndefined();
@@ -849,25 +1264,47 @@ describe("a pending comment nobody is answering", () => {
   });
 });
 
-describe("making a comment costs nothing", () => {
+when("making a comment costs nothing", () => {
   /* **A real block, and a quote really inside it.** The route checks the anchor
      against the article, so a made-up passage is a 400 rather than a stored
      comment nothing can draw. These three come from `example/blocks.json`,
      which is why the fixture is copied under this slug — the same source `HIT`
-     below uses, for the same reason. */
-  const BLOCK = "spya-gp3g6s";
-  const QUOTE = "Berggruen Prize";
-  const AT = 30;
+     below uses, for the same reason.
 
-  // The article the anchors are checked against. `data/<SLUG>/` is torn down by
-  // the file-level afterEach, so this rebuilds it before each case.
-  beforeEach(() => cp(EXAMPLE, DIR, { recursive: true }));
+     They are now the file-level `BLOCK`/`QUOTE`/`AT`, read off the seeded
+     article in `beforeAll`. The literals `spya-gp3g6s` / "Berggruen Prize" were
+     `example/blocks.json`'s and do not survive the move to `writes` — the route
+     would answer 400 for an anchor it cannot find, and every 201 below would
+     have become a 400 while the two cases that *want* a 400 went on passing.
+
+     The article they are checked against is seeded once for the whole file; the
+     file-level `afterEach` removes the comments a case wrote, which is what the
+     `cp`/`rm` of `data/<SLUG>/` used to do by removing the article itself. */
 
   /* **The value that crosses the wire.** Both halves of this app can be right
      about a body and still disagree — the store keeps it, the route drops it,
      and each side's own tests pass. So this goes in through the HTTP route and
-     comes back out through the store, and nothing in between is mocked. */
-  it("stores the reader's words, and reads them back off disk", async () => {
+     comes back out through the store, and nothing in between is mocked.
+
+     **Mutation.** `src/store/pg-comments.ts` § `create`, its `fields` object's
+     `body: input.body ?? null` replaced by `body: null` — the route's own
+     trimming still runs, so its 201 and its echoed body are unchanged and only
+     the row is wrong. **3 failed of 127**: *stores the reader's words, and reads
+     them back through the store* and *refuses a body patch that never says what
+     the body is* here, and *never touches a bookmark, because a bookmark is not
+     a lost answer* in the block above. All three `expected undefined to be …`.
+     That is the divergence this case exists for, stated exactly — the route
+     right, the store wrong, and each side's own tests green.
+
+     **Blind to.** Everything about the anchor: `blockId`, `quote` and `start`
+     are asserted through the route's *reply* rather than through the row, so a
+     `create` that stored the wrong offset would pass every case in this block.
+     And to the *edit*: *edits the words, and clearing them leaves the mark
+     behind* stayed green, because `patchBody` writes the body a second time and
+     puts back what `create` dropped — so this file covers the create path and
+     the patch path separately and nothing here needs both to be right at once.
+     `tests/store-comments-parity.test.ts` is what speaks for the round trip. */
+  it("stores the reader's words, and reads them back through the store", async () => {
     const r = await call("POST", `/api/comments/${SLUG}`, {
       blockId: BLOCK,
       quote: QUOTE,
@@ -879,7 +1316,7 @@ describe("making a comment costs nothing", () => {
     // Trimmed once, in one place, so the two stores cannot disagree about it.
     expect(r.body.comment?.body).toBe("this is the bit I doubt");
 
-    const stored = (await loadComments(SLUG))[0];
+    const stored = (await commentsOn(SLUG))[0];
     expect(stored?.body).toBe("this is the bit I doubt");
     expect(stored?.id).toBe(r.body.comment?.id);
   });
@@ -894,7 +1331,7 @@ describe("making a comment costs nothing", () => {
     expect(r.status).toBe(201);
     // Absent, not `""` — `exactOptionalPropertyTypes` and the store round-trip
     // both treat those as different, and the database refuses the empty one.
-    expect("body" in (await loadComments(SLUG))[0]!).toBe(false);
+    expect("body" in (await commentsOn(SLUG))[0]!).toBe(false);
   });
 
   it("bookmarks a passage with nothing written on it", async () => {
@@ -904,7 +1341,7 @@ describe("making a comment costs nothing", () => {
       start: AT,
     });
     expect(r.status).toBe(201);
-    expect(await loadComments(SLUG)).toHaveLength(1);
+    expect(await commentsOn(SLUG)).toHaveLength(1);
   });
 
   it("refuses a quote that is not in the block it names", async () => {
@@ -917,7 +1354,7 @@ describe("making a comment costs nothing", () => {
       start: 0,
     });
     expect(r.status).toBe(400);
-    expect(await loadComments(SLUG)).toEqual([]);
+    expect(await commentsOn(SLUG)).toEqual([]);
   });
 
   it("refuses an id that already belongs to a different comment", async () => {
@@ -931,12 +1368,15 @@ describe("making a comment costs nothing", () => {
     const clash = await call("POST", `/api/comments/${SLUG}`, {
       id: "spya-k3m9qt",
       blockId: BLOCK,
-      quote: "Essay Competition",
-      start: 0,
+      /* A **different but real** anchor: the route checks the passage before it
+         checks the id, so a made-up quote here would be a 400 and this case
+         would never reach the 409 it is named for. */
+      quote: QUOTE2,
+      start: AT2,
     });
     expect(clash.status).toBe(409);
     // The stored one is untouched, which is the half that matters.
-    expect((await loadComments(SLUG))[0]?.quote).toBe(QUOTE);
+    expect((await commentsOn(SLUG))[0]?.quote).toBe(QUOTE);
   });
 
   it("will not answer a comment that was never a question", async () => {
@@ -963,9 +1403,9 @@ describe("making a comment costs nothing", () => {
 
     const cleared = await call("PATCH", `/api/comments/${SLUG}/${id}`, { body: null });
     expect(cleared.status).toBe(200);
-    expect("body" in (await loadComments(SLUG))[0]!).toBe(false);
+    expect("body" in (await commentsOn(SLUG))[0]!).toBe(false);
     // The mark is still there. Clearing the words is not deleting the comment.
-    expect(await loadComments(SLUG)).toHaveLength(1);
+    expect(await commentsOn(SLUG)).toHaveLength(1);
   });
 
   /**
@@ -1014,16 +1454,33 @@ describe("making a comment costs nothing", () => {
       expect(r.body.error).toMatch(/\[cmt-body-missing\]/);
       // The words are still there, which is the whole point.
       expect(
-        (await loadComments(SLUG))[0]?.body,
+        (await commentsOn(SLUG))[0]?.body,
         `${JSON.stringify(sent)} took the words with it`,
       ).toBe("first thought");
     }
   });
 });
 
-describe("the tweets route", () => {
-  // Reads only. Writing a thread is a job, not a request, so there is no POST
-  // here to test and nothing in this file can reach a model.
+/**
+ * The tweets route — reads only. Writing a thread is a job, not a request, so
+ * there is no POST here to test and nothing in this file can reach a model.
+ *
+ * **This block is the one that met the seeder trap head-on.** It asks for a 404
+ * from an article that has no thread, and the corpus article `scratchArticleInPg`
+ * clones — `writes` — ships a `tweets.json`. The fixture's `mutate` deletes it
+ * on the way in and `beforeAll` asserts the `tweets` step was not copied, so the
+ * 404 is about the article rather than about a step that quietly did nothing.
+ * Read the other way round, that is the trap
+ * docs/plans/260903f-… names: *the seeder ships the artefact your oracle asserts*.
+ *
+ * **No mutation, and this is the judgement.** Its three cases are `isSlug`, a
+ * 404 and a 404, and the only store call under them is `loadTweets` answering
+ * "nothing here" — which is what every plausible break of it also answers.
+ * Breaking the read makes an absent thread look absent. The block that *can*
+ * move a `loadArticle`-family read is *a slug that is not a slug*, which has the
+ * positive case, and its mutation is recorded there.
+ */
+when("the tweets route", () => {
 
   it("refuses a slug that could climb out of data/", async () => {
     // Not theoretical: `part()` percent-decodes, so `%2E%2E%2F` arrives as
@@ -1035,10 +1492,11 @@ describe("the tweets route", () => {
   });
 
   it("says there is no thread yet, and how to ask for one", async () => {
-    // The fixture has no tweets.json, and an unknown slug falls through to it —
-    // the same resolution `loadArticle` uses. 404 here is the ordinary case,
-    // not a fault, so the message has to be actionable rather than apologetic.
-    const r = await call("GET", "/api/tweets/example");
+    // The fixture's `tweets` step was deliberately not copied (see the block
+    // header), so this is a real article with no thread on it. 404 here is the
+    // ordinary case, not a fault, so the message has to be actionable rather
+    // than apologetic.
+    const r = await call("GET", `/api/tweets/${SLUG}`);
     expect(r.status).toBe(404);
     expect(r.body.error).toMatch(/steps.*tweets/);
   });
@@ -1049,41 +1507,68 @@ describe("the tweets route", () => {
     //
     // 404 rather than a fall-through, as above — the assertion that matters is
     // that no thread came back.
-    const r = await call("POST", "/api/tweets/example");
+    const r = await call("POST", `/api/tweets/${SLUG}`);
     expect(r.status).toBe(404);
     expect(r.body).not.toHaveProperty("thread");
   });
 });
 
-describe("POST /api/search/:slug is a stream too", () => {
-  // Its own slug, and its own OpenRouter mock, so stubbing `fetch` here cannot
-  // touch any other describe block in this file — none of the rest reach a
-  // model. The fixture's artefacts are copied under the slug so the search has
-  // an article to run over; `searches.json` then lands beside them.
-  const SEARCH_SLUG = "test-routes-search-fixture";
-  const SEARCH_DIR = path.resolve(import.meta.dirname, "..", "data", SEARCH_SLUG);
-
+/**
+ * `POST /api/search/:slug` — its own article and its own OpenRouter mock, so
+ * stubbing `fetch` here cannot touch any other block in this file. None of the
+ * rest reach a model.
+ *
+ * **The seed happens in the file's `beforeAll`, above this stub, and that is
+ * not an accident of ordering.** `scratchArticleInPg` puts the raw source in
+ * the Supabase bucket **over HTTP**, so a seed inside a test whose `fetch` is
+ * stubbed fails with the stub's own answer and reads as a route bug — trap 3 in
+ * docs/plans/260903f-… § *Two more traps*.
+ *
+ * **Mutation.** `src/store/pg-searches.ts` § `remove`, its
+ * `and(eq(searchRuns.articleId, articleId), eq(searchRuns.id, runId))` reduced
+ * to the `articleId` term alone, so a delete takes every run on the article
+ * rather than the one named. **Stayed green, 127 passed.** Every case here has
+ * exactly one run on the article, so "delete this one" and "delete all of them"
+ * are the same statement — and the two cases that call `remove` at all are
+ * asserting the run is *gone*, which both spellings achieve. It is the same
+ * shape as the ordering greens elsewhere in stage B: the file exercises the
+ * call and not the necessity of its predicate. The one two-run case in the file
+ * is in the block below, and it is a `recolour` rather than a `remove`.
+ *
+ * **Blind to.** Which run is deleted, per the above; and to everything about
+ * `finish` — nothing here reads a completed run back out of the store, only out
+ * of the frames.
+ */
+when("POST /api/search/:slug is a stream too", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   beforeEach(async () => {
-    await rm(SEARCH_DIR, { recursive: true, force: true });
-    await cp(EXAMPLE, SEARCH_DIR, { recursive: true });
+    /* The runs a previous case left, rather than a directory removed and
+       re-copied. The article outlives the block; its saved searches do not. */
+    await asTestOwner(async () => {
+      for (const run of await searchStore.load(SEARCH_SLUG)) {
+        await searchStore.remove(SEARCH_SLUG, run.id);
+      }
+    });
     process.env.OPENROUTER_API_KEY = "test-key";
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
   });
   afterEach(async () => {
-    await rm(SEARCH_DIR, { recursive: true, force: true });
     vi.unstubAllGlobals();
   });
 
-  // A quote genuinely inside example/blocks.json's spya-gp3g6s, so
-  // validateHits (src/search.ts) keeps it rather than dropping it as unquoted.
-  const HIT = {
-    blockId: "spya-gp3g6s",
-    quote: "Berggruen Prize",
+  /**
+   * A block of the **seeded** article and a quote really inside it, so
+   * `validateHits` (src/search.ts) keeps the hit rather than dropping it as
+   * unquoted — a dropped hit means no `hit` frame and the first case below
+   * fails on its frame list rather than on anything it is about.
+   */
+  const hit = () => ({
+    blockId: BLOCK,
+    quote: QUOTE,
     confidence: 88,
-    reasoning: "names the prize the essay won",
-  };
+    reasoning: "quotes the passage",
+  });
 
   /** An OpenRouter SSE reply carrying the given hits as one content delta. */
   function openRouterReply(hits: unknown[]): Response {
@@ -1121,7 +1606,7 @@ describe("POST /api/search/:slug is a stream too", () => {
   }
 
   it("emits begin, then a hit frame per hit, then exactly one done", async () => {
-    fetchMock.mockResolvedValue(openRouterReply([HIT]));
+    fetchMock.mockResolvedValue(openRouterReply([hit()]));
     const r = await callStreaming("POST", `/api/search/${SEARCH_SLUG}`, {
       criterion: "the prize the essay won",
     });
@@ -1129,10 +1614,15 @@ describe("POST /api/search/:slug is a stream too", () => {
     const frames = parseFrames(r.frames);
     expect(frames.map((f) => f.event)).toEqual(["begin", "hit", "done"]);
     expect((frames[0]!.data as { status: string }).status).toBe("pending");
-    expect((frames[1]!.data as { hit: { blockId: string } }).hit.blockId).toBe("spya-gp3g6s");
+    expect((frames[1]!.data as { hit: { blockId: string } }).hit.blockId).toBe(BLOCK);
     const done = frames[2]!.data as { status: string; hits: unknown[] };
     expect(done.status).toBe("done");
     expect(done.hits).toHaveLength(1);
+    /* **And the run is in the store, not only in the frames.** The three cases
+       below assert a run is *absent*; without this one they would all pass over
+       a `begin` that wrote nothing at all — the refusal-shaped-block trap
+       docs/plans/260903f-… names, pointed at a stream. */
+    expect(await asTestOwner(() => searchStore.load(SEARCH_SLUG))).toHaveLength(1);
   });
 
   it("a model failure arrives as a done frame with status: error, not an HTTP error", async () => {
@@ -1154,8 +1644,8 @@ describe("POST /api/search/:slug is a stream too", () => {
     fetchMock.mockImplementation(async () => {
       // The reader deletes the run while the model is still thinking, before
       // a single byte of its answer has been read.
-      await deleteRun(SEARCH_SLUG, id);
-      return openRouterReply([HIT]);
+      await asTestOwner(() => searchStore.remove(SEARCH_SLUG, id));
+      return openRouterReply([hit()]);
     });
     const r = await callStreaming("POST", `/api/search/${SEARCH_SLUG}`, {
       id,
@@ -1166,13 +1656,13 @@ describe("POST /api/search/:slug is a stream too", () => {
     // delete mid-hit without a store read per hit, so it doesn't try.
     expect(frames.map((f) => f.event)).toEqual(["begin", "hit"]);
     expect(frames.some((f) => f.event === "done")).toBe(false);
-    expect(await loadRuns(SEARCH_SLUG)).toHaveLength(0);
+    expect(await asTestOwner(() => searchStore.load(SEARCH_SLUG))).toHaveLength(0);
   });
 
   it("a run deleted after a hit streamed, but before the search finishes, still gets no done frame", async () => {
     const id = mintId();
     const firstChunk = `data: ${JSON.stringify({
-      choices: [{ delta: { content: `{"hits":[${JSON.stringify(HIT)}` } }],
+      choices: [{ delta: { content: `{"hits":[${JSON.stringify(hit())}` } }],
     })}\n\n`;
     const restChunk =
       `data: ${JSON.stringify({ choices: [{ delta: { content: "]}" } }] })}\n\n` +
@@ -1192,7 +1682,7 @@ describe("POST /api/search/:slug is a stream too", () => {
           if (pulls === 2) {
             // The delete lands between the first hit arriving and the search
             // finishing — after the reader has already seen it highlighted.
-            await deleteRun(SEARCH_SLUG, id);
+            await asTestOwner(() => searchStore.remove(SEARCH_SLUG, id));
             c.enqueue(new TextEncoder().encode(restChunk));
             return;
           }
@@ -1208,7 +1698,7 @@ describe("POST /api/search/:slug is a stream too", () => {
     const frames = parseFrames(r.frames);
     expect(frames.map((f) => f.event)).toEqual(["begin", "hit"]);
     expect(frames.some((f) => f.event === "done")).toBe(false);
-    expect(await loadRuns(SEARCH_SLUG)).toHaveLength(0);
+    expect(await asTestOwner(() => searchStore.load(SEARCH_SLUG))).toHaveLength(0);
   });
 });
 
@@ -1221,29 +1711,60 @@ describe("POST /api/search/:slug is a stream too", () => {
  * refuses the first hue in the palette; a plain `!== undefined` lets a string
  * or a float through to a browser that will interpolate it into a custom
  * property name and paint nothing at all.
+ *
+ * **Mutation.** `src/store/pg-searches.ts` § `recolour`, its
+ * `eq(searchRuns.id, runId)` deleted from the `where`, so a recolour paints
+ * every saved search on the article.
+ *
+ * **It stayed green against the file as it stood — 127 passed — and that is
+ * the finding.** *Answers with the whole list* is the only case here with two
+ * runs on one article, and it asserted the list's **length** and nothing else,
+ * so a write that coloured both rows answered with exactly the list it wanted.
+ * Every other case has one run, where "this one" and "all of them" are the same
+ * statement. One assertion was added — the second run comes back with no colour
+ * — and the same mutation is then **1 failed of 127**: *answers with the whole
+ * list, and colours only the run it was given*, `expected 1 to be undefined`.
+ * `remove` in the block above has the identical hole and no two-run case at all
+ * to close it with.
+ *
+ * **Blind to.** The owner scope: `runsFor` reaches the article through
+ * `ownedSlug`, and a private database with one seeded owner cannot tell a
+ * scoped query from an unscoped one — `tests/owner-isolation.test.ts` is what
+ * speaks for that predicate. And to the *validation*, which is the block's own
+ * subject and happens above the store: every 400 here is decided before a
+ * statement runs.
  */
-describe("PATCH /api/search/:slug/:id", () => {
-  const COLOUR_SLUG = "test-routes-colour-fixture";
-  const COLOUR_DIR = path.resolve(import.meta.dirname, "..", "data", COLOUR_SLUG);
-  afterEach(() => rm(COLOUR_DIR, { recursive: true, force: true }));
+when("PATCH /api/search/:slug/:id", () => {
+  /* The runs a previous case saved, rather than a removed directory. */
+  beforeEach(async () => {
+    await asTestOwner(async () => {
+      for (const run of await searchStore.load(COLOUR_SLUG)) {
+        await searchStore.remove(COLOUR_SLUG, run.id);
+      }
+    });
+  });
 
+  /** A saved search on the colour article, through the store the route uses. */
   async function saved(criterion = "arguments against"): Promise<string> {
-    const { id } = await beginRun(COLOUR_SLUG, criterion);
-    return id;
+    const { run } = await asTestOwner(() => searchStore.begin(COLOUR_SLUG, criterion));
+    return run.id;
   }
+
+  /** The runs as the store now has them, as the reader the request ran as. */
+  const runsOn = (slug: string) => asTestOwner(() => searchStore.load(slug));
 
   it("stores the slot the reader picked", async () => {
     const id = await saved();
     const r = await call("PATCH", `/api/search/${COLOUR_SLUG}/${id}`, { colour: 5 });
     expect(r.status).toBe(200);
-    expect((await loadRuns(COLOUR_SLUG))[0]?.colour).toBe(5);
+    expect((await runsOn(COLOUR_SLUG))[0]?.colour).toBe(5);
   });
 
   it("accepts slot 0, which a truthiness check would refuse", async () => {
     const id = await saved();
     const r = await call("PATCH", `/api/search/${COLOUR_SLUG}/${id}`, { colour: 0 });
     expect(r.status).toBe(200);
-    expect((await loadRuns(COLOUR_SLUG))[0]?.colour).toBe(0);
+    expect((await runsOn(COLOUR_SLUG))[0]?.colour).toBe(0);
   });
 
   it("takes null as 'put it back on automatic', not as a missing field", async () => {
@@ -1251,7 +1772,7 @@ describe("PATCH /api/search/:slug/:id", () => {
     await call("PATCH", `/api/search/${COLOUR_SLUG}/${id}`, { colour: 3 });
     const r = await call("PATCH", `/api/search/${COLOUR_SLUG}/${id}`, { colour: null });
     expect(r.status).toBe(200);
-    const run = (await loadRuns(COLOUR_SLUG))[0];
+    const run = (await runsOn(COLOUR_SLUG))[0];
     expect(run && "colour" in run).toBe(false);
   });
 
@@ -1262,7 +1783,7 @@ describe("PATCH /api/search/:slug/:id", () => {
       expect(r.status).toBe(400);
     }
     // And nothing was written on the way to refusing.
-    const run = (await loadRuns(COLOUR_SLUG))[0];
+    const run = (await runsOn(COLOUR_SLUG))[0];
     expect(run && "colour" in run).toBe(false);
   });
 
@@ -1284,11 +1805,19 @@ describe("PATCH /api/search/:slug/:id", () => {
     }
   });
 
-  it("answers with the whole list, the same shape as the delete beside it", async () => {
+  it("answers with the whole list, and colours only the run it was given", async () => {
+    /* **The list is the shape the delete beside it answers with**, which is
+       what this case was written for. The second half arrived with the move and
+       is the only assertion in the file that can tell *this* run from *these*
+       runs: every other case here has one saved search, so a write with no `id`
+       in its `where` is indistinguishable from a correct one. */
     const first = await saved("first");
-    await saved("second");
+    const second = await saved("second");
     const r = await call("PATCH", `/api/search/${COLOUR_SLUG}/${first}`, { colour: 1 });
-    expect((r.body as { runs?: unknown[] }).runs).toHaveLength(2);
+    const runs = (r.body as { runs?: { id: string; colour?: number }[] }).runs ?? [];
+    expect(runs).toHaveLength(2);
+    expect(runs.find((run) => run.id === first)?.colour).toBe(1);
+    expect(runs.find((run) => run.id === second)?.colour).toBeUndefined();
   });
 
   it("refuses a slug that is not a path segment", async () => {
@@ -1319,7 +1848,7 @@ describe("PATCH /api/search/:slug/:id", () => {
  * assertion would still hold. If one ever needs a real row to reach its
  * validation, that is itself worth knowing.
  */
-describe("no PATCH route answers a malformed body with a 500", () => {
+when("no PATCH route answers a malformed body with a 500", () => {
   const PATCH_ROUTES = [
     "/api/library/a-slug",
     "/api/reader",
@@ -1356,9 +1885,12 @@ describe("no PATCH route answers a malformed body with a 500", () => {
  * 2026-09-02; docs/reusable/written-down-is-not-checked.md.
  *
  * No thread has to exist for this: the destructure happened before any store
- * call, so the 500 did not depend on the id being real.
+ * call, so the 500 did not depend on the id being real. **Which is also why it
+ * has no mutation** — same as the table above it, and for the same reason
+ * stated in its own header: there is no store between the request and the
+ * refusal to break.
  */
-describe("PATCH /api/chat/:slug/:threadId with a body that is not an object", () => {
+when("PATCH /api/chat/:slug/:threadId with a body that is not an object", () => {
   for (const body of ["null", "[]", '"3"', "7"]) {
     it(`answers ${body} with 400, not 500`, async () => {
       const r = await call("PATCH", "/api/chat/test-routes-colour-fixture/t1", body);
@@ -1376,12 +1908,32 @@ describe("PATCH /api/chat/:slug/:threadId with a body that is not an object", ()
  * `handleApi` rather than round it.
  *
  * The mutation test that makes them mean something is in
- * docs/plans/260826ae-auth-ui-and-production.md and has to be done by hand once: comment
- * out the `await requireUser(...)` line, watch the first of these go red, put
- * it back. A gate test that has never been seen to fail proves nothing —
+ * docs/plans/260826ae-auth-ui-and-production.md and had to be done by hand
+ * once. **It has been, on 2026-09-04, and here is what it printed.** A gate test
+ * that has never been seen to fail proves nothing —
  * docs/reusable/silent-success.md, and the memory with my name on it.
+ *
+ * **Mutation.** `src/auth.ts` § `requireUser`, its opening refusal —
+ * `if (scheme?.toLowerCase() !== "bearer" || !token) throw httpError(401, …)` —
+ * emptied, so a request with no `Authorization` header at all goes on to
+ * `verify` instead of being turned away. (Emptied rather than the plan's
+ * *"comment out the `await requireUser(...)` line"*, which does not compile:
+ * `serveAuthenticatedApi` takes the `VerifiedUser` it returns, and a type only
+ * that function can produce is the point of the split.) **2 failed of 127**:
+ * *refuses a request with no Authorization header*, `expected 200 to be 401` —
+ * an anonymous stranger served the whole shelf — and, in the block below, *says
+ * nothing about users in three refusals*, `expected [ 200, 403, 200 ] to deeply
+ * equal [ 401, 403, 200 ]`.
+ *
+ * **Blind to.** The *order* — that the gate runs before any body is read, which
+ * this block's first case asserts by choosing a GET and argues for in prose;
+ * nothing here sends a malformed body without a header and watches for a 401
+ * rather than a 400. And to `verify` itself: the second case injects a verifier
+ * that says no, so a `requireUser` that ignored a *bad* token would be caught,
+ * but every claims check inside the real verifier — `role`, `is_anonymous`, the
+ * `sub` shape — is `tests/auth.test.ts`'s, not this file's.
  */
-describe("the gate", () => {
+when("the gate", () => {
   it("refuses a request with no Authorization header", async () => {
     /* GET, because a 401 on a POST could equally be validation failing first —
        and the order matters: the gate runs before any body is read, so a
@@ -1418,7 +1970,7 @@ describe("the gate", () => {
  * administrator (`TEST_SUB`, which `isAdmin` says yes to) — so the interesting
  * case needs a verifier of its own. See src/admin.ts and docs/project/admin.md.
  */
-describe("the admin gate", () => {
+when("the admin gate", () => {
   /** Somebody else entirely, signed in perfectly properly. */
   const asSomebodyElse: Parameters<typeof handleApi>[2] = async () => ({
     ok: true,
@@ -1476,19 +2028,48 @@ describe("the admin gate", () => {
     expect(r.status).toBe(404);
   });
 
-  /* Otherwise a gate that refuses everybody passes every test above, and the
-     suite is green while the page is dead.
-
-     Under the filesystem store — which is what `npm test` runs with — the route
-     answers **501**: "there are no user accounts on the filesystem store". That
-     is the store refusing *after* the gate let the request through, so it is
-     exactly the evidence wanted, and it is asserted exactly rather than as "not
-     403". A 200 here would mean the suite had quietly acquired a database and
-     this case had stopped testing what it says. */
-  it("lets the administrator reach the route, where the store refuses instead", async () => {
+  /**
+   * Otherwise a gate that refuses everybody passes every test above, and the
+   * suite is green while the page is dead.
+   *
+   * **This asserted 501 until 2026-09-04, and the 501 was the filesystem store
+   * speaking.** *"There are no user accounts on the filesystem store"* is
+   * `adminOnFiles` in src/store/index.ts refusing after the gate let the request
+   * through — which was the right evidence to take from a suite that could not
+   * have a database, and its own comment said a 200 here *"would mean the suite
+   * had quietly acquired a database"*. It has: the file is pinned to Postgres
+   * and runs against one. So what an administrator actually gets is asserted
+   * instead, which is behaviour the store flag's deletion does not touch — F
+   * removes the `files` path, not this one.
+   *
+   * `tests/seed-admin-signin.test.ts` already drives this route against Postgres
+   * with a **real** GoTrue token; this one drives it with `acceptAny` and is
+   * about the gate rather than about the token. The two are not the same claim,
+   * and that file's header says so.
+   *
+   * **Mutation.** `src/routes.ts`, the admin `users` handler, its
+   * `send(res, 200, { users: await adminStore.listUsersAcrossOwners() })`
+   * replaced with `send(res, 200, { users: [] })` — the page a store failure
+   * would draw, and the exact thing the *"not an empty list"* comments above are
+   * about. **2 failed of 127**: this case and *says nothing about users in three
+   * refusals*, both `expected 0 to be greater than 0`. The list being non-empty
+   * is what tells a working page from a dead one, so it is asserted rather than
+   * the 200 alone — a 200 carrying nothing is precisely the refusal wearing the
+   * answer's clothes.
+   *
+   * **Blind to.** Everything in the list. It comes out of GoTrue over HTTP
+   * joined to counts from this run's private database, and nothing here reads a
+   * field — `tests/admin-store.test.ts` is what asserts the shapes and the
+   * runtime types, and `tests/admin-users-merge.test.ts` the join.
+   */
+  it("lets the administrator reach the route, and gets the list", async () => {
     const r = await call("GET", "/api/admin/users");
-    expect(r.status).toBe(501);
-    expect(r.body.error).toMatch(/Postgres/);
+    expect(r.status).toBe(200);
+    const users = (r.body as unknown as { users: unknown[] }).users;
+    /* At least one: the accounts come from the Auth service, and the private
+       lane's own setup seeds the local administrator among them. Zero would be
+       a list that had arrived from nowhere. */
+    expect(users.length).toBeGreaterThan(0);
   });
 
   /* **The feedback routes, named rather than left to the prefix.** The case
@@ -1515,10 +2096,18 @@ describe("the admin gate", () => {
     expect(r.status).toBe(403);
   });
 
-  it("lets the administrator reach the feedback list, where the store refuses instead", async () => {
+  it("lets the administrator reach the feedback list, and gets a page of it", async () => {
+    /* 501 until 2026-09-04, for the same reason and with the same repair as the
+       users case above. **An empty `reports` array is the right answer here and
+       an empty `users` array is not**: nobody has filed a report in a database
+       minted for this run, and the page is a page rather than a list of
+       accounts — so what is asserted is the *shape*, which is what tells "the
+       store answered" from "the route refused". `hasMore` and `nextCursor` are
+       in it because a page missing them is one a client pages past the end of.
+       tests/feedback-store.test.ts is what covers a report actually arriving. */
     const r = await call("GET", "/api/admin/feedback");
-    expect(r.status).toBe(501);
-    expect(r.body.error).toMatch(/Postgres/);
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ reports: [], hasMore: false, nextCursor: null });
   });
 
   it("refuses either half of the key when it is the wrong shape", async () => {
@@ -1579,19 +2168,29 @@ describe("the admin gate", () => {
     }
   });
 
-  it("says nothing about users in any of its three refusals", async () => {
+  it("says nothing about users in three refusals", async () => {
     /* Every refusal must be words rather than an empty list. A page that says
        "no accounts" and a page that could not answer look identical, and only
-       one of them is true. Three ways in, three refusals: nobody signed in, the
-       wrong person signed in, and the right person against a store that has no
-       accounts to list. */
+       one of them is true — which is still exactly the point, and is why this
+       case survived the move rather than being replaced.
+
+       **The third arm changed and the claim did not.** It used to be "the right
+       person against a store that has no accounts to list", which was a third
+       *refusal* — the filesystem store's 501. Against Postgres the right person
+       gets the page, so the three ways in are now: nobody signed in, the wrong
+       person signed in, and the administrator. Two refusals that must carry
+       words and no list, and one answer that must carry the list — which is a
+       stronger version of the same sentence, because it is the arm that proves
+       an empty `users` really would be indistinguishable from a refusal. */
     const anonymous = await call("GET", "/api/admin/users", undefined, undefined, {});
     const stranger = await call("GET", "/api/admin/users", undefined, asSomebodyElse);
     const administrator = await call("GET", "/api/admin/users");
-    expect([anonymous.status, stranger.status, administrator.status]).toEqual([401, 403, 501]);
-    for (const r of [anonymous, stranger, administrator]) {
+    expect([anonymous.status, stranger.status, administrator.status]).toEqual([401, 403, 200]);
+    for (const r of [anonymous, stranger]) {
       expect(r.body).not.toHaveProperty("users");
       expect(r.body.error).toBeTruthy();
     }
+    expect((administrator.body as unknown as { users: unknown[] }).users.length).toBeGreaterThan(0);
+    expect(administrator.body.error).toBeUndefined();
   });
 });

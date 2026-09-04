@@ -338,8 +338,17 @@ when("listing your jobs", () => {
    * first for the round trip's sake.
    *
    * So this counts the calls instead, which no amount of shared mutation can
-   * fake. Watched red with the final `store.list(owner)` replaced by
-   * `return listed`: one call, not two.
+   * fake.
+   *
+   * **Mutation.** The final `store.list(owner)` in `listJobs` replaced by
+   * `return listed`, so the pre-sweep rows are handed back. Watched red: the
+   * spy saw one call, not two, which is the whole of what this case asserts.
+   *
+   * **Blind to.** A count is not a content check. A second `list` that read
+   * some other owner's rows, or read them inside the wrong transaction, would
+   * satisfy the spy exactly as well — what makes the count worth having is that
+   * it is the only assertion here that can tell *re-read* from *happened to be
+   * right*, not that it says the re-read was correct.
    */
   it("reads the list again after settling, rather than handing back the one it swept", async () => {
     await abandoned(ALICE);
@@ -375,8 +384,23 @@ when("listing your jobs", () => {
    * Unscoped, Bob opening his shelf ends Alice's import — and Alice is not
    * watching, so the first she hears of it is a Retry button.
    *
-   * Watched red against `store.settleExpired()` with the owner left off: Alice's
-   * job came back `error`.
+   * **Mutation.** Two, a call-site one and a SQL one. The call site first:
+   * `store.settleExpired()` with the owner argument left off, watched red —
+   * Alice's job came back `error`.
+   *
+   * **Mutation.** And the predicate itself, on 2026-09-04, which is what the
+   * conversion bought: `owner === undefined ? undefined : eq(jobs.ownerId,
+   * owner)` in `settleExpired`'s `lapsed` (src/store/pg-jobs.ts) replaced by
+   * `undefined`, so the sweep takes the table. The run printed `1 failed | 8
+   * passed (9)`, this case, on `expected 'queued' to be 'running'` — Bob's page
+   * load had put Alice's row back in the queue.
+   *
+   * **Blind to.** Two readers, one predicate. Alice and Bob are the whole world
+   * here, so a scope that leaked to a *third* owner, or one that scoped by the
+   * wrong column, is not something these rows can distinguish; and the sibling
+   * conjuncts in the same `and` — `status = 'running'` and the lease comparison
+   * — went untouched, as did `list`'s own owner filter, which is a different
+   * statement that happens to read the same column.
    */
   it("cannot settle somebody else's job, however long their claimant has been gone", async () => {
     const hers = await abandoned(ALICE);

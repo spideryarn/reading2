@@ -218,10 +218,10 @@ export function worthRetrying(message: string | null | undefined): boolean {
 /**
  * **Nobody came back for this job.**
  *
- * A claimant takes a job for one step and its lease says how long that step may
- * take. A lease that runs out means the process holding it is gone — frozen by
- * the host, restarted, or killed — and the job would otherwise sit `running`
- * for ever, blocking its article and counting against the concurrency cap.
+ * A claimant takes a job and its lease says how long it may hold it. A lease
+ * that runs out means the process holding it is gone — frozen by the host,
+ * restarted, or killed — and the job would otherwise sit `running` for ever,
+ * blocking its article and counting against the concurrency cap.
  *
  * The sentence says what happened and offers the retry, because this is the one
  * failure where retrying is not just permitted but likely to work: `stepIsDone`
@@ -240,6 +240,14 @@ export function worthRetrying(message: string | null | undefined): boolean {
  * sentence rather than two. It is now also what the **step** says in that case,
  * not just the job: src/jobs.ts § `DeadlineReached`, and `STEP_STOPPED` below
  * for the accusation that fixed.
+ *
+ * **But the second situation reaches this sentence only at the end now**, since
+ * 2026-09-04. A claimant that runs out of time hands the job back to the queue
+ * instead of ending it (`pauseForDeadline`, src/store/jobs.ts) — that is a
+ * `queued` row with no sentence on it at all, which is right, because nothing
+ * has ended and there is nothing for a reader to do. Only when the windows are
+ * gone does the overrun end here, and then the wording is exact: three
+ * claimants have now failed to come back with it.
  */
 /**
  * **The stable half of `INTERRUPTED`**, and the only half anything may classify
