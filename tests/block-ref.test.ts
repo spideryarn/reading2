@@ -66,8 +66,17 @@ describe("blockPermalink", () => {
       value: "https://spideryarn.example",
       configurable: true,
     });
+    /* `cols=0,1`, not `cols=0%2C1`, and that changed on 2026-09-04. `blockHref`
+       used to round-trip the query through `URLSearchParams`, which re-encodes
+       the comma — still correct, still parses, and no longer readable by the
+       person you send it to. router.ts § `carriedSearch` and params.ts both
+       refuse that round trip deliberately; this one was quietly doing it, and
+       the escape was in this expectation as an artefact rather than as a
+       decision (the test above passes either way, because it reads the value
+       back through `URLSearchParams`). It now builds the address as text.
+       docs/plans/260904a-more-scroll-cpu-wins.md. */
     expect(blockPermalink("spya-k3m9qt")).toBe(
-      "https://spideryarn.example/read/example?cols=0%2C1&at=spya-k3m9qt",
+      "https://spideryarn.example/read/example?cols=0,1&at=spya-k3m9qt",
     );
   });
 

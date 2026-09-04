@@ -66,6 +66,16 @@ const SETTLE_MS = 1500;
 interface Props {
   id: BlockId;
   /**
+   * The query pairs the permalink carries, `at` already dropped, no leading `?`.
+   *
+   * Passed rather than read from the address bar because `TableView` is
+   * memoised and this is rendered once per block inside it — BlockRef.tsx §
+   * `blockHref` has the argument. `blockPermalink` below is deliberately *not*
+   * given it: that one runs in a click handler, where the address bar is
+   * current by definition.
+   */
+  carried: string;
+  /**
    * Every comment on this block, in reading order, or absent for none.
    *
    * **From `commentsByBlock`, which groups on `blockId` alone** — never from
@@ -116,6 +126,7 @@ interface Props {
 
 export function BlockGutter({
   id,
+  carried,
   comments,
   chatCount,
   onOpenComment,
@@ -264,7 +275,7 @@ export function BlockGutter({
           chat citations — and is untouched. */}
       <a
         className={`blk-permalink${copy === "failed" ? " failed" : ""}`}
-        href={blockHref(id)}
+        href={blockHref(id, carried)}
         /* The tooltip Greg asked for, carrying the full id. `title` rather than
            the Tooltip component on purpose: that is a Floating UI instance per
            trigger, and this is one trigger per block on an article that can run

@@ -58,6 +58,7 @@ function paint(comments?: Comment[], chatCount = 0): void {
     root.render(
       <BlockGutter
         id={ID}
+        carried=""
         {...(comments ? { comments } : {})}
         chatCount={chatCount}
         onOpenComment={(id) => opened.push(id)}

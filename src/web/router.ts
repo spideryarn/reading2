@@ -729,6 +729,21 @@ function hasKey(pair: string, name: string): boolean {
 }
 
 /**
+ * One parameter dropped, everything else kept **exactly as it was written**.
+ *
+ * The public form of the pair below, for callers who are rebuilding an address
+ * around a parameter of their own — `blockHref` in BlockRef.ts, which drops
+ * `at` because it is about to write its own. They get `hasKey`'s scar for free,
+ * which is the point of exporting this rather than letting the next caller
+ * write `filter(p => !p.startsWith("at="))` and rediscover `?%61t=`.
+ *
+ * No leading `?` on the way in or out.
+ */
+export function searchWithout(search: string, name: string): string {
+  return withoutPairs(search, (pair) => hasKey(pair, name));
+}
+
+/**
  * Drop the pairs a rewrite is consuming, and keep every other one **exactly as
  * it was written**. Text, never `URLSearchParams` — see `settleAddress`.
  */
@@ -841,6 +856,75 @@ function subscribe(onChange: () => void): () => void {
     window.removeEventListener("popstate", onChange);
     window.removeEventListener(NAVIGATED, onChange);
   };
+}
+
+/**
+ * Hear **every** write to the address bar, including the ones nuqs makes.
+ *
+ * `subscribe` above listens for `popstate` and our own `NAVIGATED`, and misses
+ * the third source entirely: a `useQueryState` setter, which writes through
+ * `history.replaceState` and tells nuqs's own module-level emitter. That gap
+ * does not matter to `useRoute` — a parameter change never changes the pathname
+ * — but it matters a great deal to anything that wants the *query string*,
+ * because **nuqs subscriptions are key-isolated**: its adapter filters
+ * `location.search` down to the keys each hook watches and hands back the
+ * cached snapshot when those are unchanged (`nuqs/dist/adapters/react.js`). So
+ * a component subscribed to `?note=` is not woken by `?dhue=`, and a component
+ * subscribed to nothing is not woken at all.
+ *
+ * That was invisible until `TableView` was memoised. Ten reading parameters are
+ * owned by child components — `rank`, `bar`, `run`, `conf`, `deep`, `diagram`,
+ * `dx`, `dhue`, `referee`, `remember` — and a change to any of them re-renders
+ * only that child. `blockHref` reads the query to build 551 permalinks, and it
+ * used to get away with it because `?at=` re-rendered the whole reading view
+ * once a second while anybody scrolled. Take that away and the staleness stops
+ * healing itself. GPT Sol's audit, 2026-09-04.
+ *
+ * **A patch rather than a list of parameters**, which was the alternative and is
+ * the reason this exists: an inventory of the thirty-five parsers in params.ts
+ * would be correct until somebody adds the thirty-sixth, and the failure would
+ * be a quietly wrong link rather than anything that breaks. This cannot go out
+ * of date.
+ *
+ * Patching `history` is not a new kind of thing here — nuqs's own
+ * `enableHistorySync()` does exactly this, and main.tsx has the long note on
+ * why we opted into it. Two wrappers on one function is fine: both run, in
+ * whichever order they were installed. Called explicitly from main.tsx rather
+ * than at import time, so the order is a decision rather than an accident of
+ * which module was reached first.
+ *
+ * Idempotent, because a second patch would double every event.
+ */
+let historyWatched = false;
+export function watchHistoryWrites(): void {
+  if (historyWatched) return;
+  historyWatched = true;
+  for (const name of ["pushState", "replaceState"] as const) {
+    const real = history[name].bind(history);
+    history[name] = (...args: Parameters<History["pushState"]>) => {
+      real(...args);
+      window.dispatchEvent(new Event(NAVIGATED));
+    };
+  }
+}
+
+/**
+ * The query string, as state — `"?a=1&b=2"`, or `""`.
+ *
+ * A **string** snapshot, so `useSyncExternalStore`'s `Object.is` compares it by
+ * value and a write that changes nothing re-renders nothing. `URLSearchParams`
+ * here would be a fresh object every call and would loop forever, which is the
+ * same trap `useRoute` below records.
+ *
+ * Only useful once `watchHistoryWrites` has been called; without it this hook
+ * would miss every nuqs write, which is most of them.
+ */
+export function useAddressSearch(): string {
+  return useSyncExternalStore(
+    subscribe,
+    () => location.search,
+    () => "",
+  );
 }
 
 /**
