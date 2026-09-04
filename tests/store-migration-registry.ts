@@ -1245,17 +1245,22 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/admin-store.test.ts": "shared-services",
   "tests/auth-user-seeding.test.ts": "shared-services",
   "tests/db-test-create.test.ts": "shared-services",
-  /* Arrived from `dev` on 2026-09-04, after T-C's lane map was written, and the
-     lane guard refused to stay green — which is the whole point of a guard that
-     re-derives the universe rather than reading a stored answer. It calls
-     `pgReady` and its oracle is checkpoint rows it writes itself, so the
-     private lane is right and nothing about it needs the shared stack. */
-  "tests/retry-keeps-the-checkpoints.test.ts": "private-postgres",
   "tests/seed-admin-signin.test.ts": "shared-services",
 
   /* ---- private-postgres: everything else that touches a database --------- */
 
   "tests/a-claim-that-lost-its-draft.test.ts": "private-postgres",
+  /* **Arrived from another worktree the same afternoon this lane was built**,
+     and needed no exemption — it seeds an owner through `seed-auth-user`, which
+     the scan's `CONNECTING_HELPERS` list now names precisely because of it.
+
+     The order is worth keeping: the poisoned `DATABASE_URL` found it first, by
+     failing its `insert into auth.users`, and the predicate was widened
+     afterwards so that the *guard* catches the next one instead of a test
+     failure. A syntactic manifest and a semantic backstop are not two ways of
+     doing the same job — this file is what it looks like when the second one
+     feeds the first. */
+  "tests/a-long-pdf-is-refused-before-it-is-stored.test.ts": "private-postgres",
   /* Storage, not Postgres — see `an-upload-is-queued-…` below. Found by the
      Storage poison on its first full run, which is what a semantic backstop is
      for: Sol read four out of the lane map and running it found two more. */
@@ -1345,7 +1350,15 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/remember-route.test.ts": "private-postgres",
   /* Landed with stage 3 of 260903k on 2026-09-03 and was never given a lane —
      it drives the Postgres queue, and article identity is only expressible
-     there. Filed here on 2026-09-04 by the stage that found the gate red. */
+     there. Filed here on 2026-09-04 by the stage that found the gate red.
+
+     **Two worktrees filed it on the same day, independently**, and the merge
+     kept both until `npm run typecheck` refused the duplicate key. They agreed
+     on the lane and differed only in where they put it, which is the useful
+     part: the guard re-derives its universe from the tree on every run, so it
+     went red in both trees for the same reason rather than staying green in one
+     of them. Its oracle is checkpoint rows it writes itself, so nothing here
+     needs the shared stack. */
   "tests/retry-keeps-the-checkpoints.test.ts": "private-postgres",
   "tests/run-lock.test.ts": "private-postgres",
   "tests/running-slot.test.ts": "private-postgres",
@@ -1519,6 +1532,14 @@ export type OwnerVerdict =
 export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerVerdict>>>> = {
   /* ---- seeded, and the scan can see it -------------------------------- */
 
+  /* Laned on 2026-09-04, and this guard asked for its verdict the moment it
+     was — which is the two maps composing rather than overlapping: giving a
+     file a lane puts it in this one's universe too, so a file cannot arrive
+     with a database and no account of the rows it writes under a fixed owner.
+     It seeds `…dd` itself through `seedAuthUser`. */
+  "tests/a-long-pdf-is-refused-before-it-is-stored.test.ts": {
+    "00000000-0000-4000-8000-0000000000dd": { kind: "seeded" },
+  },
   "tests/admin-feedback-store.test.ts": {
     "00000000-0000-4000-8000-00000000fc01": { kind: "seeded" },
     "00000000-0000-4000-8000-00000000fc02": { kind: "seeded" },
