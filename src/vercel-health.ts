@@ -179,6 +179,15 @@ interface Expected {
   valid?: { ok(value: string): boolean; must: string };
   /** `vercel` for platform settings that mean nothing on a laptop. */
   where?: "vercel";
+  /**
+   * Only required when this *other* variable is set — silent otherwise.
+   *
+   * For the half-configured case, which is the one that bites: a feature whose
+   * absence is a legitimate deployment choice, but whose *partial* presence is
+   * always a mistake. `breaks: null` cannot say this, because it is a statement
+   * about absence being fine unconditionally.
+   */
+  with?: string;
 }
 
 const EXPECTED: readonly Expected[] = [
@@ -297,6 +306,38 @@ const EXPECTED: readonly Expected[] = [
         "A test key in production accepts test cards and grants real subscriptions",
     },
   },
+  /**
+   * **The other half of "Stripe is configured", and the half no script could
+   * see.** `stripe:check` reads the Stripe account — endpoint registered,
+   * enabled, subscribed to `HANDLED_EVENTS` — and is blind to whether the
+   * *deployment* holds the secret to verify a delivery with. Until 2026-09-03
+   * neither was set on production, and docs/project/billing.md names
+   * `vercel env ls production` as the only instrument for that half. This makes
+   * it something the deploy gate does.
+   *
+   * **`with`, because half-configured is the fault, not unconfigured.**
+   * `STRIPE_SECRET_KEY` is `breaks: null` since a deployment with no Stripe is
+   * a perfectly good deployment — everyone stays free. A secret key *and* no
+   * webhook secret is nobody's deliberate choice.
+   *
+   * **What a green line here does not tell you.** Absence is conclusive;
+   * presence is not. The likelier future fault is a secret that is present and
+   * *wrong* — the endpoint recreated or rotated in the dashboard and Vercel
+   * never updated — and then every delivery is a 400, entitlement stops
+   * flowing exactly as it would have, and this reads green. Health cannot sign
+   * a delivery, so it cannot check the value. The instrument for that class is
+   * Stripe's side: the endpoint's recent delivery-failure count. Same caveat
+   * as the two `VITE_` names above. Fable's review, 2026-09-04.
+   */
+  {
+    name: "STRIPE_WEBHOOK_SECRET",
+    with: "STRIPE_SECRET_KEY",
+    breaks:
+      "src/billing/webhook.ts refuses every Stripe delivery with 503 rather than skipping " +
+      "verification, so a reader who closes the tab before returning from Checkout is never " +
+      "granted what they paid for, cancellations and renewals land only when the next ingest " +
+      "finds the period stale, and invoice.finalization_failed is never logged at all",
+  },
   /* **No `STRIPE_PRICE_*` here, and its absence is deliberate.** It was
      reported until 2026-09-02, when tiers and their Stripe price ids moved into
      the `billing_tiers` table so they could be changed without a deploy
@@ -358,6 +399,11 @@ function checkEnv(warnings: string[]): Record<string, boolean> {
 
     if (!expected.breaks) continue;
     if (expected.where === "vercel" && !process.env.VERCEL) continue;
+    /* Suppresses only the *absence* warning, exactly like `where` above — a
+       companion that is itself unset means this whole feature is switched off,
+       and a switched-off feature is not a broken deployment. The `env` map
+       above still reports it either way, so it stays visible while silent. */
+    if (expected.with && value(expected.with) === null) continue;
     if (found === undefined) warnings.push(`${names.join(" or ")} is not set — ${expected.breaks}`);
   }
 
