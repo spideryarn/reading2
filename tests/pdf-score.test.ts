@@ -237,6 +237,70 @@ describe("long tokens the page broke across a line, and the page break", () => {
   });
 });
 
+describe("the page number pdf.js fused to the heading that follows it", () => {
+  /* Every string here is the real text layer of Kuhn's "A Landscape of
+     Consciousness" (142pp, Elsevier), read by pass0 and copied verbatim. The
+     journal prints the folio at the top of each page and the paper numbers its
+     sections three deep, so a page starts with a running header, a newline, and
+     then the folio welded to the section number by `pass0`'s no-separator
+     concatenation. Eight correct headings were scored as invented on this one
+     document. docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md
+     § The checker defect. */
+  const HEADER = "Progress in Biophysics and Molecular Biology 190 (2024) 28–169";
+  const page = (text: string): Pass0 => ({
+    pages: [{ page: 1, text, words: text.split(/\s+/).length, items: [] }],
+    metaTitle: null,
+    isScan: false,
+    furniture: new Set(),
+  });
+  const said = (text: string): PdfRecord[] => [
+    { page: 1, type: "paragraph", text, continues: false, uncertain: false },
+  ];
+
+  /** folio, the heading as printed, and the rest of the line after it. */
+  const FUSED: [string, string, string][] = [
+    ["64", "9.5.10.", "Mansell’s perceptual control theory"],
+    ["52", "9.2.12.", "Northoff’s temporo-spatial sentience"],
+    ["57", "9.4.4.", "Critical brain hypothesis"],
+    ["68", "9.6.7.", "Direct perception theory"],
+    ["83", "9.10.4.", "Cleeremans and Tallon-Baudry’s phenomenal control"],
+    ["125", "16.3.", "Dao De Jing’s constant dao"],
+    ["136", "17.7.", "Combs’s chaotic attractor and autopoiesis"],
+    ["155", "4.", "My personal first-person awareness disappears upon duplication"],
+  ];
+
+  for (const [folio, heading, rest] of FUSED) {
+    it(`does not call ${heading} invented when the page layer holds ${folio}${heading}`, () => {
+      const pass = page(`${HEADER}\n${folio}${heading} ${rest}\nSome body prose follows it here.`);
+      const result = check(said(`${heading} ${rest}\nSome body prose follows it here.`), [1], pass);
+      expect(result.pages[0]!.invented).toEqual([]);
+    });
+  }
+
+  /* The other half, and the reason the rule is line-initial and narrow: on the
+     same document `12` and `13` were reported and both were true. Neither is a
+     standalone token anywhere on its page — `12` is only ever inside `9.8.12.`
+     and `2012a`, `13` only inside `13.5` and `13.2`. Catching `2012 → 12` is
+     what `protect` exists for. */
+  it("still refuses a number that is only ever a piece of a longer one", () => {
+    const pass = page(
+      `${HEADER}\n9.8.12. Thagard’s neural representation, binding and competition\n` +
+        "“to support language” (Blakemore, 2012a).",
+    );
+    const result = check(said("9.8.12. Thagard’s neural representation, binding and competition, 12"), [1], pass);
+    expect(result.pages[0]!.invented).toEqual(["12"]);
+  });
+
+  it("still refuses a section number the page only ever prints with a sub-part", () => {
+    const pass = page(
+      `${HEADER}\nlocated in some kind of “qualia space” (13.5).\n` +
+        "distance themselves from Panpsychism (13.2), and probably would argue that,",
+    );
+    const result = check(said("located in some kind of “qualia space” (13)."), [1], pass);
+    expect(result.pages[0]!.invented).toEqual(["13"]);
+  });
+});
+
 describe("what the check says it checked", () => {
   it("does not count a page it could not check", () => {
     /* `meta.pagesChecked` is shown to a reader. "8 of 8" for a document where a

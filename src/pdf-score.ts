@@ -330,6 +330,10 @@ function protectedFaults(want: string[], have: string): string[] {
  * exactly the same reason. Joining adjacent tokens only ever makes a haystack
  * entry *longer*, so a truncated number still matches nothing. The test that
  * says so sits next to the two that need the joins.
+ *
+ * **And every way a printed page number could have been welded to the numbered
+ * heading underneath it** \u2014 `defusedFolios` below, which is the one place this
+ * file makes a haystack entry *shorter*.
  */
 function protectedOf(text: string): string[] {
   const raw = text.normalize("NFKC").split(/\s+/);
@@ -344,7 +348,78 @@ function protectedOf(text: string): string[] {
     const third = raw[i + 2];
     if (third !== undefined) all.push(first + second + third);
   }
+  all.push(...defusedFolios(text));
   return protect(all.join(" "));
+}
+
+/**
+ * A numbered heading, as a whole token: `4.`, `16.3.`, `9.5.10.`.
+ *
+ * The trailing dot is required and it is doing work \u2014 it is most of what keeps
+ * this rule off an ordinary year. `2012` is not a numbered heading; `2012.` at
+ * the start of a line is, as far as this can tell, and that residual cost is
+ * written down under `defusedFolios`.
+ */
+const NUMBERED_HEADING = /^\d+(?:\.\d+)*\.$/u;
+
+/** How many digits of folio to try stripping. Nothing paginates past four. */
+const MAX_FOLIO_DIGITS = 4;
+
+/**
+ * **The page number the text layer welded onto the heading below it, taken back
+ * off again.**
+ *
+ * `pass0` in src/pdf.ts concatenates pdf.js text items with no separator unless
+ * the item carries `hasEOL`, and pdf.js does not set it on a folio printed on
+ * its own line. So a journal that prints the page number at the top of the page
+ * and a paper that numbers its sections three deep produce this, verbatim, from
+ * Kuhn's "A Landscape of Consciousness":
+ *
+ *     \u2026Molecular Biology 190 (2024) 28\u2013169\u240a649.5.10. Mansell's perceptual\u2026
+ *
+ * `64` is the printed folio and `9.5.10.` is the heading. `protect` above
+ * tokenises on whitespace, so the haystack holds `649.5.10` and never `9.5.10`
+ * \u2014 and a model that correctly obeys rule 6 and drops the running furniture
+ * writes a clean `9.5.10.` and is scored as having *invented* it. Eight
+ * headings on that one document, every one genuinely printed where the model
+ * put it. `protectedOf` can already *join* two tokens pdf.js split; nothing
+ * could *split* one it had merged. Confirmed twice independently on the real
+ * file \u2014 docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md
+ * \u00a7 The checker defect.
+ *
+ * **Three constraints keep this from becoming the `2012 \u2192 12` hole again**, and
+ * each is load-bearing rather than tidy:
+ *
+ * - **Line-initial only.** A folio is the first thing on its line and nothing
+ *   else is. Without this clause the very next test along breaks: the page
+ *   prints `1843\u201379`, the model writes `43\u201379`, and a free-floating digit strip
+ *   would wave it through.
+ * - **The whole token must be a numbered heading** \u2014 digits, dots, and a final
+ *   dot. `2012a)` and `1843\u201379` are not, so neither is ever a candidate.
+ * - **At most `MAX_FOLIO_DIGITS` stripped, and at least one digit left.** So
+ *   `9.8.12.` \u2014 a heading with no folio fused to it, line-initial, on the very
+ *   page where `12` was a *true* positive \u2014 yields nothing at all, because its
+ *   leading digit run is one digit long.
+ *
+ * The cost, stated because it is real: a line that begins `2012.` \u2014 a year
+ * ending a sentence exactly at a line break \u2014 would admit `12`. The folio would
+ * settle it and `pass0` does know the file page, but deriving the *printed*
+ * folio needs the running-header offset, and that is a document-level
+ * inference for one narrow case. Simplest version first; measured on Kuhn this
+ * rule adds 260 haystack entries across 142 pages and gets all ten of the
+ * verified cases right.
+ */
+function defusedFolios(text: string): string[] {
+  const out: string[] = [];
+  for (const line of text.normalize("NFKC").split("\n")) {
+    const first = line.trim().split(/\s+/)[0];
+    if (first === undefined || !NUMBERED_HEADING.test(first)) continue;
+    const run = /^\d+/u.exec(first)?.[0] ?? "";
+    for (let cut = 1; cut < run.length && cut <= MAX_FOLIO_DIGITS; cut++) {
+      out.push(first.slice(cut));
+    }
+  }
+  return out;
 }
 
 /**
