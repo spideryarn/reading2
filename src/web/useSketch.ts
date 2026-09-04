@@ -263,11 +263,30 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
  * So: one GET per article per Diagram open, and the only thing that clears the
  * text is arriving at a different article.
  */
-export function useSketchCaption(slug: string): string | null {
+export function useSketchCaption(slug: string | null): string | null {
   const [caption, setCaption] = useState<string | null>(null);
 
   useEffect(() => {
     setCaption(null);
+    /**
+     * **`null` means issue no request at all**, and it is the visitor's arm.
+     *
+     * This hook took a bare `string` until 2026-09-04 and had no `enabled`
+     * argument, because for an owner there is no purchase to gate — the
+     * reasoning is a few lines up and still holds. A visitor's diagram panel
+     * changed that: `/api/sketch/:slug` is behind the auth gate, so an
+     * anonymous mount is a 401 per diagram open and a request the public
+     * reading feature's acceptance test forbids outright.
+     *
+     * **Not "catch the 401 and carry on"**, which is what the `catch` below
+     * would have done, quietly and correctly-looking. That is the shape
+     * docs/reusable/silent-success.md is about: right answer, wrong reasoning,
+     * and it stops being the right answer the day the gate moves. Same
+     * treatment, and the same argument, as the experimental-features store —
+     * docs/project/experimental-features.md § A signed-out reader is off,
+     * because we decided.
+     */
+    if (slug === null) return;
     let live = true;
     void (async () => {
       try {

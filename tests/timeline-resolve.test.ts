@@ -310,7 +310,7 @@ describe("the panel, rendered", () => {
          its hooks outside React's render phase. */
       root.render(
         createElement(TimelinePanel, {
-          owner: owner({ timeline, ...over }),
+          access: { kind: "owner", owner: owner({ timeline, ...over }) },
           eventId: null,
           onEvent: () => {},
           found: [],

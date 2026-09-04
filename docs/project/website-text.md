@@ -107,10 +107,13 @@ forward.
 
 [`FeaturesPage.tsx`](../../src/web/FeaturesPage.tsx) at `/features`, since 2026-09-03: every mode
 with a screenshot and a sentence of intent, then the plans. Reachable signed out, like the privacy
-policy and for the same reason. The three plans are rendered by its `Plans` component on both
-pages, and **the numbers there are copy, not configuration** — the source of truth is the
+policy and for the same reason. The three plans are rendered by
+[`PlanCards.tsx`](../../src/web/PlanCards.tsx)'s `WebsitePlans` on all three pages, and **the numbers
+there are copy, not configuration** — the source of truth is the
 `billing_tiers` table ([billing.md](billing.md)), and a quota changed there has to be changed here
-by hand. The screenshots, their sizes and how they were made are in
+by hand. The cards here carry no buttons — no action is passed on either marketing page — so since
+2026-09-04 both of them put the same link under the plans, pointing at the page that can take the
+press. The screenshots, their sizes and how they were made are in
 [`src/web/shots.ts`](../../src/web/shots.ts), which `tests/landing-assets.test.ts` checks against
 the bytes on disk — and what makes one of them *good*, which is a separate question the site had
 been getting wrong, is [marketing-pages.md](marketing-pages.md).
@@ -125,14 +128,77 @@ The plan for both pages, with the simpler options passed over, is
 
 [`PricingPage.tsx`](../../src/web/PricingPage.tsx) at `/pricing`, since 2026-09-03, because Greg
 asked for an address you can send somebody who asks what it costs. Linked from the landing page
-twice — under the plans table and in the footer — and reachable signed out, more obviously than the
+twice — under the plans and in the footer — and reachable signed out, more obviously than the
 other two: a price you have to sign up to read is the thing people complain about.
 
 **It holds no numbers of its own.** It renders the same `PlanCards` component as the other two
-pages, and adds only the four things a table cannot say: that the price shown is the price charged
-with tax already in it, that a *monthly* allowance counts articles *added* and resets on the day you
-subscribed, that the free allowance is a lifetime one and so resets never, and that cancelling
-leaves you the month you paid for.
+pages, and adds only what a card cannot say — which since 2026-09-04 is an **FAQ** rather than four
+unlabelled paragraphs headed *How it works*.
+
+### It is one of the marketing pages, since 2026-09-04
+
+It was not, and that was a defect rather than a style: `/` and `/features` open with
+`className="site"` and `SiteNav`, while this was a bare `<main class="max-w-3xl">` with a *← Back*
+link and no navigation. Measured in the browser that day, its content column started at **x=360**
+where the other two start at **x=168** — the same three plans in a column that did not line up with
+the rest of the site. And because the `--site-*` custom properties are declared on `.site`, the whole
+visual language was simply unavailable here: a `site-panel` would have drawn a transparent border
+over no fill.
+
+So it now carries the same shell — `.site`, `SiteNav here="pricing"`, a hero with the glow and a real
+`h1` (it had none, and its outline began at level two), a `sr-only` *Plans* `h2` so the outline does
+not jump from the `h1` to the cards' `h3`s, and `SiteFooter variant="marketing"`. **The nav's
+*Sign in* link stays on this page** rather than jumping to `/#sign-in` the way it does from
+`/features`, and that is load-bearing rather than tidy: the buy path for a stranger is *press here,
+sign in here, come back here*, because `SignInControls` remembers the address it was standing on.
+
+**And it is drawn only for a stranger**, since the stage 2 code review. `/features` and `/pricing`
+are both mounted signed in as well, and there neither spelling of that link goes anywhere: on
+`/pricing` the panel lives in the signed-out half of the page, and `/` is the shelf. `SiteNav` takes
+a `signedIn` prop with no default so that a new caller has to answer;
+[`tests/site-nav-sign-in.test.tsx`](../../tests/site-nav-sign-in.test.tsx) mounts both pages both
+ways.
+
+### The FAQ, and whose sentences are in it
+
+Seven questions in two columns under the cards, folding in all four *How it works* paragraphs —
+what you are charged in, what a month's allowance counts and when it resets, that the free allowance
+is a lifetime one, and how cancelling works. Those four are **moved word for word**;
+[marketing-pages.md § The copy is not yours to write](marketing-pages.md#the-copy-is-not-yours-to-write)
+permits a restructure to move a sentence and not to rewrite one. The other three answers — what
+counts as an article, what happens at your limit, whether unused articles roll over — are
+agent-written, approved by Greg on 2026-09-04, and each carries a `[tissue]` marker in a source
+comment so a later dictation pass can find them
+([positioning.md § Whose words](positioning.md#whose-words)).
+
+**One of the four is no longer word for word, and the exception is worth knowing.** *"You are
+charged in your own currency"* was checked against the Stripe prices in the stage 2 code review and
+is false outside USD, GBP and EUR — those are the only currencies a tier carries, and hosted Checkout
+can only pick one the price has. The rule that a claim is checked against the code outranks the rule
+that Greg's sentence is not rewritten, because the second rule is about *voice* and this was about
+*fact*; the page now names the three currencies. The tax-inclusive half of his sentence is supported
+and is untouched. Three other sentences moved for the same reason, and the plan's log
+([260904b](../plans/260904b-pricing-page-and-public-showcase.md#log)) lists all four.
+
+**Three of those answers were checked against the admission path rather than against a doc about
+it**, because they are the kind that is easy to state backwards. A slot is reserved only where the
+request carries a URL or an upload, and settled only on a `done` ending — so a failed fetch costs
+nothing, pasting the same URL again costs a second article even though every step then skips, and
+re-running something already on your shelf is free. And **the answer about reaching your limit
+deliberately offers a subscriber no upgrade**: `canCheckout` is false while any non-terminal
+subscription exists and the hosted Portal cannot switch tiers either, so there is no Reader →
+Researcher to offer ([billing.md](billing.md)).
+
+### The one tooltip, and what it is not for
+
+The research behind the redesign gave a rule that settles Greg's *"maybe in tooltips"*: **if a number
+needs explaining to be usable, the explanation is not tooltip material.** So the allowance's
+translation — *About one on every weekday* — is printed on the card, and what goes behind a hover is
+the fine print somebody only reads once they are already suspicious: what counts as an article, and
+what a second paste or a refresh costs. It hangs off the phrase *A successfully added article* in the
+footnote under the cards, and its trigger is a `<button>` so that it opens on **tap and on focus** as
+well as on hover — a hover-only tooltip is invisible on a touchscreen, which for a sentence about
+money is close to not being there.
 
 **And since 2026-09-04 it is the page you buy on.** Greg: *"Right now, the only way to pay is from
 the /profile page, which is a bit buried and confusing."* So the Upgrade buttons moved out of
@@ -166,7 +232,7 @@ count against it. What it says instead is the rule going forwards — articles a
 count too, so cancelling hands back no fresh allowance — which is true, and is the half that
 surprises somebody. GPT Sol caught the absolute as a false statement on a sales page, 2026-09-03.
 
-**A signed-in reader is told which plan they are on**, in one line below the table, and a signed-out
+**A signed-in reader is told which plan they are on**, in one line below the cards, and a signed-out
 one is told nothing and — the part that matters — causes no request. Greg, 2026-09-03:
 
 > It should show the two pricing options, and explain the 3 free articles, and indicate what you're
@@ -189,7 +255,7 @@ where the headline alone does not answer the question Greg asked: `lapsed`, whos
 ended"* names what ended rather than what you are on and collapses "two free slots left" and "none
 left" into one sentence; a `paid` plan that is **cancelling**, which is word-for-word a renewing one
 because the end date lives only in `detail`; and `unknown`, where `detail` is what says reading is
-unaffected and to reload. `free` and a renewing `paid` keep the headline alone, because the table
+unaffected and to reload. `free` and a renewing `paid` keep the headline alone, because the cards
 just above explains them. Dropping `detail` everywhere was the first version, and GPT Sol was right
 that it failed *"indicate what you're on now"* in the state where a reader most needs the answer.
 

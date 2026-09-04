@@ -849,7 +849,14 @@ when("sharing one article", { timeout: 60_000 }, () => {
        * and the two `false`s are the half that matters — an inventory that said
        * *arc* here would name a rung of Outline this article does not have.
        */
-      available: { arc: false, tweets: true, glossary: true, ideas: true, quotes: false },
+      available: {
+        arc: false,
+        tweets: true,
+        glossary: true,
+        ideas: true,
+        quotes: false,
+        timeline: false,
+      },
     });
   });
 

@@ -2087,6 +2087,7 @@ export function shareableArtefacts(revision: {
   glossary: Glossary | null;
   ideas: Ideas | null;
   quotes: Quotes | null;
+  timeline: Timeline | null;
 }): PublicArtefacts {
   const present: Record<keyof PublicArtefacts, object | null> = {
     arc: revision.arc,
@@ -2094,6 +2095,7 @@ export function shareableArtefacts(revision: {
     glossary: revision.glossary,
     ideas: revision.ideas,
     quotes: revision.quotes,
+    timeline: revision.timeline,
   };
   return {
     arc: present.arc !== null,
@@ -2101,6 +2103,7 @@ export function shareableArtefacts(revision: {
     glossary: present.glossary !== null,
     ideas: present.ideas !== null,
     quotes: present.quotes !== null,
+    timeline: present.timeline !== null,
   };
 }
 
@@ -2615,6 +2618,7 @@ const rawPgArticleReader: ArticleReader = {
           glossary: revision.glossary as Glossary | null,
           ideas: revision.ideas as Ideas | null,
           quotes: revision.quotes as Quotes | null,
+          timeline: revision.timeline as Timeline | null,
         }),
       },
     };
