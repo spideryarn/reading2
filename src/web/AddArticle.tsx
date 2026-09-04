@@ -278,6 +278,8 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
                   id="add-url"
                   type="text"
                   inputMode="url"
+                  /* Enter submits the form this input is in, which is the add. */
+                  enterKeyHint="go"
                   autoComplete="url"
                   value={url}
                   onChange={(e) => {
@@ -394,11 +396,12 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
 
           {history.length > 0 && (
             <div className="tw:mt-4">
-              {/* The same disclosure the shelf's deleted articles wear — a chevron
-                  that turns, the hit area widened with `-ml-2` so the label stays
-                  on the section's left margin, and one height (28px) shared with
-                  every other small control on this page. See Library.tsx § Show
-                  deleted and docs/project/design-css-overview.md § Controls. */}
+              {/* The same disclosure the shelf's archived articles wear — a
+                  chevron that turns, the hit area widened with `-ml-2` so the
+                  label stays on the section's left margin, and one height (28px)
+                  shared with every other small control on this page. See
+                  Library.tsx § Show archived and
+                  docs/project/design-css-overview.md § Controls. */}
               <button
                 type="button"
                 onClick={() => setOpenHistory((v) => !v)}

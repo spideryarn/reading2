@@ -26,6 +26,8 @@ import type { ArticleSharing, PublicArtefacts, Visibility } from "../src/types.j
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { SHARING_ON, sharingConfirmBody } from "../src/messages.js";
+
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
     auth: {
@@ -207,7 +209,7 @@ describe("finding out who can read this", () => {
   it("says so when the article is already shared", async () => {
     await mount(SHARED);
 
-    expect(host.textContent).toContain("Anyone with the link can read this");
+    expect(host.textContent).toContain("Anyone can read this without signing in");
     expect(host.querySelector<HTMLInputElement>("input[readonly]")?.value).toContain(
       `/read/${SLUG}`,
     );
@@ -238,6 +240,29 @@ describe("finding out who can read this", () => {
   });
 });
 
+/**
+ * **The one word the owner-facing copy may not lose again.**
+ *
+ * `GET /api/public/library` lists every public article, so sharing stopped
+ * being a promise about who has the link
+ * (docs/plans/260904b-pricing-page-and-public-showcase.md § 1) — and the copy
+ * said otherwise for as long as it took to notice. The assertions above find
+ * the card's sentence by its prose, so a future edit that put *"anyone with the
+ * link"* back would only have to change those literals in step with it and
+ * every one of them would stay green.
+ *
+ * This is the one that would not: the switch's line and the confirmation say
+ * the article is *listed*, and neither makes reading it conditional on having
+ * been sent a link. Two constants and one fact, so it is one assertion rather
+ * than a snapshot of the copy — the wording stays free, the promise does not.
+ */
+it("tells the owner a shared article is listed, not merely reachable by link", () => {
+  for (const copy of [SHARING_ON, sharingConfirmBody("A piece")]) {
+    expect(copy).toMatch(/\blist(?:s|ed)\b/);
+    expect(copy).not.toMatch(/with the link can read/);
+  }
+});
+
 describe("turning it on", () => {
   it("will not publish until the owner confirms the rights", async () => {
     await mount(PRIVATE);
@@ -257,7 +282,7 @@ describe("turning it on", () => {
     press("Share with anyone");
 
     expect(host.textContent).toContain("A piece");
-    expect(host.textContent).toContain("anyone with the link can read it");
+    expect(host.textContent).toContain("anyone can read it without signing in");
     expect(host.textContent).toContain("cannot take back a page");
   });
 
@@ -276,7 +301,7 @@ describe("turning it on", () => {
         body: { visibility: "public", rightsConfirmed: true },
       },
     ]);
-    expect(host.textContent).toContain("Anyone with the link can read this");
+    expect(host.textContent).toContain("Anyone can read this without signing in");
   });
 
   /**
@@ -377,7 +402,7 @@ describe("the list of what goes out", () => {
     await openDialog(PRIVATE);
     const text = host.textContent ?? "";
 
-    expect(text).toContain("Anyone with the link gets these");
+    expect(text).toContain("Anyone who opens it gets these");
     /* The fixture has a glossary and quotes and nothing else, so the same
        dialog has to put those two on one side and the four missing ones on the
        other. A list that named everything, or nothing, would pass an assertion
@@ -392,7 +417,7 @@ describe("the list of what goes out", () => {
        as the owner who is about to publish. It was in the confirmation only,
        for one draft. */
     await mount(SHARED);
-    expect(host.textContent).toContain("Anyone with the link gets these");
+    expect(host.textContent).toContain("Anyone who opens it gets these");
   });
 
   /**
@@ -417,7 +442,7 @@ describe("the list of what goes out", () => {
     expect(text).toContain("Only you can read this");
     expect(text).not.toContain("We could not check");
     // And no list, rather than a list of five invented falses.
-    expect(text).not.toContain("Anyone with the link gets these");
+    expect(text).not.toContain("Anyone who opens it gets these");
   });
 
   /**
@@ -449,8 +474,8 @@ describe("the list of what goes out", () => {
     const text = host.textContent ?? "";
 
     expect(text).toContain("We could not work out what a shared link would carry");
-    expect(text).not.toContain("Share with anyone who has the link");
-    expect(text).not.toContain("Anyone with the link gets these");
+    expect(text).not.toContain("Share with anyone");
+    expect(text).not.toContain("Anyone who opens it gets these");
   });
 
   /* **Unsharing is never blocked.** Taking an article back is the safe
@@ -460,7 +485,7 @@ describe("the list of what goes out", () => {
     const { available: _dropped, ...noFlags } = SHARED;
     await mount(noFlags);
     expect(host.textContent).toContain("Stop sharing");
-    expect(host.textContent).not.toContain("Anyone with the link gets these");
+    expect(host.textContent).not.toContain("Anyone who opens it gets these");
   });
 });
 
@@ -489,7 +514,7 @@ describe("when a write does not come back cleanly", () => {
 
     release();
     await settle();
-    expect(host.textContent).toContain("Anyone with the link can read this");
+    expect(host.textContent).toContain("Anyone can read this without signing in");
   });
 
   /**
@@ -751,7 +776,7 @@ describe("turning it off", () => {
    * A failed request is not proof that nothing was written. The route writes and
    * then reads back, and a response can be lost on the way home — so the card
    * goes to "we do not know" rather than back to where it was. The same lesson
-   * Delete on this page learned on 2026-08-27.
+   * Archive on this page learned on 2026-08-27.
    *
    * **It has to beat the prop, not just the local state.** `sharing` still holds
    * what the page load said, which after a failed write is exactly the stale
@@ -765,7 +790,7 @@ describe("turning it off", () => {
     await settle();
 
     expect(host.textContent).toContain("may have");
-    expect(host.textContent).not.toContain("Anyone with the link can read this");
+    expect(host.textContent).not.toContain("Anyone can read this without signing in");
   });
 });
 
@@ -821,7 +846,7 @@ describe("what a shared link carries", () => {
   it("still says it as a list, on the shared card", async () => {
     await mount(SHARED);
 
-    expect(host.textContent).toContain("Anyone with the link gets these");
+    expect(host.textContent).toContain("Anyone who opens it gets these");
     expect(host.textContent).toContain("These stay with you");
   });
 

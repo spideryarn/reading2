@@ -28,7 +28,7 @@
  * for one screen is more work than not having it, the same call
  * docs/plans/260825a-shadcn-migration.md made about `Dialog`.
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { AUTH_EXCHANGE_FAILED, AUTH_PROVIDER_OFF, authConfirmationSent } from "../messages.js";
 import { Button } from "./components/ui/button.js";
@@ -45,6 +45,16 @@ export function SignInControls() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+
+  /**
+   * The password box, so the email box's Enter can move to it.
+   *
+   * A ref rather than `document.getElementById("signin-password")`, which is the
+   * whole document's namespace for a field this component owns and renders: two
+   * of these on one page, or any other form that ever picks the same id, and the
+   * key labelled "next" moves the focus into somebody else's box.
+   */
+  const passwordBox = useRef<HTMLInputElement>(null);
 
   /** Where we are now, so the callback can put the reader back. See auth-return.ts. */
   const remember = () => rememberReturn(location.pathname + location.search);
@@ -172,6 +182,25 @@ export function SignInControls() {
             id="signin-email"
             type="email"
             autoComplete="email"
+            /* **Next, and it really does move — always.** Enter in a field of a
+               form with a submit button submits it, so without this handler the
+               key labelled "next" would fire a sign-in the browser then refuses
+               for an empty password: a validation bubble where the reader asked
+               for the next box.
+
+               **And not only when the password is empty**, which is what it said
+               until GPT Sol's review of 2026-09-04. A password manager fills both
+               boxes before the reader touches either, so the commonest case was
+               the one where a key labelled "next" signed in instead — the label
+               would have been a lie exactly where it was read. The key says where
+               it goes and it goes there; signing in is the password field's job,
+               and the button's. */
+            enterKeyHint="next"
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              passwordBox.current?.focus();
+            }}
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -182,8 +211,11 @@ export function SignInControls() {
           </label>
           <input
             id="signin-password"
+            ref={passwordBox}
             type="password"
             autoComplete="current-password"
+            /* The last field of the form: Enter signs in. */
+            enterKeyHint="go"
             required
             minLength={8}
             value={password}

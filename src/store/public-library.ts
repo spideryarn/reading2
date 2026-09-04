@@ -2,7 +2,8 @@
  * **The shelf of public articles — the second ownerless query, and the first one
  * that enumerates.**
  *
- *     visibility = 'public' AND <readable>   order by public_at desc, slug   limit N
+ *     visibility = 'public' AND <readable> AND archived_at is null
+ *     order by public_at desc, slug   limit N
  *
  * The sibling of [`publicSlug`](public-slug.ts), and it keeps that file's
  * discipline for the same reason: nothing in this module's import graph can
@@ -74,7 +75,7 @@
  * See docs/plans/260904b-pricing-page-and-public-showcase.md § Stage 3a.
  */
 
-import { and, asc, eq, isNotNull, sql, type AnyColumn } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, sql, type AnyColumn } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { articleRevisions, articles, revisionBlocks } from "../db/schema.js";
@@ -260,6 +261,16 @@ export function publicLibraryQuery(
           sql`exists (
             select 1 from ${revisionBlocks}
             where ${revisionBlocks.revisionId} = ${articleRevisions.id})`,
+          /* **Archived means off every shelf, this one included.**
+             Visibility says whether the *link* works; archiving says whether the
+             article is *listed*. Without this clause an owner who archives a
+             shared piece loses sight of it on their own shelf while strangers go
+             on discovering it here — the asymmetry runs the wrong way round, and
+             nobody would ever see that it had. `publicSlug` is deliberately left
+             alone: a link somebody already holds keeps working, which is the
+             same promise the owner's own direct link makes
+             (docs/project/library.md). GPT Sol, 2026-09-04. */
+          isNull(articles.archivedAt),
         ),
       )
       /* **A total order, not merely a sensible one.** `public_at` can tie —

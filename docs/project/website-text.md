@@ -186,8 +186,9 @@ request carries a URL or an upload, and settled only on a `done` ending — so a
 nothing, pasting the same URL again costs a second article even though every step then skips, and
 re-running something already on your shelf is free. And **the answer about reaching your limit
 deliberately offers a subscriber no upgrade**: `canCheckout` is false while any non-terminal
-subscription exists and the hosted Portal cannot switch tiers either, so there is no Reader →
-Researcher to offer ([billing.md](billing.md)).
+subscription exists, so `/pricing` draws a paying reader no plan button and the page has no upgrade
+to point at. The hosted Portal *has* been able to switch tiers since 2026-09-04, so the dead end is
+now ours rather than Stripe's — [billing.md](billing.md#reader-researcher-open-at-stripe-closed-in-our-own-ui).
 
 ### The one tooltip, and what it is not for
 

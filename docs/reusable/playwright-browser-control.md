@@ -264,9 +264,11 @@ await page.screenshot({ path: "/tmp/s.png", mask: [page.locator(".timestamp")] }
 ```
 
 Always pass an explicit absolute `path` rather than relying on the runner's failure-screenshot
-location. `animations: "disabled"` freezes CSS and Web Animations first — without it, a capture taken
-mid-transition shows an element at 30% opacity and reads as "not there". `caret: "hide"` removes the
-blinking cursor, which is otherwise a one-pixel diff on every comparison.
+location — **a relative one is written to the cwd, which is the repo checkout**, so the PNG lands
+next to `package.json` as an untracked file one `git add` away from being committed, and a delegated
+screenshot agent will not notice. `animations: "disabled"` freezes CSS and Web Animations first —
+without it, a capture taken mid-transition shows an element at 30% opacity and reads as "not there".
+`caret: "hide"` removes the blinking cursor, which is otherwise a one-pixel diff on every comparison.
 
 ### Console, errors, dialogs
 

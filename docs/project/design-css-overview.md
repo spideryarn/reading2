@@ -167,7 +167,20 @@ chrome.** A gist in the column beside a paragraph is now the same face as the pa
 
 Two numbers from that research doc *are* worth keeping, because they are independently attested:
 
-- **65ch**, the reading measure — which the previous app really did ship, as `max-w-[65ch]`.
+- **65ch**, the reading measure — which the previous app really did ship, as `max-w-[65ch]`. Since
+  2026-09-04 it also **sits in the middle of whatever cell it is given**, in every mode and at every
+  width — Greg: *"Always centre the Text view within its column when visible, no matter which mode
+  is active."* Four rules carry it and each is commented where it lives, in
+  [`styles.css`](../../src/web/styles.css): § text centres `.prose`; § the gutter moves the reader's
+  icon column the same distance; § the title over the column puts the masthead on the prose's own
+  left edge wherever the two share a box; and § the header over the article's column does the same
+  for `Text verbatim`, which is the only column heading that moves — the gist columns are not
+  centred and theirs are right where they are. **Everything that names the text follows it; nothing
+  that names the row does** — the search bar and `row-active` stay at the cell's edge on purpose,
+  and the footnotes opt out as a block, both for reasons given in place. All four are self-limiting:
+  below about 900px the measure is wider than the cell and none of them does anything. The separate
+  mechanism that centres the whole *table* when the article is the only thing on the page is
+  § plain, centred, and `PROSE_ALONE_MAX_REM` in [`layout.ts`](../../src/web/layout.ts).
 - **Space above a heading exceeds space below it** — `mt-6` against `mb-4` in their document
   viewer. We had lost this; every block here is a table row and every row had the same padding, so
   a heading sat exactly halfway between the section it ended and the one it introduced. It is back,
@@ -374,7 +387,7 @@ list page now agree, and agreeing is the whole of it:
 
 | | height | radius |
 |---|---|---|
-| sort chips, Unread, Undo, Show deleted, card icon buttons, the view toggle | **28px** (`h-7` / `size-7`) | pill for state, `rounded-md` (8px) otherwise |
+| sort chips, Unread, Undo, Show archived, card icon buttons, the view toggle | **28px** (`h-7` / `size-7`) | pill for state, `rounded-md` (8px) otherwise |
 | the view toggle's two halves | 24px (`size-6`) inside the 28px box | `rounded-sm` (6px) = outer 8 − 2px padding |
 | shadcn `size="sm"` | 32px | `rounded-md` |
 | shadcn `size="default"`, and the inputs beside it | 36px | `rounded-md` |
@@ -505,17 +518,37 @@ Three things to know before touching any of it:
 The plan, the review that found three of these, and the install path they exist for:
 [docs/plans/260828av-mobile-screen-real-estate.md](../plans/260828av-mobile-screen-real-estate.md).
 
+## The stacking order, which is real even though it is not a scale
+
+**Do not read a number off this list and reuse it.** The values are not a scale and were not
+designed; what is load-bearing is the *order*, and only in a few places where one thing has to clear
+another. Those places, with the reason:
+
+- **The tooltip is frontmost, at 100.** A tooltip is always about the thing you are pointing at, so
+  anything in front of it is a hover that appears to do nothing. It has to clear the spine and both
+  sticky bars.
+- **The dock and its drawer sit above the mode band and the spine** (96/95, scrim 92), because the
+  drawer is a surface you open *over* the reading view. The offline strip is 97, above the dock,
+  since a strip the dock covers cannot tell you the thing it exists to tell you.
+- **The spine is 45 and the mode band 44**, both above the reading column's own sticky furniture.
+- Dialogs — comment, chat, annotate — share 70.
+
+Two things that deliberately escape all of this: the figure **lightbox** and the **feedback dialog**
+are native modal `<dialog>` elements in the browser's top layer, which is above every z-index on the
+page by definition. That is the cheapest answer available for anything that must cover *everything*,
+and it is worth reaching for again rather than minting a bigger number.
+
+The full inventory is 28 declarations from 0 to 100, counted on 2026-09-04 with
+`grep -nE '^\s*z-index:' src/web/styles.css` — a dated example rather than a fact to maintain here.
+Run it before assuming a gap is free.
+
 ## What is not written down yet
 
 The honest list. Each of these currently lives only as values in `styles.css`, and someone will
 eventually have to decide whether they are a system or an accident:
 
-- **The z-index budget.** Nine values between 1 and 80, and their ordering is real — the spine is
-  45, the tooltip 80 *because* it must clear the spine and both sticky bars. Written as a comment
-  on one line of `styles.css`, nowhere else. This is the most likely thing to break next. The one
-  thing that had to cover *everything* — the figure lightbox — sidesteps it entirely by being a
-  native modal `<dialog>` in the top layer, which is the cheapest answer available and is worth
-  reaching for again.
+- **The z-index budget.** Still not a system, but no longer unwritten — see
+  [the stacking order](#the-stacking-order-which-is-real-even-though-it-is-not-a-scale) below.
 - **Spacing.** No scale. `rem` values chosen per rule. Control *heights* on a list page are
   settled — see [Controls](#controls-one-height-one-radius-one-hover) above — but that is one row
   of one page agreeing with itself, not a scale, and it should not be read as one.

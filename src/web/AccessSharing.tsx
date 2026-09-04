@@ -517,8 +517,14 @@ export function AccessSharing({
                 {/* `outline` and **not** `destructive`, which is the tint the
                     eye reaches for on a button that takes something away. It
                     would be the wrong sentence: this is the safe direction, and
-                    the destructive red on this page belongs to Delete, which is
-                    the one control here that loses work. */}
+                    every direction on this page that is not is the *other* one
+                    — publishing, which cannot be un-rung.
+
+                    This used to say the red belonged to Delete, "the one
+                    control here that loses work". It never did: that button
+                    archives, it lost nothing, and on 2026-09-04 it became
+                    Archive and gave the red back. There is no destructive tint
+                    on this page now. */}
                 <Button type="button" variant="outline" size="sm" onClick={() => void set("private")}>
                   <Link2Off size={14} />
                   Stop sharing
@@ -565,7 +571,14 @@ export function AccessSharing({
                   sideways. The old unstyled control wrapped, so this would have
                   been a regression rather than an old bug. Measured by GPT Sol,
                   2026-09-04; 390px, which is where I checked first, has the
-                  room and hides it. */}
+                  room and hides it.
+
+                  **The label lost *"who has the link"* on 2026-09-04**, with
+                  the rest of the link-only copy — a public article is listed
+                  now, so the link is one way in rather than the way in
+                  (src/messages.ts § SHARING_ON). The wrap guard stays: it was
+                  measured against the longer label and costs nothing, and the
+                  next word added here would need it again. */}
               <Button
                 type="button"
                 variant="outline"
@@ -574,7 +587,7 @@ export function AccessSharing({
                 onClick={() => setConfirming(true)}
               >
                 <Globe size={14} />
-                Share with anyone who has the link…
+                Share with anyone…
               </Button>
             </Tooltip>
           )}

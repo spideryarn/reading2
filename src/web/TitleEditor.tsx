@@ -87,6 +87,10 @@ export function TitleEditor({
         ref={ref}
         value={value}
         aria-label="Title"
+        /* Enter submits the form above, which saves the rename. The hint below
+           says so in words for a reader with a keyboard; this says it on the
+           key for a reader with a thumb. */
+        enterKeyHint="done"
         aria-describedby={hintId}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {

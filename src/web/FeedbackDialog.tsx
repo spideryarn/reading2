@@ -104,13 +104,14 @@ import {
   type FeedbackKind,
 } from "../types.js";
 import type { FeedbackDiagnosticsV1 } from "../feedback-payload.js";
+/** The stamp the release and the source maps went up under, if this is a build. */
+import { buildCommit } from "./build-stamp.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { collectFeedbackDiagnostics } from "./feedback-diagnostics.js";
 import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./feedback-screenshot.js";
 import { apiFetch, failure } from "./lib/api.js";
 import { useDictationField } from "./useDictationField.js";
-
-declare const __SPIDERYARN_BUILD_COMMIT__: string;
+import { useVisualViewport } from "./useVisualViewport.js";
 
 /** Where the reader is: the address bar, and the article if there is one. */
 export interface FeedbackWhere {
@@ -259,11 +260,6 @@ function reportBody(input: {
     diagnostics: input.diagnostics,
     screenshot: input.screenshot,
   };
-}
-
-/** The stamp the release and the source maps went up under, if this is a build. */
-function buildCommit(): string | null {
-  return typeof __SPIDERYARN_BUILD_COMMIT__ === "string" ? __SPIDERYARN_BUILD_COMMIT__ : null;
 }
 
 export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
@@ -474,6 +470,17 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
   const dictationBusy = dictate.dictation.armed || dictate.readOnly;
 
   /**
+   * **What the reader can see of the screen, while this is on it.**
+   *
+   * Only while it is open: a shut dialog listening to the viewport is two
+   * listeners on every page of the app for a box nobody is looking at. Opening
+   * takes the numbers afresh, so a dialog opened with the keyboard already up
+   * is placed correctly on its first paint rather than on the first event
+   * after it. useVisualViewport says why the CSS alone is not enough on iOS.
+   */
+  const visible = useVisualViewport(open);
+
+  /**
    * **Shutting the dialog stops the microphone.**
    *
    * This component is mounted for the whole life of the page — FeedbackButton
@@ -598,6 +605,29 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
       ref={ref}
       className="fb-dialog"
       aria-label="Feedback"
+      /**
+       * **The box the reader can see, rather than the one CSS believes in.**
+       *
+       * `inset: 0` in the stylesheet is the layout viewport, and on iOS the
+       * keyboard does not touch that — it pans a smaller *visual* viewport over
+       * it, so a centred dialog is centred on a screen half of which is under
+       * the keys. These two numbers move it back: start where the visible strip
+       * starts, and be exactly as tall as it is. `.fb-panel`'s `max-height: 90%`
+       * then means 90% of what is visible, which is what `90dvh` was trying to
+       * say.
+       *
+       * `bottom: auto` because the stylesheet's `inset: 0` set it: with `top`,
+       * `bottom` and `height` all given, the browser drops one of them, and
+       * which one is not a thing to leave to a rule of precedence.
+       *
+       * When `visualViewport` is missing — jsdom, an old browser — this is
+       * `undefined` and the stylesheet stands untouched. See useVisualViewport.
+       */
+      style={
+        visible === null
+          ? undefined
+          : { top: `${visible.offsetTop}px`, height: `${visible.height}px`, bottom: "auto" }
+      }
       onClose={() => {
         if (closingOurselves.current) return;
         onClose();
@@ -671,187 +701,195 @@ export function FeedbackDialog({ open, onClose, readerEmail, where }: Props) {
           </button>
         </div>
 
-        {/* **The thanks goes first**, because it is the reason to keep reading
-            rather than a sign-off. Greg asked for "some kind of indication of our
-            appreciation for them making the effort", and it is true in a way
-            that is worth a reader knowing: most of what goes wrong in this app
-            never throws, so nothing tells us about it unless a person does. */}
-        <p className="fb-thanks">
-          Thank you — telling us is genuinely the most useful thing you can do
-          with two minutes here.
-        </p>
+        {/* **Only this scrolls**, so the buttons at the foot cannot be
+            scrolled away — the shape `.cmt-dialog` already uses, and the
+            reason it matters here is a phone: with the soft keyboard up the
+            panel has half a screen to live in, and Send has to be in it.
+            docs/project/feedback.md § The keyboard, and the button under it. */}
+        <div className="fb-scroll">
+          {/* **The thanks goes first**, because it is the reason to keep reading
+              rather than a sign-off. Greg asked for "some kind of indication of our
+              appreciation for them making the effort", and it is true in a way
+              that is worth a reader knowing: most of what goes wrong in this app
+              never throws, so nothing tells us about it unless a person does. */}
+          <p className="fb-thanks">
+            Thank you — telling us is genuinely the most useful thing you can do
+            with two minutes here.
+          </p>
 
-        <p className="fb-intro">
-          A rough note is worth far more than nothing.
-          {readerEmail ? (
-            <>
-              {" "}
-              It is sent as <span className="fb-email">{readerEmail}</span>, so we can reply.
-            </>
-          ) : null}
-        </p>
-
-        {/* **Two buttons rather than radios**, so that pressing the pressed one
-            puts it back to unset — Greg asked for the toggle to start on
-            neither, and a native radio group cannot be un-picked. `aria-pressed`
-            is what says so to a screen reader, and the `<legend>` is what stops
-            two toggles standing there unnamed. */}
-        <fieldset className="fb-kind">
-          <legend className="fb-kind-legend">Is this…</legend>
-          <KindButton
-            kind="problem"
-            chosen={kind}
-            onChoose={setKind}
-            icon={<Bug size={14} aria-hidden="true" />}
-          />
-          <KindButton
-            kind="suggestion"
-            chosen={kind}
-            onChoose={setKind}
-            icon={<Lightbulb size={14} aria-hidden="true" />}
-          />
-        </fieldset>
-
-        <label className="fb-field">
-          <span className="fb-label">What happened, or what would you like?</span>
-          {/* **The three asks, said out loud, and louder once the reader has
-              said this is a problem.** They used to be three boxes, then they
-              were hidden behind "Not sure what to write?" — and a hint nobody
-              opens is a hint nobody reads. See `KindHint` for the three
-              wordings and whose instruction each one answers. */}
-          <KindHint kind={kind} />
-          <textarea
-            ref={box}
-            className="fb-input fb-body"
-            rows={6}
-            value={body}
-            readOnly={dictate.readOnly}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="In your own words…"
-          />
-        </label>
-
-        <div className="fb-under-box">
-          {/* The microphone, for a reader who would rather say it than type it.
-              Hidden entirely where the browser cannot open one, the way every
-              other box in the app does it. */}
-          {dictate.dictation.supported && (
-            <DictationButton
-              dictation={dictate.dictation}
-              toggle={dictate.toggle}
-              disabled={stage.kind === "sending"}
-            />
-          )}
-          {/* **"Not sure what to write?" used to open here**, and it is gone —
-              Greg, 2026-09-04: *"we can get rid of not sure what to write
-              because no one will click that."* Its guidance is in `KindHint`
-              now, on screen without a click. It was a disclosure rather than the
-              tooltip Greg first suggested because this dialog is a modal
-              `<dialog>` in the top layer and the house tooltip portals to
-              `document.body`, underneath it — worth keeping written down, since
-              the next person to want help text here will reach for a tooltip
-              too. */}
-        </div>
-        <DictationStrip dictation={dictate.dictation} />
-
-        {over ? (
-          <span className="fb-over">
-            {body.length} characters — the limit is {MAX_FEEDBACK_ANSWER_CHARS}.
-          </span>
-        ) : null}
-
-        <div className="fb-shot">
-          <span className="fb-shot-label">Screenshot (optional)</span>
-          {shot ? (
-            <div className="fb-shot-have">
-              <img
-                className="fb-shot-thumb"
-                src={`data:image/png;base64,${shot.base64}`}
-                alt="The screenshot you attached"
-              />
-              <span className="fb-shot-facts">
-                {shot.width}×{shot.height}, {Math.round(shot.bytes / 1024)} KB
-              </span>
-              <button type="button" className="fb-shot-drop" onClick={() => setShot(null)}>
-                Remove
-              </button>
-            </div>
-          ) : (
-            <label className="fb-shot-pick">
-              {/* Three ways in, because the reader's screenshot is already on
-                  their clipboard nine times out of ten and asking them to save
-                  it to a file first would lose most of them. */}
-              <span>Paste it here, drop it in, or</span>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void takeFile(file);
-                  e.target.value = "";
-                }}
-              />
-            </label>
-          )}
-          {shotProblem ? <p className="fb-shot-problem">{shotProblem}</p> : null}
-        </div>
-
-        <label className="fb-consent">
-          <input
-            type="checkbox"
-            checked={consented}
-            onChange={(e) => setConsented(e.target.checked)}
-          />
-          <span>
-            <strong>Send extra diagnostics.</strong> The last few requests this page made to us and
-            how they went, the names of any errors, which article and passages you were looking at,
-            and facts about your browser and screen size. <em>Never</em> the article's text, your
-            notes, or anything you have typed into a search box.
-          </span>
-        </label>
-
-        {stage.kind === "failed" ? (
-          <div className="fb-failed" role="alert">
-            <p>{stage.message}</p>
-            {/* **Copy, and somewhere to put it.** The panel had only the Copy
-                button until GPT Sol's review on 2026-09-01, while the sentence
-                beside it said to send the report by email — so at the one moment
-                the app holds the only copy of something a person wrote, it told
-                them to email it and did not say to whom. The address is
-                `ADMIN_EMAIL`, the same constant that decides who sees /admin, so
-                there is one answer to "who runs this" rather than two.
-
-                The subject carries the report id: if the row *did* land and only
-                the reply was lost, the email and the row can still be matched
-                up. */}
-            <div className="fb-failed-outs">
-              <button type="button" className="fb-copy" onClick={copy}>
-                <Copy size={14} />
-                {copied ? "Copied" : "Copy the report"}
-              </button>
-              <a
-                className="fb-copy"
-                href={`mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(
-                  `Spideryarn feedback ${reportId}`,
-                )}`}
-              >
-                <Mail size={14} />
-                Email it to {ADMIN_EMAIL}
-              </a>
-            </div>
-            {/* Clipboard access can be refused outright — a permissions policy,
-                a non-secure context, a browser that wants a user gesture it did
-                not see. Saying so matters more here than anywhere else, because
-                a reader who believes they have copied their words and has not is
-                one Escape away from losing them. */}
-            {copyFailed ? (
-              <p className="fb-shot-problem">
-                Your browser would not let us reach the clipboard. Select the text
-                in the box above and copy it by hand.
-              </p>
+          <p className="fb-intro">
+            A rough note is worth far more than nothing.
+            {readerEmail ? (
+              <>
+                {" "}
+                It is sent as <span className="fb-email">{readerEmail}</span>, so we can reply.
+              </>
             ) : null}
+          </p>
+
+          {/* **Two buttons rather than radios**, so that pressing the pressed one
+              puts it back to unset — Greg asked for the toggle to start on
+              neither, and a native radio group cannot be un-picked. `aria-pressed`
+              is what says so to a screen reader, and the `<legend>` is what stops
+              two toggles standing there unnamed. */}
+          <fieldset className="fb-kind">
+            <legend className="fb-kind-legend">Is this…</legend>
+            <KindButton
+              kind="problem"
+              chosen={kind}
+              onChoose={setKind}
+              icon={<Bug size={14} aria-hidden="true" />}
+            />
+            <KindButton
+              kind="suggestion"
+              chosen={kind}
+              onChoose={setKind}
+              icon={<Lightbulb size={14} aria-hidden="true" />}
+            />
+          </fieldset>
+
+          <label className="fb-field">
+            <span className="fb-label">What happened, or what would you like?</span>
+            {/* **The three asks, said out loud, and louder once the reader has
+                said this is a problem.** They used to be three boxes, then they
+                were hidden behind "Not sure what to write?" — and a hint nobody
+                opens is a hint nobody reads. See `KindHint` for the three
+                wordings and whose instruction each one answers. */}
+            <KindHint kind={kind} />
+            <textarea
+              ref={box}
+              className="fb-input fb-body"
+              rows={6}
+              value={body}
+              readOnly={dictate.readOnly}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="In your own words…"
+            />
+          </label>
+
+          <div className="fb-under-box">
+            {/* The microphone, for a reader who would rather say it than type it.
+                Hidden entirely where the browser cannot open one, the way every
+                other box in the app does it. */}
+            {dictate.dictation.supported && (
+              <DictationButton
+                dictation={dictate.dictation}
+                toggle={dictate.toggle}
+                disabled={stage.kind === "sending"}
+              />
+            )}
+            {/* **"Not sure what to write?" used to open here**, and it is gone —
+                Greg, 2026-09-04: *"we can get rid of not sure what to write
+                because no one will click that."* Its guidance is in `KindHint`
+                now, on screen without a click. It was a disclosure rather than the
+                tooltip Greg first suggested because this dialog is a modal
+                `<dialog>` in the top layer and the house tooltip portals to
+                `document.body`, underneath it — worth keeping written down, since
+                the next person to want help text here will reach for a tooltip
+                too. */}
           </div>
-        ) : null}
+          <DictationStrip dictation={dictate.dictation} />
+
+          {over ? (
+            <span className="fb-over">
+              {body.length} characters — the limit is {MAX_FEEDBACK_ANSWER_CHARS}.
+            </span>
+          ) : null}
+
+          <div className="fb-shot">
+            <span className="fb-shot-label">Screenshot (optional)</span>
+            {shot ? (
+              <div className="fb-shot-have">
+                <img
+                  className="fb-shot-thumb"
+                  src={`data:image/png;base64,${shot.base64}`}
+                  alt="The screenshot you attached"
+                />
+                <span className="fb-shot-facts">
+                  {shot.width}×{shot.height}, {Math.round(shot.bytes / 1024)} KB
+                </span>
+                <button type="button" className="fb-shot-drop" onClick={() => setShot(null)}>
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <label className="fb-shot-pick">
+                {/* Three ways in, because the reader's screenshot is already on
+                    their clipboard nine times out of ten and asking them to save
+                    it to a file first would lose most of them. */}
+                <span>Paste it here, drop it in, or</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void takeFile(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            )}
+            {shotProblem ? <p className="fb-shot-problem">{shotProblem}</p> : null}
+          </div>
+
+          <label className="fb-consent">
+            <input
+              type="checkbox"
+              checked={consented}
+              onChange={(e) => setConsented(e.target.checked)}
+            />
+            <span>
+              <strong>Send extra diagnostics.</strong> The last few requests this page made to us and
+              how they went, the names of any errors, which article and passages you were looking at,
+              and facts about your browser and screen size. <em>Never</em> the article's text, your
+              notes, or anything you have typed into a search box.
+            </span>
+          </label>
+
+          {stage.kind === "failed" ? (
+            <div className="fb-failed" role="alert">
+              <p>{stage.message}</p>
+              {/* **Copy, and somewhere to put it.** The panel had only the Copy
+                  button until GPT Sol's review on 2026-09-01, while the sentence
+                  beside it said to send the report by email — so at the one moment
+                  the app holds the only copy of something a person wrote, it told
+                  them to email it and did not say to whom. The address is
+                  `ADMIN_EMAIL`, the same constant that decides who sees /admin, so
+                  there is one answer to "who runs this" rather than two.
+
+                  The subject carries the report id: if the row *did* land and only
+                  the reply was lost, the email and the row can still be matched
+                  up. */}
+              <div className="fb-failed-outs">
+                <button type="button" className="fb-copy" onClick={copy}>
+                  <Copy size={14} />
+                  {copied ? "Copied" : "Copy the report"}
+                </button>
+                <a
+                  className="fb-copy"
+                  href={`mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(
+                    `Spideryarn feedback ${reportId}`,
+                  )}`}
+                >
+                  <Mail size={14} />
+                  Email it to {ADMIN_EMAIL}
+                </a>
+              </div>
+              {/* Clipboard access can be refused outright — a permissions policy,
+                  a non-secure context, a browser that wants a user gesture it did
+                  not see. Saying so matters more here than anywhere else, because
+                  a reader who believes they have copied their words and has not is
+                  one Escape away from losing them. */}
+              {copyFailed ? (
+                <p className="fb-shot-problem">
+                  Your browser would not let us reach the clipboard. Select the text
+                  in the box above and copy it by hand.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+        </div>
 
         <div className="fb-actions">
           <button type="button" className="fb-cancel" onClick={onClose}>

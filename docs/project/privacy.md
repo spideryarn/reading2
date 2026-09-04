@@ -38,8 +38,9 @@ Asked, on the day, because none of them could be read off the code:
    human on it — but there are paying readers as of 2026-09-03, so the condition it was waiting on
    has been met. It is the first thing to change.
 2. **Deletion and export**: *"email us and we'll do it"*. True today — there is no
-   account-deletion endpoint, only per-article delete — and the page says so in those words rather
-   than implying a button. Build the button and this paragraph changes.
+   account-deletion endpoint, and no per-article delete either: the shelf's button archives, and
+   since 2026-09-04 it says so — and the page says all of that in those words rather than implying
+   a button. Build the button and this paragraph changes.
 3. **Whether we read reader content**: yes, and the page says so plainly. There is an
    administrator's view across all owners ([admin.md](admin.md)), debugging a reader's broken
    article means looking at it, and a reader discovering that for themselves is far worse than
@@ -60,10 +61,12 @@ does something else.
 
 The four that mattered:
 
-- **"Delete an article and it goes" was false.** The Delete button calls `shelf.archive`
+- **"Delete an article and it goes" was false.** The button called `shelf.archive`
   ([`ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx)), which sets `archived_at` and destroys nothing.
   Found by reading the button rather than the sentence, which is the only way it could have been
-  found. The page now says what the button really does and offers erasure by email.
+  found. The page said what the button really did and offered erasure by email — and on 2026-09-04
+  the button itself was renamed to **Archive**, so the page no longer has to explain a word away
+  ([library.md](library.md#this-section-was-called-delete-means-archive-and-that-was-the-bug)).
 - **The feedback tick-box gates diagnostics, not the screenshot.** A pasted screenshot is its own
   consent and is sent whether or not the box is ticked — [`src/db/schema.ts`](../../src/db/schema.ts)
   § `feedback_diagnostics_consented` says so in as many words. The page had merged the two.
@@ -196,8 +199,12 @@ these moves:
   rather than a blanket promise it could not keep — [ai-gateway.md § A key is not
   access](ai-gateway.md#a-key-is-not-access-and-the-difference-is-invisible-until-a-reader-finds-it)
 - **account deletion** or **export** grows a button, which changes decision 2 above
-- **what the Delete button does** — it archives, and the page says so; when a real delete or an
-  account-deletion path is built, that section is the first thing to rewrite
+- **what the Archive button does** — it archives, it is called Archive since 2026-09-04, and the
+  page says so; when a real delete or an account-deletion path is built, that section is the first
+  thing to rewrite. The page also says what archiving does to an article that was *shared*: it drops
+  out of the public listing (`publicLibraryQuery` filters `archived_at`) and the link keeps working,
+  which is [library.md](library.md#archive-and-undo-is-the-confirmation)'s split between listing and
+  access. If `publicSlug` ever starts filtering too, that sentence is wrong
 - what actually survives a delete — the page names three kinds of thing, and both were checked against the
   schema rather than assumed: `raw_sources` has no lifecycle at all (nothing deletes a row from it,
   and the bytes are content-addressed, so two readers who add the same document share one object),

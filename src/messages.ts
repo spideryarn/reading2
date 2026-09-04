@@ -2417,8 +2417,25 @@ export const NOT_FOUND_TO_HOME = "Go to the home page";
 /** The switch, off. */
 export const SHARING_OFF = "Only you can read this.";
 
-/** The switch, on. */
-export const SHARING_ON = "Anyone with the link can read this, without signing in.";
+/**
+ * **The switch, on — and the promise it makes changed on 2026-09-04.**
+ *
+ * It used to say *"Anyone with the link can read this, without signing in."*,
+ * which is a promise about **reachability by link**. `GET /api/public/library`
+ * now lists every public article, so a shared article can be found by somebody
+ * who was never sent one, and the old sentence was untrue rather than merely
+ * incomplete. Greg chose to list every public article and change the promise
+ * rather than narrow the listing:
+ * docs/plans/260904b-pricing-page-and-public-showcase.md § 1.
+ *
+ * **It stays one short sentence because it is three surfaces**, not one — the
+ * sharing card's line, the shelf badge's hover (`SHARING_BADGE`), and half of
+ * the masthead's mark (`SHARING_MARK_PUBLIC`, which appends *"Change who can
+ * read it."*). So the listing is a clause inside the existing sentence and not
+ * a second sentence after it: a badge tooltip and a link's description have to
+ * read as one voice, and two sentences read as a correction of the first.
+ */
+export const SHARING_ON = "Anyone can read this without signing in, and it's listed publicly.";
 
 /**
  * **The three tooltips on the three controls**, and the first one is the one
@@ -2438,6 +2455,13 @@ export const SHARING_ON = "Anyone with the link can read this, without signing i
  * is the same distinction from the other side: `Stop sharing` refuses the next
  * request and nothing more, and `Copy` puts an address on the clipboard without
  * changing anything at all.
+ *
+ * **`SHARING_COPY_TIP` lost the words *"by anyone who has this address"* on
+ * 2026-09-04.** They were there to make the point that copying changes nothing,
+ * and once a public article is listed (`SHARING_ON`) they read instead as a
+ * claim about *who can reach it* — the one thing on this card that is no longer
+ * true. The point survives; the clause that had quietly become a promise does
+ * not.
  */
 export const SHARING_OPEN_TIP =
   "Nothing goes out yet. This opens a list of exactly what a visitor would get, and asks you to " +
@@ -2451,7 +2475,7 @@ export const SHARING_STOP_TIP =
 /** @see SHARING_OPEN_TIP */
 export const SHARING_COPY_TIP =
   "Puts the link on your clipboard. Copying it shares nothing on its own — the article is already " +
-  "readable by anyone who has this address.";
+  "readable without it.";
 
 /**
  * **The same fact, small enough for a corner of a card on the shelf.**
@@ -2459,7 +2483,7 @@ export const SHARING_COPY_TIP =
  * The owner's own word for it — the sharing card says *"Shared since …"* — and
  * deliberately not `VIEW_ONLY` above, which is the *visitor's* side of this one
  * fact and says something else entirely: that one means *you may not change
- * this*, this one means *anyone with the link can read this*. Collapsing them
+ * this*, this one means *anyone can read this, and it is listed*. Collapsing them
  * into one word would put the visitor's sentence on the owner's shelf.
  *
  * Only ever drawn on a shared article. There is no private twin, because the
@@ -2609,6 +2633,13 @@ export const SHARED_LINK_CARRIES =
  * describes revocation purely as the next request being refused. Saying it
  * plainly is going further than the precedent, deliberately, and it is recorded
  * as a decision rather than left to look like a default.
+ *
+ * **Deliberately unchanged when the listing landed** (2026-09-04). Being listed
+ * and then delisted is the fact this sentence already covers: unsharing makes
+ * the next request — for the article or for the list it appeared in — refuse,
+ * and cannot reach a page a browser already has. Naming the list here would add
+ * a second, weaker way of saying the same thing on the card that can least
+ * afford two.
  * docs/research/260828a-public-access-how-others-do-it.md.
  */
 export const SHARING_CANNOT_UNRING =
@@ -2625,11 +2656,27 @@ export const SHARING_CONFIRM_TITLE = "Share the full text of this article?";
  * **somebody else's article**, extracted from a page they wrote, so the rights
  * question is ours and not theirs and the norm does not transfer.
  * docs/plans/260827ai-public-read-only-access.md § Rights.
+ *
+ * **It says the article will be found, and lists nothing** — 2026-09-04, both
+ * halves deliberate.
+ *
+ * *Found*, because "anyone with the link" was the whole of what an owner was
+ * being asked to agree to and it is not the whole of it any more: the article
+ * joins a public listing, so somebody who was never sent the link can arrive at
+ * it. That is the fact a confirmation exists to put in front of somebody.
+ *
+ * *Nothing enumerated*, because the `Inventory` drawn directly beneath this
+ * paragraph is derived from the modes (web/shared-inventory.ts) and cannot fall
+ * behind them, while a prose list beside it goes stale the day another artefact
+ * starts being shared — saved searches are one stage away, and nobody re-reads
+ * a confirmation dialog when adding a row. PrivacyPage.tsx promises *"The
+ * sharing card lists exactly what will go out before you turn it on"*, and it
+ * is the inventory that keeps that true.
  */
 export function sharingConfirmBody(title: string): string {
   return (
-    `This puts the whole extracted text of “${title}” where anyone with the link can read it, ` +
-    "without signing in."
+    `This puts the whole extracted text of “${title}” where anyone can read it without ` +
+    "signing in, and lists it publicly — so somebody who was never sent the link can find it."
   );
 }
 
@@ -2818,8 +2865,18 @@ export const SHARING_INVENTORY_UNKNOWN =
   "We could not work out what a shared link would carry for this article, so sharing is not " +
   "offered here — reload the page to try again. Nothing has been changed.";
 
-/** The three columns, and the sentence under each. */
-export const SHARED_HEADING = "Anyone with the link gets these";
+/**
+ * The three columns, and the sentence under each.
+ *
+ * **`SHARED_HEADING` lost *"with the link"* on 2026-09-04**, and it was the last
+ * link-shaped phrase left in the owner's dialog. It sat directly under
+ * `sharingConfirmBody`, which now says the article is listed publicly and can be
+ * found by somebody who was never sent the link — so the heading contradicted
+ * the paragraph above it on the one card where a state that looks wrong is worth
+ * most. *Opens* rather than *reads*, because the column is about what arrives
+ * with the page rather than about how much of it anybody gets through.
+ */
+export const SHARED_HEADING = "Anyone who opens it gets these";
 /**
  * **And none of it can spend your money** — the sentence that came back on
  * 2026-09-04, having been dropped on 2026-09-02.
@@ -2837,6 +2894,10 @@ export const SHARED_HEADING = "Anyone with the link gets these";
  * every mode. So this is not a promise about intent, it is a statement of what
  * the suite refuses to let change — which is exactly what the deleted note was
  * not.
+ *
+ * **It reads doubly true now that the article is listed rather than only
+ * linked** (`SHARING_ON`, above): the reader who finds this piece was never
+ * sent anything by anybody, and they still cannot spend a penny of the owner's.
  */
 export const SHARED_NOTE =
   "Reading any of this is free: nothing a visitor does can spend a model call, and nothing they " +

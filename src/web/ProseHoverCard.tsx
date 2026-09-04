@@ -253,8 +253,9 @@ export function ProseHoverCard({
        **Keyed on `target="_blank"`, not on the href**, and that is the honest
        spelling: this rule is "a link that is about to take you out of the app
        reveals itself first", and the attribute is exactly the set of links that
-       do. Only our own sanitiser can write one (src/web/sanitize.ts), so a
-       publisher cannot opt a link into or out of this.
+       do. Only our own ingress can write one — the sanitiser strips the
+       author's, and src/web/external-links.ts writes ours immediately after —
+       so a publisher cannot opt a link into or out of this.
 
        **A glossary term inside a link still wins**, and nothing here had to be
        written to make it so: `closest` returns the innermost match, so a tap on
