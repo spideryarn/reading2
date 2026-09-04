@@ -276,12 +276,47 @@
      arithmetic (the column widths, `minWidth`, and the two breakpoints at the
      end of this file), so px is the unit it belongs in. GPT Sol, 2026-08-28. */
   --spine-w: 12px;
+  /* **One cell of the prose gutter's 2 × 2 pad, square** — § the gutter, and
+     `BlockGutter.tsx` for what goes in it. Everything else about the gutter's
+     size is arithmetic on this one number: the two grid columns are one each,
+     the row floor is two of them, and the cell's left padding below is the
+     column plus its inset.
+
+     **`max()`, and the px half is the whole point.** WCAG 2.5.8 asks for a
+     24 × 24 CSS-pixel target, and `1.5rem` is that only at a 16px root — it is
+     18px at the 12px root a reader can choose in their browser's settings, and
+     this app explicitly supports other roots (`fitView` takes `rootFontPx`, and
+     tests/layout.test.ts asserts 12 and 20). So the floor is the standard's own
+     unit and the rem is what grows past it: a reader who has chosen larger type
+     gets a larger target, and nobody gets a smaller one. GPT Sol's stage 1
+     review, 2026-09-04, and it was commit-blocking — the claim in every comment
+     around here was true at one root out of three.
+
+     **`SLOT_MIN_PX` and `BLK_SLOT_REM` in layout.ts are copies of these two
+     numbers**, because the lone-column cap has to know how wide the gutter
+     actually is at a given root and CSS cannot tell it. `tests/gutter-target-size.test.ts`
+     reads this declaration and fails when they disagree. */
+  --blk-slot: max(1.5rem, 24px);
+  /* The two icon columns, and nothing else — the inset below is separate. */
+  --blk-gutter-w: calc(var(--blk-slot) * 2);
+  /* How far the pad sits from each edge of the cell's left padding. */
+  --blk-gutter-x: 0.35rem;
   /* The reading cell's own horizontal padding — the gutter's column on the left
      (§ the gutter) and an ordinary breathing space on the right. Named because
      two rules need the same two numbers: `td.text` sets them as padding, and
      the centred masthead (§ plain, centred) insets itself by them so the title
-     starts on the same pixel as the first line of the article under it. */
-  --text-pad-l: 2.1rem;
+     starts on the same pixel as the first line of the article under it.
+
+     **The left one is the gutter's column and nothing else, so it is computed
+     from it rather than restated.** It was `2.1rem` for a one-icon-wide column
+     until 2026-09-04 and then `3.7rem` for the pad, which was correct and was
+     three numbers that had to be kept in step by hand — the same trap `--blk-top`
+     below exists to close. Written as `calc()`, the icons cannot touch the prose
+     however the slot moves, and the px floor above flows through for free: 59.2px
+     at a 16px root, 56.4 at 12, 74 at 20.
+     **`proseAloneMaxPx` in layout.ts is a fact about this number**, and goes
+     stale the moment it moves. */
+  --text-pad-l: calc(var(--blk-gutter-w) + var(--blk-gutter-x) * 2);
   --text-pad-r: 1.4rem;
   /* **How much horizontal room the mode band takes from the table**, set inline
      in pixels by App from `fit.modeW`. Declared here so every rule below can
@@ -1070,24 +1105,32 @@ td.gist .title::before {
    The vertical rhythm above already does the separating. The border-right
    stays — that one divides this column from its neighbour, not paragraph from
    paragraph. */
-/* **The gutter is 2.1rem at every width, and it used to be 5.2rem.**
+/* **The gutter is one width at every window width. It was 5.2rem, then 2.1rem,
+   and it is now a 2 × 2 pad — 59.2px at a 16px root, and not a literal any
+   more.**
 
    83px of every prose row bought 64px of monospace block id that was invisible
-   until you hovered it. It is now an icon column (BlockGutter.tsx), so the
-   width that was only ever affordable on a laptop is affordable everywhere —
-   which is what let § a narrow window stop hiding half of it. 2.1rem is this
-   file's own number, promoted rather than invented: it is what the narrow
-   window has reserved for the chat button since 2026-08-27.
+   until you hovered it. It became an icon column (BlockGutter.tsx) at 2.1rem —
+   this file's own number, promoted rather than invented: what the narrow window
+   had reserved for the chat button since 2026-08-27 — which is what let § a
+   narrow window stop hiding half of it.
 
-   Not narrower, because the width is the hit target: the glyphs are 12px and a
-   target wants more, so every slot below stretches to fill this column.
+   **2.1rem bought a 22 × 15px target, and WCAG 2.5.8 asks for 24 × 24.** That
+   shortfall was recorded here as Greg's call rather than a tidy-up, because no
+   vertical arrangement of 24px targets fits a 39px one-line paragraph row. Greg
+   made the call on 2026-09-04 — bigger targets everywhere, desktop included —
+   and the answer to the arithmetic is to stop stacking: the column becomes a
+   **2 × 2 pad**, two 24px columns wide instead of four slots tall.
+   docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md.
 
-   **It is still not 24px, and that is a known shortfall rather than a claim.**
-   WCAG 2.5.8 asks for 24×24 and these are 22×15 — and three 24px targets cannot
-   be stacked inside a 39px one-line paragraph row by any arrangement, so meeting
-   it means taller rows, which is a change to the article's vertical rhythm and
-   Greg's call rather than a tidy-up. See docs/plans/prose-gutter-icons.md § Open for Greg.
-   The affordance this replaced was smaller: a 12px glyph with 0.1rem of padding.
+   The width is still the hit target, and now it is two of them. All three of
+   those numbers are **one** number now — `--blk-slot` in § tokens — because this
+   note used to name them separately and a reader had to trust that 3.7 = 3 +
+   0.35 × 2 by eye. `--text-pad-l` is `calc()` over the gutter, the gutter is two
+   slots, and the slot carries a **24px floor** so the target survives a reader
+   whose browser root is 12px rather than 16. GPT Sol's stage 1 review found that
+   last one, and it was the difference between meeting WCAG 2.5.8 and claiming
+   to.
 
    (An earlier draft of this note said the width also had to clear the pinned
    column's shadow. It does not — only `.pin-left` is pinned, and it is on the
@@ -1096,11 +1139,19 @@ td.text {
   padding: var(--block-pad) var(--text-pad-r) var(--block-pad) var(--text-pad-l);
   position: relative;
   border-bottom: 0;
-  /* One gutter slot's height. **On the cell rather than on `.blk-gutter`**,
-     because `td.text.has-marks` floors the row at three of them and a custom
-     property cannot be read from a descendant. The two must not drift: the
-     floor exists precisely so the stack cannot overhang the row. § the gutter. */
-  --blk-slot: 0.95rem;
+  /* `--blk-slot` used to be declared here, and it has moved up to `.reader`
+     (§ tokens) — the row floor below reads it, the grid's columns read it, and
+     the cell's own `--text-pad-l` is now computed from it, so it has to be
+     visible to all three. A custom property inherits, and `.reader` is an
+     ancestor of every one of them. */
+  /* **Where the gutter's first row starts, measured from the top of the cell —
+     and it is the cell's own `padding-top` plus a hair.** Named because three
+     rules need the same number and they must not disagree: `.blk-gutter`
+     positions itself at it, and `.gutter-pad` floors the row at it plus two
+     slots plus a pad. A heading has twice the padding above it, so it overrides
+     this rather than the gutter rule; without that the icons would sit a line
+     above the words they belong to. */
+  --blk-top: calc(var(--block-pad) + 0.2rem);
 }
 
 /* A HEADING BELONGS TO WHAT FOLLOWS IT, so the space above it must exceed the
@@ -1118,11 +1169,17 @@ td.text {
 td.text.kind-heading {
   padding-top: calc(var(--block-pad) * 2);
   padding-bottom: calc(var(--block-pad) / 2);
+  /* And the gutter follows the padding, because it is anchored to the first
+     line of the block rather than to the top of the cell. */
+  --blk-top: calc(var(--block-pad) * 2 + 0.2rem);
 }
 
 /* The first row has nothing above it to be separated from, so the extra pad
    would just be a gap under the table head. */
-tbody tr:first-child td.text.kind-heading { padding-top: var(--block-pad); }
+tbody tr:first-child td.text.kind-heading {
+  padding-top: var(--block-pad);
+  --blk-top: calc(var(--block-pad) + 0.2rem);
+}
 
 tr.row-active td.text { background: var(--panel); }
 
@@ -2022,9 +2079,11 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
 
    Since 2026-08-31 there is a third piece, and it is worth being exact about
    why it does not break that rule: a comment also draws a `Bookmark` in the
-   prose gutter (§ the gutter, `.blk-cmt`). The gutter is a fixed 2.1rem that
-   exists whether or not anything is in it, so a comment still costs the layout
-   nothing — which is the property this paragraph was protecting, rather than
+   prose gutter (§ the gutter, `.blk-cmt`). The gutter is a fixed 3rem — 3.7rem
+   of the cell's padding — that exists whether or not anything is in it, and
+   since 2026-09-04 the bookmark's cell in the 2 × 2 pad is reserved whether or
+   not there is a bookmark, so a comment still costs the layout nothing in either
+   direction — which is the property this paragraph was protecting, rather than
    the absence of a gutter as such. The marker is there because the underline
    cannot be: a comment whose quoted words were edited away resolves to nothing
    and draws no mark at all. GPT Sol flagged this sentence going stale.  */
@@ -5642,7 +5701,7 @@ td.text.note .prose {
 }
 /* The gutter comes back with it, or the reader's icons would be centred beside
    a note that is not. § the gutter. */
-td.text.note .blk-gutter { left: 0.35rem; }
+td.text.note .blk-gutter { left: var(--blk-gutter-x); }
 /* A note's body is an `<li>` (src/notes.ts § What "canonical" means here), and
    stage 3 hands each one to its own row — so the browser draws a list marker for
    a list that is not there. Harmless until this change, and now a bullet sitting
@@ -9698,7 +9757,19 @@ mark.chat[data-chat-end]::before {
 
 /* ------------------------------------------------------- § the gutter ------
    The reader's column beside every paragraph — BlockGutter.tsx has the rule it
-   follows and the three slots it is.
+   follows and the slots it is.
+
+   **It is a 2 × 2 pad since 2026-09-04, and it used to be a single column.**
+   Greg asked for targets a finger can hit on an iPad, which means WCAG 2.5.8's
+   24 × 24 rather than the 22 × 15 the column had; four of those stacked come to
+   ~100px against a 39px one-line paragraph row, and flooring every row at that
+   would nearly triple the article's height. Two columns of two is the smallest
+   arrangement that fits, and it costs 1.6rem of horizontal padding instead.
+
+       permalink   chat
+       bookmark    "?"
+
+   docs/plans/260904b-gutter-help-button-and-detached-streaming-chat.md.
 
    **Absolutely positioned, which the chat button never was.** Until 2026-08-31
    `.block-chat` had no `position` at all, so it was an in-flow inline-flex box
@@ -9708,23 +9779,30 @@ mark.chat[data-chat-end]::before {
    looked right because it was invisible. Measured with a real browser:
    docs/postmortems/block-chat-was-never-in-the-gutter.md.
 
-   Fixed slots rather than a packed stack, so nothing moves when hover adds the
+   Fixed cells rather than a packed stack, so nothing moves when hover adds the
    permalink above a comment marker that was already there, and the eye learns
-   where each thing lives. `align-items: center` because the three glyphs have
-   different widths and a ragged column of icons reads as a mistake. */
+   where each thing lives. Under the flex column that was here until 2026-09-04
+   "fixed" was only true of the two ends — adding a comment moved the chat button
+   from the second slot to the third. **Grid with an explicit `grid-area` on
+   every slot makes it true outright**: the bookmark is the one conditional
+   child, and it now has a cell of its own that the other three cannot fall
+   into.
+
+   `align-items` / `justify-items: center` because the glyphs have different
+   widths and a ragged pad of icons reads as a mistake. */
 .blk-gutter {
   position: absolute;
   /* **It travels with the measure, because the measure moved.** `.prose` is
      centred in this cell (§ text), so in a mode — where the cell is the window
      minus the rail and the band and the text is 65ch of it — a gutter left at
-     `0.35rem` would be a column of icons 200px out in the margin, marking
-     paragraphs it is no longer beside.
+     `--blk-gutter-x` alone would be a column of icons 200px out in the margin,
+     marking paragraphs it is no longer beside.
 
-     `0.35rem` is still the offset; what is added is half the room the centring
-     divides. **`100%` here is the CELL's padding box** — this box is absolutely
-     positioned and `td.text` is its containing block — which is why the two
-     pads are subtracted, and why this is written out rather than shared with
-     the `auto` above: `margin-inline: auto` on `.prose` divides the same
+     `--blk-gutter-x` is still the offset; what is added is half the room the
+     centring divides. **`100%` here is the CELL's padding box** — this box is
+     absolutely positioned and `td.text` is its containing block — which is why
+     the two pads are subtracted, and why this is written out rather than shared
+     with the `auto` above: `margin-inline: auto` on `.prose` divides the same
      quantity against the *content* box, so one custom property could not serve
      both without meaning two different numbers at its two use sites.
 
@@ -9738,12 +9816,30 @@ mark.chat[data-chat-end]::before {
      column of icons — the thing `align-items: center` below already exists to
      avoid. One straight column, aligned to the ordinary paragraphs that are
      nearly all of an article, and a callout's icons a few pixels further from
-     its first word. The other branch of `.prose`'s `clamp` costs the same
-     order: between roughly 680px and 810px of window `90vw` binds instead of
-     the measure, and the gutter is then up to ~6px shy of the text. GPT Sol
-     asked for both to be stated rather than implied, 2026-09-04. */
+     its first word. GPT Sol asked for that to be stated rather than implied,
+     2026-09-04.
+
+     **A second caveat stood here until the 2 × 2 pad landed, and the pad
+     retired it.** `.prose`'s `clamp` has a `90vw` branch, and while the cell's
+     left padding was 33.6px that branch bound between roughly 680 and 810px of
+     window, leaving the gutter up to ~6px shy of the text. The pad's wider
+     `--text-pad-l` closes that interval, and it stays closed at every root
+     rather than only at 16 — which is worth writing out, because the
+     neighbouring rule in § plain, centred shipped a bug this week from an
+     argument that was checked at one root and assumed at the others. The
+     `90vw` branch can only bite while the cell is *also* wider than the
+     measure, and those two want `9 × (--text-pad-l + --text-pad-r + --spine-w)
+     < --reading-measure`. It is the other way round everywhere: 842 against 742
+     at a 16px root, 713 against 556 at 12, 1026 against 928 at 20, 670 against
+     417 at 9 — the padding has a px floor and the measure does not, so shrinking
+     the type only widens the margin. GPT Sol, 2026-09-04, in the review of this
+     merge; the roots other than 16 checked 2026-09-05, after the other rule.
+
+     The `max(0px, …)` above is the second reason this rule is safe where the
+     masthead's is not: it self-limits to "leave the gutter alone", where a
+     fixed `max-width` cannot. */
   left: calc(
-    0.35rem +
+    var(--blk-gutter-x) +
       max(
         0px,
         (100% - var(--text-pad-l) - var(--text-pad-r) - var(--reading-measure)) / 2
@@ -9764,11 +9860,28 @@ mark.chat[data-chat-end]::before {
      it. */
   font-size: var(--reading-size);
   font-weight: var(--reading-weight);
-  top: calc(var(--block-pad) + 0.2rem);
-  width: 1.4rem;
-  display: flex;
-  flex-direction: column;
+  top: var(--blk-top);
+  width: var(--blk-gutter-w);
+  display: grid;
+  /* **One slot per column, named rather than `1fr 1fr`.** Two fractions of a
+     two-slot box come to the same width, but they say "share what there is"
+     where the claim being made is "each of these is a 24px target" — and it was
+     the *columns*, not the slot height, that GPT Sol pointed at: a `max()` on
+     the height alone would have left 18px-wide targets at a 12px root while
+     every comment here said 24.
+
+     **No `grid-template-rows` here**: the second row exists only when something
+     is placed in it, which is what keeps a visitor's gutter — one permalink, and
+     no floor under it — a single slot tall rather than a two-slot box hanging
+     out of a 39px paragraph. `.gutter-pad` below reserves both rows for the
+     readers who have both. */
+  grid-template-columns: repeat(2, var(--blk-slot));
+  /* **No row gap, deliberately.** The first draft asked for 4px of it and GPT
+     Sol took it out: going from a 15px slot to a 24px one already supplies the
+     visible separation Greg asked for, and a gap on top of that pushed the row
+     floor up by 4px for nothing. */
   align-items: center;
+  justify-items: center;
   line-height: 0;
   /* **The box is not a target; only the icons in it are.** Without this the
      container is an `auto` hit-test surface the full height of the stack, so it
@@ -9786,70 +9899,126 @@ mark.chat[data-chat-end]::before {
   pointer-events: none;
 }
 
-/* **A heading hangs its gutter from the bottom.** A heading row is the shortest
-   row in the article — 33px measured — and it has three pads of *empty space
-   above it*, because a heading belongs to what follows it (§ text).
-   Top-anchored, a two-slot stack ran 12px past the bottom of every heading in
-   the piece and sat in the next paragraph's gutter. Anchored to the bottom it
-   grows upward into space that is already blank.
+/* **A row that draws the whole pad is given the height for the whole pad.**
 
-   **Except when the heading is commented**, and that exception is the whole
-   reason the rule below exists: bottom-anchoring cannot make a 46px three-slot
-   stack fit a 33px row, it only decides which end escapes — so a commented
-   heading would have grown 15px *upward* into the row above, and a commented
-   first heading into the table head. Sol's third finding, and it was a shape the
-   fixture did not have. `.has-marks` takes the exception back. */
-td.text.kind-heading .blk-gutter {
+   No interactive control may cross a row boundary — Sol's second and third
+   findings on the previous piece of work, and the reasoning that killed its
+   earlier "the overhang is harmless" answer: an overhanging control is *inside
+   the upper row's `<tr>`*, so pointing at it marks that row active while the
+   pointer is geometrically in the next one. It is genuinely inert on a desktop
+   row whose overhanging chat button is hidden — which is the only case that
+   browser check covered — and it is live wherever `.block-chat.has` matches,
+   and live on **every** touch device, where `(hover: none)` reveals the whole
+   gutter.
+
+   So the fix is not to argue about the overhang, it is to remove it. `height`
+   on a `<td>` is a minimum, so this floors the row at the pad it has to hold and
+   leaves every taller row exactly as it was. The arithmetic is the pad's own:
+   where it starts, two slots, and a pad of air underneath so the icons do not
+   sit on the row's edge.
+
+   **Not every row, and that is Sol's finding 5**: a visitor's gutter is one
+   permalink in the top-left cell, and giving them a second row of height would
+   be 24px of empty gutter beside every paragraph of an article they cannot mark.
+   `gutter-pad` is set in TableView.tsx from the **capability** — a reader who
+   can open a conversation about a block is a reader whose gutter is the whole
+   pad — and it reserves both rows here rather than letting the second appear
+   with the bookmark, which is the same "fixed, not packed" rule as the columns:
+   a comment must not change the height of the row it is on.
+
+   **Since 2026-09-04 the reserved row is occupied on every owner row**, which
+   it was not when this floor landed: the "?" is the fourth cell, rendered on
+   every block and revealed by hover exactly as the permalink above it is. That
+   retires the caveat GPT Sol wrote against stage 1 — short owner rows getting
+   taller before a control used the space — and it is worth knowing it was ever
+   true, because the floor is still keyed off the reader's **capability** rather
+   than off what happens to be drawn on the row. That is the part that has to
+   stay: it is what stops a comment changing the height of the row it lands on.
+
+   This *is* a change to the article's rhythm, unlike the `.has-marks` floor it
+   replaces, and that is the visible cost of Greg's call for 24px targets
+   everywhere. Measured: a one-line paragraph goes 39.1px → 63.1px and an
+   ordinary heading 39.9 → 69.1 for the reader who owns the article, while a
+   multi-line paragraph (66.3) does not move at all. Named in the plan rather
+   than discovered here. */
+td.text.gutter-pad {
+  height: calc(var(--blk-top) + var(--blk-slot) * 2 + var(--block-pad));
+}
+
+/* **And every other row holds one slot, for the same reason and a newer one.**
+   A visitor's gutter is a single permalink, and at a 16px root a 24px target in
+   a 39.1px one-line paragraph fits with 0.04px to spare — which is to say it
+   fits by luck. **`--blk-slot`'s px floor turns that luck into a bug below 16**:
+   the row keeps shrinking with the root and the target stops, so at a 12px root
+   the permalink hung 1.56px into the next paragraph and the first heading's hung
+   0.81px into the table head. Measured, after GPT Sol's stage 1 review asked for
+   the geometry pass to be re-run at 12 and 20 — his audit had found the
+   construction "scales and remains safe at 12px and 20px", and it did, right up
+   until the fix for his own finding 1 made the target stop scaling.
+
+   The cost lands exactly where the floor bites and nowhere else: at a 16px root
+   this adds **0.04px** to a visitor's one-line paragraph and nothing at all to
+   any other row, and at 20px nothing anywhere. At 12px a visitor's short
+   paragraphs go 29.3 → 35.3, which is the honest price of a target that is 24
+   CSS pixels rather than 18. */
+td.text {
+  height: calc(var(--blk-top) + var(--blk-slot) + var(--block-pad));
+}
+
+/* A heading with no pad hangs its gutter from the *bottom* (below), so what it
+   has to hold is the slot plus that offset — not `--blk-top`, which is the
+   distance from the other end and is doubled on a heading. Flooring it the
+   top-anchored way instead would add 5px to every heading a visitor reads at the
+   default root, to buy nothing: at 16 and 20 this rule never bites at all. */
+td.text.kind-heading:not(.gutter-pad) {
+  height: calc(var(--blk-slot) + var(--block-pad));
+}
+td.text.gutter-pad .blk-gutter {
+  grid-template-rows: var(--blk-slot) var(--blk-slot);
+}
+
+/* **A heading with no pad hangs its gutter from the bottom** — which today means
+   a visitor's heading, and nothing else.
+
+   A heading row is the shortest row in the article and it has three pads of
+   *empty space above it*, because a heading belongs to what follows it (§ text).
+   One 24px slot top-anchored under a heading's doubled `padding-top` ends
+   **0.76px** above the bottom of a 39.9px heading row — measured, not reasoned.
+   That is not a margin, it is a coincidence of this face's metrics, and one font
+   change or one browser's rounding turns it into a control hanging in the next
+   paragraph's row. Anchored to the bottom instead it grows upward into space
+   that is already blank, and the clearance is 2.97px in every heading shape.
+
+   **The pad case is not an exception to this, it simply does not need it.** The
+   floor above is written in terms of `--blk-top`, which a heading raises to its
+   own doubled padding, so a floored heading row already has room for both slots
+   below the heading's first line — and top-anchored is where they belong, beside
+   the words rather than a line clear of them. The rule that used to switch
+   commented headings back to the top has gone with the arithmetic it described:
+   there is nothing left for it to correct. */
+td.text.kind-heading:not(.gutter-pad) .blk-gutter {
   top: auto;
   bottom: calc(var(--block-pad) / 2);
 }
 
-/* **A row that draws all three slots is given the height for all three.**
-
-   No interactive control may cross a row boundary — Sol's second and third
-   findings, and the reasoning that killed the earlier "the overhang is
-   harmless" answer: an overhanging control is *inside the upper row's `<tr>`*,
-   so pointing at it marks that row active while the pointer is geometrically in
-   the next one. It is genuinely inert on a desktop row whose overhanging chat
-   button is hidden — which is the only case the browser check covered — and it
-   is live wherever `.block-chat.has` matches, and live on **every** touch
-   device, where `(hover: none)` reveals the whole gutter.
-
-   So the fix is not to argue about the overhang, it is to remove it. `height`
-   on a `<td>` is a minimum, so this floors the row at the stack it has to hold
-   and leaves every taller row exactly as it was.
-
-   **Only rows that have a comment marker**, which is what keeps this from being
-   a change to the article's rhythm: two slots (30px) already fit a one-line
-   paragraph (39px), so nothing else in the piece moves. A commented one-line
-   paragraph is the rare case, and it gets the room instead of the overhang.
-
-   The heading exception goes back to top-anchoring here, because a floored
-   heading row has space *below* the heading and hanging the gutter in it would
-   put the icons a line clear of the words they belong to. */
-td.text.has-marks {
-  height: calc(var(--blk-slot) * 3 + var(--block-pad) * 2 + 0.2rem);
-}
-td.text.kind-heading.has-marks .blk-gutter {
-  top: calc(var(--block-pad) * 2);
-  bottom: auto;
-}
-
-/* One slot, and the number is load-bearing: three of them plus the cell's two
-   pads is what has to fit inside the shortest prose row in an article. At
-   0.95rem a two-item stack is 30px against a 39px one-line paragraph, and the
-   only case left that overhangs at all is a one-line paragraph the reader has
-   also commented on. Every item is this tall whether or not it is drawn, which
-   is what makes the positions fixed. */
+/* One slot, square, and the number is load-bearing: WCAG 2.5.8 asks for 24 × 24
+   and this is what makes it so, in both directions — `min-height` here, and one
+   whole grid column through the `width: 100%` below. `--blk-slot` carries the
+   px floor (§ tokens), so both directions hold at every root rather than only at
+   16px. Two of them plus the cell's padding is what the floor above reserves.
+   Every cell of the pad is this tall whether or not anything is drawn in it,
+   which is what makes the positions fixed. */
 .blk-gutter > * {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.1rem;
   min-height: var(--blk-slot);
-  /* **The whole width of the gutter, not the width of the glyph.** Without
-     this each target was the SVG's own 12px and the note on `td.text` claiming
-     the gutter width *was* the target was simply false. GPT Sol, 2026-08-31. */
+  /* **A whole cell of the pad, not the width of the glyph.** Without this each
+     target was the SVG's own 12px and the note on `td.text` claiming the gutter
+     width *was* the target was simply false. GPT Sol, 2026-08-31. It was the
+     whole 1.4rem gutter until the gutter became two columns; now it is one of
+     the two, which the grid sizes at exactly `--blk-slot`. */
   width: 100%;
   padding: 0;
   background: none;
@@ -9860,6 +10029,26 @@ td.text.kind-heading.has-marks .blk-gutter {
   text-decoration: none;
   transition: opacity 0.12s, color 0.12s;
 }
+
+/* **Every slot names its own cell**, so the pad is a map rather than a queue.
+
+   The bookmark is the only child of this container that comes and goes with the
+   article's contents rather than with the reader's pointer, and under auto
+   placement its arrival shunted the chat button along — the eye had to find the
+   door into chat in a different place on a commented paragraph than on the one
+   above it. Row 2 / column 2 is deliberately unclaimed: it is where the "?"
+   goes in stage 2, and until then it is empty space the other three cannot
+   spread into.
+
+   Written as `grid-area` on the slot classes rather than as `:nth-child`, which
+   would be a second copy of BlockGutter.tsx's render order that nothing keeps in
+   step with the first — and the two genuinely differ: the "?" is rendered last,
+   so that tab order runs address, mark, chat, help, and it is *drawn* diagonally
+   under the chat button. */
+.blk-permalink { grid-area: 1 / 1; }
+.block-chat { grid-area: 1 / 2; }
+.blk-cmt { grid-area: 2 / 1; }
+.blk-help { grid-area: 2 / 2; }
 
 /* **State is visible; an affordance waits to be asked for.** The permalink and
    an unused chat button are hidden until the pointer is on the row; a comment
@@ -9872,14 +10061,17 @@ td.text.kind-heading.has-marks .blk-gutter {
    with a mouse would look fine. `pointer-events` has to travel with the
    opacity, or an invisible target grows in the gutter and eats the clicks. */
 .blk-permalink,
-.block-chat {
+.block-chat,
+.blk-help {
   opacity: 0;
   pointer-events: none;
 }
 tr:hover .blk-permalink,
 tr:hover .block-chat,
+tr:hover .blk-help,
 .blk-permalink:focus-visible,
 .block-chat:focus-visible,
+.blk-help:focus-visible,
 .block-chat.has {
   opacity: 1;
   pointer-events: auto;
@@ -9908,16 +10100,67 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
    harness said everything was fine, because `(hover: none)` never matches
    there. So the permalink is decided here rather than by omission.
 
-   Faint rather than full: on a phone this is one glyph beside every paragraph
-   in the article, and at full strength eighty of them are a column of
-   decoration. */
+   **One number for all three**, since the "?" arrived. The chat button was 0.45
+   and the permalink 0.35, which was accretion rather than a hierarchy — two
+   rules written months apart — and with two glyphs stacked in the right column
+   and one in the left it read lopsided: the eye landed on the right half of the
+   pad before it landed on the prose. One number makes the pad read as a single
+   small mark, which is what it is.
+
+   **And the number is 0.653, which is exactly 3:1 against the page.** These are
+   icon-only controls that are permanently visible here, so WCAG 2.2's 1.4.11
+   applies to them, and the 0.35 this file carried for a day was **1.65:1** —
+   short by a wide margin. The arithmetic, from the tokens rather than from a
+   screenshot: `--page` is `oklch(0.145 0 0)` and `--ink-faint` is
+   `oklch(0.63 0 0)`; both are achromatic, so linear-light sRGB is `L³` and that
+   *is* the relative luminance, and `opacity` composites in gamma-encoded sRGB —
+   which the pixels confirm to the digit (0.35 predicted 54.4 and Chrome drew
+   54; 0.653 predicted 92.9 and drew 93).
+
+   **Why not 4.5:1, and this is the part not to "round up to be safe".** The
+   gutter's grammar is that the reader's own mark carries the weight and the
+   affordances do not. The bookmark's luminance lead over them is 2.72:1 at
+   0.35, **1.49:1 at 0.653 — plus its hue, which the affordances have none of**,
+   1.00:1 at the 0.868 that buys 4.5:1, and *inverted* above that. So 0.868 is
+   the point where the reader's mark stops leading and the buttons begin to
+   outshine it. 0.653 is not the least we can get away with: it is the compliant
+   setting the grammar survives, and the next step up is the one that breaks it.
+
+   **Two shortfalls left in deliberately, recorded rather than discovered.**
+   Both are known and neither was worth its cost, in the same spirit as the
+   22 × 15 target that stood for a month before Greg asked:
+
+   1. **1x: 2.34:1.** A 12px lucide glyph draws a 1px stroke that never covers a
+      whole device pixel on a 1x screen, so the rendered peak falls short of the
+      nominal ratio. The one-line remedy is `.blk-gutter svg { stroke-width: 2.5 }`
+      in this block, measured at 3.01:1 at 1x, 2x and 3x. Not taken: it buys the
+      ratio only on 1x `(hover: none)` hardware — old Android tablets, since a 1x
+      touch laptop has a trackpad and does not match this query — and costs about
+      a quarter more ink on every iPad, every row.
+   2. **A tinted row: 2.77:1.** `td.text.opaque` (media and captions) paints
+      `--muted` and `tr.row-active td.text` paints `--panel`, and the ratio is
+      quoted against `--page`. Alpha partly rides a lighter background up, which
+      is the argument that killed the alternative of writing this as a flat grey:
+      a flat `oklch(0.478 0 0)` is the same 3:1 over the page and drops to
+      **2.46:1** over `--muted`, where 0.653 holds 2.77.
+
+   **`.block-chat.has` is untouched by this and must stay so**: it is *state*,
+   not an affordance, and its `opacity: 1` and `--chat-mark` win here on
+   specificity (0,2,0 against 0,1,0) rather than by being written below. A block
+   that already has a conversation goes on saying so at full strength, in blue.
+   Nothing in this block may set `color`, or that quietly stops being true —
+   `tests/gutter-target-size.test.ts` says so.
+
+   docs/plans/260904b-… § The touch contrast has the tables, the crops and the
+   option held in reserve: deleting this block altogether so touch inherits the
+   desktop grammar. */
 @media (hover: none) {
   .blk-permalink,
-  .block-chat {
-    opacity: 0.45;
+  .block-chat,
+  .blk-help {
+    opacity: 0.653;
     pointer-events: auto;
   }
-  .blk-permalink { opacity: 0.35; }
 }
 
 /* The reader's mark. `--highlight` is exactly what `mark.cmt` paints the
@@ -9961,6 +10204,18 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
   font-family: var(--font-mono);
   font-size: 0.58rem;
 }
+
+/* ------------------------------------------------------ one press for help --
+   The "?" — Greg's *"hey, I don't understand. Tell me more"* in a single press.
+   Everything about its box, its reveal and its touch rule is § the gutter's
+   above, shared with the other three; what is here is the one thing it does not
+   share, which is what it turns when you point at it.
+
+   `--highlight` rather than `--chat-mark`: the reader is the one asking, and
+   this is their own gutter. The chat button's colour is reserved for the fact
+   that a conversation *exists*, which is the one thing in this column that is
+   about what the machine has produced rather than what the reader has done. */
+.blk-help:hover { color: var(--highlight); }
 
 /* ---------------------------------------------------------- § ideas mode ----
    The sixth mode, and the smallest stylesheet section of any of them — which is
@@ -11449,9 +11704,17 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
      shrank the gutter to the 2.1rem the chat button needed.
 
      Both declarations have gone, 2026-08-31, because the desktop came down to
-     meet them: the gutter is 2.1rem at every width now (§ text), and what is in
-     it is icons rather than text, so the width this query was rationing is no
+     meet them: the gutter is one width at every width now (§ text), and what is
+     in it is icons rather than text, so the width this query was rationing is no
      longer being spent anywhere.
+
+     **It went back up to 3.7rem on 2026-09-04**, when the icons became a 2 × 2
+     pad of 24px targets, and this query still does not ration it — which is a
+     decision rather than an oversight. Greg asked for targets a finger can hit,
+     and a phone is the device he asked about; taking the second column away here
+     would take it away from exactly the reader it is for. The cost is 25.6px of
+     measure on a 390px screen, because `PROSE_MIN` deliberately does not move
+     with it (layout.ts).
 
      **A phone gains rather than loses.** The permalink is the one affordance a
      touch reader could not get any other way — there is no right-click, no
@@ -11460,8 +11723,19 @@ tr:hover .blk-permalink.failed { opacity: 1; color: var(--destructive); }
      out loud in docs/plans/prose-gutter-icons.md rather than glossed. */
 
   /* Trailing padding still shrinks: 1.4rem of right margin is generous when the
-     measure is 366px. The left is § text's now. */
-  td.text { padding-right: 0.9rem; }
+     measure is 366px. The left is § text's now.
+
+     **The token, not the padding, and that is a fix rather than a tidy-up.**
+     This was `td.text { padding-right: 0.9rem }` until 2026-09-05, which left
+     `--text-pad-r` still reading 1.4rem while the cell was actually padded by
+     0.9 — harmless for as long as nothing but the padding read the token, and
+     wrong the moment something did. Three rules now do: `.blk-gutter` and both
+     mastheads compute *half the room the centring divides* from it (§ the
+     gutter, § plain, centred), and each was quietly 0.25rem out below 731px.
+     Set here rather than in the `:root` block above because `--text-pad-r` is
+     declared on `.reader`, which would win. GPT Sol found it while reviewing
+     the merge that introduced the second and third readers, 2026-09-05. */
+  .reader { --text-pad-r: 0.9rem; }
 
   /* ------------------------------------------------------------------------
      The two bars that were silently eating their own controls.
@@ -12119,48 +12393,99 @@ table.only-prose thead { display: none; }
 .reader.text-alone table.zoom { margin-inline: auto; }
 
 /* And the masthead goes over the column rather than staying at the left edge
-   of a window it no longer shares with anything. Same width — `--table-w` is
-   written inline by App from `fit.tableW`, so the number lives once, in
-   layout.ts — and the same auto margins.
+   of a window it no longer shares with anything — the prose's own width, and
+   auto margins to put it on the prose's own axis.
 
-   **It tracks the prose from about 1046px of window upwards, and not below**,
+   **It tracks the prose from about 1009px of window upwards, and not below**,
    which is a smaller claim than the obvious one and the measurements are in
    docs/plans/plain-mode-and-the-way-out.md § Centring the column. This bar
    reserves `--logo-w` on its left for the corner wordmark and `--feedback-w` on
-   its right for the button (§ header), and under about 1046px that reservation
-   is wider than the margin the centred column leaves — so `max-width` stops
+   its right for the button (§ header), and under that width the reservation is
+   wider than the margin the centred column leaves — so `max-width` stops
    controlling anything and the title stays where it has always been while the
-   prose slides left towards it. The gap closes smoothly (114px at 800, 20px at
-   1000, 0 at 1040) and there is no jump; below 812px neither of them has moved
-   at all. **That misalignment is not new** — the title was at 160 and the prose
-   at 46 before any of this — and correcting it would mean this rule doing the
-   centring arithmetic itself with both of those widths in it, which is a
-   third place for `PROSE_ALONE_MAX_REM` to be got wrong. GPT Sol asked for the
-   claim to say where it holds, 2026-09-03; it is the claim that was wrong
-   rather than the rule.
+   prose slides left towards it. The gap closes smoothly and there is no jump;
+   measured 2026-09-04, the title is 54.7px right of the prose at a 900px window
+   and 4.7px right at 1000. **That misalignment is not new and it is not this
+   rule's** — the title was at 160 and the prose at 46 before any of this, and
+   correcting it would mean this rule doing the arithmetic with the bar's two
+   reservations in it, which is what the sibling rule below has to do and is
+   the reason it is the longer of the two. GPT Sol asked for the claim to say
+   where it holds, 2026-09-03; it is the claim that was wrong rather than the
+   rule.
 
-   Above that, measured: the title lands 4px left of the first line of prose,
-   because centring inside this bar's asymmetric padding is not quite centring
-   inside the window.
+   Above that, measured 2026-09-05: the title lands **4.766px right** of the
+   first line of prose, and the number breaks cleanly into two halves that were
+   each predicted separately — 2.762px from the weight axis (the `font-size`
+   below says why) and 2.0px because this bar's own padding is 148px on the left
+   against 144px on the right, so centring in it is 2px right of centring in the
+   window. 4.762 predicted against 4.766 measured. It used to be 4px *left* of
+   the prose, and then **22.5px left of it for as long as it took to merge two
+   changes and photograph the result** — the day
+   `.prose` started dividing the leftover in its cell (§ text) and the day the
+   gutter became a 2 × 2 pad were different days on different branches, and
+   neither could see this rule. Both moved the prose right and neither moved the
+   title, and the errors added rather than cancelling. The fix is in the
+   `max-width` below; what is worth keeping is that **the defect existed only in
+   the composition**, so each branch's own checks were green and the number that
+   found it came from a browser after the merge, not from either side's tests.
 
    The bars themselves stay full-bleed, deliberately: the controls row and the
    dock are chrome that spans the window in every mode, and the masthead is the
    one piece of *the article* above the fold. */
 .reader.text-alone .masthead-inner {
-  /* The reading column *inside* the cell's own padding, which is what lands the
-     title on the prose's own left edge rather than 34px to the left of it.
-     `--text-pad-*` at the top of this file is the one place those two numbers
-     live, and `--table-w` is written inline by App from `fit.tableW`, so
-     `PROSE_ALONE_MAX_REM` is not copied into CSS.
+  /* `65ch` measured in the article's face rather than the chrome's, for the
+     reason the sibling rule below gives at length and `.blk-gutter` gives again
+     (§ the gutter). Size and not weight, also for the sibling's reason: every
+     child of this box inherits its weight, so matching the prose's 450 would
+     embolden the byline and the source note.
 
-     **Expressed as a narrower box rather than as padding on this one, so that
-     it costs nothing when the cap is not biting.** Below 812px of window the
-     table already fills the row, `--table-w` is the whole of it, and this
-     max-width is wider than the bar has to give — the rule then does nothing
-     at all, which is what a masthead already pushed rightwards by the corner
-     wordmark wants. Padding would have indented it again on exactly those
-     widths. */
-  max-width: calc(var(--table-w) - var(--text-pad-l) - var(--text-pad-r));
+     **That leaves 2.8px, the same 2.8px the sibling ships and says so.** It is
+     not halved by arriving here through a width rather than a margin: the
+     weight axis makes this box's `65ch` 5.524px short of the prose's — measured,
+     732.614 against 738.138 at a 16px root — and the term reaches the left edge
+     through `W / 2` either way. An earlier comment here claimed 1.4px, from
+     halving the sibling's residual a second time — GPT Sol, 2026-09-05. */
+  font-size: var(--reading-size);
+  /* **A box whose CENTRE sits where the prose's centre sits**, because the two
+     are centred in boxes that share an axis and the reading cell's padding is
+     not symmetric. The prose sits `(--text-pad-l − --text-pad-r) / 2` right of
+     the table's centre, so a box centred on the same axis has to lose twice
+     that to start on the same pixel: `measure + padR − padL`. Exact, not an
+     approximation — 295.33px against the prose's 295.33px at a 1280 window,
+     measured 2026-09-04.
+
+     **`--table-w` is gone from this rule and that is the point.** It said
+     "the reading *cell*", which was the right box while the prose filled its
+     cell and became the wrong one the moment the prose started dividing the
+     leftover inside it.
+
+     What `--table-w` also carried was a width that *shrank with the window*, so
+     the old rule was guaranteed to stop biting on any narrow screen. This one
+     is a constant per root, so that guarantee has to be checked rather than
+     assumed. At the default root it holds — 705px against a bar with 696 to
+     give at a 1000px window and 596 at 900, so the rule is inert and the title
+     stays where it has always been while the prose slides towards it. **At a
+     small root it does not.** `--blk-slot`'s px floor stops `--text-pad-l`
+     shrinking with the type while `--reading-measure` goes on shrinking, so at
+     a 9px root this width is 365.2px and at 12px it is 503.8px — **the same at
+     600, 700 and 731px of window**, measured, where the old one would have
+     shrunk with each. Toward the prose rather than away from it, but a change,
+     and the sentence that used to stand here said nothing moved.
+     GPT Sol, 2026-09-05.
+
+     **And below the measure's own crossover this rule simply does not follow the
+     prose.** `.prose` is `clamp(45ch, 90vw, --reading-measure)` (§ text), so
+     under about `measure / 0.9` of window it is `90vw` and narrower than the
+     length this calc uses — 824px at a 16px root, but only 618px at a 12px one,
+     because the crossover moves with the type. Measured at a 12px root: −5.7px
+     at 700 and 731px of window, and **−22.1px at 600**, where `90vw` has taken
+     over. The title is then out by roughly half of what the prose gave up. Not
+     fixed here, because the fix is either a second `clamp` in this calc or a
+     custom property `.prose` and this rule can share, and neither is worth it
+     for a reader who has both shrunk their type and narrowed their window; but
+     it is the same shape as the bug this rule was just repaired for, so it is
+     written down rather than left to be found again. */
+  max-width: calc(var(--reading-measure) + var(--text-pad-r) - var(--text-pad-l));
   margin-inline: auto;
 }
 

@@ -661,6 +661,20 @@ const chatButtons = () =>
   );
 
 /**
+ * The gutter's "?" — the other door into the same conversation, and the other
+ * thing a visitor may not have.
+ *
+ * By accessible name for the reason above it: the name is what decides whether
+ * a reader can reach the control, and `.blk-help` is hidden with `opacity`
+ * rather than `display: none`, so a button nobody can see is still in the tab
+ * order and still announced.
+ */
+const helpButtons = () =>
+  [...host.querySelectorAll("button")].filter(
+    (b) => b.getAttribute("aria-label") === "Ask for help with this paragraph",
+  );
+
+/**
  * The dock's mode buttons, in the order they are drawn.
  *
  * `role="radio"` inside the modes radiogroup, which is what the bar is
@@ -1100,6 +1114,10 @@ describe("a signed-out browser on a shared document", () => {
        mounted the table. */
     expect(host.textContent).toContain("The first paragraph of the piece.");
     expect(chatButtons()).toEqual([]);
+    /* And the "?" beside it, for the same reason and through the same gate:
+       both callbacks are `owner ? … : undefined` in App, and the callback is
+       the capability. src/web/BlockGutter.tsx. */
+    expect(helpButtons()).toEqual([]);
     /* And the slot the visitor does keep, which is what makes this an absence
        rather than a gutter that failed to render. */
     expect(host.querySelectorAll("a.blk-permalink").length).toBeGreaterThan(0);
@@ -2356,6 +2374,30 @@ describe("the same address, as the owner", () => {
     const gutters = host.querySelectorAll("a.blk-permalink").length;
     expect(gutters, "the prose must have rendered").toBeGreaterThan(0);
     expect(chatButtons().length).toBe(gutters);
+  });
+
+  /**
+   * **And the "?", which is the only place App's wiring of it is exercised.**
+   *
+   * The nine component and stylesheet tests stage 2 shipped all stay green if
+   * `App` stops passing `onHelp` — they hand the callback to `BlockGutter` or
+   * to `TableView` themselves — and so does the browser harness, which supplies
+   * it directly to `TableView`. GPT Sol's stage 2 review, finding 3. This file
+   * renders the real `App` at the real address for both readers, so it is the
+   * cheapest honest place to say *the reader actually gets the button*, and its
+   * visitor half two hundred lines up says they actually do not.
+   *
+   * Counted against the permalinks for the reason the chat assertion gives: one
+   * surviving button on one block would satisfy a `> 0` while the rest of the
+   * article had lost the control.
+   */
+  it("draws the \"?\" beside every paragraph", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    await open();
+
+    const gutters = host.querySelectorAll("a.blk-permalink").length;
+    expect(gutters, "the prose must have rendered").toBeGreaterThan(0);
+    expect(helpButtons().length).toBe(gutters);
   });
 
   /**
