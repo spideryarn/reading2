@@ -210,8 +210,14 @@ function planLine(page: HTMLElement): HTMLElement | null {
   return link?.closest("p") ?? null;
 }
 
-const ALICE = "aaaaaaaa-1111-4000-8000-000000000001";
-const BOB = "bbbbbbbb-1111-4000-8000-000000000002";
+/* **Distinct from `admin-page.test.tsx`'s pair**, which this file collided with
+   when the two arrived from different branches on the same day — both authors
+   reached for the same obvious placeholder. Nothing here inserts a row (the page
+   is mounted against a stubbed `fetch`), so the collision could not have bitten
+   at runtime; `tests/fixture-ids.test.ts` refuses it anyway, because "nothing
+   inserts under this id today" is not a property that stays true on its own. */
+const ALICE = "aaaaaaaa-2222-4000-8000-000000000001";
+const BOB = "bbbbbbbb-2222-4000-8000-000000000002";
 
 describe("the pricing page's current-plan line", () => {
   it("tells a signed-in free reader what they are on, in describePlan's words", async () => {

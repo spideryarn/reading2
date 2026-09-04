@@ -1036,6 +1036,8 @@ test; and the earlier M-series stands.
 holding the old columns was this laptop's, so `20260903185701_opposite_mach_iv` was removed from the
 chain, its columns and constraints dropped locally along with its `__drizzle_migrations` row, and
 `20260904062555_supreme_paper_doll` generated in its place — two nullable columns and one CHECK,
+(both names are gone again after the `origin/dev` merge collapsed them into
+`20260904071020_billing_cancel_at_and_quota_delta`; see below),
 checked by diffing the snapshot against its predecessor, `db:chain` clean. Worth knowing for next
 time: **`drizzle-kit generate` cannot rename a column non-interactively**, because the rename-versus-
 drop-and-add question is a TTY prompt, and `db:generate` reports the refusal as "wrote no migration".
@@ -1072,10 +1074,34 @@ So Stage 1 turns on a second surface nobody in this job built. Check `/pricing` 
 when the live row is resynced in Stage 5.
 
 **The migration snapshot chain will be stale, and the `chain` gate is what notices.** Upstream
-carries `20260903171940_jobs_requeues`, which is *earlier* by timestamp than this job's
-`20260903185701_opposite_mach_iv` but was not in the tree when ours was generated — so our snapshot
-does not contain its schema. Ordering is fine; the snapshot is not. **Regenerate the snapshot after
-the merge, do not hand-edit it**, and re-read the `Target:` line of whatever applies it.
+carries `20260903171940_jobs_requeues`, which is *earlier* by timestamp than this job's own
+migrations but was not in the tree when ours were generated — so our snapshots do not contain its
+schema. Ordering is fine; the snapshot is not. **Regenerate the snapshot after the merge, do not
+hand-edit it**, and re-read the `Target:` line of whatever applies it.
+
+**Done, 2026-09-04, and this is what it took.** The collision was two snapshots claiming the same
+parent — `20260903131757_billing_cancel_at` (Stage 1) and upstream's `jobs_requeues`, both pointing at
+`9627fa00`. Upstream's is committed on `dev` and other machines have it, so **only ours moved**: both
+of ours were removed from the chain, their columns and CHECK dropped from this laptop's database along
+with their `__drizzle_migrations` rows, upstream's applied, and the two of them regenerated as one
+migration on top of it — `20260904071020_billing_cancel_at_and_quota_delta`, three nullable columns
+and one CHECK. Collapsing Stage 1's into Stage 3b's is legitimate only because **neither had ever been
+applied anywhere but this laptop**; a deployed migration is not a thing to regenerate.
+
+Two things that will catch the next person:
+
+- **Removing journal entries leaves an `idx` gap, and `db:migrate` refuses to run on one** —
+  *"journal entry 65 carries idx 66 — the indices are broken"*, before applying anything. Renumber
+  the entries contiguously. That is a safe edit in a way `prevId` is not: databases record what they
+  have applied by the migration's `when`, never by its `idx`.
+- **`drizzle-kit generate` cannot rename a column non-interactively.** The rename-versus-drop-and-add
+  question is a TTY prompt, and `db:generate` reports the refusal as *"wrote no migration"* rather
+  than as a failure.
+
+Verified by diffing the new snapshot against `jobs_requeues`'s — four additions, all on
+`billing_accounts`, and **nothing of upstream's missing from it** — then `db:chain` clean, `db:check`
+no drift, and the columns and CHECKs read back out of the database byte-identical to a capture taken
+before any of this started.
 
 **Also arriving:** `src/db/schema.ts` (+30, conflict likely — both sides added columns),
 `tests/billing-admission.test.ts` (+105/−11, and Stage 3b touches admission), and 27 lines of
