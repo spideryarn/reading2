@@ -51,9 +51,15 @@ round seven and round twelve without converging. After two rounds, settle it you
 *"Sol still objects to X; overruled because Y"* in the plan doc — an overruled P0 or P1 goes to
 Fable or Greg first, not straight past.
 
-The cap counts P2/P3 churn. A **P0 or P1 newly established on round two** still gets one narrowly
-scoped check after its fix, because the alternative is shipping code the cap stopped anyone
-reviewing. That check is on the fix; it does not reopen discovery.
+After round two, **discovery closes** — but any established P0 or P1 whose final fix was not in the
+round-two snapshot still gets a narrowly scoped check *of that fix*, and if it comes back still
+open, settle or overrule it through Fable or Greg before landing. This does not reopen general
+discovery.
+
+Say "whose fix was not in the snapshot" rather than "newly found": the sequence that gets missed is
+a round-one P1, an inadequate first fix, round two reporting it still open, and a *second* fix after
+round two that nothing checks — and the overrule clause never fires, because you believe you fixed
+it rather than overrode it.
 
 Write the prompt the way [review-prompt-template.md](review-prompt-template.md) says — a durable
 revision or an explicit untracked-file list rather than a `/tmp` path, your suspicions last, a

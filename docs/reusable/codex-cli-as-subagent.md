@@ -408,11 +408,13 @@ then with a real `codex exec`:
 | `npm test`, the whole suite | no | no | no |
 
 The last two rows are the honest limits **of this profile**, and it is worth knowing why, because
-the reason is not the one this doc gave until 2026-09-04. Both are gated by a single switch: the
-profile's **network** policy, which `review` does not grant at all. Not the internet, not loopback —
-`curl http://127.0.0.1:…` exits 7. So run scripts as `node --import tsx <script>`, which opens no
-socket. Neither limit matters for a review: one red test file is the reproduction, a green suite is
-the implementer's job, and **the Postgres half is the orchestrator's to run and hand over.**
+the reason is not the one this doc gave until 2026-09-04. Both follow from the profile's **network**
+policy, which `review` does not grant at all — not the internet, not loopback; `curl
+http://127.0.0.1:…` exits 7. With the network proxy off, enabling direct networking permitted both
+the tsx unix socket and the Postgres connection; no allowlisted configuration tested delivered
+those two. So run scripts as `node --import tsx <script>`, which opens no socket. Neither limit
+matters for a review: one red test file is the reproduction, a green suite is the implementer's
+job, and **the Postgres half is the orchestrator's to run and hand over.**
 
 > This paragraph used to say the tsx CLI's unix socket "is denied in every mode" and that a
 > `unix_sockets` rule did not change it. That was wrong, and it mattered: it read as a property of
@@ -424,7 +426,12 @@ the implementer's job, and **the Postgres half is the orchestrator's to run and 
 Measured 2026-09-04 on 0.152.1, mostly with `codex sandbox`, which runs a command under a profile
 **with no model in it and at no cost** — the cheap way to settle any question on this page. Point
 `CODEX_HOME` at a directory holding a throwaway `config.toml` and you can test a profile without
-touching the repo's.
+touching the repo's. **Run it from a host shell**: from inside a sandboxed review it aborts before
+executing anything (`failed to open synthetic bubblewrap mount registry lock … Read-only file
+system`, exit 101), because bubblewrap will not nest. The full configurations, commands and raw
+output are in
+[the plan](../plans/260904e-give-the-cross-family-reviewer-the-right-freedoms.md#what-was-measured-2026-09-04-codex-cli-01521-hetzner-box);
+what follows is the conclusion.
 
 | Profile | `curl` external | `curl` loopback | `npm run typecheck` | a real Postgres test |
 |---|---|---|---|---|
@@ -441,8 +448,10 @@ Rows 3 and 4 are why we don't take the middle road. Codex *does* have a host all
 `"host" = "allow"` — and it works as an allowlist. But **turning the proxy on is what re-denies the
 unix socket**, so typecheck dies again; and a client that does not speak SOCKS never arrives, since
 the proxy is reached through `ALL_PROXY=socks5h://…` — the Postgres driver gets
-`connect ECONNREFUSED 127.0.0.1:1`. `network.mode = "full"` does not change either. So the choice is
-binary: no network, or unrestricted outbound.
+`connect ECONNREFUSED 127.0.0.1:1`. `network.mode = "full"` does not change either. So for **these two
+capabilities** the choice is binary — direct networking or neither of them. Networking as such is
+not binary: the row above has loopback HTTP returning 200 while external access is blocked, which
+is a real allowlist doing exactly what it says. It just doesn't buy what a reviewer needs.
 
 **We take no network.** With `"/" = "read"`, a network-capable reviewer is a process that can read
 `.env.local` — including a production `DATABASE_URL` — and make outbound requests, moments after

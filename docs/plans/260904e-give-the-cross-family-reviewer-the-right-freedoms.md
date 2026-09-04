@@ -260,8 +260,48 @@ Numbered so they can be answered individually, per
    every postmortem — *was this class reviewed by Sol, and did it catch it?* — as the only thing
    that will ever settle the cadence question with evidence. Not done because it changes the
    postmortem template, which is Greg's call.
-4. **`tests/owner-isolation.test.ts:660` has a live typecheck error** on `dev` — somebody else's
-   work in flight, noticed while measuring. Not mine to fix.
+4. ~~**`tests/owner-isolation.test.ts:660` has a live typecheck error** on `dev`~~ — somebody
+   else's work in flight, noticed while measuring. **Gone by 23:25 the same evening**; whoever owned
+   it fixed it. `npm run typecheck` is clean across all 1274 files.
+
+## The stage 1–2 code review, and what it caught
+
+[260904e-stage12-review-sol.md](260904e-stage12-review-sol.md), written to the new template so the
+template got exercised on itself. **Refused, two P1s**, and both were real.
+
+**F1 — my own commit failed the doc-links gate, and the live tree hid it.** Sol archived revision
+`4da72a17`, attached `node_modules`, and ran `tests/doc-links.test.ts` *there*: 1 failed, 13 passed.
+In the working tree it passes 14/14. The difference is another agent's untracked
+`diagnose-box-resources.md`, whose README row rode along in my pathspec commit while the file itself
+— being untracked — did not. So that commit linked to a file that did not exist in it.
+
+Self-healed ten minutes later by their own commit `8e87cfa5`, and HEAD is green. But the process
+failure was mine and is worth naming: **AGENTS.md says to say in the message whose work rode along,
+and I didn't.** Nothing was lost, and saying so would have made this findable without a reviewer
+rebuilding the commit.
+
+It is also the sharpest possible argument for the review discipline the plan is about. A reviewer
+that reasons over the working tree cannot see this. One that reconstructs the revision can — and
+this is precisely the class the `review` profile was widened for on 2026-09-02.
+
+**F2 — the termination rule had a hole**, and it was one I had just written. The exception covered a
+P1 *newly established* on round two, but not: round-one P1 → inadequate fix → round two says still
+open → a second fix after round two that nothing checks. The overrule clause never fires, because
+you believe you fixed it rather than overrode it. Reworded to "whose final fix was not in the
+round-two snapshot", which is Sol's wording.
+
+Eight more findings, all P2/P3 and all taken: the "one switch" network claim was broader than its
+own evidence (rows 3–4 have network enabled and still fail); the committed-candidate form didn't
+constrain anything — the range in *this very prompt* covered 28 commits and 131 files to describe
+two commits and eleven paths, and the file breaking the gate was in the 131; the pre-commit form is
+not durable, so it is now called *live* and closes by recording the resulting SHA; IDs collided
+across rounds; the template only fitted code review, which I noticed by having to rewrite it for a
+doc-only candidate; the severity levels overlapped; "established" was loose enough to admit any
+static read; and `codex sandbox` cannot run from inside a sandboxed review, so that advice is now
+qualified.
+
+Sol's own verdict on the template: *"The template is not too long… Its problem is precision at the
+candidate and evidence seams, not size."* That answers the suspicion I had ranked first.
 
 ## An anomaly, written down because it hides
 

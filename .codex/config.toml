@@ -13,8 +13,9 @@
 #
 # Corrected 2026-09-04: those two limits are not properties of the sandbox, as this comment used to
 # say — they are properties of *this profile*, which grants no network at all, not even loopback.
-# The tsx CLI's unix socket and the Postgres connection are both gated by that one switch, and a
-# profile with `[permissions.<name>.network] enabled = true` runs both. We deliberately do not add
+# The tsx CLI's unix socket and the Postgres connection both follow from that, and — measured with
+# the network proxy off — a profile with `[permissions.<name>.network] enabled = true` runs both.
+# No allowlisted configuration tested delivered them. We deliberately do not add
 # one: with `"/" = "read"` it would make the reviewer a process that can read .env.local and reach
 # the internet. The measurements, including why the host allowlist is not a usable middle ground,
 # are in docs/reusable/codex-cli-as-subagent.md § What network would buy.

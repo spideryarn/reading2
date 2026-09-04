@@ -15,14 +15,22 @@ one are [codex-cli-as-subagent.md](codex-cli-as-subagent.md); the workflow it si
 gone for good on the next machine — most of those 42 dead paths died because the work moved from the
 Mac to the box, not because anything was cleaned up. There are two forms and you need the right one:
 
-- **Committed candidate** → a revision pair: `git diff <base>...<head>`.
-- **Pre-commit candidate** → the base SHA, the scoped paths, **and an explicit list of untracked
-  files**.
+- **Committed candidate** → the **exact commit SHAs**, a diff command, and a **complete list of
+  changed paths** (or the command that produces it). Not a merge-base range: on a shared branch
+  that sweeps up everyone else's commits. A range meant to describe two commits and eleven paths
+  was measured covering **28 commits and 131 files** — and the one file that broke the gate was in
+  the 131 and not in the eleven, so the reviewer only found it by ignoring the reading list. Say
+  which files to *start* with, and say that it does not limit scope.
+- **Live pre-commit candidate** → the base SHA, the scoped paths, **and an explicit list of
+  untracked files**. This is the common case, because the house rule is review *before* commit: run
+  `git diff <merge-base>...HEAD` on work that is not committed yet and the reviewer gets
+  **nothing**, which looks exactly like a change with no diff. A pathspec cannot name an untracked
+  file either, so a new file that nobody lists is a new file nobody reviews.
 
-The second is the common case and the one that bites, because the house rule is review *before*
-commit: run `git diff <merge-base>...HEAD` on work that is not committed yet and the reviewer gets
-**nothing**, which looks exactly like a change with no diff. A pathspec cannot name an untracked
-file either, so a new file that nobody lists is a new file nobody reviews.
+  **It is called *live* because it is not durable.** It names a tree, not bytes: another agent
+  editing one of those paths mid-review silently changes what "the candidate" means, and tomorrow it
+  names nothing recoverable at all. Close it afterwards — **write the resulting commit SHA into the
+  review artefact** once you commit, so the review can be tied back to what it actually saw.
 
 **2. Don't paste the diff.** The tree is readable. Say where to look and what changed; a 200 KB
 prompt spends the reviewer's context on transcription instead of investigation, and one such run
@@ -39,25 +47,39 @@ applied to the prompt's layout rather than its content.
 ready" and "P1" mean something different every round and nothing can be triaged without reading
 everything.
 
+Grade by **consequence**, so two levels can't both fit — an earlier draft had "wrong behaviour a
+reader can reach" against "wrong behaviour a test can reach", and a reader-visible UI bug is both:
+
 | | |
 |---|---|
-| **P0** | wrong behaviour a reader can reach; data loss; security; money |
-| **P1** | wrong behaviour a test can reach |
-| **P2** | design |
-| **P3** | docs and comments |
+| **P0** | data loss, exploitable security, incorrect charging, or the service broadly unusable |
+| **P1** | user-visible wrong behaviour, or an authoritative contract violated |
+| **P2** | design or maintainability risk with no wrong behaviour today |
+| **P3** | non-behavioural prose or comment defect |
 
-**Refuse only on an *established* P0 or P1** — one shown by something the reviewer ran, read, or
-can point at in an authoritative contract. Not *reproduced*: the sandbox cannot reach Postgres or
-any local service, so demanding a runtime reproduction would disarm the reviewer precisely where it
-is already weakest. A concern reasoned to is still worth having; it is ranked and labelled as
-reasoned, and it does not block.
+Grade by the consequence, not the file: a defect in a *doc* that will cause a P1 to ship is not a
+P3 because it is made of prose.
+
+**Refuse only on an *established* P0 or P1.** Established means **direct evidence with no unresolved
+material inference** — an observed failing run, an exact reachable source path that demonstrates the
+violation, or an authoritative contract the candidate directly contradicts. If any load-bearing
+premise is still inferred (that a branch is reachable, that a caller exists), it is **reasoned**,
+and reasoned findings rank and inform but do not block.
+
+Established rather than *reproduced*, because the sandbox cannot reach Postgres or any local
+service, and demanding a runtime reproduction would disarm the reviewer precisely where it is
+already weakest. But "read it somewhere" is not the bar either — every static review reads code.
 
 **5. Give every finding a stable ID.** `F1`, `F2`, … The implementer's brief and the next round's
 ledger both address findings by ID, so a finding cannot quietly vanish between the review and the
 work. On 2026-08-28 a P1 was lost in relay and *the count still matched*, which is what made it
 invisible; IDs make the check mechanical — every ID appears exactly once — instead of a matter of
 someone being careful. **Hand the implementer the review artefact itself**, not only your summary of
-it.
+it, and then the ledger can link to it rather than re-transcribing long findings.
+
+**IDs are stable across the whole chain, not per round.** Reuse an ID only for the same finding, and
+number new ones above the highest already issued. Otherwise round two's first finding is another
+`F1`, the ledger has two of them, and "every ID appears exactly once" stops meaning anything.
 
 ## The template
 
@@ -69,10 +91,14 @@ Repo: <path>, branch <name>. <TypeScript/ESM/whatever a stranger needs to orient
 ## The candidate
 
 <Pick one:>
-Committed:   git diff <base-sha>...<head-sha>
-Pre-commit:  base <base-sha>; scoped paths: <paths>; untracked files: <explicit list, or "none">
+Committed:    commits <exact SHAs, in order>
+              git diff <first-candidate-parent>..<last-candidate>
+              changed paths: <complete manifest, or the command that prints it>
+Live pre-commit: base <base-sha>; scoped paths: <paths>; untracked: <explicit list, or "none">
+              (not durable — I will record the resulting commit SHA here once it lands)
 
-Read these in full: <the two or three files the change lives in>
+Start with: <the two or three files the change lives in>. This is where to begin, not the limit
+of what is in scope — the manifest above is.
 
 ## What it is meant to do
 
@@ -91,8 +117,11 @@ Independently, before you read my questions below. <Name the invariant to break.
 
 For each finding give:
   - an ID (F1, F2, …), a severity (P0/P1/P2/P3), and whether it is established or reasoned
-  - (a) the input under which the code fails its own claim — something I can run
-  - (b) the smallest change that closes it, as a code block
+  - (a) what shows it fails its own claim —
+        reviewing code:       the input or mutation I can run
+        reviewing a plan/doc: the concrete scenario it does not handle, or the authoritative
+                              contract it contradicts
+  - (b) the smallest change that closes it — a code block, or exact replacement wording
 A finding with no (a) goes last.
 
 Refuse only on an established P0 or P1, and name what established it.
