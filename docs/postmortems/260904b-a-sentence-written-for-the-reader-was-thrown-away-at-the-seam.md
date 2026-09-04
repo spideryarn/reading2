@@ -176,3 +176,47 @@ it happened. What it cost is a reader with a paid slot, a 142-page paper the app
 a card offering no button, and no way to find out why. Seven and a half hours between the commit and
 the event, and however many refusals of the other seven kinds went unexplained after it — that
 number is unknown and unknowable from here, since the whole symptom is a sentence nobody kept.
+
+## The same incident, reported twice — noted 2026-09-04
+
+Greg pressed **Feedback** eighty-six seconds after the throw, and that report was triaged separately
+before anyone joined the two up. Both are this one event:
+
+| | when | what it is |
+|---|---|---|
+| `SPIDERYARN-READING2-T` | 2026-09-03T15:56:06Z | the throw: job `spya-xxd8fq`, `step: extract`, `message_withheld: True`, exception `Error: Error` |
+| `SPIDERYARN-READING2-V` | 2026-09-03T15:57:32Z | *"couldn't upload PDF"* — the reader's account of the same minute, from `/add/upload/4f2dc343-…` |
+
+Same user, same release (`edfa8fbfa510`), and the release is the point: it was built at 12:15 that
+day and **contains none of the fix**. Stage 1 landed at 19:40 (`92ff0e83`) and the cap moved to 250
+the next morning (`92cf9383`); production carried both by 14:22 on 2026-09-04. So V needs no fix of
+its own — his 142-page paper is now inside the cap, and a document that is not gets a sentence
+naming both numbers.
+
+**What V did add, and it is not in the list above.** He wrote *upload*, not *extract*. The refusal
+he could have acted on was a page cap he had no way of knowing existed: a file manager shows you a
+size and never a page count, so the cap was discoverable only by uploading a book and being turned
+away at the end of it. The add box now says *PDF, up to 50 MB and 250 pages* before a file is
+chosen — `uploadLimits()` in [`src/uploads.ts`](../../src/uploads.ts), built from the two constants
+that enforce it, guarded by
+[`tests/upload-caps-are-stated-before-the-file-is-chosen.test.tsx`](../../tests/upload-caps-are-stated-before-the-file-is-chosen.test.tsx).
+`MAX_PAGES` moved out of [`src/pdf-read.ts`](../../src/pdf-read.ts) to make that sayable at all: that
+module pulls in pdf.js and p-queue, and the browser cannot import it — which is also why
+`UPLOAD_TOO_MANY_PAGES` in [`src/messages.ts`](../../src/messages.ts) had been written without its
+own limit in it, and now has one.
+
+**And the report's own shape was the argument for a change nobody had asked for.** *"Couldn't upload
+PDF"* fitted seven branches across four files — the picker's three, the page cap, the quota wall, a
+dead transfer, extraction failing later — and telling them apart took the Sentry event, not the
+sentence. The picker's three refusals had deliberately carried no bracketed code, on the reasoning
+that they involve no provider and no request so there is nothing to look up; that tested the wrong
+thing, and they are `[pick-pdf]`, `[pick-empty]` and `[pick-big]` now, with the family and the
+`pick-`/`up-` distinction written into [copy.md](../project/copy.md#the-bracketed-code). ⟨GPT Sol
+argued for this; the glossary reversed the same rule the same day for the same reason,
+[260904c](260904c-the-glossary-said-the-term-was-not-there.md).⟩
+
+**A fifth thing that would have caught the class**, weaker than the four above and cheap: *a limit
+the reader cannot measure for themselves must be stated before they spend anything on it.* Size is
+visible in a file manager; page count, token cost and rate limits are not. The class is **a
+precondition discoverable only by violating it**, and the four ranked recommendations are all about
+the sentence at the moment of refusal rather than about the sentence before the attempt.

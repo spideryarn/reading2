@@ -90,6 +90,9 @@ import { useRenderCount } from "./perf.js";
 import { CHAIN_MS, measureRow, stepTarget } from "./keynav.js";
 import { activeSectionIndex } from "./position.js";
 import { armActivation } from "./activation.js";
+/* The bar's own rule for a control behind the experimental-features switch —
+   `visibleKinds` below is this file's caller. */
+import { shownBehindTheSwitch } from "./experimental-visibility.js";
 import { SketchView } from "./SketchView.js";
 import { useSketchCaption } from "./useSketch.js";
 import { ILLUSTRATED_PRICE, ILLUSTRATED_WAIT, IllustratedView } from "./IllustratedView.js";
@@ -116,6 +119,24 @@ export type DiagramAccess = { kind: "owner" } | { kind: "visitor" };
 
 interface Props {
   access: DiagramAccess;
+  /**
+   * **Whether this reader has the experimental-features switch on**, which
+   * decides how many picture chips the row draws and nothing else —
+   * `visibleKinds`.
+   *
+   * The boolean rather than the whole `ExperimentalSetting`: this panel draws no
+   * switch of its own and has nothing to say about a failed load, so the three
+   * states collapse to one question. `DiagramBand` (App.tsx) reads the hook and
+   * hands the answer down, exactly as it is handed to `Dock` — the page owns the
+   * fetches and the panel is told (Dock.tsx § experimental).
+   *
+   * **Required, so a new mount site cannot forget it** and quietly show one
+   * reader four pictures the switch is meant to be hiding.
+   *
+   * It is not a capability. `access` is the one that matters, and it is checked
+   * separately: a visitor gets no chips whatever this says.
+   */
+  experimental: boolean;
   /**
    * Which article. Used for exactly one thing — asking the server for the
    * embedding model's view of it (`useSimilar`), which only the Force picture
@@ -175,8 +196,34 @@ interface Props {
  * attribute. The native tooltip waits about a second, cannot be styled, cannot
  * be read by touch, and truncates at the OS's own idea of a line — for a
  * sentence explaining what a picture *is*, that is close to not being there.
+ *
+ * ## And a fourth field, which is *whether* the chip is drawn at all
+ *
+ * Since 2026-09-04 Diagram itself is in everybody's bar and four of these five
+ * pictures are behind the experimental-features switch instead. A reader asked
+ * for exactly that:
+ *
+ * > The only diagram sub-mode that is good enough to show everyone is the
+ * > sketch mode. The other ones should be only visible to people who have
+ * > experimental features on, because they don't work so well yet.
+ * >
+ * > — a reader, 2026-09-04 (SPIDERYARN-READING2-13)
+ *
+ * `experimental` is **required on every row**, for `MODES_UI`'s reason
+ * (Dock.tsx): an optional flag would quietly enrol picture six among the
+ * finished ones. The rule that reads it is `visibleKinds` below, and it is the
+ * bar's own rule, shared rather than copied — experimental-visibility.ts.
+ *
+ * **It is not a gate and must not be read as one.** Hiding a chip hides a
+ * control; it authorises nothing. What actually stops a stranger buying a
+ * picture is `access` — a visitor gets no picker at all and is pinned to
+ * `force` — plus `requireUser` on the two endpoints that spend.
+ * docs/project/security-map.md, docs/project/experimental-features.md.
  */
-const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Network; blurb: string; how: string }> = {
+const KIND_UI: Record<
+  DiagramKind,
+  { label: string; icon: typeof Network; blurb: string; how: string; experimental: boolean }
+> = {
   /* Force draws the GRAPH, not the tree — sections joined by the words they
      share as well as by where they sit (src/web/graph.ts). Its blurb says what
      it is *for*, because unlike the tree it is not showing the reader something
@@ -184,6 +231,10 @@ const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Network; blurb:
   force: {
     label: "Force",
     icon: Waypoints,
+    /* Behind the switch since 2026-09-04, with Drift, Trail and Illustrated. It
+       was the picture Diagram opened on until then; what changed is not the
+       picture but who is shown a chip for it. */
+    experimental: true,
     blurb:
       "Sections as bubbles, settled by physics: ones that talk about the same things pull together, while down the page stays reading order.",
     how: "The solid lines are free — reading order, containment, and words two sections share. The dotted ones cost one model call, and say the two passages mean something similar.",
@@ -194,6 +245,7 @@ const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Network; blurb:
   drift: {
     label: "Drift",
     icon: ChartScatter,
+    experimental: true,
     blurb:
       "One dot per paragraph: down the page is still the article, sideways is what it is talking about — so a subject the piece returns to is a second cluster far below the first.",
     how: "Costs one model call the first time, which reads every paragraph. Sideways is either one sliding scale or a column per topic — the Sideways control switches between them.",
@@ -201,6 +253,7 @@ const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Network; blurb:
   trail: {
     label: "Trail",
     icon: Route,
+    experimental: true,
     blurb:
       "The same dots with both axes spent on meaning, joined in reading order — so you can see whether the piece travels through its subject or circles back over it.",
     how: "Shares Drift's model call, so opening one pays for both. This is the only picture here where down the page is not later in the article; colour by Progress if you need that back.",
@@ -212,6 +265,11 @@ const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Network; blurb:
   sketch: {
     label: "Sketch",
     icon: PenLine,
+    /* **The one that is good enough for everybody**, and therefore the default
+       (`diagramParam` in params.ts). It is also the only one here whose empty
+       state is a real invitation — SketchView.tsx draws what it costs and what
+       it takes, and draws nothing until asked. */
+    experimental: false,
     blurb:
       "A model reads the article, works out what shape the argument is — three supports converging, a ladder, a spine with asides — and draws that. The only picture here that is not the same shape for every article.",
     /* **Both promises here were stronger than the artefact.** The picture is
@@ -233,6 +291,9 @@ const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Network; blurb:
   illustrated: {
     label: "Illustrated",
     icon: Brush,
+    /* The dearest and slowest thing in the app, and the newest. Behind the
+       switch on both counts. */
+    experimental: true,
     blurb:
       "The same argument as the Sketch, painted — an antique map or an illuminated page, drawn from passages the article actually contains. An interpretation of the shape, not a diagram of it.",
     /* **"the list under it is both" said checked, and only half of it is.** The
@@ -241,6 +302,35 @@ const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Network; blurb:
     how: `Made from the Sketch rather than the article, so draw that one first. Costs ${ILLUSTRATED_PRICE} and takes ${ILLUSTRATED_WAIT}, and is never painted until you ask. Nothing in the picture is checked or clickable; the list under it quotes the article and jumps into it.`,
   },
 };
+
+/**
+ * **Which of the five pictures the chip row actually draws.** Two rules, and
+ * the second is the one that is easy to lose — they are `visibleModes`'
+ * (Dock.tsx) exactly, because they are the same rule
+ * (experimental-visibility.ts).
+ *
+ * 1. Every picture that is not experimental — today that is Sketch alone.
+ * 2. **Plus whichever one the reader is looking at**, experimental or not,
+ *    which is whatever `?diagram=` says.
+ *
+ * The second is what keeps a shared link working. `?mode=diagram&diagram=trail`
+ * is an address somebody copied out of their own window, and a reader with the
+ * switch off has to be able to open it, see the picture, and see a checked chip
+ * for it — this row is a `role="radiogroup"`, so a hidden current chip would
+ * leave a group announcing *one of these* with none of them on. It also means
+ * turning the switch off while looking at Drift leaves the reader on Drift.
+ *
+ * `DIAGRAMS` rather than `Object.keys(KIND_UI)`: the order of this row is
+ * Greg's, and Illustrated must stay immediately right of Sketch because three
+ * refusal sentences in that panel say *"the chip one to the left"*.
+ *
+ * Exported for tests/diagram-kind-gating.test.tsx.
+ */
+export function visibleKinds(on: boolean, current: DiagramKind): readonly DiagramKind[] {
+  return DIAGRAMS.filter((k) =>
+    shownBehindTheSwitch({ experimental: KIND_UI[k].experimental, on, current: k === current }),
+  );
+}
 
 /**
  * The pictures that draw a you-are-here line, and therefore the only ones for
@@ -525,6 +615,7 @@ function useReaderRow(enabled: boolean): [number | null, (row: number) => void] 
 
 export function DiagramPanel({
   access,
+  experimental,
   slug,
   root,
   kind: askedKind,
@@ -1443,11 +1534,20 @@ export function DiagramPanel({
 
           `kind` is pinned to `force` above regardless, so this is the
           presentation half of a rule enforced elsewhere; the enforcement is not
-          here. docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */}
+          here. docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2.
+
+          **And an owner with the experimental switch off sees one chip, not
+          five** — `visibleKinds`, since 2026-09-04. That is a different
+          mechanism from the one above and they compose in one direction only: a
+          visitor gets no row whatever their switch says. The row is still drawn
+          with a single chip in it, unlike the visitor case, because that chip is
+          not furniture — pressing Sketch is the gesture that draws one
+          (§ the gesture seam below), and its card is where the price is said.
+          docs/project/experimental-features.md. */}
       {owns && (
       <div className="diag-kinds" role="radiogroup" aria-label="Which diagram">
         <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-          {DIAGRAMS.map((k) => {
+          {visibleKinds(experimental, kind).map((k) => {
             const ui = KIND_UI[k];
             const Icon = ui.icon;
             return (

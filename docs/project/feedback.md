@@ -20,8 +20,8 @@ It asked three questions in three boxes for two days. Greg:
 Three boxes is a form, and a form is what you fill in once you have *decided* to file a bug. The
 reader this whole feature exists for is the one who was merely annoyed. So: one `body`, a `kind`
 that is **a problem, a suggestion, or nothing at all** (Greg: *"don't default to Problem. Default to
-null/unknown"*), a line of thanks above it, a "Not sure what to write?" disclosure below it, and a
-microphone — [dictation.md](dictation.md), the same three lines as every other box.
+null/unknown"*), a line of thanks above it, guidance under the label, and a microphone —
+[dictation.md](dictation.md), the same three lines as every other box.
 
 The three questions themselves survived the boxes and sit above the one box, always visible:
 
@@ -30,7 +30,25 @@ The three questions themselves survived the boxes and sit above the one box, alw
 >
 > — Greg, 2026-09-03
 
-They had spent a day inside the disclosure, and a hint nobody opens is a hint nobody reads.
+They had spent a day inside a "Not sure what to write?" disclosure, and a hint nobody opens is a
+hint nobody reads.
+
+**Since 2026-09-04 that guidance follows the toggle, and the disclosure is gone.** Greg, having
+filed the report from inside the dialog:
+
+> I think if the user clicks on a problem, then we want to show that guidance for bug tracking about
+> steps to reproduce and what happened and what do they expect to happen — we want to show that text
+> explicitly and quite prominently … And then we can get rid of not sure what to write because no
+> one will click that.
+>
+> — Greg, 2026-09-04
+
+So: **Problem** breaks the three asks out as three lines with the disclosure's old look; **Suggestion**
+asks what you'd like and what it would let you do; **nothing picked** keeps the 2026-09-03 sentence
+unchanged, which is what makes the instruction above still true for a reader who never touches the
+toggle. One reassurance was folded out of the disclosure and rides under the three asks; the rest of
+it went. `KindHint` in [`FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) is the whole of it,
+pinned by `tests/feedback-dialog.test.tsx`.
 
 The three old columns were backfilled into `body` under their old headings and **dropped**, so there
 is one shape in the table rather than two. The route still accepts the old three from a tab loaded

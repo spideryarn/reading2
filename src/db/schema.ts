@@ -281,6 +281,34 @@ export const articles = spideryarn.table("articles", {
    * notices. The CHECK is what makes it loud instead.
    */
   check("articles_visibility", sql`${t.visibility} in ('private','public')`),
+  /**
+   * **The shelf's own index, and what makes `limit 200` a bound on work rather
+   * than only on rows.**
+   *
+   * `publicLibraryQuery` (src/store/public-library.ts) is the one query on this
+   * table that anybody can run without signing in, and it asks for
+   * `visibility = 'public'` ordered by `public_at desc nulls last, slug`. With
+   * no index matching that, Postgres filters and **sorts the whole public corpus
+   * before applying the limit** — so the ceiling bounds what comes back and not
+   * what it cost, on an endpoint with no rate limit and no session. GPT Sol's
+   * finding 3 on stage 3a, 2026-09-04.
+   *
+   * **Partial, on `visibility = 'public'`**, which is the shape that earns its
+   * keep here: almost every row in this table is private and will stay private,
+   * so a full index would be mostly entries no reader can ever reach, paid for
+   * on every write. The predicate is written the same way the query writes it,
+   * because a partial index is only used when the planner can prove the query's
+   * clause implies the index's.
+   *
+   * The columns are the `order by`, in its order and its direction — including
+   * `nulls last`, which is not the default under `desc` and which the query
+   * spells out for its own reasons. Getting either wrong yields an index the
+   * planner will not use for the sort, which is the failure that looks like
+   * success. `slug` is there because the ordering is deliberately total.
+   */
+  index("articles_public_listing")
+    .on(t.publicAt.desc().nullsLast(), t.slug.asc())
+    .where(sql`${t.visibility} = 'public'`),
 ]);
 
 /**

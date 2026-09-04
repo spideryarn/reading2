@@ -44,59 +44,18 @@
  * docs/reusable/silent-success.md applied to the check itself.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const ROOT = path.resolve(import.meta.dirname, "..");
-
-/**
- * The specifiers one file imports **at run time**.
- *
- * `import type { X } from "y"` and a brace clause whose every specifier is
- * `type X` both erase, so neither is followed. Everything else is — including
- * `export … from`, a bare side-effect `import "…"`, and a dynamic `import("…")`,
- * because all three execute the module.
- */
-function runtimeImportsOf(file: string): string[] {
-  const text = readFileSync(file, "utf8");
-  const found: string[] = [];
-  for (const m of text.matchAll(/(?:^|\n)\s*(?:import|export)\s+([^;'"]*?)from\s*["']([^"']+)["']/g)) {
-    const clause = (m[1] ?? "").trim();
-    if (clause === "type" || clause.startsWith("type ")) continue;
-    const braces = /^\{([\s\S]*)\}$/.exec(clause);
-    if (braces) {
-      const names = (braces[1] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-      if (names.length > 0 && names.every((n) => n.startsWith("type "))) continue;
-    }
-    if (m[2]) found.push(m[2]);
-  }
-  for (const m of text.matchAll(/(?:^|\n)\s*import\s*["']([^"']+)["']/g)) if (m[1]) found.push(m[1]);
-  for (const m of text.matchAll(/\bimport\(\s*["']([^"']+)["']\s*\)/g)) if (m[1]) found.push(m[1]);
-  return found;
-}
-
-/** Every module reachable from one entry point, repo-relative and sorted. */
-function graphFrom(entry: string): string[] {
-  const seen = new Set<string>();
-  const queue = [path.join(ROOT, entry)];
-  while (queue.length) {
-    const file = queue.pop();
-    if (file === undefined || seen.has(file)) continue;
-    seen.add(file);
-    for (const spec of runtimeImportsOf(file)) {
-      // A bare specifier is a package; only relative imports are ours.
-      if (!spec.startsWith(".")) continue;
-      const resolved = path.resolve(path.dirname(file), spec).replace(/\.js$/, ".ts");
-      const tsx = resolved.replace(/\.ts$/, ".tsx");
-      if (existsSync(resolved)) queue.push(resolved);
-      else if (existsSync(tsx)) queue.push(tsx);
-      else throw new Error(`cannot resolve ${spec} from ${path.relative(ROOT, file)}`);
-    }
-  }
-  return [...seen].map((f) => path.relative(ROOT, f)).sort();
-}
+/* **The walker moved to a helper on 2026-09-04**, unchanged, because a second
+   guard came to need the same walk: tests/owner-isolation.test.ts § ownerless
+   enumeration inventories every `.from(articles)` query in this same graph. Two
+   copies would be two sets of rules about what counts as an import. The
+   reasoning about the walk's shape stays here, in the header above, because that
+   is where the rule is stated. */
+import { graphFrom, PUBLIC_ENTRIES, publicFiles, ROOT } from "./helpers/import-graph.js";
 
 /**
  * **The owner's read layer.** Each one returns something the public payload must
@@ -163,27 +122,6 @@ const WRITERS = [
 ];
 
 const FORBIDDEN = [...OWNER_READS, ...THE_OWNER, ...SPENDS, ...WRITERS];
-
-/**
- * **Every door a stranger can come through**, and there are two of them now.
- *
- * `src/public/routes.ts` is the JSON namespace. `src/public/page.ts` is the
- * HTML one — stage 2 serves `/read/:slug` from the same function, off the same
- * hardwired reader, to somebody who has not signed in and never will. It is the
- * same closed room with a second door, so it gets the same guard rather than a
- * new one: a walk that started only at `routes.ts` would have said nothing at
- * all about the page, and the page is the surface we invite strangers to.
- *
- * Listed rather than globbed over `src/public/`, so adding a third entry point
- * is a decision somebody makes here on purpose. `dto.ts` and `route-names.ts`
- * are leaves reached from these two, not doors of their own.
- */
-const PUBLIC_ENTRIES = ["src/public/routes.ts", "src/public/page.ts"];
-
-/** Everything reachable from either door, deduplicated. */
-function publicFiles(): string[] {
-  return [...new Set(PUBLIC_ENTRIES.flatMap((entry) => graphFrom(entry)))].sort();
-}
 
 describe("the public API's import graph", () => {
   const publicGraph = publicFiles();

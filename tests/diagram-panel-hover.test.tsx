@@ -175,6 +175,9 @@ function mount(
     root.render(
       <DiagramPanel
         access={{ kind: "owner" }}
+        /* The switch on, so all five chips are drawn — this file is about the
+           card each of them carries. DiagramPanel.tsx § visibleKinds. */
+        experimental
         slug="s"
         root={tree}
         kind={kind}

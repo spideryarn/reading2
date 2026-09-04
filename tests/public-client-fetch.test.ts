@@ -16,8 +16,9 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PublicArticle } from "../src/public-types.js";
-import { PUBLIC_ROUTE_NAMES } from "../src/public/route-names.js";
-import { loadPublicArticle, publicFetch } from "../src/web/public-api.js";
+import { pathOf, PUBLIC_ROUTE_NAMES } from "../src/public/route-names.js";
+import type { PublicLibrary } from "../src/public-library-types.js";
+import { loadPublicArticle, loadPublicLibrary, publicFetch } from "../src/web/public-api.js";
 
 /** Every request this file's calls made, exactly as `fetch` saw it. */
 const calls: { url: string; init: RequestInit | undefined }[] = [];
@@ -177,6 +178,11 @@ describe("reading a public endpoint", () => {
    */
   it.each([
     ["the article", () => loadPublicArticle("a-piece")],
+    /* The collection loader joined the list on 2026-09-04 rather than getting a
+       copy of the assertion later. It is the one that would be easiest to write
+       as a bare `fetch` — there is no slug to encode, so the line looks trivial
+       — which is exactly why it belongs here. */
+    ["the library", () => loadPublicLibrary()],
   ])("sends no credentials and no Authorization when loading %s", async (_name, load) => {
     next = () => new Response(JSON.stringify(ARTICLE), { status: 200 });
     await load();
@@ -231,8 +237,15 @@ describe("reading a public endpoint", () => {
  * turned off rather than read.
  */
 describe("the client and the server agree about the paths", () => {
+  /**
+   * The inventory's spellings, both kinds. `pathOf` is what knows that a
+   * collection route's `path()` takes nothing — the same helper the server's
+   * three sweeps use, so the client asks the question the same way rather than
+   * writing its own ternary and its own idea of what a collection is.
+   */
+  const spelled = new Set(PUBLIC_ROUTE_NAMES.map((r) => pathOf(r, "a-piece")));
+
   it("asks only for routes the server's own inventory names", async () => {
-    const spelled = new Set(PUBLIC_ROUTE_NAMES.map((r) => r.path("a-piece")));
     /* The inventory does not encode — `path()` is the *spelling*, and encoding
        is the client's own job, which the test above covers. A plain slug is the
        same either way, which is why this one uses one. */
@@ -246,5 +259,28 @@ describe("the client and the server agree about the paths", () => {
     for (const call of calls) expect(spelled).toContain(call.url);
     // And no loader asks for the same thing twice.
     expect(new Set(calls.map((c) => c.url)).size).toBe(calls.length);
+  });
+
+  /**
+   * **And the collection loader, whose path is a constant.**
+   *
+   * A slug loader would show a rename as an obviously wrong URL; this one is a
+   * literal string in one file and a `publicCollection("library")` in another,
+   * with nothing between them. So the assertion is the exact path, against the
+   * inventory — the seam this whole block exists for, at the one route where
+   * nothing else would notice it had moved.
+   */
+  it("and the library loader asks for exactly the collection path the server spells", async () => {
+    const shelf: PublicLibrary = { entries: [], truncated: false };
+    next = () => new Response(JSON.stringify(shelf), { status: 200 });
+    calls.length = 0;
+    await loadPublicLibrary();
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe("/api/public/library");
+    expect(spelled).toContain(calls[0]?.url);
+    /* The inventory really does hold a slugless route, or the line above is
+       comparing against a set that could not have contained this path anyway. */
+    expect(PUBLIC_ROUTE_NAMES.some((r) => r.kind === "collection")).toBe(true);
   });
 });

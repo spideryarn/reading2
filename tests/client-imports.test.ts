@@ -61,6 +61,15 @@ const SHARED = new Set([
   "supplement.js",
   "ingest.js", // slug derivation, so the client can show the same one the server will mint
   "term-match.js", // where a glossary term appears in a block
+  /* What the glossary's *Look up a term* box will accept — the bound, the
+     screen, and the three sentences a refused term gets. On the list for the
+     reason the header gives rather than for convenience: it imports nothing at
+     all, having been made a leaf when this test caught it reaching for one
+     number in `vocabulary.ts`. The box refuses on `parseAskedTerm` and so does
+     `POST /api/glossary/:slug/ask`, so a second copy would be a reader told two
+     different things by one rule depending on which side caught it.
+     See src/asked-term.ts and docs/project/glossary.md § Looking a term up. */
+  "asked-term.js",
   "quote-match.js",
   // Whether a saved search still describes the article. The panel puts a
   // warning on a row and the server answers the same question at the read seam;
@@ -190,6 +199,15 @@ const SHARED = new Set([
      of an allowlist projection is lost if the browser re-declares its own idea
      of what came back. See docs/plans/260827ai-public-read-only-access.md § The payload. */
   "public-types.js",
+  /* The wire shapes of `GET /api/public/library` — the shelf of public
+     articles. On the list for exactly `public-types.js`'s reason and beside it:
+     it imports **nothing at all** and is nothing but `interface` declarations,
+     so it erases entirely at compile time. Separate from that file because it
+     is the contract for the *list* rather than for one article, and the two
+     projections must not be tempted into being one — the header of
+     src/public-library-types.ts has the argument.
+     See docs/plans/260904b-pricing-page-and-public-showcase.md § Stage 3a. */
+  "public-library-types.js",
   /* What we know about the article's own images: which URLs a block would have
      the browser fetch, what a downloaded file turns out to be, and the map a URL
      is looked up in. On the list because it qualifies — it imports **nothing at

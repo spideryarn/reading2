@@ -553,7 +553,7 @@ describe("runsParam and the legacy run= it replaced", () => {
  * every other parser in params.ts makes, and worth pinning for the two newest.
  */
 describe("the diagram parameters", () => {
-  it("takes any of the three pictures and falls back to the one that draws first", () => {
+  it("takes any of the five pictures and falls back to the one everybody can see", () => {
     expect(diagramParam.parse("force")).toBe("force");
     expect(diagramParam.parse("drift")).toBe("drift");
     expect(diagramParam.parse("trail")).toBe("trail");
@@ -568,10 +568,16 @@ describe("the diagram parameters", () => {
     expect(diagramParam.parse("strata")).toBeNull();
     expect(diagramParam.parse("mindmap")).toBeNull();
     expect(diagramParam.parse("tree")).toBeNull();
-    /* `force` because it is the only one that draws anything before a model has
-       answered: four of its five kinds of line are arithmetic over prose the
-       browser already holds. The other two would open on a spinner. */
-    expect(diagramParam.defaultValue).toBe("force");
+    /* **`sketch` since 2026-09-04**, and on a different argument from the one
+       that used to be written here. `force` was the default because it was the
+       only picture that drew anything before a model had answered — the right
+       rule while it was the picture everybody saw. It is now behind the
+       experimental-features switch with Drift, Trail and Illustrated, a reader
+       having reported that only the Sketch is good enough to show everyone
+       (SPIDERYARN-READING2-13), and a default most readers cannot see would be
+       an odd thing to keep. Arriving still buys nothing: the Sketch is never
+       drawn until it is asked for. tests/diagram-kind-gating.test.tsx. */
+    expect(diagramParam.defaultValue).toBe("sketch");
   });
 
   it("defaults sideways to lanes, and refuses anything it cannot draw", () => {

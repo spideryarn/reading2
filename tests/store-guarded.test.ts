@@ -392,6 +392,14 @@ describe("no Postgres store is selected without a guard", () => {
           "and walked by tests/public-imports.test.ts",
       ],
       [
+        "pgPublicLibraryReader",
+        "the same, for the same reason and in the same closed room: src/store/public-library.ts " +
+          "keeps its own twelve-line `scrubbed`, because `guardDbStore` would pull src/chat.ts " +
+          "and everything under it into an import graph tests/public-imports.test.ts exists to " +
+          "keep small. Added 2026-09-04 with the public listing; this check is what noticed the " +
+          "new adapter, which is what it is for",
+      ],
+      [
         "pgArtifactsIn",
         "not a store anybody selects: it is built per transaction inside pgStoreSession, whose " +
           "own returned object IS guarded, so every escape route from it already goes through " +

@@ -157,6 +157,17 @@ function type(text: string) {
   });
 }
 
+/** Press one of the two kind toggles, by the words on it. */
+function pick(label: string) {
+  const button = [...host.querySelectorAll<HTMLButtonElement>("button.fb-kind-button")].find(
+    (b) => (b.textContent ?? "").includes(label),
+  );
+  if (!button) throw new Error(`no kind button called ${label}`);
+  act(() => {
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
 function send() {
   const button = host.querySelector<HTMLButtonElement>("button.fb-send");
   if (!button) throw new Error("no Send");
@@ -217,6 +228,53 @@ describe("the feedback dialog", () => {
     expect(shown).toMatch(/steps to reproduce/i);
     expect(shown).toMatch(/what you expected/i);
     expect(shown).toMatch(/what you saw instead/i);
+    expect(host.querySelector(".fb-help")).toBeNull();
+  });
+
+  /* **The guidance follows the toggle**, Greg 2026-09-04: a reader who says
+     "a problem" should be shown what makes a good bug report *prominently*,
+     rather than the same one-liner everybody else gets. What is pinned is the
+     behaviour — that picking a kind changes the guidance, and that the
+     bug-report asks are broken out as separate lines once Problem is picked —
+     not the phrasing, which is FeedbackDialog.tsx § KindHint's. */
+  it("breaks the bug-report asks out into lines once Problem is picked", () => {
+    mount();
+    expect(host.querySelectorAll(".fb-ask")).toHaveLength(0);
+    pick("A problem");
+    const asks = [...host.querySelectorAll(".fb-ask")].map((el) => el.textContent ?? "");
+    expect(asks).toHaveLength(3);
+    expect(asks[0]).toMatch(/steps to reproduce/i);
+    expect(asks[1]).toMatch(/what you expected/i);
+    expect(asks[2]).toMatch(/what you saw instead/i);
+  });
+
+  it("asks a suggestion what it is for, and does not ask it to reproduce anything", () => {
+    mount();
+    pick("A suggestion");
+    const shown = host.textContent ?? "";
+    expect(shown).toMatch(/what it would let you do/i);
+    expect(shown).not.toMatch(/steps to reproduce/i);
+    expect(host.querySelectorAll(".fb-ask")).toHaveLength(0);
+  });
+
+  /* Un-picking puts the general sentence back, which is the same code path as a
+     dialog nobody has touched — and the one a reader reaches by pressing the
+     pressed button, which is why the toggle is two buttons rather than radios. */
+  it("goes back to the general sentence when the kind is un-picked", () => {
+    mount();
+    pick("A problem");
+    pick("A problem");
+    expect(host.querySelectorAll(".fb-ask")).toHaveLength(0);
+    expect(host.textContent ?? "").toMatch(/if something went wrong/i);
+  });
+
+  /* Greg, 2026-09-04: *"we can get rid of not sure what to write because no one
+     will click that."* Guidance behind a click is guidance nobody reads, and
+     the point of the change above is that there is nothing left to click. */
+  it("has no disclosure to open", () => {
+    mount();
+    expect(host.textContent ?? "").not.toMatch(/not sure what to write/i);
+    expect(host.querySelector(".fb-help-toggle")).toBeNull();
     expect(host.querySelector(".fb-help")).toBeNull();
   });
 

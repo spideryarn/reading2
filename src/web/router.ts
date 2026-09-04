@@ -62,7 +62,7 @@
  */
 import { useMemo, useSyncExternalStore } from "react";
 
-import { isSlug } from "../ingest.js";
+import { isSlug, PUBLIC_LIBRARY_SLUG } from "../ingest.js";
 
 /** Which of an article's three pages. `article` is the reading view itself. */
 /* **Moved to src/read-address.ts on 2026-08-30** and re-exported, so nothing
@@ -84,6 +84,31 @@ export type AdminPage = "home" | "users" | "feedback";
 export type Route =
   | { kind: "library" }
   | { kind: "read"; slug: string; view: ArticleView }
+  /**
+   * **The shelf of public articles — `/read/public`.**
+   *
+   * Under `/read/` and not beside it, because it is about articles and because
+   * that is the address Greg asked for: *"create a `/read/public/` page that
+   * lists Public-readable pages"* (2026-09-04). The cost of living there is that
+   * it occupies a name an article could otherwise have had, which is why
+   * `isReservedSlug` (src/ingest.ts) refuses it at the one line that brings an
+   * article address into existence — a shelf card pointing at a page about
+   * something else is a failure nothing would report.
+   *
+   * **Matched before `/read/:slug`, here and at the edge.** `decidePublicPage`
+   * (src/public/page.ts) answers this address without asking the database, and
+   * the two have to agree or one of them serves a 404 for a page the other
+   * renders. docs/plans/260904b-pricing-page-and-public-showcase.md § 3.
+   *
+   * **There is no page behind it yet**, and this variant is honest about that
+   * rather than papering over it: App.tsx draws the 404 page and the edge
+   * answers 404, which is what an address with nothing at it should do. Stage 3b
+   * of the plan builds `PublicLibraryPage` and flips both — two lines, in two
+   * files that already have the branch. The data and the route it will read are
+   * built: `GET /api/public/library`, and `loadPublicLibrary` in
+   * src/web/public-api.ts.
+   */
+  | { kind: "public-library" }
   /**
    * Add this URL, right now — `/add/<a whole URL>`. See AddPage.tsx.
    *
@@ -364,6 +389,17 @@ export function parseRoute(pathname: string): Route {
        finding. */
     return { kind: "library" };
   }
+  /* **Before the article regex, which would otherwise swallow it.** `public` is
+     a legal slug shape, so `/read/public` matches `/read/([^/]+)` and would be
+     read as an article — asked for over the wire, refused, and shown as *this
+     document is not shared*, which is a claim about a document that does not
+     exist. The reservation in `isReservedSlug` (src/ingest.ts) is what stops one
+     ever existing; this is the half that gives the address its own meaning.
+
+     `PUBLIC_LIBRARY_HREF` rather than the literal, so the constant that names
+     the reserved slug and the constant that spells the route are one value —
+     and the edge asks the same `PUBLIC_LIBRARY_SLUG`. */
+  if (new RegExp(`^${PUBLIC_LIBRARY_HREF}/?$`).test(pathname)) return { kind: "public-library" };
   const m = /^\/read\/([^/]+)(?:\/(metadata|tweets))?\/?$/.exec(pathname);
   if (!m) return { kind: "not-found" };
   // A malformed escape would throw out of decodeURIComponent and take the whole
@@ -476,6 +512,17 @@ export const FEATURES_HREF = "/features";
  * an address to send somebody, not because the numbers live anywhere new.
  */
 export const PRICING_HREF = "/pricing";
+/**
+ * The shelf of public articles.
+ *
+ * **Built from `PUBLIC_LIBRARY_SLUG`, not typed out**, and that is the point of
+ * it: the same constant is what `isReservedSlug` refuses at the allocation seam
+ * and what `decidePublicPage` matches at the edge, so the address, the
+ * reservation and the edge branch cannot come apart. A second spelling here
+ * would be a route the reservation had stopped protecting, and nothing would
+ * say so until an article turned up wearing the name.
+ */
+export const PUBLIC_LIBRARY_HREF = `/read/${PUBLIC_LIBRARY_SLUG}`;
 /**
  * Spelled once, and read by both `parseRoute` above and main.tsx's rewrite
  * exemption.

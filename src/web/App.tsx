@@ -400,6 +400,15 @@ export function App() {
        Bare, like `PrivacyPage` above: `NotFoundPage` draws its own way home.
        docs/plans/260903j-not-found-page.md. */
     if (route.kind === "not-found") return <NotFoundPage signedIn={false} />;
+    /* **The public shelf, which has no page yet.** `/read/public` is a reserved
+       address (src/web/router.ts § `public-library`) and stage 3b of
+       docs/plans/260904b-pricing-page-and-public-showcase.md builds what goes on
+       it. Until then it is an address with nothing at it, and the 404 page is
+       the honest answer — the same one the edge gives, so the status and the
+       page agree. **Not `LandingPage`**, which is what the fall-through below
+       would give it: a plausible page at an address that means nothing is the
+       exact silence docs/plans/260903j-not-found-page.md exists to break. */
+    if (route.kind === "public-library") return <NotFoundPage signedIn={false} />;
     if (route.kind !== "read") return <LandingPage />;
     return <ArticlePage slug={route.slug} view={route.view} readerId={null} />;
   }
@@ -523,6 +532,16 @@ function SignedIn({
      gets — signed in there *is* a shelf for it to link at, which is the same
      reason the privacy page is bare above and dressed here. NotFoundPage.tsx. */
   if (route.kind === "not-found")
+    return (
+      <>
+        <HomeLogo />
+        <NotFoundPage signedIn />
+      </>
+    );
+  /* The public shelf, signed in. Same reasoning as the signed-out arm above —
+     the page is stage 3b — and dressed the same way every other standalone page
+     is here, because signed in there is a shelf for the logo to link at. */
+  if (route.kind === "public-library")
     return (
       <>
         <HomeLogo />
@@ -3078,6 +3097,7 @@ function Reader({
           read={glossaryRead}
           onJump={jumpTo}
           onSelected={setTerm}
+          onMode={setMode}
         />
       )}
       {/* **The visitor's three bands, and they are the slice.** Each is the same
@@ -3130,6 +3150,11 @@ function Reader({
       {mode === "diagram" && (
         <DiagramBand
           access={{ kind: owner ? "owner" : "visitor" }}
+          /* Which of the five picture chips the row draws — the same answer the
+             bar below is given, from the same hook, so the two cannot disagree
+             about what this reader is being shown.
+             DiagramPanel.tsx § `visibleKinds`. */
+          experimental={experimental.on}
           slug={slug}
           article={article}
           at={at}
@@ -4397,6 +4422,7 @@ function GlossaryBand({
   read,
   onJump,
   onSelected,
+  onMode,
 }: {
   slug: string;
   /**
@@ -4410,16 +4436,31 @@ function GlossaryBand({
   read: GlossaryRead;
   onJump(id: BlockId): void;
   onSelected(selection: TermSelection | null): void;
+  /**
+   * Switch mode, for the one thing the glossary cannot answer.
+   *
+   * The *Look up a term* box explains what the piece says and nothing else, so
+   * a word the piece never uses has no answer in this band at any price. Chat
+   * is the surface that may go outside the article, and the panel offers it
+   * rather than leaving the reader at a dead end. Same prop and same reason as
+   * `ConversationBand`'s, one band along. See `AskATerm` in GlossaryPanel.tsx.
+   */
+  onMode(next: Mode): void;
 }) {
   useRenderCount("GlossaryBand");
   const glossary = useGlossary(slug, read);
   const band = useGlossaryMode(glossary.glossary?.entries ?? NO_TERMS, onSelected);
+
+  /* Memoised so the panel's `onAskChat` keeps its identity between renders,
+     which is the same reason every other callback crossing this boundary is. */
+  const askChat = useCallback(() => onMode("chat"), [onMode]);
 
   return (
     <GlossaryPanel
       access={{ kind: "owner", owner: glossary, glossary: glossary.glossary }}
       {...band}
       onJump={onJump}
+      onAskChat={askChat}
     />
   );
 }
@@ -5050,13 +5091,20 @@ function useSummaryMode(article: Article) {
  * Force's dotted lines, `useProjection` for the two scatters' dots. `slug` is
  * passed for exactly that.
  *
- * All three pictures spend a model call since the free one — `tree`, the
- * outline — was cut on 2026-08-30. Force is the default because it is the only
- * one that draws something real before its answer lands. See
+ * Every picture here spends a model call, since the free one — `tree`, the
+ * outline — was cut on 2026-08-30. **Sketch is the default since
+ * 2026-09-04**, and it is the one picture here that draws nothing at all until
+ * the reader asks: what an owner arriving here meets is an invitation with the
+ * price and the wait on it (SketchView.tsx § the empty state), and opening the
+ * mode still buys nothing (activation.ts § `MODE_TARGET`). Force held the
+ * default before that, for the opposite reason — it was the only one that drew
+ * something real before its answer landed — and it is now behind the
+ * experimental-features switch with Drift, Trail and Illustrated. See
  * docs/project/diagram.md.
  */
 function DiagramBand({
   access,
+  experimental,
   slug,
   article,
   at,
@@ -5064,6 +5112,13 @@ function DiagramBand({
 }: {
   /** Owner or visitor — DiagramPanel.tsx § DiagramAccess is the whole argument. */
   access: DiagramAccess;
+  /**
+   * The experimental-features switch, as the chip row sees it — passed straight
+   * through. `Reader` reads the hook once and hands the answer to both the bar
+   * and this band, which is what stops them disagreeing.
+   * DiagramPanel.tsx § `experimental`.
+   */
+  experimental: boolean;
   slug: string;
   article: Article;
   /**
@@ -5111,6 +5166,7 @@ function DiagramBand({
   return (
     <DiagramPanel
       access={access}
+      experimental={experimental}
       slug={slug}
       root={root}
       kind={kind}

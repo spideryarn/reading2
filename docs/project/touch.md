@@ -39,8 +39,8 @@ property of the region rather than of the gesture. A table too wide for the wind
 panned by hand; you do it from a gist column rather than from the middle of a sentence. See
 [260827t-mobile-reading-view.md § One axis at a time](../plans/260827t-mobile-reading-view.md).
 
-A tap is still a tap almost everywhere: it jumps to the thing you tapped. **Two places reveal
-first and act second**, and both for the same reason: they carry a hover card, and a surface with
+A tap is still a tap almost everywhere: it jumps to the thing you tapped. **Three places reveal
+first and act second**, and all for the same reason: they carry a hover card, and a surface with
 no hover has to let the first press mean *show me* or the reader commits blind.
 
 - **The spine**, whose bands are proportional, so most are a few pixels tall and tapping one blind
@@ -90,6 +90,21 @@ no hover has to let the first press mean *show me* or the reader commits blind.
   in every mode. Guarding it is one line, the same line `pointerover` has had since the day the touch
   path was built. What is worth reading is why 24 synthetic-event tests were green throughout:
   [260903g-the-touch-card-closed-itself-on-every-tap.md](../postmortems/260903g-the-touch-card-closed-itself-on-every-tap.md).
+- **A link that leaves the app**, since 2026-09-04 — first tap shows the card, second opens the new
+  tab. Greg had run into it on a home-screen iPad, where a link navigating in place replaces the
+  whole app and there is no back button; [links.md](links.md#every-link-that-leaves-the-app-opens-a-new-tab)
+  has the report, why the new tab is unconditional, and why it is keyed on `target="_blank"`.
+
+  Note what did **not** change, because it is the interesting half: **a glossary term inside a link
+  still goes to the glossary on the second tap.** `closest` returns the innermost match, so the
+  term is the hit and the link never is — and reversing a rule a reader has already learnt, for 13%
+  of this corpus's links, would have been worse than one case less consistent. The link is still one
+  press away at the card's foot.
+
+  It also inherits the trap above rather than avoiding it, so it was checked the only way that
+  finding is worth anything: Chrome at 834×1194 with `hasTouch`, driven through CDP
+  `Input.dispatchTouchEvent` so the browser generates the pointer stream itself. Synthetic events
+  would have agreed with a broken build, and once did.
 
 ## Why the prose is untouched
 

@@ -110,6 +110,13 @@ const NOT_A_ROW: Record<string, string> = {
     "a tmux session uuid, shared by `gjd-remote-tmux.test.ts` and its script twin because they " +
     "describe the same `agents.json` fixture. It names a terminal session, not a row.",
   "49348111-df07-44ac-a204-f2e168f46de5": "the second session uuid in that same fixture pair.",
+  "aaaaaaaa-2222-4000-8000-000000000001":
+    "`ALICE`, the signed-in reader on `/pricing`, in `pricing-page-current-plan.test.tsx` and " +
+    "`site-nav-sign-in.test.tsx`. Both are jsdom component tests that render `PricingPage` with " +
+    "a `readerId` prop and a stubbed `useBilling`; neither imports a store or a database module, " +
+    "so there is no row to insert and none to delete. Deliberately one id rather than two, for " +
+    "the reason the `…c0de` entry above gives: these fixtures are the same reader looking at the " +
+    "same page, and a second uuid would say they differ when they do not.",
 };
 
 function parse(file: string, source: string): Claim[] {

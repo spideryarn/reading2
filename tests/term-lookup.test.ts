@@ -64,6 +64,15 @@
  * the wiring, so no Postgres write is exercised by this file at any point. And
  * the fourth guard stayed green under the mutation, because "no such term" is
  * exactly what an emptied list produces.
+ *
+ * ## The sentence that guard matched on is gone
+ *
+ * The mutation above quotes `/does not appear in this article/`, which was the
+ * one sentence three different refusals shared until a reader reported reading
+ * it as a denial that their glossary entry existed. It is two sentences and two
+ * codes now, and this file matches the codes —
+ * docs/postmortems/260904c-the-glossary-said-the-term-was-not-there.md, and
+ * tests/glossary-lookup-refusals.test.ts for which fact goes with which.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -224,9 +233,27 @@ when("the guards, through the store's own wiring", () => {
 
        Both are refused before any model call, which is what makes this
        assertable without a network. */
-    await expect(lookUp(SLUG, ABSENT_TERM)).rejects.toThrow(
-      /does not appear in this article/,
-    );
+    /* **Matched on the code, not the sentence** — docs/project/copy.md § The
+       bracketed code. It matched `/does not appear in this article/` until
+       2026-09-04, which pinned the wording of the very sentence a reader
+       reported as unreadable, and would have gone red for the fix rather than
+       for a regression.
+
+       **Either code, and that is not vagueness.** Which of the two fires
+       depends on whether this fixture's glossary reads as `stale`, and that is
+       a property of the corpus this box happens to hold: `sourceHash` was
+       written against the full article and a worktree carries a cut of it, so
+       the same seeding is stale here and need not be elsewhere. Pinning one
+       would be pinning the checkout. What this case is *for* — a term the
+       article does not contain never reaches a model call — is true of both,
+       and `tests/glossary-lookup-refusals.test.ts` drives `stale` itself to
+       assert which sentence goes with which fact. */
+    await expect(lookUp(SLUG, ABSENT_TERM)).rejects.toThrow(/\[gl-(not-quoted|stale)\]/);
+
+    /* The reported bug, asserted against the real wiring: whichever branch
+       fires, the reader is not told the term they are looking at does not
+       exist. */
+    await expect(lookUp(SLUG, ABSENT_TERM)).rejects.not.toThrow(/Barbara Liskov/);
   });
 
   it("refuses a term id that is not in the glossary at all", async () => {

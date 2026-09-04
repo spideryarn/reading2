@@ -565,12 +565,37 @@ had not loaded. It reads `Article.visibility`, which the Postgres store fills an
 store cannot, and it draws **nothing** when nobody could say.
 [260904b-sharing-mark-on-the-article-masthead.md](../plans/260904b-sharing-mark-on-the-article-masthead.md).
 
-**A badge, not a filter.** There is deliberately no way to sort or narrow the shelf by this until
+**A badge, not a filter.** There is deliberately no way to sort or narrow *this* shelf by it until
 there is enough shared material for it to be worth anything — Greg's decision on
 [260902j-public-read-only-access-audit-and-improvements.md](../plans/260902j-public-read-only-access-audit-and-improvements.md).
 The visitor's side of the same fact is `ViewOnlyChip` in
 [`src/web/PublicChrome.tsx`](../../src/web/PublicChrome.tsx), and it says something else: *you may
 not change this*, where this says *anyone with the link can read this*.
+
+**There is a second shelf now, and it is not this one narrowed.** `/read/public` lists every public
+article, to anybody, signed in or not — Greg, 2026-09-04: *"create a `/read/public/` page that lists
+Public-readable pages … to showcase what Spideryarn is capable of."* It is a separate query
+([`src/store/public-library.ts`](../../src/store/public-library.ts)), a separate DTO
+([`src/public-library-types.ts`](../../src/public-library-types.ts)) and a separate card, and none of
+them is a widened `LibraryEntry`: there is no `opens`, `lastOpenedAt`, `comments`, `titleOverridden`,
+`archivedAt` or `purpose`, because every one of those is a fact about a *person's* relationship with
+a document rather than about the document. The decision above is unchanged — this shelf is not a
+filter over the owner's — and the promise it changes (a shared article becomes *discoverable*, not
+only reachable by link) is
+[260904b-pricing-page-and-public-showcase.md](../plans/260904b-pricing-page-and-public-showcase.md)
+§ 1.
+
+The name `public` is reserved as an article slug, because `/read/public` would otherwise be an
+address two things claim: `isReservedSlug` in [`src/ingest.ts`](../../src/ingest.ts), refused at
+`lockOrCreateArticle`, which is the one line that brings an article address into existence.
+
+**Nobody is signed in, so the shelf has three ceilings rather than one.** 200 rows, a `left()` cap on
+every text column it returns (`PUBLIC_CARD_CHARS`) because nothing bounds a title or an `<h1>` and a
+fetched document may be 32 MB, and a partial index on `(public_at desc nulls last, slug) where
+visibility = 'public'` so the row cap bounds the database's work and not only the reply. All three
+came out of GPT Sol's review of the built code, 2026-09-04; the argument for each is in
+[`src/store/public-library.ts`](../../src/store/public-library.ts) and
+[security-map.md](security-map.md#and-since-2026-09-04-there-is-a-second-ownerless-query-which-enumerates).
 
 ### Where the numbers on it come from, and why nobody derives them twice
 

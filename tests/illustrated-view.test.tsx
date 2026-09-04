@@ -62,7 +62,14 @@ const ILLUSTRATED = {
          are rows that would jump somewhere not containing what the reader just
          read, which is the one thing this list may never do. */
       vignettes: [
-        { block: "spya-b0", quote: QUOTE, depicts: "A clockwork skull being pulled apart on a workbench" },
+        {
+          block: "spya-b0",
+          quote: QUOTE,
+          depicts: "A clockwork skull being pulled apart on a workbench",
+          /* The caption that is lettered on the plate itself, so the reader can
+             match a title they read off a vignette to the row it belongs to. */
+          title: "CLOCKWORK SKULL",
+        },
         {
           block: "spya-gone",
           quote: QUOTE,
@@ -305,6 +312,33 @@ describe("the plate's bytes", () => {
 });
 
 describe("what it depicts", () => {
+  /**
+   * **The caption in the row is the caption on the plate**, and the row is still
+   * where the claim lives. Since 2026-09-04 the picture carries a short title
+   * under each scene (docs/project/diagram.md § The picture carries words now);
+   * the row repeats it so a reader who has read one off a vignette can find the
+   * passage it came from. A plate drawn before that, or one drawn wordless,
+   * carries no title and the row must show none — a caption in the list that is
+   * not on the picture points at nothing.
+   */
+  it("shows the plate's own caption above what the row depicts, and only when there is one", async () => {
+    serving();
+    await mount();
+
+    const row = host.querySelector<HTMLButtonElement>(".ill-row");
+    expect(row?.querySelector(".ill-caption")?.textContent).toBe("CLOCKWORK SKULL");
+    /* The quote is still there and still unclamped: the caption is wayfinding,
+       the quote is the claim. */
+    expect(row?.querySelector(".ill-quote")?.textContent).toContain(QUOTE.slice(0, 20));
+
+    /* One row, one caption — a caption rendered for a row that has no title
+       would be pointing at a word that is not on the picture, and the ternary
+       that decides it is the only thing standing between the two. */
+    expect(host.querySelectorAll(".ill-caption").length).toBe(
+      host.querySelectorAll(".ill-row").length,
+    );
+  });
+
   it("jumps the article to the block its quote was checked against", async () => {
     serving();
     const jumped: BlockId[] = [];
@@ -583,7 +617,7 @@ describe("the empty state, which has three refusals to tell apart", () => {
       /* Every one of the four, because a sentence that names three of them is a
          sentence that hides one — and which one it hides is not a detail: the
          Sketch's are the two the reader did not ask for. */
-      for (const said of ["about $0.20", "about two minutes", "$0.27–$0.40", "four to seven minutes"]) {
+      for (const said of ["about $0.20", "about two minutes", "$0.40–$0.65", "four to seven minutes"]) {
         expect(cost, `"${said}" is not said before the press`).toContain(said);
       }
       /* And nothing was bought by reading the sentence. */
@@ -609,7 +643,7 @@ describe("the empty state, which has three refusals to tell apart", () => {
    * both steps are in `FORCE_ONLY_WHEN_NAMED`, so the positional cascade cannot
    * speak for either. What `force` would actually cost is the work key —
    * `workKeyFor` hashes it, so a forced press and an unforced one are two jobs
-   * at $0.27–$0.40 rather than one. Which is why the assertion is `force`
+   * at $0.40–$0.65 rather than one. Which is why the assertion is `force`
    * **absent** rather than an empty array: `parseJobRequest` reads the two the
    * same way and `workKeyFor` does not.
    */
@@ -634,7 +668,7 @@ describe("the empty state, which has three refusals to tell apart", () => {
     ]);
     expect(
       posted[0]?.force,
-      "the press forced something — a different work key from the unforced press beside it, so two tabs buy two $0.27–$0.40 jobs",
+      "the press forced something — a different work key from the unforced press beside it, so two tabs buy two $0.40–$0.65 jobs",
     ).toBeUndefined();
   });
 
@@ -700,7 +734,7 @@ describe("the empty state, which has three refusals to tell apart", () => {
 
     const why = host.querySelector(".ill-empty-why");
     expect(why?.textContent, "the dearest button in the app does not say what it costs").toContain(
-      "$0.27–$0.40",
+      "$0.40–$0.65",
     );
     expect(host.querySelector(".ill-run"), "no way to ask for one").not.toBeNull();
   });
@@ -757,6 +791,7 @@ describe("the chip in the diagram row", () => {
       root.render(
         <DiagramPanel
           access={{ kind: "visitor" }}
+          experimental={false}
           slug="s" root={tree} kind="force" onKind={() => {}} atRow={0} onJump={() => {}}
           blocks={blocks} axis="spread" onAxis={() => {}} hue="section" onHue={() => {}}
         />,
@@ -771,7 +806,7 @@ describe("the chip in the diagram row", () => {
   });
 
 
-  it("is there for an owner, and Diagram mode is what keeps it from a visitor", async () => {
+  it("is there for an owner, and `access` is what keeps it from a visitor", async () => {
     vi.stubGlobal("ResizeObserver", FakeResizeObserver);
     serving({ noArtefact: true, sketch: null });
     const { root: tree, blocks } = article();
@@ -779,6 +814,7 @@ describe("the chip in the diagram row", () => {
       root.render(
         <DiagramPanel
           access={{ kind: "owner" }}
+          experimental
           slug="s" root={tree} kind="force" onKind={() => {}} atRow={0} onJump={() => {}}
           blocks={blocks} axis="spread" onAxis={() => {}} hue="section" onHue={() => {}}
         />,
@@ -800,7 +836,7 @@ describe("the chip in the diagram row", () => {
   /**
    * **Pressing it arms; arriving at it does not.** `?diagram=` is query state,
    * so Back and Forward move it and a pasted URL sets it — none of which may
-   * buy a $0.27–$0.40, four-to-seven-minute job. Only the click mints a token.
+   * buy a $0.40–$0.65, four-to-seven-minute job. Only the click mints a token.
    */
   it("arms the job when pressed, and not when the panel merely renders it", async () => {
     vi.stubGlobal("ResizeObserver", FakeResizeObserver);
@@ -813,6 +849,7 @@ describe("the chip in the diagram row", () => {
         root.render(
           <DiagramPanel
             access={{ kind: "owner" }}
+          experimental
             slug="s" root={tree} kind={kind} onKind={() => {}} atRow={0} onJump={() => {}}
             blocks={blocks} axis="spread" onAxis={() => {}} hue="section" onHue={() => {}}
           />,
@@ -879,6 +916,7 @@ describe("the chip in the diagram row", () => {
       root.render(
         <DiagramPanel
           access={{ kind: "owner" }}
+          experimental
           slug="s" root={tree} kind="force" onKind={() => {}} atRow={0} onJump={() => {}}
           blocks={blocks} axis="spread" onAxis={() => {}} hue="section" onHue={() => {}}
         />,
@@ -893,6 +931,7 @@ describe("the chip in the diagram row", () => {
       root.render(
         <DiagramPanel
           access={{ kind: "owner" }}
+          experimental
           slug="s" root={tree} kind="illustrated" onKind={() => {}} atRow={0} onJump={() => {}}
           blocks={blocks} axis="spread" onAxis={() => {}} hue="section" onHue={() => {}}
         />,
@@ -926,6 +965,7 @@ describe("the chip in the diagram row", () => {
       root.render(
         <DiagramPanel
           access={{ kind: "owner" }}
+          experimental
           slug="s" root={tree} kind="force" onKind={() => {}} atRow={0} onJump={() => {}}
           blocks={blocks} axis="spread" onAxis={() => {}} hue="section" onHue={() => {}}
         />,

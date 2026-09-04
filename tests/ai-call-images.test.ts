@@ -124,10 +124,10 @@ function stubTransport(
 }
 
 const ASK = {
-  model: "openai/gpt-image-2",
+  model: "google/gemini-3.1-flash-image",
   prompt: "an antique map of the argument",
   aspectRatio: "2:3",
-  quality: "low",
+  resolution: "1K",
 } as const;
 
 /**
@@ -243,6 +243,16 @@ describe("the picture that comes back", () => {
 });
 
 describe("the money, which is zero and is not free", () => {
+  /**
+   * **The BYOK shape is a fixture here, not the current model's answer** —
+   * `openai/gpt-image-2` produced it until 2026-09-04 and
+   * `google/gemini-3.1-flash-image` does not, answering `is_byok: false` with a
+   * real `usage.cost` instead (see the priced case below). It is still the case
+   * worth keeping, because which of the two an image model produces is the
+   * upstream's business rather than ours, and the day one flips back a meter
+   * that had quietly stopped reading `cost_details` would report every plate as
+   * free.
+   */
   it("puts the upstream figure on the ledger row, not the zero it was billed", async () => {
     /* **The failure this test exists for is silent and total.** `usage.cost` is
        `0` on every BYOK call, so a meter that read only that would write a row
@@ -256,7 +266,7 @@ describe("the money, which is zero and is not free", () => {
     expect(row?.job).toBe("illustrate");
     /* **Not `"chat"`.** Derived from the path, it would have been. */
     expect(row?.wire).toBe("images");
-    expect(row?.requestedModel).toBe("openai/gpt-image-2");
+    expect(row?.requestedModel).toBe("google/gemini-3.1-flash-image");
     expect(row?.isByok).toBe(true);
     expect(row?.outcome).toBe("ok");
     /* A zero that is an *answer*: OpenRouter settled the call at nothing because
@@ -555,12 +565,39 @@ describe("the request that actually goes out", () => {
     expect(sent[0]?.body.usage).toBeUndefined();
     expect(sent[0]?.body.stream).toBeUndefined();
     expect(sent[0]?.body).toMatchObject({
-      model: "openai/gpt-image-2",
+      model: "google/gemini-3.1-flash-image",
       prompt: "an antique map of the argument",
       n: 1,
       aspect_ratio: "2:3",
-      quality: "low",
+      resolution: "1K",
     });
+  });
+
+  /**
+   * **What a plate's row looks like today**, which is the plain priced shape and
+   * not the BYOK one above. Measured 2026-09-04: `is_byok: false`,
+   * `usage.cost` $0.0676075 for a 1K plate. This is the reason the lettering
+   * swap touched no money code at all — and the reason it could stay on the
+   * gateway rather than needing a Google seam of its own, which
+   * docs/project/ai-gateway.md would have had a great deal to say about.
+   */
+  it("records a priced plate as an ordinary cost, with no upstream column", async () => {
+    const priced = {
+      prompt_tokens: 1085,
+      completion_tokens: 1120,
+      total_tokens: 2205,
+      cost: 0.0676075,
+      is_byok: false,
+      prompt_tokens_details: { cached_tokens: 0 },
+      completion_tokens_details: { reasoning_tokens: 0, image_tokens: 1120 },
+    };
+    const { rows } = await draw(ASK, { body: drawn({ usage: priced }) });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.isByok).toBe(false);
+    expect(rows[0]?.costSource).toBe("provider");
+    expect(rows[0]?.creditsUsedNanos).toBe(67_607_500);
+    /* The column the CHECK only accepts on a BYOK row, and this is not one. */
+    expect(rows[0]?.byokUpstreamNanos).toBeNull();
   });
 
   it("carries reference images in the shape the endpoint takes", async () => {
@@ -583,9 +620,10 @@ describe("the request that actually goes out", () => {
   });
 
   it("omits input_references entirely when there are none, rather than sending an empty list", async () => {
-    /* `input_references` is documented as 0-16, and an empty array is a value
-       inside that range that nothing has been measured against. Omission is
-       what the spike sent when it sent none, so omission is what we send. */
+    /* `input_references` is documented as 0-14 for this model, and an empty
+       array is a value inside that range that nothing has been measured
+       against. Omission is what the spike sent when it sent none, so omission
+       is what we send. */
     const none = await draw(ASK);
     expect(none.sent[0]?.body).not.toHaveProperty("input_references");
     const empty = await draw({ ...ASK, inputReferences: [] });
@@ -593,9 +631,28 @@ describe("the request that actually goes out", () => {
   });
 
   it("leaves out the optional fields the caller did not ask for", async () => {
-    const { sent } = await draw({ model: "openai/gpt-image-2", prompt: "a plate" });
+    const { sent } = await draw({ model: "google/gemini-3.1-flash-image", prompt: "a plate" });
     expect(sent[0]?.body).not.toHaveProperty("aspect_ratio");
-    expect(sent[0]?.body).not.toHaveProperty("quality");
+    expect(sent[0]?.body).not.toHaveProperty("resolution");
     expect(sent[0]?.body.n).toBe(1);
+  });
+
+  /**
+   * **The three fields this interface no longer has**, asserted because their
+   * absence is the whole reason it no longer has them.
+   *
+   * `quality`, `output_format` and `output_compression` were sent while
+   * `openai/gpt-image-2` drew the plates. None appears in
+   * `google/gemini-3.1-flash-image`'s `supported_parameters`, and this endpoint
+   * 404s on a parameter its upstream does not know — the `env-proposal` failure
+   * again, on the one call whose failure mode is a 400. A `toMatchObject` above
+   * cannot see an extra key, so a re-added field would ship silently and lose
+   * every plate.
+   */
+  it("sends nothing the model's capability list does not list", async () => {
+    const { sent } = await draw(ASK);
+    for (const gone of ["quality", "output_format", "output_compression", "size"]) {
+      expect(sent[0]?.body, gone).not.toHaveProperty(gone);
+    }
   });
 });

@@ -49,7 +49,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `order` | how the results list is stacked: `document`, `confidence` or `prioritised` | push | `?order=confidence` |
 | `conf` | the bar the search results' `prioritised` order hides under, 0–100, in the unit the rows print. No default: absent means untouched | replace, debounced | `?conf=65` |
 | `deep` | how far down the tree summary mode goes: `0` the article, `1` the parts, `2` the sections | push | `?deep=2` |
-| `diagram` | which of the three pictures diagram mode is drawing, absent for `force` — [diagram.md](diagram.md) | push | `?diagram=trail` |
+| `diagram` | which of the five pictures diagram mode is drawing, absent for the default `sketch` — [diagram.md](diagram.md) | push | `?diagram=trail` |
 | `dx` | on `drift` only: what sideways means — `lanes` (the default) or `spread` | **replace** | `?dx=spread` |
 | `dhue` | on `drift` and `trail`: what a dot's colour means — `section` (the default), `progress` or `topic` | **replace** | `?dhue=progress` |
 | `referee` | which of Referee's four sub-modes is open: `criteria` (the default), `claims`, `mirror` or `candidates` — [referee-mode.md](referee-mode.md) | push | `?referee=mirror` |
