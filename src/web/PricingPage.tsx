@@ -113,7 +113,7 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { TriangleAlert } from "lucide-react";
 
-import { SWITCHING_PLAN, describePlan, noHigherPlan, purchasableTiers } from "../billing-plan.js";
+import { describePlan, noHigherPlan, purchasableTiers, switchingPlan } from "../billing-plan.js";
 import type { BillingSummary } from "../billing-plan.js";
 import { Link } from "./Link.js";
 import { RECOMMENDED_TIER, WebsitePlans } from "./PlanCards.js";
@@ -565,7 +565,7 @@ function PlansForAReader() {
     /* **The verb is the door, and this page has room to say the plan in it.**
        A subscriber's press opens the hosted Portal, where the plan is chosen
        again and confirmed — so *Get Researcher*, which reads as a purchase
-       completed by pressing, would be the wrong promise. `SWITCHING_PLAN` under
+       completed by pressing, would be the wrong promise. `switchingPlan` under
        the cards says the rest. */
     const label = buying.kind === "switch" ? `Switch to ${plan.name}` : `Get ${plan.name}`;
     return {
@@ -610,7 +610,14 @@ function PlansForAReader() {
           the button does before they press it: it opens Stripe's own page, where
           the plan is chosen again and confirmed. */}
       {summary?.purchase.kind === "switch" && (
-        <p className="tw:mt-4 tw:m-0 tw:text-sm tw:text-muted-foreground">{SWITCHING_PLAN}</p>
+        <p className="tw:mt-4 tw:m-0 tw:text-sm tw:text-muted-foreground">
+          {/* **The sentence is `purchase.from`'s, not this page's.** A switch out
+              of a free trial ends the trial, bills in full and hands over the
+              whole new allowance — so all three clauses of the paid wording are
+              false for it, and the arm carries which one this is precisely so
+              that neither page has to guess. GPT Sol, 2026-09-04. */}
+          {switchingPlan(summary.purchase.from)}
+        </p>
       )}
       {/* **The plan, or the reason there is no plan on screen — never neither.**
           Until the read lands there are no buttons, because `buyPlan` needs

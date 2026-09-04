@@ -390,6 +390,108 @@ describe("GET /api/billing/usage", () => {
   });
 
   /**
+   * **The row that would have sold a Reader a second Reader subscription cannot
+   * be written at all.**
+   *
+   * `status = 'active'` with a known price and a readable period makes
+   * `entitlementFromRow` answer *paid Reader*, while the subscription id — the
+   * column every "do they already have one" test reads — is null. The two
+   * questions were asked separately, so they disagreed: this route answered
+   * `checkout` over `["reader", "researcher"]`, and pressing *Get Reader* would
+   * have opened a second, concurrently billed subscription for the plan the
+   * reader is already on. GPT Sol found it on 2026-09-04, and it was watched
+   * failing here on 2026-09-05 exactly that way before the fix.
+   *
+   * Two halves went in, and this is the one that holds for every writer: the
+   * insert below is refused by
+   * `billing_accounts_subscription_fields_need_subscription`. The code half —
+   * `subscriptionState` failing closed if it ever meets one anyway — is over
+   * fixture rows in tests/billing-tiers.test.ts, because the state this asserts
+   * is unreachable cannot also be handed to the route.
+   */
+  dbIt("cannot even hold a row that claims a plan with no subscription behind it", async () => {
+    if (!pool) return;
+    const tier = await readerTier();
+    const period = livePeriod();
+    const write = pool.query(
+      `insert into spideryarn.billing_accounts
+         (owner_id, stripe_customer_id, stripe_subscription_id, status, price_id,
+          current_period_start, current_period_end)
+       values ($1, $2, null, 'active', $3, $4, $5)`,
+      [OWNER, "cus_usage_ghost", tier.priceId, period.start, period.end],
+    );
+    await expect(write).rejects.toThrow("billing_accounts_subscription_fields_need_subscription");
+    /* **And the same row *with* its subscription id goes in**, so this cannot
+       pass because the insert was malformed in some other way. */
+    await givenAccount({
+      customer: "cus_usage_ghost",
+      subscription: "sub_usage_ghost",
+      status: "active",
+      priceId: tier.priceId,
+      periodStart: period.start,
+      periodEnd: period.end,
+    });
+    expect(purchaseOf((await get("/api/billing/usage", OWNER)).body).kind).toBe("switch");
+  });
+
+  /**
+   * **Nothing is on sale when Stripe is not configured.**
+   *
+   * The tiers are perfectly good rows in Postgres and `STRIPE_SECRET_KEY` is
+   * missing, so every card drawn from them ends in the 503 `orBillingUnavailable`
+   * answers. Nothing in the summary asked, so a free reader was shown *Get
+   * Reader* and a subscriber *Switch plan*, and pressing either produced
+   * "billing is not available just now". GPT Sol, 2026-09-04, finding 4.
+   *
+   * The plan itself is unaffected, which is the point of putting the check on
+   * `purchase` alone: a quota is a fact about the ledger and does not stop being
+   * true because a key is missing.
+   */
+  dbIt("offers nothing at all when this deployment has no Stripe key", async () => {
+    vi.stubEnv("STRIPE_SECRET_KEY", "");
+    try {
+      const reply = await get("/api/billing/usage", OWNER);
+      expect(purchaseOf(reply.body)).toEqual({ kind: "none", ids: [] });
+      /* And it is still an answer about a plan, not an error. */
+      expect(reply.status).toBe(200);
+      expect(reply.body.plan).toMatchObject({ kind: "free" });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    /* **The mirror**, so this cannot pass on a machine that never had a key: the
+       same reader, the same rows, with the key back. */
+    expect(purchaseOf((await get("/api/billing/usage", OWNER)).body).kind).toBe("checkout");
+  });
+
+  /**
+   * **A trialling Reader is offered the switch, and told what it really does.**
+   *
+   * `trialing` is an entitled status (`ENTITLED_STATUSES`, src/billing/tiers.ts),
+   * so this account reaches the `switch` arm — and until 2026-09-05 the sentence
+   * beside the button was the paid one, every clause of which is false here: the
+   * Portal ends the trial (`trial_update_behavior: "end_trial"`), so there is no
+   * difference to invoice, the period does not stay put, and the allowance is not
+   * prorated. `from` is what carries that as far as the page. GPT Sol, finding 2.
+   */
+  dbIt("says a trialling reader's switch is out of a trial, not out of a paid month", async () => {
+    const tier = await readerTier();
+    const period = livePeriod();
+    await givenAccount({
+      customer: "cus_usage_trial",
+      subscription: "sub_usage_trial",
+      status: "trialing",
+      priceId: tier.priceId,
+      periodStart: period.start,
+      periodEnd: period.end,
+    });
+    const purchase = (await get("/api/billing/usage", OWNER)).body.purchase as {
+      kind: string;
+      from?: string;
+    };
+    expect(purchase).toMatchObject({ kind: "switch", from: "trial" });
+  });
+
+  /**
    * The top of the ladder, which is the case that has to say something rather
    * than draw an empty gap.
    */
