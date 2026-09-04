@@ -462,7 +462,7 @@ Three packages are therefore reached only when something needs them, and the
 seams are documented where they live: **jsdom** through
 [`src/jsdom-lazy.ts`](../../src/jsdom-lazy.ts) (a synchronous `createRequire`,
 because `splitIntoBlocks` and `sanitizeHtml` are synchronous and would otherwise
-have to become async everywhere), **pdf-lib** inside `cutPages`, and the
+have to become async everywhere), **pdf-lib** inside `openPdfCuts`, and the
 **Stripe SDK** inside `stripeClient()`. That was ~940 ms off a ~2,400 ms module
 import on a quiet box, measured paired against the previous build.
 `tests/cold-start-lazy-imports.test.ts` fails if any of them goes back to module

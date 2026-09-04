@@ -110,6 +110,62 @@ describe("cutting a document into chunks", () => {
     expect(chunks.length).toBeGreaterThan(1);
     expect(chunks.flatMap((c) => c.pages)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
   });
+
+  /**
+   * **A run of image-heavy pages must not grow to the six-page maximum.**
+   *
+   * Measured, on Kuhn's 142-page paper: pages 8–13 hold the figures, hold
+   * almost no text, and so were bounded by nothing but `MAX_CHUNK_PAGES` — one
+   * chunk of **4.54 MB** against a 200 KB median for that document, and it was
+   * the 354 s call in a run whose per-call mean was 52 s and p95 96 s. The
+   * numbers below are that shape, rounded: a light document with six heavy
+   * pages in the middle of it.
+   */
+  const SPARSE = 200 * 1024;
+  const HEAVY = 1024 * 1024;
+  const HEAVY_RUN = [7, 8, 9, 10, 11, 12];
+  const bytesFor = (heavy: readonly number[], count: number) =>
+    new Map(
+      Array.from({ length: count }, (_, i) => [i + 1, heavy.includes(i + 1) ? HEAVY : SPARSE]),
+    );
+
+  it("does not let sparse image-heavy pages grow a chunk past the byte bound", () => {
+    /* Eighty words a page is under `ASSUMED_WORDS`, so every page weighs 500 and
+       six of them are 3,000 — inside `CHUNK_WORDS`. The words cannot close this
+       chunk and the pictures are invisible to them. */
+    const pass = pages(Array(20).fill(80));
+
+    const unbounded = planChunks(pass);
+    expect(unbounded.some((c) => c.pages.join() === HEAVY_RUN.join())).toBe(true);
+
+    const bounded = planChunks(pass, { pageBytes: bytesFor(HEAVY_RUN, 20) });
+    /* Every page still sent, exactly once and in order. */
+    expect(bounded.flatMap((c) => c.pages)).toEqual(unbounded.flatMap((c) => c.pages));
+    const holding = bounded.filter((c) => c.pages.some((p) => HEAVY_RUN.includes(p)));
+    expect(holding.length).toBeGreaterThan(1);
+    for (const chunk of holding) {
+      expect(chunk.pages.filter((p) => HEAVY_RUN.includes(p)).length).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it("leaves a document with nothing heavy in it exactly as it was", () => {
+    /* The bound must be a bound and not a re-plan: an ordinary paper's chunks
+       are the same with the weights as without them. */
+    const pass = pages(Array(20).fill(900));
+    const without = planChunks(pass).map((c) => c.pages.join());
+    const weighed = planChunks(pass, { pageBytes: bytesFor([], 20) }).map((c) => c.pages.join());
+    expect(weighed).toEqual(without);
+  });
+
+  it("still emits a single page that is bigger than the bound on its own", () => {
+    /* Nothing can split one page, so the bound must never be able to drop one.
+       Same shape as `CHUNK_WORDS`, which cannot refuse a 10,000-word page. */
+    const pass = pages(Array(6).fill(80));
+    const huge = new Map([1, 2, 3, 4, 5, 6].map((p) => [p, p === 3 ? 40 * 1024 * 1024 : SPARSE]));
+    const chunks = planChunks(pass, { pageBytes: huge });
+    expect(chunks.flatMap((c) => c.pages)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(chunks.some((c) => c.pages.includes(3) && c.pages.length === 1)).toBe(true);
+  });
 });
 
 describe("text the chunk was only meant to look at", () => {

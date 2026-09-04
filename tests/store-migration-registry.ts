@@ -523,6 +523,26 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    * same hour, and the merge conflict between them was prose only. Worth a line
    * because agreement reached separately is the only kind that says anything.
    */
+  /**
+   * **The same story a day later**, and recorded because the hole check catching
+   * a second arrival is the check earning its fourteen seconds twice.
+   *
+   * Landed 2026-09-04 with stage 2 of
+   * docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md, well after
+   * the witness ran, so `static-only` is not a preference — the dynamic evidence
+   * does not exist for it yet and re-running witness 2 is what upgrades it.
+   */
+  "tests/hierarchy-structure-checkpoint.test.ts": {
+    category: "store-agnostic-fake",
+    evidence: "static-only",
+    reason:
+      "Holds the structure call's checkpoint: that its key is a digest of the request the call " +
+      "really makes, and that only an answer which parsed and built is stored. Its checkpoint " +
+      "store is a `Map` written in the file and its model call is mocked, so it constructs no " +
+      "store of any kind and reads no path; it reaches a condemned module only because " +
+      "`src/hierarchy.ts` imports `nullCheckpointStore`. Nothing here changes when the filesystem " +
+      "store goes.",
+  },
   "tests/hierarchy-eval-incumbent-parity.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
@@ -1356,6 +1376,24 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "reader seam. The two chunk cases pass a fake `PdfReader`, so nothing reaches a provider or " +
       "a ledger, and the same `src/pdf-read.ts` → `cli-ledger.ts` import is the only reach. " +
       "Re-run witness 2 to confirm.",
+  },
+  /**
+   * **A third arrival from the same plan, on the same day.** Stage 5 this time,
+   * so `static-only` for the same reason as its two siblings above: the dynamic
+   * evidence does not exist yet and re-running witness 2 is what upgrades it.
+   */
+  "tests/pdf-source-parsed-once.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Arrived with stage 5 of docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md. " +
+      "Counts `PDFDocument.load` through a `vi.mock` seam to prove the source PDF is parsed once " +
+      "for the whole stage rather than once per chunk. It drives `runPdfExtract` with a stub " +
+      "`PdfReader` over `memoryCheckpoints`, which is a `Map`, so there is no database, no blob " +
+      "store and no path read; its whole static reach is the same `src/pdf-read.ts` → " +
+      "`cli-ledger.ts` import its page-cap siblings have, and no paid call is made so no ledger " +
+      "row is written. Re-run witness 2 to confirm.",
   },
   "tests/store-glossary-delete-pg.test.ts": {
     category: "shared-mechanism-collateral",

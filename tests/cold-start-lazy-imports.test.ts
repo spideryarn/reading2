@@ -46,7 +46,7 @@ const BUNDLE = path.join(ROOT, "api-dist/vercel.js");
  */
 const MUST_NOT_BE_STATIC: Record<string, string> = {
   jsdom: "src/jsdom-lazy.ts",
-  "pdf-lib": "`cutPages` in src/pdf-read.ts",
+  "pdf-lib": "`openPdfCuts` in src/pdf-read.ts",
   stripe: "`stripeClient()` in src/billing/stripe.ts",
 };
 
