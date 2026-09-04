@@ -3702,7 +3702,10 @@ export const checkpoints = spideryarn.table(
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.namespace, t.key] }),
-    check("checkpoints_namespace", sql`${t.namespace} in ('hierarchy-labels','pdf-chunk')`),
+    check(
+      "checkpoints_namespace",
+      sql`${t.namespace} in ('hierarchy-labels','hierarchy-structure','pdf-chunk')`,
+    ),
     /**
      * The same rule as `CHECKPOINT_KEY_RE`, here as well, because the
      * filesystem adapter turns this string into a **file name**. A key the

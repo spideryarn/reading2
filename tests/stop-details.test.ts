@@ -117,10 +117,14 @@ const STAGES = ["hierarchy", "arc", "tweets", "glossary", "ideas", "labels"] as 
  * child which died halfway cannot pass every "does not contain" assertion by
  * printing nothing — the vacuous shape docs/reusable/silent-success.md is about.
  *
- * None of the six stage files calls the logger itself; every line here is
- * written by the `step` wrapper in the child, which is how src/jobs.ts writes
- * one. A leak found in an *outgoing* request would add an eighth line and fail
- * this count as well as its own assertion, which is the intended noise.
+ * **One `error` line per stage**, and that qualifier is load-bearing since
+ * 2026-09-04. Each of these is written by the `step` wrapper in the child, which
+ * is how src/jobs.ts writes one. The stage files themselves used to log nothing
+ * at all; two of them now report `{ asked, found }` at `info` when they read
+ * their checkpoints, which is a good thing and is not what this counts — see the
+ * filter at the count. A leak found in an *outgoing* request would still add an
+ * eighth failure line and fail this count as well as its own assertion, which is
+ * the intended noise.
  */
 const EXPECTED_LINES = STAGES.length + 1;
 
@@ -300,10 +304,34 @@ beforeAll(async () => {
   stdout = child.stdout ?? "";
   stderr = child.stderr ?? "";
 
-  const lines = stdout.split("\n").filter((l) => l.trim() !== "");
+  /**
+   * **The failure lines only, and that narrowing is the fix of 2026-09-04.**
+   *
+   * This counted every line the child wrote, which held for as long as a stage's
+   * only log line was its failure. It stopped holding when the two checkpoint
+   * readers started saying `{ asked, found }` at `info` on every read — one in
+   * src/labels.ts, one in src/hierarchy.ts — and this went red at nine lines
+   * for seven stages, with nothing about the leak wrong.
+   *
+   * The guard's job is unchanged: a child that died halfway must not pass every
+   * "does not contain" assertion by printing nothing. Counting the *failures*
+   * still says that, and it no longer breaks whenever a stage learns to report
+   * something. The leak assertions below read the whole of `stdout` regardless,
+   * so an eighth line carrying a leak is still caught by its own case.
+   */
+  const lines = stdout
+    .split("\n")
+    .filter((l) => l.trim() !== "")
+    .filter((l) => {
+      try {
+        return (JSON.parse(l) as { level?: string }).level === "error";
+      } catch {
+        return true; // unparseable output is a fault worth failing the count on
+      }
+    });
   if (lines.length !== EXPECTED_LINES) {
     throw new Error(
-      `expected ${EXPECTED_LINES} log lines from the child, got ${lines.length}` +
+      `expected ${EXPECTED_LINES} failure log lines from the child, got ${lines.length}` +
         `\n--- fixture ${dir}: ${(await readdir(dir)).join(", ")}` +
         `\n--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}`,
     );

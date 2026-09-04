@@ -26,7 +26,15 @@ import type { Block } from "../src/types.js";
    past the structure call (the label pass, the artefact writes) executes. */
 const captured: { task: string; body: Record<string, unknown> }[] = [];
 
-vi.mock("../src/messages-stream.js", () => ({
+/* The real module, with only the two functions replaced. It was a bare factory
+   until 2026-09-04, and that is a shape worth not going back to: the day
+   src/hierarchy.ts started importing `MESSAGES_PROVIDER` as well — for the
+   structure checkpoint's key — the factory answered "no such export" and the
+   stage threw before it ever reached the capture, so this pin failed as *no
+   request made* rather than as a request that differed. Spreading the original
+   means a new import over there cannot break the pin over here. */
+vi.mock("../src/messages-stream.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/messages-stream.js")>()),
   streamMessage: (task: string, body: Record<string, unknown>) => {
     captured.push({ task, body });
     return {
@@ -108,9 +116,13 @@ const EXPECTED_USER = [
   "[4] spya-par005 <p>: More prose entirely.",
 ].join("\n\n");
 
-/* estimateHierarchyTokens: 500 + (ceil(5/4) + 6) * 175 = 1900; budgetFor adds the
-   40,000-token thinking headroom. Literals, not the formulae re-run. */
-const EXPECTED_MAX_TOKENS = 41_900;
+/* estimateHierarchyTokens: five blocks cannot force more sections than the tree
+   the prompt asks for on any article, so it is the floor — 81 sections plus the
+   9 chapters and the root above them, 91 nodes at 175, plus the 500-token
+   envelope = 16,425. budgetFor adds STRUCTURE_HEADROOM's 64,000. Literals, not
+   the formulae re-run: this pin fired when the estimator and the reservation
+   both moved on 2026-09-04, which is it working. */
+const EXPECTED_MAX_TOKENS = 80_425;
 
 /* No temp directory: the stage takes the blocks themselves and writes nothing,
    so the fixture is the array above and the pinned bytes are unaffected. */

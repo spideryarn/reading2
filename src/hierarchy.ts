@@ -32,10 +32,16 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
+import { createHash } from "node:crypto";
 import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { streamMessage, wasRefused } from "./messages-stream.js";
+import {
+  messagesWireBody,
+  streamMessage,
+  wasRefused,
+  type MessagesBody,
+} from "./messages-stream.js";
 import { CAPABLE_MODEL, type Effort } from "./models.js";
 import { loadEnvLocal } from "./env.js";
 import { stageFailure } from "./job-failure.js";
@@ -44,7 +50,7 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import { blocksArtefact } from "./blocks.js";
 import { isBodyEvidence, isStructural } from "./block-policy.js";
 import { isSpideryarnId } from "./ids.js";
-import { COVERAGE_FLOOR, generateLabels, mergeLabels, type LabelsFile } from "./labels.js";
+import { COVERAGE_FLOOR, generateLabels, isHeading, mergeLabels, type LabelsFile } from "./labels.js";
 import { hashBlocks } from "./source-hash.js";
 import { nullCheckpointStore, type CheckpointStore } from "./store/checkpoints.js";
 import { appendSupplement, splitBlocks } from "./supplement.js";
@@ -53,10 +59,11 @@ import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Tree, TreeNode, NodeId } from "./types.js";
 import { parseJsonAnswer, parseJsonFrom } from "./parse-json.js";
 import { withLedger } from "./cli-ledger.js";
+import { log } from "./log.js";
 
 /* Bumped to 2 when the nav labels moved out to src/labels.ts: this prompt no
    longer asks for them, and a tree written by toc/1 is a different artefact. */
-const PROMPT_VERSION = "toc/3";
+export const PROMPT_VERSION = "toc/3";
 
 /**
  * How hard the model thinks before it starts writing.
@@ -206,47 +213,176 @@ function renderBlocks(blocks: Block[]): string {
 }
 
 /**
+ * A node costs a title, a gist, a range and often a `sourceHeading`.
+ *
+ * **175, and it stays.** Re-measured on 2026-09-04 across 32 finished trees
+ * rebuilt into the JSON the model emits: the worst per-node cost anywhere in the
+ * corpus is 145, and the 142-page journal paper — the largest tree we have — is
+ * 132. Compact, as a model emits it: pretty-printing inflates the same payload
+ * by 1.16–1.28×, which is how a test that serialised with `null, 1` came to
+ * over-state what real trees cost.
+ */
+const TOKENS_PER_NODE = 175;
+
+/** The JSON envelope and the root's own title and gist. */
+const ENVELOPE_TOKENS = 500;
+
+/**
+ * The prompt's long-run rule, in a number: *"Where a run between headings is
+ * longer than ~9 blocks, propose your own boundaries inside it."* So a run of
+ * blocks no longer than this needs no boundary of its own, and the sections the
+ * article forces are, at worst, one per this many blocks.
+ */
+const BLOCKS_PER_SECTION = 9;
+
+/** *"Aim for 5-9 children per node"* — the top of the band, since this is a size bound. */
+const FAN_OUT = 9;
+
+/**
+ * **The cushion under every estimate, and it is empirical rather than
+ * derived** — 81, the width of the section level in the shape the prompt
+ * describes (*"Go 3 levels deep"*, *"aim for 5-9 children per node"*, at the top
+ * of that band).
+ *
+ * **It is not a claim that a short article contains 81 sections**, and the
+ * arithmetic below would be dishonest if it were: a 10-block article cannot be
+ * partitioned into 81 non-empty ones, and *"aim for 5-9 children"* is not an
+ * instruction to fill every branch. ⟨GPT Sol, on the code, 2026-09-04, and he is
+ * right — the first version of this comment called them sections the article
+ * "forces".⟩ What it is: the smallest answer this stage is willing to size for,
+ * chosen at the shape the prompt asks for because that is the number the corpus
+ * keeps landing near. Short trees are where the old estimate came closest to
+ * under-shooting — 1.09× on a 72-block article whose tree had **50** internal
+ * nodes — and this is what buys that margin back. An over-generous ceiling costs
+ * nothing; a truncation costs minutes and money.
+ */
+const MINIMUM_SECTIONS = FAN_OUT * FAN_OUT;
+
+/**
+ * How many section-level nodes this article's own structure asks for.
+ *
+ * Two of the prompt's rules bear on it, and they are treated as **competing
+ * lower bounds rather than added together**, which is the one judgement call in
+ * this function:
+ *
+ * - every heading is a hard boundary, so a node begins at each one;
+ * - a run longer than `BLOCKS_PER_SECTION` gets boundaries proposed inside it.
+ *
+ * **Added, they are the faithful reading, and adding them is not free.** For
+ * Kuhn the sum is 344 sections and 68,575 tokens, which fits one response beside
+ * the *measured* 47,289 of thinking (115,864) but not beside `STRUCTURE_HEADROOM`
+ * — so the sum and a reservation with real margin cannot both be had on this
+ * document. Said plainly, because an earlier version of this comment claimed the
+ * sum exceeded the ceiling under *any* reservation above 47,289, and that was
+ * arithmetically false ⟨GPT Sol caught it, 2026-09-04⟩.
+ *
+ * So the larger of the two is taken, and the trade is this: the sum refuses more
+ * than it should — a 2,420-block handbook with a heading every eleven blocks is
+ * 87,300 tokens under it, a `blocked` failure with no Retry, for a document 32
+ * real trees say the model would answer in five figures. The max admits it. The
+ * cost is that the max is **not** an upper bound on the prompt-faithful answer
+ * for that shape: it says 53,700 where the faithful count says 87,300. Sol
+ * constructed exactly that case and it is pinned in tests/token-budget.test.ts,
+ * red-flagged rather than hidden.
+ *
+ * The corpus is what breaks the tie: 254 authored headings produced 83 nodes and
+ * **59 dropped headings** on the one long document anybody has measured, so the
+ * faithful reading is not what the model does at scale. **If a real answer is
+ * ever seen above this estimate, the sum is the thing to move back to** — and
+ * the per-node constant or the reservation is what has to give with it.
+ */
+function sectionsAsked(blocks: Block[]): number {
+  let segments = 0;
+  blocks.forEach((b, i) => {
+    if (i === 0 || isHeading(b)) segments += 1;
+  });
+  return Math.max(MINIMUM_SECTIONS, segments, Math.ceil(blocks.length / BLOCKS_PER_SECTION));
+}
+
+/**
  * How many tokens of JSON this stage is asking the model for.
  *
- * **This used to be the unbounded one.** It charged for a nav label per gistable
- * block on top of the tree, so the estimate — and the answer — grew at N, and
- * an article long enough could not be described in one response at all. The
- * labels moved to src/labels.ts; what is left grows at roughly N/7, because
- * that is how many blocks a section holds.
+ * **This used to charge a node for every four blocks, and that was the ceiling.**
+ * `ceil(N/4) + 6` was fitted to three trees of 19, 141 and 360 blocks, where it
+ * looked like a reasonable rate. It is not a rate. Measured on 2026-09-04 over
+ * 32 trees from 10 to 2,025 blocks, over-prediction climbs monotonically with
+ * length — 1.35× → 2.2× → 3.8× → 4.0× → **8.21×** — which is the signature of a
+ * linear term over a reality that is not linear. It refused Kuhn's *A Landscape
+ * of Consciousness* (142 pages, 2,025 blocks) at an estimated 90,275 tokens; the
+ * call it refused was then made with `max_tokens` forced to 128,000 and came
+ * back `end_turn` in **10,996**, a valid tree tiling every block.
+ * docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md.
  *
- * **The constants are measured, not guessed** — and the first draft of them was
- * guessed, and was wrong in both directions. Rebuilding three finished trees
- * back into the JSON the model emits and counting gives, for the structure half
- * alone:
+ * So the node count is built from what the prompt asks for instead:
  *
- * | tree | blocks | internal nodes | tokens | per block |
- * |---|---|---|---|---|
- * | a short post | 19 | 10 | 944 | 49.7 |
- * | the test article | 141 | 33 | 3,556 | 25.2 |
- * | the constitution | 360 | 52 | 6,370 | 17.7 |
+ * - **a floor** (`MINIMUM_SECTIONS`): the width of the section level in the
+ *   shape the prompt describes, which is where short trees actually land. Not
+ *   decoration — on short articles the model goes far finer than the prompt asks
+ *   (a 72-block article produced 50 internal nodes), and it is those trees, not
+ *   the long ones, that the old term came closest to under-estimating: 1.09× on
+ *   `fowler-phrenology`.
+ * - **growth**: the sections the article's own headings and long runs ask for
+ *   (`sectionsAsked`), plus the ancestors a nine-wide tree needs to reach them.
  *
- * Per-block cost *falls* with length, because a long article's sections hold
- * more blocks each. The short post's 49.7 is fixed overhead, not a trend — which
- * is why the estimate is built from a node count and a flat constant rather than
- * from a rate per block.
+ * **It still grows without bound, deliberately.** The corpus makes it very
+ * tempting to say the answer is bounded — every real tree is depth 2, Kuhn came
+ * in at 83 nodes with fan-out median *and* max both exactly 9, pressed flat
+ * against the prompt's 3 levels × ≤9 children = ≤91. A draft of the plan said
+ * exactly that and GPT Sol returned DO-NOT-SHIP on it, correctly: `buildTree`
+ * checks neither depth nor fan-out and has been shown accepting internal depths
+ * `[0,1,2,3,4]`, so a bound here would be a claim the runtime does not keep.
+ * 91 is the floor, not the ceiling.
  *
- * A node costs 120–175 tokens: a title, a gist, a range and often a
- * `sourceHeading`. 175 is the worst case observed. The node count is the guess:
- * the three real trees came out at blocks/2.9, blocks/3.1 and blocks/6.9, and
- * `blocks/4 + 6` covers both ends — the constant keeps a 20-block article
- * honest, the divisor keeps a 2,000-block one from being refused for a tree it
- * would never have grown.
- *
- * Every real tree comes out 1.5x–2.3x under the estimate, which is the margin we
- * want: an underestimate costs a multi-minute call and a failed ingest, an
- * overestimate costs nothing at all, because `max_tokens` is a ceiling and
- * allowance the model doesn't spend is not billed.
- * tests/token-budget.test.ts holds this to the committed fixture.
+ * Measured margin over the 32 trees plus the live Kuhn call: **2.46× at the
+ * tightest** (`replication-crisis`), 4.6× on Kuhn. The old comment here claimed
+ * *"every real tree comes out 1.5x–2.3x under the estimate"*; the real range was
+ * 1.09×–8.21× and had been for as long as anyone had looked. An underestimate
+ * costs a multi-minute call and a failed ingest; an overestimate costs nothing,
+ * because `max_tokens` is a ceiling and allowance the model doesn't spend is not
+ * billed. tests/token-budget.test.ts holds this to the committed fixture and to
+ * the measured Kuhn answer.
  */
 export function estimateHierarchyTokens(blocks: Block[]): number {
-  const internal = Math.ceil(blocks.length / 4) + 6;
-  return 500 + internal * 175;
+  const sections = sectionsAsked(blocks);
+  let nodes = sections;
+  for (let level = sections; level > 1; ) {
+    level = Math.ceil(level / FAN_OUT);
+    nodes += level;
+  }
+  return ENVELOPE_TOKENS + nodes * TOKENS_PER_NODE;
 }
+
+/**
+ * **Room reserved for this call's own reasoning — 64,000, and it is measured.**
+ *
+ * `THINKING_HEADROOM`'s 40,000 (src/token-budget.ts) was measured on a call with
+ * 48,107 tokens of article in front of it. This stage reads every block of the
+ * whole document, so it is the call that meets the longest inputs, and on
+ * 2026-09-04 the real Kuhn structure call reported **47,289 thinking tokens**
+ * against 365,930 of input — over the general reservation, at `EFFORT` medium,
+ * with `end_turn` and a valid answer.
+ *
+ * **This is the half of the fix that is easy to miss.** Correcting only the
+ * answer term above would have granted that call about 51,000 tokens, under the
+ * 58,285 it provably spent, and the free refusal this whole change removes would
+ * have become an eight-minute paid truncation. GPT Sol flagged the risk on the
+ * plan before either half was built.
+ *
+ * 64,000 is that measurement with about a third again on top — the same shape as
+ * the number it sits beside, and for the same reason: one observation is not a
+ * line to fit. It is **not** a shrink to force a long article in, and `EFFORT`
+ * is untouched; docs/postmortems/260826a-toc-max-tokens.md is why lowering
+ * either is the wrong lever.
+ *
+ * **What it costs, said out loud.** Every article now gets a larger `max_tokens`
+ * than it used to, short ones included, and the postmortem's finding is that
+ * adaptive thinking at `effort: "high"` expands into whatever room it is given.
+ * The counter-evidence is the same Kuhn call: at `medium`, given 128,000, it
+ * thought 47,289 rather than filling. Unspent allowance is not billed, so the
+ * risk is that thinking *grows* to use it — which `truncatedMessage` splits out
+ * by half if it ever does. Worth watching on the bill.
+ */
+export const STRUCTURE_HEADROOM = 64_000;
 
 /**
  * The structure call's request, assembled in the one place `generateHierarchy`
@@ -272,13 +408,158 @@ export function structureRequest(body: Block[]): {
   user: string;
   maxTokens: number;
   effort: Effort;
+  /**
+   * **The exact object handed to `streamMessage`** — not a description of it.
+   *
+   * Added 2026-09-04 so the checkpoint key below can be a digest of the request
+   * the call really makes. The four fields above are read back off this one
+   * rather than assembled beside it, so there is no second assembly to drift.
+   */
+  params: MessagesBody;
 } {
+  const user = renderBlocks(body);
+  const maxTokens = budgetFor(
+    "table of contents",
+    estimateHierarchyTokens(body),
+    STRUCTURE_HEADROOM,
+  );
+  /* The locals are named once and spent twice — into `params`, which is what
+     goes on the wire, and into the four fields the eval harness reads. Reading
+     them back *off* `params` needed two casts to undo the SDK's wider types,
+     which is type debt bought for nothing. ⟨GPT Sol, 2026-09-04.⟩ */
   return {
     system: SYSTEM,
-    user: renderBlocks(body),
-    maxTokens: budgetFor("table of contents", estimateHierarchyTokens(body)),
+    user,
+    maxTokens,
     effort: EFFORT,
+    params: {
+      max_tokens: maxTokens,
+      thinking: { type: "adaptive" },
+      output_config: { effort: EFFORT },
+      system: SYSTEM,
+      messages: [{ role: "user", content: user }],
+    },
   };
+}
+
+/**
+ * **What the checkpoint key is a digest of: one canonical semantic request,
+ * assembled on the same path the call uses.**
+ *
+ * The alternative — a hand-copied list of the fields that seemed to matter —
+ * is the blind spot `promptFingerprint` in [`pdf-read.ts`](pdf-read.ts) was
+ * written to remove, and GPT Sol's review of this plan (finding 4) named four
+ * things the proposed list already omitted: `thinking`, `max_tokens`, the
+ * routing `streamMessage` injects, and the difference between `CAPABLE_MODEL`,
+ * which is the model's *name*, and `modelFor("hierarchy")`, which is the
+ * *address* the request is actually sent to.
+ *
+ * **So `request` is the finished wire body**, built by the same
+ * `messagesWireBody` that `streamMessage` sends — not this body plus a
+ * hand-written copy of what the gateway injects. That distinction was the second
+ * round's finding ⟨GPT Sol, on the code, 2026-09-04⟩ and it is worth the extra
+ * export: restating the injected half here would cover today's two fields and
+ * miss tomorrow's third **silently**, because a mutation test can only
+ * enumerate the fields the object already has.
+ *
+ * ## What is deliberately NOT in it
+ *
+ * - **The abort signal and `onProgress`.** Neither changes what a finished
+ *   answer would be; both change only whether one arrives.
+ * - **The slug and the article id.** The store is bound to one article and
+ *   refuses any other (src/store/checkpoints.ts), and the answer is stored raw
+ *   — everything downstream of it, `buildTree`'s slug stamp included, re-runs.
+ * - **The reader.** Nothing about this call depends on a person; the day
+ *   anything here reads `reader_profiles`, it has to go in. Same rule as the
+ *   other two callers, and it is the store's header that states it.
+ * - **The blocks, as blocks.** They are already here in full: every id and every
+ *   word of prose is inside `request.messages`. That is load-bearing for a
+ *   reason worth stating — a lost draft re-mints every block id
+ *   ([`ids.ts`](ids.ts)), so a stored tree can never be replayed onto an article
+ *   whose ids have moved under it.
+ *
+ * `PROMPT_VERSION` is in it even though it never reaches the wire, because it is
+ * the handle for a change in what this stage *does with* the answer — a
+ * `buildTree` that reads the JSON differently is a different question with the
+ * same bytes, and nothing else here would notice.
+ */
+export function canonicalStructureRequest(params: MessagesBody): Record<string, unknown> {
+  return {
+    promptVersion: PROMPT_VERSION,
+    /* Built at call time, like the call builds it, so an environment override of
+       the model moves the key rather than silently answering its question. */
+    request: messagesWireBody("hierarchy", params),
+  };
+}
+
+/**
+ * The key itself: sixteen hex characters, which is what both existing
+ * checkpoint callers mint and what `CHECKPOINT_KEY_RE` is happiest with.
+ *
+ * `JSON.stringify` over an object this module builds, so the key order is fixed
+ * by the literals above rather than by chance. Re-ordering those literals would
+ * change every key — which costs one call per article and nothing else, since a
+ * key that does not match is simply a miss.
+ */
+export function structureKey(canonical: unknown): string {
+  return createHash("sha256").update(JSON.stringify(canonical), "utf8").digest("hex").slice(0, 16);
+}
+
+/**
+ * One structure answer, kept so a later attempt does not buy it again.
+ *
+ * **The raw text, not the tree.** Everything between the answer and the tree —
+ * `parseJson`, `buildTree`, `appendSupplement`, the repairs — is this stage's
+ * code, and storing its output would freeze a version of it into the row. The
+ * answer is the thing that was paid for; the rest is free and re-runs.
+ */
+export interface StructureCheckpointEntry {
+  fingerprint: string;
+  answer: string;
+}
+
+/**
+ * **One stored answer, or nothing** — the entry gate, and it refuses rather than
+ * guesses, exactly as `usableEntry` does for a label batch.
+ *
+ * The store validates nothing about a value (src/store/checkpoints.ts), so an
+ * older format, or a row written by something else, has to read as a miss. The
+ * interesting failure is the one where this says yes when it should say no: the
+ * run then builds a tree from an answer to a different question and looks
+ * exactly like a run that worked.
+ */
+function usableStructure(value: unknown, fingerprint: string): string | null {
+  if (typeof value !== "object" || value === null) return null;
+  const entry = value as Partial<StructureCheckpointEntry>;
+  if (entry.fingerprint !== fingerprint) return null;
+  if (typeof entry.answer !== "string" || entry.answer.length === 0) return null;
+  /**
+   * **And it has to still parse**, which is not the same question as "is it a
+   * string".
+   *
+   * `{ fingerprint, answer: "not JSON" }` satisfies every field check above,
+   * skips the call, and then fails on every attempt for ever — a poisoned row
+   * that no retry can clear, which is worse than paying for the call again.
+   * The current writer cannot create one (it stores only an answer that parsed,
+   * built and passed the invariants), so this guards drift rather than today.
+   * ⟨GPT Sol, on the code, 2026-09-04.⟩
+   *
+   * **What it does not cover, stated rather than implied:** an answer that
+   * parses here and then fails `buildTree` or `assertTreeSound` below still
+   * throws, and still throws on the next attempt. The lever for that is
+   * `PROMPT_VERSION`, which the key carries precisely so a change in what this
+   * stage does with an answer stops every stored answer being reused — a fuller
+   * fix would re-buy the call in place, and that means a retry loop around the
+   * whole call-and-build stretch, which is more machinery than the risk earns
+   * today. Parsing is cheap and covers the case that can arise without a code
+   * change at all.
+   */
+  try {
+    parseJson(entry.answer);
+  } catch {
+    return null;
+  }
+  return entry.answer;
 }
 
 /**
@@ -1342,6 +1623,18 @@ export interface HierarchyRun {
   /** Batches taken from a checkpoint left by an earlier, failed run. */
   labelsResumed: number;
   /**
+   * **Whether the tree itself came out of a checkpoint rather than out of a
+   * call.** True means this attempt made no structure call at all.
+   *
+   * Reported for the same reason `labelsResumed` is: a checkpoint that silently
+   * never hits looks exactly like one that is working, and this is the most
+   * expensive call in the pipeline to be quietly re-buying —
+   * docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md,
+   * docs/reusable/silent-success.md. It is also why `inputTokens` and
+   * `outputTokens` can be almost nothing on a successful run.
+   */
+  structureResumed: boolean;
+  /**
    * Paragraphs left with no nav label — **normally 0, and it is reported at 0
    * as well as above it.**
    *
@@ -1460,7 +1753,48 @@ export async function generateHierarchy(opts: {
      than discovered six minutes in. `budgetFor`, inside `structureRequest`,
      throws for that case. */
   const answerTokens = estimateHierarchyTokens(body);
-  const { system, user, maxTokens, effort } = structureRequest(body);
+  const { maxTokens, params } = structureRequest(body);
+
+  /**
+   * **The tree an earlier attempt already paid for, if it left one.**
+   *
+   * The most expensive call in the pipeline — 508 seconds and about two dollars
+   * on a 142-page paper — and until 2026-09-04 a run that died in the label pass
+   * afterwards bought it again from nothing. The key is a digest of this exact
+   * request (`canonicalStructureRequest` above), so a changed prompt, model,
+   * budget, effort or block id is a different question and simply misses.
+   *
+   * **A read that throws is a miss, not a failure**, and `{ asked, found }` goes
+   * out at `info` on every read whether or not it throws — the argument is
+   * src/labels.ts § the same read, and
+   * docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md
+   * is what happens when the instrumentation covers only the throwing case.
+   */
+  const structureFingerprint = structureKey(canonicalStructureRequest(params));
+  let raw: string | null = null;
+  try {
+    const stored = await opts.checkpoints.read<unknown>(slug, "hierarchy-structure", [
+      structureFingerprint,
+    ]);
+    raw = usableStructure(stored.get(structureFingerprint), structureFingerprint);
+    /* `found` and `usable` are separate numbers on purpose: a row that is there
+       and is refused by the gate above is a different story from no row at all,
+       and reporting only the first would make a format change look like a cold
+       cache. */
+    log("pipeline").info(
+      { slug, namespace: "hierarchy-structure", asked: 1, found: stored.size, usable: raw !== null },
+      "read the structure checkpoint",
+    );
+  } catch (err) {
+    log("pipeline").warn(
+      { slug, err },
+      "could not read the structure checkpoint; the table of contents will be asked for again",
+    );
+  }
+  const structureResumed = raw !== null;
+  if (structureResumed) {
+    opts.onProgress?.("reusing the table of contents an earlier attempt paid for");
+  }
 
   /* The request itself, wrapped: a 429/401/etc from the SDK is not caught
      anywhere upstream of here, and the installed SDK builds `Error.message`
@@ -1474,57 +1808,70 @@ export async function generateHierarchy(opts: {
      whole article** — and, for a non-JSON error response, the raw upstream
      body. Neither goes through Pino, so neither can be redacted, and
      `anthropicCallFailed` never sees them. See docs/project/logging.md. */
-  let message: Anthropic.Message;
-  try {
-    const call = streamMessage("hierarchy", {
-      max_tokens: maxTokens,
-      thinking: { type: "adaptive" },
-      output_config: { effort },
-      system,
-      messages: [{ role: "user", content: user }],
-    }, { ...(opts.signal ? { signal: opts.signal } : {}) });
+  /**
+   * What the structure half of this run cost — **zero when it was resumed, and
+   * that is the truth rather than a gap.** These two feed `HierarchyRun`'s
+   * totals, which answer "what did this attempt pay for"; a resumed attempt paid
+   * for nothing here, and `structureResumed` beside them says why the figure is
+   * small.
+   */
+  let structureUsage = { input_tokens: 0, output_tokens: 0 };
+  if (raw === null) {
+    let message: Anthropic.Message;
+    try {
+      const call = streamMessage("hierarchy", params, {
+        ...(opts.signal ? { signal: opts.signal } : {}),
+      });
 
-    if (opts.onProgress) {
-      const report = opts.onProgress;
-      let chars = 0;
-      let last = 0;
-      call.onText((delta) => {
-        chars += delta.length;
-        // Throttled, because the model emits deltas far faster than anyone can
-        // read them and every one of these is a write the poller may pick up.
-        const now = Date.now();
-        if (now - last < 500) return;
-        last = now;
-        report(`${Math.round(chars / 1000)}k characters of tree so far`);
+      if (opts.onProgress) {
+        const report = opts.onProgress;
+        let chars = 0;
+        let last = 0;
+        call.onText((delta) => {
+          chars += delta.length;
+          // Throttled, because the model emits deltas far faster than anyone can
+          // read them and every one of these is a write the poller may pick up.
+          const now = Date.now();
+          if (now - last < 500) return;
+          last = now;
+          report(`${Math.round(chars / 1000)}k characters of tree so far`);
+        });
+      }
+
+      /* `call.finalMessage()`, never `call.stream.finalMessage()` — the wrapper is
+         what records what this call cost. The stream's own method works and
+         records nothing. See src/messages-stream.ts. */
+      message = await call.finalMessage();
+    } catch (err) {
+      throw anthropicCallFailed(err);
+    }
+    structureUsage = message.usage;
+    raw = message.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("");
+
+    if (wasRefused(message)) {
+      /* `stop_details` is deliberately neither thrown nor logged — it is the
+         provider's own words about a request that carried the whole article,
+         and this error is copied onto the job and shown on the progress card.
+         See MODEL_REFUSED in src/messages.ts. */
+      throw stageFailure(MODEL_REFUSED, {
+        authored: "the model answered with stop_reason: refusal",
       });
     }
-
-    /* `call.finalMessage()`, never `call.stream.finalMessage()` — the wrapper is
-       what records what this call cost. The stream's own method works and
-       records nothing. See src/messages-stream.ts. */
-    message = await call.finalMessage();
-  } catch (err) {
-    throw anthropicCallFailed(err);
-  }
-  const raw = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
-
-  if (wasRefused(message)) {
-    /* `stop_details` is deliberately neither thrown nor logged — it is the
-       provider's own words about a request that carried the whole article,
-       and this error is copied onto the job and shown on the progress card.
-       See MODEL_REFUSED in src/messages.ts. */
-    throw stageFailure(MODEL_REFUSED, {
-      authored: "the model answered with stop_reason: refusal",
-    });
-  }
-  if (message.stop_reason === "max_tokens") {
-    throw truncationFailure("table of contents", maxTokens, answerTokens, {
-      outputTokens: message.usage.output_tokens,
-      answerChars: raw.length,
-    });
+    if (message.stop_reason === "max_tokens") {
+      throw truncationFailure(
+        "table of contents",
+        maxTokens,
+        answerTokens,
+        { outputTokens: message.usage.output_tokens, answerChars: raw.length },
+        /* This stage's own reservation, not the general one — otherwise the
+           sentence that exists to say which half overran quotes a number the call
+           was never sized with. */
+        STRUCTURE_HEADROOM,
+      );
+    }
   }
 
   const { root } = parseJson(raw);
@@ -1598,6 +1945,37 @@ export async function generateHierarchy(opts: {
      guarantee about the file. `checkTree` is pure and takes microseconds.
      docs/postmortems/260830a-the-article-with-one-heading.md. */
   assertTreeSound(blocks, structure);
+
+  /**
+   * **Kept only now, and the lateness is the design.**
+   *
+   * An answer stored before `parseJson` and `buildTree` had agreed with it would
+   * be a malformed-but-complete answer replayed for ever — every later attempt
+   * "resuming" straight onto the same throw, with no call left to make that
+   * could come out differently. So the write is after every check that an answer
+   * can fail on its own: it parsed, it built a tree, and `assertTreeSound`
+   * accepted that tree. Everything past this line is the label pass, which has
+   * checkpoints of its own.
+   *
+   * **A write that throws costs one call on the next attempt and nothing else**,
+   * which is the same deal `keepBatch` takes in src/labels.ts. Failing a run
+   * that has just succeeded, over a saving, would be a cache that had become an
+   * outage.
+   */
+
+
+
+  if (!structureResumed) {
+    const entry: StructureCheckpointEntry = { fingerprint: structureFingerprint, answer: raw };
+    try {
+      await opts.checkpoints.write(slug, "hierarchy-structure", structureFingerprint, entry);
+    } catch (err) {
+      log("pipeline").warn(
+        { slug, key: structureFingerprint, err },
+        "could not save the structure checkpoint; a later attempt will ask for the tree again",
+      );
+    }
+  }
 
   /* Pass two. The tree has to exist first: the batches are cut along its own
      section boundaries, so that every label a reader compares with another was
@@ -1768,11 +2146,12 @@ export async function generateHierarchy(opts: {
     labelBatches: labelRun.batches,
     labelCalls: labelRun.calls,
     labelsResumed: labelRun.resumed,
+    structureResumed,
     labelsDropped: labelRun.dropped.length,
     /* Both passes together. What this number answers is "what did a tree cost",
        and a structure figure alone would now understate it by most of the bill. */
-    inputTokens: message.usage.input_tokens + labelRun.inputTokens,
-    outputTokens: message.usage.output_tokens + labelRun.outputTokens,
+    inputTokens: structureUsage.input_tokens + labelRun.inputTokens,
+    outputTokens: structureUsage.output_tokens + labelRun.outputTokens,
     cacheReadTokens: labelRun.cacheReadTokens,
     cacheWriteTokens: labelRun.cacheWriteTokens,
     elapsedMs: Date.now() - started,
@@ -1854,7 +2233,12 @@ async function main(): Promise<void> {
 
   console.log(`\n${run.blocks} blocks (${run.structural} to label) → ${CAPABLE_MODEL}`);
   console.log(
-    `\nNodes:     ${Object.keys(run.parts.tree.nodes).length} (${run.internal} internal)`,
+    `\nNodes:     ${Object.keys(run.parts.tree.nodes).length} (${run.internal} internal)` +
+      /* Said either way, for the reason the labels line below gives at length:
+         on this command line there is no `articleId` to key on, so it is always
+         "bought", and a line that only speaks when it is interesting cannot say
+         the uninteresting thing. */
+      `, tree ${run.structureResumed ? "resumed from a checkpoint" : "bought"}`,
   );
   /* **Said even when it is zero**, which on this command line it always is —
      the stage commands have no `articleId` to key on and pass
