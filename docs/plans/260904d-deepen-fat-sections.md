@@ -1,10 +1,27 @@
-# Deepen the sections that came back too fat
+# The tree goes as deep as each part of the article needs
 
-**Status: planned, not yet reviewed, not yet built.** Started 2026-09-04. Worktree
-`deepen-fat-sections`.
+**Status: planned, reviewed once, being rewritten around the measurements; not yet built.** Started
+2026-09-04. Worktree `deepen-fat-sections`. **Supersedes
+[260904c-hierarchy-structure-in-waves.md](260904c-hierarchy-structure-in-waves.md)**, whose pure core
+this uses and whose framing — latency and the length ceiling — the measurements below have moved on
+from.
 
-One extra rung on the zoom ladder, bought only where the reader is missing one — and a change to
-what a column *means*, which is the part that makes it work.
+The top level comes from one call that sees everything. Then every section fans out to its own
+scoped call, in parallel, one level deeper — and **each call says whether its own children still need
+splitting**. Repeat until nobody says yes.
+
+> My intuition remains that we should do this adaptively […] fan out the sections of it to separate
+> agents in parallel to output sub-sections for one level deeper within their section, and so on. The
+> subagents should also perhaps provide output on whether they think their section deserves further
+> deepening.
+>
+> — Greg, 2026-09-04
+
+**The first draft of this plan asked for one extra level everywhere it was needed, chosen by a
+word-and-block heuristic.** Both halves of that turned out wrong, and the evidence is below: one
+extra level is not enough on a book, and a heuristic is a worse instrument than asking the call that
+just read the section. What survives from that draft is the reader-facing half — a column is a
+frontier, not a depth — which the adaptive version needs more, not less.
 
 ## The problem, in the reader's terms
 
@@ -97,28 +114,106 @@ be the whole answer.
 
 ## What we are going to do
 
-Keep the single whole-document structure call **exactly as it is**, and add a second pass that
-subdivides only the sections that came back fat — recursively, until nothing is fat or a depth cap
-is reached.
-
-That distinction is the whole design, and it is what makes this different from the cascade in
-[260904c](260904c-hierarchy-structure-in-waves.md):
+**Wave 1** is one whole-document call, as today: it sees every boundary and every sibling title at
+once, and its answer is the global outline that every later call is shown. That much of
+[260826h § D](260826h-toc-scaling.md#d-coarse-to-fine-a-global-outline-first-then-subtrees-in-parallel)'s
+argument stands and is not being traded away:
 
 > Below ~125,000 words a single structure call sees every boundary and every sibling title at once,
 > which is strictly better than any decomposition and much simpler.
->
-> — [260826h § D](260826h-toc-scaling.md#d-coarse-to-fine-a-global-outline-first-then-subtrees-in-parallel)
 
-That argument is about **deciding the global outline**, and it stands. Deepening does not touch the
-global outline: the top three levels still come from the one call that saw everything. The extra
-calls only subdivide a range whose boundaries and title that call has already fixed — the one job a
-scoped call does as well as a global one.
+**Wave 2 onwards** fans out. Every node that says it needs splitting gets a scoped call carrying its
+own blocks, its ancestor chain, and the global outline; disjoint calls run in parallel; each returns
+a complete child set for its parent, **and a judgment per child about whether that child is finished
+or still needs a level of its own**. The next wave is whatever came back unfinished. It stops when
+nothing does, or at a depth cap.
 
-### It does not fix latency, and saying so is part of the proposal
+### The self-assessment is the instrument, not a heuristic
 
-The structure call on the 142-page paper is 508 s, and this plan adds calls rather than removing
-any. Deepening makes the *tree better*, not the wait shorter. If the wait is the priority this is the
-wrong plan and [260904c](260904c-hierarchy-structure-in-waves.md) is the right one.
+The first draft chose targets with `words > 800 and blocks ≥ 10`. That conjunction is still the right
+*shape* for a cheap pre-filter, and it is still wrong as the decision: a section that is one sustained
+argument and a section that is five loosely-joined ones have identical counts, and only one of them
+has anything to divide. The call that just read the prose knows which; the counter never can.
+
+So the answer format grows one field per child — finished, or wants a level of its own, with a
+reason — and the counters become a **bound** rather than a decision: a node under the divisibility
+floor is never expanded however loudly it asks, and a node past the depth cap is recorded as
+`capReached` rather than quietly accepted.
+
+This has a failure mode worth naming before it happens: a model that always says "yes, deeper" turns
+a bounded cascade into a bill. The floor and the cap are what make that merely expensive rather than
+unbounded, and the eval has to report **how often the self-assessment says yes** as a first-class
+number, not just the tree it produced.
+
+### What this is, honestly: 260904c with a better argument
+
+This is the breadth-first cascade that
+[260904c](260904c-hierarchy-structure-in-waves.md) planned and paused, plus the self-assessment. The
+pure core — `shouldExpand`, `planExpansionBatches`, `normaliseExpansion`, `assertCascadeComplete`,
+`finaliseCascade` — is already written, tested and reviewed in
+[`src/hierarchy-cascade.ts`](../../src/hierarchy-cascade.ts), and until now called by nothing.
+
+What changed is the argument for it. 260904c argued latency and the length ceiling, and both of those
+weakened: the ceiling moved to 2,889 blocks when the estimator was re-rated, and a book's structure
+call turns out to take 102 s, not the 508 s that made the case. **The argument that replaces them is
+reliability**, and it is stronger:
+
+> A call shown thirty blocks cannot emit a range that is wrong by 1,289 of them.
+
+That is not a slogan — it is the measured failure of the alternative, four runs out of four, in
+[the free experiment](#the-free-experiment-a-conditional-fourth-level-in-the-one-whole-document-call)
+below.
+
+### It costs about eight times more on a book, and that is the trade
+
+Costed against the real gateway prices and the measured Moby-Dick figures, for a ~296-call, 4-wave
+cascade:
+
+| | input | output | total | vs today |
+|---|---|---|---|---|
+| **slices only** (each call sees its own range) | $4.42 | ~$4.0 | **~$8.4** | 8.4× |
+| whole article as a cached prefix on every call | $31.96 | ~$4.0 | ~$36 | 36× |
+| today, one call | $0.91 | $0.10 | $1.00 | 1× |
+
+**Per node produced the cascade is cheaper** — about 0.7¢ against 1.6¢ — because today's $1.00 buys
+64 nodes and the cascade's $8.40 buys around 1,300. An ordinary article is a fraction of this: two
+waves and a couple of dozen small calls.
+
+**And the obvious use of prompt caching is the expensive one.** Sending the whole article as a cached
+prefix to every scoped call loses by 4×, because a cache read costs exactly what sending 10% of the
+article costs and a Moby-Dick section is 0.93% of the book. The break-even is a slice of **257
+blocks**: only wave 2's chapter-sized calls come near it. What caching should hold is the small
+shared prefix — the rules plus the frozen global outline — which is worth about 8%, and **may be
+worth nothing at all**: Sonnet 5 will not cache a prefix under 1,024 tokens, and the estimate lands
+at 1,150–1,400. `src/labels.ts` spent months writing a cache marker that did nothing for exactly this
+reason, so the cascade reports `estimatedCacheable` and `cacheReadTokens` the way labels now does, or
+the saving is invisible whether or not it happened.
+
+Two constraints that follow, both from the same source: `output_config.effort` is part of the cache
+key, so a wave that varies effort loses its cohort's prefix; and the breakpoint is a **position** —
+rules, then the frozen outline, then the per-call targets and slices.
+
+### Concurrency is the thing that decides whether this ships
+
+`src/messages-stream.ts` imposes no limit; `src/labels.ts` uses `CONCURRENCY = 4` with the stated
+reason "politeness to the rate limiter" and no measurement behind it; `src/pdf-read.ts` runs 16
+against the same account and doubled it from 8 without incident.
+
+At 4, a 296-call cascade is about **1,450 s** — roughly twice the 740 s at which the job self-aborts
+(`LEASE_MS = 760_000` less `DEADLINE_MARGIN_MS`). At 16 it is about **480 s**, inside
+`STEP_BUDGET_MS.hierarchy = 700_000` with margin. So this needs a measured concurrency, and a book
+needs the checkpoints to survive being resumed across attempts, because a single attempt is not
+guaranteed to be enough.
+
+### What it does to the wait, which is not what 260904c assumed
+
+Not a saving, and not the disaster the arithmetic first suggested either. Wave 1 is the same call it
+is today (102 s on Moby-Dick), and the waves after it are parallel. At a concurrency of 16 the whole
+cascade is around 480 s against today's 102 s on a book — **slower**, and inside the budget.
+
+The 508 s figure that made latency 260904c's headline was the 142-page journal paper, not length as
+such: a book two and a half times larger answers in a fifth of the time. Whatever is slow about that
+document, this plan does not claim to fix it, and neither did the measurement.
 
 ## The idea that makes ragged depth work: a column is a frontier, not a depth
 
@@ -144,10 +239,40 @@ Three things follow, and the first two are already true of the code:
    and a reader reads that as information about the chapter, not as a broken model.
 3. **So keep one global control, and change what the second column shows.** `L1` stays depth 1 — the
    spine, the arc, the step marker and the keyboard ladder all hang off it. The column now called
-   `L2`/"Sections" becomes **the frontier**: for each block, its leaf's parent, the finest gist that
-   contains this paragraph. On an undeepened article that is bit-for-bit what it shows today, so
-   nothing changes for ten of thirteen articles; on a deepened one it shows sections where sections
-   were fine and sub-sections where they were fat.
+   `L2`/"Sections" becomes **the frontier**: for each block, the finest *titled* node containing it.
+   On an undeepened article that is bit-for-bit what it shows today, so nothing changes for ten of
+   thirteen articles; on a deepened one it shows sections where sections were fine and sub-sections
+   where they were fat.
+
+#### "Each leaf's parent" is the wrong definition, and the right one is a projection
+
+The first draft defined the frontier as *each leaf's parent*, and that is not always an antichain.
+⟨GPT Sol, finding 2, who found the fixture and ran it.⟩ `checkTree` permits an internal node to have
+both leaf and internal children — it only requires the children to tile — and `appendSupplement`
+produces exactly that shape on a shallow tree:
+
+```
+root
+ ├── body leaf
+ ├── body leaf
+ └── supplement          ← internal, beside the root's own leaves
+       └── note leaf
+```
+
+The leaf parents are then `{root, supplement}`, and the root contains the supplement. They overlap,
+so they are not a partition, and anything computing a column from them renders the article twice.
+`tests/supplement.test.ts` already accepts this tree as valid.
+
+So the frontier is **a projection with stated rules**, not a property claimed of the tree:
+
+- For each block, walk its chain and take the **deepest node that is not a leaf**. On an ordinary
+  branch that is the leaf's parent; on the shallow-plus-apparatus shape above it is the root for a
+  body block and the supplement for a note, which do not overlap because no block is in both.
+- A supplement has no `gist` **deliberately**, so the column shows its title alone, exactly as the
+  sections column shows "Notes" today.
+
+That is a handful of lines and a test per shape — ordinary, deepened, shallow, provisional,
+supplement — and the tests are the deliverable, because the failure is silent.
 
 The one thing the frontier column hides is the skipped rung — on a deep branch, chapter →
 sub-section is two steps and the section between them is off screen. The proposal is an eyebrow line
@@ -259,21 +384,45 @@ Today:
 raw answer ──parseJson──▶ ModelNode ──buildTree──▶ Tree ──appendSupplement──▶ assertTreeSound
 ```
 
-After:
+The first draft of this plan said "deepen the `ModelNode` between `parseJson` and `buildTree`", and
+**that is unsafe**. ⟨GPT Sol, on the plan, 2026-09-04, finding 1; confirmed here against the
+source.⟩ `buildTree` does not accept the model's ranges, it **derives** them: `planChildRanges` pins
+the first child to its parent's start, clamps later starts back inside, snaps a section onto its own
+heading and computes every end, and `visit` then passes the *derived* range down to the child rather
+than the child's own ([`src/hierarchy.ts:1570`](../../src/hierarchy.ts)). So a deepening call handed
+the raw proposal could be shown section `[20…40]` while the finished tree gives that node `[18…47]`.
+The tree tiles, covers every block and passes every invariant — and its new titles and gists describe
+**prose the call never saw**. Not theoretical: Moby-Dick's structure answer needed 55 boundary
+repairs. `hierarchy-cascade.ts` states the assumption it was built on outright — every range handed
+to it "was derived by this file".
+
+So the derived ranges have to exist before any scoped call is made:
 
 ```
-raw answer ──parseJson──▶ ModelNode ──DEEPEN──▶ ModelNode ──buildTree──▶ Tree ──appendSupplement──▶ …
+raw answer ──parseJson──▶ ModelNode ──buildTree──▶ Tree
+                                                    │
+                                    proposalFromTree │  (internal nodes only, derived ranges)
+                                                    ▼
+                                                ModelNode ──DEEPEN──▶ ModelNode
+                                                                          │
+                                                              buildTree ──┴──▶ Tree ──appendSupplement──▶ …
 ```
 
-**Before `buildTree`, on the model's nested proposal** — not on the built tree. Three reasons:
+`buildTree` runs twice over the same article, which is free — it is pure, takes milliseconds, and
+the second run over already-derived ranges derives the same ones again. What that buys:
 
-1. Every check `buildTree` makes — the tiling, the coverage, the repairs, the root clamp — then runs
-   **once**, over the finished proposal, unchanged. There is no second validation path to keep in
-   step with the first.
-2. The leaf layer is grown once, under whatever the deepest node on each branch turns out to be. No
+1. Every scoped call is shown the range the finished tree will actually give the node.
+2. Every check `buildTree` makes — tiling, coverage, repairs, the root clamp — still runs **once**
+   over the finished proposal, unchanged. There is no second validation path to keep in step.
+3. The leaf layer is grown once, under whatever the deepest node on each branch turns out to be. No
    leaf is minted and then re-parented.
-3. Supplements are appended *after* `buildTree`. Deepening never sees one, so it cannot break the
+4. Supplements are appended *after* `buildTree`, so deepening never sees one and cannot break the
    depth-1 rule — which is also the phantom the measurement above tripped over.
+
+`proposalFromTree` is the one genuinely new pure function this needs, and it is small: walk the
+internal nodes, emit `{title, gist, range, sourceHeading, children}`, stop where the children are
+leaves. It wants a round-trip test — `buildTree(proposalFromTree(buildTree(p)))` and `buildTree(p)`
+agree on every range — which is also the test that says the second build is idempotent.
 
 **Before `generateLabels`, necessarily.** `labels.json` stamps `structureHash(tree)`, so a tree
 deepened after the labels were written would be stale at birth and nothing would say so
@@ -363,39 +512,212 @@ left it. A fourth level lifts the ceiling to 729 and the contradiction disappear
 **This is the strongest argument in the plan**, and it is not about fat sections at all: at a fixed
 depth of three, a book's own structure cannot be represented, however good the model is.
 
-### Stage 2 — the deepening pass, behind a flag, not yet on
+#### The free experiment: a conditional fourth level in the one whole-document call
 
-`shouldExpand` gains the words half of the conjunction; a `deepenProposal` step between `parseJson`
-and `buildTree`, driving the existing cascade core; the request builder and the executor; per-section
-checkpoints under the existing `hierarchy-structure` namespace (keyed on a digest of that section's
-own request, so the namespace and its DB CHECK need no change); supplement exclusion; and
-`OversizedTarget` and `CapReached` surfaced onto `HierarchyRun` rather than swallowed.
+If the depth cap is what binds, lifting it costs one line of prompt and no extra calls. This is the
+simplest version, so it is the one that has to be ruled out before anything is built — and GPT Sol's
+review named it independently as the experiment the plan was missing. `system-deeper.txt` replaces
+"Go 3 levels deep" with:
 
-**Done:** an article with a fat section produces a depth-4 tree that passes `buildTree`,
-`assertTreeSound` and `checkTree` including the every-internal-node-has-a-gist rule; ten of the
-thirteen corpus articles produce a **byte-identical** tree to today, which is the assertion that says
-the pass is inert where it should be; injected failures resume the exact completed sections; and the
-label pass runs over a variable-depth tree, which is the thing only a real run can show.
+> Go as deep as the article needs, up to 4 levels […] Add a fourth level ONLY inside a section that
+> would otherwise hold more than 9 blocks or more than about 800 words. Most sections need no fourth
+> level; a tree where every branch is four deep is wrong.
 
-### Stage 3 — the reading view learns that a column is a frontier
+**On an article it works, and it is free.** The worst article in the corpus:
 
-The `buildGeometry` continuation fix and its invariant; the frontier column; `sectionDepth`; the
-outline band's rung ladder; summary mode's three coupled caps; the CSS tokens; auto-fit's starting
-set; and the two section counters.
+| noema (141 blocks) | incumbent | conditional 4 levels |
+|---|---|---|
+| biggest section | 26 blocks / **1,754 words** | 15 blocks / **919 words** |
+| sections over 1,000 words | 1 | **0** |
+| body words inside a fat section | 32% | 22% |
+| the call | — | 32 s, 2,934 out |
 
-**Done:** the browser check, on the box, at three, four and five internal levels — an undeepened
-article renders identically to today, a deepened one shows sub-sections in the frontier column with
-no blank or duplicated cells, `?at=` stays section-granular, and `?cols=` shows a ragged ToC that
-reads like a ragged ToC.
+The tree came back genuinely ragged — a fourth level in a few branches and not in the rest — which
+is also the first real evidence that the model will *use* a conditional instruction rather than
+applying it everywhere.
 
-### Stage 4 — docs, eval, and the numbers
+**On the bigger book it fails outright. Four runs, four failures.** Same prompt, same blocks,
+Moby-Dick (2,569 blocks):
+
+| run | output | elapsed | what `buildTree` said |
+|---|---|---|---|
+| 1 | 23,352 | 219 s | a range naming two ids that are not in the article |
+| 2 | 7,618 | 89 s | a range running **backwards by 1,289 blocks**, plus `spya-avr7mwa` — a real id with one extra character |
+| 3 | 7,365 | 82 s | a range whose end is a 10-character string that is not an id |
+| 4 | 18,239 | 180 s | a range running backwards by 6 blocks |
+
+Every call returned `end_turn` — none was truncated or refused. Output sizes span **threefold**, and
+runs 2 and 3 ignored the fourth-level instruction altogether while 1 and 4 obeyed it. Not one
+produced a tree. The faults are mechanical rather than editorial, and `buildTree` discards a
+100–200 second answer for a single one of them.
+
+**On the smaller book it works, and one extra level is still not enough.** Origin of Species (1,326
+blocks) succeeded — and halved the problem rather than solving it:
+
+| Origin of Species | 3 levels | conditional 4 |
+|---|---|---|
+| sections | 51 | 126 |
+| median section | 17 blocks / **2,768 words** | 9 blocks / **1,056 words** |
+| body words inside a fat section | 92% | **46%** |
+| biggest section | 131 blocks / 7,390 w | 54 blocks / **10,520 w** |
+| the call | 126 s, 12,095 out | **470 s, 46,587 out** |
+
+Darwin's paragraphs average 117 words, so nine of them is still a thousand words. **How many levels
+a section needs is a property of that section**, and no constant in a prompt can express it. That is
+the whole argument for doing it adaptively.
+
+**That asymmetry is the argument for scoped calls**, and it is a better one than "fat sections
+exist": a call shown thirty blocks cannot emit a range that is wrong by 1,289 of them, and it cannot
+run out of attention two-thirds of the way through a book. Whatever is failing here is failing
+*because* the call is being asked to hold the whole article and a much denser tree at once.
+
+### Stage 2 — one scoped expansion call, and the answer format
+
+**A spike before an architecture.** Take Moby-Dick's fattest section — 382 blocks, 34,884 words — and
+Darwin's, and make one real scoped call each: the section's blocks, its ancestor chain, the frozen
+global outline, and an answer format carrying the per-child verdict. Then read the children.
+
+This is the cheapest thing that can kill the plan, and it asks the questions no amount of design
+settles:
+
+- Are the boundaries and titles as good as the global call's, given only the slice plus the outline?
+  [260826h § 2](260826h-toc-scaling.md) names the failure to watch for — *"never blind subtree calls
+  with independently invented sibling roots — that is where four sections all end up meaning
+  'Background'"* — and the outline in the prefix is the defence against it.
+- **Does the self-assessment discriminate?** A call that marks every child "needs deeper" is a bill,
+  not a signal. Run each section twice and see whether the verdicts agree with each other and with
+  what a reader would say.
+- What does a scoped call actually cost and how long does it take, so the cascade's arithmetic rests
+  on a measurement rather than on the extrapolation in § What we are going to do.
+
+**Done:** two real expansions, their children read and judged, the verdict distribution recorded, and
+a decision written into this plan about whether the self-assessment earns its place or the
+word-and-block conjunction stays the governor. Nothing in `src/` has changed.
+
+#### Result: scoped calls are mechanically clean, and the verdict discriminates
+
+`scripts/spike-expand-section.ts`, 2026-09-04. Three calls, one prompt.
+
+| | Moby-Dick "The Whale's Head and Whiteness" | Origin of Species "Principles of Classification" |
+|---|---|---|
+| the section | 382 blocks, 34,884 words | 30 blocks, 7,390 words |
+| the call | 22 s, 76,558 in, 1,938 out | 16 s, 14,889 in, 1,361 out |
+| children | 10 | 10 |
+| invented ids / out of order / outside the range | **0 / 0 / 0** | **0 / 0 / 0** |
+| marked `needsDeeper` | 6 | **0** |
+
+**Nothing mechanical went wrong.** Three scoped calls, no invented id, no reversed range, no child
+outside its parent — against four whole-document runs out of four that failed on exactly those
+things. This is the plan's central claim, and it now has evidence on both sides of it rather than
+one.
+
+**The verdicts discriminate, and they are reasoning about content rather than size.** Melville's
+children got *"Three distinct scenes: oath, Ahab's soliloquy, Starbuck's reaction"* against *"One
+continuous reflective essay."* Darwin's got *"One sustained argument across several examples"* — for
+a child of **1,381 words** — and every one of the ten was declared finished.
+
+**And every Melville child carried the author's own heading.** The whole-document call found 44 of
+his 144 headings; one scoped call over one section recovered ten of ten. That is the arithmetic
+ceiling lifting exactly where the plan predicted it would.
+
+#### Two things the spike found that no amount of design would have
+
+**1. The verdict disagrees with the word count, and it may be right.** Darwin's section was declared
+finished at children of 1,381 and 1,696 words — six minutes of reading under one sentence, and
+exactly the case the word bound was written to catch. The model's argument is that these are single
+sustained arguments, and splitting one argument into three implies seams the author did not write.
+**A product call, not a technical one**; it is with Fable.
+
+**2. The same call, run twice, gave two defensible and completely different answers.**
+
+| | children | marked deeper | shape |
+|---|---|---|---|
+| run A | 10 | 6 | grouped Melville's chapters — "Quarter-Deck, Sunset, Dusk" as one child |
+| run B | 20 | 1 | one child per authored chapter, flat |
+
+The prompt asks for two things that collide: *"the article's own headings are HARD boundaries"* and
+*"aim for 5-9 children"*. With twenty headings in range you cannot do both, and the model chose
+differently each time. **This is the book-level arithmetic contradiction again, one level down** —
+and it decides both the tree's shape and the cascade's bill, because run A costs six more calls than
+run B.
+
+So the expansion prompt has to say which rule wins when they collide, rather than leaving the model
+to pick. That decision is with Fable too, and it lands in stage 3's prompt.
+
+### Stage 3 — the cascade, wired up, behind a flag that is off
+
+`proposalFromTree` and its round-trip test; the answer format and its validator; the request builder
+and the wave executor over the existing pure core; per-expansion checkpoints; supplement exclusion;
+a measured concurrency; and `OversizedTarget`, `CapReached` and the verdict distribution surfaced onto
+`HierarchyRun` rather than swallowed.
+
+**Four things Sol's review says must be decided here rather than inherited:**
+
+- **The ranges must be derived before any scoped call sees them** — the blocker in
+  [§ Where it goes](#where-it-goes-in-generatehierarchy). This is `proposalFromTree`, and it is the
+  first thing built.
+- **The heading clause.** `shouldExpand` today returns true for *any* node with an unresolved
+  authored heading, whatever its size — which on Moby-Dick is a hundred targets, not five. With the
+  self-assessment in place this clause may be redundant or may be the floor that stops the model
+  under-splitting a book. **Decide it against stage 2's data**; do not let a reused predicate decide
+  it.
+- **Checkpoint order.** The whole-document answer is written only after it has parsed, built and
+  passed the invariants. Cascading inside that gate means a failed wave-3 call leaves the 102-second
+  wave-1 answer unsaved and the retry re-buys it. The order is: validate and checkpoint wave 1 →
+  cascade → checkpoint each expansion as it lands → build and publish the finished tree only.
+  Per-expansion entries get an entry `kind` and their own validator; sharing the namespace is safe,
+  sharing a schema is not.
+- **`assertCascadeComplete` means less on a seeded cascade.** Its `expanded` branch only checks the
+  child count, so for the wave-1 nodes it did not produce it is not saying "this was resolved". It
+  also rejects unary internal nodes that `buildTree` accepts — 35 of them across 133 saved eval
+  trees. Distinguish trusted seed structure from cascade-owned state, and apply the ≥2 rule only to
+  new expansions.
+
+Also: the word bound sums words under the reading-time policy (`countsTowardReadingTime`), not
+`isStructural` — non-gistable body prose still costs the reader. And the field is
+`minimumWordsToExpand`, not `terminalWords`: an 874-word three-block node is *intentionally*
+terminal, so a name reading "sections are at most this many words" would be a lie.
+
+**Done:** Moby-Dick and Origin of Species both produce variable-depth trees that pass `buildTree`,
+`assertTreeSound` and `checkTree` including the every-internal-node-has-a-gist rule; the corpus's
+thirteen articles produce trees whose **wave-1 layer is byte-identical to today**, which is the
+assertion that says wave 1 is untouched; an injected failure in wave 3 resumes the completed
+expansions **and does not re-buy wave 1**; and the label pass runs over a variable-depth tree, which
+only a real run can show.
+
+### Stage 4 — the reading view learns that a column is a frontier
+
+The `buildGeometry` continuation fix and its invariant; the frontier projection with a test per tree
+shape — ordinary, deep, shallow, provisional, supplement; `sectionDepth`; the outline band's rung
+ladder; summary mode's caps; the CSS tokens; auto-fit's starting set; and the two section counters.
+
+**Done:** the browser check, on the box, on a real book and a real article — an undeepened article
+renders identically to today, a deepened one shows sub-sections in the frontier column with no blank
+or duplicated cells, `?at=` stays section-granular, and `?cols=` shows a ragged table of contents
+that reads like a ragged table of contents.
+
+### Stage 5 — docs, eval, and the numbers
 
 `hierarchy.md`, `granularity-zoom.md` (§ The tree: "a column is a depth" becomes "a column is a
-frontier"), `url-state.md`, `keyboard.md`, `tooltips.md`, `summaries.md`. The eval gains a
-sections-fatness metric so the threshold can be tuned against something rather than chosen.
+frontier"), `prompt-caching.md` (stage 4 is no longer "one call per article"), `url-state.md`,
+`keyboard.md`, `tooltips.md`, `summaries.md`. The eval gains a section-fatness metric, a verdict
+distribution and a cost-per-node figure, so the bounds are tuned against something rather than
+chosen.
 
 **Done:** no doc still states three levels as a fact; `npm test`, `npm run typecheck` and
 `npm run check` green; GPT Sol's review of the built code answered.
+
+### Stage 6 — turn it on, or stop
+
+**The plan as first written could finish with every gate green and the feature still switched off**,
+because it lands behind a flag and no later stage enables it. ⟨GPT Sol, finding 9.⟩ So the enable is
+its own stage with its own evidence: the same book and the same article read both ways, side by side,
+and a judgment about whether the extra rungs help. The cost is 8× on a book, so this is a real
+decision and not a formality.
+
+If the answer is no, the honest outcome is the conditional-depth prompt from stage 1 — which works on
+articles and on the smaller book — plus a frontier column that renders it. That is a much cheaper
+result, and it is not a failure.
 
 ## Alternatives considered
 

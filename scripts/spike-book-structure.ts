@@ -77,6 +77,17 @@ async function main(): Promise<void> {
       `out=${message.usage.output_tokens} elapsed=${elapsed}s`,
   );
 
+  /* **The answer is saved before anything tries to build a tree from it.** The
+     first version of this wrote the file after `buildTree`, and the run that
+     found the interesting failure — a book-scale answer with invented block ids
+     — threw with the paid 23,352-token answer only in memory. Two hundred and
+     nineteen seconds, and nothing left to count the invented ids in. */
+  await writeFile(
+    `${outPath}.answer.json`,
+    JSON.stringify({ elapsed, usage: message.usage, stop: message.stop_reason, raw }, null, 2),
+    "utf-8",
+  );
+
   const { root } = parseJsonAnswer<{ root: ModelNode }>(raw, "the table of contents");
   const report: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [] };
   const tree = buildTree(root, {}, body, "spike", report);
