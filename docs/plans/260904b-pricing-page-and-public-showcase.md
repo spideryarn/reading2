@@ -564,6 +564,101 @@ tier's budget is `limit * 2`, and the wall compares half-units to half-units. `u
 untouched, which is the argument for half-units rather than fractions, and not a stylistic
 preference.
 
+### Stage 4b — the upgrade that makes us money, opened
+
+Added 2026-09-04 because stage 5's offer needs somewhere real to land. Greg:
+
+> it should go to $10/month subscribers when they're at their quota limit too. And also, it should
+> provide a direct link to the /buy page as an alternative!
+
+**The link is one line; the problem is that today it is a dead end.** A Reader at their monthly
+ceiling has `canCheckout: false` (any non-terminal subscription), so `/pricing` draws them no button,
+and the live Portal configuration has `subscription_update: { enabled: false }`, so there is no
+*Switch plan* button either. That is the warning already written down in
+[billing.md § A paying Reader cannot become a Researcher](../project/billing.md#a-paying-reader-cannot-become-a-researcher):
+*"the one upgrade that makes us more money is the one there is no way to perform"*. Greg chose on
+2026-09-04 to **open the path first** rather than link at it and hope.
+
+- **The two Stripe defaults are not defaults; billing.md already argues both.**
+  `proration_behavior: create_prorations` — `none` would give Researcher away for the rest of the
+  month. `billing_cycle_anchor: unchanged` — it keeps the dates, which is what makes usage already
+  spent this period count against the new 150 rather than resetting it.
+- **`ensurePortalConfiguration` does not reconcile a configuration that already exists**, so editing
+  the script is not enough to move the live account. That is the trap in this stage.
+- **The allowance side is already built.** `quota-adjustment.ts` exists for exactly this — a plan
+  change mid-period, stored as a delta rather than an absolute so it does not go stale when a tier
+  moves. Nothing new is needed there, and stage 5 must not disturb its units (P1 below).
+- **`stripe:check` never asked whether a plan switch is possible**, and passed cleanly on live day
+  with the upgrade path shut. It gains that check in this stage, because a gate that has never seen
+  its subject fail is [not evidence](../reusable/silent-success.md).
+- **Done:** a Reader signed in at `/pricing` is offered Researcher and reaches something that takes
+  the money; `stripe:check` fails if `subscription_update` is ever turned back off.
+
+### What GPT Sol found in stage 5's design, 2026-09-04
+
+Reviewed before anything was built, which is the point of reviewing a plan. **Three P1s, four P2s, no
+P0s**, and the verdict on the mechanism was that live recomputation stands. The full answer is
+`sol-stage5-answer.md` in the session scratchpad; what changes the design:
+
+**P1 — the `quotaLimitDelta` unit trap, and it is the one that would have cost real money.** Sol ran
+`tests/billing-quota-adjustment.test.ts` and confirmed the stored contract: Researcher `150` plus a
+stored delta of `-117` means an allowance of `33`. If stage 5 doubles the tier *before*
+`limitForPeriod`, that same row yields `300 - 117 = 183` half-units where the right answer is
+`(150 - 117) * 2 = 66` — a budget of ninety-one articles instead of thirty-three. **So every tier,
+delta, proration and clamp stays in article units, `limitForPeriod` is called unchanged, and
+`budgetHalfUnits = articleLimit * 2` is derived only at the admission seam.** The two units get
+different names so one cannot be passed where the other belongs. No stored delta is migrated.
+
+**P1 — excluding `pay-lapsed` was wrong as a class.** Fable's reasoning was an example, not a rule:
+a Reader who added three private articles and then lapsed is at six half-units against a free budget
+of six, and sharing one of them makes room. So **all three refusal codes get the same conditional
+treatment** and the exclusion list disappears — conditionality does the work, which is what it was
+for. `pay-lapsed`'s existing sentence also stops claiming that resubscribing is the only remedy.
+
+**P1 — "the unchanged wall" was my mistake, and it introduces a bounded overdraft.** `used < limit`
+is equivalent to `used + 1 <= limit` only because every reservation costs exactly one today. Once a
+reservation costs two, `5 < 6` admits an ingest that settles at seven. So it is **not** the same rule
+doubled, and I said in chat that it was.
+
+The decision is to **take the overdraft, knowingly**, because Greg's own sentence settles it: he said
+a free account can make six public articles, and `U + 2 <= B` delivers five. What is being accepted is
+one half-unit, once: a reader at five half-units may add a sixth article, and is then refused
+everything until they are back under. It cannot repeat and it cannot compound — at seven they are
+refused, and sharing the new article returns them to six, which is still refused. **Tests have to pin
+both halves**: that the overdraft never exceeds one half-unit, and that no add-then-unshare cycle
+gets a second one.
+
+**P2 — the offer counts rows and speaks about articles.** A re-added URL owns several charged rows,
+so "share three articles" can be false when three half-units are available from one article. Savings
+are aggregated by `article_id` within the entitlement window, and the number of *articles* is derived
+from those groups.
+
+**P2 — visibility is written outside the billing lock.** `pg-visibility.ts` locks the article;
+admission locks `billing_accounts`. An unshare committing between the usage read and the reservation
+lets a reservation commit against stale usage. Sol confirms this does **not** let two ingests consume
+one slot. The fix is a lock *order*, applied everywhere: **`billing_accounts` before `articles`**,
+and `read committed` is then sufficient — serializable is not needed.
+
+**P2 — no rounding rule makes the reader-facing counts correct.** `ceil(5/2)` says "3 of 3 used"
+while the wall still admits one; `floor` says "2 of 3" while two and a half are gone. So **half-units
+are never divided for display**: the marketed limit stays in articles, the enforcement budget is a
+separately named field, and any surface that must show usage gets integer counts it can add up
+itself. The surfaces that drift otherwise are `describePlan` (both `/profile` and `/pricing`),
+`ingestQuotaReached`'s "all N articles", the lapsed `remaining = limit - used`, `/admin/users` —
+which has its own aggregate and does not go through `usageSql` — and the plan cards' habit lines.
+
+**P2 — my claim about the `ai_calls` precedent was half wrong.** `ai_calls.article_id` *is* a real FK
+with `on delete set null`; the text-not-FK reasoning applies only to `job_id`, which is about
+disposable jobs. So the FK is fine. The real consequence is different: deleting a public article
+turns each of its ledger rows back into full price, so **deletion silently raises usage**. There is no
+article-deletion path in the app today, so this is a policy to write down rather than a defect: if
+one is ever built it takes the same billing lock and says the same thing the unshare warning says.
+
+**And the guard worth more than any of them:** `settleReservation` takes a *discriminated successful
+outcome carrying `articleId`*, and writes `succeeded_at` and `article_id` in the same update. An
+optional argument would let a future caller omit the link and charge a public article full price for
+ever, silently. Legacy rows rule out a `NOT NULL` constraint, so the type is the only guard available.
+
 ## What this deliberately does not do
 
 - No annual billing, no currency switcher, no comparison table.
