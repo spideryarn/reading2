@@ -368,3 +368,51 @@ Docs, and the two things a stage cannot check about itself.
   that pins it at zero requests.
 - **Not showing a visitor the experimental modes in the bar.** Deferred by decision, 2026-09-04.
 - **Not naming the owner** anywhere in the new copy. No `ownerId` crosses today and none starts.
+
+## Progress
+
+**Stages 0, 1, 2 and 3 are built.** Stage 4 (saved searches) and stage 5 (the sweep) are not.
+
+| | |
+|---|---|
+| **0 — Tweets** | Verified rather than built. `tweets` is selected in `PUBLIC_PROJECTIONS`, crosses in the DTO with its own key-path test, and `VisitorTweetsPage` renders it at `/read/:slug/tweets`. No code changed |
+| **1 — Timeline** | Built, `6212c75b`. The nine-step artefact path, plus `VisitorTimelineBand` and an `access` union on `TimelinePanel` |
+| **2 — Diagram** | Built, `6212c75b`. `DiagramAccess`; the visitor arm pins `kind` to `force`, disables three fetching hooks and renders no picker |
+| **3 — Comments** | Built. The projection, the dedicated query, the two SQL row filters, `CommentAccess`, the drawer, and the copy in `messages.ts` and `PrivacyPage.tsx` |
+
+### What the build changed about the plan
+
+- **`useSketchCaption` was a third fetching hook, and the plan named two.** It had no `enabled`
+  argument at all — for an owner there is no purchase to gate — so it was an unconditional GET to an
+  authenticated route on every mount of the diagram panel. It takes `string | null` now and issues
+  no request for `null`. Found by mapping the panel's hooks rather than by reading its chips.
+- **The `signedIn` prop on `Dock` went with the visitor drawer's call to action.** Its docblock said
+  it was read *only* there, and stage 3 removed the thing it was read by. The paragraph explaining
+  the two spellings of *is somebody signed in* is kept where the surviving one is declared.
+- **`readers-own` is deleted**, as § The type change said it would be, and no new union members were
+  added.
+- **`publicCitationUrl` is new** (`src/urls.ts`). The plan said citations would be "rebuilt field by
+  field and every URL through the public URL policy" without saying which policy, and there was not
+  one that fit: `safePublicCanonical` refuses any query string, which is right for a canonical and
+  would silently drop half the real citations on the web.
+
+### Every guard was watched failing
+
+Not one of these was believed on a green run alone —
+[silent-success.md](../reusable/silent-success.md).
+
+| Guard | Broken how | What went red |
+|---|---|---|
+| The column in `PUBLIC_PROJECTIONS` | deleted the `timeline` line | `public-reads.test.ts` |
+| The artefact allowlist | published `orderConflicts` | `public-dto.test.ts` key paths |
+| The diagram pin | removed `owns ? … : "force"` | `?diagram=sketch` and `?diagram=illustrated` |
+| The citation policy | replaced `publicCitationUrl` with the raw url | both citation cases, naming the credential and the private host |
+| The read-only dialog | mounted the owner's arm for a visitor | the first verb, *Delete* |
+| The table tripwire | — | fired on its own when `comments` entered the public graph, before it was widened on purpose |
+
+### Still open
+
+- **The payload measurement** § The one architectural call owes. Not done, and it is stage 5's.
+- **`security-map.md` is wrong about diagram**, which says the mode is owners-only "unconditionally".
+  It is an entry-point doc, so the correction goes to Greg as its own approved edit rather than
+  riding along here.

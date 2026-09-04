@@ -20,7 +20,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ASSETS_BUDGET_MS } from "../src/collect-assets.js";
-import { DEADLINE_MARGIN_MS, LEASE_MS } from "../src/jobs.js";
+import { DEADLINE_MARGIN_MS, LEASE_MS, STEP_BUDGET_MS } from "../src/jobs.js";
 import { DEFAULT_INGEST_STEPS } from "../src/pipeline.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -92,6 +92,15 @@ describe("the job lease and the platform's kill", () => {
    * article (7.1s measured, but its 180s cap is what bounds it), and the three
    * cheap steps rounded generously upward.
    */
+  /* **"Fits one invocation" is about elapsed time, not about how many requests
+     it actually takes** — and since 2026-09-04 those are different answers. The
+     sum below still fits the deadline, which is what this case asserts and what
+     `maxDuration` is about; but `STEP_BUDGET_MS.hierarchy` is now 700 s, so a
+     walk that has spent ~125 s on `fetch → extract → blocks` hands the claim
+     back rather than starting `hierarchy`, and the ordinary article takes two
+     requests. That is deliberate (src/jobs.ts § `STEP_BUDGET_MS`) and it does
+     not weaken this assertion: a budget that stopped fitting one invocation
+     would still be a budget nothing could recover from. */
   it("leaves room for the whole default ingest inside one invocation", () => {
     /* **Each number says where it came from and when, because this plan has
        twice been bitten by not being able to tell a measurement from a guess.**
@@ -200,5 +209,51 @@ describe("the job lease and the platform's kill", () => {
        step fit". */
     const longestMeasuredStepMs = 320_400;
     expect(LEASE_MS - DEADLINE_MARGIN_MS).toBeGreaterThan(longestMeasuredStepMs);
+  });
+
+  /**
+   * **The hand-back threshold for `hierarchy` may not admit a step the same
+   * evidence says cannot finish.**
+   *
+   * ⟨GPT Sol, reviewing the built stage 3 of
+   * docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md, finding 2⟩
+   * `STEP_BUDGET_MS.hierarchy` was 320.4 s, measured on *ordinary* articles.
+   * Measured on Kuhn's *A Landscape of Consciousness* — 142 pages, two
+   * production ingests on 2026-09-04 — the structure call alone is **508 s** and
+   * the whole step is **658–778 s**, against a 740 s deadline. Those same two
+   * ingests recorded `extract` at 305–347 s, so the walk reached `hierarchy`
+   * with 393–435 s left, admitted it on a 320.4 s budget, bought most of a
+   * structure call it could not finish, and spent one of only two requeues.
+   *
+   * So the rule is: **after the worst measured PDF extract, `hierarchy` is
+   * handed back rather than started.** Everything below is measured, and the
+   * assertion is the relationship rather than the number, so re-tuning either
+   * side is free and breaking the pair is not.
+   */
+  it("refuses to start hierarchy on what a long PDF's extract leaves behind", () => {
+    /* MEASURED 2026-09-04, production, release `436d6b56`: `spya-y807kg` at
+       09:26 and `spya-bub4bd` at 10:42, the same 142-page paper. The whole
+       `POST /api/jobs/:id/advance` returned 200 in 347 s and 305 s. The
+       **shorter** of the two is the one that binds — it leaves the *most* window
+       behind, so it is the case most likely to admit the next step. */
+    const measuredPdfExtractMs = 305_000;
+    const leftAfterIt = LEASE_MS - DEADLINE_MARGIN_MS - measuredPdfExtractMs;
+    expect(
+      STEP_BUDGET_MS.hierarchy,
+      "the walk would start `hierarchy` with less window than the 142-page paper's " +
+        "structure call alone took (508 s) — it buys most of one and spends a requeue",
+    ).toBeGreaterThan(leftAfterIt);
+
+    /* **And it still has to be startable.** A budget at or over the claimant's
+       own deadline is never satisfied by any claim, so the step could only ever
+       run as the *first* of a claim — which is the walk's ungated slot and is
+       exactly what this threshold hands it to. Over the deadline the reasoning
+       stops being "reserve nearly the whole window" and becomes "this table no
+       longer decides anything", which is worth failing on. */
+    expect(
+      STEP_BUDGET_MS.hierarchy,
+      "a budget at or over the claimant's deadline can never be met, so the table has " +
+        "stopped saying anything about this step",
+    ).toBeLessThan(LEASE_MS - DEADLINE_MARGIN_MS);
   });
 });

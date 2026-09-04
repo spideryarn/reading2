@@ -408,6 +408,30 @@ preference.
 
 ## Log
 
+- **2026-09-04, what the neighbouring worktree settled, and what it costs this plan.**
+  `260904c-more-modes-on-a-shared-link` is widening a shared link from the other side, and two of its
+  findings land on this plan rather than only on its own.
+  - **Chat is not shareable, and the reason is not a missing allowlist entry.** A stored chat answer
+    can quote the owner's *other private articles*, because `search_library` and
+    `read_library_passage` range over the whole shelf — so the disclosure sits in the prose of
+    `chat_messages.text`, the one column the feature cannot exist without. Stripping every
+    surrounding field leaves *"In your other piece on X, the author argues…"* untouched. Written up
+    in [chat-tools.md](../project/chat-tools.md); the consequence here is that **the sharing copy
+    must not promise conversations**.
+  - **`PrivacyPage.tsx`'s "Who can see your shelf" paragraph is wanted by both plans**, and is being
+    edited sequentially rather than split: that worktree takes the whole paragraph first, adding
+    nothing about listing, and the listing clause is added here afterwards — because the page must
+    not claim a public index before there is one. Two sessions editing one paragraph is a merge
+    conflict inside a sentence.
+  - Its stage order is timeline, diagram, comments, saved searches — chat dropped.
+- **2026-09-04, a subagent deleted three untracked files it did not create** — `.tmp-smoke.mts`,
+  `privacy-1280.png`, `privacy-390.png` — while tidying its own scratch files out of the worktree
+  root. Copies survive in the shared primary checkout, dated 2026-09-02 and 09-03, so nothing is
+  known to be lost; they were **not** copied back, because a file that cannot be confirmed identical
+  is worse in a shared tree than a gap. The cause is a brief that said *keep your files out of the
+  repo root* without saying *delete nothing you did not write*, and every brief since says the
+  second thing. [version-control.md](../project/version-control.md) already forbids the git commands
+  that throw work away; `rm` is the hole in that rule.
 - **2026-09-04, stage 2 built.** `/pricing` joined the marketing pages (`.site`, `SiteNav`, hero,
   `SiteFooter variant="marketing"`), the table became variant B's cards, and the four *How it works*
   paragraphs are folded into a seven-question FAQ. Six things worth knowing:

@@ -237,6 +237,165 @@ describe("long tokens the page broke across a line, and the page break", () => {
   });
 });
 
+describe("the page number pdf.js fused to the heading that follows it", () => {
+  /* Every heading and folio here is the real text layer of Kuhn's "A Landscape
+     of Consciousness" (142pp, Elsevier), read by pass0 and copied verbatim. The
+     journal prints the folio at the top of each page and the paper numbers its
+     sections three deep, so a page starts with a running header, a newline, and
+     then the folio welded to whatever follows it by `pass0`'s no-separator
+     concatenation. Eight correct headings were scored as invented on this one
+     document. docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md
+     § The checker defect.
+
+     The document shape matters as much as the strings, which is why these
+     pages are built rather than pasted: the folio is only strippable because
+     the whole document agrees what it is. The paper is 142 pages and starts at
+     journal page 28, so folio = file page + 27 — measured on the real file,
+     where 141 of the 142 pages carry that offset line-initially and the
+     runner-up offset carries 10. src/pdf-score.ts § `folioOffset`. */
+  const HEADER = "Progress in Biophysics and Molecular Biology 190 (2024) 28–169";
+  const PAGES = 142;
+  const OFFSET = 27;
+
+  /** The document as pass0 read it, with `lines` replacing the given page's. */
+  const document = (lines: Record<number, string>): Pass0 => ({
+    pages: Array.from({ length: PAGES }, (_, i) => {
+      const page = i + 1;
+      /* Line two of every real page: the folio, welded to the first line of
+         whatever the page starts with. */
+      const rest = lines[page] ?? "and the argument goes on, as it does for a hundred pages.";
+      const text = `${HEADER}\n${page + OFFSET}${rest}\nSome body prose follows it here.`;
+      return { page, text, words: text.split(/\s+/).length, items: [] };
+    }),
+    metaTitle: null,
+    isScan: false,
+    furniture: new Set(),
+  });
+  const said = (page: number, text: string): PdfRecord[] => [
+    { page, type: "paragraph", text, continues: false, uncertain: false },
+  ];
+
+  /** file page, the heading as printed, and the rest of the line after it. */
+  const FUSED: [number, string, string][] = [
+    [37, "9.5.10.", "Mansell’s perceptual control theory"],
+    [25, "9.2.12.", "Northoff’s temporo-spatial sentience"],
+    [30, "9.4.4.", "Critical brain hypothesis"],
+    [41, "9.6.7.", "Direct perception theory"],
+    [56, "9.10.4.", "Cleeremans and Tallon-Baudry’s phenomenal control"],
+    [98, "16.3.", "Dao De Jing’s constant dao"],
+    [109, "17.7.", "Combs’s chaotic attractor and autopoiesis"],
+    [128, "4.", "My personal first-person awareness disappears upon duplication"],
+  ];
+
+  for (const [page, heading, rest] of FUSED) {
+    const folio = page + OFFSET;
+    it(`does not call ${heading} invented when the page layer holds ${folio}${heading}`, () => {
+      const pass = document({ [page]: `${heading} ${rest}` });
+      const result = check(said(page, `${heading} ${rest}\nSome body prose follows it here.`), [page], pass);
+      expect(result.pages[0]!.invented).toEqual([]);
+    });
+  }
+
+  /* The other half, and the reason the rule is line-initial and narrow: on the
+     same document `12` and `13` were reported and both were true. Neither is a
+     standalone token anywhere on its page — `12` is only ever inside `9.8.12.`
+     and `2012a`, `13` only inside `13.5` and `13.2`. Catching `2012 → 12` is
+     what `protect` exists for. */
+  it("still refuses a number that is only ever a piece of a longer one", () => {
+    const pass = document({
+      50: " does, the information processing might have been just the same,\n" +
+        "9.8.12. Thagard’s neural representation, binding and competition\n" +
+        "“to support language” (Blakemore, 2012a).",
+    });
+    const result = check(
+      said(50, "9.8.12. Thagard’s neural representation, binding and competition, 12"),
+      [50],
+      pass,
+    );
+    expect(result.pages[0]!.invented).toEqual(["12"]);
+  });
+
+  it("still refuses a section number the page only ever prints with a sub-part", () => {
+    const pass = document({
+      71: "Most relevant to our Landscape is IIT’s fundamental ontology.\n" +
+        "located in some kind of “qualia space” (13.5).\n" +
+        "distance themselves from Panpsychism (13.2), and probably would argue that,",
+    });
+    const result = check(said(71, "located in some kind of “qualia space” (13)."), [71], pass);
+    expect(result.pages[0]!.invented).toEqual(["13"]);
+  });
+
+  /* **The score that actually gates is the chunk's, not the page's** — and it
+     is built by joining several pages' text layers into one string, at which
+     point no line knows which page's folio was printed above it. So the folios
+     are taken off per page and handed in. A version that forgave the fused
+     heading on the page row and not on the chunk row would report the fault and
+     buy the retry regardless, which is the whole cost this rule exists to save.
+     `contentFailures` reads `overall.invented`. */
+  it("forgives the fused heading in the chunk score, which is the one that gates", () => {
+    const pass = document({ 37: "9.5.10. Mansell’s perceptual control theory" });
+    const said37: PdfRecord[] = [
+      { page: 37, type: "heading3", text: "9.5.10. Mansell’s perceptual control theory", continues: false, uncertain: false },
+      { page: 37, type: "paragraph", text: "Some body prose follows it here.", continues: false, uncertain: false },
+      { page: 38, type: "paragraph", text: "and the argument goes on, as it does for a hundred pages. Some body prose follows it here.", continues: false, uncertain: false },
+    ];
+    /* Two requested pages and a context page, which is what a real chunk is. */
+    const result = check(said37, [37, 38], pass, { context: 36 });
+    expect(result.overall.invented).toEqual([]);
+    expect(result.failures.filter((f) => f.includes("on none of"))).toEqual([]);
+  });
+
+  /* GPT Sol, reviewing the first version of this rule, which stripped one to
+     four leading digits from ANY line-initial numbered heading. `12.3.` on a
+     page whose folio is 77 has no folio fused to it at all, so a model that
+     writes `2.3.` has corrupted a section number — the exact class `protect`
+     exists to catch — and the review found it published as acceptable.
+     docs/plans/260904b-…-code-review-sol.md finding 4. */
+  it("still refuses a section number the model shortened, when no folio was fused to it", () => {
+    const pass = document({ 50: " does, the information processing was the same.\n12.3. Genuine heading" });
+    const result = check(said(50, "2.3. Genuine heading"), [50], pass);
+    expect(result.pages[0]!.invented).toEqual(["2.3"]);
+  });
+
+  /* The same test from the other side: the digits stripped have to be this
+     page's folio and nobody else's. `9.5.10.` is fused to 64 on file page 37,
+     and a model that writes it on file page 38 is quoting a heading that is not
+     on the page it claims. */
+  it("strips the folio of the page it is scoring, not of some other page", () => {
+    const pass = document({ 37: "9.5.10. Mansell’s perceptual control theory" });
+    const result = check(said(38, "9.5.10. Mansell’s perceptual control theory"), [38], pass);
+    expect(result.pages[0]!.invented).toEqual(["9.5.10"]);
+  });
+
+  /* And what is left after the folio comes off has to be a numbered heading in
+     its own right. Folio 77 against a line-initial `77.3.` leaves `.3.`, which
+     is nothing — a heading numbered `77.3.` on page 77 is the heading itself,
+     with no folio welded to it, and a model that shortens it to `3.` has
+     dropped a number. */
+  it("refuses a strip that leaves something which is not a heading number", () => {
+    const pass = document({ 50: " does, the information processing was the same.\n77.3. A heading that starts with the folio" });
+    const result = check(said(50, "3. A heading that starts with the folio"), [50], pass);
+    expect(result.pages[0]!.invented).toEqual(["3"]);
+  });
+
+  /* A document that does not paginate this way gets no defusing at all: with no
+     offset the whole document agrees on, there is no folio to take off, and the
+     rule is inert rather than guessing. */
+  it("does not defuse anything on a document with no consistent folio", () => {
+    const pass: Pass0 = {
+      pages: [1, 2, 3].map((page) => {
+        const text = `A page of prose with no page number printed on it.\n9.5.10. A heading`;
+        return { page, text, words: text.split(/\s+/).length, items: [] };
+      }),
+      metaTitle: null,
+      isScan: false,
+      furniture: new Set(),
+    };
+    const result = check(said(2, "5.10. A heading"), [2], pass);
+    expect(result.pages[0]!.invented).toEqual(["5.10"]);
+  });
+});
+
 describe("what the check says it checked", () => {
   it("does not count a page it could not check", () => {
     /* `meta.pagesChecked` is shown to a reader. "8 of 8" for a document where a

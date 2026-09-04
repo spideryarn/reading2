@@ -7640,7 +7640,14 @@ export async function serveAuthenticatedApi(
      * and that is the design: the browser holds the request open so the work
      * happens inside an invocation somebody is waiting on, rather than in a
      * floating promise a serverless runtime is free to freeze. `vercel.json`
-     * caps a function at 300 seconds, which is the real ceiling on a step.
+     * caps a function at **800** seconds (`functions."api/**".maxDuration`),
+     * which is the real ceiling on a request. It is not the ceiling on a *step*:
+     * the claimant aborts itself at `LEASE_MS - DEADLINE_MARGIN_MS` = 740 s so
+     * that an expired lease means *the process is gone*, and a step that
+     * overruns that hands the job back rather than ending it
+     * (src/jobs.ts § `LEASE_MS`, src/store/jobs.ts § `pauseForDeadline`). This
+     * line said 300 seconds, which no version of `vercel.json` in this repo has
+     * ever said.
      *
      * **200, not 409, when somebody else has it.** A second tab asking to
      * advance a job that is already advancing is a correct thing for a correct

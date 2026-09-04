@@ -339,20 +339,42 @@ describe("the public API's tables", () => {
   }
 
   /**
-   * The four the public surface may name.
+   * The five the public surface may name.
    *
    * `articles` and `article_revisions` are the work itself; `revision_blocks` is
-   * its prose; `block_identities` is the spine those ids hang on. Everything a
-   * *reader* does — comments, chats, searches, lookups, profiles, uploads, jobs
-   * — is a different table by design, and docs/plans/260827ai-public-read-only-access.md
-   * has the diagram: the line Greg drew between what a stranger sees and what
-   * they do not is a line the schema already draws.
+   * its prose; `block_identities` is the spine those ids hang on.
+   *
+   * **`comments` is the fifth, added deliberately on 2026-09-04**, and it is
+   * the first time this list has grown. Greg decided that a shared link carries
+   * the owner's comments — docs/plans/260904c-more-modes-on-a-shared-link.md
+   * § Stage 3 — so the sentence this comment used to carry, that everything a
+   * *reader* does is a different table by design, is no longer true of all of
+   * them. It is still true of chats, searches, lookups, profiles, uploads and
+   * jobs, and those are still refused here.
+   *
+   * **What makes this a widening rather than the hole this test was written
+   * for**, stated so the next person to add a line has to clear the same bar:
+   *
+   *  - the read is `publicCommentsQuery` in src/store/public-reader.ts, which
+   *    names its columns and **repeats `publicSlug` in its own `where`** — it
+   *    does not take an article id from an earlier statement and trust it,
+   *    which is precisely the *"obtain an article id, then read a child table
+   *    by id"* move the header below describes;
+   *  - it refuses referee notes and unfinished model calls in SQL
+   *    (`PUBLIC_COMMENTS_WHERE`), so the filtering is not a `map` somebody can
+   *    widen;
+   *  - and the owner's own reader, `listFor(articleId)` in
+   *    src/store/pg-comments.ts, is **not** what serves it. That was the first
+   *    proposal and GPT Sol blocked it.
+   *
+   * A sixth line needs the same three sentences written about it, or it should
+   * not be here.
    *
    * `article_visibility_changes` is deliberately **not** here. It is written by
    * the owner's switch and read by nobody yet, and when something does read it
    * that will be an owner-facing page, not this one.
    */
-  const ALLOWED = ["articles", "articleRevisions", "revisionBlocks", "blockIdentities"];
+  const ALLOWED = ["articles", "articleRevisions", "revisionBlocks", "blockIdentities", "comments"];
 
   /**
    * **Detected through the import, not by grepping for the word.**

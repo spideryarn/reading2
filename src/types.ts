@@ -2308,6 +2308,33 @@ export interface Job {
   /** Stop has been pressed and the abort has not landed yet. */
   cancelling?: boolean;
   /**
+   * **How many extra lease windows this job has been given** — so the card can
+   * say which attempt it is on rather than looking stalled.
+   *
+   * Two mechanisms increment it and they share the one counter: a lapsed claim
+   * that `settleExpired` put back in the queue, and a claimant that ran out of
+   * its own deadline mid-step and handed the job back (`pauseForDeadline`,
+   * src/store/jobs.ts). `REQUEUE_BUDGET` in src/jobs.ts caps the total, so this
+   * never exceeds it — three windows in all, counting the first.
+   *
+   * **Absent means zero**, which is nearly every job. It crosses `publicJob`
+   * deliberately: it is a fact about the machine's own retrying, not about the
+   * reader, and a job that has quietly restarted twice is exactly the thing a
+   * person watching a long PDF wants to be told.
+   *
+   * **Nothing renders it yet**, said out loud because the sentence above is
+   * about what it is *for*. The field is on the wire; what a card should say
+   * about it is a copy decision with two renderers behind it (src/job-state.ts,
+   * and `JobCard` against `JobProgress`) and is Greg's to make.
+   *
+   * Postgres reads it off `jobs.requeues`. The filesystem adapter keeps the
+   * *budget's* count in memory — a restart empties it, deliberately, because a
+   * restart there is `sweepStopped`, which requeues everything with no budget at
+   * all — and writes this field alongside so the two stores hand the client the
+   * same shape. src/store/jobs-fs.ts says the rest.
+   */
+  requeues?: number;
+  /**
    * Who is reading, already rendered — `renderProfile` in src/profile.ts.
    *
    * On the job rather than in a step's own options, for two reasons: the queue
@@ -3261,7 +3288,7 @@ export interface FeedbackDiagnostics {
  * for.
  *
  * `feedback` is the only table in this app an ordinary account holder can add
- * rows to — capped at ten an hour each (`FEEDBACK_HOURLY_CAP`), which is a
+ * rows to — rate-capped per owner (`FEEDBACK_HOURLY_CAP`), which is a
  * ceiling on the rate and not on the total. An unbounded select on it is a
  * response whose size is decided by whoever wrote the most, so the ceiling is
  * here rather than in the caller's good intentions.

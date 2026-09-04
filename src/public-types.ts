@@ -57,6 +57,7 @@
 import type { Assets } from "./assets.js";
 import type {
   Arc,
+  Citation,
   BlockContext,
   BlockId,
   BlockKind,
@@ -162,6 +163,21 @@ export interface PublicArticle extends PublicArtefactSet {
   blocks: PublicBlock[];
   tree: Tree;
   arc?: Arc;
+  /**
+   * **The owner's comments — a required array, unlike every artefact above.**
+   *
+   * The optional keys in `PublicArtefactSet` answer *did anybody build one of
+   * these*, where absent means nobody ran the step. Comments are not built and
+   * there is no step: an article with none is an article nobody wrote on, which
+   * is an ordinary and very common state rather than a missing artefact. So the
+   * empty case is `[]` and it means what it says.
+   *
+   * GPT Sol's correction, and it took a union member out of `VisitorGap` with
+   * it: *"No saved items yet is content inside an accessible panel, not
+   * something preventing access."* An empty comments drawer is an empty drawer.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md.
+   */
+  comments: PublicComment[];
   /**
    * The article's own images and which of them we hold — the same `Assets` the
    * owner gets, and for the same reason `tree` and `arc` are not forked: it
@@ -352,6 +368,65 @@ export interface PublicTweets {
 export interface PublicTimeline {
   /** In the order they are to be shown. **Never re-sorted by a reader.** */
   events: TimelineEvent[];
+}
+
+/**
+ * **One of the owner's comments, as a visitor gets it.**
+ *
+ * Since 2026-09-04 a shared link carries the reader's marks on the passages,
+ * what they wrote about them, and what the model answered when they asked.
+ * Greg's decision, and the one thing in this file that is a **privacy** choice
+ * rather than a pipeline one: everything else here is the article or a model's
+ * work on it, and this is a person's own words.
+ * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
+ *
+ * ## What is not here, and which kind of reason each one is
+ *
+ * **Operational** — `error`, `attemptId`, `leaseExpiresAt`, `model`,
+ * `searches`, `status`. How our machine got on, not what the reader said. The
+ * public read filters to finished rows in SQL, so `status` would be a constant
+ * on the wire as well as an internal fact.
+ *
+ * **Somebody else's feature** — `criterionId` and `valence`. A comment with a
+ * criterion is a **referee's** placement of a passage on a scale, not a reading
+ * note (src/types.ts § `Comment.criterionId` draws exactly that line). Dropping
+ * the two fields would publish the *body* of a peer review with its context
+ * removed, which is worse than publishing it whole. **So the row is filtered
+ * out entirely**, in the query, and these two keys are absent as a second
+ * statement of the same decision. GPT Sol found this; the plan has it as a
+ * blocking finding.
+ *
+ * **Pointing at something a visitor has not got** — `threadId`. It names a chat
+ * conversation, and chat is not shared (chat-tools.md § a transcript cannot be
+ * published by column allowlist). A key whose only use is to open something
+ * that is not there is worse than no key.
+ *
+ * **Ordinary provenance** — `articleId`, `ownerId`, `updatedAt`. The first two
+ * are ours; the third would say *"edited"* on a screen with nothing to compare
+ * it against.
+ */
+export interface PublicComment {
+  /** Stable identity, so `?comment=` and the gutter mark agree. */
+  id: string;
+  blockId: BlockId;
+  /** The article's own characters, at the offsets the mark was made against. */
+  quote: string;
+  start: number;
+  createdAt: string;
+  /** The reader's own words. Absent on a bare bookmark, never `""`. */
+  body?: string;
+  /** What the model said back, when the reader ticked the box. */
+  answer?: string;
+  /**
+   * Where the answer says it came from, **rebuilt and re-judged**.
+   *
+   * Every URL goes through `publicCitationUrl` (src/urls.ts) rather than
+   * crossing as stored: a citation carrying credentials, or naming a host only
+   * this machine can reach, is the one thing in a comment that a stranger must
+   * not be handed. One that fails is dropped, not blanked — a citation with no
+   * address is a footnote to nowhere.
+   */
+  citations?: Citation[];
 }
 
 /**

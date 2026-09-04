@@ -1155,3 +1155,350 @@ describe("the root, which has no parent to be derived from", () => {
     expect(() => buildTree(bogus, {}, blocks, "bogus", report())).toThrow(/not in blocks\.json/);
   });
 });
+
+/**
+ * **The section that starts one paragraph after its own heading.**
+ *
+ * Measured on a 142-page Kuhn paper, 2026-09-04: of the model's 82 non-root
+ * nodes, 24 started *on* a heading block and **53 on the block immediately
+ * after one**. Every unbacked `sourceHeading` claim reproduced was at offset
+ * −1 — the model named the author's heading correctly and put the boundary on
+ * the first paragraph beneath it. The heading then fell into the previous
+ * section's tail, `planChildRanges` believed the start, and the claim was
+ * dropped as out of range. `droppedHeadings: 59` was counting that, and not the
+ * model overruling the author.
+ *
+ * So the repair is code, not prompt: a kept child that starts one block after a
+ * heading run it *names* moves back onto that run's first heading, recorded as
+ * its own `kind` of `PartitionRepair`.
+ *
+ * **Why the claim has to match.** The unconditional rule — snap any start that
+ * sits one after a heading — takes headings the model deliberately left in the
+ * section before. "closes an overlap, which would otherwise grow two leaves for
+ * one block" above is exactly that case: the model puts "The First Part" inside
+ * child 1 and starts child 2 on the paragraph after it, and moving that heading
+ * forward would be inventing a boundary nobody proposed. Requiring the child's
+ * own `sourceHeading` to name a heading in the run makes the repair
+ * self-evidencing — it only ever honours a claim the answer already made.
+ *
+ * docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md § Stage 8.
+ */
+describe("a section that starts one block after the heading it names", () => {
+  /**
+   * The live shape, and it tiles perfectly by the model's own arithmetic: child
+   * 1 ends on the heading, child 2 begins on the paragraph after it. There is
+   * no gap and no overlap to find — the answer is self-consistent, and it still
+   * has the author's heading in the wrong section.
+   */
+  const offByOne: ModelNode = {
+    ...WHOLE,
+    children: [
+      {
+        title: "First",
+        gist: "It opens.",
+        range: ["spya-aaaaaa", "spya-dddddd"],
+        sourceHeading: "The First Part",
+      },
+      {
+        title: "Second",
+        gist: "It closes.",
+        range: ["spya-eeeeee", "spya-ffffff"],
+        sourceHeading: "The Second Part",
+      },
+    ],
+  };
+
+  it("moves the boundary back onto the heading, and counts it", () => {
+    const r = report();
+    const tree = buildTree(offByOne, {}, BLOCKS, "test", r);
+    expect(titled(tree, "First")?.range).toEqual(["spya-aaaaaa", "spya-cccccc"]);
+    expect(titled(tree, "Second")?.range).toEqual(["spya-dddddd", "spya-ffffff"]);
+    expect(leafBlocks(tree).sort()).toEqual(BLOCKS.map((b) => b.id).sort());
+    expect(checkTree(BLOCKS, tree).problems).toEqual([]);
+    /* **Exactly one repair, and it is the new kind.** This is also the guard on
+       `recordBoundaryFaults`: it measures the model's two claims about each
+       boundary against where that boundary ended up, so running it after the
+       snap would report a phantom `overlap` of 2 here — the answer disagreeing
+       with a value we chose ourselves. It runs on the raw starts. */
+    expect(r.repairs).toEqual([{ where: "root > child 2", kind: "heading", at: 3, size: 1 }]);
+    expect(repairedBlockCount(r.repairs)).toBe(1);
+  });
+
+  it("stops the heading claim being dropped, which is what the reader sees", () => {
+    const r = report();
+    const tree = buildTree(offByOne, {}, BLOCKS, "test", r);
+    expect(r.droppedHeadings).toEqual([]);
+    expect(titled(tree, "Second")?.sourceHeading).toBe("The Second Part");
+  });
+
+  /** Two headings in a row — an `h2` directly under an `h1`. */
+  const RUN: Block[] = [
+    block("spya-aaaaaa", "Opening paragraph before any heading"),
+    block("spya-bbbbbb", "Part One", "heading", "h1"),
+    block("spya-cccccc", "A Sub Heading", "heading", "h2"),
+    block("spya-dddddd", "Body under the sub heading"),
+    block("spya-eeeeee", "More of the same"),
+  ];
+
+  it("snaps to the first heading of a run, not the nearest", () => {
+    const run: ModelNode = {
+      title: "Whole piece",
+      gist: "The article argues something.",
+      range: ["spya-aaaaaa", "spya-eeeeee"],
+      children: [
+        { title: "Front", gist: "It opens.", range: ["spya-aaaaaa", "spya-cccccc"] },
+        {
+          title: "Part one",
+          gist: "It closes.",
+          range: ["spya-dddddd", "spya-eeeeee"],
+          sourceHeading: "A Sub Heading",
+        },
+      ],
+    };
+    const r = report();
+    const tree = buildTree(run, {}, RUN, "test", r);
+    expect(titled(tree, "Part one")?.range).toEqual(["spya-bbbbbb", "spya-eeeeee"]);
+    expect(titled(tree, "Front")?.range).toEqual(["spya-aaaaaa", "spya-aaaaaa"]);
+    expect(checkTree(RUN, tree).problems).toEqual([]);
+    expect(r.repairs).toEqual([{ where: "root > child 2", kind: "heading", at: 1, size: 2 }]);
+  });
+
+  /**
+   * **The no-op control, and it is the one that matters.** noema's three trees
+   * show 0 of 83 starts one after a heading, so on most documents this repair
+   * must do nothing at all. A repair that fired where the model was already
+   * right would be worse than the fault it mends.
+   */
+  it("does nothing when the start is already on the heading", () => {
+    const sound: ModelNode = {
+      ...WHOLE,
+      children: [
+        {
+          title: "First",
+          gist: "It opens.",
+          range: ["spya-aaaaaa", "spya-cccccc"],
+          sourceHeading: "The First Part",
+        },
+        {
+          title: "Second",
+          gist: "It closes.",
+          range: ["spya-dddddd", "spya-ffffff"],
+          sourceHeading: "The Second Part",
+        },
+      ],
+    };
+    const r = report();
+    const tree = buildTree(sound, {}, BLOCKS, "test", r);
+    expect(titled(tree, "First")?.range).toEqual(["spya-aaaaaa", "spya-cccccc"]);
+    expect(titled(tree, "Second")?.range).toEqual(["spya-dddddd", "spya-ffffff"]);
+    expect(r.repairs).toEqual([]);
+    expect(r.droppedHeadings).toEqual([]);
+  });
+
+  it("does nothing on an article with no headings at all", () => {
+    const plain: Block[] = [
+      block("spya-aaaaaa", "One"),
+      block("spya-bbbbbb", "Two"),
+      block("spya-cccccc", "Three"),
+      block("spya-dddddd", "Four"),
+    ];
+    const headingless: ModelNode = {
+      title: "Whole piece",
+      gist: "The article argues something.",
+      range: ["spya-aaaaaa", "spya-dddddd"],
+      children: [
+        { title: "First", gist: "It opens.", range: ["spya-aaaaaa", "spya-bbbbbb"] },
+        { title: "Second", gist: "It closes.", range: ["spya-cccccc", "spya-dddddd"] },
+      ],
+    };
+    const r = report();
+    const tree = buildTree(headingless, {}, plain, "test", r);
+    expect(titled(tree, "First")?.range).toEqual(["spya-aaaaaa", "spya-bbbbbb"]);
+    expect(titled(tree, "Second")?.range).toEqual(["spya-cccccc", "spya-dddddd"]);
+    expect(r.repairs).toEqual([]);
+  });
+
+  it("leaves a start alone when the node claims no heading", () => {
+    const unclaimed: ModelNode = {
+      ...WHOLE,
+      children: [
+        { title: "First", gist: "It opens.", range: ["spya-aaaaaa", "spya-dddddd"] },
+        { title: "Second", gist: "It closes.", range: ["spya-eeeeee", "spya-ffffff"] },
+      ],
+    };
+    const r = report();
+    const tree = buildTree(unclaimed, {}, BLOCKS, "test", r);
+    expect(titled(tree, "Second")?.range).toEqual(["spya-eeeeee", "spya-ffffff"]);
+    expect(r.repairs).toEqual([]);
+  });
+
+  it("leaves a start alone when the heading before it is not the one claimed", () => {
+    const elsewhere: ModelNode = {
+      ...WHOLE,
+      children: [
+        { title: "First", gist: "It opens.", range: ["spya-aaaaaa", "spya-dddddd"] },
+        {
+          title: "Second",
+          gist: "It closes.",
+          range: ["spya-eeeeee", "spya-ffffff"],
+          // The block before this start is "The Second Part". This names the
+          // other one, so nothing here says the boundary is in the wrong place.
+          sourceHeading: "The First Part",
+        },
+      ],
+    };
+    const r = report();
+    const tree = buildTree(elsewhere, {}, BLOCKS, "test", r);
+    expect(titled(tree, "Second")?.range).toEqual(["spya-eeeeee", "spya-ffffff"]);
+    expect(r.repairs).toEqual([]);
+    expect(r.droppedHeadings).toEqual(["root > child 2"]);
+  });
+
+  it("will not take a heading the section before it starts on", () => {
+    const contested: ModelNode = {
+      title: "Whole piece",
+      gist: "The article argues something.",
+      range: ["spya-aaaaaa", "spya-eeeeee"],
+      children: [
+        { title: "Preamble", gist: "Before it all.", range: ["spya-aaaaaa", "spya-aaaaaa"] },
+        {
+          title: "Front",
+          gist: "It opens.",
+          range: ["spya-bbbbbb", "spya-cccccc"],
+          sourceHeading: "Part One",
+        },
+        {
+          title: "Sub",
+          gist: "It closes.",
+          // One block after the whole run, and the run reaches back to the
+          // heading the previous child already starts on.
+          range: ["spya-dddddd", "spya-eeeeee"],
+          sourceHeading: "A Sub Heading",
+        },
+      ],
+    };
+    const r = report();
+    const tree = buildTree(contested, {}, RUN, "test", r);
+    /* Snapped to index 2 — the deepest heading of the run that the previous
+       section does not already start on — never to index 1, which it does. A
+       section cannot begin where its predecessor begins. */
+    expect(titled(tree, "Front")?.range).toEqual(["spya-bbbbbb", "spya-bbbbbb"]);
+    expect(titled(tree, "Sub")?.range).toEqual(["spya-cccccc", "spya-eeeeee"]);
+    expect(checkTree(RUN, tree).problems).toEqual([]);
+    expect(r.repairs).toEqual([{ where: "root > child 3", kind: "heading", at: 2, size: 1 }]);
+  });
+
+  /**
+   * **The snap is a boundary like any other, so it cascades**, and the count
+   * must not charge the article twice for it: the moved start becomes the
+   * node's own `p0` one level down, its first child is pinned to it, and that
+   * pinning is recorded too — one boundary, seen at two depths, at one
+   * coordinate.
+   */
+  it("cascades into the node's own first child without being counted twice", () => {
+    const nested: ModelNode = {
+      ...WHOLE,
+      children: [
+        { title: "First", gist: "It opens.", range: ["spya-aaaaaa", "spya-dddddd"] },
+        {
+          title: "Second",
+          gist: "It closes.",
+          range: ["spya-eeeeee", "spya-ffffff"],
+          sourceHeading: "The Second Part",
+          children: [
+            { title: "Inner one", gist: "A point.", range: ["spya-eeeeee", "spya-eeeeee"] },
+            { title: "Inner two", gist: "Another.", range: ["spya-ffffff", "spya-ffffff"] },
+          ],
+        },
+      ],
+    };
+    const r = report();
+    const tree = buildTree(nested, {}, BLOCKS, "test", r);
+    expect(leafBlocks(tree).sort()).toEqual(BLOCKS.map((b) => b.id).sort());
+    expect(checkTree(BLOCKS, tree).problems).toEqual([]);
+    expect(titled(tree, "Inner one")?.range).toEqual(["spya-dddddd", "spya-eeeeee"]);
+    expect(new Set(r.repairs.map((x) => x.at))).toEqual(new Set([3]));
+    expect(repairedBlockCount(r.repairs)).toBe(1);
+  });
+
+  /**
+   * **Both faults at once, and the two sizes stay independent.** The model
+   * stopped child 1 three blocks early *and* started child 2 on the paragraph
+   * after the heading it names. The gap is measured against what the answer
+   * said; the snap by how far the boundary then moved.
+   */
+  it("records the gap and the snap separately", () => {
+    const both: ModelNode = {
+      ...WHOLE,
+      children: [
+        { title: "First", gist: "It opens.", range: ["spya-aaaaaa", "spya-aaaaaa"] },
+        {
+          title: "Second",
+          gist: "It closes.",
+          range: ["spya-eeeeee", "spya-ffffff"],
+          sourceHeading: "The Second Part",
+        },
+      ],
+    };
+    const r = report();
+    const tree = buildTree(both, {}, BLOCKS, "test", r);
+    expect(checkTree(BLOCKS, tree).problems).toEqual([]);
+    expect(r.repairs).toEqual([
+      { where: "root > child 2", kind: "gap", at: 4, size: 3 },
+      { where: "root > child 2", kind: "heading", at: 3, size: 1 },
+    ]);
+    /* **These two are one boundary and are counted as two.** The gap resolved
+       blocks 1–3 and the snap moved block 3 again, so three blocks changed
+       hands and `repairedBlockCount` says four: it groups by coordinate, and
+       the raw fault is recorded where the model put the boundary while the snap
+       is recorded where it ended up. ⟨GPT Sol, finding 1⟩ The over-count is
+       bounded by the snap's own size, it errs toward reporting more, and fixing
+       it properly means giving every repair a boundary identity and a
+       `from`/`to` — see docs/plans/260904b § Stage 8a. Asserted so that the day
+       somebody does fix it, this line is what tells them the fixture existed. */
+    expect(repairedBlockCount(r.repairs)).toBe(4);
+  });
+
+  /**
+   * **A run is only taken as far back as the previous section's own claim.**
+   * ⟨GPT Sol's review of this change, finding 2⟩
+   *
+   * The floor above stops the snap reaching a heading the previous section
+   * *starts on*, and that is not the same as a heading the previous section
+   * **names**. Here "Front" begins on the preamble and claims `Part One`; the
+   * run beneath it is `Part One` + `A Sub Heading`, and "Sub" claims the
+   * second. Snapping to the first of the run would take `Part One` out of the
+   * section that quoted it — that node loses its provenance badge, and its
+   * title and gist go on describing prose its own heading is no longer in. One
+   * matched heading justifies moving that heading, not every heading above it.
+   */
+  it("stops the run short of a heading the previous section names", () => {
+    const shared: ModelNode = {
+      title: "Whole piece",
+      gist: "The article argues something.",
+      range: ["spya-aaaaaa", "spya-eeeeee"],
+      children: [
+        {
+          title: "Front",
+          gist: "It opens.",
+          range: ["spya-aaaaaa", "spya-cccccc"],
+          sourceHeading: "Part One",
+        },
+        {
+          title: "Sub",
+          gist: "It closes.",
+          range: ["spya-dddddd", "spya-eeeeee"],
+          sourceHeading: "A Sub Heading",
+        },
+      ],
+    };
+    const r = report();
+    const tree = buildTree(shared, {}, RUN, "test", r);
+    expect(titled(tree, "Front")?.range).toEqual(["spya-aaaaaa", "spya-bbbbbb"]);
+    expect(titled(tree, "Sub")?.range).toEqual(["spya-cccccc", "spya-eeeeee"]);
+    expect(titled(tree, "Front")?.sourceHeading).toBe("Part One");
+    expect(titled(tree, "Sub")?.sourceHeading).toBe("A Sub Heading");
+    expect(r.droppedHeadings).toEqual([]);
+    expect(r.repairs).toEqual([{ where: "root > child 2", kind: "heading", at: 2, size: 1 }]);
+  });
+});

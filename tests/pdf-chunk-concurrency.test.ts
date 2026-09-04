@@ -360,10 +360,25 @@ describe("PDF chunks are read concurrently", () => {
 
     await expect(runWith(reader, bytes)).rejects.toThrow(/refused pages/);
 
-    /* `queue.clear()`: the four chunks still queued never run, so nothing past
-       the first wave was ever bought. Redden by deleting the `clear()` — the
-       remaining chunks start as the aborted ones settle and this climbs to 12. */
-    expect(started.length).toBe(CHUNK_CONCURRENCY);
+    /* `queue.clear()`: the chunks still queued never run, so nothing past the
+       first wave was ever bought. Redden by deleting the `clear()` — the
+       remaining chunks start as the aborted ones settle and this climbs to the
+       whole plan.
+
+       **`+ 1`, and the one is real.** p-queue starts the next task inside the
+       failing task's own `finally`, which is two microtask hops before
+       `allOrStop` can call `stop()` — so exactly one chunk behind the failure is
+       dequeued and calls the reader, and is then aborted by the shared signal in
+       the same turn. A call that starts and does not finish.
+
+       This line read `CHUNK_CONCURRENCY` until 2026-09-04 and passed for a
+       reason that was not the one written above it: `cutPages` put an `await`
+       between the dequeue and the call, so the seventeenth `onStart` landed
+       *after* this assertion rather than never happening. Measured rather than
+       reasoned — flushing the timers after the rejection turns 16 into 17 on
+       that code too, so cutting the chunks up front changed what is visible
+       here and not what the queue does. */
+    expect(started.length).toBe(CHUNK_CONCURRENCY + 1);
 
     /* `fatal.abort()`: everything in the air was signalled. Redden by deleting
        the `abort()` — nothing lands in `aborted` and the 5s guards fire instead.
@@ -373,7 +388,13 @@ describe("PDF chunks are read concurrently", () => {
        attached after it has thrown, so it fires along with the rest. The first
        version of this assertion said `- 1` on the assumption that a chunk which
        had already failed would not be counted, which was a guess about
-       `AbortSignal` rather than an observation of it. */
-    expect(aborted.length).toBe(CHUNK_CONCURRENCY);
+       `AbortSignal` rather than an observation of it.
+
+       `+ 1` for the same reason as the line above: the one chunk p-queue
+       dequeues before the stop can land attaches its listener to the same
+       signal a moment before it fires, so it is signalled too — which is the
+       half of this that matters, since it means the call it started never
+       completes. */
+    expect(aborted.length).toBe(CHUNK_CONCURRENCY + 1);
   });
 });

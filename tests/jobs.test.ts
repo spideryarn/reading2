@@ -138,7 +138,7 @@ import {
   STEP_ORDER,
   STEPS,
 } from "../src/pipeline.js";
-import type { StepProduct } from "../src/pipeline.js";
+import type { ConvertedProduct } from "../src/pipeline.js";
 import { isSlug, urlKey } from "../src/ingest.js";
 import type { ArtifactKind, ArtifactParts } from "../src/store/artifacts.js";
 import { mintAttempt } from "../src/store/jobs.js";
@@ -1480,7 +1480,7 @@ async function corpusArtefact(kind: ArtifactKind): Promise<unknown> {
 }
 
 /** Everything one step declares, with this clone's slug and address in it. */
-async function productOf(slug: string, name: StepName, detail: string): Promise<StepProduct> {
+async function productOf(slug: string, name: StepName, detail: string): Promise<ConvertedProduct> {
   const parts = Object.fromEntries(
     await Promise.all(
       STEPS[name].produces.map(async (kind) => {

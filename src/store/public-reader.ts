@@ -43,10 +43,10 @@
  * See docs/plans/260827ai-public-read-only-access.md.
  */
 
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { articleRevisions, articles, revisionBlocks } from "../db/schema.js";
+import { articleRevisions, articles, comments, revisionBlocks } from "../db/schema.js";
 import { headingTitleOf } from "../library-scalars.js";
 import { log } from "../log.js";
 import { STORAGE_FAILED } from "../messages.js";
@@ -386,6 +386,79 @@ export function publicCurrentRevisionQuery<K extends PublicRead>(
 }
 
 /**
+ * **The two rows a visitor must never be handed**, refused in SQL.
+ *
+ * Written as a named constant beside the query rather than inline, because
+ * these are the whole of stage 3's row-level policy and both were found by GPT
+ * Sol in review rather than by anybody writing the feature.
+ *
+ *  - **`criterion_id is null`.** A comment with a criterion is **referee**
+ *    work — a peer reviewer's placement of a passage on a scale — and not a
+ *    reading note. src/types.ts § `Comment.criterionId` draws that line
+ *    explicitly. Leaving `criterionId` and `valence` out of the DTO does *not*
+ *    make the row a reading note; it publishes the body of a peer review with
+ *    its context stripped off, which is worse than publishing it whole. The
+ *    row goes.
+ *  - **`status in ('none','done')`.** `none` is a bare bookmark, which is a
+ *    finished and very common state; `done` has an answer. `pending` and
+ *    `error` are a model call in flight or failed, and publishing one without
+ *    its `error`, its retry and its polling leaves a visitor an item that is
+ *    permanently blank with nothing saying why.
+ *
+ * **In the `where` and not in the projection**, for the reason this whole file
+ * exists: a filter in a `map` is one satisfied typechecker away from being
+ * widened, and a row that was never selected has to be put back on purpose.
+ */
+const PUBLIC_COMMENTS_WHERE = sql`${comments.criterionId} is null and ${comments.status} in ('none','done')`;
+
+/**
+ * **A public article's comments — its own query, never the owner's reader.**
+ *
+ * The obvious implementation was to resolve the article id and hand it to
+ * `listFor(articleId)` in src/store/pg-comments.ts, and GPT Sol blocked it,
+ * 2026-09-04. Two reasons, and the second is the one that matters:
+ *
+ *  - that method is an unrestricted `.select()` that maps every operational
+ *    column — `model`, `error`, `searches`, the lease — so the allowlist would
+ *    be the DTO alone, in a file that is not this one;
+ *  - **"obtain an article id, then read a child table by id" is the escape
+ *    hatch tests/public-imports.test.ts exists to close.** That test keeps
+ *    `comments`, `chat_messages` and `search_runs` out of the public graph's
+ *    table allowlist, and it was written after somebody demonstrated the hole
+ *    in six lines. Widening it silently would be exactly the move it watches
+ *    for; widening it *deliberately*, with this comment as the reason, is the
+ *    sanctioned version.
+ *
+ * So: named columns, a join back to `articles`, and **`publicSlug` repeated in
+ * this query's own `where`**. A naked `articleId` is not authority — there is
+ * no moment here where the article's visibility is taken on trust from an
+ * earlier statement.
+ *
+ * Ordered like the owner's read (`created_at`, then `id`) so a visitor and the
+ * owner see one list in one order.
+ */
+export function publicCommentsQuery(
+  db: Pick<ReturnType<typeof getDb>, "select">,
+  slug: string,
+) {
+  return db
+    .select({
+      id: comments.id,
+      blockId: comments.blockId,
+      quote: comments.quote,
+      start: comments.start,
+      createdAt: comments.createdAt,
+      body: comments.body,
+      answer: comments.answer,
+      citations: comments.citations,
+    })
+    .from(comments)
+    .innerJoin(articles, eq(articles.id, comments.articleId))
+    .where(and(publicSlug(slug), PUBLIC_COMMENTS_WHERE))
+    .orderBy(asc(comments.createdAt), asc(comments.id));
+}
+
+/**
  * A public article's blocks — **and `note` is not selected**, rather than
  * projected away afterwards.
  *
@@ -484,6 +557,20 @@ export const pgPublicReader: PublicArticleReader = {
         undefined,
       ).blocks;
 
+      /* **A second statement, and it re-asks the visibility question rather
+         than inheriting the answer.** `publicCommentsQuery` carries
+         `publicSlug` in its own `where`, so nothing here passes an article id
+         around as if it were a permission. The cost is one more round trip on a
+         public article load, which is the trade the single-payload design
+         makes: docs/plans/260904c-more-modes-on-a-shared-link.md § The one
+         architectural call, where the measurement it owes is also written down.
+
+         Awaited after the blocks rather than beside them, deliberately: an
+         article that fails the tree-and-blocks bar below is a 404, and there is
+         no point reading anybody's comments for a page that will not be
+         served. */
+      const commentRows = await publicCommentsQuery(db, slug);
+
       return publicArticle({
         slug: found.slug,
         title: found.revision.title,
@@ -502,6 +589,24 @@ export const pgPublicReader: PublicArticleReader = {
         quotes: found.revision.quotes,
         tweets: found.revision.tweets,
         timeline: found.revision.timeline,
+        /* `null` columns become absent keys, exactly as the artefacts do — the
+           mapping is here rather than in the DTO because Drizzle hands back
+           `null` and `Comment` says `undefined`. */
+        comments: commentRows.map((row) => ({
+          id: row.id,
+          blockId: row.blockId,
+          quote: row.quote,
+          start: row.start,
+          createdAt: row.createdAt.toISOString(),
+          ...(row.body === null ? {} : { body: row.body }),
+          ...(row.answer === null ? {} : { answer: row.answer }),
+          ...(row.citations === null ? {} : { citations: row.citations }),
+          /* Required by `Comment` and constant by construction: the query
+             refuses every other value (PUBLIC_COMMENTS_WHERE), and the public
+             DTO drops the field. Written out rather than cast so that a change
+             to the predicate has somewhere obvious to disagree. */
+          status: "done" as const,
+        })),
       });
     });
   },

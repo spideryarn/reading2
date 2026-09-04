@@ -523,6 +523,26 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    * same hour, and the merge conflict between them was prose only. Worth a line
    * because agreement reached separately is the only kind that says anything.
    */
+  /**
+   * **The same story a day later**, and recorded because the hole check catching
+   * a second arrival is the check earning its fourteen seconds twice.
+   *
+   * Landed 2026-09-04 with stage 2 of
+   * docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md, well after
+   * the witness ran, so `static-only` is not a preference — the dynamic evidence
+   * does not exist for it yet and re-running witness 2 is what upgrades it.
+   */
+  "tests/hierarchy-structure-checkpoint.test.ts": {
+    category: "store-agnostic-fake",
+    evidence: "static-only",
+    reason:
+      "Holds the structure call's checkpoint: that its key is a digest of the request the call " +
+      "really makes, and that only an answer which parsed and built is stored. Its checkpoint " +
+      "store is a `Map` written in the file and its model call is mocked, so it constructs no " +
+      "store of any kind and reads no path; it reaches a condemned module only because " +
+      "`src/hierarchy.ts` imports `nullCheckpointStore`. Nothing here changes when the filesystem " +
+      "store goes.",
+  },
   "tests/hierarchy-eval-incumbent-parity.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
@@ -911,12 +931,26 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "of stage B and stops seeing this file reach a condemned module.",
   },
   "tests/routes.test.ts": {
+    convertedInB: "2026-09-04",
     category: "database-integration",
     reason:
-      "The HTTP surface itself, and the broadest reach in the inventory: twenty-three sites across " +
-      "the article reader, comments, searches, shelf, reader profile and library search. It copies " +
-      "`example/` under a throwaway slug and asserts through `loadComments`, `loadShelf` and " +
-      "`loadRuns`, so both the fixture and every read-back move together.",
+      "**Converted in stage B2 on 2026-09-04** — the HTTP surface itself, and the broadest reach " +
+      "in the inventory. The pre-conversion count recorded here was *twenty-three sites*; the " +
+      "derived number is **16 `cp`/`rm`/`writeFile` calls and 28 calls into the filesystem-only " +
+      "readers and writers** (`loadComments`, `loadShelf`, `loadRuns`, `createComment`, " +
+      "`patchComment`, `beginAnswer`, `beginRun`, `deleteRun`), plus `SPIDERYARN_READER_FILE`. " +
+      "Five `scratchArticleInPg` articles replace the `example/` copies and every read-back now " +
+      "goes through `commentStore`, `shelfStore`, `searchStore` or `readerStore`. Three things " +
+      "changed meaning rather than moving: the reader profile is a row keyed on the owner, so the " +
+      "isolation is a seeded owner under `asTestOwner` and a database postcondition in `afterAll`; " +
+      "the three admin cases that asserted **501 because filesystem** now assert 200 and a list, " +
+      "which stage F does not touch; and an orphaned `pending` comment is one whose lease has run " +
+      "out, which brought a case with it. Ten mutations, seven red and three green — the greens " +
+      "are the library's owner predicate, the search store's `remove` id predicate, and the two " +
+      "slug guards that are belt and braces over each other. **Still `database-integration` " +
+      "rather than collateral**, and that is the honest verdict rather than an un-updated one: " +
+      "the entry should simply leave this map when `tests/store-migration-witness.json` is re-run " +
+      "at the end of stage B.",
   },
   "tests/second-job-queues.test.ts": {
     convertedInB: "2026-09-04",
@@ -1342,6 +1376,24 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "reader seam. The two chunk cases pass a fake `PdfReader`, so nothing reaches a provider or " +
       "a ledger, and the same `src/pdf-read.ts` → `cli-ledger.ts` import is the only reach. " +
       "Re-run witness 2 to confirm.",
+  },
+  /**
+   * **A third arrival from the same plan, on the same day.** Stage 5 this time,
+   * so `static-only` for the same reason as its two siblings above: the dynamic
+   * evidence does not exist yet and re-running witness 2 is what upgrades it.
+   */
+  "tests/pdf-source-parsed-once.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Arrived with stage 5 of docs/plans/260904b-a-long-pdf-finishes-without-a-retry-click.md. " +
+      "Counts `PDFDocument.load` through a `vi.mock` seam to prove the source PDF is parsed once " +
+      "for the whole stage rather than once per chunk. It drives `runPdfExtract` with a stub " +
+      "`PdfReader` over `memoryCheckpoints`, which is a `Map`, so there is no database, no blob " +
+      "store and no path read; its whole static reach is the same `src/pdf-read.ts` → " +
+      "`cli-ledger.ts` import its page-cap siblings have, and no paid call is made so no ledger " +
+      "row is written. Re-run witness 2 to confirm.",
   },
   "tests/store-glossary-delete-pg.test.ts": {
     category: "shared-mechanism-collateral",

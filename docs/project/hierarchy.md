@@ -261,6 +261,75 @@ Three things about the shape are load-bearing:
   is the same boundary the last child's own stretch names, so `repairedBlockCount` folds the two into
   one rather than charging the article twice for one slip.
 
+#### A section that starts one block below its own heading is snapped onto it <a id="heading-snap"></a>
+
+**The model was not ignoring the author. It was cutting one block late.** Measured on a 142-page
+Kuhn paper, 2026-09-04, replaying the saved structure answer: of 82 non-root nodes, **24 started on
+a heading block and 53 on the block immediately after one**, and 75 of the 82 named a
+`sourceHeading`. Every unbacked claim reproduced was at that offset — the heading fell into the
+previous section's tail, `planChildRanges` believed the start, and `buildTree` dropped the claim as
+out of range. `droppedHeadings: 59` was counting that, and it read as the author's structure being
+overruled. It was not.
+
+So the repair is code, in `snapStartsToHeadings` ([`src/hierarchy.ts`](../../src/hierarchy.ts)): a
+kept child whose start is the block after a heading run **it names** moves back to the run's first
+heading. Three things about it are load-bearing.
+
+- **The child's own `sourceHeading` has to match a heading in the run**, read with the same
+  `sameHeading` that decides whether a claim is backed. The unconditional rule — snap any start that
+  sits one block after a heading — takes headings the model deliberately left in the section before,
+  and the fixture for that is already in `tests/hierarchy-repairs.test.ts`. Requiring the claim makes
+  this self-evidencing: it only ever honours a boundary the answer already stated, which is what
+  makes it a repair rather than a guess.
+- **The run is taken back to its first heading, but never past one the section above it names.** The
+  floor of "the previous section's own start" is not enough: a section can begin on a preamble and
+  quote an `h1` further down, and carrying that `h1` forward would strip its provenance and leave its
+  title and gist describing prose its heading had left.
+- **It is a `PartitionRepair` of its own `kind`**, not a quiet mend. This is the one fault where the
+  model's two claims about the boundary *agree* and are both wrong, so nothing else can see it.
+- **`recordBoundaryFaults` runs first, on the raw starts.** Measuring after the snap would compare
+  the answer against a value we chose ourselves — a section moved back onto its heading reports a
+  phantom `overlap` against its own correct start — and the snap would vanish from the telemetry that
+  exists to watch it.
+
+**Measured, before and after, on the real answer** (no paid calls — the saved answer replayed through
+`buildTree`; the plan has the table):
+
+| | Kuhn, 142pp | noema × 43 saved trees |
+|---|---|---|
+| backed `sourceHeading` | 24 → **74** of 75 claimed | unchanged |
+| `droppedHeadings` | 59 → **9** | 0 → 0 |
+| headings starting a node | 21 → **67** of 254 | unchanged |
+| `repairedBlocks` | 40 → 86 | 0 → 0 |
+| `checkTree` problems | 0 → 0 | 0 → 0 |
+
+`repairedBlocks` **rises**, and that is the repair being honest rather than a regression: 46 headings
+really did change hands. The no-op half is the half that matters — 43 saved trees over noema and
+`openai-huggingface` come out byte-identical, because the model already put those starts on the
+headings.
+
+**`repairedBlocks` also over-counts now, by a known and bounded amount.** A boundary the model got
+*both* misplaced and one block late is recorded twice — by `recordBoundaryFaults` at the coordinate
+the model named, and by the snap at the coordinate it ended up — and `repairedBlockCount` groups by
+coordinate, so it sums two records of one movement. Auditing Kuhn's repairs by the union of their
+intervals gives **64** rather than 86 (40 before). Fixing it means giving a repair a boundary
+identity and a `from`/`to` instead of an `at` and a `size`, here and in
+`src/hierarchy-cascade.ts`; the error errs toward reporting more, and this number is a "go and look"
+signal rather than a gate — **but it must be fixed before anyone fits a threshold to it**, which is
+what the re-ask trigger above would be. ⟨GPT Sol's review of stage 8a, finding 1⟩
+
+**What this does not fix.** Kuhn's largest section is still 241 blocks and five are over `MAX_BATCH`.
+That is the genuine capacity conflict between the prompt's depth and fan-out numbers and an author
+who numbered three deep, and it is stage 8b of
+[260904b](../plans/260904b-a-long-pdf-finishes-without-a-retry-click.md).
+
+**When the wave cascade is wired up it needs the same thing.**
+[`src/hierarchy-cascade.ts`](../../src/hierarchy-cascade.ts) fixes each answer's ranges before the
+next call is made, precisely so no subtree is generated against a range that later moves — and it
+tells its caller to hand the final `buildTree` a fresh report because "there is nothing left for it
+to mend". The snap is now something left for it to mend. Nothing wires that module into the pipeline
+or the evals today, so this is a note for whoever does.
+
 #### Measurement is what stands where the bounds stood
 
 Every boundary the model got wrong is recorded with its position, direction and size; dropped
@@ -631,6 +700,17 @@ stamp against and what `generateHierarchy` reports as the step's input hash. It 
 publish guard compares it with the stored blocks and refuses to publish an article whose tree was
 built from something else.
 
+**The structure answer is checkpointed too, since 2026-09-04** — one row under the
+`hierarchy-structure` namespace, written only once the answer has parsed, built a tree and passed
+`assertTreeSound`, so that a malformed-but-complete answer can never be replayed for ever. This is
+the most expensive call in the pipeline (508 seconds and about two dollars on the 142-page paper),
+and until then a run that died in the label pass bought it again from nothing. The key is a digest of
+**the whole request object the call actually sends**, plus the model address and the routing
+`streamMessage` injects and `PROMPT_VERSION` — not a hand-copied list of the fields that seemed to
+matter, which is the blind spot `promptFingerprint` in [`src/pdf-read.ts`](../../src/pdf-read.ts) was
+written to remove. `HierarchyRun.structureResumed` says whether a run made the call, because a
+checkpoint that silently never hits looks exactly like one that works.
+
 While the batches are running, each one's labels are **checkpointed as it lands** — one row in the
 `checkpoints` table, under the `hierarchy-labels` namespace, keyed on the batch's fingerprint
 ([database.md § Checkpoints](database.md#checkpoints-work-a-failed-attempt-already-paid-for)). That
@@ -672,22 +752,43 @@ at `effort: "high"` expands into whatever room it is given, so raising the ceili
 thinking with it and the two never converge. `max_tokens` is a ceiling; `effort` is the leash.
 [docs/postmortems/260826a-toc-max-tokens.md](../postmortems/260826a-toc-max-tokens.md) has the whole account.
 
-**The reservation is per call, not per stage.** 40,000 was measured on a call that reads a whole
-article and thinks about its structure. A label batch reads one section and writes a dozen labels,
-and reserves 16,000. Inheriting the big number onto every small call would cost no money — an
-allowance the model does not spend is not billed — but it would hide a batch that had started
-thinking far more than it should, which is the failure that took two six-minute runs to find.
+**The reservation is per call, not per stage.** `THINKING_HEADROOM`'s 40,000 was measured on a call
+that reads a whole article and thinks about its structure. A label batch reads one section and writes
+a dozen labels, and reserves 16,000. Inheriting the big number onto every small call would cost no
+money — an allowance the model does not spend is not billed — but it would hide a batch that had
+started thinking far more than it should, which is the failure that took two six-minute runs to find.
+
+**And the structure call reserves more, because it meets the longest inputs.** `STRUCTURE_HEADROOM`
+in [`src/hierarchy.ts`](../../src/hierarchy.ts) is a measured figure of its own: on 2026-09-04 a real
+call on a 142-page journal paper reported **47,289 thinking tokens** against 365,930 of input, at
+`effort: "medium"`, and came back whole. That is over the general reservation — so correcting only
+the answer estimate below, and leaving this at 40,000, would have turned a free refusal into an
+eight-minute paid truncation. Both halves moved together, and neither is a shrink to force a long
+article in: `effort` is untouched, for the reason the postmortem gives.
 
 Two failures, deliberately kept distinct, because they are not the same problem:
 
 - **Too long to attempt.** `budgetFor` throws *before* the call when the estimated answer plus the
-  reasoning reservation exceeds what one response can hold — **1,976 blocks**, roughly 123,500 words,
-  since the labels moved out; it was 876 before. Nothing is spent, and the message says the article
-  needs [section-by-section structure](#long-articles). Clamping to the ceiling instead would be
-  friendlier-looking and wrong: the call would run for minutes, cost money, and come back truncated
-  anyway. `tests/token-budget.test.ts` pins that boundary exactly, because the boundary *is* the
-  feature — if it drops, a term that scales with paragraphs has crept back into the structure call,
-  and it would come back as a slightly worse ceiling rather than as anything red.
+  reasoning reservation exceeds what one response can hold. Nothing is spent, and the message says
+  so. Clamping to the ceiling instead would be friendlier-looking and wrong: the call would run for
+  minutes, cost money, and come back truncated anyway.
+
+  **What that boundary is, and what it is not.** It used to be pinned in the tests at exactly 1,976
+  blocks, on the argument that the boundary *is* the feature. The number itself turned out to be
+  wrong by a factor: `estimateHierarchyTokens` charged one node per four blocks, which is a rate
+  fitted to three trees of 19, 141 and 360 blocks, and re-measured over 32 trees from 10 to 2,025
+  blocks it over-predicts monotonically with length — 1.35× → 2.2× → 3.8× → 4.0× → **8.21×**. The
+  8.21× is the paper it refused, which a real call then answered in 10,996 tokens of a 128,000
+  budget. So the estimate is now built from what the prompt asks for rather than from a rate per
+  paragraph — the tree it describes for any article at all (three levels, nine children a node, so 81
+  sections) as a **floor**, plus the sections the article's own headings and long runs force on top.
+  Measured margin over the whole corpus: 2.46× at the tightest. The boundary that leaves is around
+  **2,890 blocks** of headingless prose, roughly 180,000 words — but it is a consequence rather than
+  a pin, and it moves with an article's heading count. What `tests/token-budget.test.ts` holds is the
+  thing that matters: the paper a real call proved fits is not refused, and the estimate clears what
+  that call actually cost. It is deliberately not an asymptotic claim; `buildTree` enforces neither
+  the depth nor the fan-out the prompt asks for, so no bound here would be a bound the runtime keeps.
+  [260904b](../plans/260904b-a-long-pdf-finishes-without-a-retry-click.md).
 - **The estimate was wrong.** `stop_reason: "max_tokens"` still throws, and the message now carries
   the budget and the estimate so the constants can be re-tuned from the failure. It does **not**
   suggest retrying, because the Retry button makes the identical call.
@@ -728,11 +829,16 @@ substitution in the prompt is what fixed it.
 
 ### Longer pieces <a id="long-articles"></a>
 
-Past ~1,976 blocks the **structure** call is what no longer fits, and generating it section by
-section is **not yet built**. The [budget](#the-budget) refuses those out loud rather than half-doing
-them.
+**A 142-page journal paper fits in one pass, and that is measured rather than hoped.** On 2026-09-04
+a real structure call on Kuhn's *A Landscape of Consciousness* — 2,025 blocks, 254 authored headings,
+365,930 input tokens — came back `end_turn` with a valid tree tiling every block, in **10,996 answer
+tokens** of a 128,000 budget. The old estimate had refused it at 90,275. So the thing that used to
+refuse a book was the arithmetic, not the model, and the fix was to re-rate it: see
+[the budget](#the-budget).
 
-The shape it should take, from GPT-5.6-sol's review and written up in
+Past that, the **structure** call is what no longer fits, and generating it section by section is
+**still not built**. The budget refuses those out loud rather than half-doing them. The shape it
+should take, from GPT-5.6-sol's review and written up in
 [260826h-toc-scaling.md § D](../plans/260826h-toc-scaling.md): build the authored-heading skeleton mechanically;
 make bounded, navigational section cards in parallel; run one global pass over the ordered cards to
 assign top-level boundaries and sibling titles; then generate each coarse subtree in parallel with

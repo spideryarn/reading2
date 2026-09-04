@@ -91,6 +91,22 @@ Its cost is real and named — **when our API is down, the way to report that ou
 down** — and the answer is not a browser-direct backdoor but the Copy button the dialog shows on a
 failed send, so the reader still has their words and somewhere to put them.
 
+## The rate cap, and who has none
+
+**Thirty reports an hour, per owner**, counted in the same transaction that is about to insert —
+`FEEDBACK_HOURLY_CAP` in [`src/store/contracts.ts`](../../src/store/contracts.ts). Past it the
+reader gets a 429, a `Retry-After`, and a sentence saying when. It stops a loop and one account
+hammering; it is not a defence against account farming and does not pretend to be.
+
+It was ten until 2026-09-04, when Greg hit it in an afternoon's testing — ten was low enough to stop
+the person the button is *for*, somebody who has just found four things wrong on one page.
+
+**The administrator has no cap at all.** `feedbackHourlyCap` returns `null` for an account
+[`isAdmin`](../../src/admin.ts) recognises, and the store skips the counting query entirely — the
+account that files reports on purpose all afternoon is the one we do not need protecting from. It is
+the same id check that guards `/api/admin` ([admin.md](admin.md)), asked of the request's owner,
+which *is* the verified account id.
+
 ## Where the code is
 
 | what | file |
