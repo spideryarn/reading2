@@ -63,7 +63,11 @@ JSON parser. Building that and tearing it out at code review would have cost a s
 
 **Hand it the evidence, not only the prose** — the scoped diff, the results file, the script that
 produced a number. The most useful finding is often about the experiment rather than the conclusion,
-and a reviewer given only the conclusion cannot make it.
+and a reviewer given only the conclusion cannot make it. **Name that evidence durably**: a revision
+range, or a base SHA plus scoped paths plus an explicit untracked-file list — never a `/tmp` path,
+which is unreadable tomorrow and gone on the next machine.
+[review-prompt-template.md](review-prompt-template.md) is the whole shape of the message, including
+the severity scale and why your own suspicions go last.
 
 **Check each finding yourself before acting on it.** Some of them are wrong. Fold what survives into
 the plan, and add its questions to the ones for Greg.

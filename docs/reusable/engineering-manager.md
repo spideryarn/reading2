@@ -45,6 +45,20 @@ asked. In a shared tree, name your files on both commands —
 - **At the end of every stage, as an obligatory review.** Not optional, and not skippable because
   the stage felt small.
 
+**Two rounds per stage, then you decide.** The cadence above is right; what goes wrong is that
+nothing ends it. Refusing costs a reviewer nothing and P2s are infinite, so chains here have run to
+round seven and round twelve without converging. After two rounds, settle it yourself and write
+*"Sol still objects to X; overruled because Y"* in the plan doc — an overruled P0 or P1 goes to
+Fable or Greg first, not straight past.
+
+The cap counts P2/P3 churn. A **P0 or P1 newly established on round two** still gets one narrowly
+scoped check after its fix, because the alternative is shipping code the cap stopped anyone
+reviewing. That check is on the fix; it does not reopen discovery.
+
+Write the prompt the way [review-prompt-template.md](review-prompt-template.md) says — a durable
+revision or an explicit untracked-file list rather than a `/tmp` path, your suspicions last, a
+fixed severity scale, and an ID on every finding.
+
 Hand it the evidence — the scoped diff, the failing output, the script that produced the number —
 not just your account of it, and tell it to run one test file itself: its sandbox allows that, and
 a finding it reproduced outranks one it reasoned to. **A test that needs nothing outside the tree**

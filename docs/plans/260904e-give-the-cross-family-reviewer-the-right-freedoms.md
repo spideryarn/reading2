@@ -282,6 +282,6 @@ did not hold up. That is the doc's own rule working in both directions.
 
 - [x] Plan written, reviewed by Sol, refused, and revised — 2026-09-04
 - [x] Stage 1 — corrections and the network decision — 2026-09-04
-- [ ] Stage 2 — the review prompt contract
+- [x] Stage 2 — the review prompt contract — 2026-09-04
 - [ ] Stage 3 — the delegation roster
 - [x] Stage 4 — **dropped** with a reason, above
