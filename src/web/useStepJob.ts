@@ -59,12 +59,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { jobWorthRetrying } from "../job-failure.js";
 import { driverStalled } from "../job-state.js";
 import { worthRetrying } from "../messages.js";
-/* **Type-only, and it has to stay that way.** `src/pipeline.ts` is a server
-   module and nothing else under `src/web/` imports it; `import type` is erased
-   (`verbatimModuleSyntax`), so this buys the ordering check below without any of
-   the pipeline reaching the browser. Turn it into a value import and the client
-   bundle grows the whole pipeline. src/pipeline.ts § `StepBefore`. */
-import type { StepBefore } from "../pipeline.js";
+/* **From the leaf, not from `src/pipeline.ts`.** This read
+   `import type { StepBefore } from "../pipeline.js"` until 2026-09-04, on the
+   argument that `import type` is erased (`verbatimModuleSyntax`) so none of the
+   pipeline reaches the browser bundle. True about the bundle, and beside the
+   point: the rule tests/client-imports.test.ts enforces is that the client
+   reaches only leaves, and it went red on this. `src/step-order.ts` is that
+   leaf — it holds the order itself, imports one type and nothing else, and
+   `src/pipeline.ts` re-exports it, so there is still one ordering.
+   src/step-order.ts § `StepBefore`. */
+import type { StepBefore } from "../step-order.js";
 import type { Job, StepName } from "../types.js";
 import { useJobs } from "./useJobs.js";
 
@@ -132,7 +136,7 @@ interface StepRun<S extends StepName> {
    * saying so. GPT Sol reproduced exactly that on 2026-09-03. No caller does it,
    * so this was a trap for the next one rather than a live bug — and the choice
    * was between making the name true and dropping the name. `StepBefore` is
-   * `STEP_ORDER` read as a type (src/pipeline.ts), so the compiler refuses the
+   * `STEP_ORDER` read as a type (src/step-order.ts), so the compiler refuses the
    * wrong name at the call site and lists the ones it would take, which is
    * earlier and louder than anything a test could do.
    *

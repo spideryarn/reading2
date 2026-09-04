@@ -184,11 +184,13 @@ and is untouched. Three other sentences moved for the same reason, and the plan'
 it**, because they are the kind that is easy to state backwards. A slot is reserved only where the
 request carries a URL or an upload, and settled only on a `done` ending — so a failed fetch costs
 nothing, pasting the same URL again costs a second article even though every step then skips, and
-re-running something already on your shelf is free. And **the answer about reaching your limit
-deliberately offers a subscriber no upgrade**: `canCheckout` is false while any non-terminal
-subscription exists, so `/pricing` draws a paying reader no plan button and the page has no upgrade
-to point at. The hosted Portal *has* been able to switch tiers since 2026-09-04, so the dead end is
-now ours rather than Stripe's — [billing.md](billing.md#reader-researcher-open-at-stripe-closed-in-our-own-ui).
+re-running something already on your shelf is free. And **the answer about reaching your limit offered a
+subscriber no upgrade until 2026-09-04**, because there was not one: the Portal could not switch
+between two Products, and then the gate on every plan button asked whether an open subscription
+existed rather than whether this tier was somewhere to go. Both were fixed that day, so the answer
+now names the larger plan — and says *for the part of the month that is left*, because a mid-period
+switch prorates the allowance rather than granting it whole
+([billing.md](billing.md#reader-researcher-open-at-stripe-and-open-in-our-own-ui)).
 
 ### The one tooltip, and what it is not for
 

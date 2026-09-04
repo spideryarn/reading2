@@ -47,6 +47,12 @@ export const SHELL = "tw:mx-auto tw:w-full tw:max-w-6xl tw:px-6";
 /**
  * The bar at the top of all three pages: wordmark left, three links right.
  *
+ * **Four pages, since 2026-09-04**, and the fourth is not a marketing page:
+ * `/read/public` (PublicLibraryPage.tsx) is a list of somebody's shared
+ * articles, and it borrows this bar because it is somewhere a stranger is
+ * *sent* and needs a way to the rest of the site. It borrows nothing else here,
+ * and it is deliberately not in `LINKS` below or in `SiteFooter`'s.
+ *
  * It is sticky and translucent, and it grows a hairline border only once the
  * page has scrolled — done in CSS with `animation-timeline: scroll()`, so there
  * is no scroll listener and no React state to get wrong. Where that is
@@ -64,7 +70,18 @@ export function SiteNav({
   here,
   signedIn,
 }: {
-  here: "home" | "features" | "pricing";
+  /**
+   * Which page is drawing this bar, so it can drop its own link.
+   *
+   * **`public-library` is the odd one and is the reason two rules below stopped
+   * being written as `here === "pricing"`.** `/read/public` (PublicLibraryPage.tsx)
+   * wears this bar since 2026-09-04 without being one of the three pages the bar
+   * links to, so *nothing* drops for it — and the two entries that were phrased
+   * as "am I pricing?" had to become "am I one of the pages this entry names?",
+   * which is the question they were always asking. The values match the route
+   * kinds in router.ts so a reader can grep one string.
+   */
+  here: "home" | "features" | "pricing" | "public-library";
   /** Whether the reader looking at this bar already has an account open. */
   signedIn: boolean;
 }) {
@@ -118,7 +135,7 @@ export function SiteNav({
               nothing. From `/features` the always-on link above is already
               Home, so Features is the one missing here; from `/pricing` both
               of these appear and Pricing is the one missing. */}
-          {here === "pricing" && (
+          {here !== "home" && here !== "features" && (
             <Link href={FEATURES_HREF} className={secondary}>
               Features
             </Link>
@@ -169,8 +186,18 @@ export function SiteNav({
               *Home*, which for a signed-in reader is their shelf, so a second
               way there would be the dead-control rule broken the other way
               round. */}
+          {/* **The condition is now *does this page have a panel*, and that is
+              the same correction one level along.** It read `here === "features"`
+              — a list of the pages that *lack* one, which has to be extended
+              every time a page joins this bar, and forgetting is a link that
+              scrolls nowhere rather than an error. `/read/public` joined on
+              2026-09-04 and has no panel, so it takes `/#sign-in` like
+              `/features`; the two that do are the landing page and `/pricing`. */}
           {!signedIn && (
-            <a href={here === "features" ? "/#sign-in" : "#sign-in"} className={link}>
+            <a
+              href={here === "home" || here === "pricing" ? "#sign-in" : "/#sign-in"}
+              className={link}
+            >
               Sign in
             </a>
           )}

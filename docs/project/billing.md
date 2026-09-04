@@ -215,6 +215,16 @@ it silently shows somebody the base-currency price.
 - **The lookup key is the identity, not the name.** Never change one on a tier that has been sold:
   it is how a re-run finds the price it made last time instead of minting a second one.
 
+**And a fourth, which is a class rather than a mistake: adding a value to a billing dimension turns
+rules that were harmless into policy.** While a dimension has one value — one paid tier, one
+currency, one billing period — a tie-break nobody chose, an enumerated menu, or an assumption that
+an interval is monthly all behave correctly by accident. Add the second value and each becomes a
+decision that was never made. So a change here is not finished when the rows and
+[`scripts/stripe-setup.ts`](../../scripts/stripe-setup.ts) are done: audit subscription selection's
+tie-break, the Portal's configured menu, anything that reads an interval, and the quota arithmetic
+above. [260904a](../postmortems/260904a-four-billing-faults-and-the-witnesses-that-agreed-with-the-code.md)
+names this as the next likely failure class, and its four faults are what it looks like when it fires.
+
 ### Tax: the two fields that decide what a reader is charged
 
 Both live in [`scripts/stripe-setup.ts`](../../scripts/stripe-setup.ts), both were found by driving a
@@ -517,8 +527,8 @@ and puts a link beside it when — and only when — the message's code is one o
 
 | code | goes to | because |
 |---|---|---|
-| `pay-free` | `/pricing` | never subscribed, so `canCheckout` is true and the prices are the answer to *what would carrying on cost* |
-| `pay-limit` | `/profile` | a working subscription at its ceiling. There is **nothing to buy** — `canCheckout` is false while any non-terminal subscription exists, so `/pricing` draws this reader no button. The Portal *can* switch tiers since 2026-09-04 — see [Reader → Researcher](#reader-researcher-open-at-stripe-closed-in-our-own-ui) — so this destination is under review; the reset date and the subscription are what help meanwhile |
+| `pay-free` | `/pricing` | never subscribed, so every tier is on sale to them and the prices are the answer to *what would carrying on cost* |
+| `pay-limit` | `/profile` | a working subscription at its ceiling. **Both of the old reasons have expired and the destination has not moved**: the Portal has taken a plan switch since 2026-09-04, and since later that day `/pricing` offers a Reader the tier above too — see [Reader → Researcher](#reader-researcher-open-at-stripe-and-open-in-our-own-ui). What is still only on `/profile` is the reset date, and where a capped subscriber should land is Greg's call rather than an inference from the fixed fact |
 | `pay-lapsed` | `/profile` | the client cannot tell a terminal lapse (may check out again) from `unpaid`/`incomplete` (may not) — `hasLapsed` covers both. `/profile` draws the cards when checkout is allowed **and** the Portal when there is a customer, so it is the destination that is never a dead end |
 
 (All three pointed at `/pricing` for a few hours on 2026-09-04, until a GPT Sol review of that day's
@@ -592,6 +602,22 @@ account. A plain "count, then decide" cannot: twenty requests all read zero and 
 
 **Nothing that opens its own transaction, and nothing that touches the network, may be called
 between the lock and the commit.** That is the rule a later change is most likely to break.
+
+### The allowance prorates, and the column holds a delta
+
+**A mid-period tier change moves the limit by what the money actually bought**, because Stripe
+prorates the price and we used to hand over the allowance whole — upgrade with an hour left, take the
+full allowance, downgrade before the roll, repeat. *Nobody uses 130 ingests in an hour* is not an
+answer: the quota is an abuse boundary against a script, and a script can. Upgrading on day 27 of 30
+takes a Reader from 20 to 33, not to 150.
+
+The two facts to hold before touching it: the stored column is a **delta**, not an absolute, and it
+is applied at the sync rather than at the change. So **writing an absolute limit — a support fix, a
+seed script — silently opts that reader out of every future tier change.** The arithmetic, the
+accrual model behind it, and the three shapes that were proposed and refuted are all in
+[`src/billing/quota-adjustment.ts`](../../src/billing/quota-adjustment.ts) and
+[260903i](../plans/260903i-fix-the-upgrade-path-and-the-cancellation-telling.md); if it is ever
+wrong, the inputs are the place to look and not the formula.
 
 ### Which requests spend a slot, and why the wall is at the routes
 
@@ -1151,13 +1177,14 @@ any time. See [admin.md](admin.md).
 - **Grandfathered subscribers keep paying and lose their allowance** — the warning under
   [Adding a tier or a currency](#adding-a-tier-or-a-currency). Nobody is grandfathered yet, so this
   is a trap rather than a live fault, and changing a price is what springs it.
-- **A subscriber is offered no plan change**, below. Stripe has permitted the switch since
-  2026-09-04; `canCheckout` is not tier-aware, so nothing draws the button.
+- ~~**A subscriber is offered no plan change**~~ — **done, 2026-09-04**. Stripe permitted the
+  switch that morning and the gate became tier-aware that evening; a Reader is offered Researcher on
+  both pages, through the Portal. [Reader → Researcher](#reader-researcher-open-at-stripe-and-open-in-our-own-ui).
 
 The order is in
 [the plan](../plans/260902i-stripe-payments-and-subscription-tiers.md#where-the-build-stands).
 
-### Reader → Researcher: open at Stripe, closed in our own UI
+### Reader → Researcher: open at Stripe, and open in our own UI
 
 **The Stripe half was shut, and is now open.** Found by GPT Sol on 2026-09-03 and then confirmed
 against the live Portal configuration, which is the half that matters: `subscription_update` read
@@ -1191,15 +1218,39 @@ back **absent, not empty**, unless the read asks for
 `expand: ["features.subscription_update.products"]` — so an un-expanded response reads `enabled: true`
 and looks fine while offering nowhere to go.
 
-> [!WARNING]
-> **The dead end has moved out of Stripe and into our own UI, and it is still open.** `canCheckout`
-> ([`src/billing/summary.ts`](../../src/billing/summary.ts)) means *"has no open subscription"* — a
-> subscription id whose status is not terminal, the same question `startCheckout` asks — and not *"has
-> nowhere to go"*. Every plan button is gated on it: the offers on `/profile`
-> ([`src/web/BillingSection.tsx`](../../src/web/BillingSection.tsx)), and both the per-tier button and
-> the plan cards on [`src/web/PricingPage.tsx`](../../src/web/PricingPage.tsx). So a paying Reader is
-> drawn no button anywhere, and the switch Stripe now permits is one nothing offers. Closing it means
-> making the gate **tier-aware**: a Reader may not buy Reader again, and may buy Researcher.
+#### And then the dead end moved into our own UI, where it was closed the same day
+
+`canCheckout` ([`src/billing/summary.ts`](../../src/billing/summary.ts)) meant *"has no open
+subscription"* — the same question `startCheckout` asks — and not *"has somewhere to go"*, while
+every plan button on both pages was gated on it. So a paying Reader was drawn no button anywhere and
+the switch Stripe had just permitted was one nothing offered.
+
+**The gate is now the offer.** `canCheckout` and `offers` are both gone from the wire, replaced by
+one field: `purchase`, a discriminated union in
+[`src/billing-plan.ts`](../../src/billing-plan.ts) — `checkout` or `switch` over a **non-empty** list
+of tiers, `top` for somebody already on the largest, `none` for everybody else. Deleting both names
+rather than changing the meaning of one is what made the compiler walk every call site; putting the
+list *inside* the union is what makes *"nothing to buy, and here is the catalogue"* — a paying
+Reader's state on the live account — unbuildable.
+
+- **Higher is decided by `ingests_per_period`**, not `sort_order` (a display column that nothing
+  makes ascend with what a tier sells) and not price (three currencies, and nothing makes them
+  agree). It is the key `choiceRules` and `nextQuotaAdjustment` already rank by, and
+  `tests/billing-tiers.test.ts` pins that a dearer tier allows more. **A tie is not higher**: an
+  equal allowance is a button that takes money and changes nothing, so it is not offered.
+- **The comparison is against the tier's own row, never `Entitlement.limit`** — that number carries
+  the prorated override a mid-period switch leaves behind (a Researcher who moved up on day 27 is
+  entitled to 33 this month), and ranking it would offer them the plan they are on. `Standing` takes
+  a `TierRow`, so the wrong number cannot be passed.
+- **Filtering never reorders.** `offerableTiers` sorts, `tiersToOffer` only filters, and `PlanCards`
+  draws what it is handed — nothing downstream would put a jumbled ladder right.
+- **The button says what the press does**: *Switch to Researcher* on `/pricing`, *Switch plan* on
+  `/profile`, over `SWITCHING_PLAN` — the press opens the hosted Portal, where the plan is chosen
+  again and confirmed, Stripe invoices the difference at once, the renewal date does not move, and
+  the added allowance is prorated. A button reading *Upgrade* would have named something the press
+  does not do.
+- **A Researcher is told why there is no button** (`noHigherPlan`), on both pages. Prices with
+  nothing to press and nothing said is the page this whole feature exists to stop existing.
 
 Two lessons outlived the bug, and neither of them is about Stripe:
 

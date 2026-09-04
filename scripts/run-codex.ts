@@ -53,7 +53,10 @@ const DEFAULT_TIMEOUT_MINUTES = 30;
 /**
  * `review` is the default: the tree is read-only exactly as under `read-only`, but `/tmp` and the
  * caches under `node_modules` are writable, so the reviewer can run one test file or a tsx script
- * and reproduce a finding rather than reason about it. Under plain `read-only`, measured on
+ * and reproduce a finding rather than reason about it — *a test that needs nothing outside the
+ * tree*, since the profile grants no network at all, not even loopback, so anything touching
+ * Postgres or a local service is the orchestrator's to run and hand over. Under plain `read-only`,
+ * measured on
  * 2026-09-02, vitest died on `node_modules/.vite-temp` and tsx on its IPC pipe, and fifteen
  * reviews in a row had never run a test. The profile is codex's own mechanism — a named
  * `[permissions.<name>]` table with per-path rules — and lives in the repo's `.codex/config.toml`,

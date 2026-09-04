@@ -102,11 +102,92 @@ export type ReaderPlan =
       readonly endsAt: string | null;
     };
 
+/**
+ * **What this reader may buy, and which door a press goes through.**
+ *
+ * A discriminated union over a **non-empty** list, and it replaced two fields —
+ * `offers: TierOffer[]` and `canCheckout: boolean` — on 2026-09-04. The reason
+ * is not tidiness: those two could disagree, and on the live account they always
+ * did. A paying Reader was sent `canCheckout: false` beside `offers` listing
+ * Reader *and* Researcher, so the page had a catalogue it was forbidden to draw
+ * a button on, and the reader was drawn nothing at all
+ * (docs/project/billing.md § *Reader → Researcher*). One field cannot hold that
+ * state: the tiers a reader may buy and the fact that they may buy some are the
+ * same fact, said once.
+ *
+ * **The three routes not taken**, since the alternative was put as a binary:
+ *
+ * - *Change what `canCheckout` means*, from "has no open subscription" to "has
+ *   somewhere to go". Every reader of it — two components, the buy-intent
+ *   effect, three test files, and the half-dozen comments and docs that argue
+ *   from it — keeps compiling and quietly means something else. A name whose
+ *   meaning moves under its readers is the fault this repo keeps writing
+ *   postmortems about.
+ * - *Add `canUpgrade` beside it.* Two booleans that both answer *may this reader
+ *   buy something* is two things to keep in step, and the day they disagree
+ *   neither is wrong on its face.
+ * - *Filter `offers` and leave `canCheckout` alone.* The list would then be
+ *   right and the boolean still false for a Reader, so every call site would
+ *   need to know which of the two to believe.
+ *
+ * Deleting both names is what makes the compiler walk every call site, which is
+ * the whole benefit of the change and the reason it is not a rename.
+ *
+ * **Non-empty on purpose.** `readonly [TierOffer, ...TierOffer[]]` is what makes
+ * *"there is something to buy, and here are none of them"* unbuildable — the
+ * state a filtered list plus a boolean can always reach. A caller that has
+ * narrowed to `checkout` or `switch` may draw its cards without asking whether
+ * the list is empty.
+ *
+ * `Tier` is a parameter so that the decision itself can be made over
+ * `TierRow` — the database's shape, which is where the ordering lives
+ * (`tiersToOffer`, src/billing/tiers.ts) — and mapped to the wire's `TierOffer`
+ * afterwards, rather than the same four arms being written out twice.
+ */
+export type Purchase<Tier = TierOffer> =
+  /**
+   * Nothing is on sale to this reader, and nothing needs saying about it.
+   *
+   * A deployment with no Postgres, a catalogue where no tier has a Stripe price,
+   * and — deliberately — an **open subscription that entitles nothing**:
+   * `unpaid`, `incomplete`, or a live one whose stored period we cannot read.
+   * That last group is today's behaviour kept exactly: they may not start a
+   * second Checkout Session, and what they need is the Portal, which
+   * `manageable` already offers them.
+   */
+  | { readonly kind: "none" }
+  /**
+   * They are on the largest tier sold, so there is nowhere above them.
+   *
+   * Its own arm rather than `none`, because it is the one case with something
+   * to say: a page that draws no button here should say why, and *"nothing on
+   * sale"* and *"you are already at the top"* are different sentences.
+   */
+  | { readonly kind: "top" }
+  /** No open subscription: a press opens a hosted Stripe Checkout Session. */
+  | { readonly kind: "checkout"; readonly tiers: readonly [Tier, ...Tier[]] }
+  /**
+   * An open, entitled subscription and something larger to move to: a press
+   * opens the hosted Customer **Portal**, not a Checkout Session.
+   *
+   * `startCheckout` (src/billing/checkout.ts) already forces that and is right
+   * to — Reader and Researcher are separate Stripe *Products*, so Stripe cannot
+   * schedule a change between their prices and the Portal's `subscription_update`
+   * is the mechanism. The kind is on the wire so that the **label** can say so:
+   * a button that reads *Upgrade* and lands on somebody else's page, where the
+   * plan must be chosen again and confirmed, has told the reader the wrong thing
+   * about what pressing it does.
+   */
+  | { readonly kind: "switch"; readonly tiers: readonly [Tier, ...Tier[]] };
+
+/** The tiers a `Purchase` is offering, or none — the list, without the door. */
+export function purchasableTiers<Tier>(purchase: Purchase<Tier>): readonly Tier[] {
+  return purchase.kind === "checkout" || purchase.kind === "switch" ? purchase.tiers : [];
+}
+
 /** The whole of `GET /api/billing/usage`. */
 export interface BillingSummary {
   readonly plan: ReaderPlan;
-  /** What may be bought, cheapest first. Empty on a deployment with no Stripe. */
-  readonly offers: readonly TierOffer[];
   /**
    * Whether *Manage billing* can do anything.
    *
@@ -130,23 +211,16 @@ export interface BillingSummary {
    */
   readonly manageable: boolean;
   /**
-   * Whether pressing *Upgrade* would actually sell them something.
+   * What may be bought, cheapest first, and which door a press goes through.
    *
-   * **`startCheckout` refuses while a subscription that is not over exists**,
-   * and sends the reader to the Portal instead (src/billing/checkout.ts §
-   * *Over is a shorter list than unentitled*). `TERMINAL_STATUSES` is `canceled`
-   * and `incomplete_expired` and nothing else — so `unpaid`, `past_due` and
-   * `incomplete` are all *unentitled and still not over*, and an account in one
-   * of them would be shown tier cards whose only outcome is the Portal.
-   *
-   * **The page cannot work that out from `plan`**, which is what made this a
+   * **The page cannot work this out from `plan`**, which is what makes it a
    * field rather than a derivation: `lapsed` covers both a `canceled`
    * subscription (sell them a new one) and an `unpaid` one (send them to pay the
    * invoice they have), and `unknown` is a live subscription whose dates we
-   * cannot read. GPT Sol, 2026-09-03 — the first version hid the cards only for
-   * `paid`, which is the smallest of the four cases that need hiding.
+   * cannot read. GPT Sol, 2026-09-03. Nor from `offers`, which is why that list
+   * is inside the union rather than beside it — see `Purchase`.
    */
-  readonly canCheckout: boolean;
+  readonly purchase: Purchase;
 }
 
 /* -------------------------------------------------- when the plan ends -- */
@@ -285,6 +359,56 @@ export function describePlan(plan: ReaderPlan): PlanCopy {
       };
     }
   }
+}
+
+/* ------------------------------------------- moving between paid plans -- */
+
+/**
+ * **What pressing a *Switch plan* button actually does**, said before it is
+ * pressed rather than discovered on somebody else's page.
+ *
+ * A subscriber's press does not open a Checkout page: `startCheckout` returns
+ * the hosted **Customer Portal** to anybody holding an open subscription, and is
+ * right to — Reader and Researcher are separate Stripe *Products*, so the
+ * Portal's `subscription_update` is the mechanism and there is no checkout to
+ * send them to (docs/project/billing.md § *Reader → Researcher*). The plan is
+ * then chosen and confirmed **there**, which is a step the button cannot skip,
+ * so the sentence beside it says so. This is the same habit as *"Manage billing"*
+ * naming Stripe: the limit of the thing, out loud.
+ *
+ * **Every clause is a field somebody set on purpose**, and all three are checked
+ * by `stripe:check` on every run (`portalDrift`, scripts/stripe-setup.ts):
+ * `proration_behavior: "always_invoice"` is the invoice, `billing_cycle_anchor:
+ * "unchanged"` is the unmoved renewal, and the allowance clause is
+ * `nextQuotaAdjustment` — which prorates, so *"the larger allowance starts now"*
+ * would have been false. Upgrading on day 27 of 30 takes a Reader to 33, not to
+ * 150.
+ *
+ * One string, shared by `/pricing` and `/profile`, because two tellings of one
+ * mechanism is how two pages come to describe it differently.
+ */
+export const SWITCHING_PLAN =
+  "Changing plan happens on Stripe's own billing page: this opens it, and you choose the plan " +
+  "and confirm it there. Stripe invoices the difference straight away, your renewal date does " +
+  "not move, and the larger allowance is added for the part of the month that is left.";
+
+/**
+ * There is nothing above them to move to — the sentence that stops the top tier
+ * reading as a page that forgot to draw its buttons.
+ *
+ * **A sentence rather than an empty gap**, which is what a filtered offer list
+ * leaves behind: on the largest tier every card is one they may not buy, so
+ * without this a Researcher gets prices, no button, and no reason given.
+ *
+ * `tierName` is `ReaderPlan`'s own `tierName` — the product name off the row, so
+ * it says the same word as the headline above it — and `null` is the
+ * administrator, who can hold a subscription while their plan reads *exempt* and
+ * therefore has no tier name to print.
+ */
+export function noHigherPlan(tierName: string | null): string {
+  return tierName === null
+    ? "You are on the largest plan we sell, so there is nothing above it to move to."
+    : `${tierName} is the largest plan we sell, so there is nothing above it to move to.`;
 }
 
 /**
