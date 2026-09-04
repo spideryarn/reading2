@@ -38,6 +38,19 @@ assumes 5273 gets a refused connection or — worse — *somebody else's* dev se
 page that looks exactly right and is running different code. Read the port off the line Vite prints
 and pass it on to anything you dispatch.
 
+**Killing `npm run dev` does not kill Vite.** `npm` is a wrapper; the server is its `node` child, and
+killing the PID you started leaves the child listening. Two agents hit this on 2026-09-04 within an
+hour of each other, and the second one's failure is the instructive shape: it killed the wrapper,
+started a "fresh" server that silently walked to **5302** because 5301 was still held by its own
+first one, and then pointed its verification at 5301 — **the old server** — and reported a clean
+re-verification. The numbers came back identical, which is equally consistent with "the fix works"
+and "I measured the wrong process", and that is exactly the shape
+[silent-success.md](../reusable/silent-success.md) is about.
+
+So: kill the **listening** PID (`lsof -ti :PORT`, or find the `vite` child), then check the port is
+actually free before starting another. And prove *which code* is being served before you trust a
+single thing the browser tells you — the `curl` below is the whole of it, and it takes one second.
+
 **And the port you were given can change hands while you work.** A dev server killed by memory
 pressure — a full `npm test` on a loaded box will do it — frees its port, and the next peer's Vite
 walks up and takes it. Your automation goes on signing in and answering, from another worktree's

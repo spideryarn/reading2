@@ -569,7 +569,14 @@ export function AccessSharing({
                   sideways. The old unstyled control wrapped, so this would have
                   been a regression rather than an old bug. Measured by GPT Sol,
                   2026-09-04; 390px, which is where I checked first, has the
-                  room and hides it. */}
+                  room and hides it.
+
+                  **The label lost *"who has the link"* on 2026-09-04**, with
+                  the rest of the link-only copy — a public article is listed
+                  now, so the link is one way in rather than the way in
+                  (src/messages.ts § SHARING_ON). The wrap guard stays: it was
+                  measured against the longer label and costs nothing, and the
+                  next word added here would need it again. */}
               <Button
                 type="button"
                 variant="outline"
@@ -578,7 +585,7 @@ export function AccessSharing({
                 onClick={() => setConfirming(true)}
               >
                 <Globe size={14} />
-                Share with anyone who has the link…
+                Share with anyone…
               </Button>
             </Tooltip>
           )}

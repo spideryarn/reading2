@@ -11,6 +11,7 @@
  *
  * See scripts/build-stamp.ts and docs/plans/260827v-deploy-pipeline.md.
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { missingClientEnv, resolveBuildStamp, sameCommit } from "../scripts/build-stamp.js";
@@ -125,5 +126,32 @@ describe("missingClientEnv", () => {
     expect(missingClientEnv({ ...good, VITE_SUPABASE_PUBLISHABLE_KEY: "  " })).toEqual([
       "VITE_SUPABASE_PUBLISHABLE_KEY",
     ]);
+  });
+});
+
+/**
+ * **The stamp only reaches the client if `define` carries it**, and nothing
+ * else in this suite would notice its removal.
+ *
+ * `src/web/build-stamp.ts` reads both constants behind a `typeof` guard, so
+ * deleting either line from `vite.config.ts` does not fail a type-check, does
+ * not fail a render test — the page simply, quietly, stops saying when it was
+ * built. That is precisely the shape docs/reusable/silent-success.md is about,
+ * and this is the cheapest check that sees it: the source of the config, read
+ * as text.
+ *
+ * Text rather than importing the config, because loading it runs
+ * `resolveBuildStamp()` and `loadEnvLocal()` for a question about two lines.
+ */
+describe("the client define block", () => {
+  const config = readFileSync(new URL("../vite.config.ts", import.meta.url), "utf8");
+  const block = config.slice(config.indexOf("define: {"));
+
+  it("compiles the commit into the bundle", () => {
+    expect(block).toContain("__SPIDERYARN_BUILD_COMMIT__: JSON.stringify(stamp.commit)");
+  });
+
+  it("compiles the build time in too, which /admin draws its age from", () => {
+    expect(block).toContain("__SPIDERYARN_BUILD_TIME__: JSON.stringify(stamp.builtAt)");
   });
 });
