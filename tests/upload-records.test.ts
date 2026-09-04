@@ -24,6 +24,44 @@
  * field. `tests/store-uploads-parity.test.ts` is where the two adapters are held
  * to one contract; this file is the seam above them, on the store that is
  * staying. They still clean up after themselves by id.
+ *
+ * ## The mutations, watched rather than reasoned — 2026-09-04
+ *
+ * One per claim above, because the three are three different mechanisms on this
+ * side and a mutation of one says nothing about the others. All three in
+ * `src/store/pg-uploads.ts`; all three red.
+ *
+ * **1 — exactly once.** `claim`: `const conditions = [eq(uploads.id, id),
+ * eq(uploads.status, "pending")];` made `const conditions = [eq(uploads.id,
+ * id)];` — the conditional `UPDATE` left with no precondition, so both racers
+ * win the row. **1 failed of 12**: *lets exactly one of two simultaneous
+ * callers through*, `expected [ true, true ] to have a length of 1 but got 2`.
+ * Only that one. *says which of the three ways it failed* stays green because
+ * it only exercises `unknown` and `expired`; **`taken` is asserted in exactly
+ * one place in this file**, and it is the line this mutation broke.
+ *
+ * **2 — the grant's own clock.** `claim`, the expiry clause deleted:
+ * `conditions.push(lt(sql`${now}::timestamptz`, uploads.grantExpiresAt));`
+ * removed, so an expired grant still claims. **2 failed of 12** — *says which
+ * of the three ways it failed* and *expires a claim on the grant's own clock,
+ * not on ours*, both `expected false to be 'expired'`.
+ *
+ * **3 — a repeat refusal is silent.** `reject`: `return moved.length === 1;`
+ * made `if (moved.length !== 1) throw new IllegalTransition("rejected",
+ * "rejected"); return true;` — the state-machine error the method exists to
+ * absorb. **1 failed of 12**: *swallows a second refusal of the same upload*.
+ *
+ * **What the three do not cover.** They reach `claim` and `reject` and leave
+ * `settle` almost untouched: `sourcesFor` decides every legal transition and
+ * nothing above perturbs that table, so *refuses a transition the state machine
+ * does not allow* rests on one direction of one edge. Mutation 1 removed the
+ * *status* precondition and not the **owner** one beside it — `eq(uploads
+ * .ownerId, options.owner)` is only ever asserted through *will not hand
+ * somebody else's upload over*, which claims a fresh record and would survive a
+ * `WHERE` that had lost its status clause. And none of the three touches
+ * `asOf`, which is pure and store-blind: *reports an expired grant without
+ * rewriting the record* is a claim about a `GET` not writing, and no mutation
+ * of the adapter's read path was run against it.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 

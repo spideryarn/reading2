@@ -41,6 +41,8 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { eq, inArray, isNull } from "drizzle-orm";
 
 import { loadEnvLocal } from "../src/env.js";
@@ -83,6 +85,7 @@ const { pgArticleReader } = await import("../src/store/pg.js");
 const { deriveLibraryScalars } = await import("../src/library-scalars.js");
 import type { Block, Glossary, Tree } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
+import { type ScratchArticle, scratchArticleInPg } from "./helpers/scratch-article.js";
 
 /* ------------------------------------------------------------- the fixture -- */
 
@@ -722,28 +725,142 @@ when("the shelf's reads", { timeout: 30_000 }, () => {
   });
 });
 
+/* ------------------------------------ the corpus the two audits read over -- */
+
+/**
+ * **The two audits below seed the articles they assert over.**
+ *
+ * They used to read "every article on the shelf whose slug does not start with
+ * `test-`", on the understanding that what was left was the local `data/`
+ * corpus. Nothing in this file ever put an article there. What they were
+ * actually reading was whatever a *different* suite had loaded under a corpus
+ * name and not torn down — and on 2026-09-04, when stage B of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * moved a batch of suites onto `scratchArticleInPg` (whose slugs all begin
+ * `test-`), that accident stopped happening and both audits found nothing.
+ * Their `toBeGreaterThan(0)` guards caught it, which is exactly what they are
+ * for: neither had ever been proved by a run it created the conditions for.
+ *
+ * ## Why an allow-list rather than the old `test-` filter
+ *
+ * The filter was a *deny*-list, and the deny-list is what made these tests
+ * depend on run order. Two things had to be preserved and both are:
+ *
+ *  - **Nothing else may mutate what these read.** The original comment says a
+ *    foreign fixture's `title_override` changed between two reads and cost a
+ *    run; the scalars audit says a foreign fixture's wrong column turned this
+ *    file red for somebody else's reason, "and it happened". Owning the slugs
+ *    settles both, where "exclude the fixtures we know about today" would only
+ *    have settled them until the next suite arrived.
+ *  - **This file's own hand-built fixtures stay out**, because two of them have
+ *    their scalars nulled or deliberately wrong. They are not in the list.
+ *
+ * So the slugs keep the repo's `test-` prefix — every database fixture here has
+ * one, and other suites' corpus sweeps filter on it — and the audits name them.
+ *
+ * ## They are still real articles, loaded the real way
+ *
+ * `scratchArticleInPg` clones a committed corpus article and puts it in through
+ * `loadArticleIntoPg` → `publishRevision`, which is the write path production
+ * runs. So the columns these audits check were written by the writer under
+ * test, not by an `insert` in this file — which is the whole reason the audits
+ * wanted `data/` in the first place.
+ */
+const CORPUS = {
+  /** An ordinary article with a stored title. `writes`: 19 blocks, the cheapest complete one. */
+  titled: "test-shelf-corpus-titled",
+  /**
+   * **The same article with `meta.json`'s title removed**, so the revision
+   * publishes with a null title and the fallback is genuinely exercised.
+   *
+   * Nothing in the committed corpus has a null title, so before this the
+   * "really does exercise the fallback" test below printed a warning and
+   * returned — a permanent no-op standing in for the non-vacuity control that
+   * the SQL-vs-TypeScript comparison rests on. `writes` opens with an `h1`, so
+   * the fallback has a heading to find and it is not the slug.
+   */
+  untitled: "test-shelf-corpus-untitled",
+  /**
+   * **The one corpus article with a `supplement` block.**
+   *
+   * `wordCount` is *body* words, and the scalars audit below recomputes it from
+   * `words` **and** `treatment`. The long comment there records that the audit
+   * selected `words` alone for three days and nothing could see it, because the
+   * only article in the database had no supplement blocks — "stored and actual
+   * agreed by having nothing to disagree about". This is that article, so the
+   * substitution is now visible here rather than only after an import.
+   */
+  supplement: "test-shelf-corpus-supplement",
+} as const;
+
+/**
+ * **Not `test-shelf-reads-`**, which is the prefix `mine()` above matches. These
+ * are seeded after that describe has finished, so an overlap would be harmless
+ * today; a distinct prefix means it stays harmless if the order ever changes.
+ */
+const CORPUS_SLUGS: readonly string[] = Object.values(CORPUS);
+const isCorpus = (slug: string): boolean => CORPUS_SLUGS.includes(slug);
+
+/** Drop the stored title on the way in. See `CORPUS.untitled`. */
+async function dropTitle(dir: string): Promise<void> {
+  const at = path.join(dir, "meta.json");
+  const meta = JSON.parse(await readFile(at, "utf8")) as Record<string, unknown>;
+  delete meta.title;
+  await writeFile(at, JSON.stringify(meta));
+}
+
+let seeded: ScratchArticle[] = [];
+
+/**
+ * Seed the three, in a `beforeAll`.
+ *
+ * **Per describe rather than once for the file.** The first describe's
+ * `afterAll` closes the pool, so a file-level hook would have to reason about
+ * that; two independent seeds cost about a second and nothing else.
+ */
+async function seedCorpus(): Promise<void> {
+  /* **Pushed one at a time, not built as one array literal.** A throw part way
+     through an array literal never assigns it, so whatever was already loaded
+     would be invisible to `unseedCorpus` — and the next describe's seed would
+     then fail on the duplicate slug, in a place with nothing to do with it. */
+  seeded = [];
+  seeded.push(await scratchArticleInPg(CORPUS.titled, { from: "writes" }));
+  seeded.push(await scratchArticleInPg(CORPUS.untitled, { from: "writes", mutate: dropTitle }));
+  seeded.push(await scratchArticleInPg(CORPUS.supplement, { from: "openai-huggingface" }));
+}
+
+async function unseedCorpus(): Promise<void> {
+  for (const article of seeded) await article.remove();
+  seeded = [];
+}
+
 /* ------------------------------------------ the fourth spelling of one rule -- */
 
 when("the title fallback, in SQL and in TypeScript", { timeout: 30_000 }, () => {
+  beforeAll(seedCorpus, 120_000);
+  afterAll(unseedCorpus, 120_000);
+
   /**
    * **A consistency check, not a correctness one**, and it says so because both
    * spellings were written from the same sentence by the same person on the
    * same day. What it catches is one of them drifting later — a `level = 2`, an
    * `order by block_id`, a `kind` that stops meaning what it meant.
    *
-   * It runs over the real corpus in `data/`, imported into the database, rather
-   * than over a fixture: the fixture above proves the rule under conditions
-   * chosen to break it, and this proves the two implementations still agree
-   * about eight real articles, one of which genuinely has no stored title.
+   * It runs over whole corpus articles put in through the real write path
+   * rather than over the hand-built fixture above: that fixture proves the rule
+   * under conditions chosen to break it, and this proves the two
+   * implementations still agree about real articles, one of which has no stored
+   * title. `CORPUS` above says why this file seeds them itself.
    */
   it("agree about every article on the shelf", async () => {
     const all = await pgArticleReader.listArticles({ archived: false });
-    /* **Real articles only.** Another suite's fixture can be renamed, archived
-       or torn down *while this runs* — vitest runs these files concurrently
-       against one database — so comparing two reads taken a moment apart
-       against a moving row is not a test of anything. It cost a run to a
-       fixture whose `title_override` was set between the two reads. */
-    const entries = all.filter((e) => !e.slug.startsWith("test-"));
+    /* **This file's corpus articles only**, named rather than filtered by
+       prefix. Another suite's fixture can be renamed, archived or torn down
+       between these two reads, so comparing them against a row we do not own is
+       not a test of anything — it cost a run to a fixture whose `title_override`
+       was set in between. `CORPUS` above has the longer version, including why
+       this is an allow-list. */
+    const entries = all.filter((e) => isCorpus(e.slug));
     expect(entries.length).toBeGreaterThan(0);
 
     const disagreements: { slug: string; sql: string; ts: string | null }[] = [];
@@ -773,28 +890,31 @@ when("the title fallback, in SQL and in TypeScript", { timeout: 30_000 }, () => 
     expect({ disagreements, compared: compared > 0 }).toEqual({ disagreements: [], compared: true });
   });
 
-  it("and the corpus, where it has one, really does exercise the fallback", async () => {
-    /* **Without this, the test above can be vacuous.** If every article in
-       `data/` has a stored title, the two spellings agree by never being asked.
-       The local corpus has one revision with a null title, so this asserts the
-       card shows the article's heading rather than its slug — and where a corpus
-       has none, it says so rather than quietly proving nothing. The fixture at
-       the top of this file covers the case unconditionally. */
+  it("and the corpus really does exercise the fallback", async () => {
+    /* **Without this, the test above can be vacuous.** If every article it
+       compares has a stored title, the two spellings agree by never being
+       asked. `CORPUS.untitled` is a corpus article published with its title
+       dropped, so this asserts the card shows the article's heading rather than
+       its slug. The fixture at the top of this file covers the case a second
+       way, against hand-written rows.
+
+       **It used to say "where the corpus has one".** Nothing in the committed
+       corpus does, so this printed a warning and returned — the non-vacuity
+       control was itself vacuous. Seeding one is what makes it a check. */
     const untitled = await getDb()
       .select({ slug: articles.slug })
       .from(articles)
       .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
       .where(isNull(articleRevisions.title));
-    /* **Real articles only**, for the same reason as the test above: another
-       suite's fixture can be created, renamed or torn down between these two
-       reads, and asserting that a row we do not own is still on the shelf is
-       not a test of this code. `test-reader-state-parity` cost a run before the
-       filter went from this file's own prefix to every fixture's. */
-    const real = untitled.filter((r) => !r.slug.startsWith("test-"));
-    if (!real.length) {
-      console.warn("\n  ⚠ no article in data/ has a null title — the corpus half of this proves nothing\n");
-      return;
-    }
+    /* **Ours only**, for the same reason as the test above: another suite's
+       fixture can be created, renamed or torn down between these two reads, and
+       asserting that a row we do not own is still on the shelf is not a test of
+       this code. `test-reader-state-parity` cost a run before that was true. */
+    const real = untitled.filter((r) => isCorpus(r.slug));
+    /* Named, not counted: this must be *the* article whose title we dropped, so
+       a seed that silently published a title anyway fails here rather than
+       passing over some other null-titled row. */
+    expect(real.map((r) => r.slug)).toEqual([CORPUS.untitled]);
     const entries = await pgArticleReader.listArticles({ archived: false });
     for (const { slug } of real) {
       const entry = entries.find((e) => e.slug === slug);
@@ -810,6 +930,9 @@ when("the title fallback, in SQL and in TypeScript", { timeout: 30_000 }, () => 
 /* --------------------------------------- what parity can no longer tell you -- */
 
 when("every published revision's stored scalars", { timeout: 60_000 }, () => {
+  beforeAll(seedCorpus, 120_000);
+  afterAll(unseedCorpus, 120_000);
+
   /**
    * **The guard that replaces one the parity test quietly stopped being.**
    *
@@ -850,15 +973,16 @@ when("every published revision's stored scalars", { timeout: 60_000 }, () => {
       .from(articles)
       .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId));
 
-    /* **Real articles only**, and both halves of that are deliberate. This
-       file's own fixtures are excluded because one has its scalars nulled on
-       purpose and another has them deliberately wrong for the blockless case.
-       Every *other* suite's are excluded because their columns are somebody
-       else's to keep honest, and a red here for their fixture is a red in the
-       wrong file — it happened, correctly, and the fix belonged in
-       tests/store-shelf-pg.test.ts. What is left is `data/`, which is where the
-       writers under test actually write. */
-    const real = current.filter((r) => !r.slug.startsWith("test-"));
+    /* **This file's corpus articles only**, and both halves of that are
+       deliberate. This file's hand-built fixtures are excluded because one has
+       its scalars nulled on purpose and another has them deliberately wrong for
+       the blockless case. Every *other* suite's are excluded because their
+       columns are somebody else's to keep honest, and a red here for their
+       fixture is a red in the wrong file — it happened, correctly, and the fix
+       belonged in tests/store-shelf-pg.test.ts. What is left is what `CORPUS`
+       above seeds: whole corpus articles written by `publishRevision`, which is
+       the writer under test. */
+    const real = current.filter((r) => isCorpus(r.slug));
     expect(real.length).toBeGreaterThan(0);
 
     const wrong: { slug: string; stored: unknown; actual: unknown }[] = [];
