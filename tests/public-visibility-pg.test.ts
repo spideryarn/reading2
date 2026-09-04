@@ -856,6 +856,7 @@ when("sharing one article", { timeout: 60_000 }, () => {
         ideas: true,
         quotes: false,
         timeline: false,
+        sketch: false,
       },
     });
   });
