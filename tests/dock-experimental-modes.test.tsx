@@ -251,6 +251,7 @@ const NOTHING_SHARED: PublicArtefacts = {
   ideas: false,
   quotes: false,
   timeline: false,
+  sketch: false,
 };
 const EVERYTHING_SHARED: PublicArtefacts = {
   arc: true,
@@ -259,6 +260,7 @@ const EVERYTHING_SHARED: PublicArtefacts = {
   ideas: true,
   quotes: true,
   timeline: true,
+  sketch: true,
 };
 
 /**

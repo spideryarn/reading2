@@ -303,6 +303,70 @@ The rest of that work — the browser's own chrome, which is not ours to hide, a
 Screen path that is the only way to be rid of it — is
 [260828av-mobile-screen-real-estate.md](../plans/260828av-mobile-screen-real-estate.md).
 
+## What the Enter key promises
+
+> The keyboard on mobile devices should have a Done/Send button where
+> appropriate, including this Feedback dialog box.
+>
+> — Greg, 2026-09-04
+
+`enterKeyHint` is what labels the Enter key on a soft keyboard, and **the
+decision is a product one, made box by box**. There are three kinds, and the
+rule for a new box is to say which one it is:
+
+| The box | What Enter does | What it carries |
+|---|---|---|
+| A single-line box whose Enter acts | searches, submits, commits | `search`, `go`, `done` or `send` |
+| A multi-line box | inserts a newline | **nothing** |
+| Everything else — a slider, a tick-box, a read-only field | — | nothing |
+
+**A textarea must never say Send, even where Enter sends.** Two reasons, and the
+second is the one that settles it: ⌘/Ctrl+Enter is what sends in most of this
+app's multi-line boxes, and **iOS inserts a newline whatever the key is
+labelled** — so the promise would be broken by the platform rather than by us.
+[`AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) had already written the
+same decision down as a trap worth naming. The two chat composers are the
+exception in the other direction: Enter there really does send
+([`ChatPanel.tsx`](../../src/web/ChatPanel.tsx)), so they say so.
+
+**A promise with nothing behind it is worse than no promise.** The two boxes
+that filter as you type — the shelf's search and the article search in words
+mode — had no Enter behaviour at all, so Enter now dismisses the keyboard, which
+is what the reader pressed it for and, on a desktop, hands the arrow keys back to
+the article ([keyboard.md](keyboard.md)). Same reasoning made the sign-in form's
+`next` move focus for real: Enter in a field of a form with a submit button
+submits it, so a key labelled *next* would otherwise have fired a sign-in the
+browser then refuses for an empty password. **And it moves whatever is in the
+password box** — the first version moved only when it was empty, which meant that
+with a manager's fill, the ordinary case, the key labelled *next* signed in
+instead (GPT Sol, 2026-09-04).
+
+**A key that promises to send has to refuse while the microphone is on.**
+Labelling Enter *send* on a box with a microphone beside it creates a race the
+box did not have before: press it mid-sentence and the rough live guesses go, or
+on Safari and Firefox nothing that was said goes at all, and the microphone keeps
+running. Every dictation-backed submitter now guards `dictation.armed` as well as
+`readOnly`, and disables its button in both —
+[dictation.md § Adding it to a box](dictation.md#adding-a-box-that-takes-dictation-somewhere-else).
+
+Every box in `src/web/` is listed, with its decision, in
+[`tests/what-the-enter-key-promises.test.tsx`](../../tests/what-the-enter-key-promises.test.tsx)
+— a source sweep rather than twenty render tests, because the failure it guards
+against is somebody adding a box and never asking the question. A new text box
+fails that test until a line is added saying which of the three it is. The sweep
+is an omission guard and **not** evidence that the key works:
+[`tests/the-enter-key-really-sends.test.tsx`](../../tests/the-enter-key-really-sends.test.tsx)
+mounts the boxes and presses it, including in the busy and recording states,
+because a decision table that never touched a key stayed green with the handler
+deleted.
+
+**A "Done" key is not the answer to a keyboard covering a button.** That was the
+first reading of the report above, and it is wrong: the Feedback dialog's problem
+was that Send sat underneath the keys, which is a sizing problem —
+[feedback.md § The keyboard, and the button under it](feedback.md#the-keyboard-and-the-button-under-it).
+No floating toolbar or keyboard accessory was built, and none should be: it is a
+large, fragile, iOS-only thing, and the reader's real need is to reach the button.
+
 ## What we deliberately did not build
 
 - **A setting.** Apple Books and Kindle both ship an explicit continuous-scroll / page-turn toggle,

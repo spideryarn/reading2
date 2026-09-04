@@ -57,6 +57,7 @@ import { type Mark, NO_MARK, PlaceOnCriterion } from "./PlaceOnCriterion.js";
 import { parseRoute } from "./router.js";
 import { useDictationField } from "./useDictationField.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
+import { keyboardInsetStyle, useVisualViewport } from "./useVisualViewport.js";
 
 interface Props {
   /** The passage, and the block it sits in. Always a selection, never a bare block. */
@@ -151,19 +152,34 @@ export function AnnotateDialog({ anchor, placing, onSave, onCancel }: Props) {
 
   useEscapeToClose(onCancel);
 
+  /* Mounted means on screen: the selection opens this and closing it unmounts. */
+  const visible = useVisualViewport(true);
+
   const save = () => {
-    /* **Not while a transcription is still on its way.** `readOnly` stops
-       typing and not the keyboard chord, so without this the reader's rough
-       first-pass words get stored a moment before the good ones land. The same
-       guard, for the same reason, as the follow-up box in `CommentDialog`. */
-    if (dictate.readOnly) return;
+    /* **Not while the microphone is involved, and that is two states.**
+       `readOnly` stops typing and not the keyboard chord, so without it the
+       reader's rough first-pass words get stored a moment before the good ones
+       land — and `armed`, the microphone still recording, is the one everybody
+       forgets: ⌘+Enter mid-sentence saves Chrome's live guesses, or on Safari
+       and Firefox saves nothing that was said at all. The same pair, for the
+       same reason, as the follow-up box in `CommentDialog`.
+       docs/project/dictation.md § Adding it to a box. */
+    if (dictate.readOnly || dictate.dictation.armed) return;
     if (sending.current) return;
     sending.current = true;
     onSave(draftId.current, body.trim(), ask, mark);
   };
 
   return (
-    <aside className="annotate-dialog" role="dialog" aria-label="Comment on this passage">
+    <aside
+      className="annotate-dialog"
+      /* Up out of the keyboard's way, exactly as its two neighbours in the same
+         corner are — and this box exists to be typed into.
+         useVisualViewport.ts. */
+      style={keyboardInsetStyle(visible)}
+      role="dialog"
+      aria-label="Comment on this passage"
+    >
       <header>
         <span className="annotate-label">
           <MessageSquarePlus size={12} aria-hidden="true" />
@@ -244,7 +260,14 @@ export function AnnotateDialog({ anchor, placing, onSave, onCancel }: Props) {
             {/* Never disabled: saving nothing is a bookmark, which is the point.
                 The label is the price — GPT Sol's review, on why a reader should
                 not have to remember which of two buttons costs money. */}
-            <button type="submit" className="annotate-save" disabled={dictate.readOnly}>
+            <button
+              type="submit"
+              className="annotate-save"
+              /* Both microphone states, matching the guard in `save` — a lit
+                 button over a handler that returns is a press that does
+                 nothing and says nothing. */
+              disabled={dictate.readOnly || dictate.dictation.armed}
+            >
               {ask ? "Save & ask AI" : "Save comment"}
             </button>
           </div>

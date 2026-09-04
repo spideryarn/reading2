@@ -201,7 +201,7 @@ createRoot(document.getElementById("root") as HTMLElement).render(
     <Band width={MODE_MIN} label="Drift, projection in flight">{panel("drift-wait", "drift")}</Band>
     <Band width={MODE_MIN} label="Drift, projection refused">{panel("drift-fail", "drift")}</Band>
     <Band width={MODE_MIN} label="Sketch, a redraw under way">
-      <SketchView slug="sk-busy" blocks={BLOCKS} atRow={1} onJump={() => {}} />
+      <SketchView access={{ kind: "owner", slug: "sk-busy" }} blocks={BLOCKS} atRow={1} onJump={() => {}} />
     </Band>
   </div>
   </>,

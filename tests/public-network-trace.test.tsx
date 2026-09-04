@@ -72,7 +72,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Article } from "../src/types.js";
-import type { PublicArticle, PublicTweets } from "../src/public-types.js";
+import type { PublicArticle, PublicSketch, PublicTweets } from "../src/public-types.js";
 /* The vocabulary itself, so the sweeps below cannot fall behind it — src/modes.ts
    imports nothing, which is why the server can read it too. */
 import { DEFAULT_MODE, MODES, type Mode } from "../src/modes.js";
@@ -200,12 +200,48 @@ const PDF_META = {
  */
 const PUBLIC_GIST = "What the piece says.";
 
+/**
+ * **A drawing, because the fixture's diagram band is a visitor's default now.**
+ *
+ * Small on purpose — one scene, one box — but a real `Sketch`: with no sketch
+ * at all the band says *nobody has drawn this one yet*, which is a true and
+ * common state and proves nothing about the picture a visitor is supposed to
+ * get. The absent case is asserted separately below.
+ */
+const PUBLIC_SKETCH_TITLE = "One claim, one example";
+const SKETCH: PublicSketch = {
+  title: PUBLIC_SKETCH_TITLE,
+  caption: "The example is doing the arguing.",
+  scenes: [
+    {
+      id: "s0",
+      title: "Overview",
+      height: 200,
+      items: [
+        {
+          kind: "node",
+          id: "n1",
+          shape: "box",
+          x: 10,
+          y: 10,
+          w: 120,
+          h: 40,
+          text: "The claim",
+          size: "md",
+          block: "spya-bbbbbb",
+        },
+      ],
+    },
+  ],
+};
+
 /** The owner's own words, on the fixture's one paragraph. */
 const PUBLIC_NOTE = "The bit I keep coming back to.";
 const PUBLIC_ANSWER = "Because the example is doing the arguing.";
 
 const ARTICLE: PublicArticle = {
   meta: { slug: SLUG, title: "A piece", byline: "Somebody" },
+  sketch: SKETCH,
   /* **A real one, not `[]`.** A visitor's drawer showing nothing would pass
      every assertion about *not fetching* while proving nothing about what they
      are shown — which is the whole of stage 3.
@@ -732,21 +768,17 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      is a node title off that tree, so this row fails if the picture stops being
      drawn — asserting the band's own heading would pass over an empty
      `<aside>`. § Stage 2. */
-  /* **Free since 2026-09-04, and the only row here that opens a real panel for
-     a visitor rather than a boundary or a list.** Force is built from the tree
-     in the payload; the panel's three fetching hooks are off and the picker is
-     not rendered at all.
+  /* **A visitor's diagram is the Sketch**, since 2026-09-04 — and it was the
+     free Force picture for one day in between, which is why this row has moved
+     twice. Greg: *"only Sketch will be visible to those without Experimental
+     Features"*, and an already-drawn one only.
 
-     The string is the panel's own instruction rather than a node label off the
-     picture, and that is a limit of this environment rather than a choice:
-     jsdom gives every element zero size, so the d3 layout produces no
-     positioned nodes and the SVG carries no text to assert on. **So this row
-     proves the panel mounted and spent nothing, and not that the picture drew.**
-     The browser pass owns that second half — said here because a green row that
-     looks like it covers the drawing is exactly the reassurance
-     docs/reusable/silent-success.md is about.
-     docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */
-  diagram: { where: ".mode-band.diag", says: "Point at anything in the picture" },
+     The string is the drawing's own title, off the payload, so this row is
+     about the picture rather than about the panel's furniture. Unlike Force,
+     the Sketch needs no layout to put its title on screen, so jsdom can see it
+     — which is why this assertion could get stronger when the picture changed.
+     docs/plans/260904c-more-modes-on-a-shared-link.md § Sketch. */
+  diagram: { where: ".mode-band.diag", says: PUBLIC_SKETCH_TITLE },
   /* The four that spend, each named by `MODE_LABEL[mode]` — the policy in
      src/web/visitor.ts carries no string of its own. */
   search: { where: VISITOR_BAND, says: "Search is for whoever added this article" },
@@ -1390,6 +1422,60 @@ describe("a signed-out browser on a shared document", () => {
    * they arrived in the article payload.
    * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3.
    */
+  /**
+   * **The Sketch a visitor is never offered.**
+   *
+   * Greg asked for Sketch on a shared link and, asked whether a visitor could
+   * *draw* one, said an already-drawn Sketch only. The empty state is where
+   * that decision is either kept or lost: the owner's version of this screen
+   * names the price and carries the button that spends it, and a visitor's must
+   * carry neither.
+   *
+   * **Asserted on an article with no sketch**, which is the ordinary case —
+   * `sketch` is not in `DEFAULT_INGEST_STEPS`, so most articles have never had
+   * one. The fixture carries one by default, so this case has to take it away.
+   */
+  it("offers a visitor no way to draw a sketch, and never names its price", async () => {
+    /* `delete` rather than `sketch: undefined`, because
+       `exactOptionalPropertyTypes` distinguishes an absent key from one holding
+       `undefined` — and absent is what the wire actually carries. */
+    const { sketch: _drawn, ...withoutSketch } = ARTICLE;
+    served = withoutSketch;
+    await open("?mode=diagram");
+
+    /* The honest sentence, and the whole of it. */
+    expect(host.textContent).toContain("Nobody has drawn this one yet");
+    /* And none of the owner's invitation. `$0.20` and the wait are the two
+       halves of the price, and "Draw the argument" is the button. */
+    expect(host.textContent, "the price").not.toContain("costs one model call");
+    expect(
+      [...host.querySelectorAll("button")].some(
+        (b) => (b.textContent ?? "").includes("Draw the argument"),
+      ),
+      "the Draw button",
+    ).toBe(false);
+    /* The profile tickbox goes with it — it is an input to a job. */
+    expect(host.querySelector(".sk-run"), "the run row").toBeNull();
+
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+    expect(outsidePublic()).toEqual([]);
+  });
+
+  /**
+   * **And the drawing itself comes from the payload**, with no request for it.
+   *
+   * The negative twin of the case above: with a sketch on the article a visitor
+   * sees the picture, and `/api/sketch/:slug` is never asked — which is the
+   * assertion that would fail if somebody gave the visitor arm a slug.
+   */
+  it("draws the owner's sketch from the payload, asking nothing", async () => {
+    await open("?mode=diagram");
+
+    expect(host.textContent).toContain(PUBLIC_SKETCH_TITLE);
+    expect(trace.filter((r) => r.url.includes("/api/sketch/")), "no sketch read").toEqual([]);
+    expect(outsidePublic()).toEqual([]);
+  });
+
   it("shows the owner's comments in the drawer, without asking for them", async () => {
     await open("?panel=questions");
 

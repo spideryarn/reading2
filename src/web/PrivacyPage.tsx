@@ -309,11 +309,17 @@ export function PrivacyPage() {
       </Section>
 
       {/* **The third false claim, and the worst of them.** The page said
-          "delete an article and it goes". The Delete button calls
-          `shelf.archive` (ShelfEntry.tsx), which sets `archived_at` and
-          destroys nothing — the article is restorable under "show deleted" and
-          every artefact stays. GPT Sol found it by reading the button rather
-          than the sentence, which is the only way it could have been found.
+          "delete an article and it goes". The button calls `shelf.archive`
+          (ShelfEntry.tsx), which sets `archived_at` and destroys nothing — the
+          article is restorable under "Show archived" and every artefact stays.
+          GPT Sol found it by reading the button rather than the sentence, which
+          is the only way it could have been found.
+
+          **On 2026-09-04 the button was renamed to match**, so this section no
+          longer has to explain away a word: it says what Archive does, and then
+          answers the question that word leaves open — how to have an article
+          actually erased. docs/project/library.md § Archive, and Undo is the
+          confirmation.
 
           The list of what survives a *real* erasure is longer than the two
           things the second draft named, and Sol enumerated it against the
@@ -364,11 +370,17 @@ export function PrivacyPage() {
 
       <Section title="Deleting things">
         <p>
-          The <strong className="tw:text-foreground">Delete</strong> button on your shelf is really
-          an archive: it takes the article off the shelf and you can bring it back under “show
-          deleted”. Nothing is destroyed, and your notes on it are still there. That is deliberate —
-          undo matters more than tidiness — but it is not what the word usually means, so: if you
-          want an article actually erased, email us and we will do it.
+          The <strong className="tw:text-foreground">Archive</strong> button on your shelf takes an
+          article off the shelf and out of your library search, and you can bring it back at any
+          time under “Show archived”. Nothing is destroyed, and your notes on it are still there.
+          There is no button that really erases an article — undo matters more than tidiness — so if
+          you want one actually gone, email us and we will do it.
+        </p>
+        <p>
+          If you had shared an article and then archive it, it stops being listed anywhere public —
+          but the link you gave out still opens it. Archiving is about your shelf; sharing is about
+          the link. To close the link, use{" "}
+          <strong className="tw:text-foreground">Stop sharing</strong> on the article’s own page.
         </p>
         <p>
           Same for the account. There is no “delete my account” button yet; email us and we delete

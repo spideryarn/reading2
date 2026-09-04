@@ -188,7 +188,7 @@ export function asArticleSharing(value: unknown): ArticleSharing | undefined {
  * (tests/shared-inventory.test.ts) so a sixth artefact cannot be validated into
  * existence by being forgotten.
  */
-export const ARTEFACT_KEYS = ["arc", "tweets", "glossary", "ideas", "quotes", "timeline"] as const satisfies
+export const ARTEFACT_KEYS = ["arc", "tweets", "glossary", "ideas", "quotes", "timeline", "sketch"] as const satisfies
   readonly (keyof PublicArtefacts)[];
 
 export function asPublicArtefacts(value: unknown): PublicArtefacts | undefined {
@@ -202,6 +202,7 @@ export function asPublicArtefacts(value: unknown): PublicArtefacts | undefined {
     ideas: row.ideas as boolean,
     quotes: row.quotes as boolean,
     timeline: row.timeline as boolean,
+    sketch: row.sketch as boolean,
   };
 }
 
@@ -514,8 +515,14 @@ export function AccessSharing({
                 {/* `outline` and **not** `destructive`, which is the tint the
                     eye reaches for on a button that takes something away. It
                     would be the wrong sentence: this is the safe direction, and
-                    the destructive red on this page belongs to Delete, which is
-                    the one control here that loses work. */}
+                    every direction on this page that is not is the *other* one
+                    — publishing, which cannot be un-rung.
+
+                    This used to say the red belonged to Delete, "the one
+                    control here that loses work". It never did: that button
+                    archives, it lost nothing, and on 2026-09-04 it became
+                    Archive and gave the red back. There is no destructive tint
+                    on this page now. */}
                 <Button type="button" variant="outline" size="sm" onClick={() => void set("private")}>
                   <Link2Off size={14} />
                   Stop sharing

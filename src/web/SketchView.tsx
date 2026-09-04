@@ -64,6 +64,7 @@
  * per article that nobody could ever see.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { ChevronLeft, LoaderCircle, Maximize2, Minimize2, PenLine } from "lucide-react";
 import {
   anchorTransform,
@@ -76,8 +77,9 @@ import {
   zoomAnchor,
   type ZoomAnchor,
 } from "../sketch-paint.js";
-import { CANVAS_W, type SketchNode } from "../sketch-scene.js";
+import { CANVAS_W, type Sketch, type SketchNode } from "../sketch-scene.js";
 import type { Block, BlockId } from "../types.js";
+import type { PublicSketch } from "../public-types.js";
 import { JobProgress } from "./JobProgress.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useSketch } from "./useSketch.js";
@@ -166,18 +168,257 @@ function SketchCard({
   );
 }
 
+/**
+ * **Who is reading, and therefore whether a picture can be bought.**
+ *
+ * The owner's arm is a slug, and the slug is what `useSketch` needs — that hook
+ * carries the **auto-runner**, so mounting it is itself the purchase decision.
+ * A visitor's arm is the finished drawing, out of the page's own payload.
+ *
+ * **This is the seam Greg's decision rests on.** He asked for Sketch on a
+ * shared link and, asked whether a visitor could draw one, said an
+ * already-drawn Sketch only. A `readOnly` boolean beside a slug would leave
+ * `useSketch(slug, …)` one edit away from running for a stranger and spending
+ * ~$0.20 of somebody else's money; a union means the visitor arm **has no slug
+ * to hand it**. docs/project/security-map.md § the hazard this section is
+ * really about.
+ */
+export type SketchAccess =
+  | { kind: "owner"; slug: string }
+  | { kind: "visitor"; sketch?: PublicSketch | undefined };
+
 interface Props {
-  slug: string;
+  access: SketchAccess;
   blocks: readonly Block[];
   /** Where the reader is, as a row index into `blocks`, or `null`. */
   atRow: number | null;
   onJump(id: BlockId): void;
 }
 
-export function SketchView({ slug, blocks, atRow, onJump }: Props) {
+/**
+ * **The owner's Sketch: the read, the job, and the three states a request has.**
+ *
+ * This is where `useSketch` is mounted, and it is the only place it is. That
+ * hook carries the auto-runner, so mounting it is the decision to spend — which
+ * is why a visitor's arm of `SketchView` does not reach this component at all
+ * rather than reaching it with a flag turned off.
+ * docs/plans/260904c-more-modes-on-a-shared-link.md § Sketch.
+ */
+function OwnerSketch({
+  slug,
+  blocks,
+  atRow,
+  onJump,
+}: {
+  slug: string;
+  blocks: readonly Block[];
+  atRow: number | null;
+  onJump(id: BlockId): void;
+}) {
   const blockOrder = useMemo(() => blocks.map((b) => b.id), [blocks]);
   const view = useSketch(slug, blockOrder);
-  const { sketch } = view;
+  /* Whether to draw it for this reader in particular. Owner-only state, because
+     it is an input to a job only an owner can start. */
+  const [useProfile, setUseProfile] = useState(true);
+
+  if (view.status === "loading") {
+    return (
+      <div className="sk-wait" role="status">
+        <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> Looking for a picture…
+      </div>
+    );
+  }
+
+  if (view.status === "none" || view.status === "error") {
+    return (
+      <div className="sk-empty">
+        <p>
+          {view.status === "error"
+            ? (view.error ?? "Could not ask for this picture.")
+            : "Nobody has drawn this one yet."}
+        </p>
+        {/* **What it costs, before the press rather than after it** — the same
+            rule the chips' hover cards follow, and it matters more here than
+            anywhere: this is a two-minute wait, and a reader who presses a
+            button and then watches a spinner for two minutes with no idea why
+            is owed the sentence. */}
+        <p className="sk-empty-why">
+          A model reads the whole article, works out what shape the argument is, and draws that. It
+          is the slowest thing here — {SKETCH_WAIT} — and it costs one model call, {SKETCH_PRICE}, so
+          it is never drawn until you ask.
+        </p>
+        <div className="sk-run">
+          <UseProfile
+            checked={useProfile}
+            onChange={setUseProfile}
+            hasProfile={view.hasProfile}
+            slug={slug}
+            disabled={view.job !== null}
+            automatic={view.automatic}
+          />
+          {/* **`ensure`, not `regenerate`.** There is no picture — that is what
+              this state means — so the freshness check will agree, and it has
+              to be the identical request the automatic run makes: a forced
+              press landing inside the auto-start window is a different
+              `work_key`, is not de-duplicated, and buys a second two-minute
+              $0.20 job. useSketch.ts § `ensure`. */}
+          <JobProgress
+            job={view.job}
+            starting={view.starting}
+            failed={view.failed}
+            stalled={view.stalled}
+            onRun={() => view.ensure(useProfile)}
+            onCancel={view.cancel}
+            label="Draw the argument"
+            step="sketch"
+            icon={<PenLine size={13} />}
+            runningLabel="Drawing…"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (!view.sketch) return null;
+
+  /* The caveats, which are all facts about *this reader's* artefact against
+     *this reader's* article and profile. A visitor gets none of them: they
+     cannot regenerate, the profile is not theirs, and "drawn for a profile you
+     have since changed" is a sentence about somebody else. */
+  const notes: string[] = [];
+  if (view.stale) {
+    notes.push(
+      "The article has changed since this was drawn. The shape is still a fair account of the argument; some boxes may no longer lead anywhere.",
+    );
+  }
+  if (view.faults.length > 0) {
+    const lost = view.faults.filter((f) => f.what.includes("not in this article")).length;
+    if (lost > 0) notes.push(`${lost} of its boxes point at passages this article no longer has.`);
+  }
+  if (view.profileChanged) notes.push("It was drawn for a reader profile you have since changed.");
+
+  /* **The two lines that are about a job rather than about a picture**, built
+     here because this is where the job is. Both were inside the drawing until
+     2026-09-04; a visitor has neither.
+
+     Not `JobProgress`: that row carries a Stop button and, with no job, a Draw
+     button — and offering a $0.20 redraw beside a picture that is already there
+     is a product decision this is not. Greg asked only that a redraw in flight
+     be visible: *"the diagram/sketch modes show loading spinners if they're
+     generating"*.
+
+     **And the spinner going away is not the same as the work succeeding.** A
+     redraw that came back failed left the picture standing and said nothing,
+     which reads as a completed run that changed nothing — after two minutes and
+     $0.20. The server's own words, per copy.md. ⟨Sol⟩. */
+  const progress = (
+    <>
+      {view.job && (
+        <p className="sk-busy" role="status">
+          <LoaderCircle className="cmt-spinner" size={12} aria-hidden="true" />
+          {view.job.status === "queued"
+            ? "Waiting for the queue…"
+            : (view.job.steps.find((s) => s.name === "sketch")?.label ?? "Drawing…")}
+        </p>
+      )}
+      {!view.job && view.failed && <p className="sk-failed">{view.failed.message}</p>}
+    </>
+  );
+
+  return (
+    <SketchBody
+      sketch={view.sketch}
+      notes={notes}
+      progress={progress}
+      blocks={blocks}
+      atRow={atRow}
+      onJump={onJump}
+    />
+  );
+}
+
+/**
+ * **Which half of this file a reader gets**, and the whole of the boundary.
+ *
+ * An owner reaches the hook; a visitor reaches the drawing their payload
+ * carried, or a sentence saying there is none. There is no third path and no
+ * flag: the visitor arm has no slug in it, so nothing downstream can ask for
+ * one. src/web/SketchView.tsx § SketchAccess.
+ */
+export function SketchView({ access, blocks, atRow, onJump }: Props) {
+  if (access.kind === "owner") {
+    return <OwnerSketch slug={access.slug} blocks={blocks} atRow={atRow} onJump={onJump} />;
+  }
+  /* **The visitor's empty state lives here, not in the body**, because the body
+     takes a `sketch` and there isn't one. Nobody has drawn this piece — which
+     is the ordinary case, since `sketch` is not in `DEFAULT_INGEST_STEPS` — and
+     what a visitor is owed is that fact and nothing else. The owner's version
+     of this sentence carries the price and the button that spends it;
+     compare `OwnerSketch`. */
+  if (!access.sketch) {
+    return (
+      <div className="sk-empty">
+        <p>Nobody has drawn this one yet.</p>
+      </div>
+    );
+  }
+  return (
+    <SketchBody
+      sketch={access.sketch}
+      notes={NO_NOTES}
+      blocks={blocks}
+      atRow={atRow}
+      onJump={onJump}
+    />
+  );
+}
+
+/** Shared, so the memos in the body key on one identity. */
+const NO_NOTES: readonly string[] = [];
+
+/**
+ * **The drawing, and nothing about where it came from.**
+ *
+ * Split out of `SketchView` on 2026-09-04, when a visitor started getting the
+ * Sketch on a shared link. The reason for the split is the reason for every
+ * owner/visitor seam in this app: **a hook cannot be called conditionally**, and
+ * `useSketch` is not an ordinary read — it carries the auto-runner, so mounting
+ * it *is* the decision to spend ~$0.20. A `readOnly` prop would have left it
+ * mounted for a stranger. src/web/reader-capability.ts has the general form.
+ *
+ * Everything below this line was already independent of the hook: between the
+ * old component's head and its status branches there was exactly one use of
+ * `view`, and it was reading `view.sketch`. So this is a move rather than a
+ * rewrite.
+ */
+function SketchBody({
+  sketch,
+  notes,
+  progress,
+  blocks,
+  atRow,
+  onJump,
+}: {
+  sketch: Sketch | PublicSketch;
+  /** Owner-only caveats — staleness, lost boxes, a changed profile. Empty for a visitor. */
+  notes: readonly string[];
+  /**
+   * **What the owner's redraw is doing**, already rendered, or nothing.
+   *
+   * A node rather than the job itself, so this component stays free of
+   * `UseSketch` — a visitor has no job, no failure and no hook, and giving the
+   * body the shape of one would put the owner's states back inside the half
+   * that a stranger renders. `OwnerSketch` builds it.
+   */
+  progress?: ReactNode;
+  blocks: readonly Block[];
+  atRow: number | null;
+  onJump(id: BlockId): void;
+}) {
+  /* Derived here as well as in `OwnerSketch`, because both halves need it and
+     neither is the other's parent: the owner's is what `useSketch` keys its
+     read on, and this one is what `here` maps a reader's row through. */
+  const blockOrder = useMemo(() => blocks.map((b) => b.id), [blocks]);
 
   /**
    * Which scene is open — `null` is the overview.
@@ -195,7 +436,6 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
   const [full, setFull] = useState(false);
   const [hover, setHover] = useState<string | null>(null);
   const [focused, setFocused] = useState(0);
-  const [useProfile, setUseProfile] = useState(true);
   const svg = useRef<SVGSVGElement>(null);
   const dialog = useRef<HTMLDialogElement | null>(null);
 
@@ -622,77 +862,9 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
     [painted, focused, activate, goTo, open, full],
   );
 
-  if (view.status === "loading") {
-    return (
-      <div className="sk-wait" role="status">
-        <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> Looking for a picture…
-      </div>
-    );
-  }
-
-  if (view.status === "none" || view.status === "error") {
-    return (
-      <div className="sk-empty">
-        <p>
-          {view.status === "error"
-            ? (view.error ?? "Could not ask for this picture.")
-            : "Nobody has drawn this one yet."}
-        </p>
-        {/* **What it costs, before the press rather than after it** — the same
-            rule the chips' hover cards follow, and it matters more here than
-            anywhere: this is a two-minute wait, and a reader who presses a
-            button and then watches a spinner for two minutes with no idea why
-            is owed the sentence. */}
-        <p className="sk-empty-why">
-          A model reads the whole article, works out what shape the argument is, and draws that. It
-          is the slowest thing here — {SKETCH_WAIT} — and it costs one model call, {SKETCH_PRICE}, so
-          it is never drawn until you ask.
-        </p>
-        <div className="sk-run">
-          <UseProfile
-            checked={useProfile}
-            onChange={setUseProfile}
-            hasProfile={view.hasProfile}
-            slug={slug}
-            disabled={view.job !== null}
-            automatic={view.automatic}
-          />
-          {/* **`ensure`, not `regenerate`.** There is no picture — that is what
-              this state means — so the freshness check will agree, and it has
-              to be the identical request the automatic run makes: a forced
-              press landing inside the auto-start window is a different
-              `work_key`, is not de-duplicated, and buys a second two-minute
-              $0.20 job. useSketch.ts § `ensure`. */}
-          <JobProgress
-            job={view.job}
-            starting={view.starting}
-            failed={view.failed}
-            stalled={view.stalled}
-            onRun={() => view.ensure(useProfile)}
-            onCancel={view.cancel}
-            label="Draw the argument"
-            step="sketch"
-            icon={<PenLine size={13} />}
-            runningLabel="Drawing…"
-          />
-        </div>
-      </div>
-    );
-  }
-
-  if (!sketch || !scene || !painted) return null;
-
-  const notes: string[] = [];
-  if (view.stale) {
-    notes.push(
-      "The article has changed since this was drawn. The shape is still a fair account of the argument; some boxes may no longer lead anywhere.",
-    );
-  }
-  if (view.faults.length > 0) {
-    const lost = view.faults.filter((f) => f.what.includes("not in this article")).length;
-    if (lost > 0) notes.push(`${lost} of its boxes point at passages this article no longer has.`);
-  }
-  if (view.profileChanged) notes.push("It was drawn for a reader profile you have since changed.");
+  /* `sketch` is a prop here and is never null; `scene` and `painted` are
+     derived from it and can be, on an artefact whose scenes do not paint. */
+  if (!scene || !painted) return null;
 
   /**
    * **One body, rendered in whichever container is open.**
@@ -881,20 +1053,7 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
           already there is a product decision this is not. This says what is
           happening and nothing else. The step's own label, off the server, so
           the words are the words the shelf shows for the same run. */}
-      {view.job && (
-        <p className="sk-busy" role="status">
-          <LoaderCircle className="cmt-spinner" size={12} aria-hidden="true" />
-          {view.job.status === "queued"
-            ? "Waiting for the queue…"
-            : (view.job.steps.find((s) => s.name === "sketch")?.label ?? "Drawing…")}
-        </p>
-      )}
-
-      {/* **And the spinner going away is not the same as the work succeeding.**
-          A redraw that came back failed left the picture standing and said
-          nothing, which reads as a completed run that changed nothing — after
-          two minutes and $0.20. The server's own words, per copy.md. ⟨Sol⟩. */}
-      {!view.job && view.failed && <p className="sk-failed">{view.failed.message}</p>}
+      {progress}
 
       {notes.length > 0 && <p className="sk-note">{notes.join(" ")}</p>}
 

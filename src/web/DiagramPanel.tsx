@@ -93,6 +93,7 @@ import { armActivation } from "./activation.js";
 /* The bar's own rule for a control behind the experimental-features switch —
    `visibleKinds` below is this file's caller. */
 import { shownBehindTheSwitch } from "./experimental-visibility.js";
+import type { PublicSketch } from "../public-types.js";
 import { SketchView } from "./SketchView.js";
 import { useSketchCaption } from "./useSketch.js";
 import { ILLUSTRATED_PRICE, ILLUSTRATED_WAIT, IllustratedView } from "./IllustratedView.js";
@@ -115,7 +116,17 @@ import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
  * anything, and `sketch` and `illustrated` mount children that auto-run a job.
  * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2.
  */
-export type DiagramAccess = { kind: "owner" } | { kind: "visitor" };
+export type DiagramAccess =
+  | { kind: "owner" }
+  /**
+   * **The Sketch the owner already paid for, or none at all.**
+   *
+   * `undefined` means nobody has drawn one, which is much the commonest case:
+   * `sketch` is not in `DEFAULT_INGEST_STEPS`, so somebody has to press the
+   * button and wait two to three minutes and spend ~$0.20. A visitor is then
+   * told exactly that and offered nothing — `SketchView`'s visitor arm.
+   */
+  | { kind: "visitor"; sketch?: PublicSketch | undefined };
 
 interface Props {
   access: DiagramAccess;
@@ -643,7 +654,7 @@ export function DiagramPanel({
    * `askedKind` is deliberately not read anywhere else in this component.
    * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2.
    */
-  const kind: DiagramKind = owns ? askedKind : "force";
+  const kind: DiagramKind = owns ? askedKind : "sketch";
   /**
    * **Nothing is collapsed, and nothing can be.**
    *
@@ -1650,7 +1661,19 @@ export function DiagramPanel({
           pressing either of these spends no money on the pictures the reader is
           not looking at. */}
       {kind === "sketch" ? (
-        <SketchView slug={slug} blocks={blocks} atRow={atRow} onJump={onJump} />
+        <SketchView
+          /* **The visitor arm carries no slug**, which is what keeps
+             `useSketch` — and therefore its auto-runner, and therefore ~$0.20 —
+             out of a stranger's browser. SketchView.tsx § SketchAccess. */
+          access={
+            access.kind === "owner"
+              ? { kind: "owner", slug }
+              : { kind: "visitor", sketch: access.sketch }
+          }
+          blocks={blocks}
+          atRow={atRow}
+          onJump={onJump}
+        />
       ) : kind === "illustrated" ? (
         /* No `atRow`: there is no you-are-here mark on a painting. We do not
            know where the illustrator put anything, and a marker placed where the

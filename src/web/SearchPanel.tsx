@@ -425,6 +425,13 @@ const Box = forwardRef<
           ref={box}
           className="srch-input"
           type="search"
+          /* The soft keyboard's Enter key says **Search**, and Enter does
+             search: in meaning mode it asks, and in words mode — where the hits
+             are already following every keystroke — it puts the keyboard away so
+             the reader can see them. A key that promises something and then does
+             nothing is worse than a key with no promise on it.
+             docs/project/touch.md § What the Enter key promises. */
+          enterKeyHint="search"
           value={value}
           placeholder={matcher === "words" ? "find these words…" : "describe what to look for…"}
           aria-label={matcher === "words" ? "Find these words" : "Describe what to look for"}
@@ -433,9 +440,15 @@ const Box = forwardRef<
             else setDraft(e.target.value);
           }}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && ready) {
+            if (e.key === "Enter") {
               e.preventDefault();
-              onAsk(draft);
+              if (ready) onAsk(draft);
+              /* Words mode has nothing to ask — the hits arrived as the reader
+                 typed — so Enter dismisses the keyboard instead. On a phone that
+                 is the whole point of the press; on a desktop it hands the arrow
+                 keys back to the article, which is where they belong
+                 (docs/project/keyboard.md). */
+              else if (matcher === "words") e.currentTarget.blur();
             }
             /* Escape clears the search rather than closing the mode. The mode
                has a button of its own in the bar, and a key that sometimes

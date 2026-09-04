@@ -82,6 +82,7 @@ const AVAILABLE: PublicArtefacts = {
   ideas: false,
   quotes: true,
   timeline: true,
+  sketch: true,
 };
 
 const PRIVATE: ArticleSharing = {
@@ -750,7 +751,7 @@ describe("turning it off", () => {
    * A failed request is not proof that nothing was written. The route writes and
    * then reads back, and a response can be lost on the way home — so the card
    * goes to "we do not know" rather than back to where it was. The same lesson
-   * Delete on this page learned on 2026-08-27.
+   * Archive on this page learned on 2026-08-27.
    *
    * **It has to beat the prop, not just the local state.** `sharing` still holds
    * what the page load said, which after a failed write is exactly the stale

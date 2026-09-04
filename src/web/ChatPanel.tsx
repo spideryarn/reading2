@@ -893,6 +893,8 @@ function RenameRow({
       <input
         ref={ref}
         className="chat-rename"
+        /* Enter saves the name — see the handler below. */
+        enterKeyHint="done"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
@@ -1680,6 +1682,9 @@ function EditQuestion({
       <textarea
         ref={box}
         className="chat-edit-box"
+        /* Enter asks again — the composer's arrangement, and its `enterKeyHint`
+           for the same reason. */
+        enterKeyHint="send"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
@@ -1936,12 +1941,18 @@ export function Composer({
    * the reader types during the handoff is theirs and is not thrown away.
    */
   const submit = async () => {
-    /* **Not while a transcript is on its way.** `readOnly` stops typing and
-       nothing else — Enter still fires, and sending here would post the
-       recogniser's rough guess a moment before the good words arrived, which is
-       the one outcome the two-pass design must not produce. GPT Sol's plan
-       review, item 3. */
-    if (dictate.readOnly) return;
+    /* **Not while the microphone is involved, and that is two states.**
+       `readOnly` is `transcribing` alone — the two seconds *after* the reader
+       presses stop — and sending then would post the recogniser's rough guess a
+       moment before the good words arrived, which is the one outcome the
+       two-pass design must not produce. `armed` is the microphone still being
+       **on**, and that is the state this box actually reaches now that its Enter
+       key says Send: press it mid-sentence and the question goes with Chrome's
+       live guesses in it — or, on Safari and Firefox, with nothing that was said
+       at all — and the microphone keeps running afterwards. GPT Sol's plan
+       review item 3, then its code review of 2026-09-04 for the half that was
+       missing. docs/project/dictation.md § Adding it to a box. */
+    if (dictate.readOnly || dictate.dictation.armed) return;
     const question = value.trim();
     if (question === "" || busy) return;
     setValue("");
@@ -1966,6 +1977,11 @@ export function Composer({
            exactly as chat's does. */
         rows={remember ? 6 : 1}
         value={value}
+        /* **Send, because Enter really does send here** — see the handler below.
+           This is the exception among the app's textareas: everywhere else Enter
+           is a newline and the soft keyboard must not promise otherwise.
+           docs/project/touch.md § What the Enter key promises. */
+        enterKeyHint="send"
         readOnly={dictate.readOnly}
         placeholder={
           busy
@@ -2033,7 +2049,10 @@ export function Composer({
         <button
           type="submit"
           className="chat-send"
-          disabled={busy || dictate.readOnly || value.trim() === ""}
+          /* `armed` beside `readOnly` for the reason `submit` above gives — and
+             a button the guard would refuse must not look pressable, or the
+             reader presses Send while talking and nothing at all happens. */
+          disabled={busy || dictate.readOnly || dictate.dictation.armed || value.trim() === ""}
           title="Send (Enter)"
         >
           {busy ? <LoaderCircle className="cmt-spinner" size={14} /> : <SendHorizontal size={14} />}

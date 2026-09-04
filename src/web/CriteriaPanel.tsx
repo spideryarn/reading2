@@ -715,6 +715,10 @@ function NewCriterion({
           </label>
           <input
             id="crit-against"
+            /* Enter runs the criterion — these two are fields of the form whose
+               submit button is `crit-run`, not steps in a wizard, so `next`
+               would be a lie about where the key goes. */
+            enterKeyHint="go"
             value={against}
             maxLength={200}
             placeholder="a control is missing"
@@ -725,6 +729,7 @@ function NewCriterion({
           </label>
           <input
             id="crit-favour"
+            enterKeyHint="go"
             value={favour}
             maxLength={200}
             placeholder="the controls settle it"
