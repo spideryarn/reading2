@@ -82,13 +82,24 @@ const READER_OFFER = {
   amounts: { usd: 1000, gbp: 800, eur: 900 },
 };
 
+const RESEARCHER_OFFER = {
+  id: "researcher",
+  name: "Spideryarn Researcher",
+  description: "150 articles a month.",
+  ingestsPerPeriod: 150,
+  amounts: { usd: 5000, gbp: 4000, eur: 4500 },
+};
+
 /** A free account that may check out, with Reader on sale. */
 const FREE: BillingSummary = {
   plan: { kind: "free", limit: 3, used: 1 },
-  offers: [READER_OFFER],
   manageable: false,
-  canCheckout: true,
+  purchase: { kind: "checkout", tiers: [READER_OFFER] },
 };
+
+/** What a `fetch` call sent, as the string it sent — never a re-serialisation. */
+const bodyOf = (init?: RequestInit): string | null =>
+  typeof init?.body === "string" ? init.body : null;
 
 const jsonOk = (body: unknown) =>
   new Response(JSON.stringify(body), {
@@ -98,8 +109,16 @@ const jsonOk = (body: unknown) =>
 
 let host: HTMLDivElement;
 let root: Root;
-/** Every request the page made, in order — method and path. */
-let asked: { method: string; url: string }[];
+/**
+ * Every request the page made, in order — method, path, and **the body**.
+ *
+ * The body since 2026-09-05: without it, `startCheckout` mutated to post
+ * `{"tierId":"researcher"}` for every press left this file green while a
+ * remembered *Get Reader* opened a $50 Researcher Checkout. A marker that buys
+ * the wrong plan is worse than one that buys nothing, and nothing here could
+ * see it. GPT Sol, 2026-09-04, finding 3.
+ */
+let asked: { method: string; url: string; body: string | null }[];
 
 beforeEach(() => {
   vi.unstubAllGlobals();
@@ -142,7 +161,7 @@ async function settle(turns = 6): Promise<void> {
 async function show(summary: BillingSummary | null = FREE): Promise<void> {
   vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-    asked.push({ method: init?.method ?? "GET", url });
+    asked.push({ method: init?.method ?? "GET", url, body: bodyOf(init) });
     if (url.includes("/api/billing/usage")) {
       if (summary === null) return new Response("nope", { status: 500 });
       return jsonOk(summary);
@@ -179,7 +198,7 @@ describe("a stranger pressing a plan", () => {
   it("remembers the tier and asks the server nothing at all", async () => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-      asked.push({ method: init?.method ?? "GET", url });
+      asked.push({ method: init?.method ?? "GET", url, body: bodyOf(init) });
       return new Response("nope", { status: 404 });
     });
 
@@ -209,6 +228,11 @@ describe("finishing a purchase that a sign-in interrupted", () => {
 
     expect(checkouts()).toHaveLength(1);
     expect(checkouts()[0]?.method).toBe("POST");
+    /* **And it bought *Reader*, which is the tier the marker named.** A method
+       and a URL say a purchase happened; only the body says which one, and the
+       whole point of the marker is that it survives a sign-in carrying the plan
+       somebody actually pressed. */
+    expect(checkouts()[0]?.body).toBe('{"tierId":"reader"}');
     /* And the marker is gone, which is what makes a real remount — or Back from
        Stripe onto this page — safe rather than lucky. */
     expect(sessionStorage.getItem(KEY)).toBeNull();
@@ -238,13 +262,21 @@ describe("finishing a purchase that a sign-in interrupted", () => {
     expect(host.textContent).toContain("Researcher");
   });
 
-  it("ignores a tier on sale when the account may not check out", async () => {
+  it("ignores a marker for a tier this account may not buy", async () => {
     rememberBuyIntent("reader");
-    /* A subscriber: `canCheckout` is the server's answer to *may this account
-       start a Checkout Session*, and it is a shorter list than "is unentitled".
-       Asking the plan instead is the bug BillingSection.tsx carries a comment
-       about. */
-    await show({ ...FREE, canCheckout: false });
+    /* A Reader who pressed *Get Reader* before signing in, and turns out to be
+       on Reader already. `purchase` is the server's answer to *what may this
+       account buy*, and since 2026-09-04 it is tier-aware: Researcher is on the
+       list and Reader is not, so the marker buys nothing. Asking the plan
+       instead is the bug BillingSection.tsx carries a comment about. */
+    await show({ ...FREE, purchase: { kind: "switch", tiers: [RESEARCHER_OFFER], from: "paid" } });
+
+    expect(checkouts()).toEqual([]);
+  });
+
+  it("ignores a marker entirely when there is nothing this account may buy", async () => {
+    rememberBuyIntent("reader");
+    await show({ ...FREE, purchase: { kind: "top" } });
 
     expect(checkouts()).toEqual([]);
   });
@@ -280,7 +312,7 @@ describe("finishing a purchase that a sign-in interrupted", () => {
     });
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-      asked.push({ method: init?.method ?? "GET", url });
+      asked.push({ method: init?.method ?? "GET", url, body: bodyOf(init) });
       if (url.includes("/api/billing/usage")) {
         await answered;
         return jsonOk(FREE);

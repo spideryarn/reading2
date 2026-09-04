@@ -991,6 +991,47 @@ describe("what counts as a plan change at all", () => {
     ).toEqual(NO_ADJUSTMENT);
   });
 
+  /**
+   * **Ending a trial to switch plan is not a mid-period plan change either — and
+   * the copy on both pages depends on it.**
+   *
+   * `trialing` is an entitled status (src/billing/tiers.ts) and the hosted
+   * Portal is configured `trial_update_behavior: "end_trial"`, so a trialling
+   * reader who switches has their trial ended: the trial period stops at that
+   * moment and a paid one starts, which is a **new period start** on the same
+   * subscription. This branch therefore writes no delta, and the reader gets the
+   * whole of the new tier's allowance rather than a part-month share.
+   *
+   * That is not a bug — a trial nobody paid for has no allowance to prorate away
+   * from — but it made the sentence beside the *Switch plan* button false, which
+   * promised "the larger allowance is added for the part of the month that is
+   * left". `switchingPlan("trial")` (src/billing-plan.ts) says the true thing,
+   * and this is the fact it says. GPT Sol, 2026-09-04, finding 2, reproduced.
+   *
+   * Pinned here rather than argued in a comment, so that a change to the
+   * ordering rule which quietly started prorating this makes the copy red.
+   */
+  it("clears when a trial ends into a new period on the same subscription", () => {
+    const started = new Date(400);
+    const adjustment = change({
+      /* The trial: Reader's price, the period that has just been cut short. */
+      stored: storedReader(),
+      /* The switch: same subscription, Researcher's price, a period beginning
+         now because the trial has just ended. */
+      incoming: {
+        ...PURE_PERIOD,
+        priceId: "price_researcher",
+        periodStart: started,
+        periodEnd: new Date(1400),
+      },
+      now: started,
+    });
+    expect(adjustment).toEqual(NO_ADJUSTMENT);
+    /* And what the wall then allows is the whole 150, read the way admission
+       reads it — not the ~75 a half-period proration would have given. */
+    expect(limitForPeriod(150, started, adjustment, RULES.maxAllowance)).toBe(150);
+  });
+
   /** And a row that has never been synced has no subscription to match against. */
   it("clears when the row names no subscription at all", () => {
     expect(change({ stored: { ...storedResearcher(), subscriptionId: null } })).toEqual(

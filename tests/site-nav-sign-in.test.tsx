@@ -60,6 +60,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 
 const { PricingPage } = await import("../src/web/PricingPage.js");
 const { FeaturesPage } = await import("../src/web/FeaturesPage.js");
+const { PublicLibraryPage } = await import("../src/web/PublicLibraryPage.js");
 
 /* Otherwise every `act()` here prints "the current testing environment is not
    configured to support act(...)" and React declines to flush effects inside
@@ -164,6 +165,31 @@ describe("/features", () => {
        the shelf has no sign-in panel. Asserted by absence rather than by
        resolving the fragment, because the target is on another page and this
        document cannot be asked about it. */
+    expect(signIn(page)).toBeNull();
+    expect(deadFragments(page)).toEqual([]);
+  });
+});
+
+/**
+ * **The fourth page to draw this bar, and the reason the condition inside it
+ * changed shape** — src/web/SiteBits.tsx § `signedIn`.
+ *
+ * The destination used to be chosen by naming the pages that *lack* a panel
+ * (`here === "features" ? "/#sign-in" : "#sign-in"`), which is a list that has
+ * to be extended every time a page joins the bar and fails silently when it is
+ * not: `/read/public` has no panel, so under the old form it would have drawn a
+ * bare `#sign-in` naming nothing on the page. It is now chosen by naming the two
+ * that *have* one. Watched failing on the first case here, 2026-09-04.
+ */
+describe("/read/public", () => {
+  it("sends a stranger to the landing page's panel, path and all", async () => {
+    const page = await show(<PublicLibraryPage signedIn={false} />);
+    expect(signIn(page)?.getAttribute("href")).toBe("/#sign-in");
+    expect(deadFragments(page)).toEqual([]);
+  });
+
+  it("draws no sign-in link for a reader who is already signed in", async () => {
+    const page = await show(<PublicLibraryPage signedIn />);
     expect(signIn(page)).toBeNull();
     expect(deadFragments(page)).toEqual([]);
   });

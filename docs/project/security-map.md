@@ -82,7 +82,8 @@ An agent about to edit one of these is editing a defence, not a helper.
 |---|---|
 | [`src/sanitize-policy.ts`](../../src/sanitize-policy.ts) | **one policy**: DOMPurify config, embed allowlist, hooks. Node-free, so both bindings share it |
 | [`src/sanitize.ts`](../../src/sanitize.ts) | the server binding, called from stage 3 in [`src/blocks.ts`](../../src/blocks.ts) — cleans the stored artefact |
-| [`src/web/sanitize.ts`](../../src/web/sanitize.ts) | the browser binding, at article ingress in [`App.tsx`](../../src/web/App.tsx) — guards the render |
+| [`src/web/sanitize.ts`](../../src/web/sanitize.ts) | the browser binding, at article ingress in [`App.tsx`](../../src/web/App.tsx) — guards the render. **Policy only**: it must stay byte-for-byte what the server binding produces, and `tests/sanitize-client.test.ts` says so |
+| [`src/web/external-links.ts`](../../src/web/external-links.ts) | not a defence, but it *rests* on one: `target="_blank" rel="noopener noreferrer"` on every outbound link, written at ingress **after** the sanitiser has stripped the author's own `target`. It lives outside the sanitiser for the reason in the row above |
 | [`src/routes.ts`](../../src/routes.ts) | `slugPart()` for every capture that becomes a directory name; the one `requireUser` call |
 | [`src/slug.ts`](../../src/slug.ts) | what a slug may be — two rules, one per question (mint? read?) |
 | [`src/auth.ts`](../../src/auth.ts) | the gate: `requireUser`, and `isAllowed` |
@@ -96,6 +97,7 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/public/dto.ts`](../../src/public/dto.ts) | **the allowlist, as code** — every key a stranger receives, constructed rather than filtered. See below |
 | [`src/store/public-slug.ts`](../../src/store/public-slug.ts) | `publicSlug()` — slug **and** `visibility = 'public'`, the one ownerless *lookup* |
 | [`src/store/public-library.ts`](../../src/store/public-library.ts) | `publicLibraryQuery()` — the one ownerless *listing*. See below |
+| [`src/web/PublicLibraryPage.tsx`](../../src/web/PublicLibraryPage.tsx) | the page that draws it — **the only defence it holds is which route it asks**. See below |
 
 The tests are the specification: `tests/sanitize.test.ts`, `tests/sanitize-client.test.ts`,
 `tests/routes.test.ts`, `tests/slug.test.ts`, `tests/owner-isolation.test.ts`,
@@ -143,14 +145,16 @@ the shelf.
 therefore a **closed query rather than a reusable predicate** — there is no exported
 *"visibility is public"* clause for anybody to bolt onto another query — and it carries the same
 readability bar as `loadArticle`/`loadHead` (a tree and at least one block), so a damaged revision
-cannot become a card whose destination 404s. It selects seven named columns, orders totally, and is
-bounded.
+cannot become a card whose destination 404s. It selects eight named columns, orders totally, and is
+bounded. Every one of the eight is a fact about the *document* — the eighth, added the same day, is
+`byline`, the author the publisher's own page declared. Nothing in the projection names the reader
+who shared it.
 
 **The existing static guard could not have caught a bad one.** `tests/owner-isolation.test.ts` greps
 `src/store/` for `eq(articles.slug, …)`, and a listing has no slug in it. That file now has a second
 section, *ownerless enumeration*, which inventories every query naming the `articles` table
 reachable from the public import graph, permits exactly two, reads the listing's **generated SQL**
-for the public predicate and the absence of `owner_id`, pins its seven columns, and runs it against
+for the public predicate and the absence of `owner_id`, pins its eight columns, and runs it against
 two owners over private, public-readable and public-but-unreadable rows. Each of those was watched
 failing against a deliberately broken query before it was believed.
 
@@ -170,12 +174,42 @@ past the regex it replaced.
 `<h1>`, so the listing's projection caps every text column it returns with `left()` **in the SQL** —
 after the rows are built it is too late, the bytes have crossed. `PUBLIC_CARD_CHARS` in
 [`src/store/public-library.ts`](../../src/store/public-library.ts) holds the numbers, and a fixture
-with a 5,000-character title, gist, site name and `<h1>` measures them. A partial index
+with a 5,000-character title, gist, site name, byline and `<h1>` measures them. A partial index
 (`articles_public_listing`, `drizzle/20260904175802_*`) covers `visibility = 'public'` in the
 listing's exact order, so `limit` bounds the database's work and not only the reply.
 
 It also refuses to work at all on the filesystem store — `requirePostgres()` answers 501 — so a
 misconfigured dev server cannot serve a half-implemented public path.
+
+#### And since 2026-09-04 there is a page over it, which holds one defence
+
+`/read/public` ([public-shelf.md](public-shelf.md), `PublicLibraryPage` in
+[`src/web/PublicLibraryPage.tsx`](../../src/web/PublicLibraryPage.tsx)) is now the **third**
+signed-out surface, after `/read/<slug>` and the marketing pages. A page is not where the predicate
+lives and it must not become one, so the only thing it can get wrong is worth naming exactly: **a
+page can leak a private article in one way, by asking for one.** The listing route cannot answer with
+one whatever happens to it later; an owner-scoped route asked from this page would.
+
+So the guard is an inventory rather than an absence — `tests/public-shelf-page.test.tsx` records the
+page's whole conversation with the server and asserts it is one request, to `/api/public/library`,
+with `credentials: "omit"`, no `Authorization`, and **no call into the auth module at all** (that
+module is stubbed wholesale, because a mount effect reaching for a session would make no request and
+leave a URL list looking clean). It asserts the same request signed in as signed out, which is the
+rule the whole namespace follows and is the property the obvious "improvement" — enrich the page for
+somebody who has an account — would break. A test that seeded a private article and looked for its
+title in the DOM would have gone green the day somebody swapped the loader for `useShelf`.
+
+**The inventory is of the page's requests, not of the tab's, and that is a known hole rather than an
+oversight.** Production mounts `App`, which initialises a session and starts the job service before
+it reaches this branch, so an `App` arm that later wrapped this page in something owner-scoped would
+leave every assertion green. GPT Sol raised it reviewing the built page, 2026-09-04; closing it needs
+a suite that renders `<App />` and **nothing in `tests/` does**, so it is recorded as the next guard
+rather than half-built. It is a gap in the guard and not a disclosure: today's branches render this
+page and nothing else.
+
+**The page shows the shelf is not the catalogue**, which is a smaller point and still worth one
+sentence: its own copy says an article that is not listed is one nobody has shared, so a reader
+cannot mistake absence for concealment. [privacy.md](privacy.md) is what an owner is told.
 
 **Diagram used to be deliberately *not* here, and since 2026-09-04 it is.** `POLICY` marked it
 owners-only unconditionally, because its pictures POST for embeddings and spend money. What changed
@@ -209,6 +243,18 @@ discoverability, not authority.
 > start.** Sketch reaches its ~$0.20 cost through `useSketch`'s auto-runner and `armActivation`,
 > not through the two POSTs named above, so an audit that checks only those two would clear it
 > wrongly — which is the same shape of mistake as `useSketchCaption` above.
+
+**That was built later the same day, and this is where the boundary now is.** A visitor's picture is
+the Sketch, out of the payload (`PublicSketch`), and `useSketch` is mounted in exactly one component
+— `OwnerSketch` — which the visitor arm of `SketchAccess` never reaches, because that arm **has no
+slug in it**. `SketchView` was split into that owner half and a presentational `SketchBody` for this
+reason and no other: a `readOnly` prop would have left the auto-runner mounted for a stranger.
+`profileHash` is the field to notice not crossing — it is who the drawing was made for.
+
+The check that would fail if this were undone is
+`tests/public-network-trace.test.tsx`: handing every reader `{ kind: "owner", slug }` turns eleven
+of its tests red, and the failure output shows a visitor being offered *$0.20* and *Draw the
+argument*. Verified by doing it, 2026-09-04.
 
 
 ### The owner is shown the inventory before they publish
@@ -248,6 +294,14 @@ computed, sent and read by nothing for the first day, so an article with no arc 
 mode of its own", which is the mistake written out and still not seen. GPT Sol's review found it.
 The tests that missed it compared all-flags-false against all-flags-true, which agrees with a
 function that ignores a flag entirely; the ones there now turn on **one flag at a time**.
+
+**The tick-box is not a rights check, and the other half of the protection is a takedown route.**
+It moves responsibility onto the owner; nothing verifies that they hold the rights, and nothing
+could. So since 2026-09-04 there is one place a wronged rightsholder can write —
+[privacy.md § If something here is yours](privacy.md#if-something-here-is-yours), a section rather
+than a page, linked from the two surfaces a stranger meets a republished article on. There is
+deliberately **no** administrator path that unpublishes anybody's article: the mechanism is the
+owner's own sharing switch, and a person decides.
 
 **`StageState.done` is the wrong signal, and this is the trap.** It is
 `status === "done" && isCurrent(step)`, so a **stale** artefact reports `done: false` — while

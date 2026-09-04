@@ -25,8 +25,10 @@ import {
   describeAmounts,
   describePlan,
   formatAmount,
+  isPurchase,
   planEndsAt,
   readableDate,
+  switchingPlan,
 } from "../src/billing-plan.js";
 import type { ReaderPlan } from "../src/billing-plan.js";
 import { QUOTA_CODES, codeOfMessage, ingestQuotaReached, isQuotaRefusal } from "../src/messages.js";
@@ -292,5 +294,90 @@ describe("which failures get an upgrade link beside them", () => {
     expect(isQuotaRefusal("Something went wrong")).toBe(false);
     expect(isQuotaRefusal(null)).toBe(false);
     expect(isQuotaRefusal("")).toBe(false);
+  });
+});
+
+/**
+ * **The sentence beside a *Switch plan* button, which is two sentences.**
+ *
+ * All three claims the paid one makes are false out of a free trial: the Portal
+ * is configured `trial_update_behavior: "end_trial"`, so there is no difference
+ * to invoice, the current period does not stay where it was, and — because the
+ * period start moves — `nextQuotaAdjustment` writes no prorated delta and the
+ * reader gets the whole new allowance. GPT Sol, 2026-09-04, finding 2. The quota
+ * half is pinned in tests/billing-quota-adjustment.test.ts, where the arithmetic
+ * lives; these are the words.
+ */
+describe("what a switch says it will do", () => {
+  it("keeps the paid claims for a paid month", () => {
+    const paid = switchingPlan("paid");
+    expect(paid).toContain("invoices the difference");
+    expect(paid).toContain("your renewal date does not move");
+    expect(paid).toContain("part of the month that is left");
+  });
+
+  it("makes none of those three claims to somebody on a trial", () => {
+    const trial = switchingPlan("trial");
+    expect(trial).toContain("ends your free trial");
+    expect(trial).not.toContain("invoices the difference");
+    expect(trial).not.toContain("your renewal date does not move");
+    expect(trial).not.toContain("part of the month that is left");
+  });
+
+  it("still says where the press lands, in both", () => {
+    /* The one clause that is true of every switch, and the reason the sentence
+       exists: the press opens somebody else's page, where the plan has to be
+       chosen again. */
+    for (const from of ["paid", "trial"] as const) {
+      expect(switchingPlan(from)).toContain("Stripe's own billing page");
+    }
+  });
+});
+
+/**
+ * **The non-empty tuple, checked at the one place it is not a compile-time
+ * claim.**
+ *
+ * `readJson<BillingSummary>` is `JSON.parse(text) as T` (src/web/lib/api.ts), so
+ * during a deploy a browser can receive a body the type says is impossible. A
+ * reply carrying the `canCheckout`/`offers` pair `purchase` replaced has no
+ * `purchase` at all, and `summary.purchase.kind` on `undefined` throws inside a
+ * render. GPT Sol, 2026-09-04, finding 5.
+ */
+describe("whether a wire body really is a Purchase", () => {
+  it("accepts the four shapes the server sends", () => {
+    const tier = { id: "reader", name: "Reader", description: "", ingestsPerPeriod: 20, amounts: { usd: 1000 } };
+    expect(isPurchase({ kind: "none" })).toBe(true);
+    expect(isPurchase({ kind: "top" })).toBe(true);
+    expect(isPurchase({ kind: "checkout", tiers: [tier] })).toBe(true);
+    expect(isPurchase({ kind: "switch", tiers: [tier], from: "paid" })).toBe(true);
+  });
+
+  it("refuses the shape a server from before 2026-09-04 sends", () => {
+    /* The real regression: `canCheckout` and `offers`, and no `purchase` — so
+       the field this is asked about is `undefined`. */
+    expect(isPurchase(undefined)).toBe(false);
+    expect(isPurchase(null)).toBe(false);
+  });
+
+  it("refuses an offer of nothing dressed as an offer of something", () => {
+    /* The tuple's whole point: *there is something to buy, and here are none of
+       them* is the state a filtered list beside a boolean could always reach. */
+    expect(isPurchase({ kind: "checkout", tiers: [] })).toBe(false);
+    expect(isPurchase({ kind: "switch", tiers: [], from: "paid" })).toBe(false);
+  });
+
+  it("refuses a switch that does not say which kind of switch it is", () => {
+    /* Defaulting it would be the bug: a `switch` from a server that predates
+       `from` would be shown the paid sentence, which is the false-copy defect
+       found in the same review. */
+    const tier = { id: "reader", name: "Reader", description: "", ingestsPerPeriod: 20, amounts: { usd: 1000 } };
+    expect(isPurchase({ kind: "switch", tiers: [tier] })).toBe(false);
+    expect(isPurchase({ kind: "switch", tiers: [tier], from: "sideways" })).toBe(false);
+  });
+
+  it("refuses a door nobody has built", () => {
+    expect(isPurchase({ kind: "upgrade" })).toBe(false);
+    expect(isPurchase({})).toBe(false);
   });
 });

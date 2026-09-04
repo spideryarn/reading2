@@ -134,6 +134,13 @@ apt_get() {
 systemctl stop apt-daily.timer apt-daily-upgrade.timer unattended-upgrades 2>/dev/null || true
 
 echo "=== swap ==="
+# Creates swap once; it deliberately does NOT resize existing swap. Growing it
+# in place needs `swapoff`, which forces every swapped page back into RAM at
+# once - on the loaded box that makes you want more swap, that is the OOM you
+# were trying to avoid. To add swap to a box that already has some, append a
+# second file instead (safe, no swapoff, takes effect immediately):
+#   docs/reusable/diagnose-box-resources.md - "Add swap without disrupting anything"
+# So raising swap_gb reaches new boxes only. Existing ones need the manual step.
 if [ ! -f /swapfile ]; then
   fallocate -l ${GJD_SWAP_GB}G /swapfile
   chmod 600 /swapfile

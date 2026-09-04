@@ -242,7 +242,7 @@ describe("the Export button", () => {
    * **No row, no button.** The reading view answers an unknown address with the
    * example fixture, so this page can be showing an article that has no row of
    * its own — and `GET /api/export/:slug` is owner-scoped, so the button's only
-   * possible outcome there is a 404. The same rule Delete and the sharing
+   * possible outcome there is a 404. The same rule Archive and the sharing
    * switch keep.
    */
   it("is withheld when the page is showing the example fixture", async () => {

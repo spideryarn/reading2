@@ -7674,13 +7674,13 @@ export async function serveAuthenticatedApi(
      * door it is being sent through — the two look identical to
      * `location.assign`. **Ours does not use it**, and that was a decision
      * rather than an omission: it navigates immediately, and a sentence rendered
-     * for the half-second before a navigation is a sentence nobody reads. What
-     * the page does instead is not offer Upgrade to an account whose press would
-     * only reach the Portal (`canCheckout`, src/billing-plan.ts), which removes
-     * the case rather than explaining it. The field stays because the two
-     * outcomes really are different and a caller that wanted to wait could say
-     * so. This comment claimed the client explained it; it did not.
-     * GPT Sol, 2026-09-03.
+     * for the half-second before a navigation is a sentence nobody reads. The
+     * page says which door it is before the press instead of after it: since
+     * 2026-09-04 `summary.purchase` (src/billing-plan.ts) carries the same
+     * distinction, so a subscriber's button reads *Switch plan* and the sentence
+     * under the cards names the Portal. The field stays because the two outcomes
+     * really are different and a caller that wanted to wait could say so. This
+     * comment claimed the client explained it; it did not. GPT Sol, 2026-09-03.
      *
      * **200, not 302.** A redirect would be answered by `fetch` before the page
      * could say anything, and the client is an SPA that navigates itself.

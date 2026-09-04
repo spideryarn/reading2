@@ -1009,6 +1009,60 @@ fetch only inside its own mode — but because the panel and the marks *must* be
 Computing them twice from the same inputs would work until the day one side gained a filter, and
 then the list and the highlights would quietly disagree. Same shape as the glossary's `onSelected`.
 
+## A visitor reads the saved searches and asks nothing
+
+Since 2026-09-04 a shared link carries the owner's saved runs, and Greg drew the line at making one:
+
+> Only owner can create new searches. Everyone else can see the ones they have already created.
+>
+> — Greg, 2026-09-04
+
+So a visitor gets the list, the ticks, the colours, the marks in the prose and the sort controls.
+They do not get the composer, the ↺, the palette, the delete, or the retry — and they do not get the
+**words matcher** either, which is the one thing here that costs nothing and was left out anyway.
+The reason is the box: it is one `<input>` over both matchers
+([§ The box keeps what you typed](#the-box-keeps-what-you-typed-when-you-switch-matcher)), so
+offering words alone would have meant splitting it. Greg's rule was the simpler version first, and
+this is the note saying it is a small follow-up rather than a decision against it.
+
+**How it is enforced, in three places rather than one**, because each closes something the others
+cannot:
+
+- [`SearchPanel`](../../src/web/SearchPanel.tsx) takes a `SearchAccess` union whose visitor arm
+  carries **none of the four verbs**. There is no `onDelete` to call, rather than a disabled button.
+  The three fetch flags — `loaded`, `loadFailed`, `error` — are on the owner's arm too, because they
+  are facts about a request a visitor never makes.
+- `?match=` is **pinned** to `meaning` in `useSearchMode` ([`App.tsx`](../../src/web/App.tsx)),
+  in the component, whatever the URL says. Hiding the toggle would not have been enough: `?match=`
+  is ordinary query state and a pasted link walks straight past a control that was merely not drawn.
+  The same pin `DiagramPanel` puts on `?diagram=`.
+- **`useSearch` is mounted in `SearchBand` alone.** `VisitorSearchBand` is a second component
+  because React forbids a conditional hook, and it is handed no slug —
+  [reader-capability.ts](../../src/web/reader-capability.ts) is the argument in full.
+  `tests/public-network-trace.test.tsx` asserts `/api/search/:slug` is never requested.
+
+**What crosses, and the one field that is disclosure rather than prose.** `PublicSearchRun`
+(`src/public-types.ts`) is `id`, `criterion`, `createdAt`, `hits`, `colour?` and `stale`. `criterion`
+is **the reader's own writing** — the same kind of thing a comment's body is — and it is named as
+such so nobody has to rediscover it while deciding what a future field is. Out go `articleId`,
+`ownerId`, `model`, `error`, `attemptId` and `attemptStartedAt`, and **only finished runs cross at
+all**, refused in SQL by `PUBLIC_SEARCHES_WHERE` rather than in a projection.
+
+**`sourceHash` is the interesting absence**, and the only column in the whole public surface that is
+selected without being a promise about the wire. The visitor's question is *is this still about the
+article I am reading*, and the hash is our way of answering it rather than theirs — so it crosses as
+the derived `stale` boolean, computed by the same
+[`isStale`](../../src/search-stale.ts) the owner's hook calls, against the fingerprint of the very
+blocks in the same payload. **The failure that has is silent and one-directional**: get the hash
+inputs wrong and every saved search on every shared article wears *older version*, which reads as a
+fact about the article rather than a bug. `tests/public-visibility-pg.test.ts` therefore asserts a
+run whose hash matches comes back **not** stale — the positive control, without which a derivation
+hardwired to `true` passes.
+
+The plan is
+[260904c-more-modes-on-a-shared-link.md](../plans/260904c-more-modes-on-a-shared-link.md) § Stage 4;
+what an owner is told about it is [privacy.md](privacy.md) and the sharing card's own inventory.
+
 ## The third search: the whole library at once
 
 Everything above is **inside one article**. On 2026-08-26 a third search arrived, on the home page,

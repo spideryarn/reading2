@@ -9,7 +9,36 @@
          back to the chrome by the `--safe-*` tokens in styles.css § tokens.
          Nothing else may assume the viewport starts at a safe pixel.
          docs/plans/260828av-mobile-screen-real-estate.md § 2. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- `interactive-widget=resizes-content` since 2026-09-04: it ASKS the
+         browser to let the on-screen keyboard shrink the LAYOUT viewport, so
+         `dvh` and `position: fixed` see the room that is actually left. Without
+         it the keyboard moves only the visual viewport, every viewport unit
+         keeps the full height, and a dialog sized in `dvh` puts its buttons
+         underneath the keys — which is what Greg reported from an installed iOS
+         app, where there is no accessory bar carrying "Done" to get out of the
+         box with either. `.fb-panel` in styles.css is what it was added for.
+
+         **It is a Chromium fix. Do not read it as an iOS one.** WebKit's
+         implementation bug is open (bugs.webkit.org/show_bug.cgi?id=259770) and
+         what iOS does instead is pan the visual viewport over a layout viewport
+         that stays full height. Nobody here has watched this key change anything
+         on a phone. The claim that "an installed standalone app resizes on its
+         own" stood in this comment for a few hours on 2026-09-04 and was never
+         checked by anyone; GPT Sol pointed at it and it is withdrawn.
+
+         What does not depend on the browser honouring it is
+         `src/web/useVisualViewport.ts`: the dialogs read `window.visualViewport`
+         and place themselves inside the part the reader can see. This key is
+         still worth having — where it is honoured it fixes every `dvh` in the
+         app at once — but it is the belt, not the braces.
+
+         It had been deferred once, knowingly, as "an app-wide change to how
+         every page reacts to a keyboard … not being made blind" (the note on
+         `.cmt-dialog`). What changed is that a reader hit the consequence. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <!-- Only what the tab says between the first byte and React's first paint.
          Every page sets its own from src/web/page-title.ts — see
          docs/project/page-titles.md — so this is deliberately the bare name

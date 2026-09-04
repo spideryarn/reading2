@@ -46,12 +46,14 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { articleRevisions, articles, comments, revisionBlocks } from "../db/schema.js";
+import { articleRevisions, articles, comments, revisionBlocks, searchRuns } from "../db/schema.js";
 import { headingTitleOf } from "../library-scalars.js";
 import { log } from "../log.js";
 import { STORAGE_FAILED } from "../messages.js";
 import type { PublicArticle, PublicBlock } from "../public-types.js";
 import { sanitizeStoredBlocks } from "../sanitize.js";
+import { isStale } from "../search-stale.js";
+import { hashBlocks } from "../source-hash.js";
 import { isSlug } from "../ingest.js";
 import { publicSlug } from "./public-slug.js";
 import { publicArticle } from "../public/dto.js";
@@ -286,6 +288,11 @@ const PUBLIC_PROJECTIONS = {
        never having had a timeline. Nothing goes red anywhere.
        tests/public-projection-columns.test.ts is what would. */
     timeline: articleRevisions.timeline,
+    /* **The seventh, and the one that cost real money to make.** A visitor sees
+       the Sketch the owner already paid for; nothing on their side can start
+       another. docs/project/security-map.md § the hazard this section is really
+       about. */
+    sketch: articleRevisions.sketch,
   },
   /**
    * **Enough to fill in a `<head>`, and deliberately not enough to render.**
@@ -459,6 +466,58 @@ export function publicCommentsQuery(
 }
 
 /**
+ * **Finished runs only**, and the same argument `PUBLIC_COMMENTS_WHERE` makes
+ * one screen up.
+ *
+ * A `pending` run is a model call still in flight and an `error` one is a call
+ * that failed. Neither is an answer, and a visitor can do nothing about either:
+ * the owner's panel offers a spinner and a retry button, and both of those are
+ * spend. Published without them, an unfinished run is a row that says nothing
+ * and never will.
+ *
+ * **In the `where` rather than in a `map`**, because a filter in a projection is
+ * one satisfied typechecker away from being widened, and a row that was never
+ * selected has to be put back on purpose.
+ */
+const PUBLIC_SEARCHES_WHERE = sql`${searchRuns.status} = 'done'`;
+
+/**
+ * **A public article's saved searches — its own query, never the owner's
+ * reader**, for the two reasons `publicCommentsQuery` gives above and does not
+ * repeat: the owner's `list` maps every operational column, and *"obtain an
+ * article id, then read a child table by id"* is the exact escape hatch
+ * tests/public-imports.test.ts exists to close. So: named columns, a join back
+ * to `articles`, and **`publicSlug` repeated in this query's own `where`**.
+ *
+ * **`sourceHash` is selected and does not cross.** It is what
+ * `isStale` compares against the fingerprint of the blocks in this same
+ * payload, and the caller turns the answer into `PublicSearchRun.stale`. That
+ * is the one column here whose presence in the `select` is not a promise about
+ * the wire — see the mapping in `loadArticle`, which is where it stops.
+ *
+ * Ordered like the owner's read, so a visitor and the owner see one list in one
+ * order.
+ */
+export function publicSearchesQuery(
+  db: Pick<ReturnType<typeof getDb>, "select">,
+  slug: string,
+) {
+  return db
+    .select({
+      id: searchRuns.id,
+      criterion: searchRuns.criterion,
+      hits: searchRuns.hits,
+      colour: searchRuns.colour,
+      createdAt: searchRuns.createdAt,
+      sourceHash: searchRuns.sourceHash,
+    })
+    .from(searchRuns)
+    .innerJoin(articles, eq(articles.id, searchRuns.articleId))
+    .where(and(publicSlug(slug), PUBLIC_SEARCHES_WHERE))
+    .orderBy(asc(searchRuns.createdAt), asc(searchRuns.id));
+}
+
+/**
  * A public article's blocks — **and `note` is not selected**, rather than
  * projected away afterwards.
  *
@@ -570,6 +629,39 @@ export const pgPublicReader: PublicArticleReader = {
          no point reading anybody's comments for a page that will not be
          served. */
       const commentRows = await publicCommentsQuery(db, slug);
+      const searchRows = await publicSearchesQuery(db, slug);
+
+      /**
+       * **The article's fingerprint, from the rows this read already has.**
+       *
+       * `hashBlocks` (src/source-hash.ts) over `rows` — not over `blocks`,
+       * which have been through the sanitiser, and not over a second query.
+       * Three things make the two agree, and all three have to hold or every
+       * saved search silently reports itself stale:
+       *
+       *  1. `sourceHashQuery` in pg.ts hashes `revision_blocks` for
+       *     `articles.current_revision_id`, and `publicBlocksQuery` above
+       *     fetches `revision_blocks` for the current revision. The same rows.
+       *  2. Both order by `ordinal`, and the hash is order-sensitive.
+       *  3. Both feed it `id`, `text`, `role`, `treatment` — the four fields
+       *     `BlockFingerprint` names, and no others.
+       *
+       * The failure this can have is one-directional and quiet: get it wrong
+       * and every run wears *older version*, which reads as a fact about the
+       * article rather than as a bug. So the test that covers it asserts a run
+       * whose hash matches comes back **not** stale — the positive control,
+       * without which a derivation hardwired to `true` passes.
+       */
+      const current = rows.length
+        ? hashBlocks(
+            rows.map((row) => ({
+              id: row.blockId,
+              text: row.text,
+              role: row.role,
+              treatment: row.treatment,
+            })),
+          )
+        : undefined;
 
       return publicArticle({
         slug: found.slug,
@@ -589,6 +681,7 @@ export const pgPublicReader: PublicArticleReader = {
         quotes: found.revision.quotes,
         tweets: found.revision.tweets,
         timeline: found.revision.timeline,
+        sketch: found.revision.sketch,
         /* `null` columns become absent keys, exactly as the artefacts do — the
            mapping is here rather than in the DTO because Drizzle hands back
            `null` and `Comment` says `undefined`. */
@@ -604,6 +697,27 @@ export const pgPublicReader: PublicArticleReader = {
           /* Required by `Comment` and constant by construction: the query
              refuses every other value (PUBLIC_COMMENTS_WHERE), and the public
              DTO drops the field. Written out rather than cast so that a change
+             to the predicate has somewhere obvious to disagree. */
+          status: "done" as const,
+        })),
+        searches: searchRows.map((row) => ({
+          id: row.id,
+          criterion: row.criterion,
+          hits: row.hits,
+          createdAt: row.createdAt.toISOString(),
+          ...(row.colour === null ? {} : { colour: row.colour }),
+          /* **Where `sourceHash` stops.** It was selected so that this line
+             could ask the question; what leaves the server is the answer.
+             `isStale` is the same function the owner's panel calls, which is
+             what stops two definitions of *current* existing at once —
+             src/search-stale.ts says why it is a module of its own. */
+          stale: isStale(
+            { ...(row.sourceHash === null ? {} : { sourceHash: row.sourceHash }) },
+            current,
+          ),
+          /* Required by `SearchRun` and constant by construction: the query
+             refuses every other value (PUBLIC_SEARCHES_WHERE), and the public
+             DTO drops the field. Written out rather than cast, so that a change
              to the predicate has somewhere obvious to disagree. */
           status: "done" as const,
         })),

@@ -104,8 +104,10 @@ import {
 } from "./router.js";
 
 /**
- * **The three pages this row can link to**, and therefore the only three
- * answers to "which page am I" that change anything.
+ * **The four pages this row can link to**, and therefore the only four answers
+ * to "which page am I" that change anything. It said three until 2026-09-04, and
+ * had done since `/pricing` was added to `LINKS` below without this sentence
+ * following it.
  *
  * A subset of `Route["kind"]` rather than the whole union, and the subtraction
  * is the point: `here="profile"` is meaningless — no link would drop — and

@@ -69,6 +69,7 @@ const NOTHING_BUILT: PublicArtefacts = {
   ideas: false,
   quotes: false,
   timeline: false,
+  sketch: false,
 };
 const EVERYTHING_BUILT: PublicArtefacts = {
   arc: true,
@@ -77,6 +78,7 @@ const EVERYTHING_BUILT: PublicArtefacts = {
   ideas: true,
   quotes: true,
   timeline: true,
+  sketch: true,
 };
 
 /**
@@ -106,6 +108,7 @@ function only(built: keyof PublicArtefacts): PublicArtefacts {
     glossary: built === "glossary",
     ideas: built === "ideas",
     timeline: built === "timeline",
+    sketch: built === "sketch",
   };
 }
 
@@ -145,9 +148,18 @@ describe("what a visitor is told, mode by mode", () => {
    * the artefact one. Timeline is asserted under the artefact sweep below
    * instead, with the glossary and the quotes.
    * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1.
+   *
+   * **`search` left the same day**, and it is the more interesting of the two
+   * because it did *not* become an artefact mode. It is `available`: an article
+   * nobody has searched is an empty panel rather than a boundary, which is the
+   * call GPT Sol talked this plan into — *"No saved items yet is content inside
+   * an accessible panel, not something preventing access."* So it is asserted
+   * under the free sweep below, with `diagram`, and what stops a visitor
+   * spending is the `SearchAccess` union rather than this table.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
    */
   it("names the modes that spend as the owner's, whatever the flags say", () => {
-    for (const mode of ["chat", "search", "remember", "referee"] as const) {
+    for (const mode of ["chat", "remember", "referee"] as const) {
       for (const flags of [NOTHING_BUILT, EVERYTHING_BUILT]) {
         expect(visitorGap(mode, flags)).toEqual({
           kind: "owners-only",
@@ -249,7 +261,19 @@ describe("what a visitor is told, mode by mode", () => {
        it — DiagramPanel.tsx § DiagramAccess — because the panel *can* buy, and
        the visitor arm is what stops it.
        docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */
-    const ALWAYS_FREE: Mode[] = ["plain", "hierarchy", "outline", "summary", "diagram"];
+    /* **`search` joined this list on 2026-09-04.** Free in the sense this list
+       means it — a visitor's band mounts no hook and issues no request — even
+       though the runs on it cost the owner a model call each. What a visitor
+       gets is the answers somebody already paid for, which is the same bargain
+       `diagram` makes with the Sketch. */
+    const ALWAYS_FREE: Mode[] = [
+      "plain",
+      "hierarchy",
+      "outline",
+      "summary",
+      "diagram",
+      "search",
+    ];
     expect([...markedModes(NOTHING_BUILT).keys()].sort()).toEqual(
       MODES.filter((m: Mode) => !ALWAYS_FREE.includes(m))
         .slice()
@@ -270,7 +294,7 @@ describe("what a visitor is told, mode by mode", () => {
        `POLICY` record now, and there is no fall-through left to reach.
        docs/plans/260831an-referee-mode-for-peer-reviewers.md. */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
-      ["chat", "referee", "remember", "search"].sort(),
+      ["chat", "referee", "remember"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. */
     for (const built of ["glossary", "ideas", "quotes", "timeline"] as const) {
@@ -293,7 +317,11 @@ describe("what a visitor is told, mode by mode", () => {
         /* Free since 2026-09-04: the picture is drawn from the tree in the
            payload, and the panel's visitor arm buys nothing.
            docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */
-        mode === "diagram"
+        mode === "diagram" ||
+        /* And the same day: the saved runs come in the payload, and the visitor
+           arm of `SearchAccess` carries none of the four verbs.
+           docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
+        mode === "search"
       ) {
         expect(gap, mode).toBeNull();
       } else {
@@ -382,6 +410,7 @@ describe("what the payload says it has", () => {
        `assets` step, so the reader hot-links exactly as before. src/assets.ts. */
     assets: undefined,
     comments: [],
+    searches: [],
     tree: { version: "t", generator: "t", slug: "a-piece", rootId: "n0", nodes: {} },
   };
 
@@ -393,6 +422,7 @@ describe("what the payload says it has", () => {
       ideas: false,
       quotes: false,
       timeline: false,
+      sketch: false,
     });
     expect(
       artefactsIn({

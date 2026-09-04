@@ -26,20 +26,32 @@
        See docs/project/typechecking.md. */
     "paths": { "@/*": ["./*"] }
   },
-  /* `../*.d.ts` is not the client's own code, and it is here for a reason worth
-     stating: `useStepJob.ts` takes a **type-only** import from `src/pipeline.ts`
-     (§ `StepBefore`, the ordering `precededBy` is checked against). Nothing of
-     that reaches the browser — `import type` is erased — but tsc still walks the
-     module for its types, and the pipeline reaches `src/fetch.ts` and
-     `src/pdf.ts`, whose untyped dependencies are declared in `src/*.d.ts`.
-     Without this glob those three resolve as `any` and the project fails with
-     TS7016 on packages the client never loads. Same reasoning, and the same
-     glob, as tests/tsconfig.json.
+  /* **`../*.d.ts` was here and is not any more**, which is worth a note because
+     it will look like an omission to anyone who reads tests/tsconfig.json, where
+     the same glob is still needed.
 
-     The visible cost is that this project went from 267 files to 346 on
-     2026-09-03: the pipeline's type closure is now checked here as well as by
-     the root project. Measured at the time as 2.5s → 3.2s for the whole of
-     `npm run typecheck`. */
-  "include": [".", "../types.ts", "../*.d.ts"],
+     It was added on 2026-09-03 for one import: `useStepJob.ts` took a type-only
+     `StepBefore` from `src/pipeline.ts`, and although nothing of that reached
+     the browser, tsc still walked the module for its types — through the
+     pipeline to `src/fetch.ts` and `src/pdf.ts`, whose untyped dependencies are
+     declared in `src/*.d.ts`. Without the glob those resolved as `any` and the
+     project failed TS7016 on packages the client never loads. The cost was the
+     pipeline's whole type closure being checked here as well as by the root
+     project: 267 files to 346, and 2.5s → 3.2s across `npm run typecheck`.
+
+     That import moved to `src/step-order.ts` on 2026-09-04. There is still a
+     closure — `step-order.ts` reaches `types.ts`, and that reaches `messages.ts`,
+     `assets.ts` and `ids.ts` — but every one of those was already in this
+     project, and none of them touches an untyped package, so the glob has
+     nothing left to declare.
+
+     **What stops the glob being needed again is tests/client-imports.test.ts,
+     not TS7016.** GPT Sol's correction, 2026-09-04: a future client import of a
+     server module would only fail here if that module happened to reach an
+     untyped package, and a fully typed one would typecheck in silence. The
+     layering rule is the diagnostic; this `include` was only ever the plaster
+     over one breach of it. The fix, then and next time, is to move the shared
+     piece into a module that imports nothing. */
+  "include": [".", "../types.ts"],
   "exclude": []
 }

@@ -45,6 +45,12 @@ so say so in the prompt, and say how: `npx vitest run tests/<one>.test.ts` and
 Until 2026-09-02 it could not, and fifteen reviews in a row were reasoning rather than
 reproduction — every attempt to run a test is in their activity logs, dying on `EROFS`.
 
+**But only a test that needs nothing outside the tree.** The profile has *no network at all*, not
+even loopback, so anything touching Postgres or a local service skips or fails however it is
+invoked, and `data/` is not writable either. Those are **the orchestrator's to run**, handing over
+the raw output — not the reviewer's. Promising "you can run a test file" without that caveat is how
+a review comes back with five Postgres assertions quietly skipped.
+
 **Weight the second review higher than the first — higher, not instead.** A plan-stage review reads
 prose, so it can only catch what the prose says. It cannot find a `PATCH` handler that writes one
 field and then rejects the request — that bug does not exist until somebody writes it. Reviewing the
@@ -57,7 +63,11 @@ JSON parser. Building that and tearing it out at code review would have cost a s
 
 **Hand it the evidence, not only the prose** — the scoped diff, the results file, the script that
 produced a number. The most useful finding is often about the experiment rather than the conclusion,
-and a reviewer given only the conclusion cannot make it.
+and a reviewer given only the conclusion cannot make it. **Name that evidence durably**: a revision
+range, or a base SHA plus scoped paths plus an explicit untracked-file list — never a `/tmp` path,
+which is unreadable tomorrow and gone on the next machine.
+[review-prompt-template.md](review-prompt-template.md) is the whole shape of the message, including
+the severity scale and why your own suspicions go last.
 
 **Check each finding yourself before acting on it.** Some of them are wrong. Fold what survives into
 the plan, and add its questions to the ones for Greg.
@@ -86,6 +96,11 @@ unreviewed code written by someone else, and spend most of the run on what has c
 that returned nothing looks exactly like a review that found nothing. This is
 [silent-success.md](silent-success.md) with a subprocess in it; the several ways it happens are under
 [Gotchas](#gotchas). `retrying with CODEX_API_KEY` on stdout is the fallback working, not a failure.
+
+**Assume intermittent, not down.** The commonest way a run returns nothing is an `HTTP 404` from the
+responses endpoint, and it comes and goes: on 2026-09-03 it failed twice five minutes apart and then
+worked later the same day. So retry before concluding the reviewer is unavailable — and if it really
+is, say plainly that the review could not run rather than committing as though it had found nothing.
 
 ## Setup (once per machine)
 
@@ -392,12 +407,61 @@ then with a real `codex exec`:
 | `npm run typecheck` (the tsx CLI) | `EPERM` | `EPERM` | `EPERM` |
 | `npm test`, the whole suite | no | no | no |
 
-The last two rows are the honest limits. The tsx CLI listens on a unix socket and the sandbox
-denies that in every mode (a `unix_sockets` allow rule in the profile's `[network]` table did not
-change it), so run scripts as `node --import tsx <script>`. The full suite writes to `data/` and the
-Postgres half needs loopback network, which no profile short of `danger-full-access` grants. Neither
+The last two rows are the honest limits **of this profile**, and it is worth knowing why, because
+the reason is not the one this doc gave until 2026-09-04. Both follow from the profile's **network**
+policy, which `review` does not grant at all — not the internet, not loopback; `curl
+http://127.0.0.1:…` exits 7. With the network proxy off, enabling direct networking permitted both
+the tsx unix socket and the Postgres connection; no allowlisted configuration tested delivered
+those two. So run scripts as `node --import tsx <script>`, which opens no socket. Neither limit
 matters for a review: one red test file is the reproduction, a green suite is the implementer's
-job.
+job, and **the Postgres half is the orchestrator's to run and hand over.**
+
+> This paragraph used to say the tsx CLI's unix socket "is denied in every mode" and that a
+> `unix_sockets` rule did not change it. That was wrong, and it mattered: it read as a property of
+> the sandbox, so nobody looked again. It is a property of *this profile*. See
+> [What network would buy](#what-network-would-buy-and-why-the-profile-does-not-grant-it).
+
+### What network would buy, and why the profile does not grant it
+
+Measured 2026-09-04 on 0.152.1, mostly with `codex sandbox`, which runs a command under a profile
+**with no model in it and at no cost** — the cheap way to settle any question on this page. Point
+`CODEX_HOME` at a directory holding a throwaway `config.toml` and you can test a profile without
+touching the repo's. **Run it from a host shell**: from inside a sandboxed review it aborts before
+executing anything (`failed to open synthetic bubblewrap mount registry lock … Read-only file
+system`, exit 101), because bubblewrap will not nest. The full configurations, commands and raw
+output are in
+[the plan](../plans/260904e-give-the-cross-family-reviewer-the-right-freedoms.md#what-was-measured-2026-09-04-codex-cli-01521-hetzner-box);
+what follows is the conclusion.
+
+| Profile | `curl` external | `curl` loopback | `npm run typecheck` | a real Postgres test |
+|---|---|---|---|---|
+| `review` (what is checked in) | ✗ exit 7 | ✗ exit 7 | ✗ `EPERM` | ✗ |
+| `[permissions.X.network] enabled = true` | 200 | 200 | **passes, 1266 files** | **16/16 passed** |
+| the same `+ features.network_proxy` and a loopback allowlist | ✗ blocked | 200 | ✗ `EPERM` | ✗ 5 of 16 failed |
+| the same again with `network.mode = "full"` | ✗ blocked | 200 | ✗ `EPERM` | ✗ 5 of 16 failed |
+
+Row 2 is the temptation: turn network on and the reviewer can typecheck the repo and reproduce a
+Postgres finding against a real database, which is where most of this codebase's bugs live.
+
+Rows 3 and 4 are why we don't take the middle road. Codex *does* have a host allowlist —
+`features.network_proxy = true` plus a `[permissions.<name>.network.domains]` table of
+`"host" = "allow"` — and it works as an allowlist. But **turning the proxy on is what re-denies the
+unix socket**, so typecheck dies again; and a client that does not speak SOCKS never arrives, since
+the proxy is reached through `ALL_PROXY=socks5h://…` — the Postgres driver gets
+`connect ECONNREFUSED 127.0.0.1:1`. `network.mode = "full"` does not change either. So for **these two
+capabilities** the choice is binary — direct networking or neither of them. Networking as such is
+not binary: the row above has loopback HTTP returning 200 while external access is blocked, which
+is a real allowlist doing exactly what it says. It just doesn't buy what a reviewer needs.
+
+**We take no network.** With `"/" = "read"`, a network-capable reviewer is a process that can read
+`.env.local` — including a production `DATABASE_URL` — and make outbound requests, moments after
+reading a corpus of untrusted article prose. Nothing about that requires the model to be
+adversarial. Deny rules exist and work (`"/path" = "none"`, globs included), but they do not save
+it: denying `.env*` stops the suite reading `DATABASE_URL` and so removes the capability you turned
+network on for, and denying `~/.codex` stops codex executing its own binary.
+
+The cost we accept is real — the reviewer reasons about Postgres rather than reproducing it. Pay it
+by running that suite yourself and handing over the raw output.
 
 It is a relaxation of what the reviewer can *run*, not of what it can *change*: the sandbox still
 refuses a write to anything git tracks, so nothing in [Commit before you let it write](#commit-before-you-let-it-write)
@@ -593,9 +657,11 @@ under `~/.codex/sessions/`; capture the id from the `--json` `thread.started` ev
 - **Don't pipe Codex's raw stdout back in as a prompt.** It's a prompt-injection vector as soon as
   Codex echoes file or user content. Use `-o` and parse deliberately.
 - **`listen EPERM` on a tsx IPC pipe.** Any sandboxed run that shells out to `npx tsx` or an
-  `npm run` script built on it fails with `listen EPERM … /tmp/tsx-…/*.pipe` — in every mode,
-  `workspace-write` included, measured 2026-09-02. That's a sandbox artefact, not a code failure:
-  the tsx CLI listens on a unix socket and the sandbox denies it. Invoke the script as
+  `npm run` script built on it fails with `listen EPERM … /tmp/tsx-…/*.pipe` — in every mode we
+  actually use, `workspace-write` included, measured 2026-09-02. That's a sandbox artefact, not a
+  code failure: the tsx CLI listens on a unix socket and the sandbox denies it **whenever the
+  profile denies network**, which is every profile here (2026-09-04 —
+  [why](#what-network-would-buy-and-why-the-profile-does-not-grant-it)). Invoke the script as
   `node --import tsx …`, which opens no socket, or re-run the validation in your own shell.
 - **Stale-looking answers.** A run occasionally returns something that reads as an answer to a
   *previous* prompt. The wrapper writes a fresh temp `-o` file per run and never resumes a session,

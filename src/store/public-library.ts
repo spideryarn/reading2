@@ -2,7 +2,8 @@
  * **The shelf of public articles — the second ownerless query, and the first one
  * that enumerates.**
  *
- *     visibility = 'public' AND <readable>   order by public_at desc, slug   limit N
+ *     visibility = 'public' AND <readable> AND archived_at is null
+ *     order by public_at desc, slug   limit N
  *
  * The sibling of [`publicSlug`](public-slug.ts), and it keeps that file's
  * discipline for the same reason: nothing in this module's import graph can
@@ -74,7 +75,7 @@
  * See docs/plans/260904b-pricing-page-and-public-showcase.md § Stage 3a.
  */
 
-import { and, asc, eq, isNotNull, sql, type AnyColumn } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, sql, type AnyColumn } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { articleRevisions, articles, revisionBlocks } from "../db/schema.js";
@@ -134,6 +135,10 @@ export const PUBLIC_CARD_CHARS = {
   title: 300,
   gist: 1_200,
   siteName: 120,
+  /* A byline is a name or a short list of them, and it comes off the publisher's
+     markup like everything else here — so it is capped for the same reason and
+     at roughly the same size as the site name. */
+  byline: 200,
 } as const;
 
 /** `left(col, n)`, with `n` written into the statement rather than bound. */
@@ -205,6 +210,12 @@ const PUBLIC_LIBRARY_CARD = {
      why the cap is in the statement rather than in the `map` below. */
   title: capped(articleRevisions.title, PUBLIC_CARD_CHARS.title).as("title"),
   headingTitle: PUBLIC_LIBRARY_HEADING_TITLE.as("heading_title"),
+  /* **The article's author, and there is still no column here about its
+     owner.** `byline` is what stage 2 read off the publisher's page, in the same
+     class as `site_name` below — a fact about the document. The reader who
+     shared it is not on this wire at all, and src/public-library-types.ts §
+     `byline` says why that distinction is worth a paragraph. */
+  byline: capped(articleRevisions.byline, PUBLIC_CARD_CHARS.byline).as("byline"),
   gist: capped(articleRevisions.rootGist, PUBLIC_CARD_CHARS.gist).as("root_gist"),
   siteName: capped(articleRevisions.siteName, PUBLIC_CARD_CHARS.siteName).as("site_name"),
   words: articleRevisions.wordCount,
@@ -260,6 +271,16 @@ export function publicLibraryQuery(
           sql`exists (
             select 1 from ${revisionBlocks}
             where ${revisionBlocks.revisionId} = ${articleRevisions.id})`,
+          /* **Archived means off every shelf, this one included.**
+             Visibility says whether the *link* works; archiving says whether the
+             article is *listed*. Without this clause an owner who archives a
+             shared piece loses sight of it on their own shelf while strangers go
+             on discovering it here — the asymmetry runs the wrong way round, and
+             nobody would ever see that it had. `publicSlug` is deliberately left
+             alone: a link somebody already holds keeps working, which is the
+             same promise the owner's own direct link makes
+             (docs/project/library.md). GPT Sol, 2026-09-04. */
+          isNull(articles.archivedAt),
         ),
       )
       /* **A total order, not merely a sensible one.** `public_at` can tie —
@@ -330,6 +351,7 @@ export const pgPublicLibraryReader: PublicLibraryReader = {
              public-reader.ts § `loadHead` has the tab that changed in front of
              a reader when the third step was missing. */
           title: row.title ?? row.headingTitle ?? row.slug,
+          byline: row.byline,
           gist: row.gist,
           siteName: row.siteName,
           words: row.words,

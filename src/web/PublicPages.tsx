@@ -19,10 +19,10 @@ import { ArrowLeft, ExternalLink } from "lucide-react";
 
 import type { Article } from "../types.js";
 import type { PublicArtefacts, PublicTweets } from "../public-types.js";
-import { SHARED_LINK_CARRIES } from "../messages.js";
+import { SHARED_LINK_CARRIES, TAKEDOWN_LINK } from "../messages.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
-import { carriedSearch, readHref, type ArticleView } from "./router.js";
+import { carriedSearch, readHref, TAKEDOWN_HREF, type ArticleView } from "./router.js";
 import { webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
@@ -172,6 +172,28 @@ export function PublicMetadataPage({
               longer needs the sentence. src/messages.ts § SHARED_LINK_CARRIES. */}
           <p className="tw:m-0 tw:text-sm tw:text-ink-faint">{SHARED_LINK_CARRIES}</p>
         </section>
+
+        {/* **The way to complain about this article**, for whoever wrote it.
+            src/messages.ts § TAKEDOWN_LINK, and the section it points at is on
+            `/privacy` — PrivacyPage.tsx argues there for a section over a route.
+
+            **On this page rather than in the reading view.** This is the page
+            about where the piece came from — it already shows the address it was
+            published at, three lines up — and it is one press of the bottom bar
+            away from the article, so it is findable without being loud. The
+            reading view is the wrong place twice over: a report link in the
+            prose chrome would shout at every reader of an article that is almost
+            certainly shared legitimately, and that bar is measured by
+            `stickyOffset` (src/web/scroll.ts), so anything added to it moves
+            where every deep link and arrow jump lands.
+
+            **Quiet, and last.** A visitor came here to read; the person this is
+            for is looking for it. */}
+        <p className="tw:mt-10 tw:mb-0 tw:text-xs tw:text-ink-faint">
+          <Link href={TAKEDOWN_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
+            {TAKEDOWN_LINK}
+          </Link>
+        </p>
       </main>
       <VisitorDock slug={slug} view="metadata" available={available} />
     </>

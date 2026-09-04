@@ -37,16 +37,11 @@ import {
 } from "@sentry/react";
 
 import { type Fields, safeEvent, sanitise } from "../monitoring-scrub.js";
-
-/**
- * The commit, compiled in by `define` in vite.config.ts.
- *
- * Declared behind a `typeof` guard at its use site, the same shape
- * src/vercel-health.ts uses, because **there is no `define` in dev** — the
- * constant simply does not exist there, and a bare reference is a
- * `ReferenceError` on the first line of the app.
- */
-declare const __SPIDERYARN_BUILD_COMMIT__: string;
+/* The commit, compiled in by `define` in vite.config.ts and read behind the
+   `typeof` guard that build-stamp.ts exists to keep in one place: there is no
+   `define` in dev, so a bare reference is a `ReferenceError` on the first line
+   of the app. */
+import { buildCommit } from "./build-stamp.js";
 
 let started = false;
 
@@ -87,7 +82,7 @@ export function initClientMonitoring(): void {
          they disagree, Sentry has the map and will not use it — and says
          nothing about why, which is the shape of failure this whole change
          keeps running into. */
-      release: typeof __SPIDERYARN_BUILD_COMMIT__ === "string" ? __SPIDERYARN_BUILD_COMMIT__ : undefined,
+      release: buildCommit() ?? undefined,
       /* Off, then two added back by name. The browser default set includes
          breadcrumbs (see the header), `httpContext` (which attaches
          `location.href`, the referrer and the user agent), and the linked-errors

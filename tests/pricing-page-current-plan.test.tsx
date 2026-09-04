@@ -102,12 +102,34 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 
 const { PricingPage } = await import("../src/web/PricingPage.js");
 
+/**
+ * The two paid tiers as the route sends them.
+ *
+ * Spelled out rather than left empty, because `purchase` is what draws the
+ * buttons now and a fixture with nothing in it would quietly test a page that
+ * has none — see `Purchase`, src/billing-plan.ts.
+ */
+const READER_OFFER = {
+  id: "reader",
+  name: "Spideryarn Reader",
+  description: "For somebody who reads a lot.",
+  ingestsPerPeriod: 20,
+  amounts: { usd: 1000, gbp: 800, eur: 900 },
+};
+
+const RESEARCHER_OFFER = {
+  id: "researcher",
+  name: "Spideryarn Researcher",
+  description: "For somebody who reads for a living.",
+  ingestsPerPeriod: 150,
+  amounts: { usd: 5000, gbp: 4000, eur: 4500 },
+};
+
 /** A free account with one of its three articles gone. */
 const FREE: BillingSummary = {
   plan: { kind: "free", limit: 3, used: 1 },
-  offers: [],
   manageable: false,
-  canCheckout: true,
+  purchase: { kind: "checkout", tiers: [READER_OFFER, RESEARCHER_OFFER] },
 };
 
 /**
@@ -132,9 +154,12 @@ const PAID_PLAN = {
 
 const PAID: BillingSummary = {
   plan: PAID_PLAN,
-  offers: [],
   manageable: true,
-  canCheckout: false,
+  /* **A real Reader's answer**, not an empty one: there is a tier above them and
+     the door to it is the hosted Portal. A fixture that said "nothing to buy"
+     would be the state this page was stuck in before the gate became
+     tier-aware. */
+  purchase: { kind: "switch", tiers: [RESEARCHER_OFFER], from: "paid" },
 };
 
 /**
@@ -164,9 +189,8 @@ const CANCELLING: BillingSummary = {
  */
 const LAPSED: BillingSummary = {
   plan: { kind: "lapsed", limit: 3, remaining: 2 },
-  offers: [],
   manageable: true,
-  canCheckout: true,
+  purchase: { kind: "checkout", tiers: [READER_OFFER, RESEARCHER_OFFER] },
 };
 
 const jsonOk = (body: unknown) =>

@@ -50,6 +50,7 @@ import { askAboutBlock } from "./chat-handoff.js";
 import { shortBlockId } from "./BlockRef.js";
 import { useChat } from "./useChat.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
+import { keyboardInsetStyle, useVisualViewport } from "./useVisualViewport.js";
 
 /**
  * What the panel is open on.
@@ -138,6 +139,9 @@ export function ChatDialog({
      typed. Same reason `ChatPanel` keeps a map of them. */
   const [draft, setDraft] = useState(target.kind === "draft" ? (target.question ?? "") : "");
   const focused = useRef(0);
+
+  /* Mounted means on screen here, as it does for `.cmt-dialog`. */
+  const visible = useVisualViewport(true);
 
   /**
    * A conversation the reader has just started, still being minted.
@@ -253,7 +257,16 @@ export function ChatDialog({
   );
 
   return (
-    <aside className="chat-dialog" role="dialog" aria-label="Chat about this passage">
+    <aside
+      className="chat-dialog"
+      /* `.cmt-dialog`'s geometry and `.cmt-dialog`'s problem: pinned to the
+         bottom of the layout viewport, which on iOS is behind the keyboard —
+         and this one has a composer in it, so the keyboard is the normal state.
+         See CommentDialog.tsx and useVisualViewport.ts. */
+      style={keyboardInsetStyle(visible)}
+      role="dialog"
+      aria-label="Chat about this passage"
+    >
       <header>
         <span className="chat-dialog-label">
           <MessageSquare size={12} aria-hidden="true" />

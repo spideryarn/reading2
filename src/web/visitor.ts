@@ -91,6 +91,7 @@ export const NOUN: Record<keyof PublicArtefacts, string> = {
   quotes: "a set of quotes",
   tweets: "a tweet thread",
   timeline: "a timeline",
+  sketch: "a sketch",
 };
 
 /**
@@ -176,7 +177,29 @@ const POLICY: Record<Mode, VisitorPolicy> = {
   ideas: { kind: "artefact", key: "ideas" },
   quotes: { kind: "artefact", key: "quotes" },
 
-  search: { kind: "owners-only" },
+  /**
+   * **Search became `available` on 2026-09-04**, and it is `available` rather
+   * than `{ kind: "artefact" }` for the reason GPT Sol gave when it talked this
+   * plan out of a `none-yet` gap:
+   *
+   * > "No saved items yet" is content inside an accessible panel, not something
+   * > preventing access.
+   *
+   * An article nobody has searched is an empty panel, not a boundary — the same
+   * call `comments` produced one stage earlier, and the reason `VisitorGap`
+   * gained no member for either.
+   *
+   * What a visitor gets is the owner's finished runs, their ticks, their
+   * colours and their marks in the prose; what they do not get is the composer,
+   * the retry, the recolour, the delete, or the words matcher. Greg,
+   * 2026-09-04 — *"Only owner can create new searches. Everyone else can see
+   * the ones they have already created."* The enforcement is a `SearchAccess`
+   * union whose visitor arm carries none of those verbs
+   * (src/web/SearchPanel.tsx), plus the pin on `?match=`, plus the fact that
+   * `useSearch` is mounted in `SearchBand` alone.
+   * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
+   */
+  search: { kind: "available" },
   chat: { kind: "owners-only" },
   remember: { kind: "owners-only" },
   /**

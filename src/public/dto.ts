@@ -51,6 +51,7 @@
  */
 
 import type { Assets } from "../assets.js";
+import type { Sketch } from "../sketch-scene.js";
 import type {
   Arc,
   ArcEntry,
@@ -64,6 +65,8 @@ import type {
   Quote,
   Quotes,
   NodeId,
+  SearchHit,
+  SearchRun,
   Timeline,
   TimelineEvent,
   TimelineOccurrence,
@@ -81,6 +84,8 @@ import type {
   PublicComment,
   PublicQuotes,
   PublicMeta,
+  PublicSearchRun,
+  PublicSketch,
   PublicTimeline,
   PublicTweets,
 } from "../public-types.js";
@@ -476,6 +481,82 @@ function publicCitations(citations: Citation[] | undefined): { citations?: Citat
   return kept.length === 0 ? {} : { citations: kept };
 }
 
+/**
+ * The Sketch, as three fields of the artefact's nine.
+ *
+ * **The scenes are passed through whole**, and src/public-types.ts
+ * § `PublicSketch` argues it: a scene is geometry and the model's own labels,
+ * with `SketchNode.block` carrying a block id of the article the visitor is
+ * already reading. There is nothing in it about a person, so copying a hundred
+ * nested fields by hand would buy a transcription error rather than safety.
+ *
+ * **`profileHash` is the field to notice going.** It is who the drawing was
+ * made for — a hash of the owner's reader profile — and a visitor is looking at
+ * a picture drawn for somebody else. The other four absences are the ordinary
+ * pipeline ones.
+ */
+function publicSketch(sketch: Sketch): PublicSketch {
+  return {
+    title: sketch.title,
+    caption: sketch.caption,
+    scenes: sketch.scenes,
+  };
+}
+
+/**
+ * The owner's saved searches, run by run and hit by hit.
+ *
+ * **The filtering is in SQL, not here**, exactly as `publicComments` above says
+ * of itself: `PUBLIC_SEARCHES_WHERE` in src/store/public-reader.ts takes
+ * finished runs only, so a pending or failed one never reaches this function.
+ * Two answers to one question is how the untested one ends up being the one
+ * that runs.
+ *
+ * **`stale` arrives already computed** and is passed through rather than worked
+ * out here, because working it out needs the article's fingerprint — which is a
+ * fact about the blocks the reader fetched, not about the run. src/store's job;
+ * this function's job is the allowlist.
+ */
+function publicSearches(runs: readonly (SearchRun & { stale: boolean })[]): PublicSearchRun[] {
+  return runs.map(
+    (run): PublicSearchRun => ({
+      id: run.id,
+      criterion: run.criterion,
+      createdAt: run.createdAt,
+      hits: publicSearchHits(run.hits),
+      ...opt(run, "colour"),
+      stale: run.stale,
+    }),
+  );
+}
+
+/**
+ * **Every hit rebuilt**, though `SearchHit` has nothing in it that is about a
+ * person today.
+ *
+ * That is the point rather than an oversight — the same argument
+ * `publicTimeline` makes about `TimelineEvent`. A hit is a block id, the words
+ * the model pointed at, how sure it was and why; there is no cost, no model and
+ * no URL in it, and it was checked against the type on 2026-09-04. What copying
+ * it by hand buys is the *next* field: one added to `SearchHit` for the owner's
+ * panel does not cross until somebody adds a line here, which is the whole
+ * design of this file.
+ *
+ * `start` through `opt`, because it is genuinely optional — a disambiguator
+ * between repeats of the same words, never the anchor (docs/project/block-ids.md).
+ */
+function publicSearchHits(hits: readonly SearchHit[]): SearchHit[] {
+  return hits.map(
+    (hit): SearchHit => ({
+      blockId: hit.blockId,
+      quote: hit.quote,
+      confidence: hit.confidence,
+      reasoning: hit.reasoning,
+      ...opt(hit, "start"),
+    }),
+  );
+}
+
 /** The ideas, rebuilt idea by idea and occurrence by occurrence. */
 function publicIdeas(ideas: Ideas): PublicIdeas {
   return {
@@ -543,6 +624,8 @@ export function publicArticle(row: {
   tweets: TweetThread | null;
   timeline: Timeline | null;
   comments: readonly Comment[];
+  searches: readonly (SearchRun & { stale: boolean })[];
+  sketch: Sketch | null;
 }): PublicArticle {
   return {
     meta: publicMeta(row),
@@ -571,10 +654,15 @@ export function publicArticle(row: {
     ...(row.quotes !== null ? { quotes: publicQuotes(row.quotes) } : {}),
     ...(row.tweets !== null ? { tweets: publicTweets(row.tweets) } : {}),
     ...(row.timeline !== null ? { timeline: publicTimeline(row.timeline) } : {}),
+    ...(row.sketch !== null ? { sketch: publicSketch(row.sketch) } : {}),
     /* **A required key, so leaving this line out is a type error** — unlike the
        artefacts above it, where an absent key is the meaning. An article with
        no comments crosses as `[]`. See PublicArticle.comments. */
     comments: publicComments(row.comments),
+    /* A required key too, and for the same reason: an article nobody has
+       searched crosses as `[]`, which is a state rather than a missing
+       artefact. See PublicArticle.searches. */
+    searches: publicSearches(row.searches),
   };
 }
 

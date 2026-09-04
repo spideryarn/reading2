@@ -38,10 +38,13 @@
  * what to go and look at when any of it moves. Two claims in the first draft
  * were already false when written, and the comments beside them say which.
  */
+import { useEffect } from "react";
 import { ArrowLeft } from "lucide-react";
 
+import { TAKEDOWN_HEADING } from "../messages.js";
 import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
+import { TAKEDOWN_SECTION_ID } from "./router.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 
@@ -52,12 +55,26 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "3 September 2026";
+const LAST_UPDATED = "5 September 2026";
 
-/** A heading and its paragraphs. Seven of them; nothing else on the page. */
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+/**
+ * A heading and its paragraphs. Eight of them; nothing else on the page.
+ *
+ * `id` is optional and exactly one section has one: the takedown section, which
+ * is linked into from the two public visitor surfaces. `scroll-mt` so that a
+ * section scrolled to does not end up under the top bar.
+ */
+function Section({
+  id,
+  title,
+  children,
+}: {
+  id?: string;
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="tw:mt-8">
+    <section id={id} className="tw:mt-8 tw:scroll-mt-20">
       <h2 className="tw:m-0 tw:mb-2 tw:font-prose tw:text-lg tw:leading-snug tw:text-foreground">
         {title}
       </h2>
@@ -85,8 +102,38 @@ function Third({ name, href, children }: { name: string; href: string; children:
   );
 }
 
+/**
+ * **Arriving at `/privacy#if-something-here-is-yours` has to move the page**,
+ * and nothing else in the app would do it.
+ *
+ * `navigate` (router.ts) pushes the address and then scrolls to the top on every
+ * navigation, because arriving halfway down a new page reads as a rendering bug
+ * — and that is the right default for the other twenty links in the app. A cold
+ * load does not rescue it either: the browser honours a fragment against the
+ * document it parsed, and this page is rendered by React afterwards, so there is
+ * nothing under that id when it looks. Without these six lines the takedown link
+ * lands a rightsholder at the top of a long privacy policy with no indication of
+ * where to look, and nothing anywhere reports that it did.
+ *
+ * **One id, not a general fragment router.** There is exactly one anchor on this
+ * page and this is it; a `location.hash.slice(1)` lookup would be a mechanism
+ * for a feature nobody has asked for, and would happily scroll to anything a
+ * pasted address named.
+ *
+ * `?.` on the call because jsdom has no `scrollIntoView` — the same reason
+ * PricingPage.tsx guards its own. tests/takedown-privacy-section.test.tsx
+ * drives both arms.
+ */
+function useTakedownFragment(): void {
+  useEffect(() => {
+    if (location.hash !== `#${TAKEDOWN_SECTION_ID}`) return;
+    document.getElementById(TAKEDOWN_SECTION_ID)?.scrollIntoView?.({ block: "start" });
+  }, []);
+}
+
 export function PrivacyPage() {
   useDocumentTitle(pageTitle({ kind: "privacy" }));
+  useTakedownFragment();
 
   return (
     <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:pb-24 tw:font-sans">
@@ -293,13 +340,17 @@ export function PrivacyPage() {
             points at the card. */}
         <p>
           Two exceptions, and both are worth knowing. If you mark an article{" "}
-          <strong className="tw:text-foreground">public</strong>, anyone with the link can read it
-          without signing in — that is what the setting is for. They get the article, its outline,
+          <strong className="tw:text-foreground">public</strong>, anyone can read it without signing
+          in, and it is listed publicly where somebody who was never sent the link can find it —
+          that is what the setting is for. They get the article, its outline,
           its arc, the glossary, the ideas, the quotes, the timeline and the thread, some of which
           the model wrote knowing what your profile says about you, even though the profile itself
-          is not shared. <strong className="tw:text-foreground">They also get your comments</strong>
-          {" "}— the passages you marked, what you wrote about them, and what the model answered when
-          you asked. Your chat conversations are not shared, and neither is your profile. The
+          is not shared.{" "}
+          <strong className="tw:text-foreground">They also get your comments and your searches</strong>
+          {" "}— the passages you marked, what you wrote about them, what the model answered when you
+          asked, and the questions you put to the piece along with the passages they found. They can
+          read all of that and add none of it. Your chat conversations are not shared, and neither
+          is your profile. The
           sharing card lists exactly what will go out before you turn it on. And{" "}
           <strong className="tw:text-foreground">we can see what is in the app</strong>: there is an
           administrator’s view across all accounts, and we may read your articles and what you have
@@ -309,11 +360,17 @@ export function PrivacyPage() {
       </Section>
 
       {/* **The third false claim, and the worst of them.** The page said
-          "delete an article and it goes". The Delete button calls
-          `shelf.archive` (ShelfEntry.tsx), which sets `archived_at` and
-          destroys nothing — the article is restorable under "show deleted" and
-          every artefact stays. GPT Sol found it by reading the button rather
-          than the sentence, which is the only way it could have been found.
+          "delete an article and it goes". The button calls `shelf.archive`
+          (ShelfEntry.tsx), which sets `archived_at` and destroys nothing — the
+          article is restorable under "Show archived" and every artefact stays.
+          GPT Sol found it by reading the button rather than the sentence, which
+          is the only way it could have been found.
+
+          **On 2026-09-04 the button was renamed to match**, so this section no
+          longer has to explain away a word: it says what Archive does, and then
+          answers the question that word leaves open — how to have an article
+          actually erased. docs/project/library.md § Archive, and Undo is the
+          confirmation.
 
           The list of what survives a *real* erasure is longer than the two
           things the second draft named, and Sol enumerated it against the
@@ -364,11 +421,17 @@ export function PrivacyPage() {
 
       <Section title="Deleting things">
         <p>
-          The <strong className="tw:text-foreground">Delete</strong> button on your shelf is really
-          an archive: it takes the article off the shelf and you can bring it back under “show
-          deleted”. Nothing is destroyed, and your notes on it are still there. That is deliberate —
-          undo matters more than tidiness — but it is not what the word usually means, so: if you
-          want an article actually erased, email us and we will do it.
+          The <strong className="tw:text-foreground">Archive</strong> button on your shelf takes an
+          article off the shelf and out of your library search, and you can bring it back at any
+          time under “Show archived”. Nothing is destroyed, and your notes on it are still there.
+          There is no button that really erases an article — undo matters more than tidiness — so if
+          you want one actually gone, email us and we will do it.
+        </p>
+        <p>
+          If you had shared an article and then archive it, it stops being listed anywhere public —
+          but the link you gave out still opens it. Archiving is about your shelf; sharing is about
+          the link. To close the link, use{" "}
+          <strong className="tw:text-foreground">Stop sharing</strong> on the article’s own page.
         </p>
         <p>
           Same for the account. There is no “delete my account” button yet; email us and we delete
@@ -468,6 +531,78 @@ export function PrivacyPage() {
           <strong className="tw:text-foreground">This page will change.</strong> When it does we’ll
           update the date at the top. If something material changes we’ll say so in the app rather
           than leaving you to spot it.
+        </p>
+      </Section>
+
+      {/* **The one section on this page written to somebody who does not have an
+          account**, which is why it is last: everything above is addressed to a
+          reader, and this is addressed to the author of something a reader
+          added.
+
+          **Greg chose "build a minimal takedown route" on 2026-09-04**, over
+          doing nothing and over a form with a queue behind it. The reason it
+          exists is that Spideryarn republishes the extracted text of somebody
+          else's article: the owner ticks a box confirming they have the right
+          to, that box moves responsibility onto them rather than checking
+          anything, and the platform's actual protection is that plus a way for
+          the wronged party to complain. `/read/public` turned "reachable by
+          link" into "findable", which is when that stops being theoretical.
+
+          **A section and not a route**, decided here rather than inherited. A
+          page of its own costs an arm in `parseRoute`, a member of the `Route`
+          union, a case in `page-title.ts`, two arms of `App.tsx` and a component
+          — and, worse, a second public address saying things about what we do
+          that has to stay true alongside this one. The words belong beside "What
+          you add is your responsibility" two sections up, which is the same fact
+          told to the other party, and beside "Deleting things", which is already
+          "email us and we will do it by hand". Findability comes from the link
+          rather than from the page's name: nobody has to guess that a rights
+          complaint lives under Privacy, because the two places a stranger meets
+          a republished article both carry `TAKEDOWN_LINK` pointing straight at
+          this anchor (src/web/PublicPages.tsx, src/web/PublicLibraryPage.tsx).
+
+          **What is deliberately not built**: no form, no table, no queue, no
+          moderation view, and nothing that changes an article's visibility
+          without a person deciding. The mechanism for taking something down is
+          the owner's own sharing switch; an administrator's override of it is a
+          much larger decision than this section.
+
+          **Every sentence here is a promise about what we will actually do**, so
+          it names one mailbox, one pair of hands and days rather than hours. The
+          third paragraph exists because "taken down" means something narrower
+          here than a complainant would assume, and finding that out afterwards
+          is worse than being told. docs/project/privacy.md § If something here
+          is yours. */}
+      <Section id={TAKEDOWN_SECTION_ID} title={TAKEDOWN_HEADING}>
+        <p>
+          When somebody adds an article to Spideryarn we fetch it and keep a copy of the text so
+          that they can read it here. If they turn sharing on, that copy becomes readable by anyone
+          and is listed on our public shelf. We ask them to confirm they have the right to share it
+          — that is a promise they make, not a check we run, because we have no way of knowing who
+          owns a page we fetched.
+        </p>
+        <p>
+          So if something of yours is here and you would rather it were not, write to{" "}
+          <a
+            href={`mailto:${CONTACT_EMAIL}`}
+            className="tw:text-highlight tw:no-underline tw:hover:underline"
+          >
+            {CONTACT_EMAIL}
+          </a>
+          . Please include the address of the Spideryarn page it is on, where the piece was
+          originally published, and a line about your connection to it. The first of those is the
+          one we cannot work without: if a message doesn’t say which page it is about, all we can
+          do is write back and ask. We will take a fair complaint at face value rather
+          than asking you to prove anything first: we make the article private, which takes it off
+          the public shelf and stops the shared link opening it, and then we come back to you.
+        </p>
+        <p>
+          The limits are worth saying plainly. One person reads that mailbox and does this by hand,
+          so expect days rather than hours, and there is nothing out of hours. Making an article
+          private does not delete the reader’s own copy — they keep what they added, the way they
+          keep anything else in their library — and it does nothing about wherever else the piece
+          may have been copied to. If you want the copy erased as well, say so and we will do that
+          too.
         </p>
       </Section>
 
