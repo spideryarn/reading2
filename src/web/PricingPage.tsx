@@ -209,8 +209,14 @@ function CurrentPlan() {
      a reader of the JSX to infer. A `switch` would be the exhaustive form, but
      this is one boolean about presentation and not a fork in what the page
      does. */
+  /* `endsAt !== null` rather than a `cancelling` boolean: the boolean was
+     computed from `cancel_at_period_end`, which the hosted Portal never sets, so
+     this branch was unreachable in production and the page stayed silent about a
+     plan that was ending. src/billing-plan.ts § `planEndsAt`. */
   const needsDetail =
-    plan.kind === "lapsed" || plan.kind === "unknown" || (plan.kind === "paid" && plan.cancelling);
+    plan.kind === "lapsed" ||
+    plan.kind === "unknown" ||
+    (plan.kind === "paid" && plan.endsAt !== null);
 
   return (
     /* **No `role="status"`.** This is passive page content that happens to

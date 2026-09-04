@@ -387,6 +387,12 @@ v1 **refuses**: the empty state says "Draw the Sketch first" and points at the S
 press into a hidden $0.20 charge and a three-minute wait that nothing warned about, and Sketch's own
 empty state exists precisely to name that price before the press.
 
+> **Reversed 2026-09-03, on Greg's ask** —
+> [260903j § Part two](260903j-illustrated-415-and-one-click-paint.md). The chain landed; the
+> objection above was to the *hiding*, not to the chain, so the refusal branches now carry a "Draw
+> the Sketch, then paint" button with both prices and both waits in front of it. Current behaviour
+> is [diagram.md § Illustrated](../project/diagram.md#illustrated).
+
 ### Its fingerprint is the Sketch, not the article
 
 A forced Sketch redraw changes the scene with every article byte identical, so an article-shaped

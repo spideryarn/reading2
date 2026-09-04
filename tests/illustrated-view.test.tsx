@@ -501,6 +501,57 @@ describe("the empty state, which has three refusals to tell apart", () => {
   }
 
   /**
+   * **The sentence above the branch, which every test up to here reads straight
+   * past.**
+   *
+   * They all query `[data-ill-refusal]`, which is the *second* paragraph. The
+   * first one said *"there is no Sketch to paint from"* for all three branches
+   * until 2026-09-03 — true of `absent`, and flatly contradicted in the other
+   * two by the sentence immediately underneath it, which describes the Sketch
+   * that supposedly does not exist. A reader has no way to tell which half to
+   * believe. GPT Sol found it; nothing here could have, and that gap is the
+   * reason this test exists rather than the wording.
+   *
+   * **Two assertions, and they do different jobs.** The `toBe` is the gate: the
+   * headline is one sentence for all three branches, so pinning it is what makes
+   * a rewrite come back and re-read it against all three. The regex is what says
+   * *why* — it rejects the class, a bare denial of the Sketch's existence, and
+   * it is the half that still bites when somebody rewrites the copy and this
+   * constant together. Neither alone is enough: `toBe` would wave through a
+   * matched pair of wrong sentences, and the regex cannot tell a missing
+   * headline from a good one.
+   */
+  const REFUSAL_HEAD =
+    "Nobody has painted this one yet, and there is no usable Sketch to paint from.";
+
+  for (const c of cases) {
+    it(`does not deny the Sketch it then describes (${c.name})`, async () => {
+      serving({ noArtefact: true, sketch: c.sketch });
+      await mount();
+
+      const why = host.querySelector("[data-ill-refusal]");
+      expect(why, `no ${c.name} refusal on screen, so nothing below means anything`).not.toBeNull();
+      expect(
+        why?.previousElementSibling?.textContent,
+        `the ${c.name} refusal's headline is not the one sentence that is true of all three`,
+      ).toBe(REFUSAL_HEAD);
+
+      /* `absent` is the one branch where denying the Sketch is the truth, and it
+         says so in its own words — so the contradiction below is only ever
+         asked of the two where a Sketch exists. */
+      if (c.sketch === null) return;
+      expect(
+        why?.textContent,
+        `the ${c.name} branch stopped describing the Sketch, so there is nothing left for the headline to contradict and this test has quietly stopped testing anything`,
+      ).toContain("The Sketch of this article");
+      expect(
+        `${why?.previousElementSibling?.textContent} ${why?.textContent}`,
+        `the ${c.name} panel says there is no Sketch and then describes the Sketch`,
+      ).not.toMatch(/(?:is|are) no Sketch\b(?! of this article yet)/);
+    });
+  }
+
+  /**
    * **The reversal, and the condition it came with.**
    *
    * These three states dead-ended until 2026-09-03: no button, because
@@ -549,9 +600,18 @@ describe("the empty state, which has three refusals to tell apart", () => {
    * painting. `orderSteps` (src/jobs.ts) sorts the names by `STEP_ORDER`, so
    * the server is what guarantees the Sketch runs first.
    *
-   * **And unforced.** Forcing `sketch` would cascade over every step after it
-   * (`cascadeForce`), redrawing a Sketch that may be perfectly current — $0.20
-   * for nothing — and `stepIsDone` is what should decide.
+   * **And unforced** — for the reason src/web/useIllustrated.ts §
+   * `drawThenPaint` gives, which is not the one this docstring gave until
+   * 2026-09-03. It said *"forcing `sketch` would cascade over every step after
+   * it, redrawing a Sketch that may be perfectly current — $0.20 for nothing"*,
+   * and no part of that is how the code behaves: a force from this hook names
+   * `illustrated` and never `sketch` (`force: [step]` in useStepJob.ts), and
+   * both steps are in `FORCE_ONLY_WHEN_NAMED`, so the positional cascade cannot
+   * speak for either. What `force` would actually cost is the work key —
+   * `workKeyFor` hashes it, so a forced press and an unforced one are two jobs
+   * at $0.27–$0.40 rather than one. Which is why the assertion is `force`
+   * **absent** rather than an empty array: `parseJobRequest` reads the two the
+   * same way and `workKeyFor` does not.
    */
   it("posts one job naming both steps, unforced", async () => {
     serving({ noArtefact: true, sketch: { stale: true, profileChanged: false } });
@@ -574,7 +634,7 @@ describe("the empty state, which has three refusals to tell apart", () => {
     ]);
     expect(
       posted[0]?.force,
-      "the press forced something — a current Sketch would be redrawn at $0.20 for nothing",
+      "the press forced something — a different work key from the unforced press beside it, so two tabs buy two $0.27–$0.40 jobs",
     ).toBeUndefined();
   });
 

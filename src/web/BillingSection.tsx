@@ -38,8 +38,17 @@
  * it — that is the policy (Greg, 2026-09-03), but written as arithmetic it reads
  * as a bug. `describePlan` holds the words and the `lapsed` arm of the plan union
  * has no `used` field at all, so this component could not print it if it tried.
+ *
+ * ## And what the cancelled case must always say
+ *
+ * *When*. A real cancellation on 2026-09-03 produced no sentence here at all —
+ * the row's only cancellation signal was a boolean the hosted Portal leaves
+ * `false` (docs/project/billing.md § *The first live sale*). The plan now
+ * carries one derived `endsAt` date, drawn in the foreground tone rather than
+ * the muted one, because a plan that ends on a date is the one thing on this
+ * card the reader may not already know.
  */
-import { CreditCard, ExternalLink, TriangleAlert } from "lucide-react";
+import { CalendarClock, CreditCard, ExternalLink, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { describeAmounts, describePlan } from "../billing-plan.js";
@@ -68,6 +77,17 @@ export function BillingSection() {
   }
 
   const copy = describePlan(summary.plan);
+  /* **The one thing on this card the reader may not know**, and the reason the
+     detail line is drawn in the foreground tone rather than the muted one. A
+     plan that ends on a date is time-sensitive in a way "renews on the 3rd" is
+     not: until 2026-09-03 a real cancellation produced no sentence here at all
+     (docs/project/billing.md § *The first live sale*), and burying the fix in
+     grey small print would be most of the way back to saying nothing.
+
+     **Asked of the plan, not of the words.** `endsAt` is the single derived
+     field the wire carries, so this cannot come to disagree with the sentence
+     `describePlan` wrote from the same field. */
+  const ending = summary.plan.kind === "paid" && summary.plan.endsAt !== null;
 
   return (
     <div className="tw:flex tw:flex-col tw:gap-4">
@@ -76,7 +96,19 @@ export function BillingSection() {
         <div className="tw:min-w-0">
           <p className="tw:m-0 tw:text-sm tw:text-foreground">{copy.headline}</p>
           {copy.detail && (
-            <p className="tw:mt-1 tw:mb-0 tw:text-xs tw:text-muted-foreground">{copy.detail}</p>
+            <p
+              className={
+                ending
+                  ? "tw:mt-1 tw:mb-0 tw:flex tw:items-start tw:gap-1.5 tw:text-xs tw:text-foreground"
+                  : "tw:mt-1 tw:mb-0 tw:text-xs tw:text-muted-foreground"
+              }
+            >
+              {/* Not `TriangleAlert`: a cancellation the reader asked for is not
+                  a fault, and nothing here needs fixing. A date wants a
+                  calendar. */}
+              {ending && <CalendarClock size={13} className="tw:mt-0.5 tw:shrink-0" />}
+              <span>{copy.detail}</span>
+            </p>
           )}
         </div>
         {/* **Only when the Portal has something to open.** It refuses an owner

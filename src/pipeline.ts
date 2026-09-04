@@ -259,6 +259,50 @@ export type StepsMissingFromOrder<
 > = T;
 
 /**
+ * **Every step the array above runs before `S`**, as a union. `never` for
+ * `fetch`, which nothing precedes.
+ *
+ * Read off `STEP_ORDER` itself rather than written out, so there is one
+ * ordering here and not two: move a name in the array and this answers
+ * differently on the next compile.
+ *
+ * **What it is for**: `StepRun.precededBy` in src/web/useStepJob.ts, where a
+ * caller names the steps that have to run before its own inside one job. The
+ * server does not honour that word — `orderSteps` (src/jobs.ts) sorts whatever
+ * arrives by `STEP_ORDER` and nothing else — so `precededBy: ["assets"]` on
+ * `hierarchy` would come back as `["hierarchy", "assets"]`, a "preceding" step
+ * that runs afterwards, with nothing anywhere saying so. GPT Sol reproduced
+ * exactly that on 2026-09-03; the one caller in the tree is safe, so what this
+ * closes is the next caller rather than a live bug.
+ *
+ * The check has to be a type rather than a `STEP_ORDER.indexOf` comparison at
+ * the call site, because the call site is in the browser and **nothing under
+ * `src/web/` imports `src/pipeline.ts`**: this is a server module, and the
+ * client's answer to needing part of it has twice been a shape rather than a
+ * copy (src/web/feedback-diagnostics.ts § `WORD`, *"why a third copy of
+ * `STEP_ORDER` would be worse than a shape"*). A `import type` costs the bundle
+ * nothing — it is erased, and `verbatimModuleSyntax` makes that a rule rather
+ * than an optimisation — so the ordering can be checked in the browser's code
+ * without any of the ordering's module reaching the browser. **Keep the import
+ * in `useStepJob.ts` a type-only one**; making it a value import is what would
+ * pull the pipeline into the client bundle.
+ *
+ * `[S] extends [Head]` rather than `S extends Head`, so a union `S` — which is
+ * what the defaulted `StepJob<StepName>` supplies — fails every branch and
+ * widens to the whole list instead of distributing into nonsense. That is the
+ * one hole: a caller who passes a `StepName`-typed variable rather than a
+ * literal gets no check. All nine callers pass literals.
+ */
+export type StepBefore<
+  S extends StepName,
+  T extends readonly StepName[] = typeof STEP_ORDER,
+> = T extends readonly [infer Head extends StepName, ...infer Rest extends readonly StepName[]]
+  ? [S] extends [Head]
+    ? never
+    : Head | StepBefore<S, Rest>
+  : never;
+
+/**
  * What "add this URL" runs: every step that makes the article readable.
  *
  * Not `tweets` and not `glossary`. Each costs model calls over the whole
@@ -3140,10 +3184,20 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    * is a press away. See § the steps that know why they stopped in
    * src/messages.ts.
    *
-   * **Not `enqueue(["sketch", "illustrated"])`**, which is the tempting version
-   * and is worse. It turns one press into a hidden $0.20 charge and a
-   * three-minute wait that nothing warned about, and Sketch's own empty state
-   * exists precisely to name that price before the press.
+   * **The client may name both steps, and since 2026-09-03 it does.** This
+   * paragraph used to say *"not `enqueue(["sketch", "illustrated"])`, which is
+   * the tempting version and is worse — it turns one press into a hidden $0.20
+   * charge and a three-minute wait that nothing warned about"*. Greg asked for
+   * the one press anyway, and the objection was to the **hiding** rather than to
+   * the chain: `IllustratedView`'s refusal branches now offer it with both
+   * prices and both waits on the button before it is pressed
+   * (docs/project/diagram.md § Illustrated).
+   *
+   * **Nothing changes on this side of the seam.** The step still refuses rather
+   * than pulling its own prerequisite in; what makes the chain safe is that
+   * `STEP_ORDER` sequences one job and `stepIsDone` decides whether the Sketch
+   * half runs at all — so a stale Sketch is re-drawn and a current one is
+   * adopted, without this step knowing who asked.
    *
    * ## 2. Its fingerprint is the Sketch, not the article
    *

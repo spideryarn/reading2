@@ -180,6 +180,28 @@ export type StoreEntry =
  */
 export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
   /**
+   * **Arrived from `dev` on 2026-09-04 and the hole check caught it**, which is
+   * why that check walks the import graph live instead of reading a stored
+   * answer. It reaches a condemned module through `src/jobs.js`; it never runs
+   * one.
+   *
+   * **`npm test` cannot redden this file at all.** Its assertions are three
+   * `@ts-expect-error` directives over `precededBy`, and vitest strips those
+   * without looking — `tests/tsconfig.json` is the instrument, and the file's
+   * own header says so. So the flag cannot reach it from either side: no store
+   * is selected, and no store code executes.
+   */
+  "tests/step-job-preceded-by.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "A compile-time test of `StepBefore<S>`. It imports src/jobs.js, which is how the import " +
+      "graph reaches a condemned module, but its subject is a type and its assertions are " +
+      "`@ts-expect-error` directives that only `npm run typecheck` evaluates. Nothing here selects " +
+      "a store or calls one, so the hinge changes it in no way.",
+  },
+  /**
    * **The entry the dynamic witness could not produce**, and the reason the
    * registry does not take its silence as proof.
    *
@@ -1223,6 +1245,12 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/admin-store.test.ts": "shared-services",
   "tests/auth-user-seeding.test.ts": "shared-services",
   "tests/db-test-create.test.ts": "shared-services",
+  /* Arrived from `dev` on 2026-09-04, after T-C's lane map was written, and the
+     lane guard refused to stay green — which is the whole point of a guard that
+     re-derives the universe rather than reading a stored answer. It calls
+     `pgReady` and its oracle is checkpoint rows it writes itself, so the
+     private lane is right and nothing about it needs the shared stack. */
+  "tests/retry-keeps-the-checkpoints.test.ts": "private-postgres",
   "tests/seed-admin-signin.test.ts": "shared-services",
 
   /* ---- private-postgres: everything else that touches a database --------- */
@@ -1234,6 +1262,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/article-rows-snapshot.test.ts": "private-postgres",
   "tests/billing-admission.test.ts": "private-postgres",
   "tests/billing-checkout.test.ts": "private-postgres",
+  /* Stage 3b's, arriving from this worktree rather than from `dev`, and caught
+     by the same guard for the same reason. It calls `pgReady`, seeds its own
+     owner and its own two tiers, and its oracle is rows it writes itself — so
+     the private lane is right and nothing in it needs the shared stack. */
+  "tests/billing-quota-adjustment.test.ts": "private-postgres",
   "tests/billing-quota-race.test.ts": "private-postgres",
   "tests/billing-settlement.test.ts": "private-postgres",
   "tests/billing-tiers.test.ts": "private-postgres",
@@ -1394,6 +1427,13 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   "tests/ai-calls-spend-pg.test.ts": {
     "00000000-0000-4000-8000-00000000ad01": { kind: "seeded" },
     "00000000-0000-4000-8000-00000000ad02": { kind: "seeded" },
+  },
+  /* Stage 3b's own reader. `seedAuthUser` in `beforeAll`, and every row it
+     writes — the billing account, the ingest events — hangs off the
+     `auth.users` foreign key, so there is nothing here that would work without
+     the row. */
+  "tests/billing-quota-adjustment.test.ts": {
+    "0b1113b0-0000-4000-8000-00000000e3b0": { kind: "seeded" },
   },
   "tests/billing-quota-race.test.ts": {
     "0b111a99-0000-4000-8000-00000000c0da": { kind: "seeded" },

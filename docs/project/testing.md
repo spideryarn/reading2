@@ -150,6 +150,20 @@ was caught by mutation-testing it rather than by trusting it green, which is the
 everything else in this section: *a test that only ever runs green is indistinguishable from a test
 that matches nothing.*
 
+**Known wrong, and deliberately not fixed: `slug()` disagrees with GitHub on repeated spaces.** It
+collapses whitespace runs (`\s+` → one hyphen); GitHub's slugger replaces each space *individually*.
+So a heading with an em-dash — `## Stage 4 — an invoice…` — loses the dash as punctuation and leaves
+**two** spaces, and GitHub's real anchor is `stage-4--an-invoice…` while this gate demands
+`stage-4-an-invoice…`. The gate therefore **passes links that are broken on GitHub and rejects the
+ones that work**, which is the failure shape the paragraph above is about, in the checker itself.
+
+Measured 2026-09-04: 1184 headings in `docs/` contain an em-dash, against 502 same-file anchor links
+of which **3** are in the GitHub-correct form. So the repo has consistently written links to satisfy
+this gate, and correcting `slug()` would redden hundreds of links across files many agents have open
+at once. Left alone on cost, not on merit. **Write anchors the way the gate wants** — one hyphen —
+and know they are wrong on github.com; the rendered docs are read locally and in editors far more
+often. Fixing it properly is a whole-tree sweep and wants to be its own job.
+
 Comments need their own rule, because they don't use markdown link syntax. A bare
 `granularity-zoom.md#the-tree` is resolved against the **docs** directories, not against the source
 file that mentions it — `granularity-zoom.md` written in `src/web/tree.ts` means

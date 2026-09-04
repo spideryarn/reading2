@@ -345,15 +345,38 @@ function reportProfile(profile: CpuProfile, out: string): void {
 class Cdp {
   private ws: WebSocket;
   private next = 1;
-  private pending = new Map<number, (v: unknown) => void>();
+  private pending = new Map<number, { ok(v: unknown): void; fail(e: Error): void }>();
 
   private constructor(ws: WebSocket) {
     this.ws = ws;
     this.ws.addEventListener("message", (ev: MessageEvent) => {
-      const msg = JSON.parse(String(ev.data)) as { id?: number; result?: unknown };
+      /* **A CDP failure is `{id, error}`, not a rejected socket.** This modelled
+         only `{id, result}` and resolved unconditionally, so a command the
+         browser refused looked exactly like one it ran — and `undefined` then
+         flowed on to whatever read the result. It made the wheel loop's
+         `failed` counter a lie: it could only ever see a synchronous
+         `WebSocket.send` throw, never a command the browser rejected, while
+         reporting zero. GPT Sol, 2026-09-04; the counter is the sort of check
+         docs/reusable/silent-success.md is about, and it was one itself. */
+      const msg = JSON.parse(String(ev.data)) as {
+        id?: number;
+        result?: unknown;
+        error?: { code?: number; message?: string };
+      };
       if (msg.id === undefined) return; // an event; nothing here subscribes
-      this.pending.get(msg.id)?.(msg.result);
+      const waiting = this.pending.get(msg.id);
       this.pending.delete(msg.id);
+      if (!waiting) return;
+      if (msg.error) waiting.fail(new Error(`CDP: ${msg.error.message ?? "unknown error"}`));
+      else waiting.ok(msg.result);
+    });
+    /* A socket that closes with commands outstanding used to leave their
+       promises pending for ever, so the run hung rather than failing. */
+    this.ws.addEventListener("close", () => {
+      for (const waiting of this.pending.values()) {
+        waiting.fail(new Error("CDP: the browser closed the connection"));
+      }
+      this.pending.clear();
     });
   }
 
@@ -370,9 +393,17 @@ class Cdp {
 
   send<T = unknown>(method: string, params: object = {}): Promise<T> {
     const id = this.next++;
-    return new Promise<T>((resolve) => {
-      this.pending.set(id, resolve as (v: unknown) => void);
-      this.ws.send(JSON.stringify({ id, method, params }));
+    return new Promise<T>((resolve, reject) => {
+      this.pending.set(id, {
+        ok: resolve as (v: unknown) => void,
+        fail: (e) => reject(new Error(`${method}: ${e.message}`)),
+      });
+      try {
+        this.ws.send(JSON.stringify({ id, method, params }));
+      } catch (e) {
+        this.pending.delete(id);
+        reject(e instanceof Error ? e : new Error(String(e)));
+      }
     });
   }
 
@@ -480,28 +511,195 @@ interface PageState {
    measurement — it only has to catch "the page is one screen". */
 const window$innerHeightGuess = 800;
 
-async function wheel(cdp: Cdp, ms: number): Promise<void> {
+/**
+ * Where the synthetic pointer sits while it scrolls.
+ *
+ * It was `400, 400` as a bare constant, which is **over `table.zoom`** on the
+ * reading view — and every `<tr>` there carries an `onMouseEnter`. That made
+ * "does hover fire during a scroll?" a question the harness could not be used
+ * to ask, because it had already answered it one way. It can now be moved off
+ * the table (`--wheel-x 5`, the spine rail), and the run prints where the point
+ * actually landed, because a "pointer away" run that was secretly still over
+ * the table looks exactly like a null result.
+ *
+ * The answer, 2026-09-04, for anyone who does not want to re-run it: 77-79
+ * `TableView` renders over the table against 74-76 off it, which is noise, and
+ * a capture-phase listener saw **0** `mouseenter` events from 60 synthetic
+ * wheels against 12 from three real `mouse.move`s. Chrome does not recompute
+ * hover from a compositor scroll under a stationary synthetic pointer.
+ */
+const WHEEL_X = Number(flag("wheel-x", "400"));
+const WHEEL_Y = Number(flag("wheel-y", "400"));
+
+/**
+ * What the wheel loop actually managed to do — and it is not a detail.
+ *
+ * This used to `await` each `Input.dispatchMouseEvent` **before** sleeping, so a
+ * page whose main thread was busy acknowledged more slowly and therefore
+ * received *fewer wheel events*. The slower side of every comparison was being
+ * asked to do less work, which biases every before/after on this harness in the
+ * flattering direction: the 2026-09-03 dev runs dispatched 90 events against the
+ * static clone's 370, and production 325-335 against 370.
+ *
+ * So the send is no longer awaited, and the loop runs on a **fixed schedule**
+ * against its own start time rather than accumulating each iteration's drift.
+ * Both sides of a comparison now get the same number of events. `sendMs*` is
+ * kept, because how long the browser takes to acknowledge input is a real signal
+ * about main-thread load — it is simply no longer allowed to change the input.
+ */
+interface WheelStats {
+  /** How many events went out. Should equal `ms / STEP_MS` on any page now. */
+  dispatched: number;
+  wallMs: number;
+  /** Ack latency, measured but no longer gating the loop. */
+  sendMsTotal: number;
+  sendMsMax: number;
+  /** Acks that alone took longer than the step — main-thread congestion. */
+  sendMsOverStep: number;
+  /** Sends that failed outright. Never seen; here so a silent zero is not one. */
+  failed: number;
+}
+
+async function wheel(cdp: Cdp, ms: number): Promise<WheelStats> {
   const STEP_MS = 60;
-  const until = Date.now() + ms;
+  const start = Date.now();
+  const until = start + ms;
   let deltaY = 120;
   let sinceFlip = 0;
+  const s: WheelStats = {
+    dispatched: 0,
+    wallMs: 0,
+    sendMsTotal: 0,
+    sendMsMax: 0,
+    sendMsOverStep: 0,
+    failed: 0,
+  };
+  const inFlight: Promise<void>[] = [];
   while (Date.now() < until) {
-    await cdp.send("Input.dispatchMouseEvent", {
-      type: "mouseWheel",
-      x: 400,
-      y: 400,
-      deltaX: 0,
-      deltaY,
-      pointerType: "mouse",
-    });
+    const t0 = Date.now();
+    /* Deliberately not awaited — see `WheelStats`. Collected so the run cannot
+       finish with sends still outstanding, and so a rejection is counted rather
+       than becoming an unhandled promise. */
+    inFlight.push(
+      cdp
+        .send("Input.dispatchMouseEvent", {
+          type: "mouseWheel",
+          x: WHEEL_X,
+          y: WHEEL_Y,
+          deltaX: 0,
+          deltaY,
+          pointerType: "mouse",
+        })
+        .then(
+          () => {
+            const took = Date.now() - t0;
+            s.sendMsTotal += took;
+            if (took > s.sendMsMax) s.sendMsMax = took;
+            if (took > STEP_MS) s.sendMsOverStep += 1;
+          },
+          () => {
+            s.failed += 1;
+          },
+        ),
+    );
+    s.dispatched += 1;
     sinceFlip += 1;
     // ~15 seconds in one direction, then back, so we never park at an end.
     if (sinceFlip > 250) {
       deltaY = -deltaY;
       sinceFlip = 0;
     }
-    await sleep(STEP_MS);
+    /* Against `start`, not against now: sleeping a flat `STEP_MS` after
+       whatever the iteration cost is how the old loop drifted. */
+    const nextAt = start + s.dispatched * STEP_MS;
+    const wait = nextAt - Date.now();
+    if (wait > 0) await sleep(wait);
   }
+  await Promise.all(inFlight);
+  s.wallMs = Date.now() - start;
+  return s;
+}
+
+/**
+ * How smooth the scroll actually was, which is the number a reader feels.
+ *
+ * Everything else here is CPU, and CPU is a budget rather than an experience: a
+ * page can sit at 49% of a core and still miss one frame in fourteen, which is
+ * exactly what the reading view was doing on 2026-09-04 while the same document
+ * with its scripts stripped missed one in three hundred. Nobody had looked,
+ * because nothing measured it.
+ *
+ * An rAF loop in the page, recording inter-frame deltas and `scrollY`. It costs
+ * one callback a frame, which is inside the noise of the thing it measures — but
+ * it is *in* both sides of any comparison, so read a difference rather than an
+ * absolute.
+ *
+ * `totalDistance` is the other half of why this exists: it is `dispatched x
+ * deltaY` when every wheel event landed, and less when they did not, which is
+ * how the harness's old ack-gated pacing was caught. See `WheelStats`.
+ */
+async function startFrameProbe(cdp: Cdp): Promise<void> {
+  await cdp.send("Runtime.evaluate", {
+    expression: `(() => {
+      window.__scrollProbe = { deltas: [], scrollYs: [], running: true };
+      let last = null;
+      function tick(t) {
+        const p = window.__scrollProbe;
+        if (!p || !p.running) return;
+        if (last !== null) p.deltas.push(t - last);
+        last = t;
+        p.scrollYs.push(window.scrollY || document.documentElement.scrollTop || 0);
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    })()`,
+  });
+}
+
+interface FrameStats {
+  frames: number;
+  medianMs: number;
+  p95Ms: number;
+  maxMs: number;
+  /**
+   * rAF intervals longer than 32ms — **not** a count of missed refreshes.
+   *
+   * A 133ms gap is roughly seven missed 60Hz opportunities and increments this
+   * once, and the denominator is the intervals that were delivered rather than
+   * the ones that should have been. So it is a comparative jank signal and not
+   * a frame-drop rate, and calling it "one dropped frame in fourteen" is wrong
+   * in both the numerator and the denominator. GPT Sol, 2026-09-04.
+   */
+  longFramesOver32ms: number;
+  /** Every pixel travelled, up and down. `dispatched x 120` when nothing was lost. */
+  totalDistance: number;
+  netDistance: number;
+}
+
+async function stopFrameProbe(cdp: Cdp): Promise<FrameStats> {
+  const r = await cdp.send<{ result: { value: FrameStats } }>("Runtime.evaluate", {
+    expression: `(() => {
+      const p = window.__scrollProbe;
+      if (!p) return { frames: 0, medianMs: 0, p95Ms: 0, maxMs: 0, longFramesOver32ms: 0, totalDistance: 0, netDistance: 0 };
+      p.running = false;
+      const deltas = p.deltas.slice().sort((a, b) => a - b);
+      const ys = p.scrollYs;
+      let totalDistance = 0;
+      for (let i = 1; i < ys.length; i++) totalDistance += Math.abs(ys[i] - ys[i - 1]);
+      const pct = (q) => deltas.length ? deltas[Math.min(deltas.length - 1, Math.floor(q * deltas.length))] : 0;
+      return {
+        frames: deltas.length + 1,
+        medianMs: pct(0.5),
+        p95Ms: pct(0.95),
+        maxMs: deltas.length ? deltas[deltas.length - 1] : 0,
+        longFramesOver32ms: deltas.filter(d => d > 32).length,
+        totalDistance,
+        netDistance: ys.length ? Math.abs(ys[ys.length - 1] - ys[0]) : 0,
+      };
+    })()`,
+    returnByValue: true,
+  });
+  return r.result.value;
 }
 
 async function main(): Promise<void> {
@@ -750,6 +948,25 @@ async function main(): Promise<void> {
        it perturbs the very number the rest of this script reports. A run that
        profiles is a run for *finding* the cost; a run that does not is the one
        whose percentage you quote. Never the same run. */
+    /* Where the wheel pointer actually landed, printed unconditionally when
+       scrolling — because a "pointer away from the table" run that was secretly
+       still over it looks exactly like a null result, and that is the shape
+       docs/reusable/silent-success.md is about. */
+    if (scrolling) {
+      const at = await cdp.send<{ result: { value: unknown } }>("Runtime.evaluate", {
+        expression: `(() => {
+          const t = document.querySelector('table.zoom');
+          const el = document.elementFromPoint(${WHEEL_X}, ${WHEEL_Y});
+          return {
+            x: ${WHEEL_X}, y: ${WHEEL_Y},
+            insideTable: !!(t && el && t.contains(el)),
+            over: el ? el.tagName + (el.className ? '.' + String(el.className).slice(0, 40) : '') : null,
+          };
+        })()`,
+        returnByValue: true,
+      });
+      console.log(`wheel pointer: ${JSON.stringify(at.result.value)}`);
+    }
     const profiling = has("cpu-profile");
     if (profiling) {
       await cdp.send("Profiler.enable");
@@ -758,8 +975,13 @@ async function main(): Promise<void> {
       await cdp.send("Profiler.setSamplingInterval", { interval: 100 });
       await cdp.send("Profiler.start");
     }
-    if (scrolling) await wheel(cdp, seconds * 1000);
-    else await sleep(seconds * 1000);
+    let wheelStats: WheelStats | null = null;
+    let frameStats: FrameStats | null = null;
+    if (scrolling) {
+      await startFrameProbe(cdp);
+      wheelStats = await wheel(cdp, seconds * 1000);
+      frameStats = await stopFrameProbe(cdp);
+    } else await sleep(seconds * 1000);
     if (profiling) {
       const prof = await cdp.send<{ profile: CpuProfile }>("Profiler.stop");
       reportProfile(prof.profile, flag("cpu-profile", ""));
@@ -828,9 +1050,27 @@ async function main(): Promise<void> {
           },
         ]),
       ),
+      /* Null unless `--scroll`. `wheel.dispatched` belongs beside every CPU
+         figure it sits next to: two runs are only comparable if they were given
+         the same input, and until 2026-09-04 the busier one silently got less
+         of it. `frames.longFramesOver32ms` is the closest thing here to what a
+         reader feels — read its own docstring before quoting it, because it is
+         a count of long rAF intervals and not of missed refreshes. */
+      wheel: wheelStats,
+      frames: frameStats,
     };
 
     console.log(JSON.stringify(result, null, 2));
+    if (frameStats && wheelStats) {
+      const jank = frameStats.frames
+        ? Math.round((frameStats.longFramesOver32ms / frameStats.frames) * 1000) / 10
+        : 0;
+      console.log(
+        `scroll: ${wheelStats.dispatched} wheels → ${frameStats.totalDistance}px, ` +
+          `p95 frame ${frameStats.p95Ms}ms, worst ${frameStats.maxMs}ms, ` +
+          `${frameStats.longFramesOver32ms}/${frameStats.frames} rAF intervals over 32ms (${jank}%)`,
+      );
+    }
     if (json) {
       writeFileSync(json, JSON.stringify(result, null, 2));
       console.log(`wrote ${json}`);
